@@ -1178,108 +1178,11 @@
                 />
               </div>
               <button id="fetch-models-btn" class="moe-btn-secondary">
-                拉取模型列表
+                📡 拉取模型列表
               </button>
             </div>
           </div>
 
-          <!-- 副 API 卡片 -->
-          <div class="moe-card">
-            <div class="moe-card-header">
-              <span class="icon">⚡</span>
-              <h3>副 API</h3>
-            </div>
-            <div class="moe-card-body">
-              <div class="form-group">
-                <label>反代地址 (Proxy)</label>
-                <input
-                  type="text"
-                  id="sub-proxy-url"
-                  placeholder="https://api.openai.com"
-                  class="moe-input"
-                />
-              </div>
-              <div class="form-group">
-                <label>密钥 (Key)</label>
-                <input
-                  type="password"
-                  id="sub-api-key"
-                  placeholder="sk-..."
-                  class="moe-input"
-                />
-              </div>
-              <div class="form-group">
-                <label>模型选择 (手动输入 或 拉取后选择)</label>
-                <input
-                  type="text"
-                  id="sub-model-select"
-                  class="moe-input"
-                  placeholder="如 gpt-4o, claude-3-5-sonnet"
-                />
-                <select
-                  id="sub-fetched-model-list"
-                  class="moe-input"
-                  style="
-                    margin-top: 5px;
-                    display: none;
-                    border: 1px dashed var(--accent-color);
-                  "
-                  onchange="
-                    document.getElementById('sub-model-select').value = this.value
-                  "
-                >
-                  <option value="">▼ 点击此处选择已拉取的模型</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label
-                  >温度 (随机性):
-                  <span
-                    id="sub-temperature-value"
-                    style="color: var(--accent-color)"
-                    >0.8</span
-                  ></label
-                >
-                <input
-                  type="range"
-                  id="sub-temperature-slider"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value="0.8"
-                  class="moe-slider"
-                />
-              </div>
-              <button id="sub-fetch-models-btn" class="moe-btn-secondary" type="button">
-                拉取模型列表
-              </button>
-              <div class="form-group" style="margin-top: 14px;">
-                <label style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; display: block;">用途</label>
-                <div style="display: flex; flex-direction: column; gap: 8px; background: var(--secondary-bg); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-color);">
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; text-align: left;">
-                    <input type="checkbox" id="sub-usage-summary" class="sub-usage-checkbox" value="summary" style="margin: 0;" />
-                    <span>总结聊天记录</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; text-align: left;">
-                    <input type="checkbox" id="sub-usage-fanfic" class="sub-usage-checkbox" value="fanfic" style="margin: 0;" />
-                    <span>同人文生成</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; text-align: left;">
-                    <input type="checkbox" id="sub-usage-module" class="sub-usage-checkbox" value="module" style="margin: 0;" />
-                    <span>模组自动分割</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; text-align: left;">
-                    <input type="checkbox" id="sub-usage-avatar-gen" class="sub-usage-checkbox" value="avatar_gen" style="margin: 0;" />
-                    <span>头像、道具图生成</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; text-align: left;">
-                    <input type="checkbox" id="sub-usage-map" class="sub-usage-checkbox" value="map" style="margin: 0;" />
-                    <span>地图生成</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
           <!-- 2. 语音合成卡片 -->
           <div class="moe-card">
             <div class="moe-card-header">
@@ -5491,13 +5394,6 @@
                     >
                       图库
                     </button>
-                    <button
-                      id="ai-avatar-gen-btn"
-                      class="moe-btn-mini"
-                      type="button"
-                    >
-                      生图
-                    </button>
                   </div>
                   <input
                     type="file"
@@ -5524,13 +5420,6 @@
                       class="moe-btn-mini"
                     >
                       上传
-                    </button>
-                    <button
-                      id="group-avatar-gen-btn"
-                      class="moe-btn-mini"
-                      type="button"
-                    >
-                      生图
                     </button>
                   </div>
                   <input
@@ -5564,13 +5453,6 @@
                     </button>
                     <button id="open-persona-library-btn" class="moe-btn-mini">
                       预设
-                    </button>
-                    <button
-                      id="my-avatar-gen-btn"
-                      class="moe-btn-mini"
-                      type="button"
-                    >
-                      生图
                     </button>
                   </div>
                   <input
@@ -6727,28 +6609,6 @@
                 🚫 拉黑对方
               </button>
             </div>
-          <!-- NOV 生图设置 -->
-          <div class="moe-card" style="margin-top: 10px;">
-            <div class="moe-card-header">
-              <h3>NOV 生图</h3>
-            </div>
-            <div class="moe-card-body">
-              <div class="form-group">
-                <label class="toggle-switch-label">
-                  <span class="toggle-switch-text">NOV 生图</span>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="chat-nov-gen-switch" />
-                    <span class="slider"></span>
-                  </label>
-                </label>
-              </div>
-              <div id="chat-nov-gen-guide-container" style="display: none; margin-top: 10px;">
-                <div class="form-group">
-                  <label>生图规范提示词</label>
-                  <textarea id="chat-nov-gen-guide-input" class="moe-input" rows="2" placeholder="输入生图规范提示词..."></textarea>
-                </div>
-              </div>
-            </div>
           </div>
 
           <!-- 底部垫高，防止被悬浮按钮遮挡 -->
@@ -6905,14 +6765,6 @@
                 onclick="document.getElementById('member-avatar-input').click()"
               >
                 上传头像
-              </button>
-              <button
-                id="member-avatar-gen-btn"
-                class="moe-btn-mini"
-                type="button"
-                style="margin-top: 4px;"
-              >
-                生图
               </button>
               <!-- 更换头像框按钮 -->
               <button
@@ -7542,27 +7394,6 @@
               <input type="checkbox" id="nai-smea-dyn" style="width: auto" />
               <span style="color: #666; font-size: 14px">启用动态SMEA</span>
             </div>
-          </div>
-
-          <div class="form-group">
-            <label style="color: #333">画师串</label>
-            <textarea
-              id="nai-artist-string"
-              rows="2"
-              style="
-                background-color: #f8f9fa;
-                color: #333;
-                border: 1px solid #ccc;
-                padding: 8px;
-                width: 100%;
-                border-radius: 4px;
-                resize: vertical;
-              "
-              placeholder="画师风格或关键词，如：by artist_name, ghibli style"
-            ></textarea>
-            <small style="color: #666"
-              >可填写画师风格串，生图时置于正面提示词最前面</small
-            >
           </div>
 
           <div class="form-group">
@@ -20414,42 +20245,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           textImageModeContent.classList.remove("active");
         }
 
-        
-        // NovelAI 导入导出保存辅助函数
-        function getNovelAIBackupData() {
-          return {
-            enabled: localStorage.getItem("novelai-enabled") === "true",
-            apiKey: localStorage.getItem("novelai-api-key") || "",
-            model: localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full",
-            settings: typeof getNovelAISettings === "function" ? getNovelAISettings() : {}
-          };
-        }
-
-        function restoreNovelAIBackupData(novData) {
-          if (!novData) return;
-          if (typeof novData.enabled !== "undefined") {
-            localStorage.setItem("novelai-enabled", novData.enabled ? "true" : "false");
-            const switchEl = document.getElementById("novelai-switch");
-            if (switchEl) switchEl.checked = !!novData.enabled;
-          }
-          if (typeof novData.apiKey !== "undefined") {
-            localStorage.setItem("novelai-api-key", novData.apiKey || "");
-            const keyEl = document.getElementById("novelai-api-key");
-            if (keyEl) keyEl.value = novData.apiKey || "";
-          }
-          if (typeof novData.model !== "undefined") {
-            localStorage.setItem("novelai-model", novData.model || "nai-diffusion-4-5-full");
-            const modelEl = document.getElementById("novelai-model");
-            if (modelEl) modelEl.value = novData.model || "nai-diffusion-4-5-full";
-          }
-          if (novData.settings) {
-            localStorage.setItem("novelai-settings", JSON.stringify(novData.settings));
-            if (typeof loadNovelAISettings === "function") {
-              loadNovelAISettings();
-            }
-          }
-        }
-
         async function exportBackup() {
           try {
             const backupData = {
@@ -20658,8 +20453,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               lockscreenWallpaper: state.globalSettings.lockscreenWallpaper,
             };
 
-            backupData.novelaiState = getNovelAIBackupData();
-
             const blob = new Blob([JSON.stringify(backupData, null, 2)], {
               type: "application/json",
             });
@@ -20819,7 +20612,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 自动备份时可能不在主屏幕。为了安全起见，这里仅保存 globalSettings 里的 widgetData。
           // 如果需要完整还原UI布局，最好只在手动导出时包含 homeScreenState。
 
-          backupData.novelaiState = getNovelAIBackupData();
           return JSON.stringify(backupData, null, 2);
         }
 
@@ -21353,8 +21145,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   await db[tableName].put(data[tableName]);
                 }
               }
-
-              restoreNovelAIBackupData(data.novelaiState || data.novelaiSettings || data.data?.novelaiState || data.data?.novelaiSettings);
             });
 
             // 导入主屏幕样式的逻辑保持不变，因为它不直接操作数据库的多个表
@@ -22515,8 +22305,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             settings.quality_toggle;
           document.getElementById("nai-smea").checked = settings.smea;
           document.getElementById("nai-smea-dyn").checked = settings.smea_dyn;
-          const artistStrInput = document.getElementById("nai-artist-string");
-          if (artistStrInput) artistStrInput.value = settings.artist_string || "";
           document.getElementById("nai-default-positive").value =
             settings.default_positive;
           document.getElementById("nai-default-negative").value =
@@ -22560,7 +22348,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               document.getElementById("nai-quality-toggle").checked,
             smea: document.getElementById("nai-smea").checked,
             smea_dyn: document.getElementById("nai-smea-dyn").checked,
-            artist_string: document.getElementById("nai-artist-string") ? document.getElementById("nai-artist-string").value.trim() : "",
             default_positive: document.getElementById("nai-default-positive")
               .value,
             default_negative: document.getElementById("nai-default-negative")
@@ -22590,7 +22377,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             quality_toggle: true,
             smea: true,
             smea_dyn: false,
-            artist_string: "",
             default_positive:
               "masterpiece, best quality, 1girl, beautiful, detailed face, detailed eyes, long hair, anime style",
             default_negative:
@@ -23078,31 +22864,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           document.getElementById("minimax-group-id").value =
             state.apiConfig.minimaxGroupId || "";
           document.getElementById("minimax-api-key").value =
-          state.apiConfig.minimaxApiKey || "";
-        if (document.getElementById("sub-proxy-url")) document.getElementById("sub-proxy-url").value = state.apiConfig.subProxyUrl || "";
-        if (document.getElementById("sub-api-key")) document.getElementById("sub-api-key").value = state.apiConfig.subApiKey || "";
-        if (document.getElementById("sub-model-select")) document.getElementById("sub-model-select").value = state.apiConfig.subModel || "";
-        if (document.getElementById("sub-temperature-slider")) {
-          const subT = typeof state.apiConfig.subTemperature !== "undefined" ? state.apiConfig.subTemperature : 0.8;
-          document.getElementById("sub-temperature-slider").value = subT;
-          if (document.getElementById("sub-temperature-value")) document.getElementById("sub-temperature-value").textContent = subT;
-        }
-        const usages = state.apiConfig.subUsages || [];
-        document.querySelectorAll(".sub-usage-checkbox").forEach(cb => {
-          cb.checked = usages.includes(cb.value);
-        });
-        
-        let allWeiboOn = true;
-        let singleChatCount = 0;
-        for (const id in state.chats) {
-          const c = state.chats[id];
-          if (c && !c.isGroup) {
-            singleChatCount++;
-            if (!c.settings?.weiboEnabled) allWeiboOn = false;
-          }
-        }
-        const weiboBtn = document.getElementById("enable-all-weibo-btn");
-        if (weiboBtn) weiboBtn.textContent = (singleChatCount > 0 && allWeiboOn) ? "关闭" : "开启";
+            state.apiConfig.minimaxApiKey || "";
           document.getElementById("minimax-provider-select").value =
             state.apiConfig.minimaxProvider || "cn";
 
@@ -51209,8 +50971,6 @@ ${colSpecs.join('\n')}
               console.log(`已打包 ${charIds.length} 个角色的核心及关联数据。`);
             }
 
-            backupData.data.novelaiState = getNovelAIBackupData();
-
             // 3. 创建JSON文件并触发下载
             const blob = new Blob([JSON.stringify(backupData, null, 2)], {
               type: "application/json",
@@ -51325,7 +51085,6 @@ ${colSpecs.join('\n')}
                   await db[tableName].bulkPut(data.data[tableName]);
                 }
               }
-              restoreNovelAIBackupData(data.novelaiState || data.novelaiSettings || data.data?.novelaiState || data.data?.novelaiSettings);
             });
 
             await loadAllDataFromDB();
@@ -57581,17 +57340,12 @@ ${colSpecs.join('\n')}
               state.apiConfig.minimaxGroupId = document
                 .getElementById("minimax-group-id")
                 .value.trim();
-              state.apiConfig.minimaxApiKey = document.getElementById("minimax-api-key").value;
-              state.apiConfig.subProxyUrl = (document.getElementById("sub-proxy-url")?.value || "").trim();
-              state.apiConfig.subApiKey = (document.getElementById("sub-api-key")?.value || "").trim();
-              state.apiConfig.subModel = (document.getElementById("sub-model-select")?.value || "").trim();
-              const subTempEl = document.getElementById("sub-temperature-slider");
-              if (subTempEl) state.apiConfig.subTemperature = parseFloat(subTempEl.value);
-              const selectedUsages = [];
-              document.querySelectorAll(".sub-usage-checkbox:checked").forEach(cb => {
-                selectedUsages.push(cb.value);
-              });
-              state.apiConfig.subUsages = selectedUsages;
+              state.apiConfig.minimaxApiKey = document
+                .getElementById("minimax-api-key")
+                .value.trim();
+              state.apiConfig.minimaxProvider = document.getElementById(
+                "minimax-provider-select",
+              ).value;
               state.apiConfig.minimaxSpeechModel = document.getElementById(
                 "minimax-speech-model-select",
               ).value;
@@ -63840,25 +63594,20 @@ ${colSpecs.join('\n')}
           const enableAllWeiboBtn = document.getElementById("enable-all-weibo-btn");
           if (enableAllWeiboBtn) {
             enableAllWeiboBtn.addEventListener("click", async () => {
-              const currentText = enableAllWeiboBtn.textContent.trim();
-              const isTurnedOn = currentText === "关闭";
-              const targetState = !isTurnedOn;
               let count = 0;
               for (const id in state.chats) {
                 const c = state.chats[id];
                 if (c && !c.isGroup) {
                   if (!c.settings) c.settings = {};
-                  c.settings.weiboEnabled = targetState;
+                  c.settings.weiboEnabled = true;
                   await db.chats.put(c);
                   count++;
                 }
               }
-              enableAllWeiboBtn.textContent = targetState ? "关闭" : "开启";
-              const msg = targetState ? "已开启全体好友微博" : "已关闭全体好友微博";
               if (typeof showCustomAlert === "function") {
-                await showCustomAlert("提示", msg);
+                await showCustomAlert("提示", "已开启全体好友微博");
               } else {
-                alert(msg);
+                alert("已开启全体好友微博");
               }
             });
           }
@@ -63962,7 +63711,6 @@ ${colSpecs.join('\n')}
                   const choice = await showChoiceModal("编辑头像", [
                     { text: "更换头像图片", value: "avatar" },
                     { text: "更换头像框", value: "frame" },
-                    { text: "生图", value: "aigen" },
                   ]);
 
                   // 3. 根据用户的选择，执行不同的操作
@@ -63970,8 +63718,6 @@ ${colSpecs.join('\n')}
                     handleEditImage(editableImage); // 调用原来的更换图片函数
                   } else if (choice === "frame") {
                     openFrameSelectorModal("home_profile"); // 调用我们新增的更换头像框函数
-                  } else if (choice === "aigen") {
-                    openAvatarGenModal("my");
                   }
                 } else {
                   // 4. 如果点击的不是主头像（比如是其他小组件的图片），就还执行原来的逻辑
@@ -67252,520 +66998,6 @@ ${colSpecs.join('\n')}
 
         console.log("✅ [NAI下载] 三击下载功能已初始化");
         console.log("💡 [NAI下载] 提示：三击任意NAI图片即可下载");
-// 模块 29 与 模块 28 辅助函数与逻辑
-function buildNovelAIPositivePrompt({ userPrompt = "", isAvatar = false, chatId = null }) {
-  const settings = getNovelAISettings();
-  const artistStr = (settings.artist_string || "").trim();
-
-  if (isAvatar) {
-    const panelPrompt = userPrompt.trim();
-    if (artistStr && panelPrompt) {
-      return artistStr + ", " + panelPrompt;
-    } else if (artistStr) {
-      return artistStr;
-    } else {
-      return panelPrompt;
-    }
-  } else {
-    let basePositive = settings.default_positive || "";
-    if (chatId) {
-      const charPrompts = getCharacterNAIPrompts(chatId);
-      basePositive = charPrompts.positive || settings.default_positive || "";
-    }
-    let combinedBase = basePositive.trim();
-    if (artistStr) {
-      combinedBase = combinedBase ? artistStr + ", " + combinedBase : artistStr;
-    }
-    if (userPrompt && userPrompt.trim()) {
-      return userPrompt.trim() + ", " + combinedBase;
-    }
-    return combinedBase;
-  }
-}
-
-function getAuxiliaryAPIConfig(usageType = 'avatar_gen') {
-  const cfg = state.apiConfig || {};
-  const usages = cfg.subUsages || [];
-  const hasSubKey = !!(cfg.subApiKey && cfg.subApiKey.trim());
-  const isUsageEnabled = usages.includes(usageType);
-  if (hasSubKey && isUsageEnabled) {
-    return {
-      proxyUrl: cfg.subProxyUrl || cfg.proxyUrl || "",
-      apiKey: cfg.subApiKey.trim(),
-      model: cfg.subModel || cfg.model || ""
-    };
-  }
-  return {
-    proxyUrl: cfg.proxyUrl || "",
-    apiKey: cfg.apiKey || "",
-    model: cfg.model || ""
-  };
-}
-
-async function callAuxiliaryAI(systemPrompt, userPrompt) {
-  const { proxyUrl, apiKey, model } = getAuxiliaryAPIConfig();
-  if (!apiKey) {
-    throw new Error("未配置 API Key");
-  }
-  
-  const isGemini = model.toLowerCase().includes("gemini");
-  const messagesForApi = [
-    { role: "user", content: systemPrompt + "\n\n用户描述: " + userPrompt }
-  ];
-
-  if (isGemini) {
-    const geminiConfig = toGeminiRequestData(
-      model,
-      apiKey,
-      systemPrompt,
-      [{ role: "user", content: userPrompt }],
-      true,
-      0.7
-    );
-    const resp = await fetch(geminiConfig.url, geminiConfig.data);
-    if (!resp.ok) throw new Error("API 请求失败: " + resp.status);
-    const data = await resp.json();
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  } else {
-    const targetUrl = proxyUrl.endsWith("/") ? proxyUrl + "v1/chat/completions" : proxyUrl + "/v1/chat/completions";
-    const resp = await fetch(targetUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + apiKey
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messagesForApi,
-        temperature: 0.7
-      })
-    });
-    if (!resp.ok) throw new Error("API 请求失败: " + resp.status);
-    const data = await resp.json();
-    return data?.choices?.[0]?.message?.content || "";
-  }
-}
-
-let currentAvatarGenTarget = "my";
-let avatarCropState = {
-  rawImg: null,
-  scale: 1,
-  coverScale: 1,
-  x: 0,
-  y: 0,
-  rotate: 0,
-  flipH: false,
-  isDragging: false,
-  startX: 0,
-  startY: 0,
-  startXPos: 0,
-  startYPos: 0,
-  clickCount: 0,
-  clickTimer: null
-};
-
-function openAvatarGenModal(targetType = "my") {
-  currentAvatarGenTarget = targetType;
-  const modal = document.getElementById("avatar-gen-modal");
-  if (!modal) return;
-  modal.style.display = "flex";
-
-  const appearanceInput = document.getElementById("avatar-gen-appearance");
-  const promptInput = document.getElementById("avatar-gen-prompt-input");
-  const statusDiv = document.getElementById("avatar-gen-status");
-  const previewSection = document.getElementById("avatar-gen-preview-section");
-
-  if (statusDiv) statusDiv.style.display = "none";
-  if (previewSection) previewSection.style.display = "none";
-
-  if (targetType === "ai" && state.activeChatId && state.chats[state.activeChatId]) {
-    const chat = state.chats[state.activeChatId];
-    if (appearanceInput) {
-      appearanceInput.value = chat.settings?.aiPersona || "";
-    }
-  } else {
-    if (appearanceInput) {
-      appearanceInput.value = "";
-    }
-  }
-  if (promptInput) promptInput.value = "";
-}
-
-function setupAvatarCropImage(img) {
-  avatarCropState.rotate = 0;
-  avatarCropState.flipH = false;
-  avatarCropState.rawImg = img;
-  const coverScale = Math.max(220 / img.naturalWidth, 220 / img.naturalHeight);
-  avatarCropState.coverScale = coverScale;
-  avatarCropState.scale = coverScale;
-  avatarCropState.x = (220 - img.naturalWidth * coverScale) / 2;
-  avatarCropState.y = (220 - img.naturalHeight * coverScale) / 2;
-
-  const imgEl = document.getElementById("avatar-crop-img");
-  if (imgEl) {
-    imgEl.src = img.src;
-    imgEl.style.width = img.naturalWidth + "px";
-    imgEl.style.height = img.naturalHeight + "px";
-  }
-
-  const zoomRange = document.getElementById("avatar-crop-zoom-range");
-  if (zoomRange) {
-    zoomRange.min = (coverScale * 0.4).toFixed(3);
-    zoomRange.max = (coverScale * 3.5).toFixed(3);
-    zoomRange.value = coverScale.toFixed(3);
-  }
-
-  updateAvatarCropTransform();
-}
-
-function setAvatarCropScale(newScale) {
-  const oldScale = avatarCropState.scale;
-  if (!oldScale) return;
-  const centerImgX = (110 - avatarCropState.x) / oldScale;
-  const centerImgY = (110 - avatarCropState.y) / oldScale;
-
-  avatarCropState.scale = newScale;
-  avatarCropState.x = 110 - centerImgX * newScale;
-  avatarCropState.y = 110 - centerImgY * newScale;
-  updateAvatarCropTransform();
-}
-
-function updateAvatarCropTransform() {
-  const imgEl = document.getElementById("avatar-crop-img");
-  if (!imgEl) return;
-  const scaleX = avatarCropState.flipH ? -avatarCropState.scale : avatarCropState.scale;
-  const scaleY = avatarCropState.scale;
-  const rot = avatarCropState.rotate || 0;
-  imgEl.style.transform = "translate(" + avatarCropState.x + "px, " + avatarCropState.y + "px) scale(" + scaleX + ", " + scaleY + ") rotate(" + rot + "deg)";
-}
-
-function saveAvatarFromCanvas() {
-  if (!avatarCropState.rawImg) {
-    alert("请先生成图片");
-    return;
-  }
-  const canvas = document.createElement("canvas");
-  canvas.width = 300;
-  canvas.height = 300;
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, 300, 300);
-
-  const ratio = 300 / 200;
-
-  ctx.save();
-  ctx.translate(150, 150);
-  if (avatarCropState.flipH) ctx.scale(-1, 1);
-  if (avatarCropState.rotate) ctx.rotate((avatarCropState.rotate * Math.PI) / 180);
-
-  const raw = avatarCropState.rawImg;
-  const drawWidth = raw.naturalWidth * avatarCropState.scale * ratio;
-  const drawHeight = raw.naturalHeight * avatarCropState.scale * ratio;
-  const drawX = (avatarCropState.x - 100) * ratio;
-  const drawY = (avatarCropState.y - 100) * ratio;
-
-  ctx.drawImage(raw, drawX, drawY, drawWidth, drawHeight);
-  ctx.restore();
-
-  const avatarDataUrl = canvas.toDataURL("image/png");
-
-  if (currentAvatarGenTarget === "ai") {
-    const preview = document.getElementById("ai-avatar-preview");
-    if (preview) preview.src = avatarDataUrl;
-    if (state.activeChatId && state.chats[state.activeChatId]) {
-      state.chats[state.activeChatId].avatar = avatarDataUrl;
-      if (!state.chats[state.activeChatId].settings) state.chats[state.activeChatId].settings = {};
-      state.chats[state.activeChatId].settings.aiAvatar = avatarDataUrl;
-      if (typeof db !== "undefined" && db.chats) db.chats.put(state.chats[state.activeChatId]);
-      if (typeof renderChatList === "function") renderChatList();
-      if (typeof updateChatHeader === "function") updateChatHeader();
-    }
-  } else if (currentAvatarGenTarget === "my") {
-    const preview = document.getElementById("my-avatar-preview");
-    if (preview) preview.src = avatarDataUrl;
-    const profileImg = document.getElementById("profile-avatar-img");
-    if (profileImg) profileImg.src = avatarDataUrl;
-    if (state.qzoneSettings) {
-      state.qzoneSettings.avatar = avatarDataUrl;
-      if (typeof db !== "undefined" && db.qzoneSettings) db.qzoneSettings.put(state.qzoneSettings);
-    }
-  } else if (currentAvatarGenTarget === "group") {
-    const preview = document.getElementById("group-avatar-preview");
-    if (preview) preview.src = avatarDataUrl;
-    if (state.activeChatId && state.chats[state.activeChatId]) {
-      state.chats[state.activeChatId].avatar = avatarDataUrl;
-      if (!state.chats[state.activeChatId].settings) state.chats[state.activeChatId].settings = {};
-      state.chats[state.activeChatId].settings.groupAvatar = avatarDataUrl;
-      if (typeof db !== "undefined" && db.chats) db.chats.put(state.chats[state.activeChatId]);
-      if (typeof renderChatList === "function") renderChatList();
-      if (typeof updateChatHeader === "function") updateChatHeader();
-    }
-  } else if (currentAvatarGenTarget === "member" && typeof editingMemberId !== "undefined") {
-    const preview = document.getElementById("member-avatar-preview");
-    if (preview) preview.src = avatarDataUrl;
-    const chat = state.chats[state.activeChatId];
-    if (chat && chat.members) {
-      const member = chat.members.find(m => m.id === editingMemberId);
-      if (member) {
-        member.avatar = avatarDataUrl;
-        if (typeof db !== "undefined" && db.chats) db.chats.put(chat);
-      }
-    }
-  }
-
-  const modal = document.getElementById("avatar-gen-modal");
-  if (modal) modal.style.display = "none";
-  alert("头像保存成功！");
-}
-
-function initAvatarGenModalEvents() {
-  const closeBtn = document.getElementById("close-avatar-gen-modal");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => {
-      document.getElementById("avatar-gen-modal").style.display = "none";
-    });
-  }
-
-  const flipBtn = document.getElementById("avatar-crop-flip-btn");
-  if (flipBtn) {
-    flipBtn.addEventListener("click", () => {
-      avatarCropState.flipH = !avatarCropState.flipH;
-      updateAvatarCropTransform();
-    });
-  }
-
-  const rotateBtn = document.getElementById("avatar-crop-rotate-btn");
-  if (rotateBtn) {
-    rotateBtn.addEventListener("click", () => {
-      avatarCropState.rotate = ((avatarCropState.rotate || 0) + 90) % 360;
-      updateAvatarCropTransform();
-    });
-  }
-
-  const resetBtn = document.getElementById("avatar-crop-reset-btn");
-  if (resetBtn) {
-    resetBtn.addEventListener("click", () => {
-      if (avatarCropState.rawImg) setupAvatarCropImage(avatarCropState.rawImg);
-    });
-  }
-
-  const saveBtn = document.getElementById("avatar-gen-save-btn");
-  if (saveBtn) {
-    saveBtn.addEventListener("click", saveAvatarFromCanvas);
-  }
-
-  const makePromptBtn = document.getElementById("avatar-gen-make-prompt-btn");
-  if (makePromptBtn) {
-    makePromptBtn.addEventListener("click", async () => {
-      const appearanceText = document.getElementById("avatar-gen-appearance").value.trim();
-      if (!appearanceText) {
-        alert("请先填写外貌描述");
-        return;
-      }
-      const statusDiv = document.getElementById("avatar-gen-status");
-      statusDiv.style.display = "block";
-      statusDiv.textContent = "正在生成 prompt...";
-      makePromptBtn.disabled = true;
-      try {
-        const sysPrompt = "你是一个 AI 绘图 Prompt 专家。根据用户提供的角色外貌描述，将其转化为 NovelAI / Stable Diffusion 生图使用的英文 Tag 提示词。只输出英文 Tag 提示词，用逗号分隔，不要包含任何中文、解释或 Markdown。";
-        let generatedTags = await callAuxiliaryAI(sysPrompt, appearanceText);
-        generatedTags = generatedTags.trim().replace(/^\`\`\`[a-z]*/i, "").replace(/\`\`\`$/i, "").trim();
-        document.getElementById("avatar-gen-prompt-input").value = generatedTags;
-        statusDiv.textContent = "prompt 已生成！";
-      } catch (err) {
-        alert("生成 prompt 失败: " + err.message);
-        statusDiv.style.display = "none";
-      } finally {
-        makePromptBtn.disabled = false;
-      }
-    });
-  }
-
-  const doGenBtn = document.getElementById("avatar-gen-do-gen-btn");
-  if (doGenBtn) {
-    doGenBtn.addEventListener("click", async () => {
-      const userPrompt = document.getElementById("avatar-gen-prompt-input").value.trim();
-      if (!userPrompt) {
-        alert("请先填写提示词");
-        return;
-      }
-      const apiKey = localStorage.getItem("novelai-api-key");
-      if (!apiKey) {
-        alert("请先在 NovelAI 设置中填写 API Key！");
-        return;
-      }
-      const statusDiv = document.getElementById("avatar-gen-status");
-      statusDiv.style.display = "block";
-      statusDiv.textContent = "正在生成图片，请稍候...";
-      doGenBtn.disabled = true;
-      try {
-        const finalPositive = buildNovelAIPositivePrompt({
-          userPrompt: userPrompt,
-          isAvatar: true
-        });
-        const settings = getNovelAISettings();
-        const model = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
-        const requestBody = {
-          input: finalPositive,
-          model: model,
-          action: "generate",
-          parameters: {
-            width: 1024,
-            height: 1024,
-            scale: settings.cfg_scale || 5,
-            sampler: settings.sampler || "k_euler_ancestral",
-            steps: settings.steps || 28,
-            seed: settings.seed === -1 ? Math.floor(Math.random() * 4294967295) : settings.seed,
-            n_samples: 1,
-            ucPreset: settings.uc_preset || 1,
-            qualityToggle: false,
-            negative_prompt: settings.default_negative || ""
-          }
-        };
-        if (model.includes("nai-diffusion-4")) {
-          requestBody.parameters.params_version = 3;
-          requestBody.parameters.v4_prompt = {
-            caption: {
-              base_caption: finalPositive,
-              char_captions: []
-            },
-            use_coords: false,
-            use_order: true
-          };
-        }
-        let apiUrl = model.includes("nai-diffusion-4")
-          ? "https://image.novelai.net/ai/generate-image-stream"
-          : "https://image.novelai.net/ai/generate-image";
-        let corsProxy = settings.cors_proxy === "custom" ? (settings.custom_proxy_url || "") : settings.cors_proxy;
-        if (corsProxy) {
-          apiUrl = corsProxy + encodeURIComponent(apiUrl);
-        }
-        const resp = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + apiKey
-          },
-          body: JSON.stringify(requestBody)
-        });
-        if (!resp.ok) {
-          const errTxt = await resp.text();
-          throw new Error("API 失败 (" + resp.status + "): " + errTxt);
-        }
-        const contentType = resp.headers.get("content-type");
-        let imageBlob = null;
-        if (contentType && contentType.includes("text/event-stream")) {
-          const text = await resp.text();
-          const lines = text.trim().split("\n");
-          let base64Data = null;
-          for (let i = lines.length - 1; i >= 0; i--) {
-            const line = lines[i].trim();
-            if (line.startsWith("data: ") && line !== "data: [DONE]") {
-              const content = line.substring(6);
-              try {
-                const json = JSON.parse(content);
-                if (json.event_type === "final" && json.image) {
-                  base64Data = json.image;
-                  break;
-                }
-                if (json.data) { base64Data = json.data; break; }
-                if (json.image) { base64Data = json.image; break; }
-              } catch (e) {
-                base64Data = content;
-                break;
-              }
-            }
-          }
-          if (!base64Data) throw new Error("解压图片数据失败");
-          const isPNG = base64Data.startsWith("iVBORw0KGgo");
-          const isJPEG = base64Data.startsWith("/9j/");
-          if (isPNG || isJPEG) {
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-            imageBlob = new Blob([bytes], { type: isPNG ? "image/png" : "image/jpeg" });
-          } else {
-            imageBlob = new Blob([Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))], { type: "image/png" });
-          }
-        } else {
-          imageBlob = await resp.blob();
-        }
-        const imgUrl = URL.createObjectURL(imageBlob);
-        const img = new Image();
-        img.onload = () => {
-          setupAvatarCropImage(img);
-          statusDiv.style.display = "none";
-        };
-        img.src = imgUrl;
-      } catch (err) {
-        alert("生图失败: " + err.message);
-        statusDiv.style.display = "none";
-      } finally {
-        doGenBtn.disabled = false;
-      }
-    });
-  }
-
-  const viewport = document.getElementById("avatar-crop-viewport");
-  if (viewport) {
-    viewport.addEventListener("pointerdown", (e) => {
-      if (!avatarCropState.rawImg) return;
-      avatarCropState.isDragging = true;
-      avatarCropState.startX = e.clientX;
-      avatarCropState.startY = e.clientY;
-      avatarCropState.startXPos = avatarCropState.x;
-      avatarCropState.startYPos = avatarCropState.y;
-      viewport.style.cursor = "grabbing";
-
-      avatarCropState.clickCount++;
-      if (avatarCropState.clickCount === 1) {
-        avatarCropState.clickTimer = setTimeout(() => {
-          avatarCropState.clickCount = 0;
-        }, 500);
-      }
-      if (avatarCropState.clickCount >= 3) {
-        clearTimeout(avatarCropState.clickTimer);
-        avatarCropState.clickCount = 0;
-        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-        const imgEl = document.getElementById("avatar-crop-img");
-        if (imgEl && imgEl.src) {
-          const a = document.createElement("a");
-          a.href = imgEl.src;
-          a.download = "avatar-" + Date.now() + ".png";
-          a.click();
-        }
-      }
-    });
-
-    window.addEventListener("pointermove", (e) => {
-      if (!avatarCropState.isDragging) return;
-      const dx = e.clientX - avatarCropState.startX;
-      const dy = e.clientY - avatarCropState.startY;
-      avatarCropState.x = avatarCropState.startXPos + dx;
-      avatarCropState.y = avatarCropState.startYPos + dy;
-      updateAvatarCropTransform();
-    });
-
-    window.addEventListener("pointerup", () => {
-      avatarCropState.isDragging = false;
-      if (viewport) viewport.style.cursor = "grab";
-    });
-
-    viewport.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      if (!avatarCropState.rawImg) return;
-      const delta = e.deltaY < 0 ? 0.05 : -0.05;
-      const newScale = Math.max(0.1, Math.min(10, avatarCropState.scale + delta));
-      setAvatarCropScale(newScale);
-    }, { passive: false });
-  }
-}
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initAvatarGenModalEvents);
-} else {
-  initAvatarGenModalEvents();
-}
-
       })();
     </script>
 
@@ -67785,73 +67017,5 @@ if (document.readyState === "loading") {
     <input type="file" id="ludo-qbank-import-input" accept=".json" hidden />
     <input type="file" id="inner-voice-bg-input" accept="image/*" hidden />
     <input type="file" id="script-kill-import-input" accept=".json" hidden />
-  
-    <!-- 头像生图弹窗 -->
-    <div id="avatar-gen-modal" class="modal" style="display: none;">
-      <div class="modal-content" style="max-width: 640px; width: 94%; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-color);">
-          <span style="font-weight: 600; font-size: 16px; color: var(--text-primary);">生图</span>
-          <span class="close" id="close-avatar-gen-modal" style="cursor: pointer; font-size: 24px; font-weight: bold; color: var(--text-secondary);">&times;</span>
-        </div>
-        <div class="modal-body" style="padding: 16px;">
-          <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start;">
-            <!-- 左侧 宽度二分之一 -->
-            <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 10px;">
-              <div class="form-group" style="margin-bottom: 0;">
-                <label style="font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; display: block;">外貌描述</label>
-                <textarea id="avatar-gen-appearance" class="moe-input" rows="3" placeholder="输入外貌特征..." style="width: 100%; box-sizing: border-box; resize: vertical;"></textarea>
-              </div>
-
-              <button type="button" id="avatar-gen-make-prompt-btn" class="moe-btn-secondary" style="width: 100%; font-size: 13px; height: 34px; border-radius: 17px;">
-                生成prompt
-              </button>
-
-              <div class="form-group" style="margin-bottom: 0;">
-                <label style="font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; display: block;">提示词 Prompt</label>
-                <textarea id="avatar-gen-prompt-input" class="moe-input" rows="4" placeholder="英文化生图提示词..." style="width: 100%; box-sizing: border-box; resize: vertical;"></textarea>
-              </div>
-
-              <button type="button" id="avatar-gen-do-gen-btn" class="moe-btn" style="width: 100%; font-size: 14px; height: 36px; border-radius: 18px; background-color: var(--accent-color); color: #fff;">
-                生图
-              </button>
-
-              <div id="avatar-gen-status" style="display: none; text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 4px;"></div>
-            </div>
-
-            <!-- 右侧 1*1 方框与圆形矢量图按钮 -->
-            <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-              <!-- 1*1 方框 支持手拖动缩放 旋转 -->
-              <div id="avatar-crop-viewport" style="width: 200px; height: 200px; border-radius: 12px; border: 2px solid var(--accent-color); overflow: hidden; position: relative; cursor: grab; background-color: var(--secondary-bg); touch-action: none;">
-                <img id="avatar-crop-img" src="" alt="头像预览" style="position: absolute; top: 0; left: 0; transform-origin: center center; user-select: none; pointer-events: none; max-width: none;" />
-              </div>
-
-              <!-- 下方圆形矢量图按钮 -->
-              <div style="display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%;">
-                <!-- 镜像翻转 -->
-                <button type="button" id="avatar-crop-flip-btn" title="镜像翻转" style="width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3L21 7L17 11"/><path d="M3 7H21"/><path d="M7 21L3 17L7 13"/><path d="M21 17H3"/></svg>
-                </button>
-
-                <!-- 旋转 -->
-                <button type="button" id="avatar-crop-rotate-btn" title="旋转" style="width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                </button>
-
-                <!-- 重置 -->
-                <button type="button" id="avatar-crop-reset-btn" title="重置" style="width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                </button>
-
-                <!-- 保存成为头像 -->
-                <button type="button" id="avatar-gen-save-btn" title="保存" style="width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--accent-color); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
   </body>
 </html>
