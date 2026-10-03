@@ -29646,7 +29646,14 @@ select:focus-visible {
 #streak-settings-section,
 #offline-mode-section,
 #offline-mode-details,
-#couple-avatar-group {
+#couple-avatar-group,
+#waimai-request-modal,
+#red-packet-modal,
+#red-packet-details-modal,
+#transfer-modal,
+.message-bubble.is-waimai-request,
+.message-bubble.is-red-packet,
+.message-bubble.is-transfer {
   display: none !important;
 }
 

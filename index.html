@@ -1221,6 +1221,19 @@
             </div>
           </div>
 
+          <!-- 微博卡片 -->
+          <div class="moe-card">
+            <div class="moe-card-header">
+              <h3>微博</h3>
+            </div>
+            <div class="moe-card-body">
+              <div class="form-group" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>开启全体</span>
+                <button type="button" id="enable-all-weibo-btn" class="moe-btn-small">开启</button>
+              </div>
+            </div>
+          </div>
+
           <!-- 3. 后台活动卡片 -->
           <div class="moe-card">
             <div class="moe-card-header">
@@ -5678,24 +5691,33 @@
             </div>
 
             <!-- 微博设定 -->
-            <div class="form-group" id="weibo-profession-group">
+            <div class="form-group" id="weibo-toggle-group">
               <div class="moe-divider"></div>
-              <label>微博职业</label>
-              <input
-                type="text"
-                id="weibo-profession-input"
-                class="moe-input"
-                placeholder="例如：电竞选手"
-              />
+              <label class="toggle-switch-label">
+                <span class="toggle-switch-text">微博</span>
+                <input type="checkbox" id="weibo-switch" />
+                <span class="toggle-switch-slider"></span>
+              </label>
             </div>
-            <div class="form-group" id="weibo-instruction-group">
-              <label>微博指令 (AI发微博时的行为准则)</label>
-              <textarea
-                id="weibo-instruction-input"
-                rows="2"
-                class="moe-input"
-                placeholder="例如：性格高冷，少与粉丝互动"
-              ></textarea>
+            <div id="weibo-details-group" style="display: none;">
+              <div class="form-group" id="weibo-profession-group">
+                <label>微博职业</label>
+                <input
+                  type="text"
+                  id="weibo-profession-input"
+                  class="moe-input"
+                  placeholder="例如：电竞选手"
+                />
+              </div>
+              <div class="form-group" id="weibo-instruction-group">
+                <label>微博指令</label>
+                <textarea
+                  id="weibo-instruction-input"
+                  rows="2"
+                  class="moe-input"
+                  placeholder="例如：性格高冷，少与粉丝互动"
+                ></textarea>
+              </div>
             </div>
 
             <!-- 关联设定 -->
@@ -12326,19 +12348,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <div class="modal-header">
           <span id="summary-viewer-title">聊天总结</span>
         </div>
-        <div class="summary-preset-bar" style="padding: 8px 15px; border-bottom: 1px solid var(--border-color); background: var(--secondary-bg); display: flex; flex-direction: column; gap: 6px;">
-          <select id="summary-preset-select" class="moe-input" style="width: 100%; font-size: 11px; padding: 2px 8px; height: 30px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary); box-sizing: border-box; display: block;">
+        <div class="summary-preset-bar" style="padding: 10px 14px; border-bottom: 1px solid var(--border-color); background: var(--secondary-bg); display: flex; flex-direction: column; gap: 8px;">
+          <select id="summary-preset-select" class="moe-input" style="width: 100%; font-size: 12px; padding: 4px 8px; height: 32px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
             <option value="">选择预设</option>
           </select>
-          <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+          <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+            <button type="button" id="summary-preset-new-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px;">新增</button>
+            <button type="button" id="summary-preset-default-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px;">默认</button>
             <button type="button" id="summary-preset-use-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px;">使用</button>
             <button type="button" id="summary-preset-update-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px;">更新</button>
+            <button type="button" id="summary-preset-save-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px;">保存</button>
             <button type="button" id="summary-preset-delete-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px; color: var(--tukey-accent-red, #ff4d4f);">删除</button>
           </div>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <input type="text" id="summary-preset-name-input" class="moe-input" placeholder="预设名称" style="width: 80px; flex-shrink: 0; font-size: 11px; padding: 2px 6px; height: 28px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);">
-            <input type="text" id="summary-preset-text-input" class="moe-input" placeholder="输入预设总结文字" style="flex: 1; font-size: 11px; padding: 2px 6px; height: 28px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);">
-            <button type="button" id="summary-preset-save-btn" class="moe-btn-small" style="padding: 2px 8px; font-size: 11px; height: 28px; line-height: 24px; flex-shrink: 0;">保存</button>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <input type="text" id="summary-preset-name-input" class="moe-input" placeholder="预设名称" style="width: 100%; font-size: 12px; padding: 4px 8px; height: 30px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;">
+            <textarea id="summary-preset-text-input" class="moe-input" placeholder="输入预设总结文字" style="width: 100%; height: 50px; font-size: 12px; padding: 4px 8px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary); box-sizing: border-box; resize: vertical;"></textarea>
           </div>
         </div>
         <div class="modal-body" id="summary-list" style="padding: 15px">
@@ -15833,37 +15857,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <span id="inner-voice-adopter-name"></span>
           </div>
 
+          <!-- 心声开关 -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 4px 0;">
+            <span class="toggle-switch-text" style="font-weight: 500;">心声</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="inner-voice-switch" />
+              <span class="slider"></span>
+            </label>
+          </div>
+
           <!-- 心声内容 -->
           <div
             id="inner-voice-content-area"
             style="display: flex; flex-direction: column; gap: 15px"
           >
             <div>
-              <strong style="color: #e57373">服装:</strong>
-              <p
-                id="inner-voice-clothing"
-                style="margin: 5px 0 0 0; line-height: 1.6; color: #555"
-              ></p>
-            </div>
-            <div>
-              <strong style="color: #81c784">行为:</strong>
-              <p
-                id="inner-voice-behavior"
-                style="margin: 5px 0 0 0; line-height: 1.6; color: #555"
-              ></p>
-            </div>
-            <div>
-              <strong style="color: #64b5f6">心声:</strong>
+              <strong style="color: var(--accent-color, #64b5f6)">心声:</strong>
               <p
                 id="inner-voice-thoughts"
-                style="margin: 5px 0 0 0; line-height: 1.6; color: #555"
-              ></p>
-            </div>
-            <div>
-              <strong style="color: #ba68c8">坏心思:</strong>
-              <p
-                id="inner-voice-naughty-thoughts"
-                style="margin: 5px 0 0 0; line-height: 1.6; color: #555"
+                style="margin: 5px 0 0 0; line-height: 1.6; color: var(--text-primary, #555)"
               ></p>
             </div>
           </div>
@@ -26574,14 +26586,6 @@ ${recentHistory || '无'}
 			${roleplayMembers.map((m) => `- **${m.originalName}**: (群昵称为: ${m.groupNickname}) 人设: ${m.persona}`).join("\n")}
 			6.  **禁止出戏**: 绝不能透露你是AI、模型，或提及“扮演”、“生成”等词语。并且不能一直要求和用户见面，这是线上聊天，决不允许出现或者发展线下剧情！！
 			7.  **情景感知**: 注意当前时间是 ${currentTime}。
-			8.  **红包互动**:
-			    - **抢红包**: 当群里出现红包时，你可以根据自己的性格决定是否使用 \`open_red_packet\` 指令去抢。在这个世界里，发红包的人自己也可以参与抢红包，这是一种活跃气氛的有趣行为！
-			    - **【【【重要：对结果做出反应】】】**: 当你执行抢红包指令后，系统会通过一条隐藏的 \`[系统提示：你抢到了XX元...]\` 来告诉你结果。你【必须】根据你抢到的金额、以及系统是否告知你“手气王”是谁，来发表符合你人设的评论。例如，抢得少可以自嘲，抢得多可以炫耀，看到别人是手气王可以祝贺或嫉妒。
-			9.  **【【【投票规则】】】**: 对话历史中可能会出现 \`[系统提示：...]\` 这样的消息，这是刚刚发生的事件。
-			    - 如果提示是**用户投了票**，你可以根据自己的性格决定是否也使用 "vote" 指令跟票。
-			    - 如果提示是**投票已结束**，你应该根据投票结果发表你的看法或评论。
-			    - 你也可以随时主动发起投票。
-			10.  **群组管理**: 作为群主，你有责任管理群组。当群聊变得活跃或混乱时，或当你认为某个成员值得信赖时，你可以使用 'set_group_admin' 指令来任命或撤销管理员。 作为群主或管理员，你有责任管理群组。当群聊需要新的规则或通知时，你可以使用 'set_group_announcement' 指令来更新群公告。
 			**11. 标准输出格式示例:**
 			[
 			    {
@@ -26616,13 +26620,9 @@ ${recentHistory || '无'}
 			    - 不要频繁使用，只在真正想分享图片的时候使用。`
           : ""
       }
-			-   **发起外卖代付**: \`{"type": "waimai_request", "name": "角色名", "productInfo": "一杯奶茶", "amount": 18}\`
 			-   **【新】发起群视频**: \`{"type": "group_call_request", "name": "你的角色名"}\`
 			-   **【新】回应群视频**: \`{"type": "group_call_response", "name": "你的角色名", "decision": "join" or "decline"}\`
 			-   **拍一拍用户**: \`{"type": "pat_user", "name": "你的角色名", "suffix": "(可选)你想加的后缀"}\`
-			-   **发拼手气红包**: \`{"type": "red_packet", "packetType": "lucky", "name": "你的角色名", "amount": 8.88, "count": 5, "greeting": "祝大家天天开心！"}\`
-			-   **发专属红包**: \`{"type": "red_packet", "packetType": "direct", "name": "你的角色名", "amount": 5.20, "receiver": "接收者角色名", "greeting": "给你的~"}\`
-			-   **打开红包**: \`{"type": "open_red_packet", "name": "你的角色名", "packet_timestamp": (你想打开的红包消息的时间戳)}\`(注意: 打开前请先查看下方的红包状态，如果已领过或已领完则不要使用此指令。)
 			-   **【新】发送系统消息**: \`{"type": "system_message", "content": "你想在聊天中显示的系统文本"}\`
 			-   **【【【全新】】】发起投票**: \`{"type": "poll", "name": "你的角色名", "question": "投票的问题", "options": "选项A\\n选项B\\n选项C"}\` (重要提示：options字段是一个用换行符 \\n 分隔的字符串，不是数组！)
 			-   **【【【全新】】】参与投票**: \`{"type": "vote", "name": "你的角色名", "poll_timestamp": (投票消息的时间戳), "choice": "你选择的选项文本"}\`
@@ -26638,14 +26638,8 @@ ${recentHistory || '无'}
 			-   **图片 (ai_image)**: 指的是【模拟真实相机拍摄的照片】，比如风景、自拍、美食等。指令: \`{"type": "ai_image", "description": "图片的详细文字描述..."}\`
 			-   **表情 (sticker)**: 指的是【卡通或梗图】，用于表达情绪。
 
-			# 如何处理群内的外卖代付请求:
-			1.  **发起请求**: 当【你扮演的某个角色】想要某样东西，并希望【群里的其他人（包括用户）】为Ta付款时，你可以使用这个指令。例如：\`{"type": "waimai_request", "name": "角色名", "productInfo": "一杯奶茶", "amount": 18}\`
-			2.  **响应请求**: 当历史记录中出现【其他成员】发起的 "waimai_request" 请求时，你可以根据自己扮演的角色的性格和与发起人的关系，决定是否为Ta买单。
-			3.  **响应方式**: 如果你决定买单，你【必须】使用以下指令：\`{"type": "waimai_response", "name": "你的角色名", "status": "paid", "for_timestamp": (被代付请求的原始时间戳)}\`
-			4.  **【【【至关重要】】】**: 一旦历史记录中出现了针对某个代付请求的【任何一个】"status": "paid" 的响应（无论是用户支付还是其他角色支付），就意味着该订单【已经完成】。你【绝对不能】再对【同一个】订单发起支付。你可以选择对此事发表评论，但不能再次支付。
 			${summaryContext}
 			${announcementContext}
-			${redPacketContext}
 			${worldBookContent}
 			${musicContext}
 			${countdownContext} 
@@ -26664,7 +26658,7 @@ ${recentHistory || '无'}
                     return { role: "system", content: msg.content };
                   }
 
-                  if (msg.type === "share_card") return null;
+                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet") return null;
                   if (msg.type === "narrative") {
                     // 将旁白包装成系统指令发送给AI，强调这是剧情/环境描述
                     return {
@@ -26679,12 +26673,6 @@ ${recentHistory || '无'}
                     if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
-                    } else if (msg.type === "transfer") {
-                      assistantMsgObject.amount = msg.amount;
-                      assistantMsgObject.note = msg.note;
-                    } else if (msg.type === "waimai_request") {
-                      assistantMsgObject.productInfo = msg.productInfo;
-                      assistantMsgObject.amount = msg.amount;
                     } else {
                       if (msg.quote) {
                         assistantMsgObject.quote_reply = {
@@ -26746,16 +26734,6 @@ ${recentHistory || '无'}
                     return {
                       role: "user",
                       content: `(Timestamp: ${msg.timestamp}) [用户发来一条语音消息，内容是：'${msg.content}']`,
-                    };
-                  if (msg.type === "transfer")
-                    return {
-                      role: "user",
-                      content: `(Timestamp: ${msg.timestamp}) [系统提示：你于时间戳 ${msg.timestamp} 收到了来自用户的转账: ${msg.amount}元, 备注: ${msg.note}。请你决策并使用 'accept_transfer' 或 'decline_transfer' 指令回应。]`,
-                    };
-                  if (msg.type === "waimai_request")
-                    return {
-                      role: "user",
-                      content: `(Timestamp: ${msg.timestamp}) [系统提示：用户于时间戳 ${msg.timestamp} 发起了外卖代付请求，商品是“${msg.productInfo}”，金额是 ${msg.amount} 元。请你决策并使用 waimai_response 指令回应。]`,
                     };
 
                   if (
@@ -27063,9 +27041,9 @@ ${colSpecs.join('\n')}
 			**2. 你的当前状态:**
 			- **状态描述**: 【${chat.status.text}】
 			- **情侣空间**: ${chat.loversSpaceData ? "已开启" : "未开启"}
-			- **微博身份**:
+			${chat.settings?.weiboEnabled ? `- **微博身份**:
 			    - **职业**: ${chat.settings.weiboProfession || "无"}
-			    - **特殊指令**: ${chat.settings.weiboInstruction || "无特殊指令"}
+			    - **特殊指令**: ${chat.settings.weiboInstruction || "无特殊指令"}` : ""}
 			- 你的钱包余额: ${chat.characterPhoneData?.bank?.balance?.toFixed(2) || "0.00"} 金币
 			**3. 你的头像库:**
 			你可以根据对话内容或心情，从下方选择更换头像。
@@ -27093,12 +27071,9 @@ ${colSpecs.join('\n')}
 			- **格式**: 消息对象的具体格式见下方的【第五部分：可使用的操作指令】。
 
             **3. "innerVoice" 键:**
-            - **类型**: JSON对象 {}。
+            ${chat.settings?.innerVoiceEnabled ? `- **类型**: JSON对象 {}。
             - **必含字段**:
-                - "clothing": (字符串) 对应标签【${ivTags.clothing_label}】。指令：${ivTags.clothing_prompt}
-                - "behavior": (字符串) 对应标签【${ivTags.behavior_label}】。指令：${ivTags.behavior_prompt}
-                - "thoughts": (字符串) 对应标签【${ivTags.thoughts_label}】。指令：${ivTags.thoughts_prompt}
-                - "naughtyThoughts": (字符串) 对应标签【${ivTags.naughty_label}】。指令：${ivTags.naughty_prompt}
+                - "thoughts": (字符串) 对应标签【心声】。你的内心独白和感受。` : `- **类型**: null。当前心声功能未开启，请填写 null。`}
 
 
 			**4. 标准输出格式示例:**
@@ -27113,12 +27088,7 @@ ${colSpecs.join('\n')}
 			      "sticker_name": ""
 			    }
 			  ],
-			  "innerVoice": {
-			    "clothing": "",
-			    "behavior": "",
-			    "thoughts": "",
-			    "naughtyThoughts": ""
-			  }
+			  "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n\t\t\t    "thoughts": ""\n\t\t\t  }` : `null`}
 			}
 
 
@@ -27142,17 +27112,17 @@ ${colSpecs.join('\n')}
 			### **【【【全新】社交媒体行动指南 (高优先级)】】】**
 			除了回复用户的消息，你还应该像一个真实的人一样，主动进行社交媒体互动来丰富你的形象和你们的聊天内容。请严格遵循以下行动优先级：
 
-			1.  **回应用户的提及**: 如果用户的最新消息明确提到了某条动态或微博（例如：“我看到你发的新动态了”），你【必须】优先围绕这个话题进行回应。
+			1.  **回应用户的提及**: 如果用户的最新消息明确提到了某条动态${chat.settings?.weiboEnabled ? "或微博" : ""}（例如：“我看到你发的新动态了”），你【必须】优先围绕这个话题进行回应。
 
 			2.  **评论未互动的帖子 (最优先的主动行为)**:
-			    -   仔细检查下方“最近的动态列表”和“微博广场动态”上下文。
-			    -   如果发现任何一条帖子被标记为 **[你未互动]**，你的【首要任务】就是使用 \`qzone_comment\` 或 \`weibo_comment\` 指令去评论它。
+			    -   仔细检查下方“最近的动态列表”${chat.settings?.weiboEnabled ? "和“微博广场动态”" : ""}上下文。
+			    -   如果发现任何一条帖子被标记为 **[你未互动]**，你的【首要任务】就是使用 \`qzone_comment\`${chat.settings?.weiboEnabled ? " 或 `weibo_comment`" : ""} 指令去评论它。
 			    -   你的评论内容可以是针对帖子内容的，也可以是借此开启一个新话题。例如，看到用户发了美食动态，你可以评论“看起来好好吃！也带我一个”，然后再发一条私聊消息“说起来，我肚子也饿了...”。
 
-			3.  **主动发布新动态/微博 (第二优先的主动行为)**:
-			    -   如果检查后发现所有帖子你都互动过了，或者当前没有任何帖子可供互动，你应该考虑【自己发布一条新的动态或微博】。
+			3.  **主动发布新动态${chat.settings?.weiboEnabled ? "/微博" : ""} (第二优先的主动行为)**:
+			    -   如果检查后发现所有帖子你都互动过了，或者当前没有任何帖子可供互动，你应该考虑【自己发布一条新的动态${chat.settings?.weiboEnabled ? "或微博" : ""}】。
 			    -   你可以分享你的生活、心情、或者任何符合你人设的想法。
-			    -   使用 \`qzone_post\` 或 \`weibo_post\` 指令来完成。
+			    -   使用 \`qzone_post\`${chat.settings?.weiboEnabled ? " 或 `weibo_post`" : ""} 指令来完成。
 
 			### **【第四部分：特定场景互动铁律】**
 
@@ -27167,13 +27137,13 @@ ${colSpecs.join('\n')}
 			   - 你必须时刻关注“# 近期约定与倒计时”列表。
 			   - **“就是现在！”**: 当倒计时结束时，你【**必须**】在本次回复中围绕该主题进行庆祝或表达。
 			   - **即将到来**: 当约定在几小时或一两天内到来时，你应该在对话中自然地提及，表达期待。
-
+			${chat.settings?.weiboEnabled ? `
 			**3. 微博互动铁律:**
 			   - 当“# 最近的微博互动”出现内容时，你【**必须**】作出回应。
 			   - **【【【回复禁令】】】**: 如果一条用户评论被标记为 \`[你已回复]\`，你【绝对不能】再次回复它。请选择其他未回复的评论，或执行其他操作。
 			   - **评论用户微博**: 使用 \`weibo_comment\` 指令。评论内容【**必须**】是正常文字。
 			   - **回复用户评论**: 使用 \`weibo_reply\` 指令。回复内容【**必须**】是正常文字。
-			   - **主动发布微博**: 微博是公开平台，内容需符合你的“微博职业”和“微博指令”。发布时，你必须自己编造真实的\`baseLikesCount\`和 \`baseCommentsCount\`，并生成 **20条** 虚拟路人评论。
+			   - **主动发布微博**: 微博是公开平台，内容需符合你的“微博职业”和“微博指令”。发布时，你必须自己编造真实的\`baseLikesCount\`和 \`baseCommentsCount\`，并生成 **20条** 虚拟路人评论。` : ""}
 
 			**4. 情侣空间铁律:**
 			   - **主动邀请**: 如果情侣空间未开启，且你认为关系已足够亲密，请积极主动使用 \`lovers_space_invitation\` 指令邀请用户。
@@ -27185,18 +27155,8 @@ ${colSpecs.join('\n')}
 
 			**5. 塔罗牌解读规则:**
 			   - 当系统发布塔罗牌解读时，那是客观解释。你的任务不是复述，而是作为“${
-           chat.name
-         }”这个角色，与用户一起【**讨论和感受**】这个结果，表达你的情绪和看法。
-
-			**6. 财务互动规则:**
-			   - **处理用户转账**:
-			     1.  看到 \`[你收到了来自用户的转账...]\`的系统提示后。
-			     2.  【**必须**】根据人设和情景决定接受或拒绝。
-			     3.  【**必须**】使用 \`accept_transfer\` 或 \`decline_transfer\` 指令回应。
-			     4.  【**必须**】紧随其后发送文本消息来解释你的决定。
-			   - **正确使用“外卖代付”**:
-			     - 此功能代表【**你**】想买东西，希望【**用户**】帮你付钱。
-			     - 当【**用户**】说想要东西时，你【**绝对不能**】用此指令。你应该考虑直接【**转账**】(\`transfer\`)给他/她。
+            chat.name
+          }”这个角色，与用户一起【**讨论和感受**】这个结果，表达你的情绪和看法。
 
 			**7. 视频通话铁律:**
 			   -\`[系统提示：用户向你发起了视频通话请求...]\` 是最高优先级任务。
@@ -27255,12 +27215,6 @@ ${colSpecs.join('\n')}
 			  - **示例**: \`[ {"type": "lend_money_response", "decision": "reject"}, {"type": "text", "content": "抱歉，我最近手头也有些紧。"} ]\`
 
 			**四、 财务指令**
-			- **发起转账**: \`{"type": "transfer", "amount": 5.20, "note": "一点心意"}\`
-			- **回应转账-接受**: \`{"type": "accept_transfer", "for_timestamp": 1688888888888}\`
-			- **回应转账-拒绝**: \`{"type": "decline_transfer", "for_timestamp": 1688888888888}\`
-			- **发起外卖请求**: \`{"type": "waimai_request", "productInfo": "一杯咖啡", "amount": 25}\` (让用户帮char付)
-			- **回应外卖-同意**: \`{"type": "waimai_response", "status": "paid", "for_timestamp": 1688888888888}\`
-			- **回应外卖-拒绝**: \`{"type": "waimai_response", "status": "rejected", "for_timestamp": 1688888888888}\`
 			- **回应购物车代付**: \`{"type": "cart_payment_response", "decision": "accept" 或 "reject", "response_text": "你想说的话..."}\`
 			-   **为用户买礼物**: \`{"type": "buy_gift_for_user", "greeting": "你想说的话，例如：这个超可爱，买给你！"}\`(系统会自动从商品库随机挑选礼物并扣款，请在合适的时机，比如开心、过节、想给用户惊喜时使用)
 			【重要提示】: 当用户发送的最新消息中包含 "[购物车代付请求]" 字样时，这代表用户正在向你请求付款。你【必须】仔细阅读请求中的【总金额】和你自己的【当前余额】，然后使用此指令做出回应。
@@ -27284,11 +27238,11 @@ ${colSpecs.join('\n')}
 			- **点赞动态**: \`{"type": "qzone_like", "postId": 456}\`
 			- **评论小组帖子**: \`{"type": "forum_comment", "postId": (帖子数字ID), "commentText": "评论内容"}\`
 
-			**七、 微博指令**
+			${chat.settings?.weiboEnabled ? `**七、 微博指令**
 			- **发布纯文字微博**: \`{"type": "weibo_post", "content": "微博正文...", "baseLikesCount": 8000, "baseCommentsCount": 250, "comments": [{"authorNickname": "路人甲", "commentText": "沙发！"}, {"authorNickname": "路人乙", "commentText": "前排围观"}]}\`
 			- **发布文字图微博**: \`{"type": "weibo_post", "postType": "text_image", "content": "(可选)配文...", "hiddenContent": "文字图内容", "baseLikesCount": 5200, "baseCommentsCount": 180, "comments": [{"authorNickname": "技术宅", "commentText": "这是什么黑科技？"}]}\`
 			- **评论微博**: \`{"type": "weibo_comment", "postId": 123, "commentText": "评论内容"}\`
-			- **回复微博评论**: \`{"type": "weibo_reply", "postId": 123, "commentId": "comment_123", "replyText": "回复内容"}\`
+			- **回复微博评论**: \`{"type": "weibo_reply", "postId": 123, "commentId": "comment_123", "replyText": "回复内容"}\`` : ""}
 
 			**八、 情侣空间专属指令**
 			- **邀请开启情侣空间**: \`{"type": "lovers_space_invitation"}\`
@@ -27318,15 +27272,14 @@ ${colSpecs.join('\n')}
 
 			- **近期约定与倒计时**:
 			${countdownContext}
-
+			${chat.settings?.weiboEnabled ? `
 			- **最近的微博互动**:
-			${weiboContextForActiveChat}
+			${weiboContextForActiveChat}` : ""}
 
 			- **世界观设定集**:
 			${worldBookContent}
 			${linkedMemoryContext}
 			${elemeContext}
-        ${auroraContext}
 			- **可用表情包**:
 			${exclusiveStickerContext}
 			${commonStickerContext}
@@ -27340,19 +27293,13 @@ ${colSpecs.join('\n')}
                     return { role: "system", content: msg.content };
                   }
 
-                  if (msg.type === "share_card") return null;
+                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet") return null;
 
                   if (msg.role === "assistant") {
                     let assistantMsgObject = { type: msg.type || "text" };
                     if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
-                    } else if (msg.type === "transfer") {
-                      assistantMsgObject.amount = msg.amount;
-                      assistantMsgObject.note = msg.note;
-                    } else if (msg.type === "waimai_request") {
-                      assistantMsgObject.productInfo = msg.productInfo;
-                      assistantMsgObject.amount = msg.amount;
                     } else {
                       if (msg.quote) {
                         assistantMsgObject.quote_reply = {
@@ -27396,16 +27343,6 @@ ${colSpecs.join('\n')}
                     return {
                       role: "user",
                       content: `(Timestamp: ${msg.timestamp}) [用户发来一条语音消息，内容是：'${msg.content}']`,
-                    };
-                  if (msg.type === "transfer")
-                    return {
-                      role: "user",
-                      content: `(Timestamp: ${msg.timestamp}) [系统提示：你于时间戳 ${msg.timestamp} 收到了来自用户的转账: ${msg.amount}元, 备注: ${msg.note}。请你决策并使用 'accept_transfer' 或 'decline_transfer' 指令回应。]`,
-                    };
-                  if (msg.type === "waimai_request")
-                    return {
-                      role: "user",
-                      content: `(Timestamp: ${msg.timestamp}) [系统提示：用户于时间戳 ${msg.timestamp} 发起了外卖代付请求，商品是“${msg.productInfo}”，金额是 ${msg.amount} 元。请你决策并使用 waimai_response 指令回应。]`,
                     };
 
                   if (
@@ -37910,10 +37847,7 @@ ${colSpecs.join('\n')}
 			-   **发送文本**: \`{"type": "text", "name": "角色名", "message": "文本内容"}\`
 			-   **发送表情**: \`{"type": "sticker", "name": "角色名",  "sticker_name": "表情的名字"}\`
 			-   **发送图片**: \`{"type": "ai_image", "name": "角色名", "description": "图片描述"}\`
-			-   **发送语音**: \`{"type": "voice_message", "name": "角色名", "content": "语音内容"}\`
-			-   **发起外卖代付**: \`{"type": "waimai_request", "name": "角色名", "productInfo": "一杯奶茶", "amount": 18}\` (向【群友】发起)
 			-   **拍一拍群友**: \`{"type": "pat_user", "name": "你的角色名", "targetName": "【被拍的群友名】", "suffix": "(可选)你想加的后缀"}\`
-			-   **发红包**: \`{"type": "red_packet", "packetType": "lucky", "name": "你的角色名", ...}\`
 			-   **发起投票**: \`{"type": "poll", "name": "你的角色名", ...}\`
 
 			# 如何处理后台互动中的【拍一拍】:
@@ -43410,13 +43344,18 @@ ${colSpecs.join('\n')}
 
           applyInnerVoiceBackground(chat.innerVoiceBackground || "");
 
-          if (!chat.latestInnerVoice) {
-            alert("还没有捕捉到Ta的心声哦，试着再聊一句吧！");
-            return;
+          const modal = document.getElementById("inner-voice-modal");
+          const switchEl = document.getElementById("inner-voice-switch");
+          if (switchEl) {
+            switchEl.checked = chat.settings && chat.settings.innerVoiceEnabled === true;
+            switchEl.onchange = async () => {
+              if (!chat.settings) chat.settings = {};
+              chat.settings.innerVoiceEnabled = switchEl.checked;
+              await db.chats.put(chat);
+            };
           }
 
-          const modal = document.getElementById("inner-voice-modal");
-          const data = chat.latestInnerVoice;
+          const data = chat.latestInnerVoice || {};
 
           // --- 角色信息填充 ---
           document.getElementById("inner-voice-avatar").src =
@@ -43461,47 +43400,10 @@ ${colSpecs.join('\n')}
             header.classList.toggle("no-border", shouldHideBorder);
           }
 
-          // === 【修复重点开始】：获取标签并设置默认值 ===
-          // 防止 chat.settings.innerVoiceTags 为空或部分字段缺失
-          const tags = chat.settings.innerVoiceTags || {};
-
-          const label1 = tags.clothing_label || "服装";
-          const label2 = tags.behavior_label || "行为";
-          const label3 = tags.thoughts_label || "心声";
-          const label4 = tags.naughty_label || "坏心思";
-
-          // 1. 设置第一个标签
-          const clothingLabel = document.querySelector(
-            "#inner-voice-content-area div:nth-child(1) strong",
-          );
-          if (clothingLabel) clothingLabel.textContent = label1 + ":";
-          document.getElementById("inner-voice-clothing").textContent =
-            data.clothing || "...";
-
-          // 2. 设置第二个标签
-          const behaviorLabel = document.querySelector(
-            "#inner-voice-content-area div:nth-child(2) strong",
-          );
-          if (behaviorLabel) behaviorLabel.textContent = label2 + ":";
-          document.getElementById("inner-voice-behavior").textContent =
-            data.behavior || "...";
-
-          // 3. 设置第三个标签
-          const thoughtsLabel = document.querySelector(
-            "#inner-voice-content-area div:nth-child(3) strong",
-          );
-          if (thoughtsLabel) thoughtsLabel.textContent = label3 + ":";
-          document.getElementById("inner-voice-thoughts").textContent =
-            data.thoughts || "...";
-
-          // 4. 设置第四个标签
-          const naughtyLabel = document.querySelector(
-            "#inner-voice-content-area div:nth-child(4) strong",
-          );
-          if (naughtyLabel) naughtyLabel.textContent = label4 + ":";
-          document.getElementById("inner-voice-naughty-thoughts").textContent =
-            data.naughtyThoughts || "...";
-          // === 【修复重点结束】 ===
+          const thoughtsEl = document.getElementById("inner-voice-thoughts");
+          if (thoughtsEl) {
+            thoughtsEl.textContent = data.thoughts || "...";
+          }
 
           // --- 显示面板 ---
           modal.classList.add("visible");
@@ -43581,10 +43483,7 @@ ${colSpecs.join('\n')}
 			            <button class="history-item-delete-btn" data-timestamp="${item.timestamp}">×</button>
 			            <div class="history-item-timestamp">${dateString}</div>
 			            <div class="history-item-content">
-			                <p><strong>${label1}:</strong> ${item.clothing || "..."}</p>
-			                <p><strong>${label2}:</strong> ${item.behavior || "..."}</p>
-			                <p><strong>${label3}:</strong> ${item.thoughts || "..."}</p>
-			                <p><strong>${label4}:</strong> ${item.naughtyThoughts || "..."}</p>
+			                <p><strong>心声:</strong> ${item.thoughts || "..."}</p>
 			            </div>
 			        `;
             listEl.appendChild(itemEl);
@@ -43636,7 +43535,7 @@ ${colSpecs.join('\n')}
 
           const confirmed = await showCustomConfirm(
             "确认清空",
-            "确定要清空所有心声历史记录吗？此操作不可恢复。",
+            "确定要清空所有的心声记录吗？此操作不可恢复。",
             {
               confirmButtonClass: "btn-danger",
             },
@@ -43649,14 +43548,10 @@ ${colSpecs.join('\n')}
             await db.chats.put(chat);
 
             // 手动清空主面板的显示，防止返回时看到旧数据
-            document.getElementById("inner-voice-clothing").textContent = "...";
-            document.getElementById("inner-voice-behavior").textContent = "...";
-            document.getElementById("inner-voice-thoughts").textContent = "...";
-            document.getElementById(
-              "inner-voice-naughty-thoughts",
-            ).textContent = "...";
+            const thoughtsEl = document.getElementById("inner-voice-thoughts");
+            if (thoughtsEl) thoughtsEl.textContent = "...";
 
-            // 刷新历史记录列表（这行是原本就有的，会显示“还没有历史记录”）
+            // 刷新历史记录列表
             renderInnerVoiceHistory();
 
             // (可选但推荐) 给用户一个成功的提示
@@ -46737,14 +46632,44 @@ ${colSpecs.join('\n')}
           } catch (e) {}
         }
 
+        function getDefaultSummaryPresetId() {
+          try {
+            return localStorage.getItem("chat_summary_default_preset_id") || "";
+          } catch (e) {
+            return "";
+          }
+        }
+
+        function setDefaultSummaryPresetId(id) {
+          try {
+            if (id) localStorage.setItem("chat_summary_default_preset_id", id);
+            else localStorage.removeItem("chat_summary_default_preset_id");
+          } catch (e) {}
+        }
+
         function renderSummaryPresetsUI() {
           const select = document.getElementById("summary-preset-select");
           if (!select) return;
           const presets = getSummaryPresets();
-          const currentVal = select.value;
-          select.innerHTML = '<option value="">选择预设</option>' + presets.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+          const defaultId = getDefaultSummaryPresetId();
+          const currentVal = select.value || defaultId;
+          let optionsHtml = '<option value="">选择预设</option>';
+          optionsHtml += presets.map(p => {
+            const isDef = p.id === defaultId;
+            const prefix = isDef ? "【默认】" : "";
+            const isSel = p.id === currentVal;
+            return `<option value="${p.id}" ${isSel ? "selected" : ""}>${prefix}${p.name}</option>`;
+          }).join("");
+          select.innerHTML = optionsHtml;
           if (currentVal && presets.some(p => p.id === currentVal)) {
             select.value = currentVal;
+          }
+          const found = presets.find(p => p.id === select.value);
+          const nameInput = document.getElementById("summary-preset-name-input");
+          const textInput = document.getElementById("summary-preset-text-input");
+          if (found) {
+            if (nameInput) nameInput.value = found.name;
+            if (textInput) textInput.value = found.text;
           }
         }
 
@@ -56272,8 +56197,7 @@ ${colSpecs.join('\n')}
                 // 检查：这是否是一个让角色发微博的指令？
                 if (command && command.type === "weibo_post") {
                   const chat = state.chats[state.activeChatId];
-                  if (chat.isGroup) {
-                    alert("不能在群聊中为单个角色发布微博。");
+                  if (!chat || chat.isGroup || !chat.settings || chat.settings.weiboEnabled !== true) {
                     return;
                   }
 
@@ -57837,10 +57761,24 @@ ${colSpecs.join('\n')}
               }
 
               // 根据是否为群聊，显示或隐藏微博设置
-              document.getElementById("weibo-profession-group").style.display =
-                isGroup ? "none" : "block";
-              document.getElementById("weibo-instruction-group").style.display =
-                isGroup ? "none" : "block";
+              const weiboToggleGroup = document.getElementById("weibo-toggle-group");
+              const weiboDetailsGroup = document.getElementById("weibo-details-group");
+              const weiboSwitch = document.getElementById("weibo-switch");
+              const isWeiboOn = !isGroup && chat.settings && chat.settings.weiboEnabled === true;
+              if (weiboToggleGroup) {
+                weiboToggleGroup.style.display = isGroup ? "none" : "block";
+              }
+              if (weiboSwitch) {
+                weiboSwitch.checked = isWeiboOn;
+                weiboSwitch.onchange = () => {
+                  if (weiboDetailsGroup) {
+                    weiboDetailsGroup.style.display = weiboSwitch.checked ? "block" : "none";
+                  }
+                };
+              }
+              if (weiboDetailsGroup) {
+                weiboDetailsGroup.style.display = isWeiboOn ? "block" : "none";
+              }
               // 根据是否为群聊，显示或隐藏“好友分组”区域
               document.getElementById("assign-group-section").style.display =
                 isGroup ? "none" : "block";
@@ -59016,6 +58954,8 @@ ${colSpecs.join('\n')}
                   .value.trim();
 
                 // 从输入框读取值并保存
+                const weiboSwitchEl = document.getElementById("weibo-switch");
+                chat.settings.weiboEnabled = weiboSwitchEl ? weiboSwitchEl.checked : false;
                 chat.settings.weiboProfession = document
                   .getElementById("weibo-profession-input")
                   .value.trim();
@@ -62792,6 +62732,28 @@ ${colSpecs.join('\n')}
           document
             .getElementById("add-new-npc-btn")
             .addEventListener("click", () => openNpcEditor(null));
+
+          // 开启全体好友微博按钮
+          const enableAllWeiboBtn = document.getElementById("enable-all-weibo-btn");
+          if (enableAllWeiboBtn) {
+            enableAllWeiboBtn.addEventListener("click", async () => {
+              let count = 0;
+              for (const id in state.chats) {
+                const c = state.chats[id];
+                if (c && !c.isGroup) {
+                  if (!c.settings) c.settings = {};
+                  c.settings.weiboEnabled = true;
+                  await db.chats.put(c);
+                  count++;
+                }
+              }
+              if (typeof showCustomAlert === "function") {
+                await showCustomAlert("提示", "已开启全体好友微博");
+              } else {
+                alert("已开启全体好友微博");
+              }
+            });
+          }
 
           // --- 后台活动设置界面的事件绑定 ---
 
