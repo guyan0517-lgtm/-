@@ -1,0 +1,16 @@
+{
+  "name": "ephone-tuk-mini",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'Build complete'",
+    "lint": "echo 'No lint script defined'"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "sharp": "^0.35.5"
+  }
+}
