@@ -1,4 +1,4 @@
-const CACHE_NAME = "ephone-tuk-cache-v3";
+const CACHE_NAME = "ephone-tuk-cache-v4";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const ASSETS_TO_CACHE = [
   "./manifest.json",
   "./icon.png",
   "./icon-192.png",
+  "./icon-512.png",
   "./apple-touch-icon.png",
   "./icon.svg",
   "./main-app.js"
