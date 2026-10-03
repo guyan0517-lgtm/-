@@ -348,6 +348,8 @@ class CocPanel {
 // ===================================================================
 
 let currentActiveCocPanel = null;
+let currentWorkingSkills = null;
+let currentWorkingCustomSkills = null;
 
 function getStoredCocPresets() {
   try {
@@ -390,7 +392,7 @@ function loadCocModalPresetsList(selectedId = "") {
 }
 
 function updateCocModalTotalPoints() {
-  if (!currentActiveCocPanel) return;
+  if (!currentActiveCocPanel || !currentWorkingSkills) return;
   let total = 0;
   const grid = document.getElementById("coc-modal-skills-grid");
   if (grid) {
@@ -407,16 +409,14 @@ function updateCocModalTotalPoints() {
     });
   }
 
-  currentActiveCocPanel.data.totalPoints = total;
   const display1 = document.getElementById("coc-modal-total-display");
   const display2 = document.getElementById("coc-modal-footer-points");
   if (display1) display1.textContent = total;
   if (display2) display2.textContent = total;
-  currentActiveCocPanel.updateTotalPoints();
 }
 
 function renderCocModalSkillsGrid() {
-  if (!currentActiveCocPanel) return;
+  if (!currentActiveCocPanel || !currentWorkingSkills) return;
   const grid = document.getElementById("coc-modal-skills-grid");
   if (!grid) return;
 
@@ -426,14 +426,14 @@ function renderCocModalSkillsGrid() {
   let items = [];
   COC_STANDARD_SKILLS.forEach(s => {
     const base = s.name === "闪避" ? Math.floor((stats.dex || 50) / 2) : s.base;
-    const currentVal = typeof data.skills[s.name] !== "undefined" ? data.skills[s.name] : base;
+    const currentVal = typeof currentWorkingSkills[s.name] !== "undefined" ? currentWorkingSkills[s.name] : base;
     items.push({ name: s.name, base: base, val: currentVal, isCustom: false });
   });
 
-  if (Array.isArray(data.customSkills)) {
-    data.customSkills.forEach(name => {
+  if (Array.isArray(currentWorkingCustomSkills)) {
+    currentWorkingCustomSkills.forEach(name => {
       if (!items.find(it => it.name === name)) {
-        const currentVal = typeof data.skills[name] !== "undefined" ? data.skills[name] : 0;
+        const currentVal = typeof currentWorkingSkills[name] !== "undefined" ? currentWorkingSkills[name] : 0;
         items.push({ name: name, base: 0, val: currentVal, isCustom: true });
       }
     });
@@ -473,10 +473,14 @@ function openCocSkillsModal(cocPanelInstance) {
     currentActiveCocPanel.data = getDefaultCocData();
   }
 
-  if (!currentActiveCocPanel.data.skills || typeof currentActiveCocPanel.data.skills !== "object" || Object.keys(currentActiveCocPanel.data.skills).length === 0) {
+  if (!currentActiveCocPanel.data.skills || typeof currentActiveCocPanel.data.skills !== "object") {
     const def = getDefaultCocData();
-    currentActiveCocPanel.data.skills = { ...def.skills, ...(currentActiveCocPanel.data.skills || {}) };
+    currentActiveCocPanel.data.skills = { ...def.skills };
   }
+
+  // 深度复制技能数据到草稿中，只有点保存时才写入真正的面板数据
+  currentWorkingSkills = JSON.parse(JSON.stringify(currentActiveCocPanel.data.skills || {}));
+  currentWorkingCustomSkills = [...(currentActiveCocPanel.data.customSkills || [])];
 
   try {
     renderCocModalSkillsGrid();
@@ -493,12 +497,12 @@ function closeCocSkillsModal() {
   if (modal) {
     modal.classList.remove("visible");
   }
-  if (currentActiveCocPanel && typeof currentActiveCocPanel.updateTotalPoints === "function") {
-    currentActiveCocPanel.updateTotalPoints();
-  }
+  // 放弃未保存的草稿修改
+  currentWorkingSkills = null;
+  currentWorkingCustomSkills = null;
 }
 
-// 绑定技能模态框的所有交互事件
+// // 绑定技能模态框的所有交互事件
 function initCocSkillsModalEvents() {
   const modal = document.getElementById("coc-skills-modal");
   if (!modal) return;
@@ -523,8 +527,8 @@ function initCocSkillsModalEvents() {
 
   if (saveBtn) {
     saveBtn.onclick = () => {
-      if (currentActiveCocPanel) {
-        // 同步所有输入框的值到当前面板对象
+      if (currentActiveCocPanel && currentWorkingSkills) {
+        // 同步所有输入框的值到草稿对象
         const grid = document.getElementById("coc-modal-skills-grid");
         if (grid) {
           grid.querySelectorAll(".coc-skill-item").forEach(item => {
@@ -532,16 +536,21 @@ function initCocSkillsModalEvents() {
             const name = item.dataset.skill;
             const valInput = item.querySelector(".coc-skill-val");
             if (valInput) {
-              currentActiveCocPanel.data.skills[name] = parseInt(valInput.value, 10) || 0;
+              currentWorkingSkills[name] = parseInt(valInput.value, 10) || 0;
             }
           });
         }
-        currentActiveCocPanel.save();
+        // 将草稿提交到真正的数据对象中，不直接操作数据库
+        currentActiveCocPanel.data.skills = { ...currentWorkingSkills };
+        currentActiveCocPanel.data.customSkills = [...(currentWorkingCustomSkills || [])];
+        currentActiveCocPanel.updateTotalPoints();
+
         const origText = saveBtn.textContent;
         saveBtn.textContent = "已保存";
         setTimeout(() => {
           saveBtn.textContent = origText;
-        }, 1000);
+          closeCocSkillsModal();
+        }, 500);
       }
     };
   }
@@ -558,19 +567,19 @@ function initCocSkillsModalEvents() {
         }
         if (!name || !name.trim()) return;
         const trimmed = name.trim();
-        if (!currentActiveCocPanel.data.customSkills) currentActiveCocPanel.data.customSkills = [];
-        if (!currentActiveCocPanel.data.customSkills.includes(trimmed)) {
-          currentActiveCocPanel.data.customSkills.push(trimmed);
+        if (!currentWorkingCustomSkills) currentWorkingCustomSkills = [];
+        if (!currentWorkingCustomSkills.includes(trimmed)) {
+          currentWorkingCustomSkills.push(trimmed);
         }
-        if (typeof currentActiveCocPanel.data.skills[trimmed] === "undefined") {
-          currentActiveCocPanel.data.skills[trimmed] = 0;
+        if (typeof currentWorkingSkills[trimmed] === "undefined") {
+          currentWorkingSkills[trimmed] = 0;
         }
         renderCocModalSkillsGrid();
         return;
       }
 
       const item = e.target.closest(".coc-skill-item");
-      if (!item || !currentActiveCocPanel) return;
+      if (!item || !currentWorkingSkills) return;
       const skillName = item.dataset.skill;
       const base = parseInt(item.dataset.base, 10) || 0;
       const valInput = item.querySelector(".coc-skill-val");
@@ -580,27 +589,27 @@ function initCocSkillsModalEvents() {
         let currentVal = parseInt(valInput.value, 10) || base;
         currentVal += 5;
         valInput.value = currentVal;
-        currentActiveCocPanel.data.skills[skillName] = currentVal;
+        currentWorkingSkills[skillName] = currentVal;
         updateCocModalTotalPoints();
       } else if (e.target.closest(".coc-skill-sub5-btn")) {
         let currentVal = parseInt(valInput.value, 10) || base;
         currentVal = Math.max(base, currentVal - 5);
         valInput.value = currentVal;
-        currentActiveCocPanel.data.skills[skillName] = currentVal;
+        currentWorkingSkills[skillName] = currentVal;
         updateCocModalTotalPoints();
       } else if (e.target.closest(".coc-skill-reset-btn")) {
         valInput.value = base;
-        currentActiveCocPanel.data.skills[skillName] = base;
+        currentWorkingSkills[skillName] = base;
         updateCocModalTotalPoints();
       }
     });
 
     grid.addEventListener("input", (e) => {
-      if (e.target.classList.contains("coc-skill-val") && currentActiveCocPanel) {
+      if (e.target.classList.contains("coc-skill-val") && currentWorkingSkills) {
         const item = e.target.closest(".coc-skill-item");
         if (!item || item.classList.contains("coc-add-skill-card")) return;
         const skillName = item.dataset.skill;
-        currentActiveCocPanel.data.skills[skillName] = parseInt(e.target.value, 10) || 0;
+        currentWorkingSkills[skillName] = parseInt(e.target.value, 10) || 0;
         updateCocModalTotalPoints();
       }
     });
@@ -610,7 +619,7 @@ function initCocSkillsModalEvents() {
   const resetAllBtn = document.getElementById("coc-modal-reset-all-btn");
   if (resetAllBtn) {
     resetAllBtn.onclick = () => {
-      if (!currentActiveCocPanel) return;
+      if (!currentActiveCocPanel || !currentWorkingSkills) return;
       const stats = currentActiveCocPanel.data.stats || {};
       const grid = document.getElementById("coc-modal-skills-grid");
       if (grid) {
@@ -620,7 +629,7 @@ function initCocSkillsModalEvents() {
           const base = getSkillBaseValue(name, stats);
           const valInput = item.querySelector(".coc-skill-val");
           if (valInput) valInput.value = base;
-          currentActiveCocPanel.data.skills[name] = base;
+          currentWorkingSkills[name] = base;
         });
       }
       updateCocModalTotalPoints();
@@ -631,7 +640,7 @@ function initCocSkillsModalEvents() {
   const savePresetBtn = document.getElementById("coc-modal-save-preset-btn");
   if (savePresetBtn) {
     savePresetBtn.onclick = async () => {
-      if (!currentActiveCocPanel) return;
+      if (!currentActiveCocPanel || !currentWorkingSkills) return;
       let presetName = null;
       if (typeof window.showCustomPrompt === "function") {
         presetName = await window.showCustomPrompt("新建预设", "请输入预设方案名称...", "", "text");
@@ -644,8 +653,8 @@ function initCocSkillsModalEvents() {
       const newPreset = {
         id: "coc_preset_" + Date.now(),
         name: trimmed,
-        skills: { ...currentActiveCocPanel.data.skills },
-        customSkills: [...(currentActiveCocPanel.data.customSkills || [])]
+        skills: { ...currentWorkingSkills },
+        customSkills: [...(currentWorkingCustomSkills || [])]
       };
       presets.push(newPreset);
       saveStoredCocPresets(presets);
@@ -658,7 +667,7 @@ function initCocSkillsModalEvents() {
     };
   }
 
-  // 选择预设立即套用
+  // 选择预设套用（写入草稿）
   const presetSelect = document.getElementById("coc-modal-preset-select");
   if (presetSelect) {
     presetSelect.onchange = () => {
@@ -671,15 +680,15 @@ function initCocSkillsModalEvents() {
       if (!preset) return;
 
       if (Array.isArray(preset.customSkills)) {
-        if (!currentActiveCocPanel.data.customSkills) currentActiveCocPanel.data.customSkills = [];
+        if (!currentWorkingCustomSkills) currentWorkingCustomSkills = [];
         preset.customSkills.forEach(c => {
-          if (!currentActiveCocPanel.data.customSkills.includes(c)) {
-            currentActiveCocPanel.data.customSkills.push(c);
+          if (!currentWorkingCustomSkills.includes(c)) {
+            currentWorkingCustomSkills.push(c);
           }
         });
       }
 
-      currentActiveCocPanel.data.skills = { ...preset.skills };
+      currentWorkingSkills = { ...preset.skills };
       renderCocModalSkillsGrid();
     };
   }
