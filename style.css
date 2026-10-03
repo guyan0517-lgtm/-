@@ -29906,3 +29906,46 @@ select:focus-visible {
 }
 
 
+
+
+/* 修复按钮上下居中与字缩进错位问题 */
+.moe-btn-mini, .btn-stack button, .change-frame-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border-color) !important;
+  background: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  cursor: pointer;
+  width: 100%;
+  font-weight: 500 !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  margin: 0 !important;
+  vertical-align: middle !important;
+}
+
+.moe-btn, .moe-btn-secondary, .moe-btn-small {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+  vertical-align: middle !important;
+}
+
+.modal-header .close {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  height: 30px !important;
+  width: 30px !important;
+}
