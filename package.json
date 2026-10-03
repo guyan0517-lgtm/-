@@ -10,6 +10,7 @@
     "lint": "echo 'No lint script defined'"
   },
   "dependencies": {
+    "dexie": "^4.4.6",
     "express": "^4.19.2",
     "sharp": "^0.35.5"
   }

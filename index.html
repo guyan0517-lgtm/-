@@ -40,7 +40,8 @@
     <meta property="og:description" content="虚拟手机模拟与角色聊天互动应用" />
 
     <link rel="stylesheet" href="style.css" />
-    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <script src="/node_modules/dexie/dist/dexie.js"></script>
+    <script>if (typeof Dexie === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/dexie/dist/dexie.js"><\/script>'); }</script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
@@ -6838,9 +6839,7 @@
           <button type="button" class="moe-btn-secondary status-col-type-option" data-type="affection" style="font-size: 12px; padding: 6px 8px; border-radius: 10px;">好感度</button>
           <button type="button" class="moe-btn-secondary status-col-type-option" data-type="luck" style="font-size: 12px; padding: 6px 8px; border-radius: 10px;">幸运</button>
           <button type="button" class="moe-btn-secondary status-col-type-option" data-type="location" style="font-size: 12px; padding: 6px 8px; border-radius: 10px; grid-column: span 2;">地点</button>
-        </div>
-        <div class="modal-footer" style="padding-top: 6px;">
-          <button type="button" class="cancel" id="cancel-status-col-type-btn" style="width: 100%; height: 30px; font-size: 12px; border-radius: 10px;">取消</button>
+          <button type="button" class="moe-btn-secondary" id="cancel-status-col-type-btn" style="font-size: 12px; padding: 6px 8px; border-radius: 10px; grid-column: span 2; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer;">取消</button>
         </div>
       </div>
     </div>
@@ -49228,6 +49227,171 @@ ${colSpecs.join('\n')}
           );
         }
 
+        async function loadDatingPresetsSelect() {
+          const selectEl = document.getElementById("dating-preset-select");
+          if (!selectEl) return;
+          selectEl.innerHTML = '<option value="">-- 选择预设方案 --</option>';
+          try {
+            const presets = await db.datingPresets.toArray();
+            state.datingPresets = presets || [];
+            presets.forEach((preset) => {
+              const option = document.createElement("option");
+              option.value = preset.id;
+              option.textContent = preset.name;
+              selectEl.appendChild(option);
+            });
+          } catch (e) {
+            console.error("加载约会预设失败:", e);
+          }
+        }
+
+        async function handleDatingPresetSelect(e) {
+          const presetId = parseInt(e.target.value);
+          if (!presetId) return;
+          try {
+            const preset = await db.datingPresets.get(presetId);
+            if (!preset) return;
+            const settings = preset.settings || {};
+
+            const spriteSelect = document.getElementById("dating-sprite-group-select");
+            if (spriteSelect && settings.spriteGroupId !== undefined) {
+              spriteSelect.value = settings.spriteGroupId || "";
+            }
+
+            const promptInput = document.getElementById("dating-prompt-input");
+            if (promptInput && settings.prompt !== undefined) {
+              promptInput.value = settings.prompt || "";
+            }
+
+            const styleInput = document.getElementById("dating-style-input");
+            if (styleInput && settings.style !== undefined) {
+              styleInput.value = settings.style || "";
+            }
+
+            const bgUrlInput = document.getElementById("dating-bg-url-input");
+            if (bgUrlInput && settings.bgUrl !== undefined) {
+              bgUrlInput.value = settings.bgUrl || "";
+            }
+
+            if (settings.selectedWbIds && Array.isArray(settings.selectedWbIds)) {
+              const container = document.getElementById("dating-wb-checkboxes-container");
+              if (container) {
+                container.querySelectorAll("input[type='checkbox']").forEach((chk) => {
+                  chk.checked = settings.selectedWbIds.includes(chk.value);
+                });
+              }
+            }
+          } catch (err) {
+            console.error("切换约会预设失败:", err);
+          }
+        }
+
+        async function openDatingPresetManager() {
+          const selectEl = document.getElementById("dating-preset-select");
+          const selectedId = parseInt(selectEl ? selectEl.value : "");
+          const presets = state.datingPresets || [];
+          const selectedPreset = presets.find((p) => p.id === selectedId) || null;
+
+          const modal = document.getElementById("preset-actions-modal");
+          if (!modal) return;
+          const footer = modal.querySelector(".custom-modal-footer");
+
+          footer.innerHTML = `
+            <button id="preset-action-save-new">保存当前配置为新预设</button>
+            <button id="preset-action-update-current" ${!selectedPreset ? "disabled" : ""}>更新当前配置</button>
+            <button id="preset-action-delete-current" class="btn-danger" ${!selectedPreset ? "disabled" : ""}>删除当前配置</button>
+            <button id="preset-action-cancel" style="margin-top: 8px; border-radius: 8px; background-color: #f0f0f0;">取消</button>
+          `;
+
+          document.getElementById("preset-action-save-new").addEventListener("click", saveCurrentDatingConfigAsPreset);
+          if (selectedPreset) {
+            document.getElementById("preset-action-update-current").addEventListener("click", () => updateSelectedDatingPreset(selectedId));
+            document.getElementById("preset-action-delete-current").addEventListener("click", () => deleteSelectedDatingPreset(selectedId));
+          }
+          document.getElementById("preset-action-cancel").addEventListener("click", () => modal.classList.remove("visible"));
+
+          modal.classList.add("visible");
+        }
+
+        async function saveCurrentDatingConfigAsPreset() {
+          const spriteGroupId = document.getElementById("dating-sprite-group-select")?.value || "";
+          const prompt = document.getElementById("dating-prompt-input")?.value || "";
+          const style = document.getElementById("dating-style-input")?.value || "";
+          const bgUrl = document.getElementById("dating-bg-url-input")?.value || "";
+
+          const selectedWbIds = [];
+          const container = document.getElementById("dating-wb-checkboxes-container");
+          if (container) {
+            container.querySelectorAll("input[type='checkbox']:checked").forEach((chk) => {
+              selectedWbIds.push(chk.value);
+            });
+          }
+
+          const name = await showCustomPrompt("保存约会预设", "请为这个预设方案起个名字：");
+          if (name && name.trim()) {
+            const settings = { spriteGroupId, prompt, style, bgUrl, selectedWbIds };
+            const newPreset = { name: name.trim(), settings };
+            const newId = await db.datingPresets.add(newPreset);
+
+            await loadDatingPresetsSelect();
+            const selectEl = document.getElementById("dating-preset-select");
+            if (selectEl) selectEl.value = newId;
+
+            document.getElementById("preset-actions-modal").classList.remove("visible");
+            if (typeof showCustomAlert === "function") {
+              await showCustomAlert("成功", `约会预设 "${name.trim()}" 已保存！`);
+            }
+          }
+        }
+
+        async function updateSelectedDatingPreset(presetId) {
+          const preset = (state.datingPresets || []).find((p) => p.id === presetId);
+          if (!preset) return;
+
+          const spriteGroupId = document.getElementById("dating-sprite-group-select")?.value || "";
+          const prompt = document.getElementById("dating-prompt-input")?.value || "";
+          const style = document.getElementById("dating-style-input")?.value || "";
+          const bgUrl = document.getElementById("dating-bg-url-input")?.value || "";
+
+          const selectedWbIds = [];
+          const container = document.getElementById("dating-wb-checkboxes-container");
+          if (container) {
+            container.querySelectorAll("input[type='checkbox']:checked").forEach((chk) => {
+              selectedWbIds.push(chk.value);
+            });
+          }
+
+          preset.settings = { spriteGroupId, prompt, style, bgUrl, selectedWbIds };
+          await db.datingPresets.put(preset);
+
+          document.getElementById("preset-actions-modal").classList.remove("visible");
+          if (typeof showCustomAlert === "function") {
+            await showCustomAlert("成功", `预设 "${preset.name}" 已更新！`);
+          }
+        }
+
+        async function deleteSelectedDatingPreset(presetId) {
+          const preset = (state.datingPresets || []).find((p) => p.id === presetId);
+          if (!preset) return;
+
+          const confirmed = typeof showCustomConfirm === "function"
+            ? await showCustomConfirm("确认删除", `确定要删除预设 "${preset.name}" 吗？`, { confirmButtonClass: "btn-danger" })
+            : confirm(`确定要删除预设 "${preset.name}" 吗？`);
+
+          if (confirmed) {
+            await db.datingPresets.delete(presetId);
+            await loadDatingPresetsSelect();
+            document.getElementById("preset-actions-modal").classList.remove("visible");
+            if (typeof showCustomAlert === "function") {
+              await showCustomAlert("成功", "预设已删除。");
+            }
+          }
+        }
+
+        window.loadDatingPresetsSelect = loadDatingPresetsSelect;
+        window.handleDatingPresetSelect = handleDatingPresetSelect;
+        window.openDatingPresetManager = openDatingPresetManager;
+
         /**
          * 打开AI生成群成员的模态框
          */
@@ -63880,6 +64044,7 @@ ${colSpecs.join('\n')}
           document
             .getElementById("manage-dating-presets-btn")
             .addEventListener("click", openDatingPresetManager);
+          loadDatingPresetsSelect();
 
           // --- 表情分类功能事件绑定 ---
           document
