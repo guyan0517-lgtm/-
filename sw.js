@@ -1,14 +1,14 @@
-const CACHE_NAME = "ephone-tuk-cache-v1";
+const CACHE_NAME = "ephone-tuk-cache-v3";
 const ASSETS_TO_CACHE = [
-  "/",
-  "/index.html",
-  "/style.css",
-  "/manifest.json",
-  "/icon.png",
-  "/icon-192.png",
-  "/apple-touch-icon.png",
-  "/icon.svg",
-  "/main-app.js"
+  "./",
+  "./index.html",
+  "./style.css",
+  "./manifest.json",
+  "./icon.png",
+  "./icon-192.png",
+  "./apple-touch-icon.png",
+  "./icon.svg",
+  "./main-app.js"
 ];
 
 self.addEventListener("install", event => {
@@ -66,7 +66,7 @@ self.addEventListener("fetch", event => {
         });
         return networkResponse;
       }).catch(err => {
-        return caches.match("/index.html") || Promise.reject(err);
+        return caches.match("./index.html") || Promise.reject(err);
       });
     })
   );
