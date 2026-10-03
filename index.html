@@ -18849,7 +18849,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           try {
             const preset = await db.thoughtChainPresets.get(chat.thoughtChainId);
             if (!preset) return "";
-            let block = "\n【角色思维链：" + preset.name + "】\n" + (preset.generalContent || "");
+            let block = "\n# 【角色思维链与深度思考规范】\n" +
+              "预设名称：" + preset.name + "\n" +
+              "【思维链输出规范】：请在生成 JSON 时，务必将你的深度思考与推演过程写入顶层 \"thinking\" 字段中。格式示例：\n" +
+              "{\n  \"thinking\": \"1. 分析对方意图... 2. 拟定角色心理... 3. 确定发言语气...\",\n  \"chatResponse\": [ {\"type\": \"text\", \"content\": \"示例文本\"} ],\n  \"innerVoice\": null\n}\n" +
+              "以下是思维链的具体设定要求：\n" +
+              (preset.generalContent || "");
             if (chat.thoughtChainEnableCoc !== false && preset.cocContent) {
               block += "\n" + preset.cocContent;
             }
@@ -21842,7 +21847,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             id: "main",
             quickReplies: ["你好", "继续", "有趣"],
             ringtoneUrl: "https://files.catbox.moe/3w7gla.mp3",
-            notificationSoundUrl: "https://files.catbox.moe/k369mf.mp3", // <-- 在这里新增这一行
+            notificationSoundUrl: "https://laddy-lulu.github.io/Ephone-stuffs/message.mp3",
             widgetData: {},
             wallpaper: "linear-gradient(135deg, #89f7fe, #66a6ff)",
             lockscreenWallpaper: "linear-gradient(135deg, #764ba2, #667eea)",
@@ -21854,7 +21859,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             appIcons: { ...DEFAULT_APP_ICONS },
             appLabels: {},
             ringtoneUrl: "https://files.catbox.moe/3w7gla.mp3",
-            notificationSoundUrl: "https://files.catbox.moe/k369mf.mp3",
+            notificationSoundUrl: "https://laddy-lulu.github.io/Ephone-stuffs/message.mp3",
             widgetData: {}, // 【核心修改】在这里新增一个空对象，用来存放你的自定义内容
             // 在 state.globalSettings 的初始化对象里添加：
             homeAvatarFrame: "", // 为主屏幕头像框添加默认空值
@@ -21997,7 +22002,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             typeof state.globalSettings.notificationSoundUrl === "undefined"
           ) {
             state.globalSettings.notificationSoundUrl =
-              "https://files.catbox.moe/k369mf.mp3";
+              "https://laddy-lulu.github.io/Ephone-stuffs/message.mp3";
           }
         }
 
@@ -22965,7 +22970,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
           } catch (error) {
-            console.error("NovelAI生成失败:", error);
+            console.warn("NovelAI生成失败:", error);
             statusDiv.style.display = "none";
             errorDiv.style.display = "block";
             errorDiv.textContent = "生成失败: " + error.message;
@@ -25428,6 +25433,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             contentHtml = String(msg.content || "").replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
           }
 
+          // 思维链折叠块渲染
+          let thinkingHtml = "";
+          if (msg.thinking) {
+            thinkingHtml = `
+              <details class="thought-chain-block">
+                <summary class="thought-chain-summary"><svg class="thought-chain-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a9 9 0 0 1 9 9c0 3.8-2.5 7.1-6 8.4V21a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1.6C5.5 18.1 3 14.8 3 11a9 9 0 0 1 9-9z"/><path d="M9 22h6"/></svg> 思考过程</summary>
+                <div class="thought-chain-content">${String(msg.thinking).replace(/\n/g, "<br>")}</div>
+              </details>
+            `;
+          }
+
           // 1. 检查消息对象中是否存在引用信息 (msg.quote)
           let quoteHtml = "";
           // 无论是用户消息还是AI消息，只要它包含了 .quote 对象，就执行这段逻辑
@@ -25450,6 +25466,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           bubble.innerHTML = `
 			        ${avatarHtml}
 			        <div class="content">
+			            ${thinkingHtml}
 			            ${quoteHtml}
 			            ${contentHtml}
 			        </div>
@@ -27579,16 +27596,16 @@ ${libraryList}
                   } else if (col.type === "luck") {
                     colSpecs.push(`${col.label}：${hitLuck.name}`);
                   } else if (col.type === "affection") {
-                    colSpecs.push(`${col.label}：(请在此填空，如：好感度+2=82)`);
+                    colSpecs.push(`${col.label}：请根据剧情进展填入好感变动与总量，示例：好感度+2=82`);
                   } else {
-                    colSpecs.push(`${col.label}：(请在此按格式填空：${fmt}${col.note ? '，' + col.note : ''})`);
+                    colSpecs.push(`${col.label}：请根据当前剧情替换填入具体内容，绝对禁止原样输出星号或占位符，示例：${fmt}${col.note ? '，提示：' + col.note : ''}`);
                   }
                 });
 
                 systemStatusPromptBlock = `
 # 【系统状态栏单气泡输出铁律（绝对禁止拆分成多条气泡）】
 1. 无论有多少个项目，系统状态栏的所有内容【必须且只能】合并在 chatResponse 数组的【第1条消息】中（每项之间用换行符 \\n 分隔），【绝对禁止】将每个项目拆分为独立气泡！
-2. 系统状态栏格式必须严格遵循以下内容（行首严禁带“-”，严禁改动任何标签）：
+2. 系统状态栏格式必须参考以下规则（标签名称严禁修改，但包含占位符或提示的项目必须由你替换为真实具体的剧情内容，严禁原样输出星号*或提示词）：
 ${colSpecs.join('\n')}
 3. 你的第2条及后续消息气泡，请根据角色人设与当前剧情展开正常的对话与描写。
 
@@ -27635,22 +27652,26 @@ ${colSpecs.join('\n')}
 			你的每一次回复都【**必须**】是一个**单一且完整**的JSON对象。绝对禁止返回JSON数组或纯文本。
 
 			**1. JSON对象结构:**
-			该JSON对象【**必须**】包含两个顶级键: "chatResponse" 和 "innerVoice"。
+			该JSON对象【**必须**】包含三个顶级键: "thinking"、"chatResponse" 和 "innerVoice"。
 
-			**2. "chatResponse" 键:**
+			**2. "thinking" 键:**
+			- **类型**: 字符串或 null。开启思维链时在此填写你的推理分析与思考过程，未开启或无思考时填 null。
+
+			**3. "chatResponse" 键:**
 			- **类型**: JSON数组 []。
 			- **内容**: 你的回复【必须】模拟真人的打字和思考习惯。不要一次性发送一大段文字，你应该将你想说的话，拆分成【多条、简短的】消息气泡来发送。
 **${replyCountInstruction}** 
 			- **格式**: 消息对象的具体格式见下方的【第五部分：可使用的操作指令】。
 
-            **3. "innerVoice" 键:**
+			**4. "innerVoice" 键:**
             ${chat.settings?.innerVoiceEnabled ? `- **类型**: JSON对象 {}。
             - **必含字段**:
                 - "thoughts": (字符串) 对应标签【心声】。你的内心独白和感受。` : `- **类型**: null。当前心声功能未开启，请填写 null。`}
 
 
-			**4. 标准输出格式示例:**
+			**5. 标准输出格式示例:**
 			{
+			  "thinking": "在这里详细写下你的思考过程与推理分析...",
 			  "chatResponse": [
 			    {
 			      "type": "text",
@@ -28290,16 +28311,25 @@ ${colSpecs.join('\n')}
             console.log(`AI '${chat.name}' 的原始回复:`, aiResponseContent);
             chat.history = chat.history.filter((msg) => !msg.isTemporary);
 
-            // 智能解析AI回复，确保心声数据不丢失
+            // 智能解析AI回复，确保心声与思维链数据不丢失
             let messagesArray = [];
             let innerVoiceData = null;
+            let extractedThinking = null;
 
             try {
               // 在解析前，先对AI的原始回复进行“净化”处理
               let sanitizedContent = aiResponseContent
-                .replace(/^```json\s*/, "") // 移除开头的 ```json
-                .replace(/```$/, "") // 移除结尾的 ```
+                .replace(/^```json\s*/i, "") // 移除开头的 ```json
+                .replace(/^```\s*/i, "")
+                .replace(/```$/i, "")
                 .trim(); // 移除首尾的空格和换行
+
+              // 尝试从字符串中提取 <thinking>...</thinking> 标签
+              const thinkingMatch = sanitizedContent.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+              if (thinkingMatch) {
+                extractedThinking = thinkingMatch[1].trim();
+                sanitizedContent = sanitizedContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
+              }
 
               // 再次净化，强行提取第一个 { 和最后一个 } 之间的内容
               const firstBrace = sanitizedContent.indexOf("{");
@@ -28312,6 +28342,10 @@ ${colSpecs.join('\n')}
               }
 
               const fullResponse = JSON.parse(sanitizedContent);
+
+              if (fullResponse.thinking && typeof fullResponse.thinking === "string") {
+                extractedThinking = fullResponse.thinking.trim();
+              }
 
               // 现在我们可以安全地解析净化后的内容了
               if (
@@ -28344,6 +28378,10 @@ ${colSpecs.join('\n')}
               console.warn("AI回复不是有效的JSON，退回到标准解析模式。", e);
               messagesArray = parseAiResponse(aiResponseContent);
               console.log(messagesArray);
+            }
+
+            if (extractedThinking && messagesArray && messagesArray.length > 0) {
+              messagesArray[0].thinking = extractedThinking;
             }
 
             // 无论增加多少个项目，确保开头的系统状态栏项目全部合并为单一气泡，禁止拆分
@@ -28477,20 +28515,20 @@ ${colSpecs.join('\n')}
               }
 
               if (chat.isGroup && msgData.name && msgData.name === chat.name) {
-                console.error(
-                  `AI幻觉已被拦截！试图使用群名 ("${chat.name}") 作为角色名。消息内容:`,
-                  msgData,
-                );
-                continue;
+                if (chat.members && chat.members.length > 0) {
+                  msgData.name = chat.members[0].originalName || chat.members[0].groupNickname || chat.name;
+                }
               }
 
-              // 在群聊中，如果AI返回的消息没有指定发送者，则直接跳过这条消息
+              // 在群聊中，如果AI返回的消息没有指定发送者，自动补全发送者角色名
               if (chat.isGroup && !msgData.name) {
-                console.error(
-                  `AI幻觉已被拦截！试图在群聊中发送一条没有“name”的消息。消息内容:`,
-                  msgData,
-                );
-                continue; // continue会立即结束本次循环，处理下一条消息
+                if (msgData.type === "system_message" || msgData.type === "pat_message" || msgData.type === "narrative") {
+                  msgData.name = "系统";
+                } else if (chat.members && chat.members.length > 0) {
+                  msgData.name = chat.members[0].originalName || chat.members[0].groupNickname || "系统";
+                } else {
+                  msgData.name = "系统";
+                }
               }
 
               let aiMessage = null;
@@ -28498,6 +28536,7 @@ ${colSpecs.join('\n')}
                 role: "assistant",
                 senderName: msgData.name || chat.name,
                 timestamp: messageTimestamp++,
+                thinking: msgData.thinking || null,
               };
               // 定位指令侦测与解析器
               // 我们在处理所有消息类型之前，优先检查它是否是我们的新定位指令
@@ -29005,7 +29044,7 @@ ${colSpecs.join('\n')}
                 }
 
                 case "dating_summary_card": {
-                  bubble.classList.add("is-dating-summary"); // 应用透明气泡样式
+                  if (bubble) bubble.classList.add("is-dating-summary"); // 应用透明气泡样式
                   const payload = msg.payload;
                   let cardClass = "";
 
@@ -30369,7 +30408,7 @@ ${colSpecs.join('\n')}
                         `✅ 动态NovelAI图片全部生成完成: ${generatedImageUrls.length}张`,
                       );
                     } catch (error) {
-                      console.error("❌ 动态NAI图片生成失败:", error);
+                      console.warn("❌ 动态NAI图片生成失败:", error);
                       // 失败时仍然发布动态，但添加错误信息
                       newPost.content =
                         (newPost.content || newPost.publicText || "") +
@@ -30780,7 +30819,7 @@ ${colSpecs.join('\n')}
                       fullPrompt: finalPositivePrompt, // 保存完整提示词供查看
                     };
                   } catch (error) {
-                    console.error("❌ NAI图片生成失败:", error);
+                    console.warn("❌ NAI图片生成失败:", error);
                     // 失败时降级为文本消息
                     aiMessage = {
                       ...baseMessage,
@@ -40959,16 +40998,16 @@ ${colSpecs.join('\n')}
                   "播放消息提示音失败：用户需要先与页面进行一次交互（如点击）才能自动播放音频。",
                 );
               } else {
-                // 对于其他错误（比如我们这次遇到的），直接打印错误详情
-                console.error(
-                  `播放消息提示音失败 (${error.name}): ${error.message}`,
+                // 对于其他错误（如NotSupportedError），打印警告日志，防止抛出未捕获错误
+                console.warn(
+                  `播放消息提示音被拦截或无法播放 (${error.name}): ${error.message}`,
                   "URL:",
                   soundUrl,
                 );
               }
             });
           } catch (error) {
-            console.error("创建提示音Audio对象时出错:", error);
+            console.warn("创建提示音Audio对象时出错:", error);
           }
         }
 
@@ -42358,7 +42397,7 @@ ${colSpecs.join('\n')}
           } finally {
             document
               .getElementById("generation-overlay")
-              .classList.remove("visible");
+              ?.classList.remove("visible");
           }
         }
 
@@ -42834,7 +42873,7 @@ ${colSpecs.join('\n')}
           } finally {
             document
               .getElementById("generation-overlay")
-              .classList.remove("visible");
+              ?.classList.remove("visible");
           }
         }
 
@@ -43463,7 +43502,7 @@ ${colSpecs.join('\n')}
 
           document
             .getElementById("generation-overlay")
-            .classList.add("visible");
+            ?.classList.add("visible");
 
           try {
             const persona = chat.settings.aiPersona;
@@ -43610,7 +43649,7 @@ ${colSpecs.join('\n')}
           } finally {
             document
               .getElementById("generation-overlay")
-              .classList.remove("visible");
+              ?.classList.remove("visible");
           }
         }
 
@@ -51882,9 +51921,11 @@ ${colSpecs.join('\n')}
           if (!confirmed) return;
 
           const loadingOverlay = document.getElementById("generation-overlay");
-          const loadingText = loadingOverlay.querySelector("p");
-          loadingText.textContent = "正在全力压缩图片，请耐心等待...";
-          loadingOverlay.classList.add("visible");
+          if (loadingOverlay) {
+            const loadingText = loadingOverlay.querySelector("p");
+            if (loadingText) loadingText.textContent = "正在全力压缩图片，请耐心等待...";
+            loadingOverlay.classList.add("visible");
+          }
 
           try {
             const quality =
@@ -54112,13 +54153,13 @@ ${colSpecs.join('\n')}
           }
 
           const loadingOverlay = document.getElementById("generation-overlay");
-          const loadingText = loadingOverlay.querySelector("p");
-
-          // ★★★ 3. 只有不是自动备份时，才显示遮罩层 ★★★
-          if (!isAuto) {
-            loadingOverlay.classList.add("visible");
-          } else {
-            console.log("正在后台执行流式备份..."); // 后台备份仅打印日志
+          if (loadingOverlay) {
+            const loadingText = loadingOverlay.querySelector("p");
+            if (!isAuto) {
+              loadingOverlay.classList.add("visible");
+            } else {
+              console.log("正在后台执行流式备份...");
+            }
           }
 
           // ★★★ 修改 1: 降低分片大小到 15MB (浏览器上传更稳定) ★★★
@@ -54320,8 +54361,10 @@ ${colSpecs.join('\n')}
           if (!confirmed) return;
 
           const loadingOverlay = document.getElementById("generation-overlay");
-          const loadingText = loadingOverlay.querySelector("p");
-          loadingOverlay.classList.add("visible");
+          if (loadingOverlay) {
+            const loadingText = loadingOverlay.querySelector("p");
+            loadingOverlay.classList.add("visible");
+          }
 
           try {
             // 1. 定义需要恢复的表名和配置
@@ -54528,8 +54571,10 @@ ${colSpecs.join('\n')}
           if (!confirmed) return;
 
           const loadingOverlay = document.getElementById("generation-overlay");
-          const loadingText = loadingOverlay.querySelector("p");
-          loadingOverlay.classList.add("visible");
+          if (loadingOverlay) {
+            const loadingText = loadingOverlay.querySelector("p");
+            loadingOverlay.classList.add("visible");
+          }
 
           try {
             // 1. 定义需要恢复的表名和配置 (与上传时对应)
@@ -55757,7 +55802,7 @@ ${colSpecs.join('\n')}
             typeof state.globalSettings.notificationSoundUrl === "undefined"
           ) {
             state.globalSettings.notificationSoundUrl =
-              "https://files.catbox.moe/k369mf.mp3";
+              "https://laddy-lulu.github.io/Ephone-stuffs/message.mp3";
           }
 
           renderHomeScreenProfileFrame(); // 初始化时渲染主页头像框
@@ -67068,6 +67113,14 @@ ${colSpecs.join('\n')}
 
         window.triggerAiResponse = triggerAiResponse;
         window.openLoversSpaceFromCard = openLoversSpaceFromCard;
+        window.openThoughtChainScreen = function () {
+          const lsModal = document.getElementById("ls-char-selector-modal");
+          if (lsModal) lsModal.classList.remove("visible");
+          showScreen("thought-chain-screen");
+          if (typeof renderThoughtChainPresetsUI === "function") {
+            renderThoughtChainPresetsUI();
+          }
+        };
       });
 
       (function () {

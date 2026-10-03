@@ -3730,9 +3730,19 @@ function initLoversSpace() {
     .addEventListener("click", handleChangeLoversSpaceBackground);
 
   // 绑定主屏幕App图标的点击事件
-  document
-    .getElementById("lovers-space-app-icon")
-    .addEventListener("click", openLoversSpaceEntry);
+  const loversSpaceAppIcon = document.getElementById("lovers-space-app-icon");
+  if (loversSpaceAppIcon) {
+    loversSpaceAppIcon.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const modal = document.getElementById("ls-char-selector-modal");
+      if (modal) modal.classList.remove("visible");
+      if (typeof openThoughtChainScreen === "function") {
+        openThoughtChainScreen();
+      } else if (typeof showScreen === "function") {
+        showScreen("thought-chain-screen");
+      }
+    });
+  }
 
   document
     .getElementById("ls-char-selector-list")

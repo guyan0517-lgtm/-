@@ -346,7 +346,7 @@ async function generateHouseData(charId, includeComputer = true) {
     await showCustomAlert("生成失败", `发生错误: ${error.message}`);
     return null;
   } finally {
-    document.getElementById("generation-overlay").classList.remove("visible");
+    document.getElementById("generation-overlay")?.classList.remove("visible");
   }
 }
 

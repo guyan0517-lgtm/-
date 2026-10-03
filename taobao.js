@@ -1330,16 +1330,16 @@ function playNotificationSound() {
           "播放消息提示音失败：用户需要先与页面进行一次交互（如点击）才能自动播放音频。",
         );
       } else {
-        // 对于其他错误（比如我们这次遇到的），直接打印错误详情
-        console.error(
-          `播放消息提示音失败 (${error.name}): ${error.message}`,
+        // 对于其他错误（如NotSupportedError），打印警告日志
+        console.warn(
+          `播放消息提示音被拦截或无法播放 (${error.name}): ${error.message}`,
           "URL:",
           soundUrl,
         );
       }
     });
   } catch (error) {
-    console.error("创建提示音Audio对象时出错:", error);
+    console.warn("创建提示音Audio对象时出错:", error);
   }
 }
 

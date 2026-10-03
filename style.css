@@ -29905,4 +29905,49 @@ select:focus-visible {
   border-color: var(--accent-color);
 }
 
+/* Thought Chain Collapsible Bubble Styles */
+.thought-chain-block {
+  background-color: var(--secondary-bg);
+  color: var(--text-secondary);
+  border-left: 3px solid var(--accent-color);
+  border-radius: var(--border-radius, 8px);
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.thought-chain-summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 600;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.85;
+}
+
+.thought-chain-summary:hover {
+  opacity: 1;
+}
+
+.thought-chain-icon {
+  stroke: var(--accent-color);
+  flex-shrink: 0;
+}
+
+.thought-chain-content {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  opacity: 0.9;
+}
+
+
 
