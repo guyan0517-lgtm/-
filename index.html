@@ -342,15 +342,15 @@
                 </div>
                 <span class="label">书柜</span>
               </div>
-              <div class="desktop-app-icon" id="lovers-space-app-icon">
+              <div class="desktop-app-icon" id="lovers-space-app-icon" onclick="openThoughtChainScreen()">
                 <div class="icon-bg-desktop">
                   <img
                     id="icon-img-lovers-space"
                     src="https://i.postimg.cc/d1wZ39xW/lovers-space-icon.png"
-                    alt="情侣空间"
+                    alt="思维链"
                   />
                 </div>
-                <span class="label">情侣空间</span>
+                <span class="label">思维链</span>
               </div>
 
               <div
@@ -1974,6 +1974,20 @@
           <div class="nav-item" data-view="favorites-view">
             <span>收藏</span>
           </div>
+        </div>
+      </div>
+
+      <div id="thought-chain-screen" class="screen">
+        <div class="header">
+          <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+          <span>思维链</span>
+          <div class="header-actions">
+            <button type="button" id="tc-set-default-btn" class="tc-btn-action">设默认</button>
+            <span class="action-btn" id="tc-add-preset-btn" title="新建预设">+</span>
+          </div>
+        </div>
+        <div class="list-container">
+          <div id="tc-preset-list" class="tc-preset-list-container"></div>
         </div>
       </div>
 
@@ -5313,12 +5327,16 @@
               style="display: none"
             >
               <label>备注名 (仅显示用，AI不知道)</label>
-              <input
-                type="text"
-                id="chat-remark-input"
-                class="moe-input"
-                placeholder="设置一个备注..."
-              />
+              <div class="input-with-btn-row" style="display: flex; gap: 8px;">
+                <input
+                  type="text"
+                  id="chat-remark-input"
+                  class="moe-input"
+                  style="flex: 1;"
+                  placeholder="设置一个备注..."
+                />
+                <button type="button" id="open-thought-chain-bind-btn-single" class="moe-btn-small" style="width: auto; flex-shrink: 0; white-space: nowrap;">思维链</button>
+              </div>
             </div>
 
             <div
@@ -5337,11 +5355,15 @@
 
             <div class="form-group" id="my-group-nickname-group">
               <label for="my-group-nickname-input">我的群昵称</label>
-              <input
-                type="text"
-                id="my-group-nickname-input"
-                class="moe-input"
-              />
+              <div class="input-with-btn-row" style="display: flex; gap: 8px;">
+                <input
+                  type="text"
+                  id="my-group-nickname-input"
+                  class="moe-input"
+                  style="flex: 1;"
+                />
+                <button type="button" id="open-thought-chain-bind-btn-group" class="moe-btn-small" style="width: auto; flex-shrink: 0; white-space: nowrap;">思维链</button>
+              </div>
             </div>
 
             <!-- 头像区域 (并排布局) -->
@@ -7492,6 +7514,54 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           >
             保存设置
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="thought-chain-editor-modal" class="modal">
+      <div class="modal-content" style="max-width: 420px; width: 90%; height: auto; max-height: 88vh; padding: 20px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <span id="tc-editor-modal-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">编辑思维链</span>
+          <button type="button" class="close-btn" id="close-tc-editor-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
+        </div>
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 4px 2px;">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">预设名称</label>
+            <input type="text" id="tc-preset-name-input" class="moe-input" placeholder="输入预设名称" style="width: 100%; box-sizing: border-box;" />
+          </div>
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">一般思维链内容</label>
+            <textarea id="tc-preset-general-input" class="moe-input" rows="6" placeholder="输入思维链指导规则、思考步骤等内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">跑团模块内容</label>
+            <textarea id="tc-preset-coc-input" class="moe-input" rows="4" placeholder="输入跑团模块专属指令..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="button" class="moe-btn-secondary" id="cancel-tc-editor-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">取消</button>
+          <button type="button" class="moe-btn" id="save-tc-editor-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="thought-chain-bind-modal" class="modal">
+      <div class="modal-content" style="max-width: 380px; width: 90%; height: auto; max-height: 85vh; padding: 20px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <span style="font-weight: 600; font-size: 16px; color: var(--text-primary);">思维链绑定</span>
+          <button type="button" class="close-btn" id="close-thought-chain-bind-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
+        </div>
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 4px 2px;">
+          <div style="background: var(--secondary-bg); padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; border: 1px solid var(--border-color);">
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">当前配置思维链</div>
+            <div id="tc-current-bound-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">无</div>
+          </div>
+          <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">选择思维链预设</div>
+          <div id="tc-preset-select-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="button" class="moe-btn-secondary" id="cancel-thought-chain-bind-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">取消</button>
+          <button type="button" class="moe-btn" id="save-thought-chain-bind-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">保存</button>
         </div>
       </div>
     </div>
@@ -18307,10 +18377,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function initDatabase(userId) {
           // 数据库名带上用户ID，实现每个人数据隔离
           db = new Dexie("GeminiChatDB");
-          db.version(62).stores({
-            // 版本号从 51 升级到 52
+          db.version(63).stores({
             chats:
               "&id, isGroup, groupId, ownerId, isPinned, characterPhoneData, latestInnerVoice, innerVoiceHistory, loversSpaceData.emotionDiaries, settings.summary, settings.weiboNickname, settings.innerVoiceHideHeaderBorder, settings.innerVoiceAdopterLabelFormat, interactionStats, unlockedSymbols, settings.selectedIntimacyBadge",
+            thoughtChainPresets: "++id, name",
             apiConfig: "&id",
             globalSettings: "&id, activeThemeId",
             userStickers: "&id, url, name, categoryId",
@@ -18377,6 +18447,316 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 到这里加下面三行
           window.db = db;
           console.log(`[System] 已加载用户 ${userId} 的数据库`);
+        }
+
+        // ===================================================================
+        // 思维链 模块函数
+        // ===================================================================
+        let editingThoughtChainId = null;
+        let selectedThoughtChainBindId = null;
+
+        async function openThoughtChainScreen() {
+          showScreen("thought-chain-screen");
+          await renderThoughtChainPresets();
+        }
+        window.openThoughtChainScreen = openThoughtChainScreen;
+
+        async function renderThoughtChainPresets() {
+          const container = document.getElementById("tc-preset-list");
+          if (!container) return;
+          container.innerHTML = "";
+
+          const presets = (await db.thoughtChainPresets.toArray()) || [];
+          const defaultId = state.globalSettings ? state.globalSettings.defaultThoughtChainId : null;
+
+          if (presets.length === 0) {
+            container.innerHTML = `
+              <div class="tc-empty-state">
+                <span style="font-weight: 600; color: var(--text-primary);">暂无思维链预设</span>
+                <span>点击右上角加号按钮可新建预设</span>
+              </div>
+            `;
+            return;
+          }
+
+          presets.forEach((preset) => {
+            const card = document.createElement("div");
+            card.className = "tc-preset-card";
+
+            const isDefault = preset.id === defaultId;
+            const hasCoc = preset.cocContent && preset.cocContent.trim().length > 0;
+
+            const headerRow = document.createElement("div");
+            headerRow.className = "tc-card-header";
+
+            const titleGroup = document.createElement("div");
+            titleGroup.className = "tc-card-title-group";
+
+            const titleSpan = document.createElement("span");
+            titleSpan.className = "tc-card-title";
+            titleSpan.textContent = preset.name;
+            titleGroup.appendChild(titleSpan);
+
+            if (isDefault) {
+              const defBadge = document.createElement("span");
+              defBadge.className = "tc-badge-default";
+              defBadge.textContent = "默认";
+              titleGroup.appendChild(defBadge);
+            }
+
+            if (hasCoc) {
+              const cocBadge = document.createElement("span");
+              cocBadge.className = "tc-badge-coc";
+              cocBadge.textContent = "跑团";
+              titleGroup.appendChild(cocBadge);
+            }
+
+            headerRow.appendChild(titleGroup);
+
+            const actionsRow = document.createElement("div");
+            actionsRow.className = "tc-card-actions";
+
+            const editBtn = document.createElement("button");
+            editBtn.type = "button";
+            editBtn.className = "tc-btn-action primary";
+            editBtn.textContent = "编辑";
+            editBtn.onclick = () => openThoughtChainEditor(preset.id);
+
+            const delBtn = document.createElement("button");
+            delBtn.type = "button";
+            delBtn.className = "tc-btn-action";
+            delBtn.textContent = "删除";
+            delBtn.onclick = () => deleteThoughtChainPreset(preset.id);
+
+            actionsRow.appendChild(editBtn);
+            actionsRow.appendChild(delBtn);
+
+            headerRow.appendChild(actionsRow);
+            card.appendChild(headerRow);
+
+            const previewText = preset.generalContent || preset.cocContent || "";
+            if (previewText.trim()) {
+              const previewDiv = document.createElement("div");
+              previewDiv.className = "tc-card-preview";
+              previewDiv.textContent = previewText.trim();
+              card.appendChild(previewDiv);
+            }
+
+            container.appendChild(card);
+          });
+        }
+
+        async function openThoughtChainEditor(presetId = null) {
+          editingThoughtChainId = presetId;
+          const modal = document.getElementById("thought-chain-editor-modal");
+          const titleEl = document.getElementById("tc-editor-modal-title");
+          const nameInput = document.getElementById("tc-preset-name-input");
+          const generalInput = document.getElementById("tc-preset-general-input");
+          const cocInput = document.getElementById("tc-preset-coc-input");
+
+          if (presetId) {
+            const preset = await db.thoughtChainPresets.get(presetId);
+            if (preset) {
+              titleEl.textContent = "编辑思维链";
+              nameInput.value = preset.name || "";
+              generalInput.value = preset.generalContent || "";
+              cocInput.value = preset.cocContent || "";
+            }
+          } else {
+            titleEl.textContent = "新建思维链";
+            nameInput.value = "";
+            generalInput.value = "";
+            cocInput.value = "";
+          }
+
+          modal.classList.add("visible");
+        }
+
+        async function saveThoughtChainPreset() {
+          const nameInput = document.getElementById("tc-preset-name-input");
+          const generalInput = document.getElementById("tc-preset-general-input");
+          const cocInput = document.getElementById("tc-preset-coc-input");
+
+          const name = nameInput.value.trim();
+          if (!name) {
+            alert("请输入预设名称");
+            return;
+          }
+
+          const generalContent = generalInput.value;
+          const cocContent = cocInput.value;
+
+          if (editingThoughtChainId) {
+            const preset = await db.thoughtChainPresets.get(editingThoughtChainId);
+            if (preset) {
+              preset.name = name;
+              preset.generalContent = generalContent;
+              preset.cocContent = cocContent;
+              await db.thoughtChainPresets.put(preset);
+            }
+          } else {
+            await db.thoughtChainPresets.add({
+              name,
+              generalContent,
+              cocContent,
+              createdAt: Date.now(),
+            });
+          }
+
+          document.getElementById("thought-chain-editor-modal").classList.remove("visible");
+          await renderThoughtChainPresets();
+        }
+
+        async function deleteThoughtChainPreset(presetId) {
+          const preset = await db.thoughtChainPresets.get(presetId);
+          if (!preset) return;
+          const confirmed = await showCustomConfirm("确认删除", `确定要删除思维链预设 "${preset.name}" 吗？`, { confirmButtonClass: "btn-danger" });
+          if (confirmed) {
+            await db.thoughtChainPresets.delete(presetId);
+            if (state.globalSettings && state.globalSettings.defaultThoughtChainId === presetId) {
+              state.globalSettings.defaultThoughtChainId = null;
+              await db.globalSettings.put(state.globalSettings);
+            }
+            await renderThoughtChainPresets();
+          }
+        }
+
+        async function setThoughtChainDefault() {
+          const presets = (await db.thoughtChainPresets.toArray()) || [];
+          if (presets.length === 0) {
+            alert("暂无思维链预设，请先新建预设");
+            return;
+          }
+
+          const choices = [
+            { text: "无", value: "none" },
+            ...presets.map((p) => ({ text: p.name, value: String(p.id) })),
+          ];
+
+          const chosen = await showChoiceModal("设置默认思维链", choices);
+          if (chosen === null) return;
+
+          if (chosen === "none") {
+            state.globalSettings.defaultThoughtChainId = null;
+          } else {
+            state.globalSettings.defaultThoughtChainId = isNaN(Number(chosen)) ? chosen : Number(chosen);
+          }
+
+          await db.globalSettings.put(state.globalSettings);
+          await renderThoughtChainPresets();
+        }
+
+        async function openThoughtChainBindModal() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const modal = document.getElementById("thought-chain-bind-modal");
+          const currentNameEl = document.getElementById("tc-current-bound-name");
+          const listEl = document.getElementById("tc-preset-select-list");
+
+          let currentPresetName = "无";
+          if (chat.thoughtChainId) {
+            const currentPreset = await db.thoughtChainPresets.get(chat.thoughtChainId);
+            if (currentPreset) {
+              currentPresetName = currentPreset.name;
+            }
+          }
+          currentNameEl.textContent = currentPresetName;
+
+          listEl.innerHTML = "";
+          const presets = (await db.thoughtChainPresets.toArray()) || [];
+
+          selectedThoughtChainBindId = chat.thoughtChainId || null;
+          let selectedCocEnable = chat.thoughtChainEnableCoc !== false;
+
+          const noneItem = document.createElement("div");
+          noneItem.className = `tc-bind-card ${!selectedThoughtChainBindId ? "selected" : ""}`;
+          noneItem.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="radio" name="tc_bind_radio" value="none" ${!selectedThoughtChainBindId ? "checked" : ""} style="cursor:pointer;" />
+              <span style="font-size:13px; font-weight:600; color:var(--text-primary);">无</span>
+            </div>
+          `;
+
+          noneItem.onclick = () => {
+            selectedThoughtChainBindId = null;
+            document.querySelectorAll("#tc-preset-select-list .tc-bind-card").forEach(el => el.classList.remove("selected"));
+            noneItem.classList.add("selected");
+            const radio = noneItem.querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+          };
+          listEl.appendChild(noneItem);
+
+          presets.forEach((preset) => {
+            const item = document.createElement("div");
+            const isChecked = selectedThoughtChainBindId === preset.id;
+            item.className = `tc-bind-card ${isChecked ? "selected" : ""}`;
+
+            const hasCoc = preset.cocContent && preset.cocContent.trim().length > 0;
+
+            item.innerHTML = `
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <input type="radio" name="tc_bind_radio" value="${preset.id}" ${isChecked ? "checked" : ""} style="cursor:pointer;" />
+                  <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${preset.name}</span>
+                  ${hasCoc ? '<span class="tc-badge-coc">跑团</span>' : ""}
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;" onclick="event.stopPropagation();">
+                <label style="font-size:12px; color:var(--text-secondary); display:flex; align-items:center; gap:4px; cursor:pointer;">
+                  <input type="checkbox" class="tc-coc-checkbox" data-preset-id="${preset.id}" ${selectedCocEnable ? "checked" : ""} />
+                  跑团模块
+                </label>
+              </div>
+            `;
+
+            item.onclick = () => {
+              selectedThoughtChainBindId = preset.id;
+              document.querySelectorAll("#tc-preset-select-list .tc-bind-card").forEach(el => el.classList.remove("selected"));
+              item.classList.add("selected");
+              const radio = item.querySelector('input[type="radio"]');
+              if (radio) radio.checked = true;
+            };
+
+            listEl.appendChild(item);
+          });
+
+          modal.classList.add("visible");
+        }
+
+        async function saveThoughtChainBind() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          chat.thoughtChainId = selectedThoughtChainBindId;
+
+          if (selectedThoughtChainBindId) {
+            const cb = document.querySelector(`.tc-coc-checkbox[data-preset-id="${selectedThoughtChainBindId}"]`);
+            chat.thoughtChainEnableCoc = cb ? cb.checked : true;
+          } else {
+            chat.thoughtChainEnableCoc = true;
+          }
+
+          await db.chats.put(chat);
+          document.getElementById("thought-chain-bind-modal").classList.remove("visible");
+        }
+
+        async function getThoughtChainPromptBlock(chat) {
+          if (!chat || !chat.thoughtChainId) return "";
+          try {
+            const preset = await db.thoughtChainPresets.get(chat.thoughtChainId);
+            if (!preset) return "";
+            let block = "\n【角色思维链：" + preset.name + "】\n" + (preset.generalContent || "");
+            if (chat.thoughtChainEnableCoc !== false && preset.cocContent) {
+              block += "\n" + preset.cocContent;
+            }
+            return block + "\n";
+          } catch (e) {
+            console.error("加载思维链预设错误:", e);
+            return "";
+          }
         }
         // === 修改结束 ===
 
@@ -18922,6 +19302,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             id: newChatId,
             name: characterName,
             isGroup: false,
+            thoughtChainId: state.globalSettings ? state.globalSettings.defaultThoughtChainId : null,
+            thoughtChainEnableCoc: true,
             isPinned: false,
             history: [],
             unreadCount: 0,
@@ -26434,6 +26816,8 @@ ${recentHistory || '无'}
               }
             }
 
+            const thoughtChainPromptBlock = await getThoughtChainPromptBlock(chat);
+
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
             let linkedMemoryContext = "";
@@ -26674,6 +27058,7 @@ ${recentHistory || '无'}
 			${summaryContext}
 			${announcementContext}
 			${worldBookContent}
+			${thoughtChainPromptBlock}
 			${musicContext}
 			${countdownContext} 
 			${sharedContext}
@@ -27311,6 +27696,7 @@ ${colSpecs.join('\n')}
 
 			- **世界观设定集**:
 			${worldBookContent}
+			${thoughtChainPromptBlock}
 			${linkedMemoryContext}
 			${elemeContext}
 			- **可用表情包**:
@@ -55492,6 +55878,45 @@ ${colSpecs.join('\n')}
           document
             .getElementById("create-weibo-post-btn")
             .addEventListener("click", openWeiboPublisherClean);
+
+          // 思维链 模块事件绑定
+          const tcAddBtn = document.getElementById("tc-add-preset-btn");
+          if (tcAddBtn) tcAddBtn.addEventListener("click", () => openThoughtChainEditor());
+
+          const tcSetDefBtn = document.getElementById("tc-set-default-btn");
+          if (tcSetDefBtn) tcSetDefBtn.addEventListener("click", setThoughtChainDefault);
+
+          const openTcBindSingle = document.getElementById("open-thought-chain-bind-btn-single");
+          if (openTcBindSingle) openTcBindSingle.addEventListener("click", openThoughtChainBindModal);
+
+          const openTcBindGroup = document.getElementById("open-thought-chain-bind-btn-group");
+          if (openTcBindGroup) openTcBindGroup.addEventListener("click", openThoughtChainBindModal);
+
+          const closeTcEditorBtn = document.getElementById("close-tc-editor-modal-btn");
+          if (closeTcEditorBtn) closeTcEditorBtn.addEventListener("click", () => {
+            document.getElementById("thought-chain-editor-modal").classList.remove("visible");
+          });
+
+          const cancelTcEditorBtn = document.getElementById("cancel-tc-editor-btn");
+          if (cancelTcEditorBtn) cancelTcEditorBtn.addEventListener("click", () => {
+            document.getElementById("thought-chain-editor-modal").classList.remove("visible");
+          });
+
+          const saveTcEditorBtn = document.getElementById("save-tc-editor-btn");
+          if (saveTcEditorBtn) saveTcEditorBtn.addEventListener("click", saveThoughtChainPreset);
+
+          const closeTcBindBtn = document.getElementById("close-thought-chain-bind-modal-btn");
+          if (closeTcBindBtn) closeTcBindBtn.addEventListener("click", () => {
+            document.getElementById("thought-chain-bind-modal").classList.remove("visible");
+          });
+
+          const cancelTcBindBtn = document.getElementById("cancel-thought-chain-bind-btn");
+          if (cancelTcBindBtn) cancelTcBindBtn.addEventListener("click", () => {
+            document.getElementById("thought-chain-bind-modal").classList.remove("visible");
+          });
+
+          const saveTcBindBtn = document.getElementById("save-thought-chain-bind-btn");
+          if (saveTcBindBtn) saveTcBindBtn.addEventListener("click", saveThoughtChainBind);
 
           document
             .getElementById("delete-expired-songs-btn")
