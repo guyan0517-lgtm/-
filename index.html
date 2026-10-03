@@ -4532,7 +4532,7 @@
     <!-- 选择联系人以创建群聊的屏幕 -->
     <div id="contact-picker-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="cancel-contact-picker-btn">取消</span>
+        <span class="save-btn" id="cancel-contact-picker-btn">取消</span>
         <span>选择联系人</span>
         <span class="save-btn" id="confirm-contact-picker-btn">完成(0)</span>
       </div>
@@ -6703,6 +6703,9 @@
             <div class="moe-divider"></div>
 
             <div class="moe-btn-group">
+              <button id="clear-images-btn" class="moe-btn-danger">
+                清图
+              </button>
               <button id="clear-chat-btn" class="moe-btn-danger">
                 🧹 清空聊天
               </button>
@@ -18635,14 +18638,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             headerRow.appendChild(actionsRow);
             card.appendChild(headerRow);
 
-            const previewText = preset.generalContent || preset.cocContent || "";
-            if (previewText.trim()) {
-              const previewDiv = document.createElement("div");
-              previewDiv.className = "tc-card-preview";
-              previewDiv.textContent = previewText.trim();
-              card.appendChild(previewDiv);
-            }
-
             container.appendChild(card);
           });
         }
@@ -23850,8 +23845,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           const typingIndicator = document.createElement("div");
           typingIndicator.id = "typing-indicator";
-          typingIndicator.style.display = "none";
-          typingIndicator.textContent = "对方正在输入...";
+          window.activeGeneratingChats = window.activeGeneratingChats || {};
+          if (window.activeGeneratingChats[chatId]) {
+            if (chat.isGroup) {
+              typingIndicator.textContent = "成员们正在输入...";
+              typingIndicator.style.display = "block";
+            } else {
+              typingIndicator.style.display = "none";
+              const chatHeaderTitle = document.getElementById("chat-header-title");
+              if (chatHeaderTitle) {
+                chatHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : (chat.settings?.offlineMode?.enabled ? "对方正在赴约中..." : "对方正在输入...");
+                chatHeaderTitle.classList.add("typing-status");
+              }
+            }
+          } else {
+            typingIndicator.style.display = "none";
+            typingIndicator.textContent = chat.isGroup ? "成员们正在输入..." : "对方正在输入...";
+          }
           messagesContainer.appendChild(typingIndicator);
           setTimeout(
             () =>
@@ -24663,6 +24673,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           let contentHtml;
+          let extractedThinkingText = msg.thinking || null;
 
           if (msg.type === "share_link") {
             bubble.classList.add("is-link-share");
@@ -25430,16 +25441,36 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               msg.fullPrompt || msg.prompt || "NovelAI生成"
             }">`;
           } else {
-            contentHtml = String(msg.content || "").replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
+            let rawContentText = String(msg.content || "");
+            extractedThinkingText = msg.thinking || null;
+            if (/<thinking>[\s\S]*?<\/thinking>/i.test(rawContentText)) {
+              const tMatch = rawContentText.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+              if (tMatch && !extractedThinkingText) {
+                extractedThinkingText = tMatch[1].trim();
+                msg.thinking = extractedThinkingText;
+              }
+              rawContentText = rawContentText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
+            }
+            contentHtml = rawContentText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
           }
 
           // 思维链折叠块渲染
           let thinkingHtml = "";
-          if (msg.thinking) {
+          const hasThinkingModule = Boolean(chat && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
+          if (extractedThinkingText !== null && extractedThinkingText !== undefined || (!isUser && hasThinkingModule)) {
+            const displayThinkingText = extractedThinkingText ? String(extractedThinkingText).replace(/\n/g, "<br>") : "无思考内容";
             thinkingHtml = `
               <details class="thought-chain-block">
-                <summary class="thought-chain-summary"><svg class="thought-chain-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a9 9 0 0 1 9 9c0 3.8-2.5 7.1-6 8.4V21a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1.6C5.5 18.1 3 14.8 3 11a9 9 0 0 1 9-9z"/><path d="M9 22h6"/></svg> 思考过程</summary>
-                <div class="thought-chain-content">${String(msg.thinking).replace(/\n/g, "<br>")}</div>
+                <summary class="thought-chain-summary">
+                  <svg class="thought-chain-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span style="flex-grow: 1;">思考</span>
+                  <svg class="thought-chain-arrow" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </summary>
+                <div class="thought-chain-content">${displayThinkingText}</div>
               </details>
             `;
           }
@@ -25836,25 +25867,48 @@ ${recentHistory || '无'}
             return;
           }
 
+          window.activeGeneratingChats = window.activeGeneratingChats || {};
+          window.activeGeneratingChats[chatId] = true;
+
+          const initialHeaderTitle = document.getElementById("chat-header-title");
+          const initialTypingInd = document.getElementById("typing-indicator");
+          if (chat.isGroup) {
+            if (initialTypingInd) {
+              initialTypingInd.textContent = "成员们正在输入...";
+              initialTypingInd.style.display = "block";
+            }
+          } else if (initialHeaderTitle) {
+            initialHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : (chat.settings?.offlineMode?.enabled ? "对方正在赴约中..." : "对方正在输入...");
+            initialHeaderTitle.classList.add("typing-status");
+          }
+
           // 系统状态栏角色（单聊）：合并为同一条消息，同一个气泡内，AI 禁止生成其他任何消息
           if (!chat.isGroup && chat.roleType === "system_status") {
-            const statusContent = await generateSystemStatusContent(chat);
-            if (statusContent) {
-              const statusMsg = {
-                id: "msg_" + Date.now(),
-                sender: "ai",
-                role: "assistant",
-                name: chat.name || "系统状态",
-                avatar: chat.settings?.aiAvatar || DEFAULT_STATUS_AVATAR,
-                content: statusContent,
-                timestamp: Date.now()
-              };
-              if (!chat.history) chat.history = [];
-              chat.history.push(statusMsg);
-              await incrementMessageCount(chatId);
-              await db.chats.put(chat);
-              appendMessage(statusMsg, chat);
-              renderChatList();
+            try {
+              const statusContent = await generateSystemStatusContent(chat);
+              if (statusContent) {
+                const statusMsg = {
+                  id: "msg_" + Date.now(),
+                  sender: "ai",
+                  role: "assistant",
+                  name: chat.name || "系统状态",
+                  avatar: chat.settings?.aiAvatar || DEFAULT_STATUS_AVATAR,
+                  content: statusContent,
+                  timestamp: Date.now()
+                };
+                if (!chat.history) chat.history = [];
+                chat.history.push(statusMsg);
+                await incrementMessageCount(chatId);
+                await db.chats.put(chat);
+                appendMessage(statusMsg, chat);
+                renderChatList();
+              }
+            } finally {
+              delete window.activeGeneratingChats[chatId];
+              if (initialHeaderTitle && state.activeChatId === chatId) {
+                initialHeaderTitle.textContent = chat.name;
+                initialHeaderTitle.classList.remove("typing-status");
+              }
             }
             return;
           }
@@ -27260,6 +27314,9 @@ ${recentHistory || '无'}
                     // AI消息的处理逻辑保持不变...
                     let assistantMsgObject = { type: msg.type || "text" };
                     assistantMsgObject.name = msg.senderName;
+                    if (msg.thinking) {
+                      assistantMsgObject.thinking = "<thinking>思维链内容已隐藏</thinking>";
+                    }
                     if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
@@ -27892,6 +27949,9 @@ ${colSpecs.join('\n')}
 
                   if (msg.role === "assistant") {
                     let assistantMsgObject = { type: msg.type || "text" };
+                    if (msg.thinking) {
+                      assistantMsgObject.thinking = "<thinking>思维链内容已隐藏</thinking>";
+                    }
                     if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
@@ -31945,6 +32005,9 @@ ${colSpecs.join('\n')}
               renderChatInterface(chatId);
             }
           } finally {
+            if (window.activeGeneratingChats) {
+              delete window.activeGeneratingChats[chatId];
+            }
             // 在 finally 块中统一隐藏所有类型的提示
             if (chat.isGroup) {
               if (typingIndicator) {
@@ -49049,6 +49112,25 @@ ${colSpecs.join('\n')}
             count: calculateTokenCount(summaryText),
           });
 
+          // 4.5 思维链预设 & 游戏模组
+          let tcPromptText = "";
+          if (typeof getThoughtChainPromptBlock === "function") {
+            tcPromptText = await getThoughtChainPromptBlock(chat);
+          }
+          breakdown.push({
+            name: "思维链预设",
+            count: calculateTokenCount(tcPromptText),
+          });
+
+          let cocModuleText = "";
+          if (window.getCocPromptStatus && settings.myCocPanel) {
+            cocModuleText = window.getCocPromptStatus(settings.myCocPanel) || "";
+          }
+          breakdown.push({
+            name: "游戏模组/面板",
+            count: calculateTokenCount(cocModuleText),
+          });
+
           // 5. 短期记忆 (对话) - 【核心修改部分】
           const history = chat.history.filter((msg) => !msg.isHidden);
           const memoryDepth = settings.maxMemory || 10;
@@ -49063,6 +49145,9 @@ ${colSpecs.join('\n')}
                 ? msg.content
                 : JSON.stringify(msg.content);
             let len = calculateTokenCount(content);
+            if (msg.thinking) {
+              len += calculateTokenCount(String(msg.thinking));
+            }
 
             // --- 异常检测逻辑 ---
             if (len > outlierThreshold) {
@@ -60243,6 +60328,58 @@ ${colSpecs.join('\n')}
               }
             });
 
+          const clearImagesBtn = document.getElementById("clear-images-btn");
+          if (clearImagesBtn) {
+            clearImagesBtn.addEventListener("click", async () => {
+              if (!state.activeChatId) return;
+              const chat = state.chats[state.activeChatId];
+              const confirmed = await showCustomConfirm(
+                "确认清图",
+                "确定要清空此聊天中的所有生图和图片吗？",
+                { confirmButtonClass: "btn-danger" },
+              );
+              if (confirmed) {
+                if (chat.history) {
+                  chat.history.forEach((msg) => {
+                    if (!msg) return;
+                    if (
+                      msg.type === "image" ||
+                      msg.type === "nov" ||
+                      msg.type === "sd" ||
+                      msg.type === "ai_image" ||
+                      msg.type === "realimag" ||
+                      msg.type === "naiimag"
+                    ) {
+                      msg.content = "[图片已清理]";
+                      if (msg.imageUrl) delete msg.imageUrl;
+                      if (msg.url) delete msg.url;
+                    } else if (msg.imageUrl) {
+                      delete msg.imageUrl;
+                    } else if (msg.type === "user_photo") {
+                      msg.content = "[图片已清理]";
+                    } else if (typeof msg.content === "string") {
+                      msg.content = msg.content
+                        .replace(/<img[^>]*>/gi, "[图片已清理]")
+                        .replace(/!\[.*?\]\([^\)]+\)/gi, "[图片已清理]");
+                    } else if (Array.isArray(msg.content)) {
+                      msg.content = msg.content.map((item) => {
+                        if (item && item.type === "image_url") {
+                          return { type: "text", text: "[图片已清理]" };
+                        }
+                        return item;
+                      });
+                    }
+                  });
+                }
+                await db.chats.put(chat);
+                renderChatInterface(state.activeChatId);
+                renderChatList();
+                chatSettingsModal.classList.remove("visible");
+                await showCustomAlert("清图成功", "所有生图与图片已清理完成！");
+              }
+            });
+          }
+
           // 导出聊天记录按钮
           document
             .getElementById("export-chat-history-btn")
@@ -67113,12 +67250,12 @@ ${colSpecs.join('\n')}
 
         window.triggerAiResponse = triggerAiResponse;
         window.openLoversSpaceFromCard = openLoversSpaceFromCard;
-        window.openThoughtChainScreen = function () {
+        window.openThoughtChainScreen = async function () {
           const lsModal = document.getElementById("ls-char-selector-modal");
           if (lsModal) lsModal.classList.remove("visible");
           showScreen("thought-chain-screen");
-          if (typeof renderThoughtChainPresetsUI === "function") {
-            renderThoughtChainPresetsUI();
+          if (typeof renderThoughtChainPresets === "function") {
+            await renderThoughtChainPresets();
           }
         };
       });
