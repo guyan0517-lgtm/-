@@ -5915,11 +5915,10 @@
                   <option value="">选择预设</option>
                 </select>
                 <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; flex-wrap: wrap;">
-                  <button type="button" id="summary-preset-new-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 12px; height: 26px; line-height: 22px; border-radius: 6px;">新增</button>
-                  <button type="button" id="summary-preset-default-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 12px; height: 26px; line-height: 22px; border-radius: 6px;">默认</button>
-                  <button type="button" id="summary-preset-update-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 12px; height: 26px; line-height: 22px; border-radius: 6px;">更新</button>
-                  <button type="button" id="summary-preset-save-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 12px; height: 26px; line-height: 22px; border-radius: 6px;">保存</button>
-                  <button type="button" id="summary-preset-delete-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 12px; height: 26px; line-height: 22px; border-radius: 6px; color: var(--tukey-accent-red, #ff4d4f);">删除</button>
+                  <button type="button" id="summary-preset-default-btn" class="summary-preset-btn">默认</button>
+                  <button type="button" id="summary-preset-new-btn" class="summary-preset-btn">新建</button>
+                  <button type="button" id="summary-preset-save-btn" class="summary-preset-btn">保存</button>
+                  <button type="button" id="summary-preset-delete-btn" class="summary-preset-btn">删除</button>
                 </div>
               </div>
               <div class="form-group">
@@ -18950,11 +18949,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               aiAvatarLibrary: [],
               stickerLibrary: [],
               summary: {
-                enabled: false,
+                enabled: true,
                 mode: "auto",
                 count: 20,
                 prompt:
-                  "请你以第三人称的视角，客观、冷静、不带任何感情色彩地总结以下对话的核心事件和信息。禁止进行任何角色扮演或添加主观评论。",
+                  (function() {
+                    try {
+                      const defId = localStorage.getItem("chat_summary_default_preset_id");
+                      const raw = localStorage.getItem("chat_summary_presets");
+                      if (defId && raw) {
+                        const list = JSON.parse(raw);
+                        const found = list.find(p => p.id === defId);
+                        if (found && (found.prompt || found.text)) return found.prompt || found.text;
+                      }
+                    } catch (e) {}
+                    return "请你以第三人称的视角，客观、冷静、不带任何感情色彩地总结以下对话的核心事件和信息。禁止进行任何角色扮演或添加主观评论。";
+                  })(),
                 lastSummaryIndex: -1,
               },
               linkedMemories: [],
@@ -34742,6 +34752,25 @@ ${colSpecs.join('\n')}
               // 为用户自己也加上管理员和头衔的初始设置
               isUserAdmin: false,
               myGroupTitle: "",
+              summary: {
+                enabled: true,
+                mode: "auto",
+                count: 20,
+                prompt:
+                  (function() {
+                    try {
+                      const defId = localStorage.getItem("chat_summary_default_preset_id");
+                      const raw = localStorage.getItem("chat_summary_presets");
+                      if (defId && raw) {
+                        const list = JSON.parse(raw);
+                        const found = list.find(p => p.id === defId);
+                        if (found && (found.prompt || found.text)) return found.prompt || found.text;
+                      }
+                    } catch (e) {}
+                    return "请你以第三人称的视角，客观、冷静、不带任何感情色彩地总结以下对话的核心事件和信息。禁止进行任何角色扮演或添加主观评论。";
+                  })(),
+                lastSummaryIndex: -1,
+              },
             },
             history: [],
             musicData: { totalTime: 0 },
@@ -46463,7 +46492,16 @@ ${colSpecs.join('\n')}
               messagesToSummarize,
             );
             if (summaryText) {
-              await saveSummaryAsMemory(chatId, summaryText);
+              const nonSummaryMsgs = chat.history.filter((m) => m.type !== "summary");
+              const endNum = Math.max(1, nonSummaryMsgs.length);
+              const startNum = Math.max(1, endNum - (summarySettings.count || 20) + 1);
+              const rangeInfo = {
+                start: startNum,
+                end: endNum,
+                ranges: [{ start: startNum, end: endNum }],
+                hasLargeGap: false,
+              };
+              await saveSummaryAsMemory(chatId, summaryText, "", rangeInfo);
             }
           } catch (e) {
             // generateSummary 内部已经处理了错误弹窗，这里我们只需要记录日志即可
@@ -46615,7 +46653,7 @@ ${colSpecs.join('\n')}
         /**
          * 将生成的总结作为一条特殊的记忆消息保存起来
          */
-        async function saveSummaryAsMemory(chatId, summaryText, headerText = "") {
+        async function saveSummaryAsMemory(chatId, summaryText, headerText = "", rangeInfo = null) {
           const chat = state.chats[chatId];
           const newLastSummaryIndex = chat.history.length - 1;
           let header = headerText ? headerText.trim() : "";
@@ -46626,8 +46664,22 @@ ${colSpecs.join('\n')}
               header = headerMatch[1].trim();
               content = content.replace(/^(?:【卡头】|\[卡头\]|卡头[:：])[^\n\r]*[\r\n]*/, "").trim();
             } else {
-              header = new Date().toLocaleDateString("zh-CN");
+              header = "";
             }
+          }
+
+          let finalRangeInfo = rangeInfo;
+          if (!finalRangeInfo) {
+            const nonSummaryMsgs = chat.history.filter((m) => m.type !== "summary");
+            const count = (chat.settings && chat.settings.summary && chat.settings.summary.count) || 20;
+            const endNum = Math.max(1, nonSummaryMsgs.length);
+            const startNum = Math.max(1, endNum - count + 1);
+            finalRangeInfo = {
+              start: startNum,
+              end: endNum,
+              ranges: [{ start: startNum, end: endNum }],
+              hasLargeGap: false,
+            };
           }
 
           const summaryMessage = {
@@ -46637,14 +46689,97 @@ ${colSpecs.join('\n')}
             content: content,
             timestamp: Date.now(),
             isHidden: true,
+            rangeInfo: finalRangeInfo,
           };
 
           chat.history.push(summaryMessage);
-          chat.settings.summary.lastSummaryIndex = newLastSummaryIndex;
+          if (chat.settings && chat.settings.summary) {
+            chat.settings.summary.lastSummaryIndex = newLastSummaryIndex;
+          }
 
           await db.chats.put(chat);
           console.log(`新的总结已作为记忆保存 for chat: ${chatId}`);
           return summaryMessage;
+        }
+
+        function getSummaryRangeInfo(summary, chat) {
+          if (summary.rangeInfo && summary.rangeInfo.start && summary.rangeInfo.end) {
+            return summary.rangeInfo;
+          }
+          if (summary.start && summary.end) {
+            return {
+              start: summary.start,
+              end: summary.end,
+              ranges: summary.ranges || [{ start: summary.start, end: summary.end }],
+              hasLargeGap: !!summary.hasLargeGap,
+            };
+          }
+
+          const history = (chat && chat.history) || [];
+          const nonSummaryMsgs = [];
+          const summaryMsgs = [];
+          history.forEach((m) => {
+            if (m.type === "summary") {
+              summaryMsgs.push(m);
+            } else {
+              nonSummaryMsgs.push(m);
+            }
+          });
+
+          const sIdx = summaryMsgs.findIndex((m) => m.timestamp === summary.timestamp);
+          let startNum = 1;
+          let endNum = 1;
+
+          if (nonSummaryMsgs.length === 0) {
+            startNum = 1;
+            endNum = 1;
+          } else if (sIdx !== -1) {
+            const originalPos = history.findIndex((m) => m.timestamp === summary.timestamp);
+            const nonSummaryBefore = history.slice(0, originalPos).filter((m) => m.type !== "summary").length;
+            let prevNonSummaryBefore = 0;
+            if (sIdx > 0) {
+              const prevSummary = summaryMsgs[sIdx - 1];
+              const prevOriginalPos = history.findIndex((m) => m.timestamp === prevSummary.timestamp);
+              prevNonSummaryBefore = history.slice(0, prevOriginalPos).filter((m) => m.type !== "summary").length;
+            }
+            startNum = Math.max(1, prevNonSummaryBefore + 1);
+            endNum = Math.max(startNum, nonSummaryBefore);
+          } else {
+            const count = (chat && chat.settings && chat.settings.summary && chat.settings.summary.count) || 20;
+            endNum = Math.max(1, nonSummaryMsgs.length);
+            startNum = Math.max(1, endNum - count + 1);
+          }
+
+          const deduced = {
+            start: startNum,
+            end: endNum,
+            ranges: [{ start: startNum, end: endNum }],
+            hasLargeGap: false,
+          };
+          summary.rangeInfo = deduced;
+          return deduced;
+        }
+
+        function getDefaultSummarySettings() {
+          let prompt = "请你以第三人称的视角，客观、冷静、不带任何感情色彩地总结以下对话的核心事件和信息。禁止进行任何角色扮演或添加主观评论。";
+          try {
+            const defId = localStorage.getItem("chat_summary_default_preset_id");
+            const raw = localStorage.getItem("chat_summary_presets");
+            if (defId && raw) {
+              const list = JSON.parse(raw);
+              const found = list.find((p) => p.id === defId);
+              if (found && (found.prompt || found.text)) {
+                prompt = found.prompt || found.text;
+              }
+            }
+          } catch (e) {}
+          return {
+            enabled: true,
+            mode: "auto",
+            count: 20,
+            prompt: prompt,
+            lastSummaryIndex: -1,
+          };
         }
 
         // --- 长期记忆总结预设管理与对话记忆功能 ---
@@ -46697,7 +46832,7 @@ ${colSpecs.join('\n')}
           optionsHtml += presets
             .map((p) => {
               const isDef = p.id === defaultId;
-              const prefix = isDef ? "【默认】" : "";
+              const prefix = isDef ? "默认 · " : "";
               const isSel = p.id === currentVal;
               return `<option value="${p.id}" ${isSel ? "selected" : ""}>${prefix}${p.name}</option>`;
             })
@@ -46788,8 +46923,53 @@ ${colSpecs.join('\n')}
             .sort((a, b) => a.timestamp - b.timestamp);
 
           const mergedText = selected.map((s) => s.content.trim()).join("\n\n");
-          const headers = selected.map((s) => s.header || "").filter(Boolean);
-          const mergedHeader = headers.length > 0 ? ("合并 · " + headers.join("、")) : ("合并 · " + new Date().toLocaleDateString("zh-CN"));
+          const headers = selected.map((s) => (s.header || "").trim()).filter(Boolean);
+          const mergedHeader = headers.length > 0 ? ("合并 · " + headers.join("、")) : "";
+
+          let combinedRanges = [];
+          selected.forEach((s) => {
+            const rInfo = getSummaryRangeInfo(s, chat);
+            if (rInfo && rInfo.ranges && rInfo.ranges.length) {
+              combinedRanges.push(...rInfo.ranges);
+            } else if (rInfo && rInfo.start && rInfo.end) {
+              combinedRanges.push({ start: rInfo.start, end: rInfo.end });
+            }
+          });
+
+          combinedRanges.sort((a, b) => a.start - b.start);
+
+          const compactedRanges = [];
+          combinedRanges.forEach((curr) => {
+            if (compactedRanges.length === 0) {
+              compactedRanges.push({ start: curr.start, end: curr.end });
+            } else {
+              const last = compactedRanges[compactedRanges.length - 1];
+              if (curr.start <= last.end + 1) {
+                last.end = Math.max(last.end, curr.end);
+              } else {
+                compactedRanges.push({ start: curr.start, end: curr.end });
+              }
+            }
+          });
+
+          const head = compactedRanges.length > 0 ? compactedRanges[0].start : 1;
+          const tail = compactedRanges.length > 0 ? compactedRanges[compactedRanges.length - 1].end : 1;
+
+          let hasLargeGap = false;
+          for (let i = 0; i < compactedRanges.length - 1; i++) {
+            const missing = compactedRanges[i + 1].start - compactedRanges[i].end - 1;
+            if (missing > 50) {
+              hasLargeGap = true;
+              break;
+            }
+          }
+
+          const mergedRangeInfo = {
+            start: head,
+            end: tail,
+            ranges: compactedRanges,
+            hasLargeGap: hasLargeGap,
+          };
 
           const newSummary = {
             role: "system",
@@ -46798,6 +46978,7 @@ ${colSpecs.join('\n')}
             content: mergedText,
             timestamp: Date.now(),
             isHidden: true,
+            rangeInfo: mergedRangeInfo,
           };
 
           chat.history.push(newSummary);
@@ -46830,6 +47011,51 @@ ${colSpecs.join('\n')}
           const selected = (chat.history || [])
             .filter((m) => m.type === "summary" && selectedSummaryTimestamps.has(m.timestamp))
             .sort((a, b) => a.timestamp - b.timestamp);
+
+          let combinedRanges = [];
+          selected.forEach((s) => {
+            const rInfo = getSummaryRangeInfo(s, chat);
+            if (rInfo && rInfo.ranges && rInfo.ranges.length) {
+              combinedRanges.push(...rInfo.ranges);
+            } else if (rInfo && rInfo.start && rInfo.end) {
+              combinedRanges.push({ start: rInfo.start, end: rInfo.end });
+            }
+          });
+
+          combinedRanges.sort((a, b) => a.start - b.start);
+
+          const compactedRanges = [];
+          combinedRanges.forEach((curr) => {
+            if (compactedRanges.length === 0) {
+              compactedRanges.push({ start: curr.start, end: curr.end });
+            } else {
+              const last = compactedRanges[compactedRanges.length - 1];
+              if (curr.start <= last.end + 1) {
+                last.end = Math.max(last.end, curr.end);
+              } else {
+                compactedRanges.push({ start: curr.start, end: curr.end });
+              }
+            }
+          });
+
+          const head = compactedRanges.length > 0 ? compactedRanges[0].start : 1;
+          const tail = compactedRanges.length > 0 ? compactedRanges[compactedRanges.length - 1].end : 1;
+
+          let hasLargeGap = false;
+          for (let i = 0; i < compactedRanges.length - 1; i++) {
+            const missing = compactedRanges[i + 1].start - compactedRanges[i].end - 1;
+            if (missing > 50) {
+              hasLargeGap = true;
+              break;
+            }
+          }
+
+          const mergedRangeInfo = {
+            start: head,
+            end: tail,
+            ranges: compactedRanges,
+            hasLargeGap: hasLargeGap,
+          };
 
           const basePrompt =
             (chat.settings && chat.settings.summary && chat.settings.summary.prompt) ||
@@ -46882,7 +47108,7 @@ ${colSpecs.join('\n')}
 
             if (!aiContent || !aiContent.trim()) throw new Error("AI返回了空内容");
 
-            await saveSummaryAsMemory(state.activeChatId, aiContent.trim());
+            await saveSummaryAsMemory(state.activeChatId, aiContent.trim(), "", mergedRangeInfo);
             exitSummaryMultiSelect();
             openSummaryViewer();
             if (typeof showCustomAlert === "function") await showCustomAlert("完成", "已成功归纳所选记忆");
@@ -46900,14 +47126,14 @@ ${colSpecs.join('\n')}
           const summary = (chat.history || []).find((m) => m.timestamp === timestamp);
           if (!summary) return;
 
-          const currentHeader = summary.header || new Date(summary.timestamp).toLocaleDateString("zh-CN");
+          const currentHeader = summary.header || "";
           let newHeader = null;
           if (typeof showCustomPrompt === "function") {
             newHeader = await showCustomPrompt("修改卡头", "请输入卡头内容", currentHeader);
           } else {
             newHeader = prompt("请输入卡头内容", currentHeader);
           }
-          if (newHeader !== null && newHeader.trim()) {
+          if (newHeader !== null) {
             summary.header = newHeader.trim();
             await db.chats.put(chat);
             openSummaryViewer();
@@ -46973,10 +47199,7 @@ ${colSpecs.join('\n')}
               card.className = "summary-item-card";
               card.dataset.timestamp = summary.timestamp;
 
-              let cardHeader = summary.header || "";
-              if (!cardHeader) {
-                cardHeader = new Date(summary.timestamp).toLocaleDateString("zh-CN");
-              }
+              let cardHeader = (summary.header || "").trim();
 
               const formattedTime = new Date(summary.timestamp).toLocaleString("zh-CN", {
                 dateStyle: "short",
@@ -46994,12 +47217,35 @@ ${colSpecs.join('\n')}
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;");
 
+              const rangeInfo = getSummaryRangeInfo(summary, chat);
+              const rangeText = `第${rangeInfo.start}条-第${rangeInfo.end}条`;
+              const hasGap = !!rangeInfo.hasLargeGap;
+
+              const headerHtml = safeHeader ? `
+                <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--secondary-bg); color: var(--accent-color); border: 1px solid var(--border-color); flex-shrink: 0;">卡头</span>
+                <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击修改卡头">${safeHeader}</span>
+              ` : `
+                <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击添加卡头"></span>
+              `;
+
+              const rangePopoverHtml = hasGap ? `
+                <button type="button" class="summary-range-info-btn" data-timestamp="${summary.timestamp}" title="查看条目" style="background: none; border: none; padding: 0; margin: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); opacity: 0.6; line-height: 1;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                </button>
+                <div class="summary-range-popover" id="summary-popover-${summary.timestamp}" style="display: none; position: absolute; right: 0; bottom: calc(100% + 6px); background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); padding: 4px 8px; z-index: 100; min-width: 105px; max-height: 58px; overflow-y: auto; box-sizing: border-box; font-size: 11px; color: var(--text-primary); text-align: left;">
+                  ${(rangeInfo.ranges || []).map((r) => `<div style="height: 18px; line-height: 18px; white-space: nowrap;">第${r.start}条-第${r.end}条</div>`).join("")}
+                </div>
+              ` : "";
+
               card.innerHTML = `
                 <div class="summary-card-header">
                   <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
                     <input type="checkbox" class="summary-select-checkbox" data-timestamp="${summary.timestamp}" style="display: none; width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color); margin: 0; flex-shrink: 0;" />
-                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--secondary-bg); color: var(--accent-color); border: 1px solid var(--border-color); flex-shrink: 0;">卡头</span>
-                    <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击修改卡头">${safeHeader}</span>
+                    ${headerHtml}
                   </div>
                   <div class="summary-actions">
                     <button type="button" class="edit-summary-header-btn" data-timestamp="${summary.timestamp}" title="卡头">
@@ -47025,6 +47271,10 @@ ${colSpecs.join('\n')}
                 <div class="summary-content">${safeContent}</div>
                 <div class="summary-meta">
                   <span>生成于: ${formattedTime}</span>
+                  <div class="summary-range-container" style="display: inline-flex; align-items: center; gap: 4px; position: relative;">
+                    <span class="summary-range-text">${rangeText}</span>
+                    ${rangePopoverHtml}
+                  </div>
                 </div>
               `;
               listEl.appendChild(card);
@@ -47156,7 +47406,30 @@ ${colSpecs.join('\n')}
             );
 
             if (summaryText) {
-              await saveSummaryAsMemory(state.activeChatId, summaryText);
+              let rangeInfo = null;
+              if (mode === "range" && range) {
+                rangeInfo = {
+                  start: range.start,
+                  end: range.end,
+                  ranges: [{ start: range.start, end: range.end }],
+                  hasLargeGap: false,
+                };
+              } else {
+                const count =
+                  chat.settings && chat.settings.summary && chat.settings.summary.count > 0
+                    ? chat.settings.summary.count
+                    : 20;
+                const nonSummaryMsgs = chat.history.filter((m) => m.type !== "summary");
+                const endNum = Math.max(1, nonSummaryMsgs.length);
+                const startNum = Math.max(1, endNum - count + 1);
+                rangeInfo = {
+                  start: startNum,
+                  end: endNum,
+                  ranges: [{ start: startNum, end: endNum }],
+                  hasLargeGap: false,
+                };
+              }
+              await saveSummaryAsMemory(state.activeChatId, summaryText, "", rangeInfo);
               await showCustomAlert("总结完成", "新的对话记忆已生成！");
               if (
                 document
@@ -55553,6 +55826,7 @@ ${colSpecs.join('\n')}
                 coupleAvatarDescription: "",
                 weiboProfession: "",
                 weiboInstruction: "",
+                summary: getDefaultSummarySettings(),
               },
               history: [],
               musicData: { totalTime: 0 },
@@ -55641,6 +55915,7 @@ ${colSpecs.join('\n')}
                     coupleAvatarDescription: "",
                     weiboProfession: "",
                     weiboInstruction: "",
+                    summary: getDefaultSummarySettings(),
                   },
                   history: [],
                   musicData: { totalTime: 0 },
@@ -55752,7 +56027,8 @@ ${colSpecs.join('\n')}
                   { id: "lk_4", min: 70, max: 90, name: "小有不顺", note: "小有不顺：略有阻碍" },
                   { id: "lk_5", min: 90, max: 100, name: "大祸临头", note: "大祸临头：遭逢厄运" }
                 ],
-                weatherPool: ["晴朗", "多云", "阴天", "小雨", "大雨", "暴雪", "微风"]
+                weatherPool: ["晴朗", "多云", "阴天", "小雨", "大雨", "暴雪", "微风"],
+                summary: getDefaultSummarySettings(),
               },
               history: [],
               musicData: { totalTime: 0 },
@@ -57682,7 +57958,7 @@ ${colSpecs.join('\n')}
                 "summary-details-container",
               );
 
-              summaryToggle.checked = summarySettings.enabled || false;
+              summaryToggle.checked = summarySettings.enabled !== undefined ? summarySettings.enabled : true;
               summaryDetails.style.display = summaryToggle.checked
                 ? "block"
                 : "none";
@@ -57703,10 +57979,6 @@ ${colSpecs.join('\n')}
                 "请你以第三人称的视角，客观、冷静、不带任何感情色彩地总结以下对话的核心事件和信息。禁止进行任何角色扮演或添加主观评论。";
 
               renderSummaryPresetsUI();
-              if (defaultPresetId) {
-                const select = document.getElementById("summary-preset-select");
-                if (select) select.value = defaultPresetId;
-              }
 
               // 为开关添加实时交互
               summaryToggle.onchange = () => {
@@ -63773,6 +64045,22 @@ ${colSpecs.join('\n')}
             });
           }
 
+          const presetDefaultBtn = document.getElementById("summary-preset-default-btn");
+          if (presetDefaultBtn) {
+            presetDefaultBtn.addEventListener("click", async () => {
+              const select = document.getElementById("summary-preset-select");
+              if (!select || !select.value) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先选择预设");
+                else alert("请先选择预设");
+                return;
+              }
+              setDefaultSummaryPresetId(select.value);
+              renderSummaryPresetsUI();
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已设为默认预设");
+              else alert("已设为默认预设");
+            });
+          }
+
           const presetNewBtn = document.getElementById("summary-preset-new-btn");
           if (presetNewBtn) {
             presetNewBtn.addEventListener("click", async () => {
@@ -63780,7 +64068,7 @@ ${colSpecs.join('\n')}
               const promptText = promptInput ? promptInput.value.trim() : "";
               let name = null;
               if (typeof showCustomPrompt === "function") {
-                name = await showCustomPrompt("新增预设", "请输入预设名称");
+                name = await showCustomPrompt("新建预设", "请输入预设名称");
               } else {
                 name = prompt("请输入预设名称");
               }
@@ -63795,45 +64083,10 @@ ${colSpecs.join('\n')}
               });
               saveSummaryPresets(presets);
               renderSummaryPresetsUI();
-              if (presetSelect) presetSelect.value = newId;
-              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设保存成功");
-              else alert("预设保存成功");
-            });
-          }
-
-          const presetDefaultBtn = document.getElementById("summary-preset-default-btn");
-          if (presetDefaultBtn) {
-            presetDefaultBtn.addEventListener("click", async () => {
               const select = document.getElementById("summary-preset-select");
-              if (!select || !select.value) {
-                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先选择预设");
-                else alert("请先选择预设");
-                return;
-              }
-              setDefaultSummaryPresetId(select.value);
-              renderSummaryPresetsUI();
-              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已设为默认");
-              else alert("已设为默认");
-            });
-          }
-
-          const presetUpdateBtn = document.getElementById("summary-preset-update-btn");
-          if (presetUpdateBtn) {
-            presetUpdateBtn.addEventListener("click", async () => {
-              const select = document.getElementById("summary-preset-select");
-              const presets = getSummaryPresets();
-              const found = presets.find((p) => p.id === (select ? select.value : ""));
-              if (!found) {
-                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先选择要更新的预设");
-                else alert("请先选择要更新的预设");
-                return;
-              }
-              const promptInput = document.getElementById("summary-prompt-input");
-              found.prompt = promptInput ? promptInput.value.trim() : "";
-              saveSummaryPresets(presets);
-              renderSummaryPresetsUI();
-              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设已更新");
-              else alert("预设已更新");
+              if (select) select.value = newId;
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "新预设已保存");
+              else alert("新预设已保存");
             });
           }
 
@@ -63843,34 +64096,19 @@ ${colSpecs.join('\n')}
               const select = document.getElementById("summary-preset-select");
               const presets = getSummaryPresets();
               const found = presets.find((p) => p.id === (select ? select.value : ""));
+              if (!found) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先选择要保存覆盖的预设");
+                else alert("请先选择要保存覆盖的预设");
+                return;
+              }
               const promptInput = document.getElementById("summary-prompt-input");
               const promptText = promptInput ? promptInput.value.trim() : "";
-              if (found) {
-                found.prompt = promptText;
-                saveSummaryPresets(presets);
-                renderSummaryPresetsUI();
-                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设保存成功");
-                else alert("预设保存成功");
-              } else {
-                let name = null;
-                if (typeof showCustomPrompt === "function") {
-                  name = await showCustomPrompt("保存预设", "请输入预设名称");
-                } else {
-                  name = prompt("请输入预设名称");
-                }
-                if (!name || !name.trim()) return;
-                const newId = "preset_" + Date.now();
-                presets.push({
-                  id: newId,
-                  name: name.trim(),
-                  prompt: promptText,
-                });
-                saveSummaryPresets(presets);
-                renderSummaryPresetsUI();
-                if (select) select.value = newId;
-                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设保存成功");
-                else alert("预设保存成功");
-              }
+              found.prompt = promptText;
+              saveSummaryPresets(presets);
+              renderSummaryPresetsUI();
+              if (select) select.value = found.id;
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已覆盖保存当前预设");
+              else alert("已覆盖保存当前预设");
             });
           }
 
@@ -63901,6 +64139,15 @@ ${colSpecs.join('\n')}
               else alert("预设已删除");
             });
           }
+
+          // 点击空白处收起合并记忆明细面板
+          document.addEventListener("click", (e) => {
+            if (!e.target.closest(".summary-range-container")) {
+              document.querySelectorAll(".summary-range-popover").forEach((p) => {
+                p.style.display = "none";
+              });
+            }
+          });
 
           // 长按进入多选及列表事件
           const summaryListEl = document.getElementById("summary-list");
@@ -63983,6 +64230,25 @@ ${colSpecs.join('\n')}
             const card = e.target.closest(".summary-item-card");
             if (!card) return;
             const timestamp = parseInt(card.dataset.timestamp);
+
+            const rangeInfoBtn = e.target.closest(".summary-range-info-btn");
+            if (rangeInfoBtn) {
+              const container = rangeInfoBtn.closest(".summary-range-container");
+              const popover = container ? container.querySelector(".summary-range-popover") : null;
+              if (popover) {
+                const isShown = popover.style.display === "block";
+                document.querySelectorAll(".summary-range-popover").forEach((p) => {
+                  p.style.display = "none";
+                });
+                popover.style.display = isShown ? "none" : "block";
+              }
+              return;
+            }
+
+            const popoverEl = e.target.closest(".summary-range-popover");
+            if (popoverEl) {
+              return;
+            }
 
             const editHeaderBtn = e.target.closest(".edit-summary-header-btn");
             const headerTitle = e.target.closest(".summary-card-header-title");
