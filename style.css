@@ -29591,10 +29591,9 @@ select:focus-visible {
   position: relative !important;
   z-index: 5 !important;
   display: flex !important;
-  gap: 4px !important;
-  align-items: center !important;
-  margin-bottom: 6px !important;
-  flex-wrap: nowrap !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  margin-bottom: 8px !important;
   width: 100% !important;
   box-sizing: border-box !important;
 }
@@ -29602,30 +29601,53 @@ select:focus-visible {
 .coc-presets-row select,
 #coc-modal-preset-select,
 #cmd-preset-select,
+#rule-preset-select,
+#summary-preset-select,
 #weather-pool-select {
   position: relative !important;
   z-index: 5 !important;
-  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
   color: var(--text-primary) !important;
   background-color: var(--card-bg, #ffffff) !important;
   border: 1px solid var(--border-color) !important;
-  border-radius: 14px !important;
-  height: 28px !important;
-  min-height: 28px !important;
+  border-radius: 8px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   line-height: 24px !important;
-  padding: 2px 10px !important;
-  font-size: 11px !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
   box-sizing: border-box !important;
   opacity: 1 !important;
   visibility: visible !important;
+  display: block !important;
 }
 
 .coc-presets-row select option,
 #coc-modal-preset-select option,
 #cmd-preset-select option,
+#rule-preset-select option,
+#summary-preset-select option,
 #weather-pool-select option {
   color: var(--text-primary, #1f1f1f) !important;
   background-color: var(--card-bg, #ffffff) !important;
+}
+
+#send-photo-btn,
+#transfer-btn,
+#voice-message-btn,
+#send-waimai-request-btn,
+#video-call-btn,
+#group-video-call-btn,
+#share-link-btn,
+#send-location-btn,
+#pet-action-btn,
+#aurora-media-btn,
+#streak-settings-section,
+#offline-mode-section,
+#offline-mode-details,
+#couple-avatar-group {
+  display: none !important;
 }
 
 

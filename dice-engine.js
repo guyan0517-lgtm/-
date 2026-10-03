@@ -19,7 +19,7 @@ const DEFAULT_DICE_TEMPLATES = {
 const COC7_RULEBOOK_COMMAND_DOCS = [
   {
     key: "roll",
-    name: "普通投掷",
+    name: "普通掷骰",
     syntax: ".r 或 .r xdy 或 .r xdy±n",
     vars: "{角色名}、{表达式}、{结果}",
     desc: `投掷与掷骰规则（Rolling the Dice）：
@@ -137,7 +137,92 @@ const COC7_RULEBOOK_COMMAND_DOCS = [
   }
 ];
 
-// 现实气候天数换算的默认天气池（支持四季细分）
+const CANYUNWOSHI_RULEBOOK_COMMAND_DOCS = JSON.parse(JSON.stringify(COC7_RULEBOOK_COMMAND_DOCS));
+
+window.RULEBOOK_DOCS_MAP = {
+  coc7: COC7_RULEBOOK_COMMAND_DOCS,
+  canyunwoshi: CANYUNWOSHI_RULEBOOK_COMMAND_DOCS
+};
+
+const DEFAULT_RULE_SYSTEM_PRESETS = [
+  {
+    id: "coc7",
+    name: "COC7",
+    modules: [
+      { id: "mod_coc_combat", name: "战斗规则", prompt: "" },
+      { id: "mod_coc_career", name: "职业规则", prompt: "" },
+      { id: "mod_coc_check", name: "属性检定", prompt: "" },
+      { id: "mod_coc_sanity", name: "理智规则", prompt: "" },
+      { id: "mod_coc_chase", name: "追逐规则", prompt: "" },
+      { id: "mod_coc_magic", name: "魔法规则", prompt: "" }
+    ]
+  },
+  {
+    id: "canyunwoshi",
+    name: "餐云卧石",
+    modules: [
+      { id: "mod_cy_combat", name: "战斗规则", prompt: "" },
+      { id: "mod_cy_cultivation", name: "心法规则", prompt: "" },
+      { id: "mod_cy_root", name: "灵根属性", prompt: "" },
+      { id: "mod_cy_realm", name: "境界突破", prompt: "" },
+      { id: "mod_cy_sect", name: "宗门职事", prompt: "" }
+    ]
+  }
+];
+
+window.getStoredRuleSystemPresets = function() {
+  try {
+    const raw = localStorage.getItem("coc_rulebook_system_presets");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsed.forEach(p => {
+          if (p.id === "yunwoshi" || p.id === "canyunwoshi" || p.name.includes("云卧石") || p.name.includes("餐饮") || p.name.includes("参云")) {
+            p.id = "canyunwoshi";
+            p.name = "餐云卧石";
+          }
+          if (!Array.isArray(p.modules)) {
+            p.modules = [];
+          }
+        });
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(DEFAULT_RULE_SYSTEM_PRESETS));
+};
+
+window.saveStoredRuleSystemPresets = function(presets) {
+  try {
+    localStorage.setItem("coc_rulebook_system_presets", JSON.stringify(presets));
+  } catch (e) {}
+};
+
+window.getActiveRulePresetId = function() {
+  const presets = window.getStoredRuleSystemPresets();
+  const saved = localStorage.getItem("coc_active_rulebook_preset_id");
+  if (saved && presets.some(p => p.id === saved)) {
+    return saved;
+  }
+  return presets[0] ? presets[0].id : "coc7";
+};
+
+window.setActiveRulePresetId = function(id) {
+  try {
+    localStorage.setItem("coc_active_rulebook_preset_id", id);
+  } catch (e) {}
+};
+
+window.getStoredRulebooksList = function() {
+  const presets = window.getStoredRuleSystemPresets();
+  return presets.map(p => ({ id: p.id, name: p.name }));
+};
+
+window.getActiveRulebookId = function() {
+  return window.getActiveRulePresetId();
+};
+
+// 现实气候天数换算的默认天气池
 const DEFAULT_WEATHER_POOLS = [
   {
     id: "weather_temperate",
@@ -952,41 +1037,284 @@ document.addEventListener("click", async (e) => {
 });
 
 // ===================================================================
-// UI 渲染：指令管理中心与天气池界面 (模块 5 & 模块 6)
+// UI 渲染：法则界面（规则、指令、天气池）
 // ===================================================================
 
-let currentCmdTab = "commands"; // "commands" 或 "weather"
+let currentCmdTab = "rules"; // "rules", "commands" 或 "weather"
+let currentEditingRuleModuleId = null;
 
 window.renderDiceCommandCenter = function() {
   const container = document.getElementById("studio-content-area");
   if (!container) return;
 
   const titleEl = document.getElementById("studio-main-title");
-  if (titleEl) titleEl.textContent = "指令";
+  if (titleEl) titleEl.textContent = "法则";
 
+  const tabRulesBtn = document.getElementById("cmd-tab-rules");
   const tabCmdBtn = document.getElementById("cmd-tab-commands");
   const tabWeatherBtn = document.getElementById("cmd-tab-weather");
 
-  if (tabCmdBtn && tabWeatherBtn) {
-    if (currentCmdTab === "commands") {
-      tabCmdBtn.style.fontWeight = "bold";
-      tabCmdBtn.style.color = "var(--accent-color)";
-      tabWeatherBtn.style.fontWeight = "normal";
-      tabWeatherBtn.style.color = "var(--text-secondary)";
-    } else {
-      tabWeatherBtn.style.fontWeight = "bold";
-      tabWeatherBtn.style.color = "var(--accent-color)";
-      tabCmdBtn.style.fontWeight = "normal";
-      tabCmdBtn.style.color = "var(--text-secondary)";
+  [tabRulesBtn, tabCmdBtn, tabWeatherBtn].forEach(btn => {
+    if (btn) {
+      btn.style.fontWeight = "normal";
+      btn.style.color = "var(--text-secondary)";
     }
+  });
+
+  if (currentCmdTab === "rules" && tabRulesBtn) {
+    tabRulesBtn.style.fontWeight = "bold";
+    tabRulesBtn.style.color = "var(--accent-color)";
+  } else if (currentCmdTab === "commands" && tabCmdBtn) {
+    tabCmdBtn.style.fontWeight = "bold";
+    tabCmdBtn.style.color = "var(--accent-color)";
+  } else if (currentCmdTab === "weather" && tabWeatherBtn) {
+    tabWeatherBtn.style.fontWeight = "bold";
+    tabWeatherBtn.style.color = "var(--accent-color)";
   }
 
-  if (currentCmdTab === "commands") {
+  if (currentCmdTab === "rules") {
+    renderRulesTab(container);
+  } else if (currentCmdTab === "commands") {
     renderCommandsTab(container);
   } else {
     renderWeatherTab(container);
   }
 };
+
+function renderRulesTab(container) {
+  const presets = window.getStoredRuleSystemPresets();
+  const activePresetId = window.getActiveRulePresetId();
+  let currentPreset = presets.find(p => p.id === activePresetId) || presets[0];
+
+  if (!currentPreset) {
+    currentPreset = DEFAULT_RULE_SYSTEM_PRESETS[0];
+    presets.push(currentPreset);
+    window.saveStoredRuleSystemPresets(presets);
+  }
+
+  if (currentEditingRuleModuleId) {
+    renderRuleModuleEditor(container, currentPreset, presets);
+    return;
+  }
+
+  let presetOptionsHtml = presets.map(p => `<option value="${p.id}" ${p.id === currentPreset.id ? "selected" : ""}>${p.name}</option>`).join("");
+
+  let modulesHtml = "";
+  if (currentPreset.modules && currentPreset.modules.length > 0) {
+    modulesHtml = currentPreset.modules.map(mod => {
+      const previewText = mod.prompt ? mod.prompt.replace(/</g, "&lt;") : "暂无提示词，点击编辑";
+      return `
+        <div class="list-item rule-module-item" data-module-id="${mod.id}" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; margin-bottom: 8px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; box-sizing: border-box;">
+          <div style="flex: 1; min-width: 0; padding-right: 8px;">
+            <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin-bottom: 4px;">${mod.name}</div>
+            <div style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${previewText}</div>
+          </div>
+          <span style="color: var(--text-secondary); font-size: 14px; flex-shrink: 0;">›</span>
+        </div>
+      `;
+    }).join("");
+  } else {
+    modulesHtml = `
+      <div style="text-align: center; padding: 30px 10px; color: var(--text-secondary); font-size: 12px;">
+        暂无条例，点击下方新增
+      </div>
+    `;
+  }
+
+  container.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; width: 100%; box-sizing: border-box;">
+      <select id="rule-preset-select" class="moe-input" style="width: 100%; box-sizing: border-box; height: 32px; font-size: 12px; padding: 4px 8px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: block;">
+        ${presetOptionsHtml}
+      </select>
+      <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+        <button type="button" id="rule-new-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 2px 10px; font-size: 11px;">新增</button>
+        <button type="button" id="rule-rename-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 2px 10px; font-size: 11px;">改名</button>
+        <button type="button" id="rule-del-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 2px 10px; font-size: 11px; color: var(--tukey-accent-red, #ff4d4f);">删除</button>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 2px;">
+      <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">条例</span>
+      <button type="button" id="rule-add-module-btn" class="moe-btn-mini" style="height: 26px; padding: 2px 10px; font-size: 11px;">+ 新增</button>
+    </div>
+    <div id="rule-modules-list-container">
+      ${modulesHtml}
+    </div>
+  `;
+
+  // 绑定预设切换
+  const rulePresetSelect = document.getElementById("rule-preset-select");
+  if (rulePresetSelect) {
+    rulePresetSelect.onchange = (e) => {
+      window.setActiveRulePresetId(e.target.value);
+      renderRulesTab(container);
+    };
+  }
+
+  // 新增预设
+  const newPresetBtn = document.getElementById("rule-new-preset-btn");
+  if (newPresetBtn) {
+    newPresetBtn.onclick = async () => {
+      let name = null;
+      if (typeof window.showCustomPrompt === "function") {
+        name = await window.showCustomPrompt("新增预设", "请输入规则名称", "新规则");
+      } else {
+        name = prompt("请输入规则名称:");
+      }
+      if (!name || !name.trim()) return;
+      const newId = "rule_" + Date.now();
+      const newPreset = {
+        id: newId,
+        name: name.trim(),
+        modules: []
+      };
+      presets.push(newPreset);
+      window.saveStoredRuleSystemPresets(presets);
+      window.setActiveRulePresetId(newId);
+      renderRulesTab(container);
+    };
+  }
+
+  // 重命名预设
+  const renamePresetBtn = document.getElementById("rule-rename-preset-btn");
+  if (renamePresetBtn) {
+    renamePresetBtn.onclick = async () => {
+      let newName = null;
+      if (typeof window.showCustomPrompt === "function") {
+        newName = await window.showCustomPrompt("改名", "请输入规则新名称", currentPreset.name);
+      } else {
+        newName = prompt("请输入规则新名称:", currentPreset.name);
+      }
+      if (!newName || !newName.trim()) return;
+      currentPreset.name = newName.trim();
+      window.saveStoredRuleSystemPresets(presets);
+      renderRulesTab(container);
+    };
+  }
+
+  // 删除预设
+  const delPresetBtn = document.getElementById("rule-del-preset-btn");
+  if (delPresetBtn) {
+    delPresetBtn.onclick = async () => {
+      if (presets.length <= 1) {
+        if (typeof window.showCustomAlert === "function") {
+          await window.showCustomAlert("提示", "至少保留一个规则预设");
+        } else {
+          alert("至少保留一个规则预设");
+        }
+        return;
+      }
+      let confirmed = false;
+      if (typeof window.showCustomConfirm === "function") {
+        confirmed = await window.showCustomConfirm("删除预设", `确定要删除规则预设《${currentPreset.name}》吗？`, { confirmButtonClass: "btn-danger" });
+      } else {
+        confirmed = confirm(`确定要删除规则预设《${currentPreset.name}》吗？`);
+      }
+      if (!confirmed) return;
+      const idx = presets.findIndex(p => p.id === currentPreset.id);
+      if (idx !== -1) {
+        presets.splice(idx, 1);
+        window.saveStoredRuleSystemPresets(presets);
+        window.setActiveRulePresetId(presets[0].id);
+        renderRulesTab(container);
+      }
+    };
+  }
+
+  // 新增条例
+  const addModBtn = document.getElementById("rule-add-module-btn");
+  if (addModBtn) {
+    addModBtn.onclick = async () => {
+      let name = null;
+      if (typeof window.showCustomPrompt === "function") {
+        name = await window.showCustomPrompt("新增条例", "请输入条例名称", "新条例");
+      } else {
+        name = prompt("请输入条例名称:");
+      }
+      if (!name || !name.trim()) return;
+      const newModule = {
+        id: "mod_" + Date.now(),
+        name: name.trim(),
+        prompt: ""
+      };
+      if (!currentPreset.modules) currentPreset.modules = [];
+      currentPreset.modules.push(newModule);
+      window.saveStoredRuleSystemPresets(presets);
+      currentEditingRuleModuleId = newModule.id;
+      renderRulesTab(container);
+    };
+  }
+
+  // 点击条例项进入详情编辑
+  container.querySelectorAll(".rule-module-item").forEach(item => {
+    item.onclick = () => {
+      currentEditingRuleModuleId = item.dataset.moduleId;
+      renderRulesTab(container);
+    };
+  });
+}
+
+function renderRuleModuleEditor(container, currentPreset, presets) {
+  const mod = currentPreset.modules.find(m => m.id === currentEditingRuleModuleId);
+  if (!mod) {
+    currentEditingRuleModuleId = null;
+    renderRulesTab(container);
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 12px; box-sizing: border-box;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+        <button type="button" id="rule-module-back-btn" class="moe-btn-mini" style="height: 28px; padding: 2px 10px; font-size: 12px; display: inline-flex; align-items: center;">‹ 返回</button>
+        <span style="font-weight: 700; font-size: 14px; color: var(--text-primary);">${mod.name}</span>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <button type="button" id="rule-module-del-btn" class="moe-btn-mini" style="height: 28px; padding: 2px 8px; font-size: 11px; color: var(--tukey-accent-red, #ff4d4f);">删除</button>
+          <button type="button" id="rule-module-save-btn" class="moe-btn-mini" style="height: 28px; padding: 2px 10px; font-size: 11px; background: var(--accent-color); color: #fff;">保存</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">条例名称</label>
+        <input type="text" id="rule-module-name-input" class="moe-input" value="${mod.name.replace(/"/g, "&quot;")}" style="width: 100%; height: 32px; box-sizing: border-box; font-size: 12px; border-radius: 8px;">
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">提示词</label>
+        <textarea id="rule-module-prompt-input" class="moe-input" placeholder="在此处填写提示词..." style="width: 100%; height: 280px; box-sizing: border-box; font-size: 12px; line-height: 1.6; border-radius: 8px; resize: vertical;">${mod.prompt || ""}</textarea>
+      </div>
+    </div>
+  `;
+
+  // 返回按钮
+  document.getElementById("rule-module-back-btn").onclick = () => {
+    currentEditingRuleModuleId = null;
+    renderRulesTab(container);
+  };
+
+  // 删除按钮
+  document.getElementById("rule-module-del-btn").onclick = async () => {
+    let confirmed = false;
+    if (typeof window.showCustomConfirm === "function") {
+      confirmed = await window.showCustomConfirm("删除条例", `确定要删除条例《${mod.name}》吗？`, { confirmButtonClass: "btn-danger" });
+    } else {
+      confirmed = confirm(`确定要删除条例《${mod.name}》吗？`);
+    }
+    if (!confirmed) return;
+    currentPreset.modules = currentPreset.modules.filter(m => m.id !== mod.id);
+    window.saveStoredRuleSystemPresets(presets);
+    currentEditingRuleModuleId = null;
+    renderRulesTab(container);
+  };
+
+  // 保存按钮
+  document.getElementById("rule-module-save-btn").onclick = async () => {
+    const nameInput = document.getElementById("rule-module-name-input");
+    const promptInput = document.getElementById("rule-module-prompt-input");
+    const newName = nameInput ? nameInput.value.trim() : "";
+    if (newName) mod.name = newName;
+    mod.prompt = promptInput ? promptInput.value : "";
+    window.saveStoredRuleSystemPresets(presets);
+    currentEditingRuleModuleId = null;
+    renderRulesTab(container);
+  };
+}
 
 function renderCommandsTab(container) {
   const presets = getStoredDicePresets();
@@ -1014,21 +1342,22 @@ function renderCommandsTab(container) {
   }).join("");
 
   container.innerHTML = `
-    <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 10px; width: 100%; box-sizing: border-box; position: relative; z-index: 5;">
-      <select id="cmd-preset-select" class="moe-input" style="flex: 1 1 auto; height: 28px; min-height: 28px; font-size: 11px; padding: 2px 8px; min-width: 90px; color: var(--text-primary); background-color: var(--card-bg, #ffffff); position: relative; z-index: 5; opacity: 1; visibility: visible; border-radius: 14px;">
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; width: 100%; box-sizing: border-box;">
+      <select id="cmd-preset-select" class="moe-input" style="width: 100%; box-sizing: border-box; height: 32px; font-size: 12px; padding: 4px 8px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: block;">
         ${presetOptionsHtml}
       </select>
-      <button type="button" id="cmd-new-preset-btn" class="moe-btn-mini" style="flex: 0 0 auto !important; width: auto !important; max-width: 44px !important; padding: 2px 6px !important; font-size: 11px !important; height: 26px !important; line-height: 20px !important;">新建</button>
-      <button type="button" id="cmd-saveas-preset-btn" class="moe-btn-mini" style="flex: 0 0 auto !important; width: auto !important; max-width: 44px !important; padding: 2px 6px !important; font-size: 11px !important; height: 26px !important; line-height: 20px !important;">另存</button>
-      <button type="button" id="cmd-save-preset-btn" class="moe-btn-mini" style="flex: 0 0 auto !important; width: auto !important; max-width: 44px !important; padding: 2px 6px !important; font-size: 11px !important; height: 26px !important; line-height: 20px !important;">保存</button>
-      <button type="button" id="cmd-del-preset-btn" class="moe-btn-mini" style="flex: 0 0 auto !important; width: auto !important; max-width: 44px !important; padding: 2px 6px !important; font-size: 11px !important; height: 26px !important; line-height: 20px !important;">删除</button>
+      <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+        <button type="button" id="cmd-new-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 2px 10px; font-size: 11px;">新建</button>
+        <button type="button" id="cmd-saveas-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 2px 10px; font-size: 11px;">另存</button>
+        <button type="button" id="cmd-save-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 2px 10px; font-size: 11px;">保存</button>
+        <button type="button" id="cmd-del-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 2px 10px; font-size: 11px; color: var(--tukey-accent-red, #ff4d4f);">删除</button>
+      </div>
     </div>
     <div id="cmd-cards-container">
       ${cardsHtml}
     </div>
   `;
 
-  // 绑定事件
   document.getElementById("cmd-preset-select").onchange = (e) => {
     localStorage.setItem("coc_active_dice_preset_id", e.target.value);
     renderCommandsTab(container);
@@ -1626,8 +1955,16 @@ function parseWeatherImportText(rawText, fallbackName) {
 
 // 绑定导航栏标签切换事件
 document.addEventListener("DOMContentLoaded", () => {
+  const tabRules = document.getElementById("cmd-tab-rules");
   const tabCmd = document.getElementById("cmd-tab-commands");
   const tabWeather = document.getElementById("cmd-tab-weather");
+  if (tabRules) {
+    tabRules.addEventListener("click", () => {
+      currentCmdTab = "rules";
+      currentEditingRuleModuleId = null;
+      window.renderDiceCommandCenter();
+    });
+  }
   if (tabCmd) {
     tabCmd.addEventListener("click", () => {
       currentCmdTab = "commands";

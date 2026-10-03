@@ -95,7 +95,8 @@ function getDefaultCocData() {
     },
     skills: defaultSkills,
     customSkills: [],
-    totalPoints: 0
+    totalPoints: 0,
+    rulebook: "coc7"
   };
 }
 
@@ -222,6 +223,11 @@ class CocPanel {
         </div>
 
         <button type="button" class="moe-btn-secondary coc-open-skills-modal-btn" style="width: 100%; margin: 6px 0;">技能面板</button>
+        <div class="form-group coc-rulebook-group" style="margin-top: 6px; margin-bottom: 2px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; display: block;">规则</label>
+          <select class="moe-input coc-rulebook-select" style="width: 100%; font-size: 11px; padding: 4px 6px; border-radius: 6px; color: var(--text-primary); background-color: var(--secondary-bg);">
+          </select>
+        </div>
       </div>
     `;
 
@@ -270,6 +276,26 @@ class CocPanel {
         openCocSkillsModal(this);
       });
     }
+
+    const rulebookSelect = this.container.querySelector(".coc-rulebook-select");
+    if (rulebookSelect) {
+      const getList = window.getStoredRulebooksList || function() {
+        return [
+          { id: "coc7", name: "COC7" },
+          { id: "canyunwoshi", name: "餐云卧石" }
+        ];
+      };
+      const list = getList();
+      let currentRulebook = this.data.rulebook || "coc7";
+      if (currentRulebook === "yunwoshi") currentRulebook = "canyunwoshi";
+      this.data.rulebook = currentRulebook;
+      rulebookSelect.innerHTML = list.map(r => `<option value="${r.id}" ${r.id === currentRulebook ? "selected" : ""}>${r.name}</option>`).join("");
+      rulebookSelect.value = currentRulebook;
+      rulebookSelect.addEventListener("change", (e) => {
+        this.data.rulebook = e.target.value;
+        this.save();
+      });
+    }
   }
 
   updateCalculatedUI() {
@@ -312,7 +338,8 @@ class CocPanel {
         calculated: { ...defaultData.calculated, ...(data.calculated || {}) },
         skills: { ...defaultData.skills, ...(data.skills || {}) },
         customSkills: Array.isArray(data.customSkills) ? [...data.customSkills] : [],
-        totalPoints: data.totalPoints || 0
+        totalPoints: data.totalPoints || 0,
+        rulebook: (data && data.rulebook) || "coc7"
       };
     }
 
@@ -320,6 +347,22 @@ class CocPanel {
       const stat = input.dataset.stat;
       input.value = this.data.stats[stat] || 50;
     });
+
+    const rulebookSelect = this.container.querySelector(".coc-rulebook-select");
+    if (rulebookSelect) {
+      const getList = window.getStoredRulebooksList || function() {
+        return [
+          { id: "coc7", name: "COC7" },
+          { id: "canyunwoshi", name: "餐云卧石" }
+        ];
+      };
+      const list = getList();
+      let currentRulebook = this.data.rulebook || "coc7";
+      if (currentRulebook === "yunwoshi") currentRulebook = "canyunwoshi";
+      this.data.rulebook = currentRulebook;
+      rulebookSelect.innerHTML = list.map(r => `<option value="${r.id}" ${r.id === currentRulebook ? "selected" : ""}>${r.name}</option>`).join("");
+      rulebookSelect.value = currentRulebook;
+    }
 
     this.data.calculated = calculateCocStats(this.data.stats, this.data.calculated);
     this.updateCalculatedUI();
@@ -331,6 +374,10 @@ class CocPanel {
       const stat = input.dataset.stat;
       this.data.stats[stat] = parseInt(input.value, 10) || 0;
     });
+    const rulebookSelect = this.container.querySelector(".coc-rulebook-select");
+    if (rulebookSelect) {
+      this.data.rulebook = rulebookSelect.value;
+    }
     this.data.calculated = calculateCocStats(this.data.stats, this.data.calculated);
     this.updateTotalPoints();
     return JSON.parse(JSON.stringify(this.data));

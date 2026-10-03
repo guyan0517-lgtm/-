@@ -30,6 +30,7 @@
 
     <!-- 6. 为部分安卓浏览器提供支持 -->
     <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#f5f5f7" />
 
     <!-- 7. 标准浏览器页签图标 -->
     <link rel="icon" type="image/png" href="icon.png?v=1.0.4" />
@@ -574,10 +575,10 @@
               <img
                 id="icon-img-studio"
                 src="https://api.iconify.design/lucide:terminal.svg?color=%23ff7f50"
-                alt="指令"
+                alt="法则"
               />
             </div>
-            <span class="label">指令</span>
+            <span class="label">法则</span>
           </div>
 
           <div
@@ -2228,6 +2229,7 @@
               id="send-photo-btn"
               class="chat-action-icon-btn action-button"
               title="发送照片"
+              style="display: none !important;"
             >
               <svg
                 width="24"
@@ -2285,6 +2287,7 @@
               id="transfer-btn"
               class="chat-action-icon-btn action-button"
               title="转账"
+              style="display: none !important;"
             >
               <svg
                 width="24"
@@ -2304,6 +2307,7 @@
               id="voice-message-btn"
               class="chat-action-icon-btn action-button"
               title="发送语音"
+              style="display: none !important;"
             >
               <svg
                 width="24"
@@ -2328,6 +2332,7 @@
               id="send-waimai-request-btn"
               class="chat-action-icon-btn action-button"
               title="发起外卖请求"
+              style="display: none !important;"
             >
               <svg
                 width="24"
@@ -2590,6 +2595,7 @@
               id="aurora-media-btn"
               class="chat-action-icon-btn action-button"
               title="漫游共赏 (视频/小说)"
+              style="display: none !important;"
             >
               <svg
                 width="24"
@@ -5425,7 +5431,7 @@
             </div>
 
             <!-- 替换原来的 id="couple-avatar-group" -->
-            <div class="form-group" id="couple-avatar-group">
+            <div class="form-group" id="couple-avatar-group" style="display: none !important;">
               <div class="moe-divider"></div>
               <div
                 style="
@@ -6829,17 +6835,22 @@
     </div>
 
     <div id="system-status-col-type-modal" class="modal">
-      <div class="modal-content" style="max-width: 220px; padding: 12px; border-radius: 16px;">
-        <div class="modal-header" style="font-size: 14px; padding-bottom: 6px; text-align: center;"><span>选择栏目类型</span></div>
+      <div class="modal-content" style="max-width: 240px; padding: 16px; border-radius: 20px; background: var(--card-bg, #ffffff);">
+        <div class="modal-header" style="font-size: 14px; font-weight: 700; padding-bottom: 8px; text-align: center; border-bottom: none; color: var(--text-primary);">
+          <span>选择栏目类型</span>
+        </div>
         <div class="modal-body" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 0;">
-          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="general" style="font-size: 12px; padding: 6px 8px; border-radius: 10px;">一般栏目</button>
-          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="date" style="font-size: 12px; padding: 6px 8px; border-radius: 10px;">日期</button>
-          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="time" style="font-size: 12px; padding: 6px 8px; border-radius: 10px;">时间</button>
-          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="weather" style="font-size: 12px; padding: 6px 8px; border-radius: 10px;">天气</button>
-          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="affection" style="font-size: 12px; padding: 6px 8px; border-radius: 10px;">好感度</button>
-          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="luck" style="font-size: 12px; padding: 6px 8px; border-radius: 10px;">幸运</button>
-          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="location" style="font-size: 12px; padding: 6px 8px; border-radius: 10px; grid-column: span 2;">地点</button>
-          <button type="button" class="moe-btn-secondary" id="cancel-status-col-type-btn" style="font-size: 12px; padding: 6px 8px; border-radius: 10px; grid-column: span 2; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer;">取消</button>
+          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="general" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">一般栏目</button>
+          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="date" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">日期</button>
+          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="time" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">时间</button>
+          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="weather" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">天气</button>
+          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="affection" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">好感度</button>
+          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="luck" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">幸运</button>
+          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="location" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%; grid-column: span 2;">地点</button>
+          
+          <div style="grid-column: span 2; margin: 4px 0; border-top: 1px solid var(--border-color, #e0e0e0); opacity: 0.6;"></div>
+          
+          <button type="button" class="moe-btn-secondary" id="cancel-status-col-type-btn" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%; grid-column: span 2; cursor: pointer;">取消</button>
         </div>
       </div>
     </div>
@@ -6866,12 +6877,14 @@
         </div>
         <div class="modal-body" style="display: flex; flex-direction: column; overflow: hidden; padding: 10px;">
           <div class="coc-presets-row" style="margin-bottom: 8px;">
-            <select class="moe-input" id="coc-modal-preset-select">
+            <select class="moe-input" id="coc-modal-preset-select" style="width: 100%; box-sizing: border-box; height: 32px; font-size: 12px; padding: 4px 8px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: block;">
               <option value="">预设方案</option>
             </select>
-            <button type="button" class="moe-btn-mini" id="coc-modal-save-preset-btn">新建</button>
-            <button type="button" class="moe-btn-mini" id="coc-modal-del-preset-btn">删除</button>
-            <button type="button" class="moe-btn-mini" id="coc-modal-reset-all-btn">重置</button>
+            <div style="display: flex; gap: 6px; justify-content: flex-end; width: 100%;">
+              <button type="button" class="moe-btn-mini" id="coc-modal-save-preset-btn">新建</button>
+              <button type="button" class="moe-btn-mini" id="coc-modal-del-preset-btn">删除</button>
+              <button type="button" class="moe-btn-mini" id="coc-modal-reset-all-btn">重置</button>
+            </div>
           </div>
 
           <div id="coc-modal-skills-grid" class="coc-modal-skills-grid"></div>
@@ -12313,6 +12326,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <div class="modal-header">
           <span id="summary-viewer-title">聊天总结</span>
         </div>
+        <div class="summary-preset-bar" style="padding: 8px 15px; border-bottom: 1px solid var(--border-color); background: var(--secondary-bg); display: flex; flex-direction: column; gap: 6px;">
+          <select id="summary-preset-select" class="moe-input" style="width: 100%; font-size: 11px; padding: 2px 8px; height: 30px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary); box-sizing: border-box; display: block;">
+            <option value="">选择预设</option>
+          </select>
+          <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+            <button type="button" id="summary-preset-use-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px;">使用</button>
+            <button type="button" id="summary-preset-update-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px;">更新</button>
+            <button type="button" id="summary-preset-delete-btn" class="moe-btn-small" style="padding: 2px 10px; font-size: 11px; height: 26px; line-height: 22px; color: var(--tukey-accent-red, #ff4d4f);">删除</button>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <input type="text" id="summary-preset-name-input" class="moe-input" placeholder="预设名称" style="width: 80px; flex-shrink: 0; font-size: 11px; padding: 2px 6px; height: 28px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);">
+            <input type="text" id="summary-preset-text-input" class="moe-input" placeholder="输入预设总结文字" style="flex: 1; font-size: 11px; padding: 2px 6px; height: 28px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);">
+            <button type="button" id="summary-preset-save-btn" class="moe-btn-small" style="padding: 2px 8px; font-size: 11px; height: 28px; line-height: 24px; flex-shrink: 0;">保存</button>
+          </div>
+        </div>
         <div class="modal-body" id="summary-list" style="padding: 15px">
           <!-- 总结列表将由JS动态生成在这里 -->
         </div>
@@ -14328,9 +14356,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <div id="studio-screen" class="screen">
       <div class="header">
         <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
-        <span id="studio-main-title">指令</span>
+        <span id="studio-main-title">法则</span>
         <div class="header-actions">
-          <span class="action-btn" id="cmd-tab-commands" style="font-size: 13px; margin-right: 6px; cursor: pointer;">指令</span>
+          <span class="action-btn" id="cmd-tab-rules" style="font-size: 13px; margin-right: 8px; cursor: pointer;">规则</span>
+          <span class="action-btn" id="cmd-tab-commands" style="font-size: 13px; margin-right: 8px; cursor: pointer;">指令</span>
           <span class="action-btn" id="cmd-tab-weather" style="font-size: 13px; cursor: pointer;">天气池</span>
         </div>
       </div>
@@ -24945,9 +24974,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const petBtn = document.getElementById("pet-action-btn");
           if (petBtn) petBtn.style.display = "none";
           const transferBtn = document.getElementById("transfer-btn");
-          if (transferBtn) transferBtn.style.display = chat.isGroup ? "none" : "flex";
+          if (transferBtn) transferBtn.style.display = "none";
           const voiceMsgBtn = document.getElementById("voice-message-btn");
-          if (voiceMsgBtn) voiceMsgBtn.style.display = "flex";
+          if (voiceMsgBtn) voiceMsgBtn.style.display = "none";
           startPetDecayTimer();
         }
 
@@ -46691,12 +46720,81 @@ ${colSpecs.join('\n')}
 
         // --- 总结管理界面的函数 ---
 
+        function getSummaryPresets() {
+          try {
+            const raw = localStorage.getItem("chat_summary_presets");
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) return parsed;
+            }
+          } catch (e) {}
+          return [];
+        }
+
+        function saveSummaryPresets(presets) {
+          try {
+            localStorage.setItem("chat_summary_presets", JSON.stringify(presets));
+          } catch (e) {}
+        }
+
+        function renderSummaryPresetsUI() {
+          const select = document.getElementById("summary-preset-select");
+          if (!select) return;
+          const presets = getSummaryPresets();
+          const currentVal = select.value;
+          select.innerHTML = '<option value="">选择预设</option>' + presets.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+          if (currentVal && presets.some(p => p.id === currentVal)) {
+            select.value = currentVal;
+          }
+        }
+
+        async function handleSaveSummaryAsPreset(timestamp) {
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+          const summary = (chat.history || []).find(m => m.timestamp === timestamp);
+          if (!summary) return;
+
+          const textInput = document.getElementById("summary-preset-text-input");
+          const nameInput = document.getElementById("summary-preset-name-input");
+          if (textInput) textInput.value = summary.content;
+
+          let name = null;
+          if (typeof showCustomPrompt === "function") {
+            name = await showCustomPrompt("保存预设", "请输入预设名称", "预设" + (getSummaryPresets().length + 1));
+          } else {
+            name = prompt("请输入预设名称");
+          }
+          if (!name || !name.trim()) return;
+
+          if (nameInput) nameInput.value = name.trim();
+
+          const presets = getSummaryPresets();
+          const newId = "preset_" + Date.now();
+          const newPreset = {
+            id: newId,
+            name: name.trim(),
+            text: summary.content
+          };
+          presets.push(newPreset);
+          saveSummaryPresets(presets);
+          renderSummaryPresetsUI();
+          const select = document.getElementById("summary-preset-select");
+          if (select) select.value = newId;
+          if (typeof showCustomAlert === "function") {
+            await showCustomAlert("提示", "已保存为预设");
+          } else {
+            alert("已保存为预设");
+          }
+        }
+
         let editingSummaryTimestamp = null;
 
         async function openSummaryViewer() {
           const chat = state.chats[state.activeChatId];
           document.getElementById("summary-viewer-title").textContent =
             `“${chat.name}”的对话记忆`;
+
+          renderSummaryPresetsUI();
 
           const listEl = document.getElementById("summary-list");
           listEl.innerHTML = "";
@@ -46715,6 +46813,7 @@ ${colSpecs.join('\n')}
 
               card.innerHTML = `
 			                <div class="summary-actions">
+			                    <button class="save-preset-summary-btn" data-timestamp="${summary.timestamp}" title="存设" style="padding: 2px 6px; font-size: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer;">存设</button>
 			                    <button class="concise-summary-btn" data-timestamp="${
                             summary.timestamp
                           }" title="精简总结">✨</button>
@@ -63536,10 +63635,145 @@ ${colSpecs.join('\n')}
               document.getElementById("chat-settings-btn").click();
             });
 
+          const presetSelect = document.getElementById("summary-preset-select");
+          if (presetSelect) {
+            presetSelect.addEventListener("change", () => {
+              const presets = getSummaryPresets();
+              const found = presets.find(p => p.id === presetSelect.value);
+              const nameInput = document.getElementById("summary-preset-name-input");
+              const textInput = document.getElementById("summary-preset-text-input");
+              if (found) {
+                if (nameInput) nameInput.value = found.name;
+                if (textInput) textInput.value = found.text;
+              } else {
+                if (nameInput) nameInput.value = "";
+                if (textInput) textInput.value = "";
+              }
+            });
+          }
+
+          const presetSaveBtn = document.getElementById("summary-preset-save-btn");
+          if (presetSaveBtn) {
+            presetSaveBtn.addEventListener("click", async () => {
+              const nameInput = document.getElementById("summary-preset-name-input");
+              const textInput = document.getElementById("summary-preset-text-input");
+              const name = nameInput ? nameInput.value.trim() : "";
+              const text = textInput ? textInput.value.trim() : "";
+              if (!text) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设文字不能为空");
+                else alert("预设文字不能为空");
+                return;
+              }
+              const presets = getSummaryPresets();
+              const presetName = name || ("预设" + (presets.length + 1));
+              const newId = "preset_" + Date.now();
+              presets.push({ id: newId, name: presetName, text: text });
+              saveSummaryPresets(presets);
+              renderSummaryPresetsUI();
+              const select = document.getElementById("summary-preset-select");
+              if (select) select.value = newId;
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设保存成功");
+              else alert("预设保存成功");
+            });
+          }
+
+          const presetUseBtn = document.getElementById("summary-preset-use-btn");
+          if (presetUseBtn) {
+            presetUseBtn.addEventListener("click", async () => {
+              const select = document.getElementById("summary-preset-select");
+              const presets = getSummaryPresets();
+              const found = presets.find(p => p.id === (select ? select.value : ""));
+              const textInput = document.getElementById("summary-preset-text-input");
+              const text = found ? found.text : (textInput ? textInput.value.trim() : "");
+              if (!text) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请选择预设或输入文字");
+                else alert("请选择预设或输入文字");
+                return;
+              }
+              const chat = state.chats[state.activeChatId];
+              if (!chat) return;
+              if (!chat.history) chat.history = [];
+              chat.history.push({
+                id: "summary_" + Date.now(),
+                role: "system",
+                type: "summary",
+                content: text,
+                timestamp: Date.now()
+              });
+              await db.chats.put(chat);
+              openSummaryViewer();
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已使用预设添加总结记录");
+              else alert("已使用预设添加总结记录");
+            });
+          }
+
+          const presetUpdateBtn = document.getElementById("summary-preset-update-btn");
+          if (presetUpdateBtn) {
+            presetUpdateBtn.addEventListener("click", async () => {
+              const select = document.getElementById("summary-preset-select");
+              const presets = getSummaryPresets();
+              const found = presets.find(p => p.id === (select ? select.value : ""));
+              if (!found) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先在下拉框中选择要更新的预设");
+                else alert("请先在下拉框中选择要更新的预设");
+                return;
+              }
+              const nameInput = document.getElementById("summary-preset-name-input");
+              const textInput = document.getElementById("summary-preset-text-input");
+              const name = nameInput ? nameInput.value.trim() : "";
+              const text = textInput ? textInput.value.trim() : "";
+              if (!text) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设文字不能为空");
+                else alert("预设文字不能为空");
+                return;
+              }
+              if (name) found.name = name;
+              found.text = text;
+              saveSummaryPresets(presets);
+              renderSummaryPresetsUI();
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设已更新");
+              else alert("预设已更新");
+            });
+          }
+
+          const presetDeleteBtn = document.getElementById("summary-preset-delete-btn");
+          if (presetDeleteBtn) {
+            presetDeleteBtn.addEventListener("click", async () => {
+              const select = document.getElementById("summary-preset-select");
+              const presets = getSummaryPresets();
+              const idx = presets.findIndex(p => p.id === (select ? select.value : ""));
+              if (idx === -1) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先选择要删除的预设");
+                else alert("请先选择要删除的预设");
+                return;
+              }
+              const confirmed = typeof showCustomConfirm === "function" 
+                ? await showCustomConfirm("确认删除", "确定删除该预设吗")
+                : confirm("确定删除该预设吗");
+              if (!confirmed) return;
+              presets.splice(idx, 1);
+              saveSummaryPresets(presets);
+              renderSummaryPresetsUI();
+              const nameInput = document.getElementById("summary-preset-name-input");
+              const textInput = document.getElementById("summary-preset-text-input");
+              if (nameInput) nameInput.value = "";
+              if (textInput) textInput.value = "";
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设已删除");
+              else alert("预设已删除");
+            });
+          }
+
           // 使用事件委托处理总结列表中的所有按钮
           document
             .getElementById("summary-list")
             .addEventListener("click", (e) => {
+              const savePresetBtn = e.target.closest(".save-preset-summary-btn");
+              if (savePresetBtn) {
+                const timestamp = parseInt(savePresetBtn.dataset.timestamp);
+                handleSaveSummaryAsPreset(timestamp);
+                return;
+              }
+
               const editBtn = e.target.closest(".edit-summary-btn");
               if (editBtn) {
                 const timestamp = parseInt(editBtn.dataset.timestamp);
