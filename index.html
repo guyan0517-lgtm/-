@@ -25543,14 +25543,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }">`;
           } else {
             let rawContentText = String(msg.content || "");
-            extractedThinkingText = msg.thinking || null;
-            if (/<thinking>[\s\S]*?<\/thinking>/i.test(rawContentText)) {
-              const tMatch = rawContentText.match(/<thinking>([\s\S]*?)<\/thinking>/i);
-              if (tMatch && !extractedThinkingText) {
-                extractedThinkingText = tMatch[1].trim();
-                msg.thinking = extractedThinkingText;
+            const hasThinkingModule = Boolean(chat && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
+            extractedThinkingText = hasThinkingModule ? (msg.thinking || null) : null;
+            if (hasThinkingModule) {
+              if (/<thinking>[\s\S]*?<\/thinking>/i.test(rawContentText)) {
+                const tMatch = rawContentText.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+                if (tMatch && !extractedThinkingText) {
+                  extractedThinkingText = tMatch[1].trim();
+                  msg.thinking = extractedThinkingText;
+                }
+                rawContentText = rawContentText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
               }
-              rawContentText = rawContentText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
             }
             contentHtml = rawContentText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
           }
@@ -25590,6 +25593,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 			            <div class="quoted-content">${fullQuotedContent}</div>
 			        </div>
 			    `;
+          }
+
+          if (!contentHtml.trim() && !quoteHtml && !msg.imageUrl && !msg.image && !msg.payload && !bubble.classList.contains("is-link-share") && !bubble.classList.contains("is-dating-summary") && !bubble.classList.contains("is-sticker") && !bubble.classList.contains("has-image") && !bubble.classList.contains("is-realimag") && !bubble.classList.contains("is-gift-notification")) {
+            return null;
           }
 
           // 2. 拼接最终的气泡内容
@@ -28557,6 +28564,30 @@ ${colSpecs.join('\n')}
             let collectedThinking = extractedThinking || "";
             const filteredMessages = [];
 
+            const statusPrefixes = (chat.settings?.columns || []).map(c => c.label).filter(Boolean);
+            function isStatusBubble(item) {
+              if (!item) return false;
+              const txt = String(item.content || item.message || "").trim();
+              if (!txt) return false;
+              if (/^\[[^\]\n]+\][：:]/.test(txt)) return true;
+              return statusPrefixes.some(p => txt.startsWith(p));
+            }
+
+            function isSubstantiveAiMessage(item) {
+              if (!item) return false;
+              if (item.type === "thinking" || item.type === "thought" || item.type === "system_message" || item.type === "pat_message" || item.type === "narrative" || item.type === "dice" || item.type === "status_update" || item.type === "change_couple_avatar" || item.type === "set_group_title") {
+                return false;
+              }
+              if (isStatusBubble(item)) {
+                return false;
+              }
+              const text = String(item.content || item.message || "").trim();
+              if (text || item.imageUrl || item.image || item.payload || item.type?.includes("image") || item.type?.includes("share") || item.type?.includes("card") || item.type === "naiimag" || item.type === "sticker" || item.type === "voice_message" || item.type === "transfer" || item.type === "waimai_request") {
+                return true;
+              }
+              return false;
+            }
+
             for (let i = 0; i < messagesArray.length; i++) {
               let item = messagesArray[i];
               if (!item) continue;
@@ -28593,38 +28624,17 @@ ${colSpecs.join('\n')}
                 delete item.thinking;
               }
 
-              if (!text.trim() && !item.image && !item.type?.includes("image") && !item.type?.includes("share")) {
+              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request") {
                 continue;
               }
 
               filteredMessages.push(item);
             }
 
-            if (filteredMessages.length === 0 && collectedThinking) {
-              filteredMessages.push({
-                type: "text",
-                content: "",
-                sender: chat.name,
-              });
-            }
-
             messagesArray = filteredMessages;
-
-            if (collectedThinking && messagesArray.length > 0) {
-              messagesArray[0].thinking = collectedThinking;
-            }
 
             // 无论增加多少个项目，确保开头的系统状态栏项目全部合并为单一气泡，禁止拆分
             if (messagesArray && messagesArray.length > 0) {
-              const statusPrefixes = (chat.settings?.columns || []).map(c => c.label).filter(Boolean);
-              function isStatusBubble(item) {
-                if (!item) return false;
-                const txt = String(item.content || item.message || "").trim();
-                if (!txt) return false;
-                if (/^\[[^\]\n]+\][：:]/.test(txt)) return true;
-                return statusPrefixes.some(p => txt.startsWith(p));
-              }
-
               if (isStatusBubble(messagesArray[0])) {
                 let statusContents = [];
                 let mergeCount = 0;
@@ -28643,6 +28653,13 @@ ${colSpecs.join('\n')}
                   if (firstMsg.message !== undefined) firstMsg.message = mergedText;
                   messagesArray.splice(0, mergeCount, firstMsg);
                 }
+              }
+            }
+
+            if (collectedThinking && messagesArray.length > 0) {
+              const targetMsg = messagesArray.find(isSubstantiveAiMessage) || messagesArray[0];
+              if (targetMsg) {
+                targetMsg.thinking = collectedThinking;
               }
             }
 
