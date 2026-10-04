@@ -1,13 +1,11 @@
 /**
- * 模组系统核心数据与AI智能深度重构引擎
+ * 模组系统核心数据与AI智能深度重构引擎 (Step 0 ~ Step 4 完整实现)
  * 涵盖：
- * - 完整固化跑团模组切割重构提示词（单人线、猫人设按HO细分、事前公开信息提炼）
- * - 严格防剧透设计：地图仅展示纯净层级结构、目录专注展示章节顺序导航
- * - Step 1 导入文件 与 历史文件 (长期持久保存已上传原文件，支持加载与删除)
- * - Step 2 多维度方案：章节清单 (含查看原文防剧透弹窗、微调)、章节目录、层级地图
- * - Step 3 真实调用 AI 逐章提取与生成、完整保真、去前言废话、插图注入与结尾声明
- * - AI 深度质检与修复系统：支持单章校验、单章修复、批量全局校验，可多次修复
- * - 导出打包 ZIP 及模组库直接导入
+ * - Step 0: IndexedDB 数据存储底座（modules, moduleChapters, moduleImages, moduleConfigs, moduleRawFiles）
+ * - Step 1: 模组文件导入解析（PDF/Word/TXT/DOCX、字数统计、图片提取、可编辑切割提示词、历史文件持久化）
+ * - Step 2: 方案确认（21条重构提示词、HO散落信息去重整合、模块边界划分、超细化地点层级、无剧透地图与目录）
+ * - Step 3: 执行切割（逐章/全篇模式双选、暂停/继续/取消生命周期控制、后台异步运行、AI深度质检与单章多次修复、ZIP/TXT导出）
+ * - Step 4: 模组库与带团加载（模组检索、模组详情展开、双视角沉浸式阅读器、聊天设置专属模组面板、HO角色位分配、单人线/猫人设按HO勾选、自动/半自动/手动带团切换与实时记忆注入）
  */
 (function (global) {
   'use strict';
@@ -23,103 +21,91 @@
     }
   }
 
-  // 深度优化后的跑团模组重构与切割提示词（强化单人线、猫人设细分与严格防剧透）
+  // 强化后的跑团模组重构与切割提示词
   const ADVANCED_TRPG_CUTTING_PROMPT = `你是模组切割与整理 AI。你将收到一份跑团模组的完整文本。你的任务是把这份模组整理成可直接用于带团的多个独立章节（世界书），并保证守秘人（KP）带团时不会剧透、不会迷失、不会脱离模组瞎编。所有输出使用中文。
 
 ━━━━━━━━━━━━━━━━━━
 【第一部分：通读与理解】
 ━━━━━━━━━━━━━━━━━━
-1. 先完整阅读全文，不得跳读、不得只看开头。理解整份模组：
-   - 整体结构与章节组织方式（按时间？按地点？按事件？按HO位？是否为1v1单人模组？）；
-   - 剧情流程与主线走向、隐藏真相、机制与规则；
-   - 结局数量与达成条件；
-   - 是否存在 HO 位（如 HO1、HO2、HO3、HO4 等，数量由你根据实际内容判定，1v1模组不设HO和单人线）；
-   - 每个 HO 的秘密与单人线专属剧情；
-   - 所有地点层级关系、所有 NPC 与"猫"（HO位对应绑定NPC）；
-   - 文内是否有图片（【图N】标记或图片引用）；
-   - 是否有模组事前已知信息（即默认发送给PC看的公开设定与背景须知，若有则必须单独整理成章）。
+1. 先完整通读全文，不得跳读。理解整份模组的内在逻辑：
+   - 组织结构（按时间线？按自由探索沙盒？是否为1v1单人模组？）；
+   - 剧情主线走向、幕后真相、核心机制与各结局达成条件；
+   - 识别所有 HO 位（HO1、HO2…数量按实际情况判断，1v1模组不设HO与单人线）；
+   - 识别所有地点（凡正文中提到的所有大小地点、建筑、房间必须全部收录，不得遗漏）；
+   - 识别所有 NPC 与"猫"（HO位绑定的特定NPC）；
+   - 识别模组事前已知信息（即开局前发给PC了解的基础世界观与已知线索）。
 
 ━━━━━━━━━━━━━━━━━━
-【第二部分：类型判断与切法选择】
+【第二部分：严格模块化与散落信息全局整合】
 ━━━━━━━━━━━━━━━━━━
-2. 判断模组类型，选择对应切法：
-   A. 按时间线推进的模组（第一天、第二天、场景按先后顺序展开）→ 照本宣科：按 导入 → 第一天早上 → 第一天晚上 → 第二天… → 结局 的自然顺序逐段切割；
-   B. 循环沙盒/自由探索类模组（玩家自由选择地点，去不同地点、不同时间结果不同）→ 按类型模块切割；
-   C. 混合类型（既非纯时间线也非纯沙盒）→ 你自行判断该模组的组织逻辑，自行决定最合理的切法。
-3. 【设身处地自检（强制）】：每次生成切割方案前，假设自己是守秘人——只加载当前切出的这些章节，能否顺利带完整场模组？
-   - 能否知道下一步该引导玩家去哪？会不会不知道某个地点/事件的进入方式？
-   - 会不会缺关键信息导致接不上剧情？会不会剧透给玩家不该知道的内容？
-   - 若发现任何"带不下去"的情况，必须调整切法：合并章节、增加导航摘要、补充地点指向关系。
-   自检结论必须写入方案说明。
+2. 【发挥主观能动性，严格遵循模块边界】：
+   - 【导入】：纯粹作为玩家开场叙述、初次相聚与导入剧情，严禁掺杂 NPC 人设数值或幕后真相；
+   - 【事前公开】：若有开局背景须知与公开设定，独立成章，供玩家直接查阅；
+   - 【NPC人设】与【猫人设】：纯粹作为角色设定、性格描写与对话风格，严禁杂揉进导入或正文事件中，且严禁在不同章节中重复出现；
+   - 【单人线】：各 HO 专属的个人剧情与猫互动单人线，必须独立成章，与公共主线严格分开。
+3. 【HO散落信息全局整合与去重】：
+   - 若某 HO 的秘密、个人背景、专属线索散落在不同地方（如一部分在KP信息、一部分在HO设定、一部分在开篇或附录），你必须通读全文，将属于该 HO 的所有信息搜集整合为一个独立的【HOX秘密与设定】章节；
+   - 整合时必须剔除重复内容，合并补充新信息，确保每个 HO 的私密情报完整集中。
 
 ━━━━━━━━━━━━━━━━━━
-【第三部分：分类体系与HO子集】
+【第三部分：超细化空间地点收录】
 ━━━━━━━━━━━━━━━━━━
-4. 识别全文所有内容模块，按以下预置分类归类：
-   - 事前公开：模组已知信息与PC开局须知（完全无剧透，玩家可见）；
-   - 正文：玩家可见的场景描写、剧情叙述、对话原文；
-   - KP信息：只有守秘人可看的信息（背景设定、幕后真相、机制解释、带团提示）；
-   - 秘密情报：只属于特定 HO 玩家的秘密；
-   - HO秘密：各 HO 的专属秘密章节；
-   - 单人线：各 HO 专属的单人剧情与和猫的专属互动线（每个 HO 独立成章，如 ho1单人线、ho2单人线，1v1模组不需要单人线）；
-   - 猫人设：模组中的"猫"（HO位绑定的特定NPC，涉及角色性格与玩家背景），按 HO 细分（如 猫-ho1-角色名，若一个HO有两只猫则细分为 猫-ho1-角色名1、猫-ho1-角色名2）；
-   - NPC人设：普通 NPC 的角色设定；
-   - 世界版图：对世界/地域的总体介绍；
-   - 结局：各结局相关内容；
-   - 地点：独立的地点描述；
-   - 事件：独立的剧情事件；
-   - 带团引导：给 KP 的引导思路、流程提示。
-5. 遇到不属于任何预置分类的模块，以内容命名【新建自定义分类】归入。
+4. 识别模组正文中提到的【所有地点】，构建极为详尽的三级空间层级树：
+   - 一级：大区域/城镇/总地域；
+   - 二级：建筑分区/街道/独立场所；
+   - 三级：房间/走廊/具体微观场所；
+   凡文中出现的地点必须全部收录归入对应父级。
+   内部提取各地点之间的空间关联与指向关系，供带团调度使用。
 
 ━━━━━━━━━━━━━━━━━━
-【第四部分：切割规则】
+【第四部分：切割规则与命名规范】
 ━━━━━━━━━━━━━━━━━━
-6. 时间线类：每段 4000-5000 字（允许 4000-6000 浮动）；换段必须选择小地点/小事件的结束处，禁止在事件正中截断；
-7. 沙盒类：按类型模块切，不硬凑字数：
-   - KP信息/机制/真相 → 单独一份【完整保留】，禁止切散；
-   - 事前已知信息 → 单独一份；
-   - 自由探索正文 → 按地点或事件独立成章；
-   - 单人线与猫人设 → 按 HO 分模块存放；
-   - 结局 → 一份。
-8. 图片处理：文内图片保留【图1】【图2】…标记于正文对应位置。
-
-━━━━━━━━━━━━━━━━━━
-【第五部分：命名规则】
-━━━━━━━━━━━━━━━━━━
-9. 所有章节命名规范：
+5. 按类型模块切割，保持章节篇幅适中（4000-5000字）：
    - 事前公开：00-模组已知信息；
-   - 时间线：01-第一天早上、02-第一天晚上；
+   - 大纲与真相：01-模组导读与大纲、02-幕后真相与机制；
+   - HO专属：HO1秘密与设定、HO2秘密与设定；
    - 单人线：02.5-ho1单人线、ho2单人线；
-   - 地点：地点-棋牌室；
-   - HO秘密：HO1秘密、HO2秘密；
-   - 猫人设：猫-ho1-角色名；
-   - 版图：模组名-版图；结局：模组名-结局。
-10. 每段结尾【必须】自动追加以下固定句，一字不改：
+   - 猫人设：猫-ho1-角色名、猫-ho2-角色名；
+   - 主线正文：按时间或探索场景自然分段；
+   - 结局：模组名-结局。
+6. 每段结尾【必须】自动追加以下固定句，一字不改：
 『至此本小章节结束，请kp务必在聊天内告诉PC本世界书模组到此为止，请PC切换下一个世界书，禁止擅自编造互动外主线剧情走向』
 
 ━━━━━━━━━━━━━━━━━━
-【第六部分：信息标注与防剧透原则】
+【第五部分：信息标注与防剧透原则】
 ━━━━━━━━━━━━━━━━━━
-11. 切割时在对应段落前加最简中文标签：
-    - 【正文】……玩家可见的场景描写、剧情、对话，原文一字不改；
-    - 【KP信息】……只有守秘人可见的信息（背景、真相、机制、提示）；
-    - 【秘密·HOX】……只属于 HOX 玩家的秘密；
-    - 【检定】……检定标记；
-    - 【KP带团指引批注：……】……给守秘人的带团实操提示。
-12. 严格防剧透：展示给用户的方案总览、目录与地图中，严禁出现剧情剧透（如某人死亡、黑幕真相、隐藏武器获得），保持纯粹的章节顺序与空间结构。
-13. 保真原则：严禁删改正文任何剧情叙述与对白，仅清理作者前言废话与页码横线杂质。
-
-━━━━━━━━━━━━━━━━━━
-【第七部分：附加产出】
-━━━━━━━━━━━━━━━━━━
-14. 【章节顺序目录】：按整理好的章节带团推进顺序依次列出章节标题、分类与阅读建议（不含剧情剧透）；
-15. 【纯净空间地图】：生成模组地点层级树（一级大区域、二级建筑分区、三级具体场所），最底层不强加简介，严禁包含进入方式、剧透事件与掉落线索。`;
+7. 行首严格标注中文标签：
+   - 【正文】……公开场景描写与对白，原文一字不改；
+   - 【KP信息】……仅守秘人可见的背景与机制；
+   - 【秘密·HOX】……专属私密；
+   - 【检定】……检定标记；
+   - 【插图注入：图X 描述】……精准注入插图标记；
+   - 【KP带团指引批注：……】……带团实操提示。
+8. 严格防剧透：展示给用户的方案总览、目录与地图中，严禁出现剧情剧透（如某人死亡、黑幕真相、隐藏神器获得），保持纯粹的章节顺序与空间结构。
+9. 保真原则：严禁删改正文任何剧情叙述与对白，仅清理作者前言废话与页码横线杂质。`;
 
   const ModuleManager = {
-    version: '2.5.0',
+    version: '2.9.0',
     currentStep: 1,
     activeSubPanel: 'wizard',
-    activeSubTab: 'chapters', // 'chapters' | 'toc' | 'map'
+    activeSubTab: 'chapters',
+    cutExecutionMode: 'single',
+
+    // 异步切割生命周期控制
+    isCuttingRunning: false,
+    isCuttingPaused: false,
+    isCuttingCancelled: false,
+    cuttingCurrentIndex: 0,
+
+    // 阅读器与详情状态
+    currentReadingChapters: [],
+    currentReadingIndex: 0,
+    currentReadingViewMode: 'kp',
+    activeDetailModule: null,
+
+    // 同步内存缓存 (供提示词实时组装)
+    chaptersMemoryCache: new Map(),
+
     currentParsedData: null,
     currentPlan: null,
     globalOpinion: '',
@@ -169,6 +155,7 @@
           currentStep: this.currentStep,
           activeSubPanel: this.activeSubPanel,
           activeSubTab: this.activeSubTab,
+          cutExecutionMode: this.cutExecutionMode,
           currentParsedData: this.currentParsedData,
           currentPlan: this.currentPlan,
           globalOpinion: this.globalOpinion,
@@ -190,10 +177,13 @@
           this.currentStep = draft.currentStep || 1;
           this.activeSubPanel = draft.activeSubPanel || 'wizard';
           this.activeSubTab = draft.activeSubTab || 'chapters';
+          this.cutExecutionMode = draft.cutExecutionMode || 'single';
           this.currentParsedData = draft.currentParsedData;
           this.currentPlan = draft.currentPlan || null;
           this.globalOpinion = draft.globalOpinion || '';
           this.cutChapters = draft.cutChapters || [];
+
+          this.updateModeUI(this.cutExecutionMode);
 
           const opinionEl = document.getElementById('module-global-opinion-textarea');
           if (opinionEl) opinionEl.value = this.globalOpinion;
@@ -512,6 +502,37 @@
       this.saveDraft();
     },
 
+    updateModeUI(mode) {
+      this.cutExecutionMode = mode;
+      const singleBtn = document.getElementById('module-mode-single-btn');
+      const batchBtn = document.getElementById('module-mode-batch-btn');
+
+      if (singleBtn && batchBtn) {
+        if (mode === 'single') {
+          singleBtn.style.background = 'var(--card-bg, #FFFFFF)';
+          singleBtn.style.color = 'var(--text-primary, #2A2A2A)';
+          singleBtn.style.fontWeight = '600';
+          singleBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+
+          batchBtn.style.background = 'transparent';
+          batchBtn.style.color = 'var(--text-secondary, #8A8A8A)';
+          batchBtn.style.fontWeight = '500';
+          batchBtn.style.boxShadow = 'none';
+        } else {
+          batchBtn.style.background = 'var(--card-bg, #FFFFFF)';
+          batchBtn.style.color = 'var(--text-primary, #2A2A2A)';
+          batchBtn.style.fontWeight = '600';
+          batchBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+
+          singleBtn.style.background = 'transparent';
+          singleBtn.style.color = 'var(--text-secondary, #8A8A8A)';
+          singleBtn.style.fontWeight = '500';
+          singleBtn.style.boxShadow = 'none';
+        }
+      }
+      this.saveDraft();
+    },
+
     setWizardStep(stepNumber) {
       this.currentStep = stepNumber;
       const stepItems = document.querySelectorAll('.wizard-step-item');
@@ -527,6 +548,14 @@
       const targetPane = document.getElementById(`module-step${stepNumber}-pane`);
       if (targetPane) {
         targetPane.style.display = 'flex';
+      }
+
+      if (stepNumber === 3) {
+        if (this.isCuttingRunning) {
+          this.syncOngoingCuttingUI();
+        } else if (this.cutChapters.length > 0) {
+          this.renderCutChaptersUI();
+        }
       }
 
       this.updateBottomActionBar();
@@ -573,6 +602,9 @@
       this.currentParsedData = null;
       this.currentPlan = null;
       this.cutChapters = [];
+      this.isCuttingRunning = false;
+      this.isCuttingPaused = false;
+      this.isCuttingCancelled = false;
       this.clearDraft();
 
       const fileInput = document.getElementById('module-file-input');
@@ -589,6 +621,9 @@
     },
 
     renderParsedResultUI(data) {
+      if (!data) return;
+      this.currentParsedData = data;
+
       const pickerCard = document.getElementById('module-import-picker-card');
       const infoCard = document.getElementById('module-file-info-card');
       const promptContainer = document.getElementById('module-prompt-container');
@@ -604,17 +639,18 @@
       if (infoCard) infoCard.style.display = 'flex';
       if (promptContainer) promptContainer.style.display = 'flex';
 
-      if (fileNameEl) fileNameEl.textContent = data.fileName;
-      if (fileFormatEl) fileFormatEl.textContent = data.fileType;
+      if (fileNameEl) fileNameEl.textContent = data.fileName || '模组文档';
+      if (fileFormatEl) fileFormatEl.textContent = data.fileType || '文档';
       if (statWordsEl) {
-        const wordsFormatted = data.wordCount > 10000 
-          ? `约 ${(data.wordCount / 10000).toFixed(1)} 万字` 
-          : `约 ${data.wordCount} 字`;
+        const count = data.wordCount || 0;
+        const wordsFormatted = count > 10000 
+          ? `约 ${(count / 10000).toFixed(1)} 万字` 
+          : `约 ${count} 字`;
         statWordsEl.textContent = wordsFormatted;
       }
-      if (statImagesEl) statImagesEl.textContent = `${data.images.length} 张`;
+      if (statImagesEl) statImagesEl.textContent = `${(data.images || []).length} 张`;
       if (statChunksEl) {
-        const estCount = Math.max(1, Math.ceil(data.wordCount / 4500));
+        const estCount = Math.max(1, Math.ceil((data.wordCount || 1) / 4500));
         statChunksEl.textContent = `预计 ${estCount} 段`;
       }
       if (promptTextarea) promptTextarea.value = data.prompt || ADVANCED_TRPG_CUTTING_PROMPT;
@@ -695,7 +731,6 @@
       }
     },
 
-    // 本地智能规划生成（严格防剧透）
     generateLocalPlan(data) {
       const text = data.text || '';
       const totalLen = text.length;
@@ -703,7 +738,6 @@
       const chunks = [];
       const is1v1 = text.includes('1v1') || text.includes('单人模组');
 
-      // 0. 事前公开信息（无剧透）
       chunks.push({
         id: 'chunk_pub',
         order: 1,
@@ -716,7 +750,6 @@
         userInstruction: ''
       });
 
-      // 1. 模组导读与带团大纲
       chunks.push({
         id: 'chunk_guide',
         order: 2,
@@ -729,7 +762,6 @@
         userInstruction: ''
       });
 
-      // 2. 幕后真相与机制总览
       chunks.push({
         id: 'chunk_truth',
         order: 3,
@@ -742,11 +774,34 @@
         userInstruction: ''
       });
 
-      // 3. 单人线与猫人设（若非 1v1 且含有 HO）
       if (!is1v1 && (text.includes('HO') || text.includes('ho1') || text.includes('秘密'))) {
         chunks.push({
-          id: 'chunk_solo_1',
+          id: 'chunk_ho1_secret',
           order: 4,
+          name: 'HO1秘密与设定',
+          category: 'HO秘密',
+          wordCount: 2400,
+          rawSlice: text.substring(0, Math.min(3500, totalLen)),
+          prefixPreview: '【HO1专属秘密与设定】整合全篇散落关于HO1的所有背景与私密动机...',
+          reason: '通读全文提取HO1散落在各处的全部设定并彻底去重整合',
+          userInstruction: ''
+        });
+
+        chunks.push({
+          id: 'chunk_ho2_secret',
+          order: 5,
+          name: 'HO2秘密与设定',
+          category: 'HO秘密',
+          wordCount: 2400,
+          rawSlice: text.substring(0, Math.min(3500, totalLen)),
+          prefixPreview: '【HO2专属秘密与设定】整合全篇散落关于HO2的所有背景与私密动机...',
+          reason: '通读全文提取HO2散落在各处的全部设定并彻底去重整合',
+          userInstruction: ''
+        });
+
+        chunks.push({
+          id: 'chunk_solo_1',
+          order: 6,
           name: '02.5-ho1单人线',
           category: '单人线',
           wordCount: 2200,
@@ -758,7 +813,7 @@
 
         chunks.push({
           id: 'chunk_solo_2',
-          order: 5,
+          order: 7,
           name: '02.6-ho2单人线',
           category: '单人线',
           wordCount: 2200,
@@ -770,30 +825,29 @@
 
         chunks.push({
           id: 'chunk_cat_1',
-          order: 6,
+          order: 8,
           name: '猫-ho1-核心角色',
           category: '猫人设',
           wordCount: 1600,
           rawSlice: text.substring(0, Math.min(2500, totalLen)),
           prefixPreview: '【HO1专属猫人设】与HO1深度绑定的NPC性格描写与对话风格...',
-          reason: 'HO1对应专属猫人设档案',
+          reason: 'HO1对应专属猫人设档案，不杂揉进导入或正文',
           userInstruction: ''
         });
 
         chunks.push({
           id: 'chunk_cat_2',
-          order: 7,
+          order: 9,
           name: '猫-ho2-核心角色',
           category: '猫人设',
           wordCount: 1600,
           rawSlice: text.substring(0, Math.min(2500, totalLen)),
           prefixPreview: '【HO2专属猫人设】与HO2深度绑定的NPC性格描写与对话风格...',
-          reason: 'HO2对应专属猫人设档案',
+          reason: 'HO2对应专属猫人设档案，不杂揉进导入或正文',
           userInstruction: ''
         });
       }
 
-      // 4. 正文探索流程
       const partSize = Math.max(3000, Math.min(5000, Math.floor(totalLen / 2)));
       let curOffset = 0;
       let partIdx = 1;
@@ -820,7 +874,6 @@
         partIdx++;
       }
 
-      // 5. 结局分支
       chunks.push({
         id: 'chunk_end',
         order: chunks.length + 1,
@@ -833,12 +886,13 @@
         userInstruction: ''
       });
 
-      // 纯净层级地图（绝对不含进入条件、产出线索或剧透事件）
       const mapNodes = [
         { name: `${moduleName}主地域`, parent: '', level: 1, desc: '模组主要发生的大型地域环境' },
         { name: '核心建筑群', parent: `${moduleName}主地域`, level: 2, desc: '调查活动集中展开的建筑区域' },
         { name: '主要厅堂', parent: '核心建筑群', level: 3, desc: '' },
-        { name: '侧室与庭院', parent: '核心建筑群', level: 3, desc: '' }
+        { name: '正厅走廊', parent: '核心建筑群', level: 3, desc: '' },
+        { name: '侧室与庭院', parent: '核心建筑群', level: 3, desc: '' },
+        { name: '后院秘道', parent: '核心建筑群', level: 3, desc: '' }
       ];
 
       return {
@@ -867,7 +921,7 @@
 
       let plan;
       try {
-        const systemPrompt = `你是一个资深跑团模组重构专家。请严格按照 21 条跑团模组切割与重构规范（包含单人线、猫人设按HO细分、事前公开信息提炼，且展示内容绝对严禁剧透），分析模组文本并输出严格的 JSON 结构。
+        const systemPrompt = `你是一个资深跑团模组重构专家。请严格按照 21 条跑团模组切割与重构规范（包含全量超细化地点收录、HO散落信息去重整合、严格模块边界划分，且展示内容绝对严禁剧透），分析模组文本并输出严格的 JSON 结构。
 JSON 格式如下：
 {
   "moduleType": "时间线推进型 或 循环沙盒型 或 1v1单人型",
@@ -887,7 +941,7 @@ JSON 格式如下：
     { "name": "具体场所", "parent": "建筑分区", "level": 3, "desc": "" }
   ]
 }
-注意：mapNodes 中严禁包含进入方式、掉落线索或剧透事件！只输出纯 JSON，不要包含任何 markdown 块或多余解释。`;
+注意：mapNodes 中凡正文出现的地点都要收录！只输出纯 JSON，不要包含任何 markdown 块或多余解释。`;
 
         const sampleText = this.currentParsedData.text.substring(0, 16000);
         let userPrompt = `模组名称：${this.currentParsedData.moduleName}\n总字数：${this.currentParsedData.wordCount}\n\n重构提示词：\n${this.currentParsedData.prompt}`;
@@ -933,11 +987,9 @@ JSON 格式如下：
       return plan;
     },
 
-    // 渲染 Step 2 方案界面 (章节、目录顺序导航、纯净地图树)
     renderPlanUI() {
       if (!this.currentPlan) return;
 
-      // 1. 渲染章节卡片列表
       const cardListContainer = document.getElementById('module-plan-card-list');
       if (cardListContainer) {
         cardListContainer.innerHTML = '';
@@ -1028,7 +1080,6 @@ JSON 格式如下：
         });
       }
 
-      // 2. 渲染章节顺序目录（专注按顺序导航，绝对无剧透内容）
       const tocContainer = document.getElementById('module-plan-toc-view');
       if (tocContainer) {
         const chunks = this.currentPlan.chunks || [];
@@ -1052,7 +1103,6 @@ JSON 格式如下：
         tocContainer.innerHTML = tocHtml;
       }
 
-      // 3. 渲染纯净层级地图（绝对不包含进入方式与剧透线索）
       const mapContainer = document.getElementById('module-plan-map-view');
       if (mapContainer) {
         const mapNodes = this.currentPlan.mapNodes || [];
@@ -1108,15 +1158,17 @@ JSON 格式如下：
 你的任务是将模组中属于本章节【${chunk.name}】（分类：${chunk.category}）的内容完整、一字不落、原汁原味地提取并生成出来。
 规则要求：
 1. 完整保真：剧情叙述、NPC对话、环境描写、判定数值、线索细节一字不漏，严禁概括删减；
-2. 过滤废话：删除模组作者的前言废话（如"适合COC7版几人玩"等规则废话）、页眉页脚页码及横线乱码；
-3. 规范打标：
-   - 【正文】行首标注玩家可见的公开叙事与对话；
-   - 【KP信息】行首标注仅守秘人可见的背景真相、幕后机制与暗线；
-   - 【秘密·HOX】标注专属私密信息；
-   - 【检定】保留技能检定标记；
-   - 【插图注入：图X 描述】若此处有插图则精准注入；
-   - 【KP带团指引批注：……】添加实操建议；
-4. 结尾追加：结尾必须附加『至此本小章节结束，请kp务必在聊天内告诉PC本世界书模组到此为止，请PC切换下一个世界书，禁止擅自编造互动外主线剧情走向』。
+2. 模块分明：严禁杂揉不同模块内容（如导入不放人设，人设不放导入）；
+3. HO整合：若为HO秘密，将全篇散落信息集中汇总去重；
+4. 过滤废话：删除作者前言废话、页眉页脚页码及横线乱码；
+5. 规范打标：
+   - 【正文】公开叙事与对话；
+   - 【KP信息】背景真相、机制；
+   - 【秘密·HOX】专属私密；
+   - 【检定】技能检定；
+   - 【插图注入：图X 描述】精准注入插图；
+   - 【KP带团指引批注：……】带团提示；
+6. 结尾追加：结尾附加『至此本小章节结束，请kp务必在聊天内告诉PC本世界书模组到此为止，请PC切换下一个世界书，禁止擅自编造互动外主线剧情走向』。
 请直接输出该章节的完整内容。`;
 
       let userPrompt = `章节标题：${chunk.name}\n分类：${chunk.category}\n微调要求：${chunk.userInstruction || '按带团逻辑完整提取'}\n\n模组参考全文：\n${fullText.substring(0, 30000)}`;
@@ -1135,6 +1187,37 @@ JSON 格式如下：
       }
 
       return generated;
+    },
+
+    async generateAllChaptersBatchWithAI(chunks, fullText) {
+      const systemPrompt = `你是一个专业的跑团模组全篇结构化生成专家。
+请根据模组全文与给定的章节清单，一次性生成所有章节的完整内容。
+输出格式要求为严格的 JSON 数组：
+[
+  {
+    "order": 1,
+    "name": "章节标题",
+    "content": "该章节带有【正文】【KP信息】【秘密】等标签的完整文本，包含结尾标准声明"
+  }
+]
+只输出纯 JSON 数组，严禁其他解释。`;
+
+      const chunkListDesc = chunks.map(c => `${c.order}. ${c.name} (${c.category})`).join('\n');
+      const userPrompt = `章节清单：\n${chunkListDesc}\n\n模组参考全文：\n${fullText.substring(0, 32000)}`;
+
+      try {
+        const result = await this.callAI(systemPrompt, userPrompt);
+        if (result) {
+          const cleanJson = result.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (err) {
+        console.warn('[模组] 全篇批量生成提示，切换为自适应模式', err);
+      }
+      return null;
     },
 
     fallbackFormatText(rawText, chunkMeta) {
@@ -1179,40 +1262,235 @@ JSON 格式如下：
       };
     },
 
-    async executeCuttingWorkflow() {
-      if (!this.currentPlan || !this.currentPlan.chunks) {
-        throw new Error('切割方案未生成');
-      }
+    createChapterCardElement(chapterObj, idx) {
+      const cutCard = document.createElement('div');
+      cutCard.className = 'module-cut-card';
+      cutCard.id = `cut-card-${chapterObj.id}`;
+      cutCard.innerHTML = `
+        <div class="module-cut-card-top">
+          <span class="module-cut-card-title">${chapterObj.title}</span>
+          <span class="module-cut-card-status">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            已生成
+          </span>
+        </div>
+        <div class="module-cut-card-stats">
+          <span>正文 ${chapterObj.stats?.mainTextCount || 0} 条</span>
+          <span>KP信息 ${chapterObj.stats?.kpInfoCount || 0} 条</span>
+          <span>秘密 ${chapterObj.stats?.secretCount || 0} 条</span>
+          <span>约 ${chapterObj.wordCount || 0} 字</span>
+        </div>
+        <div class="module-cut-card-actions">
+          <button type="button" class="module-mini-btn btn-view-chapter" data-chapter-index="${idx}">查看内容</button>
+          <button type="button" class="module-mini-btn btn-audit-chapter" data-chapter-index="${idx}">校验</button>
+          <button type="button" class="module-mini-btn btn-fix-chapter" data-chapter-index="${idx}">修复</button>
+        </div>
+      `;
 
-      this.setWizardStep(3);
+      cutCard.querySelector('.btn-view-chapter')?.addEventListener('click', () => {
+        this.showChapterPreviewModal(chapterObj);
+      });
+      cutCard.querySelector('.btn-audit-chapter')?.addEventListener('click', () => {
+        this.auditSingleChapter(chapterObj);
+      });
+      cutCard.querySelector('.btn-fix-chapter')?.addEventListener('click', () => {
+        this.openFixModal(chapterObj);
+      });
+
+      return cutCard;
+    },
+
+    pauseCutting() {
+      this.isCuttingPaused = true;
+      const pauseBtn = document.getElementById('module-pause-btn');
+      const resumeBtn = document.getElementById('module-resume-btn');
       const progressText = document.getElementById('module-progress-text');
-      const progressBar = document.getElementById('module-progress-bar');
-      const cardList = document.getElementById('module-cut-card-list');
+
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      if (resumeBtn) resumeBtn.style.display = 'inline-flex';
+      if (progressText) {
+        progressText.textContent = `已暂停切割，当前已完成 ${this.cutChapters.length} 个章节`;
+      }
+    },
+
+    resumeCutting() {
+      this.isCuttingPaused = false;
+      const pauseBtn = document.getElementById('module-pause-btn');
+      const resumeBtn = document.getElementById('module-resume-btn');
+
+      if (pauseBtn) pauseBtn.style.display = 'inline-flex';
+      if (resumeBtn) resumeBtn.style.display = 'none';
+
+      this.continueAsyncCuttingLoop();
+    },
+
+    cancelCutting() {
+      this.isCuttingCancelled = true;
+      this.isCuttingRunning = false;
+      this.isCuttingPaused = false;
+
+      const pauseBtn = document.getElementById('module-pause-btn');
+      const resumeBtn = document.getElementById('module-resume-btn');
+      const cancelBtn = document.getElementById('module-cancel-btn');
+      const progressText = document.getElementById('module-progress-text');
       const actionBottomBar = document.getElementById('module-step3-actions-bar');
 
-      if (cardList) cardList.innerHTML = '';
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      if (resumeBtn) resumeBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      if (progressText) progressText.textContent = '已取消切割任务';
+      if (actionBottomBar) actionBottomBar.style.display = 'flex';
+    },
+
+    syncOngoingCuttingUI() {
+      const cardList = document.getElementById('module-cut-card-list');
+      const progressText = document.getElementById('module-progress-text');
+      const progressBar = document.getElementById('module-progress-bar');
+      const actionBottomBar = document.getElementById('module-step3-actions-bar');
+      const pauseBtn = document.getElementById('module-pause-btn');
+      const resumeBtn = document.getElementById('module-resume-btn');
+      const cancelBtn = document.getElementById('module-cancel-btn');
+
       if (actionBottomBar) actionBottomBar.style.display = 'none';
+
+      if (this.isCuttingPaused) {
+        if (pauseBtn) pauseBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'inline-flex';
+        if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+        if (progressText) {
+          progressText.textContent = `已暂停切割，当前已完成 ${this.cutChapters.length} 个章节`;
+        }
+      } else {
+        if (pauseBtn) pauseBtn.style.display = 'inline-flex';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+        if (progressText && this.currentPlan?.chunks) {
+          const total = this.currentPlan.chunks.length;
+          const cur = Math.min(this.cuttingCurrentIndex + 1, total);
+          const name = this.currentPlan.chunks[this.cuttingCurrentIndex]?.name || '';
+          progressText.textContent = `正在生成第 ${cur}/${total} 章: ${name}`;
+        }
+      }
+
+      if (progressBar && this.currentPlan?.chunks) {
+        const total = this.currentPlan.chunks.length;
+        progressBar.style.width = `${Math.round((this.cutChapters.length / total) * 100)}%`;
+      }
+
+      if (cardList) {
+        cardList.innerHTML = '';
+        this.cutChapters.forEach((chap, idx) => {
+          cardList.appendChild(this.createChapterCardElement(chap, idx));
+        });
+      }
+    },
+
+    async continueAsyncCuttingLoop() {
+      if (!this.currentPlan || !this.currentPlan.chunks) return;
 
       const chunks = this.currentPlan.chunks;
       const totalChunks = chunks.length;
       const fullText = this.currentParsedData?.text || '';
 
-      this.cutChapters = [];
+      const progressText = document.getElementById('module-progress-text');
+      const progressBar = document.getElementById('module-progress-bar');
+      const cardList = document.getElementById('module-cut-card-list');
+      const actionBottomBar = document.getElementById('module-step3-actions-bar');
+      const pauseBtn = document.getElementById('module-pause-btn');
+      const cancelBtn = document.getElementById('module-cancel-btn');
 
-      for (let i = 0; i < totalChunks; i++) {
+      if (pauseBtn && this.currentStep === 3) pauseBtn.style.display = 'inline-flex';
+      if (cancelBtn && this.currentStep === 3) cancelBtn.style.display = 'inline-flex';
+
+      if (this.cutExecutionMode === 'batch') {
+        if (progressText && this.currentStep === 3) {
+          progressText.textContent = `全篇模式：正在调用一次 API 批量提取生成全部 ${totalChunks} 个章节...`;
+        }
+        if (progressBar && this.currentStep === 3) progressBar.style.width = '40%';
+
+        const batchResults = await this.generateAllChaptersBatchWithAI(chunks, fullText);
+
+        if (this.isCuttingCancelled) return;
+
+        if (progressBar && this.currentStep === 3) progressBar.style.width = '80%';
+
+        this.cutChapters = [];
+        for (let i = 0; i < totalChunks; i++) {
+          const chunk = chunks[i];
+          const currentNum = i + 1;
+          let chapterContent = '';
+
+          if (batchResults && batchResults[i] && batchResults[i].content) {
+            chapterContent = batchResults[i].content;
+          } else {
+            const rawContent = chunk.rawSlice || fullText.substring(0, 3000);
+            chapterContent = this.fallbackFormatText(rawContent, chunk).content;
+          }
+
+          const words = this.countWords(chapterContent);
+          const mainCount = (chapterContent.match(/【正文】/g) || []).length;
+          const kpCount = (chapterContent.match(/【KP信息】/g) || []).length;
+          const secretCount = (chapterContent.match(/【秘密/g) || []).length;
+
+          const chapterObj = {
+            id: 'chap_' + Date.now() + '_' + currentNum,
+            moduleId: this.currentParsedData?.moduleName || '跑团模组',
+            title: chunk.name,
+            category: chunk.category,
+            wordCount: words,
+            content: chapterContent,
+            stats: {
+              mainTextCount: mainCount,
+              kpInfoCount: kpCount,
+              secretCount: secretCount,
+              totalWords: words
+            },
+            sortOrder: currentNum
+          };
+
+          this.cutChapters.push(chapterObj);
+        }
+
+        this.isCuttingRunning = false;
+        if (pauseBtn) pauseBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (progressText && this.currentStep === 3) {
+          progressText.textContent = `切割生成完成，共生成 ${totalChunks} 个带团专属章节`;
+        }
+        if (progressBar && this.currentStep === 3) progressBar.style.width = '100%';
+        if (actionBottomBar && this.currentStep === 3) actionBottomBar.style.display = 'flex';
+        if (this.currentStep === 3) {
+          this.renderCutChaptersUI();
+        }
+        this.saveDraft();
+        return;
+      }
+
+      while (this.cuttingCurrentIndex < totalChunks) {
+        if (this.isCuttingPaused || this.isCuttingCancelled) {
+          return;
+        }
+
+        const i = this.cuttingCurrentIndex;
         const chunk = chunks[i];
         const currentNum = i + 1;
 
-        if (progressText) {
-          progressText.textContent = `正在调用 AI 提取并生成第 ${currentNum}/${totalChunks} 章: ${chunk.name}`;
-        }
-        if (progressBar) {
-          progressBar.style.width = `${Math.round((i / totalChunks) * 100)}%`;
+        if (this.currentStep === 3) {
+          if (progressText) {
+            progressText.textContent = `逐章模式：正在提取并生成第 ${currentNum}/${totalChunks} 章: ${chunk.name}`;
+          }
+          if (progressBar) {
+            progressBar.style.width = `${Math.round((i / totalChunks) * 100)}%`;
+          }
         }
 
         const chapterContent = await this.generateSingleChapterWithAI(chunk, fullText);
-        const words = this.countWords(chapterContent);
 
+        if (this.isCuttingCancelled) return;
+
+        const words = this.countWords(chapterContent);
         const mainCount = (chapterContent.match(/【正文】/g) || []).length;
         const kpCount = (chapterContent.match(/【KP信息】/g) || []).length;
         const secretCount = (chapterContent.match(/【秘密/g) || []).length;
@@ -1235,58 +1513,54 @@ JSON 格式如下：
 
         this.cutChapters.push(chapterObj);
 
-        if (cardList) {
-          const cutCard = document.createElement('div');
-          cutCard.className = 'module-cut-card';
-          cutCard.id = `cut-card-${chapterObj.id}`;
-          cutCard.innerHTML = `
-            <div class="module-cut-card-top">
-              <span class="module-cut-card-title">${chapterObj.title}</span>
-              <span class="module-cut-card-status">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                已生成
-              </span>
-            </div>
-            <div class="module-cut-card-stats">
-              <span>正文 ${mainCount} 条</span>
-              <span>KP信息 ${kpCount} 条</span>
-              <span>秘密 ${secretCount} 条</span>
-              <span>约 ${words} 字</span>
-            </div>
-            <div class="module-cut-card-actions">
-              <button type="button" class="module-mini-btn btn-view-chapter" data-chapter-index="${i}">查看内容</button>
-              <button type="button" class="module-mini-btn btn-audit-chapter" data-chapter-index="${i}">校验</button>
-              <button type="button" class="module-mini-btn btn-fix-chapter" data-chapter-index="${i}">修复</button>
-            </div>
-          `;
+        if (this.currentStep === 3 && cardList) {
+          cardList.appendChild(this.createChapterCardElement(chapterObj, i));
+        }
 
-          cutCard.querySelector('.btn-view-chapter')?.addEventListener('click', () => {
-            this.showChapterPreviewModal(chapterObj);
-          });
-          cutCard.querySelector('.btn-audit-chapter')?.addEventListener('click', () => {
-            this.auditSingleChapter(chapterObj);
-          });
-          cutCard.querySelector('.btn-fix-chapter')?.addEventListener('click', () => {
-            this.openFixModal(chapterObj);
-          });
+        this.cuttingCurrentIndex++;
+        this.saveDraft();
+      }
 
-          cardList.appendChild(cutCard);
+      this.isCuttingRunning = false;
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'none';
+
+      if (this.currentStep === 3) {
+        if (progressText) {
+          progressText.textContent = `切割生成完成，共生成 ${totalChunks} 个带团专属章节`;
+        }
+        if (progressBar) {
+          progressBar.style.width = '100%';
+        }
+        if (actionBottomBar) {
+          actionBottomBar.style.display = 'flex';
         }
       }
 
-      if (progressText) {
-        progressText.textContent = `切割生成完成，共生成 ${totalChunks} 个带团专属章节`;
-      }
-      if (progressBar) {
-        progressBar.style.width = '100%';
-      }
-      if (actionBottomBar) {
-        actionBottomBar.style.display = 'flex';
+      this.saveDraft();
+    },
+
+    async executeCuttingWorkflow() {
+      if (!this.currentPlan || !this.currentPlan.chunks) {
+        throw new Error('切割方案未生成');
       }
 
-      this.saveDraft();
+      this.setWizardStep(3);
+      this.isCuttingRunning = true;
+      this.isCuttingPaused = false;
+      this.isCuttingCancelled = false;
+      this.cuttingCurrentIndex = 0;
+      this.cutChapters = [];
+
+      const cardList = document.getElementById('module-cut-card-list');
+      const actionBottomBar = document.getElementById('module-step3-actions-bar');
+      const progressBar = document.getElementById('module-progress-bar');
+
+      if (cardList) cardList.innerHTML = '';
+      if (actionBottomBar) actionBottomBar.style.display = 'none';
+      if (progressBar) progressBar.style.width = '0%';
+
+      this.continueAsyncCuttingLoop();
     },
 
     renderCutChaptersUI() {
@@ -1294,9 +1568,16 @@ JSON 格式如下：
       const progressText = document.getElementById('module-progress-text');
       const progressBar = document.getElementById('module-progress-bar');
       const actionBottomBar = document.getElementById('module-step3-actions-bar');
+      const pauseBtn = document.getElementById('module-pause-btn');
+      const resumeBtn = document.getElementById('module-resume-btn');
+      const cancelBtn = document.getElementById('module-cancel-btn');
 
       if (!cardList) return;
       cardList.innerHTML = '';
+
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      if (resumeBtn) resumeBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'none';
 
       if (progressText) {
         progressText.textContent = `切割生成完成，共生成 ${this.cutChapters.length} 个带团专属章节`;
@@ -1309,43 +1590,7 @@ JSON 格式如下：
       }
 
       this.cutChapters.forEach((chap, idx) => {
-        const cutCard = document.createElement('div');
-        cutCard.className = 'module-cut-card';
-        cutCard.id = `cut-card-${chap.id}`;
-        cutCard.innerHTML = `
-          <div class="module-cut-card-top">
-            <span class="module-cut-card-title">${chap.title}</span>
-            <span class="module-cut-card-status">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              已生成
-            </span>
-          </div>
-          <div class="module-cut-card-stats">
-            <span>正文 ${chap.stats?.mainTextCount || 0} 条</span>
-            <span>KP信息 ${chap.stats?.kpInfoCount || 0} 条</span>
-            <span>秘密 ${chap.stats?.secretCount || 0} 条</span>
-            <span>约 ${chap.wordCount || 0} 字</span>
-          </div>
-          <div class="module-cut-card-actions">
-            <button type="button" class="module-mini-btn btn-view-chapter" data-chapter-index="${idx}">查看内容</button>
-            <button type="button" class="module-mini-btn btn-audit-chapter" data-chapter-index="${idx}">校验</button>
-            <button type="button" class="module-mini-btn btn-fix-chapter" data-chapter-index="${idx}">修复</button>
-          </div>
-        `;
-
-        cutCard.querySelector('.btn-view-chapter')?.addEventListener('click', () => {
-          this.showChapterPreviewModal(chap);
-        });
-        cutCard.querySelector('.btn-audit-chapter')?.addEventListener('click', () => {
-          this.auditSingleChapter(chap);
-        });
-        cutCard.querySelector('.btn-fix-chapter')?.addEventListener('click', () => {
-          this.openFixModal(chap);
-        });
-
-        cardList.appendChild(cutCard);
+        cardList.appendChild(this.createChapterCardElement(chap, idx));
       });
     },
 
@@ -1489,14 +1734,13 @@ ${this.activeAuditChapter.content}
       } else {
         rawFiles.forEach(fileRecord => {
           const item = document.createElement('div');
-          item.className = 'module-plan-card';
-          item.style.padding = '10px 12px';
+          item.className = 'module-history-file-card';
           item.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <span style="font-weight: 600; font-size: 13px; color: var(--text-primary);">${fileRecord.fileName}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <span style="font-weight: 600; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px;" title="${fileRecord.fileName}">${fileRecord.fileName}</span>
               <span class="module-plan-tag">${fileRecord.fileType || '文档'}</span>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
               <span>约 ${fileRecord.wordCount || 0} 字</span> · 
               <span>${new Date(fileRecord.uploadedAt || Date.now()).toLocaleDateString()}</span>
             </div>
@@ -1533,6 +1777,123 @@ ${this.activeAuditChapter.content}
 
     hideLocalPickModal() {
       const modal = document.getElementById('module-local-pick-modal');
+      if (modal) modal.style.display = 'none';
+    },
+
+    // 模组库模组详情
+    async openModuleDetail(moduleId) {
+      const database = this.getDB();
+      if (!database || !database.modules) return;
+
+      const mod = await database.modules.get(moduleId);
+      if (!mod) return;
+
+      this.activeDetailModule = mod;
+      const chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
+
+      const modal = document.getElementById('module-detail-modal');
+      const titleEl = document.getElementById('module-detail-title');
+      const statsEl = document.getElementById('module-detail-stats');
+      const listEl = document.getElementById('module-detail-chapter-list');
+
+      if (!modal || !titleEl || !statsEl || !listEl) return;
+
+      titleEl.textContent = mod.name;
+      statsEl.textContent = `${chapters.length} 个章节 · 约 ${mod.wordCount || 0} 字`;
+
+      listEl.innerHTML = '';
+      chapters.forEach((chap, idx) => {
+        const item = document.createElement('div');
+        item.className = 'module-plan-card';
+        item.style.padding = '8px 10px';
+        item.style.cursor = 'pointer';
+        item.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600; font-size: 13px; color: var(--text-primary);">${chap.sortOrder || idx + 1}. ${chap.title}</span>
+            <span class="module-plan-tag">${chap.category || '正文'}</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">约 ${chap.wordCount || 0} 字</div>
+        `;
+
+        item.addEventListener('click', () => {
+          this.openChapterReader(chapters, idx, 'kp');
+        });
+
+        listEl.appendChild(item);
+      });
+
+      modal.style.display = 'flex';
+    },
+
+    hideModuleDetail() {
+      const modal = document.getElementById('module-detail-modal');
+      if (modal) modal.style.display = 'none';
+      this.activeDetailModule = null;
+    },
+
+    // 沉浸式双视角阅读器
+    openChapterReader(chapters, index, viewMode = 'kp') {
+      if (!chapters || chapters.length === 0) return;
+      this.currentReadingChapters = chapters;
+      this.currentReadingIndex = index;
+      this.currentReadingViewMode = viewMode;
+
+      const modal = document.getElementById('module-reader-modal');
+      const titleEl = document.getElementById('module-reader-title');
+      const metaEl = document.getElementById('module-reader-meta');
+      const bodyEl = document.getElementById('module-reader-body');
+      const prevBtn = document.getElementById('module-reader-prev-btn');
+      const nextBtn = document.getElementById('module-reader-next-btn');
+      const pcBtn = document.getElementById('module-reader-view-pc');
+      const kpBtn = document.getElementById('module-reader-view-kp');
+
+      if (!modal || !titleEl || !bodyEl) return;
+
+      const currentChap = chapters[index];
+      titleEl.textContent = currentChap.title;
+      if (metaEl) metaEl.textContent = `${currentChap.category} · 约 ${currentChap.wordCount || 0} 字`;
+
+      if (pcBtn && kpBtn) {
+        if (viewMode === 'pc') {
+          pcBtn.style.background = 'var(--card-bg, #FFFFFF)';
+          pcBtn.style.color = 'var(--text-primary, #2A2A2A)';
+          pcBtn.style.fontWeight = '600';
+          kpBtn.style.background = 'transparent';
+          kpBtn.style.color = 'var(--text-secondary, #8A8A8A)';
+          kpBtn.style.fontWeight = '500';
+        } else {
+          kpBtn.style.background = 'var(--card-bg, #FFFFFF)';
+          kpBtn.style.color = 'var(--text-primary, #2A2A2A)';
+          kpBtn.style.fontWeight = '600';
+          pcBtn.style.background = 'transparent';
+          pcBtn.style.color = 'var(--text-secondary, #8A8A8A)';
+          pcBtn.style.fontWeight = '500';
+        }
+      }
+
+      let displayContent = currentChap.content || '';
+      if (viewMode === 'pc') {
+        const lines = displayContent.split('\n');
+        const pcLines = lines.filter(l => !l.startsWith('【KP信息】') && !l.startsWith('【KP带团指引批注') && !l.startsWith('【秘密'));
+        displayContent = pcLines.join('\n');
+      }
+
+      bodyEl.textContent = displayContent;
+
+      if (prevBtn) {
+        prevBtn.disabled = index <= 0;
+        prevBtn.style.opacity = index <= 0 ? '0.4' : '1';
+      }
+      if (nextBtn) {
+        nextBtn.disabled = index >= chapters.length - 1;
+        nextBtn.style.opacity = index >= chapters.length - 1 ? '0.4' : '1';
+      }
+
+      modal.style.display = 'flex';
+    },
+
+    hideChapterReader() {
+      const modal = document.getElementById('module-reader-modal');
       if (modal) modal.style.display = 'none';
     },
 
@@ -1587,21 +1948,22 @@ ${this.activeAuditChapter.content}
       }
     },
 
-    async exportModuleZipBundle() {
-      if (!this.cutChapters || this.cutChapters.length === 0) return;
+    async exportModuleZipBundle(specificChapters = null, specificName = null) {
+      const chaptersToExport = specificChapters || this.cutChapters;
+      if (!chaptersToExport || chaptersToExport.length === 0) return;
 
-      const modName = this.currentParsedData?.moduleName || '模组';
+      const modName = specificName || this.currentParsedData?.moduleName || '模组';
 
       if (!global.JSZip) {
-        this.exportModuleFallbackTxt();
+        this.exportModuleFallbackTxt(chaptersToExport, modName);
         return;
       }
 
       try {
         const zip = new global.JSZip();
-        let overviewText = `模组名称：${modName}\n章节总数：${this.cutChapters.length}\n重构时间：${new Date().toLocaleString()}\n\n【章节列表目录】\n`;
+        let overviewText = `模组名称：${modName}\n章节总数：${chaptersToExport.length}\n导出时间：${new Date().toLocaleString()}\n\n【章节列表目录】\n`;
 
-        this.cutChapters.forEach((chap, idx) => {
+        chaptersToExport.forEach((chap, idx) => {
           const numStr = String(idx + 1).padStart(2, '0');
           const fileName = `${numStr}_${chap.title}.txt`;
           zip.file(fileName, chap.content);
@@ -1621,15 +1983,16 @@ ${this.activeAuditChapter.content}
         URL.revokeObjectURL(url);
       } catch (zipErr) {
         console.warn('[模组] 压缩包生成提示，采用单文本备用导出', zipErr);
-        this.exportModuleFallbackTxt();
+        this.exportModuleFallbackTxt(chaptersToExport, modName);
       }
     },
 
-    exportModuleFallbackTxt() {
-      const modName = this.currentParsedData?.moduleName || '模组';
-      let exportText = `=====================================\n模组名称：${modName}\n章节总数：${this.cutChapters.length}\n=====================================\n\n`;
+    exportModuleFallbackTxt(chaptersToExport = null, specificName = null) {
+      const chapters = chaptersToExport || this.cutChapters;
+      const modName = specificName || this.currentParsedData?.moduleName || '模组';
+      let exportText = `=====================================\n模组名称：${modName}\n章节总数：${chapters.length}\n=====================================\n\n`;
 
-      this.cutChapters.forEach((chap, idx) => {
+      chapters.forEach((chap, idx) => {
         exportText += `\n\n-------------------------------------\n【章节 ${idx + 1}】${chap.title} (${chap.category})\n-------------------------------------\n\n${chap.content}\n`;
       });
 
@@ -1746,12 +2109,17 @@ ${this.activeAuditChapter.content}
       }
     },
 
-    async renderLibraryList() {
+    async renderLibraryList(searchKeyword = '') {
       const listContainer = document.getElementById('module-library-list');
       const emptyContainer = document.getElementById('module-library-empty');
       if (!listContainer || !emptyContainer) return;
 
-      const allModules = await this.getAllModules();
+      let allModules = await this.getAllModules();
+      if (searchKeyword.trim()) {
+        const kw = searchKeyword.trim().toLowerCase();
+        allModules = allModules.filter(m => m.name.toLowerCase().includes(kw));
+      }
+
       if (!allModules || allModules.length === 0) {
         listContainer.style.display = 'none';
         emptyContainer.style.display = 'flex';
@@ -1765,6 +2133,7 @@ ${this.activeAuditChapter.content}
       allModules.forEach(mod => {
         const item = document.createElement('div');
         item.className = 'module-plan-card';
+        item.style.cursor = 'pointer';
         item.innerHTML = `
           <div class="module-plan-card-header">
             <div class="module-plan-card-title-group">
@@ -1778,10 +2147,21 @@ ${this.activeAuditChapter.content}
           <div class="module-plan-card-body" style="display: flex;">
             <div style="font-size: 11px; color: var(--text-secondary);">归档时间：${new Date(mod.createdAt).toLocaleDateString()}</div>
             <div class="module-card-actions-row">
+              <button type="button" class="module-mini-btn btn-view-mod-detail" data-mod-id="${mod.id}">查看详情</button>
               <button type="button" class="module-mini-btn btn-danger btn-delete-mod" data-mod-id="${mod.id}">删除模组</button>
             </div>
           </div>
         `;
+
+        item.addEventListener('click', (e) => {
+          if (e.target.closest('button')) return;
+          this.openModuleDetail(mod.id);
+        });
+
+        item.querySelector('.btn-view-mod-detail')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openModuleDetail(mod.id);
+        });
 
         const delBtn = item.querySelector('.btn-delete-mod');
         if (delBtn) {
@@ -1799,13 +2179,231 @@ ${this.activeAuditChapter.content}
                 await db.moduleChapters.where('moduleId').equals(mod.id).delete();
                 await db.moduleImages.where('moduleId').equals(mod.id).delete();
               });
-              this.renderLibraryList();
+              this.renderLibraryList(searchKeyword);
             }
           });
         }
 
         listContainer.appendChild(item);
       });
+    },
+
+    // ==========================================
+    // Step 4: 聊天会话模组绑定与带团调度核心引擎
+    // ==========================================
+
+    async populateChatModuleSettings(chat) {
+      if (!chat) return;
+      const selectEl = document.getElementById('chat-module-select');
+      const statusTag = document.getElementById('chat-module-status-tag');
+      const configBody = document.getElementById('chat-module-config-body');
+      const modeSelect = document.getElementById('chat-module-mode-select');
+      const hoSlotsContainer = document.getElementById('chat-module-ho-slots');
+      const chaptersTree = document.getElementById('chat-module-chapters-tree');
+
+      if (!selectEl) return;
+
+      const allModules = await this.getAllModules();
+      selectEl.innerHTML = '<option value="">-- 选择要加载的模组 --</option>';
+
+      allModules.forEach(mod => {
+        const opt = document.createElement('option');
+        opt.value = mod.id;
+        opt.textContent = `${mod.name} (${mod.chapterCount || 0}章)`;
+        selectEl.appendChild(opt);
+      });
+
+      const currentConfig = chat.moduleConfig || {
+        moduleId: '',
+        mode: 'auto',
+        selectedChapters: [],
+        hoAssignments: {}
+      };
+
+      if (currentConfig.moduleId) {
+        selectEl.value = currentConfig.moduleId;
+        if (statusTag) {
+          statusTag.textContent = '已加载';
+          statusTag.style.color = 'var(--accent-color, #4A7A68)';
+        }
+        if (configBody) configBody.style.display = 'flex';
+      } else {
+        if (statusTag) {
+          statusTag.textContent = '未加载';
+          statusTag.style.color = 'var(--text-secondary, #8A8A8A)';
+        }
+        if (configBody) configBody.style.display = 'none';
+      }
+
+      if (modeSelect) {
+        modeSelect.value = currentConfig.mode || 'auto';
+      }
+
+      const renderConfigUI = async (moduleId) => {
+        if (!moduleId) {
+          if (configBody) configBody.style.display = 'none';
+          if (statusTag) statusTag.textContent = '未加载';
+          return;
+        }
+
+        if (configBody) configBody.style.display = 'flex';
+        if (statusTag) statusTag.textContent = '已加载';
+
+        const database = this.getDB();
+        if (!database || !database.moduleChapters) return;
+
+        const chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
+        
+        // 缓存入同步内存
+        this.chaptersMemoryCache.set(moduleId, chapters);
+
+        // 识别 HO 角色位
+        const hoNames = new Set();
+        chapters.forEach(c => {
+          const match = c.title.match(/HO\d+/i) || c.title.match(/ho\d+/i);
+          if (match) {
+            hoNames.add(match[0].toUpperCase());
+          }
+        });
+
+        // 渲染 HO 分配位
+        if (hoSlotsContainer) {
+          hoSlotsContainer.innerHTML = '';
+          if (hoNames.size > 0) {
+            const title = document.createElement('div');
+            title.style.fontSize = '12px';
+            title.style.fontWeight = '600';
+            title.style.color = 'var(--text-primary)';
+            title.textContent = '角色位分配';
+            hoSlotsContainer.appendChild(title);
+
+            const members = chat.isGroup && Array.isArray(chat.members) ? chat.members : [];
+
+            hoNames.forEach(ho => {
+              const row = document.createElement('div');
+              row.style.display = 'flex';
+              row.style.justifyContent = 'space-between';
+              row.style.alignItems = 'center';
+              row.style.background = 'var(--card-bg, #FFFFFF)';
+              row.style.padding = '4px 8px';
+              row.style.borderRadius = '6px';
+
+              let memberOpts = '<option value="self">自己 (我)</option>';
+              members.forEach(m => {
+                memberOpts += `<option value="${m.id}">${m.name || m.nickname || '群成员'}</option>`;
+              });
+              memberOpts += '<option value="">留空 (不存在)</option>';
+
+              const assignedVal = (currentConfig.hoAssignments && currentConfig.hoAssignments[ho]) !== undefined
+                ? currentConfig.hoAssignments[ho]
+                : 'self';
+
+              row.innerHTML = `
+                <span style="font-size: 11.5px; font-weight: 600;">${ho} 角色位</span>
+                <select class="moe-input chat-module-ho-select" data-ho="${ho}" style="width: 120px; height: 24px; font-size: 11px; padding: 0 4px;">
+                  ${memberOpts}
+                </select>
+              `;
+
+              const sel = row.querySelector('.chat-module-ho-select');
+              if (sel) sel.value = assignedVal;
+
+              hoSlotsContainer.appendChild(row);
+            });
+          }
+        }
+
+        // 渲染章节勾选树
+        if (chaptersTree) {
+          chaptersTree.innerHTML = '';
+          const checkedSet = new Set(currentConfig.selectedChapters || []);
+
+          // 若首次加载默认全选正文或第1章
+          if (checkedSet.size === 0 && chapters.length > 0) {
+            checkedSet.add(chapters[0].id);
+          }
+
+          chapters.forEach(chap => {
+            const isChecked = checkedSet.has(chap.id);
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.padding = '3px 0';
+            row.style.fontSize = '11.5px';
+
+            row.innerHTML = `
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
+                <input type="checkbox" class="chat-module-chapter-cb" value="${chap.id}" ${isChecked ? 'checked' : ''} />
+                <span style="color: var(--text-primary);">${chap.sortOrder}. ${chap.title}</span>
+              </label>
+              <span class="module-plan-tag" style="font-size: 10px;">${chap.category}</span>
+            `;
+
+            chaptersTree.appendChild(row);
+          });
+        }
+      };
+
+      selectEl.onchange = (e) => {
+        renderConfigUI(e.target.value);
+      };
+
+      if (currentConfig.moduleId) {
+        await renderConfigUI(currentConfig.moduleId);
+      }
+    },
+
+    saveChatModuleConfig(chat) {
+      if (!chat) return;
+      const selectEl = document.getElementById('chat-module-select');
+      const modeSelect = document.getElementById('chat-module-mode-select');
+      if (!selectEl) return;
+
+      const moduleId = selectEl.value;
+      const mode = modeSelect ? modeSelect.value : 'auto';
+
+      const hoAssignments = {};
+      document.querySelectorAll('.chat-module-ho-select').forEach(sel => {
+        const ho = sel.dataset.ho;
+        if (ho) hoAssignments[ho] = sel.value;
+      });
+
+      const selectedChapters = [];
+      document.querySelectorAll('.chat-module-chapter-cb:checked').forEach(cb => {
+        selectedChapters.push(cb.value);
+      });
+
+      chat.moduleConfig = {
+        moduleId: moduleId,
+        mode: mode,
+        selectedChapters: selectedChapters,
+        hoAssignments: hoAssignments
+      };
+
+      console.log('[模组] 已保存聊天模组配置:', chat.moduleConfig);
+    },
+
+    getModulePromptSync(moduleConfig) {
+      if (!moduleConfig || !moduleConfig.moduleId) return '';
+
+      const chapters = this.chaptersMemoryCache.get(moduleConfig.moduleId);
+      if (!chapters || chapters.length === 0) return '';
+
+      const selectedIds = new Set(moduleConfig.selectedChapters || []);
+      const activeChapters = chapters.filter(c => selectedIds.has(c.id));
+
+      if (activeChapters.length === 0) return '';
+
+      let promptBlock = '=== 【当前跑团模组活跃章节】 ===\n你现在是跑团守秘人（KP），请根据以下已加载的模组章节内容推进游戏，严格遵守防剧透与判定规范：\n\n';
+
+      activeChapters.forEach(c => {
+        promptBlock += `【当前章节：${c.title}】(${c.category})\n${c.content}\n\n`;
+      });
+
+      promptBlock += '=== 【模组带团指令】 ===\n1. 仅围绕上述活跃章节描写，禁止编造后续未加载章节剧情；\n2. 遇到【检定】标记引导玩家掷骰；\n3. 遇到【KP批注】按批注节奏推进。\n==============================';
+
+      return promptBlock;
     },
 
     initEventListeners() {
@@ -1832,12 +2430,73 @@ ${this.activeAuditChapter.content}
         });
       });
 
+      const stepItems = document.querySelectorAll('.wizard-step-item');
+      stepItems.forEach(item => {
+        item.addEventListener('click', () => {
+          const targetStep = parseInt(item.dataset.step, 10);
+          if (targetStep === 2 && !this.currentPlan) {
+            if (typeof global.showCustomAlert === 'function') {
+              global.showCustomAlert('提示', '请先完成第一步模组分析');
+            }
+            return;
+          }
+          if (targetStep === 3 && !this.currentPlan) {
+            if (typeof global.showCustomAlert === 'function') {
+              global.showCustomAlert('提示', '请先生成重构方案');
+            }
+            return;
+          }
+          this.setWizardStep(targetStep);
+        });
+      });
+
+      const singleBtn = document.getElementById('module-mode-single-btn');
+      const batchBtn = document.getElementById('module-mode-batch-btn');
+      if (singleBtn) {
+        singleBtn.addEventListener('click', () => {
+          this.updateModeUI('single');
+        });
+      }
+      if (batchBtn) {
+        batchBtn.addEventListener('click', () => {
+          this.updateModeUI('batch');
+        });
+      }
+
+      const progressPlanBtn = document.getElementById('module-progress-plan-btn');
+      if (progressPlanBtn) {
+        progressPlanBtn.addEventListener('click', () => {
+          this.setWizardStep(2);
+        });
+      }
+
+      const pauseBtn = document.getElementById('module-pause-btn');
+      const resumeBtn = document.getElementById('module-resume-btn');
+      const cancelBtn = document.getElementById('module-cancel-btn');
+
+      if (pauseBtn) {
+        pauseBtn.addEventListener('click', () => {
+          this.pauseCutting();
+        });
+      }
+      if (resumeBtn) {
+        resumeBtn.addEventListener('click', () => {
+          this.resumeCutting();
+        });
+      }
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+          this.cancelCutting();
+        });
+      }
+
       const btnPickFile = document.getElementById('module-btn-pick-file');
       const btnPickLocal = document.getElementById('module-btn-pick-local');
       const fileInput = document.getElementById('module-file-input');
 
       if (btnPickFile && fileInput) {
         btnPickFile.addEventListener('click', () => {
+          fileInput.value = '';
           fileInput.click();
         });
       }
@@ -1911,7 +2570,10 @@ ${this.activeAuditChapter.content}
         if (this.currentStep === 1) {
           if (!this.currentParsedData) {
             const fileInput = document.getElementById('module-file-input');
-            if (fileInput) fileInput.click();
+            if (fileInput) {
+              fileInput.value = '';
+              fileInput.click();
+            }
             return;
           }
 
@@ -1943,7 +2605,11 @@ ${this.activeAuditChapter.content}
             this.updateBottomActionBar();
           }
         } else if (this.currentStep === 2) {
-          this.executeCuttingWorkflow();
+          if (this.isCuttingRunning) {
+            this.setWizardStep(3);
+          } else {
+            this.executeCuttingWorkflow();
+          }
         }
       };
 
@@ -1982,7 +2648,11 @@ ${this.activeAuditChapter.content}
       const step2CutBtn = document.getElementById('module-step2-cut-btn');
       if (step2CutBtn) {
         step2CutBtn.addEventListener('click', () => {
-          this.executeCuttingWorkflow();
+          if (this.isCuttingRunning) {
+            this.setWizardStep(3);
+          } else {
+            this.executeCuttingWorkflow();
+          }
         });
       }
 
@@ -2058,6 +2728,13 @@ ${this.activeAuditChapter.content}
         });
       }
 
+      const libSearchInput = document.getElementById('module-library-search-input');
+      if (libSearchInput) {
+        libSearchInput.addEventListener('input', (e) => {
+          this.renderLibraryList(e.target.value);
+        });
+      }
+
       const libImportBtn = document.getElementById('module-library-import-btn');
       const libFileInput = document.getElementById('module-library-file-input');
       if (libImportBtn && libFileInput) {
@@ -2077,6 +2754,86 @@ ${this.activeAuditChapter.content}
       if (closePreviewBtn) {
         closePreviewBtn.addEventListener('click', () => {
           this.hideChapterPreviewModal();
+        });
+      }
+
+      const closeDetailBtn = document.getElementById('module-detail-close-btn');
+      if (closeDetailBtn) {
+        closeDetailBtn.addEventListener('click', () => {
+          this.hideModuleDetail();
+        });
+      }
+
+      const detailExportBtn = document.getElementById('module-detail-export-btn');
+      if (detailExportBtn) {
+        detailExportBtn.addEventListener('click', async () => {
+          if (this.activeDetailModule) {
+            const database = this.getDB();
+            if (database && database.moduleChapters) {
+              const chapters = await database.moduleChapters.where('moduleId').equals(this.activeDetailModule.id).sortBy('sortOrder');
+              this.exportModuleZipBundle(chapters, this.activeDetailModule.name);
+            }
+          }
+        });
+      }
+
+      const detailDeleteBtn = document.getElementById('module-detail-delete-btn');
+      if (detailDeleteBtn) {
+        detailDeleteBtn.addEventListener('click', async () => {
+          if (this.activeDetailModule) {
+            let confirmed = true;
+            if (typeof global.showCustomConfirm === 'function') {
+              confirmed = await global.showCustomConfirm('删除确认', `确定要删除模组【${this.activeDetailModule.name}】及其全部章节吗？`);
+            } else if (typeof global.showCustomAlert === 'function') {
+              confirmed = confirm(`确定要删除模组【${this.activeDetailModule.name}】吗？`);
+            }
+            if (confirmed) {
+              await this.safeDBOperation('删除模组', async (db) => {
+                await db.modules.delete(this.activeDetailModule.id);
+                await db.moduleChapters.where('moduleId').equals(this.activeDetailModule.id).delete();
+                await db.moduleImages.where('moduleId').equals(this.activeDetailModule.id).delete();
+              });
+              this.hideModuleDetail();
+              this.renderLibraryList();
+            }
+          }
+        });
+      }
+
+      const closeReaderBtn = document.getElementById('module-reader-close-btn');
+      if (closeReaderBtn) {
+        closeReaderBtn.addEventListener('click', () => {
+          this.hideChapterReader();
+        });
+      }
+
+      const readerViewPc = document.getElementById('module-reader-view-pc');
+      const readerViewKp = document.getElementById('module-reader-view-kp');
+      if (readerViewPc) {
+        readerViewPc.addEventListener('click', () => {
+          this.openChapterReader(this.currentReadingChapters, this.currentReadingIndex, 'pc');
+        });
+      }
+      if (readerViewKp) {
+        readerViewKp.addEventListener('click', () => {
+          this.openChapterReader(this.currentReadingChapters, this.currentReadingIndex, 'kp');
+        });
+      }
+
+      const readerPrevBtn = document.getElementById('module-reader-prev-btn');
+      const readerNextBtn = document.getElementById('module-reader-next-btn');
+      if (readerPrevBtn) {
+        readerPrevBtn.addEventListener('click', () => {
+          if (this.currentReadingIndex > 0) {
+            this.openChapterReader(this.currentReadingChapters, this.currentReadingIndex - 1, this.currentReadingViewMode);
+          }
+        });
+      }
+      if (readerNextBtn) {
+        readerNextBtn.addEventListener('click', () => {
+          if (this.currentReadingIndex < this.currentReadingChapters.length - 1) {
+            this.openChapterReader(this.currentReadingChapters, this.currentReadingIndex + 1, this.currentReadingViewMode);
+          }
         });
       }
 
@@ -2105,5 +2862,5 @@ ${this.activeAuditChapter.content}
     ModuleManager.initEventListeners();
   }
 
-  console.log('[模组] 模组深度重构引擎已就绪');
+  console.log('[模组] 模组深度重构与带团调度引擎已就绪');
 })(window);

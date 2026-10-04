@@ -30944,6 +30944,46 @@ details[open] .thought-chain-arrow {
   color: var(--text-primary, #2A2A2A);
 }
 
+/* 历史已上传模组文件列表 (强制固定高度，支持滑块滚动) */
+#module-local-pick-list {
+  max-height: 55vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 4px 10px 4px;
+  box-sizing: border-box;
+}
+
+#module-local-pick-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+#module-local-pick-list::-webkit-scrollbar-thumb {
+  background-color: var(--border-color, rgba(0, 0, 0, 0.15));
+  border-radius: 4px;
+}
+
+.module-history-file-card {
+  flex-shrink: 0 !important;
+  min-height: 88px !important;
+  box-sizing: border-box !important;
+  background-color: var(--card-bg, #FFFFFF);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.module-history-file-card:hover {
+  border-color: var(--accent-color, #4A7A68);
+}
+
 .module-progress-track {
   width: 100%;
   height: 6px;

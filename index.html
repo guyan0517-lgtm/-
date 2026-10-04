@@ -2168,6 +2168,14 @@
               <!-- Step 2: 方案确认页 -->
               <div class="module-step-pane" id="module-step2-pane" style="display: none;">
                 <div class="module-step-desc">AI 已通读全文并完成深度带团重构，你可以切换查看章节、目录与地图</div>
+                <!-- 切割生成模式切换行 -->
+                <div class="module-cut-mode-row" style="display: flex; align-items: center; justify-content: space-between; background-color: var(--secondary-bg, #F0EFEA); padding: 6px 12px; border-radius: 10px; margin-bottom: 8px;">
+                  <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">模式</span>
+                  <div style="display: flex; gap: 6px;">
+                    <button type="button" class="module-mode-btn active" id="module-mode-single-btn" data-mode="single" style="font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 6px; border: none; background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">逐章</button>
+                    <button type="button" class="module-mode-btn" id="module-mode-batch-btn" data-mode="batch" style="font-size: 11px; font-weight: 500; padding: 4px 12px; border-radius: 6px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;">全篇</button>
+                  </div>
+                </div>
                 <!-- 方案多维度子标签栏 -->
                 <div class="module-step2-tabs" id="module-step2-tabs">
                   <span class="module-subtab active" data-subtab="chapters">章节</span>
@@ -2196,7 +2204,15 @@
               <!-- Step 3: 切割执行页 -->
               <div class="module-step-pane" id="module-step3-pane" style="display: none;">
                 <div class="module-progress-box">
-                  <div class="module-progress-text" id="module-progress-text">准备开始切割...</div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <div class="module-progress-text" id="module-progress-text">准备开始切割...</div>
+                    <div class="module-progress-ctrls" style="display: flex; gap: 6px;">
+                      <button type="button" class="module-mini-btn" id="module-progress-plan-btn">方案</button>
+                      <button type="button" class="module-mini-btn" id="module-pause-btn" style="display: none;">暂停</button>
+                      <button type="button" class="module-mini-btn" id="module-resume-btn" style="display: none;">继续</button>
+                      <button type="button" class="module-mini-btn btn-danger" id="module-cancel-btn" style="display: none;">取消</button>
+                    </div>
+                  </div>
                   <div class="module-progress-track">
                     <div class="module-progress-bar" id="module-progress-bar" style="width: 0%;"></div>
                   </div>
@@ -2224,9 +2240,10 @@
 
           <!-- 独立模组库面板 -->
           <div class="module-library-panel" id="module-library-panel" style="display: none;">
-            <div class="module-library-header-actions" style="display: flex; justify-content: flex-end; padding: 4px 14px 0 14px;">
+            <div class="module-library-header-actions" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 14px 0 14px; gap: 10px;">
+              <input type="text" id="module-library-search-input" class="module-tuning-input" style="flex: 1; height: 30px; font-size: 12px;" placeholder="搜索模组名称..." />
               <input type="file" id="module-library-file-input" accept=".zip, .txt" style="display: none;" />
-              <button type="button" class="module-mini-btn" id="module-library-import-btn" style="height: 28px; padding: 0 12px; font-weight: 600;">导入模组</button>
+              <button type="button" class="module-mini-btn" id="module-library-import-btn" style="height: 30px; padding: 0 12px; font-weight: 600; flex-shrink: 0;">导入模组</button>
             </div>
             <div class="module-library-body" id="module-library-body">
               <div class="module-library-empty" id="module-library-empty">
@@ -2294,6 +2311,49 @@
               <span id="module-local-pick-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">✕</span>
             </div>
             <div style="flex: 1; overflow-y: auto; padding: 10px 0; display: flex; flex-direction: column; gap: 8px;" id="module-local-pick-list"></div>
+          </div>
+        </div>
+
+        <!-- 模组库模组详情弹窗 -->
+        <div class="modal" id="module-detail-modal" style="display: none;">
+          <div class="modal-content" style="max-width: 480px; max-height: 85vh; display: flex; flex-direction: column; gap: 10px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+              <span style="font-weight: 600; font-size: 15px;" id="module-detail-title">模组详情</span>
+              <span id="module-detail-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">✕</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; background-color: var(--secondary-bg, #F9F8F5); padding: 8px 12px; border-radius: 8px; font-size: 11.5px; color: var(--text-secondary);">
+              <span id="module-detail-stats">0 个章节 · 约 0 字</span>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" class="module-mini-btn" id="module-detail-export-btn">导出</button>
+                <button type="button" class="module-mini-btn btn-danger" id="module-detail-delete-btn">删除</button>
+              </div>
+            </div>
+            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;" id="module-detail-chapter-list"></div>
+          </div>
+        </div>
+
+        <!-- 双视角模组阅读器弹窗 -->
+        <div class="modal" id="module-reader-modal" style="display: none;">
+          <div class="modal-content" style="max-width: 500px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-weight: 600; font-size: 14px;" id="module-reader-title">章节标题</span>
+                <span style="font-size: 11px; color: var(--text-secondary);" id="module-reader-meta">分类 · 字数</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <!-- 视角切换按键 -->
+                <div style="display: flex; background: var(--secondary-bg, #F0EFEA); padding: 2px; border-radius: 6px;">
+                  <button type="button" id="module-reader-view-pc" style="border: none; background: var(--card-bg, #FFFFFF); color: var(--text-primary); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; cursor: pointer;">玩家</button>
+                  <button type="button" id="module-reader-view-kp" style="border: none; background: transparent; color: var(--text-secondary); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; cursor: pointer;">守秘人</button>
+                </div>
+                <span id="module-reader-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">✕</span>
+              </div>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding: 12px 0; font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; color: var(--text-primary);" id="module-reader-body"></div>
+            <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border-color);">
+              <button type="button" class="module-mini-btn" id="module-reader-prev-btn">上一章</button>
+              <button type="button" class="module-mini-btn" id="module-reader-next-btn">下一章</button>
+            </div>
           </div>
         </div>
 
@@ -6103,6 +6163,45 @@
                   id="world-book-checkboxes-container"
                   class="checkboxes-container"
                 ></div>
+              </div>
+            </div>
+
+            <!-- 模组专属加载与带团设置 -->
+            <div class="moe-divider"></div>
+            <div class="form-group" id="chat-module-link-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label style="margin: 0; font-weight: 600;">模组</label>
+                <span id="chat-module-status-tag" class="module-plan-tag" style="font-size: 11px;">未加载</span>
+              </div>
+              
+              <!-- 模组可折叠主面板 -->
+              <div class="chat-module-panel" id="chat-module-panel" style="background: var(--secondary-bg, #F9F8F5); border: 1px solid var(--border-color, rgba(0,0,0,0.06)); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <!-- 模组选择下拉框 -->
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <select id="chat-module-select" class="moe-input" style="flex: 1; height: 32px; font-size: 12px;">
+                    <option value="">-- 选择要加载的模组 --</option>
+                  </select>
+                </div>
+
+                <!-- 模组配置区 -->
+                <div id="chat-module-config-body" style="display: none; flex-direction: column; gap: 8px;">
+                  <!-- 切换模式 -->
+                  <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card-bg, #FFFFFF); padding: 6px 10px; border-radius: 8px;">
+                    <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">切换模式</span>
+                    <select id="chat-module-mode-select" class="moe-input" style="width: 100px; height: 26px; font-size: 11px; padding: 0 4px;">
+                      <option value="auto">自动</option>
+                      <option value="semi">半自动</option>
+                      <option value="manual">手动</option>
+                    </select>
+                  </div>
+
+                  <!-- HO 角色位分配区 -->
+                  <div id="chat-module-ho-slots" style="display: flex; flex-direction: column; gap: 4px;"></div>
+
+                  <!-- 章节勾选目录树 -->
+                  <div style="font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--text-primary);">章节勾选</div>
+                  <div id="chat-module-chapters-tree" style="max-height: 180px; overflow-y: auto; background: var(--card-bg, #FFFFFF); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px;"></div>
+                </div>
               </div>
             </div>
 
@@ -50181,6 +50280,14 @@ ${colSpecs.join('\n')}
             combinedText += linkedContents;
           }
 
+          // 2.5 添加模组当前勾选章节内容（跑团模式）
+          if (chat.moduleConfig && chat.moduleConfig.moduleId && window.ModuleManager && typeof window.ModuleManager.getModulePromptSync === 'function') {
+            const modText = window.ModuleManager.getModulePromptSync(chat.moduleConfig);
+            if (modText) {
+              combinedText += '\n\n' + modText;
+            }
+          }
+
           // 3. 添加所有总结作为长期记忆
           const summaryContext = chat.history
             .filter((msg) => msg.type === "summary")
@@ -60353,6 +60460,11 @@ ${colSpecs.join('\n')}
               const customCssInput =
                 document.getElementById("custom-css-input");
 
+              // 加载模组配置
+              if (window.ModuleManager && typeof window.ModuleManager.populateChatModuleSettings === 'function') {
+                await window.ModuleManager.populateChatModuleSettings(chat);
+              }
+
               // --- 加载火花设置 ---
               const streakSettings = chat.settings.streak || {
                 enabled: false,
@@ -61064,6 +61176,11 @@ ${colSpecs.join('\n')}
               chat.settings.linkedWorldBookIds = Array.from(checkedBooks).map(
                 (cb) => cb.value,
               );
+
+              // 保存模组绑定配置
+              if (window.ModuleManager && typeof window.ModuleManager.saveChatModuleConfig === 'function') {
+                window.ModuleManager.saveChatModuleConfig(chat);
+              }
 
               if (chat.isGroup) {
                 chat.settings.myNickname = document
