@@ -66,6 +66,8 @@
     <script src="avatar-frames.js"></script>
     <script src="coc-panel.js"></script>
     <script src="dice-engine.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="module-manager.js" defer></script>
 
     <style></style>
 
@@ -2055,23 +2057,243 @@
           </div>
         </div>
 
-        <div id="memories-view" class="chat-list-view">
-          <div class="header">
-            <span class="back-btn" id="memories-back-btn">‹</span>
-            <span>我们的回忆</span>
-            <span class="action-btn" id="add-countdown-btn">+</span>
+        <!-- 模组界面视图 -->
+        <div id="modules-view" class="chat-list-view">
+          <div class="header" id="modules-view-header">
+            <span class="back-btn" id="modules-back-btn">‹</span>
+            <div class="module-header-nav" id="module-header-nav">
+              <span class="module-header-tab active" data-tab="wizard">切割</span>
+              <span class="module-header-tab" data-tab="library">模组库</span>
+            </div>
+            <div style="width: 40px; height: 40px; flex-shrink: 0;"></div>
           </div>
-          <div
-            id="memories-list"
-            class="list-container"
-            style="
-              padding: 15px;
-              display: flex;
-              flex-direction: column;
-              gap: 15px;
-            "
-          >
-            <!-- 回忆卡片将由JS动态生成在这里 -->
+
+          <!-- 切割向导主面板 -->
+          <div class="module-wizard-panel" id="module-wizard-panel">
+            <!-- 步骤指示器 (无数字纯文本标签) -->
+            <div class="module-wizard-steps" id="module-wizard-steps">
+              <div class="wizard-step-item active" data-step="1">
+                <span class="step-label">导入</span>
+              </div>
+              <div class="wizard-step-line"></div>
+              <div class="wizard-step-item" data-step="2">
+                <span class="step-label">方案</span>
+              </div>
+              <div class="wizard-step-line"></div>
+              <div class="wizard-step-item" data-step="3">
+                <span class="step-label">切割</span>
+              </div>
+            </div>
+
+            <!-- 步骤内容主区域 -->
+            <div class="module-view-body" id="module-view-body">
+              <!-- Step 1: 导入页 -->
+              <div class="module-step-pane active" id="module-step1-pane">
+                <input type="file" id="module-file-input" accept=".pdf,.docx,.doc,.txt" style="display: none;" />
+                
+                <!-- 导入双选项卡片组 -->
+                <div class="module-import-options-row" id="module-import-picker-card">
+                  <div class="module-import-option-card" id="module-btn-pick-file">
+                    <div class="module-big-plus-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                      </svg>
+                    </div>
+                    <div class="module-picker-title">导入文件</div>
+                    <div class="module-picker-desc">PDF / Word / TXT</div>
+                  </div>
+
+                  <div class="module-import-option-card" id="module-btn-pick-local">
+                    <div class="module-big-plus-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                      </svg>
+                    </div>
+                    <div class="module-picker-title">历史文件</div>
+                    <div class="module-picker-desc">已上传的原文件列表</div>
+                  </div>
+                </div>
+
+                <!-- 文件解析后展示的信息卡 -->
+                <div class="module-file-info-card" id="module-file-info-card" style="display: none;">
+                  <div class="module-file-header">
+                    <div class="module-file-icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                      </svg>
+                    </div>
+                    <div class="module-file-main">
+                      <div class="module-file-name" id="module-file-name-text">模组文件名.pdf</div>
+                      <div class="module-file-format" id="module-file-format-text">PDF 文档</div>
+                    </div>
+                  </div>
+                  <div class="module-file-stats-row">
+                    <div class="module-stat-cell">
+                      <span class="stat-label">总字数</span>
+                      <span class="stat-value" id="module-stat-words">约 0 字</span>
+                    </div>
+                    <div class="module-stat-cell">
+                      <span class="stat-label">图片提取</span>
+                      <span class="stat-value" id="module-stat-images">0 张</span>
+                    </div>
+                    <div class="module-stat-cell">
+                      <span class="stat-label">预估段数</span>
+                      <span class="stat-value" id="module-stat-chunks">预计 0 段</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 切割提示词编辑框 -->
+                <div class="module-prompt-container" id="module-prompt-container" style="display: none;">
+                  <div class="module-prompt-header">
+                    <span class="module-prompt-title">切割提示词</span>
+                    <span class="module-prompt-sub">可修改补充，用于告诉 AI 如何切割与判断</span>
+                  </div>
+                  <textarea class="module-prompt-textarea" id="module-prompt-textarea" rows="8"></textarea>
+                </div>
+
+                <!-- Step 1 内置操作按钮栏 -->
+                <div class="module-step-actions-bar" id="module-step1-actions-bar" style="display: flex; gap: 8px; margin-top: 10px;">
+                  <button type="button" class="module-btn-secondary" id="module-step1-reselect-btn" style="display: none;">重新选择</button>
+                  <button type="button" class="module-btn-primary" id="module-step1-analyze-btn">开始分析</button>
+                </div>
+              </div>
+
+              <!-- Step 2: 方案确认页 -->
+              <div class="module-step-pane" id="module-step2-pane" style="display: none;">
+                <div class="module-step-desc">AI 已通读全文并完成深度带团重构，你可以切换查看章节、目录与地图</div>
+                <!-- 方案多维度子标签栏 -->
+                <div class="module-step2-tabs" id="module-step2-tabs">
+                  <span class="module-subtab active" data-subtab="chapters">章节</span>
+                  <span class="module-subtab" data-subtab="toc">目录</span>
+                  <span class="module-subtab" data-subtab="map">地图</span>
+                </div>
+                <!-- 章节卡片列表 -->
+                <div class="module-plan-card-list module-subpane" id="module-plan-card-list"></div>
+                <!-- 带团章节目录视图 -->
+                <div class="module-plan-toc-view module-subpane" id="module-plan-toc-view" style="display: none;"></div>
+                <!-- 模组地图层级树视图 -->
+                <div class="module-plan-map-view module-subpane" id="module-plan-map-view" style="display: none;"></div>
+                <!-- 全局修改意见框 -->
+                <div class="module-global-opinion-box" id="module-global-opinion-box">
+                  <div class="module-global-opinion-header">修改意见</div>
+                  <textarea class="module-global-opinion-textarea" id="module-global-opinion-textarea" rows="3" placeholder="在此输入对整体方案的补充调整意见..."></textarea>
+                </div>
+                <!-- Step 2 内置操作按钮栏 -->
+                <div class="module-step-actions-bar" id="module-step2-actions-bar" style="display: flex; gap: 8px; margin-top: 10px;">
+                  <button type="button" class="module-btn-secondary" id="module-step2-prev-btn">上一步</button>
+                  <button type="button" class="module-btn-secondary" id="module-step2-rethink-btn">重新思考</button>
+                  <button type="button" class="module-btn-primary" id="module-step2-cut-btn">切割</button>
+                </div>
+              </div>
+
+              <!-- Step 3: 切割执行页 -->
+              <div class="module-step-pane" id="module-step3-pane" style="display: none;">
+                <div class="module-progress-box">
+                  <div class="module-progress-text" id="module-progress-text">准备开始切割...</div>
+                  <div class="module-progress-track">
+                    <div class="module-progress-bar" id="module-progress-bar" style="width: 0%;"></div>
+                  </div>
+                </div>
+                <div class="module-cut-card-list" id="module-cut-card-list"></div>
+                <!-- 切割完成后的操作栏 -->
+                <div class="module-step3-actions-bar" id="module-step3-actions-bar" style="display: none;">
+                  <button type="button" class="module-btn-secondary" id="module-step3-back-btn">上一步</button>
+                  <button type="button" class="module-btn-secondary" id="module-batch-audit-btn">校验</button>
+                  <button type="button" class="module-btn-secondary" id="module-export-btn">导出文件</button>
+                  <button type="button" class="module-btn-primary" id="module-save-library-btn">存入模组库</button>
+                  <button type="button" class="module-btn-secondary" id="module-finish-btn">完成</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 底部操作按钮栏 (用于 Step 1 & Step 2) -->
+            <div class="module-bottom-action-bar" id="module-bottom-action-bar" style="display: flex;">
+              <!-- 按钮由 JS 动态切换文案与操作 -->
+              <button type="button" class="module-btn-secondary" id="module-secondary-action-btn" style="display: none;">重新选择</button>
+              <button type="button" class="module-btn-secondary" id="module-rethink-action-btn" style="display: none;">重新思考</button>
+              <button type="button" class="module-btn-primary" id="module-primary-action-btn">开始分析</button>
+            </div>
+          </div>
+
+          <!-- 独立模组库面板 -->
+          <div class="module-library-panel" id="module-library-panel" style="display: none;">
+            <div class="module-library-header-actions" style="display: flex; justify-content: flex-end; padding: 4px 14px 0 14px;">
+              <input type="file" id="module-library-file-input" accept=".zip, .txt" style="display: none;" />
+              <button type="button" class="module-mini-btn" id="module-library-import-btn" style="height: 28px; padding: 0 12px; font-weight: 600;">导入模组</button>
+            </div>
+            <div class="module-library-body" id="module-library-body">
+              <div class="module-library-empty" id="module-library-empty">
+                <div class="module-empty-icon">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                    <path d="M6 6h10"></path>
+                    <path d="M6 10h10"></path>
+                  </svg>
+                </div>
+                <div class="module-empty-title">暂无已切割模组</div>
+                <div class="module-empty-desc">支持导入已打包的 ZIP 或 TXT 模组文件</div>
+              </div>
+              <div class="module-library-list" id="module-library-list" style="display: none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 原文查看弹窗 (带剧透提示触发) -->
+        <div class="modal" id="module-raw-preview-modal" style="display: none;">
+          <div class="modal-content" style="max-width: 480px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+              <span style="font-weight: 600; font-size: 15px;" id="module-raw-preview-title">章节原文</span>
+              <span id="module-raw-preview-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">✕</span>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding: 12px 0; font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; color: var(--text-primary);" id="module-raw-preview-body"></div>
+          </div>
+        </div>
+
+        <!-- 模组小章节内容查看弹窗 -->
+        <div class="modal" id="module-chapter-preview-modal" style="display: none;">
+          <div class="modal-content" style="max-width: 480px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+              <span style="font-weight: 600; font-size: 15px;" id="module-preview-modal-title">章节内容</span>
+              <span id="module-preview-modal-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">✕</span>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding: 12px 0; font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; color: var(--text-primary);" id="module-preview-modal-body"></div>
+          </div>
+        </div>
+
+        <!-- AI 审查与修复弹窗 -->
+        <div class="modal" id="module-audit-modal" style="display: none;">
+          <div class="modal-content" style="max-width: 480px; max-height: 85vh; display: flex; flex-direction: column; gap: 10px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+              <span style="font-weight: 600; font-size: 15px;" id="module-audit-modal-title">AI 校验与修复</span>
+              <span id="module-audit-modal-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">✕</span>
+            </div>
+            <div style="flex: 1; overflow-y: auto; font-size: 12px; line-height: 1.6; color: var(--text-primary);" id="module-audit-modal-body">
+              <div id="module-audit-issues-list" style="margin-bottom: 10px;"></div>
+              <div style="font-weight: 600; margin-bottom: 4px;">补充修复意见：</div>
+              <textarea id="module-audit-instruction-input" class="module-prompt-textarea" style="min-height: 60px;" placeholder="在此输入给 AI 的针对性修复要求..."></textarea>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border-color);">
+              <button type="button" class="module-mini-btn" id="module-audit-recheck-btn">重新校验</button>
+              <button type="button" class="module-btn-primary" id="module-audit-fix-btn" style="height: 30px; padding: 0 16px;">执行修复</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 历史已上传文件选择弹窗 -->
+        <div class="modal" id="module-local-pick-modal" style="display: none;">
+          <div class="modal-content" style="max-width: 440px; max-height: 75vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+              <span style="font-weight: 600; font-size: 15px;">历史文件</span>
+              <span id="module-local-pick-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">✕</span>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding: 10px 0; display: flex; flex-direction: column; gap: 8px;" id="module-local-pick-list"></div>
           </div>
         </div>
 
@@ -2084,8 +2306,8 @@
             <span>动态</span>
           </div>
 
-          <div class="nav-item" data-view="memories-view">
-            <span>回忆</span>
+          <div class="nav-item" data-view="modules-view">
+            <span>模组</span>
           </div>
 
           <div class="nav-item" data-view="favorites-view">
@@ -18562,7 +18784,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function initDatabase(userId) {
           // 数据库名带上用户ID，实现每个人数据隔离
           db = new Dexie("GeminiChatDB");
-          db.version(63).stores({
+          db.version(64).stores({
             chats:
               "&id, isGroup, groupId, ownerId, isPinned, characterPhoneData, latestInnerVoice, innerVoiceHistory, loversSpaceData.emotionDiaries, settings.summary, settings.weiboNickname, settings.innerVoiceHideHeaderBorder, settings.innerVoiceAdopterLabelFormat, interactionStats, unlockedSymbols, settings.selectedIntimacyBadge",
             thoughtChainPresets: "++id, name",
@@ -18628,6 +18850,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             auroraBooks: "++id, title, content, addedAt",
             passerbyAvatars: "++id, url",
             clawMachineDolls: "++id, url",
+            modules: "&id, name, type, group, wordCount, status, githubSync, createdAt",
+            moduleChapters: "&id, moduleId, title, category, subCategory, wordCount, hoIndex, isGlobal, sortOrder",
+            moduleGroups: "++id, name, sortOrder",
+            moduleImages: "++id, moduleId, imageIndex, isSensitive",
+            moduleCluePointers: "++id, moduleId, source, target",
+            moduleLocationNav: "++id, moduleId, name, parent, level",
+            moduleHoRoles: "++id, moduleId, hoCode, assignee",
+            moduleConfigs: "&chatId, activeModuleId, switchMode",
+            moduleRawFiles: "&id, fileName, fileType, wordCount, uploadedAt"
           });
           // 到这里加下面三行
           window.db = db;
@@ -19796,7 +20027,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             "messages-view": document.getElementById("messages-view"),
             "qzone-screen": document.getElementById("qzone-screen"),
             "favorites-view": document.getElementById("favorites-view"),
-            "memories-view": document.getElementById("memories-view"), // <-- 新增这一行
+            "modules-view": document.getElementById("modules-view"),
+            "memories-view": document.getElementById("memories-view"),
           };
           const mainHeader = document.getElementById("main-chat-list-header");
           const mainBottomNav = document.getElementById("chat-list-bottom-nav"); // 获取主导航栏
@@ -19806,9 +20038,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           // 隐藏所有视图
-          Object.values(views).forEach((v) => v.classList.remove("active"));
+          Object.values(views).forEach((v) => {
+            if (v && v.classList) {
+              v.classList.remove("active");
+            }
+          });
           // 显示目标视图
-          if (views[viewId]) {
+          if (views[viewId] && views[viewId].classList) {
             views[viewId].classList.add("active");
           }
 
@@ -19819,35 +20055,59 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               item.classList.toggle("active", item.dataset.view === viewId);
             });
 
-          // 统一管理所有UI元素的显隐
-          if (viewId === "messages-view") {
-            mainHeader.style.display = "flex";
+          // 统一管理所有UI元素的显隐：消息页显示主头部，其他页隐藏主头部；底部导航栏常驻显示
+          if (mainHeader) {
+            mainHeader.style.display = viewId === "messages-view" ? "flex" : "none";
+          }
+          if (mainBottomNav) {
             mainBottomNav.style.display = "flex";
-          } else {
-            mainHeader.style.display = "none";
-            mainBottomNav.style.display = "none";
           }
 
-          if (viewId !== "memories-view") {
+          if (viewId !== "memories-view" && typeof activeCountdownTimers !== "undefined" && Array.isArray(activeCountdownTimers)) {
             activeCountdownTimers.forEach((timerId) => clearInterval(timerId));
             activeCountdownTimers = [];
           }
 
           // 根据视图ID执行特定的渲染/更新逻辑
-          switch (viewId) {
-            case "qzone-screen":
-              views["qzone-screen"].style.backgroundColor = "#f0f2f5";
-              updateUnreadIndicator(0);
-              renderQzoneScreen();
-              renderQzonePosts();
-              break;
-            case "favorites-view":
-              views["favorites-view"].style.backgroundColor = "#f9f9f9";
-              renderFavoritesScreen();
-              break;
-            case "messages-view":
-              // 如果需要，可以在这里添加返回消息列表时要执行的逻辑
-              break;
+          try {
+            switch (viewId) {
+              case "qzone-screen":
+                if (views["qzone-screen"]) {
+                  views["qzone-screen"].style.backgroundColor = "#f0f2f5";
+                }
+                if (typeof updateUnreadIndicator === "function") {
+                  updateUnreadIndicator(0);
+                }
+                if (typeof renderQzoneScreen === "function") {
+                  renderQzoneScreen();
+                }
+                if (typeof renderQzonePosts === "function") {
+                  renderQzonePosts();
+                }
+                break;
+              case "favorites-view":
+                if (views["favorites-view"]) {
+                  views["favorites-view"].style.backgroundColor = "#f9f9f9";
+                }
+                if (typeof renderFavoritesScreen === "function") {
+                  renderFavoritesScreen();
+                }
+                break;
+              case "modules-view":
+                if (typeof renderModulesScreen === "function") {
+                  renderModulesScreen();
+                }
+                break;
+              case "memories-view":
+                if (typeof renderMemoriesScreen === "function") {
+                  renderMemoriesScreen();
+                }
+                break;
+              case "messages-view":
+                break;
+            }
+          } catch (viewSwitchErr) {
+            console.error("[切换视图异常]", viewSwitchErr);
           }
         }
 
@@ -49502,96 +49762,161 @@ ${colSpecs.join('\n')}
         }
 
         /**
-         * 处理导入的SillyTavern世界书文件
-         * @param {File} file - 用户选择的JSON文件
+         * 处理导入的世界书文件 (支持 txt, docx, doc, json, jsonl)
+         * @param {File} file - 用户选择的文件
          */
         async function handleImportSillyTavernWorldBook(file) {
-          // 使用FileReader来读取文件内容
-          const reader = new FileReader();
-          reader.onload = async (e) => {
-            try {
-              const text = e.target.result;
+          try {
+            const fileName = file.name.toLowerCase();
+            let categoryName = file.name.replace(/\.[^/.]+$/, "").trim() || "导入的世界书";
+            const newBooks = [];
+
+            if (fileName.endsWith('.json') || fileName.endsWith('.jsonl')) {
+              const text = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsText(file, "UTF-8");
+              });
               const data = JSON.parse(text);
 
-              // 验证文件格式是否正确，确保包含'entries'对象
-              if (!data.entries || typeof data.entries !== "object") {
-                throw new Error(
-                  "文件格式无效。SillyTavern世界书应包含'entries'对象。",
-                );
-              }
-
-              // 从文件名提取名称，作为新的分类名
-              let categoryName = file.name
-                .replace(/\.(json|jsonl)$/i, "")
-                .trim();
-              if (!categoryName) categoryName = "导入的世界书";
-
-              // 检查该分类是否已存在，如果不存在则创建
-              let category = await db.worldBookCategories
-                .where("name")
-                .equals(categoryName)
-                .first();
-              if (!category) {
-                const newCategoryId = await db.worldBookCategories.add({
-                  name: categoryName,
-                });
-                category = { id: newCategoryId, name: categoryName };
-                console.log(
-                  `创建了新的世界书分类: ${categoryName} (ID: ${newCategoryId})`,
-                );
-              } else {
-                console.log(
-                  `将条目添加到已存在的分类: ${categoryName} (ID: ${category.id})`,
-                );
-              }
-
-              const newBooks = [];
-              // 遍历SillyTavern worldbook中的所有条目
-              for (const key in data.entries) {
-                const entry = data.entries[key];
-
-                if (entry) {
-                  // 使用entry.comment作为书名，如果为空则使用"条目 key"作为备用
-                  const entryName = (entry.comment || `条目 ${key}`).trim();
-                  const entryContent = (entry.content || "").trim();
-                  // 确保书名和内容都不为空
-                  if (entryName && entryContent) {
-                    newBooks.push({
-                      id: "wb_" + Date.now() + Math.random(), // 创建唯一ID
-                      name: entryName,
-                      content: entryContent,
-                      categoryId: category.id, // 归属到新的分类
-                    });
+              if (data.entries && typeof data.entries === "object") {
+                for (const key in data.entries) {
+                  const entry = data.entries[key];
+                  if (entry) {
+                    const entryName = (entry.comment || entry.name || `条目 ${key}`).trim();
+                    const entryContent = (entry.content || "").trim();
+                    if (entryName && entryContent) {
+                      newBooks.push({
+                        id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
+                        name: entryName,
+                        content: entryContent,
+                      });
+                    }
                   }
                 }
+              } else if (Array.isArray(data)) {
+                data.forEach((item, idx) => {
+                  const name = item.name || item.title || `条目 ${idx + 1}`;
+                  const content = item.content || item.text || JSON.stringify(item);
+                  if (content) {
+                    newBooks.push({
+                      id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
+                      name: name,
+                      content: content,
+                    });
+                  }
+                });
+              }
+            } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
+              let extractedText = '';
+              const arrayBuffer = await file.arrayBuffer();
+              if (window.mammoth && typeof window.mammoth.extractRawText === 'function') {
+                try {
+                  const result = await window.mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                  extractedText = result.value || '';
+                } catch (mErr) {
+                  console.warn('Mammoth 解析告警', mErr);
+                }
+              }
+              if (!extractedText && window.JSZip) {
+                try {
+                  const zip = await window.JSZip.loadAsync(arrayBuffer);
+                  const docXml = zip.file('word/document.xml');
+                  if (docXml) {
+                    const xmlText = await docXml.async('text');
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                    const paragraphs = xmlDoc.getElementsByTagName('w:p');
+                    const textPieces = [];
+                    for (let i = 0; i < paragraphs.length; i++) {
+                      textPieces.push(paragraphs[i].textContent || '');
+                    }
+                    extractedText = textPieces.join('\n');
+                  }
+                } catch (zErr) {}
               }
 
-              if (newBooks.length === 0) {
-                alert("没有找到任何可导入的有效条目。");
-                return;
+              if (extractedText) {
+                const sections = extractedText.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+                if (sections.length > 1) {
+                  sections.forEach((sec, idx) => {
+                    const firstLine = sec.split('\n')[0].substring(0, 30).trim();
+                    newBooks.push({
+                      id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
+                      name: firstLine || `${categoryName} 章节${idx + 1}`,
+                      content: sec,
+                    });
+                  });
+                } else {
+                  newBooks.push({
+                    id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
+                    name: categoryName,
+                    content: extractedText,
+                  });
+                }
               }
+            } else if (fileName.endsWith('.txt')) {
+              const text = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsText(file, "UTF-8");
+              });
+              const sections = text.split(/\n\s*\n\s*\n/).map(s => s.trim()).filter(Boolean);
+              if (sections.length > 1) {
+                sections.forEach((sec, idx) => {
+                  const firstLine = sec.split('\n')[0].substring(0, 30).trim();
+                  newBooks.push({
+                    id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
+                    name: firstLine || `${categoryName} 节${idx + 1}`,
+                    content: sec,
+                  });
+                });
+              } else {
+                newBooks.push({
+                  id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
+                  name: categoryName,
+                  content: text,
+                });
+              }
+            }
 
-              // 批量将新书添加到数据库，效率更高
-              await db.worldBooks.bulkAdd(newBooks);
-              // 更新内存中的state，以便UI能立即刷新
-              state.worldBooks.push(...newBooks);
+            if (newBooks.length === 0) {
+              if (typeof showCustomAlert === 'function') {
+                showCustomAlert("提示", "没有找到任何可导入的有效条目。");
+              }
+              return;
+            }
 
-              // 重新渲染世界书列表，显示新内容
-              await renderWorldBookScreen();
-              await showCustomAlert(
+            // 获取或创建分类
+            let category = await db.worldBookCategories.where("name").equals(categoryName).first();
+            if (!category) {
+              const newCategoryId = await db.worldBookCategories.add({ name: categoryName });
+              category = { id: newCategoryId, name: categoryName };
+            }
+
+            newBooks.forEach(b => { b.categoryId = category.id; });
+
+            await db.worldBooks.bulkAdd(newBooks);
+            state.worldBooks.push(...newBooks);
+            await renderWorldBookScreen();
+
+            if (typeof showCustomAlert === 'function') {
+              showCustomAlert(
                 "导入成功",
                 `成功将《${categoryName}》中的 ${newBooks.length} 个条目导入到世界书！`,
               );
-            } catch (error) {
-              console.error("导入世界书失败:", error);
-              await showCustomAlert(
+            }
+          } catch (error) {
+            console.warn("导入世界书异常:", error);
+            if (typeof showCustomAlert === 'function') {
+              showCustomAlert(
                 "导入失败",
-                `无法解析文件，请确保它是有效的SillyTavern世界书JSON文件。\n\n错误: ${error.message}`,
+                `无法解析该文件: ${error.message || error}`,
               );
             }
-          };
-          // 以UTF-8编码读取文件内容
-          reader.readAsText(file, "UTF-8");
+          }
         }
 
         // 心声背景更换功能核心函数
@@ -58803,55 +59128,10 @@ ${colSpecs.join('\n')}
 
           document
             .getElementById("import-world-book-btn")
-            .addEventListener("click", async () => {
-              const unlockKey = "isCharacterImportUnlocked";
-
-              // 1. 检查是否已经解锁 (和角色卡导入共用一个解锁状态)
-              if (localStorage.getItem(unlockKey) === "true") {
-                document.getElementById("world-book-import-input").click(); // 直接打开文件选择器
-                return;
-              }
-
-              // 2. 如果未解锁，获取设备码
-              const deviceCode = getDeviceCode();
-
-              // 3. 构建一个包含设备码和输入框的HTML内容 (和角色卡导入的弹窗一样)
-              const modalHtmlContent = `
-			        <p style="margin-bottom: 15px;">请前往取PIN网站，使用下面的设备码获取PIN。</p>
-			        <div style="background: #eee; padding: 10px; border-radius: 6px; margin-bottom: 15px; user-select: all; cursor: copy;" title="点击复制设备码">
-			            <strong>设备码:</strong> <span id="device-code-to-copy">${deviceCode}</span>
-			        </div>
-			        <p id="copy-device-code-feedback" style="height: 15px; font-size: 12px; color: green;"></p>
-			    `;
-
-              // 4. 使用 showCustomPrompt 弹出增强版模态框，让用户输入PIN
-              const userPin = await window.showCustomPrompt(
-                "功能解锁",
-                "请在此输入获取到的PIN码...",
-                "",
-                "text",
-                modalHtmlContent,
-              );
-
-              // 5. 如果用户点击了取消，则直接返回
-              if (userPin === null) return;
-
-              // 6. 验证PIN码
-              const correctPin = generatePinFromDeviceCode(deviceCode);
-              if (userPin.trim().toUpperCase() === correctPin) {
-                localStorage.setItem(unlockKey, "true");
-                await showCustomAlert(
-                  "解锁成功！",
-                  "导入功能已解锁，此设备无需再次输入PIN码。",
-                );
-                // 触发世界书的文件选择器
-                document.getElementById("world-book-import-input").click();
-              } else {
-                await showCustomAlert(
-                  "解锁失败",
-                  "PIN码错误，请重新获取或输入。",
-                );
-              }
+            .addEventListener("click", () => {
+              // 直接打开文件选择器，无需输入密码
+              const inputEl = document.getElementById("world-book-import-input");
+              if (inputEl) inputEl.click();
             });
 
           document
@@ -61579,7 +61859,7 @@ ${colSpecs.join('\n')}
           document
             .getElementById("qzone-back-btn")
             .addEventListener("click", () =>
-              switchToChatListView("messages-view"),
+              showScreen("home-screen"),
             );
           document
             .getElementById("qzone-nickname")
@@ -62456,16 +62736,11 @@ ${colSpecs.join('\n')}
             }
           });
 
-          // 绑定动态页和收藏页的返回按钮
-          document
-            .getElementById("qzone-back-btn")
-            .addEventListener("click", () =>
-              switchToChatListView("messages-view"),
-            );
+          // 绑定动态页和收藏页的返回按钮返回主菜单
           document
             .getElementById("favorites-back-btn")
             .addEventListener("click", () =>
-              switchToChatListView("messages-view"),
+              showScreen("home-screen"),
             );
 
           // 收藏页搜索功能
@@ -63036,25 +63311,36 @@ ${colSpecs.join('\n')}
               }
             });
 
-          // 回忆录相关事件绑定
-          // 1. 将“回忆”页签和它的视图连接起来
-          document
-            .querySelector('.nav-item[data-view="memories-view"]')
-            .addEventListener("click", () => {
-              // 在切换前，确保"收藏"页面的编辑模式已关闭
+          // 模组与回忆相关事件绑定
+          const modulesNavItem = document.querySelector('.nav-item[data-view="modules-view"]');
+          if (modulesNavItem) {
+            modulesNavItem.addEventListener("click", () => {
+              if (isFavoritesSelectionMode) {
+                document.getElementById("favorites-edit-btn").click();
+              }
+              switchToChatListView("modules-view");
+            });
+          }
+
+          const memoriesNavItem = document.querySelector('.nav-item[data-view="memories-view"]');
+          if (memoriesNavItem) {
+            memoriesNavItem.addEventListener("click", () => {
               if (isFavoritesSelectionMode) {
                 document.getElementById("favorites-edit-btn").click();
               }
               switchToChatListView("memories-view");
-              renderMemoriesScreen(); // 点击时渲染
+              if (typeof renderMemoriesScreen === "function") {
+                renderMemoriesScreen();
+              }
             });
+          }
 
-          // 2. 绑定回忆录界面的返回按钮
-          document
-            .getElementById("memories-back-btn")
-            .addEventListener("click", () =>
-              switchToChatListView("messages-view"),
+          const memoriesBackBtn = document.getElementById("memories-back-btn");
+          if (memoriesBackBtn) {
+            memoriesBackBtn.addEventListener("click", () =>
+              showScreen("home-screen"),
             );
+          }
 
           // 约定/倒计时功能事件绑定
           document
@@ -68451,7 +68737,7 @@ ${colSpecs.join('\n')}
     <input
       type="file"
       id="world-book-import-input"
-      accept=".json, .jsonl"
+      accept=".json, .jsonl, .txt, .docx, .doc"
       style="display: none"
     />
     <input type="file" id="ludo-qbank-import-input" accept=".json" hidden />

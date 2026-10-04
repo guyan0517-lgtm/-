@@ -1943,6 +1943,8 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   height: 100%;
   display: flex;
   flex-direction: column;
+  padding-bottom: 54px;
+  box-sizing: border-box;
   opacity: 0;
   visibility: hidden;
   transition:
@@ -30143,6 +30145,884 @@ details[open] .thought-chain-arrow {
 .image-viewer-btn:active {
   transform: scale(0.94);
 }
+
+/* ===================================================================
+ * 模组系统专属视觉规范样式 (Step 1 导入 & Step 2 方案确认)
+ * =================================================================== */
+#modules-view {
+  background-color: var(--background-color, #FAF8F4);
+  color: var(--text-primary, #2A2A2A);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.module-wizard-panel,
+.module-library-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 顶部居中文本切换栏 (无外圆框) */
+.module-header-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex: 1;
+}
+
+.module-header-tab {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-secondary, #8A8A8A);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  padding: 6px 4px;
+  user-select: none;
+}
+
+.module-header-tab:hover {
+  color: var(--text-primary, #2A2A2A);
+}
+
+.module-header-tab.active {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary, #2A2A2A);
+}
+
+.module-header-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  right: 10%;
+  height: 2.5px;
+  background-color: var(--accent-color, #4A7A68);
+  border-radius: 2px;
+}
+
+/* 步骤指示器 */
+.module-wizard-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background-color: var(--card-bg, #FFFFFF);
+  border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wizard-step-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary, #8A8A8A);
+  transition: all 0.2s ease;
+}
+
+.wizard-step-item .step-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: var(--secondary-bg, #F0EFEA);
+  color: var(--text-secondary, #8A8A8A);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wizard-step-item.active {
+  color: var(--accent-color, #4A7A68);
+  font-weight: 600;
+}
+
+.wizard-step-item.active .step-num {
+  background-color: var(--accent-color, #4A7A68);
+  color: #FFFFFF;
+}
+
+.wizard-step-item.completed .step-num {
+  background-color: var(--accent-color, #4A7A68);
+  color: #FFFFFF;
+}
+
+.wizard-step-line {
+  flex: 1;
+  max-width: 24px;
+  height: 1.5px;
+  background-color: var(--border-color, rgba(0, 0, 0, 0.08));
+}
+
+/* 步骤主体内容区 */
+.module-view-body,
+.module-library-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.module-step-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.module-step-desc {
+  font-size: 12px;
+  color: var(--text-secondary, #8A8A8A);
+  line-height: 1.5;
+  padding: 2px 4px;
+}
+
+/* 大加号选择文件卡片 */
+.module-import-picker-card {
+  background-color: var(--card-bg, #FFFFFF);
+  border: 1.5px dashed var(--border-color, rgba(0, 0, 0, 0.15));
+  border-radius: 14px;
+  padding: 36px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.module-import-picker-card:active {
+  transform: scale(0.98);
+  background-color: var(--secondary-bg, #F9F8F5);
+}
+
+.module-import-options-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.module-import-option-card {
+  flex: 1;
+  background-color: var(--card-bg, #FFFFFF);
+  border: 2px dashed var(--border-color, rgba(0, 0, 0, 0.12));
+  border-radius: 16px;
+  padding: 30px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.module-import-option-card:hover {
+  border-color: var(--accent-color, #4A7A68);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(74, 122, 104, 0.1);
+}
+
+.module-big-plus-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--secondary-bg, #F0EFEA);
+  color: var(--accent-color, #4A7A68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.module-picker-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+  margin-bottom: 3px;
+}
+
+.module-picker-desc {
+  font-size: 11px;
+  color: var(--text-secondary, #8A8A8A);
+}
+
+/* 文件信息卡 */
+.module-file-info-card {
+  background-color: var(--card-bg, #FFFFFF);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.module-file-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.module-file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background-color: var(--secondary-bg, #F0EFEA);
+  color: var(--accent-color, #4A7A68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.module-file-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.module-file-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-file-format {
+  font-size: 11px;
+  color: var(--text-secondary, #8A8A8A);
+  margin-top: 2px;
+}
+
+.module-file-stats-row {
+  display: flex;
+  background-color: var(--secondary-bg, #F9F8F5);
+  border-radius: 10px;
+  padding: 8px 10px;
+  justify-content: space-around;
+}
+
+.module-stat-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.module-stat-cell .stat-label {
+  font-size: 10px;
+  color: var(--text-secondary, #8A8A8A);
+}
+
+.module-stat-cell .stat-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+}
+
+/* 切割提示词编辑框 */
+.module-prompt-container {
+  background-color: var(--card-bg, #FFFFFF);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.module-prompt-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.module-prompt-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+}
+
+.module-prompt-sub {
+  font-size: 11px;
+  color: var(--text-secondary, #8A8A8A);
+}
+
+.module-prompt-textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  background-color: var(--secondary-bg, #F9F8F5);
+  color: var(--text-primary, #2A2A2A);
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 120px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.module-prompt-textarea:focus {
+  outline: none;
+  border-color: var(--accent-color, #4A7A68);
+  background-color: #FFFFFF;
+}
+
+/* ===================================================================
+ * Step 2: 方案折叠卡片与多维度视图 (章节 / 目录 / 地图 / 线索)
+ * =================================================================== */
+.module-step2-tabs {
+  display: flex;
+  gap: 8px;
+  background-color: var(--secondary-bg, #F0EFEA);
+  padding: 3px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.module-subtab {
+  flex: 1;
+  text-align: center;
+  padding: 5px 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #8A8A8A);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.module-subtab.active {
+  background-color: var(--card-bg, #FFFFFF);
+  color: var(--text-primary, #2A2A2A);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 目录视图卡片 */
+.module-plan-toc-view,
+.module-plan-map-view,
+.module-plan-clues-view {
+  background-color: var(--card-bg, #FFFFFF);
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.module-toc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.module-toc-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-color, #4A7A68);
+  border-left: 3px solid var(--accent-color, #4A7A68);
+  padding-left: 6px;
+}
+
+.module-toc-section-content {
+  color: var(--text-primary, #2A2A2A);
+  padding-left: 9px;
+}
+
+/* 地图层级树 */
+.module-map-node {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background-color: var(--secondary-bg, #F9F8F5);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent-color, #4A7A68);
+}
+
+.module-map-node.level-2 {
+  margin-left: 14px;
+  border-left-color: #8E7D6B;
+}
+
+.module-map-node.level-3 {
+  margin-left: 28px;
+  border-left-color: #6A8E7D;
+}
+
+.module-map-node-title {
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.module-map-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background-color: rgba(74, 122, 104, 0.1);
+  color: var(--accent-color, #4A7A68);
+}
+
+.module-map-node-desc {
+  font-size: 11.5px;
+  color: var(--text-secondary, #8A8A8A);
+}
+
+/* 线索关系卡片 */
+.module-clue-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  background-color: var(--secondary-bg, #F9F8F5);
+  border-radius: 8px;
+}
+
+.module-clue-flow {
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.module-clue-desc {
+  font-size: 11.5px;
+  color: var(--text-secondary, #8A8A8A);
+}
+
+.module-plan-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.module-plan-card {
+  background-color: var(--card-bg, #FFFFFF);
+  border-radius: 14px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.module-plan-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.module-plan-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.module-plan-index-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-color, #4A7A68);
+  background-color: var(--secondary-bg, #F0EFEA);
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.module-plan-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-plan-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.module-plan-words {
+  font-size: 11px;
+  color: var(--text-secondary, #8A8A8A);
+}
+
+.module-plan-tag {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background-color: var(--secondary-bg, #F0EFEA);
+  color: var(--accent-color, #4A7A68);
+  font-weight: 500;
+}
+
+.module-plan-chevron {
+  color: var(--text-secondary, #8A8A8A);
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+}
+
+.module-plan-card.expanded .module-plan-chevron {
+  transform: rotate(180deg);
+}
+
+.module-plan-card-body {
+  display: none;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
+  background-color: var(--card-bg, #FFFFFF);
+  flex-direction: column;
+  gap: 10px;
+}
+
+.module-plan-card.expanded .module-plan-card-body {
+  display: flex;
+}
+
+.module-preview-box {
+  background-color: var(--secondary-bg, #F9F8F5);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary, #666666);
+}
+
+.module-preview-label {
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+}
+
+.module-reason-box {
+  font-size: 11px;
+  color: var(--text-primary, #2A2A2A);
+  line-height: 1.5;
+  background-color: rgba(74, 122, 104, 0.05);
+  border-left: 3px solid var(--accent-color, #4A7A68);
+  padding: 6px 10px;
+  border-radius: 0 8px 8px 0;
+}
+
+.module-tuning-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.module-tuning-input {
+  width: 100%;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  background-color: var(--secondary-bg, #F9F8F5);
+  color: var(--text-primary, #2A2A2A);
+  padding: 0 10px;
+  font-size: 12px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.module-tuning-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #4A7A68);
+  background-color: #FFFFFF;
+}
+
+.module-card-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.module-mini-btn {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  background-color: var(--secondary-bg, #F0EFEA);
+  color: var(--text-primary, #2A2A2A);
+  transition: all 0.2s ease;
+}
+
+.module-mini-btn:hover {
+  background-color: var(--border-color, #E2DFD8);
+}
+
+.module-mini-btn.btn-danger {
+  color: #D32F2F;
+}
+
+/* 全局修改意见框 */
+.module-global-opinion-box {
+  background-color: var(--card-bg, #FFFFFF);
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.module-global-opinion-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+}
+
+.module-global-opinion-textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  background-color: var(--secondary-bg, #F9F8F5);
+  color: var(--text-primary, #2A2A2A);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 60px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.module-global-opinion-textarea:focus {
+  outline: none;
+  border-color: var(--accent-color, #4A7A68);
+  background-color: #FFFFFF;
+}
+
+/* 底部紧凑型操作按钮栏 (缩小二分之一) */
+.module-bottom-action-bar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 6px 14px;
+  background-color: var(--card-bg, #FFFFFF);
+  border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+}
+
+.module-btn-primary {
+  flex: 2;
+  height: 32px;
+  border-radius: 9999px;
+  background-color: var(--accent-color, #4A7A68);
+  color: #FFFFFF;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 4px rgba(74, 122, 104, 0.2);
+}
+
+.module-btn-primary:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.module-btn-secondary {
+  flex: 1;
+  height: 32px;
+  border-radius: 9999px;
+  background-color: var(--secondary-bg, #F0EFEA);
+  color: var(--text-primary, #2A2A2A);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.module-btn-secondary:active {
+  transform: scale(0.98);
+  background-color: var(--border-color, #E2DFD8);
+}
+
+/* 模组库面板空状态 */
+.module-library-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.module-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: var(--secondary-bg, #F0EFEA);
+  color: var(--text-secondary, #8A8A8A);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.module-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+  margin-bottom: 4px;
+}
+
+.module-empty-desc {
+  font-size: 12px;
+  color: var(--text-secondary, #8A8A8A);
+}
+
+/* ===================================================================
+ * Step 3: 切割执行与完成样式
+ * =================================================================== */
+.module-progress-box {
+  background-color: var(--card-bg, #FFFFFF);
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.module-progress-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+}
+
+.module-progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: var(--secondary-bg, #F0EFEA);
+  overflow: hidden;
+}
+
+.module-progress-bar {
+  height: 100%;
+  border-radius: 9999px;
+  background-color: var(--accent-color, #4A7A68);
+  transition: width 0.3s ease;
+}
+
+.module-cut-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.module-cut-card {
+  background-color: var(--card-bg, #FFFFFF);
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.3s ease;
+}
+
+.module-cut-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.module-cut-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+}
+
+.module-cut-card-status {
+  color: var(--accent-color, #4A7A68);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.module-cut-card-stats {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-secondary, #8A8A8A);
+  background-color: var(--secondary-bg, #F9F8F5);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.module-cut-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.module-step3-actions-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+
+
 
 
 
