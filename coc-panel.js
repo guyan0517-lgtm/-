@@ -175,58 +175,65 @@ class CocPanel {
   render() {
     this.container.innerHTML = `
       <div class="coc-panel-wrapper">
-        <div class="coc-panel-header">
-          <span class="coc-panel-title">面板</span>
-          <span class="coc-total-badge">总加点数: <span class="coc-top-points">0</span></span>
+        <div class="coc-panel-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="coc-panel-title">面板</span>
+            <span class="coc-total-badge">总加点数: <span class="coc-top-points">0</span></span>
+          </div>
+          <svg class="coc-panel-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); transition: transform 0.2s ease; transform: rotate(-90deg); flex-shrink: 0;">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <div class="coc-section-label" style="margin-bottom: 0;">属性</div>
-          <button type="button" class="moe-btn-mini coc-download-btn" title="导入" style="flex: 0 0 auto !important; width: 24px !important; min-width: 24px !important; height: 20px !important; min-height: 20px !important; padding: 0 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; border-radius: 6px; cursor: pointer; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary);">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="coc-stats-grid">
-          <div class="coc-stat-item"><label>力量</label><input type="number" class="coc-stat-input" data-stat="str" value="50" min="0" max="999"></div>
-          <div class="coc-stat-item"><label>敏捷</label><input type="number" class="coc-stat-input" data-stat="dex" value="50" min="0" max="999"></div>
-          <div class="coc-stat-item"><label>体质</label><input type="number" class="coc-stat-input" data-stat="con" value="50" min="0" max="999"></div>
-          <div class="coc-stat-item"><label>意志</label><input type="number" class="coc-stat-input" data-stat="pow" value="50" min="0" max="999"></div>
-          <div class="coc-stat-item"><label>体型</label><input type="number" class="coc-stat-input" data-stat="siz" value="50" min="0" max="999"></div>
-          <div class="coc-stat-item"><label>教育</label><input type="number" class="coc-stat-input" data-stat="edu" value="50" min="0" max="999"></div>
-          <div class="coc-stat-item"><label>外貌</label><input type="number" class="coc-stat-input" data-stat="app" value="50" min="0" max="999"></div>
-          <div class="coc-stat-item"><label>智力</label><input type="number" class="coc-stat-input" data-stat="int" value="50" min="0" max="999"></div>
-          <div class="coc-stat-item"><label>幸运</label><input type="number" class="coc-stat-input" data-stat="luk" value="50" min="0" max="999"></div>
-        </div>
+        <div class="coc-panel-body" style="display: none; margin-top: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div class="coc-section-label" style="margin-bottom: 0;">属性</div>
+            <button type="button" class="moe-btn-mini coc-download-btn" title="导入" style="flex: 0 0 auto !important; width: 24px !important; min-width: 24px !important; height: 20px !important; min-height: 20px !important; padding: 0 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; border-radius: 6px; cursor: pointer; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="coc-stats-grid">
+            <div class="coc-stat-item"><label>力量</label><input type="number" class="coc-stat-input" data-stat="str" value="50" min="0" max="999"></div>
+            <div class="coc-stat-item"><label>敏捷</label><input type="number" class="coc-stat-input" data-stat="dex" value="50" min="0" max="999"></div>
+            <div class="coc-stat-item"><label>体质</label><input type="number" class="coc-stat-input" data-stat="con" value="50" min="0" max="999"></div>
+            <div class="coc-stat-item"><label>意志</label><input type="number" class="coc-stat-input" data-stat="pow" value="50" min="0" max="999"></div>
+            <div class="coc-stat-item"><label>体型</label><input type="number" class="coc-stat-input" data-stat="siz" value="50" min="0" max="999"></div>
+            <div class="coc-stat-item"><label>教育</label><input type="number" class="coc-stat-input" data-stat="edu" value="50" min="0" max="999"></div>
+            <div class="coc-stat-item"><label>外貌</label><input type="number" class="coc-stat-input" data-stat="app" value="50" min="0" max="999"></div>
+            <div class="coc-stat-item"><label>智力</label><input type="number" class="coc-stat-input" data-stat="int" value="50" min="0" max="999"></div>
+            <div class="coc-stat-item"><label>幸运</label><input type="number" class="coc-stat-input" data-stat="luk" value="50" min="0" max="999"></div>
+          </div>
 
-        <div class="coc-section-label">数值</div>
-        <div class="coc-values-grid">
-          <div class="coc-value-item">
-            <div class="coc-value-label">HP</div>
-            <div class="coc-value-num coc-val-hp">10/10</div>
+          <div class="coc-section-label">数值</div>
+          <div class="coc-values-grid">
+            <div class="coc-value-item">
+              <div class="coc-value-label">HP</div>
+              <div class="coc-value-num coc-val-hp">10/10</div>
+            </div>
+            <div class="coc-value-item">
+              <div class="coc-value-label">MP</div>
+              <div class="coc-value-num coc-val-mp">10/10</div>
+            </div>
+            <div class="coc-value-item">
+              <div class="coc-value-label">SAN</div>
+              <div class="coc-value-num coc-val-san">50/99</div>
+            </div>
+            <div class="coc-value-item">
+              <div class="coc-value-label">DB</div>
+              <div class="coc-value-num coc-val-db">0</div>
+            </div>
           </div>
-          <div class="coc-value-item">
-            <div class="coc-value-label">MP</div>
-            <div class="coc-value-num coc-val-mp">10/10</div>
-          </div>
-          <div class="coc-value-item">
-            <div class="coc-value-label">SAN</div>
-            <div class="coc-value-num coc-val-san">50/99</div>
-          </div>
-          <div class="coc-value-item">
-            <div class="coc-value-label">DB</div>
-            <div class="coc-value-num coc-val-db">0</div>
-          </div>
-        </div>
 
-        <button type="button" class="moe-btn-secondary coc-open-skills-modal-btn" style="width: 100%; margin: 6px 0;">技能面板</button>
-        <div class="form-group coc-rulebook-group" style="margin-top: 6px; margin-bottom: 2px;">
-          <label style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; display: block;">规则</label>
-          <select class="moe-input coc-rulebook-select" style="width: 100%; font-size: 11px; padding: 4px 6px; border-radius: 6px; color: var(--text-primary); background-color: var(--secondary-bg);">
-          </select>
+          <button type="button" class="moe-btn-secondary coc-open-skills-modal-btn" style="width: 100%; margin: 6px 0;">技能面板</button>
+          <div class="form-group coc-rulebook-group" style="margin-top: 6px; margin-bottom: 2px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; display: block;">规则</label>
+            <select class="moe-input coc-rulebook-select" style="width: 100%; font-size: 11px; padding: 4px 6px; border-radius: 6px; color: var(--text-primary); background-color: var(--secondary-bg);">
+            </select>
+          </div>
         </div>
       </div>
     `;
@@ -236,6 +243,19 @@ class CocPanel {
   }
 
   bindEvents() {
+    const header = this.container.querySelector(".coc-panel-header");
+    const body = this.container.querySelector(".coc-panel-body");
+    const arrow = this.container.querySelector(".coc-panel-arrow");
+    if (header && body) {
+      header.addEventListener("click", () => {
+        const isHidden = body.style.display === "none";
+        body.style.display = isHidden ? "block" : "none";
+        if (arrow) {
+          arrow.style.transform = isHidden ? "rotate(0deg)" : "rotate(-90deg)";
+        }
+      });
+    }
+
     const downloadBtn = this.container.querySelector(".coc-download-btn");
     if (downloadBtn) {
       downloadBtn.addEventListener("click", (e) => {

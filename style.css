@@ -30089,9 +30089,9 @@ details[open] .thought-chain-arrow {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.88);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 .image-viewer-container {
@@ -30107,20 +30107,17 @@ details[open] .thought-chain-arrow {
 
 #image-viewer-img {
   max-width: 92vw;
-  max-height: 78vh;
+  max-height: 85vh;
   object-fit: contain;
   border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   user-select: none;
   -webkit-user-drag: none;
   transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .image-viewer-toolbar {
-  margin-top: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: none !important;
 }
 
 .image-viewer-btn {
