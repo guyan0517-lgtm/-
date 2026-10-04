@@ -2149,19 +2149,23 @@
                   </div>
                 </div>
 
-                <!-- 切割提示词编辑框 -->
+                <!-- 切割提示词编辑框与预设栏 -->
                 <div class="module-prompt-container" id="module-prompt-container" style="display: none;">
                   <div class="module-prompt-header">
                     <span class="module-prompt-title">切割提示词</span>
-                    <span class="module-prompt-sub">可修改补充，用于告诉 AI 如何切割与判断</span>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 10px;">
+                    <select id="module-prompt-preset-select" class="moe-input" style="width: 100%; height: 34px; line-height: 24px; padding: 4px 8px; font-size: 13px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
+                      <option value="">选择预设</option>
+                    </select>
+                    <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+                      <button type="button" id="module-preset-default-btn" class="summary-preset-btn">默认</button>
+                      <button type="button" id="module-preset-new-btn" class="summary-preset-btn">新建</button>
+                      <button type="button" id="module-preset-save-btn" class="summary-preset-btn">保存</button>
+                      <button type="button" id="module-preset-delete-btn" class="summary-preset-btn">删除</button>
+                    </div>
                   </div>
                   <textarea class="module-prompt-textarea" id="module-prompt-textarea" rows="8"></textarea>
-                </div>
-
-                <!-- Step 1 内置操作按钮栏 -->
-                <div class="module-step-actions-bar" id="module-step1-actions-bar" style="display: flex; gap: 8px; margin-top: 10px;">
-                  <button type="button" class="module-btn-secondary" id="module-step1-reselect-btn" style="display: none;">重新选择</button>
-                  <button type="button" class="module-btn-primary" id="module-step1-analyze-btn">开始分析</button>
                 </div>
               </div>
 
@@ -2193,12 +2197,6 @@
                   <div class="module-global-opinion-header">修改意见</div>
                   <textarea class="module-global-opinion-textarea" id="module-global-opinion-textarea" rows="3" placeholder="在此输入对整体方案的补充调整意见..."></textarea>
                 </div>
-                <!-- Step 2 内置操作按钮栏 -->
-                <div class="module-step-actions-bar" id="module-step2-actions-bar" style="display: flex; gap: 8px; margin-top: 10px;">
-                  <button type="button" class="module-btn-secondary" id="module-step2-prev-btn">上一步</button>
-                  <button type="button" class="module-btn-secondary" id="module-step2-rethink-btn">重新思考</button>
-                  <button type="button" class="module-btn-primary" id="module-step2-cut-btn">切割</button>
-                </div>
               </div>
 
               <!-- Step 3: 切割执行页 -->
@@ -2207,7 +2205,6 @@
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                     <div class="module-progress-text" id="module-progress-text">准备开始切割...</div>
                     <div class="module-progress-ctrls" style="display: flex; gap: 6px;">
-                      <button type="button" class="module-mini-btn" id="module-progress-plan-btn">方案</button>
                       <button type="button" class="module-mini-btn" id="module-pause-btn" style="display: none;">暂停</button>
                       <button type="button" class="module-mini-btn" id="module-resume-btn" style="display: none;">继续</button>
                       <button type="button" class="module-mini-btn btn-danger" id="module-cancel-btn" style="display: none;">取消</button>
@@ -2218,23 +2215,20 @@
                   </div>
                 </div>
                 <div class="module-cut-card-list" id="module-cut-card-list"></div>
-                <!-- 切割完成后的操作栏 -->
-                <div class="module-step3-actions-bar" id="module-step3-actions-bar" style="display: none;">
-                  <button type="button" class="module-btn-secondary" id="module-step3-back-btn">上一步</button>
-                  <button type="button" class="module-btn-secondary" id="module-batch-audit-btn">校验</button>
-                  <button type="button" class="module-btn-secondary" id="module-export-btn">导出文件</button>
-                  <button type="button" class="module-btn-primary" id="module-save-library-btn">存入模组库</button>
-                  <button type="button" class="module-btn-secondary" id="module-finish-btn">完成</button>
-                </div>
               </div>
             </div>
 
-            <!-- 底部操作按钮栏 (用于 Step 1 & Step 2) -->
+            <!-- 底部操作按钮栏 -->
             <div class="module-bottom-action-bar" id="module-bottom-action-bar" style="display: flex;">
               <!-- 按钮由 JS 动态切换文案与操作 -->
               <button type="button" class="module-btn-secondary" id="module-secondary-action-btn" style="display: none;">重新选择</button>
               <button type="button" class="module-btn-secondary" id="module-rethink-action-btn" style="display: none;">重新思考</button>
               <button type="button" class="module-btn-primary" id="module-primary-action-btn">开始分析</button>
+              <button type="button" class="module-btn-secondary" id="module-step3-back-btn" style="display: none;">上一步</button>
+              <button type="button" class="module-btn-secondary" id="module-batch-audit-btn" style="display: none;">校验</button>
+              <button type="button" class="module-btn-secondary" id="module-export-btn" style="display: none;">导出</button>
+              <button type="button" class="module-btn-primary" id="module-save-library-btn" style="display: none;">存入</button>
+              <button type="button" class="module-btn-secondary" id="module-finish-btn" style="display: none;">完成</button>
             </div>
           </div>
 
@@ -20974,6 +20968,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               userWalletTransactions,
               userStickerCategories,
               thoughtChainPresets,
+              modules,
+              moduleChapters,
+              moduleGroups,
+              moduleImages,
+              moduleCluePointers,
+              moduleLocationNav,
+              moduleHoRoles,
+              moduleConfigs,
+              moduleRawFiles,
             ] = await Promise.all([
               db.chats.toArray(),
               db.worldBooks.toArray(),
@@ -21013,6 +21016,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               db.userWalletTransactions.toArray(),
               db.userStickerCategories.toArray(),
               db.thoughtChainPresets ? db.thoughtChainPresets.toArray() : Promise.resolve([]),
+              db.modules ? db.modules.toArray() : Promise.resolve([]),
+              db.moduleChapters ? db.moduleChapters.toArray() : Promise.resolve([]),
+              db.moduleGroups ? db.moduleGroups.toArray() : Promise.resolve([]),
+              db.moduleImages ? db.moduleImages.toArray() : Promise.resolve([]),
+              db.moduleCluePointers ? db.moduleCluePointers.toArray() : Promise.resolve([]),
+              db.moduleLocationNav ? db.moduleLocationNav.toArray() : Promise.resolve([]),
+              db.moduleHoRoles ? db.moduleHoRoles.toArray() : Promise.resolve([]),
+              db.moduleConfigs ? db.moduleConfigs.toArray() : Promise.resolve([]),
+              db.moduleRawFiles ? db.moduleRawFiles.toArray() : Promise.resolve([]),
             ]);
 
             Object.assign(backupData, {
@@ -21054,6 +21066,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               userWalletTransactions,
               userStickerCategories,
               thoughtChainPresets,
+              modules,
+              moduleChapters,
+              moduleGroups,
+              moduleImages,
+              moduleCluePointers,
+              moduleLocationNav,
+              moduleHoRoles,
+              moduleConfigs,
+              moduleRawFiles,
+              modulePromptPresets: typeof getModulePromptPresets === "function" ? getModulePromptPresets() : JSON.parse(localStorage.getItem("coc_module_prompt_presets") || "[]"),
+              moduleDefaultPresetId: localStorage.getItem("coc_module_default_preset_id") || "",
+              moduleDraftState: localStorage.getItem("coc_module_draft_state_v1") || "",
               novelaiSettings: {
                 enabled: localStorage.getItem("novelai-enabled"),
                 model: localStorage.getItem("novelai-model"),
@@ -21220,6 +21244,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             userWalletTransactions,
             userStickerCategories,
             thoughtChainPresets,
+            modules,
+            moduleChapters,
+            moduleGroups,
+            moduleImages,
+            moduleCluePointers,
+            moduleLocationNav,
+            moduleHoRoles,
+            moduleConfigs,
+            moduleRawFiles,
           ] = await Promise.all([
             db.chats.toArray(),
             db.worldBooks.toArray(),
@@ -21259,6 +21292,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             db.userWalletTransactions.toArray(),
             db.userStickerCategories.toArray(),
             db.thoughtChainPresets ? db.thoughtChainPresets.toArray() : Promise.resolve([]),
+            db.modules ? db.modules.toArray() : Promise.resolve([]),
+            db.moduleChapters ? db.moduleChapters.toArray() : Promise.resolve([]),
+            db.moduleGroups ? db.moduleGroups.toArray() : Promise.resolve([]),
+            db.moduleImages ? db.moduleImages.toArray() : Promise.resolve([]),
+            db.moduleCluePointers ? db.moduleCluePointers.toArray() : Promise.resolve([]),
+            db.moduleLocationNav ? db.moduleLocationNav.toArray() : Promise.resolve([]),
+            db.moduleHoRoles ? db.moduleHoRoles.toArray() : Promise.resolve([]),
+            db.moduleConfigs ? db.moduleConfigs.toArray() : Promise.resolve([]),
+            db.moduleRawFiles ? db.moduleRawFiles.toArray() : Promise.resolve([]),
           ]);
 
           // 组装数据
@@ -21301,6 +21343,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             userWalletTransactions,
             userStickerCategories,
             thoughtChainPresets,
+            modules,
+            moduleChapters,
+            moduleGroups,
+            moduleImages,
+            moduleCluePointers,
+            moduleLocationNav,
+            moduleHoRoles,
+            moduleConfigs,
+            moduleRawFiles,
+            modulePromptPresets: typeof getModulePromptPresets === "function" ? getModulePromptPresets() : JSON.parse(localStorage.getItem("coc_module_prompt_presets") || "[]"),
+            moduleDefaultPresetId: localStorage.getItem("coc_module_default_preset_id") || "",
+            moduleDraftState: localStorage.getItem("coc_module_draft_state_v1") || "",
             novelaiSettings: {
               enabled: localStorage.getItem("novelai-enabled"),
               model: localStorage.getItem("novelai-model"),
@@ -21775,6 +21829,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 "fontPresets",
                 "homeScreenPresets",
                 "thoughtChainPresets",
+                "modules",
+                "moduleChapters",
+                "moduleGroups",
+                "moduleImages",
+                "moduleCluePointers",
+                "moduleLocationNav",
+                "moduleHoRoles",
+                "moduleConfigs",
+                "moduleRawFiles",
               ];
 
               // 世界书格式兼容转换代码
@@ -21866,6 +21929,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       : data.novelaiSettings.settings
                   );
                 }
+              }
+
+              if (data.modulePromptPresets && Array.isArray(data.modulePromptPresets)) {
+                localStorage.setItem("coc_module_prompt_presets", JSON.stringify(data.modulePromptPresets));
+              }
+              if (data.moduleDefaultPresetId) {
+                localStorage.setItem("coc_module_default_preset_id", data.moduleDefaultPresetId);
+              }
+              if (data.moduleDraftState) {
+                localStorage.setItem(
+                  "coc_module_draft_state_v1",
+                  typeof data.moduleDraftState === "object"
+                    ? JSON.stringify(data.moduleDraftState)
+                    : data.moduleDraftState
+                );
               }
             });
 
@@ -52115,6 +52193,21 @@ ${colSpecs.join('\n')}
                 "bubbleStylePresets",
               ],
             },
+            {
+              id: "modules",
+              name: "跑团模组数据 (模组库/章节/预设)",
+              tables: [
+                "modules",
+                "moduleChapters",
+                "moduleGroups",
+                "moduleImages",
+                "moduleCluePointers",
+                "moduleLocationNav",
+                "moduleHoRoles",
+                "moduleConfigs",
+                "moduleRawFiles",
+              ],
+            },
           ];
 
           appsToExport.forEach((app) => {
@@ -52261,6 +52354,19 @@ ${colSpecs.join('\n')}
                   "bubbleStylePresets",
                 ],
               },
+              modules: {
+                tables: [
+                  "modules",
+                  "moduleChapters",
+                  "moduleGroups",
+                  "moduleImages",
+                  "moduleCluePointers",
+                  "moduleLocationNav",
+                  "moduleHoRoles",
+                  "moduleConfigs",
+                  "moduleRawFiles",
+                ],
+              },
             };
 
             // 1. 导出选中的App数据
@@ -52396,6 +52502,7 @@ ${colSpecs.join('\n')}
                 charStickers: "角色通用表情包",
                 gameData: "游戏大厅数据",
                 appearance: "通用外观预设",
+                modules: "跑团模组数据",
               };
               if (item.startsWith("character_")) {
                 const charId = item.replace("character_", "");
@@ -59616,6 +59723,8 @@ ${colSpecs.join('\n')}
             "chat-settings-modal",
           );
           const worldBookSelectBox = document.querySelector(
+            "#world-book-link-group .select-box",
+          ) || document.querySelector(
             ".custom-multiselect .select-box",
           );
           const worldBookCheckboxesContainer = document.getElementById(
@@ -59623,36 +59732,49 @@ ${colSpecs.join('\n')}
           );
 
           function updateWorldBookSelectionDisplay() {
+            if (!worldBookCheckboxesContainer) return;
             const checkedBoxes =
-              worldBookCheckboxesContainer.querySelectorAll("input:checked");
+              worldBookCheckboxesContainer.querySelectorAll("input.wb-book-checkbox:checked");
             const displayText = document.querySelector(
+              "#world-book-link-group .selected-options-text",
+            ) || document.querySelector(
               ".selected-options-text",
             );
+            if (!displayText) return;
             if (checkedBoxes.length === 0) {
               displayText.textContent = "-- 点击选择 --";
             } else if (checkedBoxes.length > 2) {
               displayText.textContent = `已选择 ${checkedBoxes.length} 项`;
             } else {
               displayText.textContent = Array.from(checkedBoxes)
-                .map((cb) => cb.parentElement.textContent.trim())
+                .map((cb) => {
+                  const nameSpan = cb.parentElement ? cb.parentElement.querySelector(".wb-book-name") : null;
+                  return nameSpan ? nameSpan.textContent.trim() : cb.parentElement.textContent.trim();
+                })
                 .join(", ");
             }
           }
 
-          worldBookSelectBox.addEventListener("click", (e) => {
-            e.stopPropagation();
-            worldBookCheckboxesContainer.classList.toggle("visible");
-            worldBookSelectBox.classList.toggle("expanded");
-          });
-          document
-            .getElementById("world-book-checkboxes-container")
-            .addEventListener("change", updateWorldBookSelectionDisplay);
+          if (worldBookSelectBox && worldBookCheckboxesContainer) {
+            worldBookSelectBox.addEventListener("click", (e) => {
+              e.stopPropagation();
+              worldBookCheckboxesContainer.classList.toggle("visible");
+              worldBookSelectBox.classList.toggle("expanded");
+            });
+            worldBookCheckboxesContainer.addEventListener("click", (e) => {
+              e.stopPropagation();
+            });
+          }
+
+          if (worldBookCheckboxesContainer) {
+            worldBookCheckboxesContainer.addEventListener("change", updateWorldBookSelectionDisplay);
+          }
+
           window.addEventListener("click", (e) => {
-            if (
-              !document.querySelector(".custom-multiselect").contains(e.target)
-            ) {
-              worldBookCheckboxesContainer.classList.remove("visible");
-              worldBookSelectBox.classList.remove("expanded");
+            const multiselect = document.querySelector("#world-book-link-group .custom-multiselect") || document.querySelector(".custom-multiselect");
+            if (multiselect && !multiselect.contains(e.target)) {
+              if (worldBookCheckboxesContainer) worldBookCheckboxesContainer.classList.remove("visible");
+              if (worldBookSelectBox) worldBookSelectBox.classList.remove("expanded");
             }
           });
 
@@ -60439,6 +60561,16 @@ ${colSpecs.join('\n')}
                   // 默认将所有文件夹设置为折叠状态，保持界面整洁
                   header.classList.add("collapsed");
                   bookContainer.classList.add("collapsed");
+
+                  header.onclick = (e) => {
+                    if (e.target.matches('input[type="checkbox"]') || e.target.classList.contains("wb-category-checkbox")) {
+                      return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    header.classList.toggle("collapsed");
+                    bookContainer.classList.toggle("collapsed");
+                  };
 
                   worldBookCheckboxesContainer.appendChild(header);
                   worldBookCheckboxesContainer.appendChild(bookContainer);
@@ -64530,26 +64662,7 @@ ${colSpecs.join('\n')}
             }
           });
 
-          // 使用事件委托来处理所有点击和勾选事件，效率更高
-          worldBookCheckboxesContainer.addEventListener("click", (e) => {
-            const header = e.target.closest(".wb-category-header");
-            // 如果点击的是文件夹头部，并且不是点在复选框上
-            if (header && !e.target.matches('input[type="checkbox"]')) {
-              const categoryId = header.querySelector(".wb-category-checkbox")
-                ?.dataset.categoryId;
-              if (categoryId) {
-                const bookContainer =
-                  worldBookCheckboxesContainer.querySelector(
-                    `.wb-book-container[data-container-for="${categoryId}"]`,
-                  );
-                if (bookContainer) {
-                  header.classList.toggle("collapsed");
-                  bookContainer.classList.toggle("collapsed");
-                }
-              }
-            }
-          });
-
+          // 世界书复选框容器的勾选状态同步
           worldBookCheckboxesContainer.addEventListener("change", (e) => {
             const target = e.target;
 
@@ -66006,9 +66119,47 @@ ${colSpecs.join('\n')}
             .addEventListener("click", openOfflinePresetManager);
 
           // 聊天总结功能事件绑定
-          document
-            .getElementById("view-summaries-btn")
-            .addEventListener("click", openSummaryViewer);
+          const handleViewSummaries = (e) => {
+            if (e) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+            openSummaryViewer();
+          };
+
+          const handleManualSummary = (e) => {
+            if (e) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+            const settingsModal = document.getElementById("chat-settings-modal");
+            if (settingsModal) settingsModal.classList.remove("visible");
+            openManualSummaryOptions();
+          };
+
+          const viewSummariesBtn = document.getElementById("view-summaries-btn");
+          if (viewSummariesBtn) {
+            viewSummariesBtn.addEventListener("click", handleViewSummaries);
+          }
+
+          const manualSummaryBtn = document.getElementById("manual-summary-btn");
+          if (manualSummaryBtn) {
+            manualSummaryBtn.addEventListener("click", handleManualSummary);
+          }
+
+          document.addEventListener("click", (e) => {
+            const vBtn = e.target.closest("#view-summaries-btn");
+            if (vBtn) {
+              handleViewSummaries(e);
+              return;
+            }
+            const mBtn = e.target.closest("#manual-summary-btn");
+            if (mBtn) {
+              handleManualSummary(e);
+              return;
+            }
+          });
+
           document
             .getElementById("close-summary-viewer-btn")
             .addEventListener("click", () => {
@@ -66294,19 +66445,6 @@ ${colSpecs.join('\n')}
               document
                 .getElementById("summary-prompt-edit-modal")
                 .classList.remove("visible");
-            });
-
-          document
-            .getElementById("chat-settings-modal")
-            .addEventListener("click", (e) => {
-              if (e.target.id === "manual-summary-btn") {
-                // 点击后先关闭设置弹窗
-                document
-                  .getElementById("chat-settings-modal")
-                  .classList.remove("visible");
-                // 【调用我们新创建的选择函数，而不是直接总结
-                openManualSummaryOptions();
-              }
             });
 
           // 角色手机外观设置事件监听器

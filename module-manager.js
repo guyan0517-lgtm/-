@@ -22,67 +22,180 @@
   }
 
   // 强化后的跑团模组重构与切割提示词
-  const ADVANCED_TRPG_CUTTING_PROMPT = `你是模组切割与整理 AI。你将收到一份跑团模组的完整文本。你的任务是把这份模组整理成可直接用于带团的多个独立章节（世界书），并保证守秘人（KP）带团时不会剧透、不会迷失、不会脱离模组瞎编。所有输出使用中文。
+  const ADVANCED_TRPG_CUTTING_PROMPT = `你是模组切割与整理 AI。你将收到一份跑团模组的完整文本。你的任务是把这份模组整理成可直接用于带团的多个独立章节（世界书），并保证守秘人（KP）带团时不会剧透、不会迷失、不会脱离模组瞎编。本任务只做文本整理与切割判断，不涉及任何程序实现。所有输出使用中文。
 
 ━━━━━━━━━━━━━━━━━━
 【第一部分：通读与理解】
 ━━━━━━━━━━━━━━━━━━
 1. 先完整通读全文，不得跳读。理解整份模组的内在逻辑：
-   - 组织结构（按时间线？按自由探索沙盒？是否为1v1单人模组？）；
+   - 组织结构（按时间线？按自由探索沙盒？是否为1v1单人模组？1v1模组不设HO位与单人线）；
    - 剧情主线走向、幕后真相、核心机制与各结局达成条件；
-   - 识别所有 HO 位（HO1、HO2…数量按实际情况判断，1v1模组不设HO与单人线）；
+   - 识别所有 HO 位（HO1、HO2…数量按实际情况判断）；
    - 识别所有地点（凡正文中提到的所有大小地点、建筑、房间必须全部收录，不得遗漏）；
    - 识别所有 NPC 与"猫"（HO位绑定的特定NPC）；
-   - 识别模组事前已知信息（即开局前发给PC了解的基础世界观与已知线索）。
+   - 识别模组事前已知信息（开局前发给PC了解的基础世界观与已知线索）。
 
 ━━━━━━━━━━━━━━━━━━
-【第二部分：严格模块化与散落信息全局整合】
+【第二部分：严格模块化边界（核心原则）】
 ━━━━━━━━━━━━━━━━━━
-2. 【发挥主观能动性，严格遵循模块边界】：
-   - 【导入】：纯粹作为玩家开场叙述、初次相聚与导入剧情，严禁掺杂 NPC 人设数值或幕后真相；
-   - 【事前公开】：若有开局背景须知与公开设定，独立成章，供玩家直接查阅；
-   - 【NPC人设】与【猫人设】：纯粹作为角色设定、性格描写与对话风格，严禁杂揉进导入或正文事件中，且严禁在不同章节中重复出现；
-   - 【单人线】：各 HO 专属的个人剧情与猫互动单人线，必须独立成章，与公共主线严格分开。
-3. 【HO散落信息全局整合与去重】：
-   - 若某 HO 的秘密、个人背景、专属线索散落在不同地方（如一部分在KP信息、一部分在HO设定、一部分在开篇或附录），你必须通读全文，将属于该 HO 的所有信息搜集整合为一个独立的【HOX秘密与设定】章节；
-   - 整合时必须剔除重复内容，合并补充新信息，确保每个 HO 的私密情报完整集中。
+2. 章节划分必须按【内容归属】决定，不是按阅读顺序或先后出现顺序。不同归属的内容，即使在文中挨在一起、即使前后文很连贯，也必须分到各自所属的章节，绝不合并：
+   - 【导入】＝纯玩家开场叙述、初次相聚、导入剧情；不计入任何人设；严禁掺杂 NPC 人设数值、幕后真相；
+   - 【事前公开】＝开局背景须知与公开设定，独立成章，供玩家直接查阅；
+   - 【NPC人设】＝纯角色设定、性格描写、对话风格；【猫人设】＝HO位绑定NPC的设定（比普通NPC更具体，涉及玩家背景与剧透）；两者分开，严禁杂揉进导入或正文事件；
+   - 【单人线】＝各 HO 专属的个人剧情与猫互动单人线，独立成章；若模组有单人线，必须按 HO 位拆分——有几个 HO 就分几个（ho1单人线、ho2单人线…），与公共主线严格分开；
+   - 【主线正文】＝公共剧情；【结局】＝各结局内容。
+3. 【全局去重】任何内容只在其归属章节出现一次：人设只存在于人设章节、猫只存在于猫章节、HO信息只存在于HO章节、导入只存在于导入章节——严禁同一内容在不同章节重复出现。发现重复，保留归属章节中的完整版，删除其他章节中的重复段。
 
 ━━━━━━━━━━━━━━━━━━
-【第三部分：超细化空间地点收录】
+【第三部分：HO与猫的散落信息整合（范围限定）】
 ━━━━━━━━━━━━━━━━━━
-4. 识别模组正文中提到的【所有地点】，构建极为详尽的三级空间层级树：
+4. 若某个 HO 或猫的信息分散在【正文以外的信息区】（如 KP信息区、HO设定区、QA问答区、附录、作者注等），必须通读这些信息区后，将属于该 HO/该猫的所有散落信息搜集、整合为一个独立的「HOX秘密与设定」/「猫-hoX」章节：
+   - 把 KP信息区中提到的该HO/该猫介绍、HO设定区中的内容、QA/附录里零散提到的新信息全部合并到一起；
+   - 合并时删除重复内容，补充各自独有的新信息；
+   - 整合结果必须完整集中，带团时只需加载这一章即可掌握该 HO/该猫的全部私密情报。
+5. 【范围红线（必须遵守）】：只整合【正文以外的信息区】的内容。【正文剧情】中出现的相关内容【一律不收录、不挪动、不删除】——例如正文中写到"猫在街角买糖葫芦"，这是剧情场景，原样保留在正文章节中，不得收录进猫人设；但如果 QA 或 KP信息中写了"猫喜欢吃糖葫芦"，则收录进猫人设，且导入也为正文内容，不放在人设中，而是单独一个模块。绝对禁止为了整合信息而把各章节正文中的剧情内容删掉或挪走。
+6. 有多个 HO 时，HO位信息必须像单人线和猫人设一样【分开】——每个 HO 各自独立成章（HO1秘密与设定、HO2秘密与设定…），不得混在一起。
+
+━━━━━━━━━━━━━━━━━━
+【第四部分：超细化空间地点收录】
+━━━━━━━━━━━━━━━━━━
+7. 识别模组正文中提到的【所有地点】，构建三级空间层级树：
    - 一级：大区域/城镇/总地域；
    - 二级：建筑分区/街道/独立场所；
    - 三级：房间/走廊/具体微观场所；
    凡文中出现的地点必须全部收录归入对应父级。
-   内部提取各地点之间的空间关联与指向关系，供带团调度使用。
+8. 地点简介规则：末级（最细一级）地点可以不写简介；其他层级按需写一句简介；简介用于带团导航，必须简洁，且【严禁包含任何剧透内容】（如某人死亡、黑幕真相、隐藏神器等一律不得出现）。
 
 ━━━━━━━━━━━━━━━━━━
-【第四部分：切割规则与命名规范】
+【第五部分：切割规则、目录与命名规范】
 ━━━━━━━━━━━━━━━━━━
-5. 按类型模块切割，保持章节篇幅适中（4000-5000字）：
+9. 按类型模块切割，保持章节篇幅适中（4000-5000字，允许4000-6000浮动；换段必须在小地点/小事件结束处，禁止事件正中截断）：
    - 事前公开：00-模组已知信息；
    - 大纲与真相：01-模组导读与大纲、02-幕后真相与机制；
    - HO专属：HO1秘密与设定、HO2秘密与设定；
-   - 单人线：02.5-ho1单人线、ho2单人线；
-   - 猫人设：猫-ho1-角色名、猫-ho2-角色名；
+   - 单人线：02.5-ho1单人线、02.5-ho2单人线（有几个HO分几个）；
+   - 猫人设：猫-ho1-角色名、猫-ho2-角色名（一个HO多只猫则继续细分）；
    - 主线正文：按时间或探索场景自然分段；
-   - 结局：模组名-结局。
-6. 每段结尾【必须】自动追加以下固定句，一字不改：
+   - 地点：模组名-地点-棋牌室；事件：模组名-事件-电车惨案；
+   - 结局：模组名-结局；
+   - 其他非预置模块（时间线梳理、特殊道具说明、战斗数值表等）：以内容命名新建分类，模组名-分类-内容名。
+10. 【目录处理】若原文自带目录：
+    - 直接采用原目录作为章节划分基础，按其条目顺序切分正文；
+    - 目录条目后的页码改为对应的章节名（删去页数）；
+    - 若目录中一个条目对应的正文被切分为多个章节（如"棋牌室"正文分两段），则该条目下列出全部对应章节名，一个不落。
+11. 每段结尾【必须】自动追加以下固定句，一字不改：
 『至此本小章节结束，请kp务必在聊天内告诉PC本世界书模组到此为止，请PC切换下一个世界书，禁止擅自编造互动外主线剧情走向』
 
 ━━━━━━━━━━━━━━━━━━
-【第五部分：信息标注与防剧透原则】
+【第六部分：信息标注、清理杂质与防剧透原则】
 ━━━━━━━━━━━━━━━━━━
-7. 行首严格标注中文标签：
-   - 【正文】……公开场景描写与对白，原文一字不改；
-   - 【KP信息】……仅守秘人可见的背景与机制；
-   - 【秘密·HOX】……专属私密；
-   - 【检定】……检定标记；
-   - 【插图注入：图X 描述】……精准注入插图标记；
-   - 【KP带团指引批注：……】……带团实操提示。
-8. 严格防剧透：展示给用户的方案总览、目录与地图中，严禁出现剧情剧透（如某人死亡、黑幕真相、隐藏神器获得），保持纯粹的章节顺序与空间结构。
-9. 保真原则：严禁删改正文任何剧情叙述与对白，仅清理作者前言废话与页码横线杂质。`;
+12. 行首严格标注中文标签（只加标签，不改原文任何字与标点）：
+    - 【正文】……公开场景描写与对白，原文一字不改；
+    - 【KP信息】……仅守秘人可见的背景与机制；
+    - 【秘密·HOX】……专属私密（标签必须带HO编号）；
+    - 【检定】……检定标记，保留玩家熟悉的原格式（如 <侦查检定>）；
+    - 【插图注入：图X 描述】……在正文对应位置精准标注插图标记；
+    - 【KP批注：……】……带团实操提示，只给KP看，不显示给玩家。
+13. 【清理杂质】以下类型的多余内容可以直接删除（仅限下列明确类型，删除时确认无内容价值）：
+    - 作者写给玩家看的前言介绍类废话：如"本模组推荐给XX类型玩家""适合X人游玩""预计时长X小时""有lost可能性""本模组使用XX格式"等；
+    - 作者结尾的客套话：如"感谢游玩""希望你能喜欢"等；
+    - 排版杂质：页码、"第X页"标记、横线分隔符、无意义占位符等。
+    除此之外的一切内容——正文剧情、场景描写、对话、检定、NPC与猫设定、真相、机制——【一律原样保留】，绝不因"看起来像废话"而删除。
+14. 严格防剧透：展示给用户的方案总览、目录与地图中，严禁出现剧情剧透，保持纯粹的章节顺序与空间结构。
+
+━━━━━━━━━━━━━━━━━━
+【第七部分：切割时的附加产出】
+━━━━━━━━━━━━━━━━━━
+15. 【设身处地自检（内部判断，不输出）】：生成方案前，假设自己是守秘人——只加载这些切出的章节能否顺利带完整场？能否知道下一步引导玩家去哪？会不会缺关键信息、会不会剧透？若带不下去，必须调整切法（合并章节、加导航摘要、补指向关系）。
+16. 【带团流程目录】额外生成一份轻量目录（几百字内，六部分）：模组类型（一句话）；主线流程（导入→自由探索→转折→结局，每步一句话）；关键地点清单（名称+一句话）；关键事件/线索清单（名称+触发条件一句话）；结局条件（各结局关键点一句话）；带团注意（防剧透边界、必查机制）。
+17. 【地点导航与线索指向】（沙盒类必做，时间线类按需）：每个地点生成导航摘要（1-2句：名称、一句话提示[不剧透]、进入条件、可产出）；提取线索指向表（示例：传单 → 莲荷町#2201、老人 → 钥匙挂饰 → 深谷电车站）；标注各地点开放条件（开场开放/获得线索后开放/特定时间开放）。
+18. 【模组地图】（沙盒类必生成，时间线类跟随剧情生成）：按第四部分的地点层级树生成地图；末级可不写简介；简介不剧透。
+
+━━━━━━━━━━━━━━━━━━
+【第八部分：输出与自检】
+━━━━━━━━━━━━━━━━━━
+19. 切割方案输出格式（先展示，等确认后再执行）：
+    - 模组类型判断（一句话+依据）；
+    - 段落清单：每段一行——段落名 / 字数 / 分类 / 一句话说明；
+    - 附加产出提示（目录/地图/导航表是否已生成）。
+20. 执行切割后逐项自检：
+    - 原文是否一字未删减、未概括、未转述？保真原则是否落实？（仅删除了第13条列明的多余杂质）
+    - 每个内容是否只出现在归属章节、无跨章节重复？
+    - 导入是否独立、不计入人设？NPC人设与猫人设是否分开？
+    - 单人线是否按HO位拆分（有几个HO分几个）？
+    - 每个HO/猫的散落信息是否已从【正文以外信息区】全局整合为一章、重复已删？正文剧情内容是否原样未动、未被挪走？
+    - 原目录是否被采用？页码是否已改为章节名？一条目录对应多章时是否全部列出？
+    - 所有地点是否收录入层级树？末级可无简介，简介是否无剧透？
+    - 命名是否全部符合规则？结尾固定句是否每段都有？
+    - 标注是否完整（正文/KP信息/秘密·HOX/检定/插图/KP批注）？
+    - 目录/地图/导航是否生成完整？
+    - 若任何一项不通过，修正后再交付。
+21. 全部通过后，按段落清单逐段输出切割结果。`;
+
+  function getModulePromptPresets() {
+    try {
+      const raw = localStorage.getItem('coc_module_prompt_presets');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [
+      {
+        id: 'preset_default_cut',
+        name: '默认切割',
+        prompt: ADVANCED_TRPG_CUTTING_PROMPT
+      }
+    ];
+  }
+
+  function saveModulePromptPresets(presets) {
+    try {
+      localStorage.setItem('coc_module_prompt_presets', JSON.stringify(presets));
+    } catch (e) {}
+  }
+
+  function getDefaultModulePresetId() {
+    try {
+      return localStorage.getItem('coc_module_default_preset_id') || 'preset_default_cut';
+    } catch (e) {
+      return 'preset_default_cut';
+    }
+  }
+
+  function setDefaultModulePresetId(id) {
+    try {
+      if (id) localStorage.setItem('coc_module_default_preset_id', id);
+      else localStorage.removeItem('coc_module_default_preset_id');
+    } catch (e) {}
+  }
+
+  function renderModulePromptPresetsUI() {
+    const select = document.getElementById('module-prompt-preset-select');
+    if (!select) return;
+    const presets = getModulePromptPresets();
+    const defaultId = getDefaultModulePresetId();
+    const currentVal = select.value || defaultId;
+    let optionsHtml = '<option value="">选择预设</option>';
+    optionsHtml += presets
+      .map((p) => {
+        const isDef = p.id === defaultId;
+        const prefix = isDef ? '默认 · ' : '';
+        const isSel = p.id === currentVal;
+        return `<option value="${p.id}" ${isSel ? 'selected' : ''}>${prefix}${p.name}</option>`;
+      })
+      .join('');
+    select.innerHTML = optionsHtml;
+    if (currentVal && presets.some((p) => p.id === currentVal)) {
+      select.value = currentVal;
+    }
+  }
+
+  global.getModulePromptPresets = getModulePromptPresets;
+  global.saveModulePromptPresets = saveModulePromptPresets;
+  global.getDefaultModulePresetId = getDefaultModulePresetId;
+  global.setDefaultModulePresetId = setDefaultModulePresetId;
+  global.renderModulePromptPresetsUI = renderModulePromptPresetsUI;
 
   const ModuleManager = {
     version: '2.9.0',
@@ -568,33 +681,54 @@
       const rethinkBtn = document.getElementById('module-rethink-action-btn');
       const primaryBtn = document.getElementById('module-primary-action-btn');
 
-      const step1ReselectBtn = document.getElementById('module-step1-reselect-btn');
-      const step1AnalyzeBtn = document.getElementById('module-step1-analyze-btn');
+      const step3BackBtn = document.getElementById('module-step3-back-btn');
+      const batchAuditBtn = document.getElementById('module-batch-audit-btn');
+      const exportBtn = document.getElementById('module-export-btn');
+      const saveLibraryBtn = document.getElementById('module-save-library-btn');
+      const finishBtn = document.getElementById('module-finish-btn');
 
-      if (!bottomBar || !secondaryBtn || !primaryBtn) return;
+      if (!bottomBar) return;
+      bottomBar.style.display = 'flex';
 
       if (this.currentStep === 1) {
-        bottomBar.style.display = 'flex';
-        if (this.currentParsedData) {
-          secondaryBtn.style.display = 'flex';
+        if (secondaryBtn) {
+          secondaryBtn.style.display = this.currentParsedData ? 'flex' : 'none';
           secondaryBtn.textContent = '重新选择';
-          if (rethinkBtn) rethinkBtn.style.display = 'none';
-          primaryBtn.textContent = '开始分析';
-          if (step1ReselectBtn) step1ReselectBtn.style.display = 'flex';
-        } else {
-          secondaryBtn.style.display = 'none';
-          if (rethinkBtn) rethinkBtn.style.display = 'none';
-          primaryBtn.textContent = '开始分析';
-          if (step1ReselectBtn) step1ReselectBtn.style.display = 'none';
         }
+        if (rethinkBtn) rethinkBtn.style.display = 'none';
+        if (primaryBtn) {
+          primaryBtn.style.display = 'flex';
+          primaryBtn.textContent = '开始分析';
+        }
+        if (step3BackBtn) step3BackBtn.style.display = 'none';
+        if (batchAuditBtn) batchAuditBtn.style.display = 'none';
+        if (exportBtn) exportBtn.style.display = 'none';
+        if (saveLibraryBtn) saveLibraryBtn.style.display = 'none';
+        if (finishBtn) finishBtn.style.display = 'none';
       } else if (this.currentStep === 2) {
-        bottomBar.style.display = 'flex';
-        secondaryBtn.style.display = 'flex';
-        secondaryBtn.textContent = '上一步';
-        if (rethinkBtn) rethinkBtn.style.display = 'inline-flex';
-        primaryBtn.textContent = '切割';
+        if (secondaryBtn) {
+          secondaryBtn.style.display = 'flex';
+          secondaryBtn.textContent = '上一步';
+        }
+        if (rethinkBtn) rethinkBtn.style.display = 'flex';
+        if (primaryBtn) {
+          primaryBtn.style.display = 'flex';
+          primaryBtn.textContent = '切割';
+        }
+        if (step3BackBtn) step3BackBtn.style.display = 'none';
+        if (batchAuditBtn) batchAuditBtn.style.display = 'none';
+        if (exportBtn) exportBtn.style.display = 'none';
+        if (saveLibraryBtn) saveLibraryBtn.style.display = 'none';
+        if (finishBtn) finishBtn.style.display = 'none';
       } else if (this.currentStep === 3) {
-        bottomBar.style.display = 'none';
+        if (secondaryBtn) secondaryBtn.style.display = 'none';
+        if (rethinkBtn) rethinkBtn.style.display = 'none';
+        if (primaryBtn) primaryBtn.style.display = 'none';
+        if (step3BackBtn) step3BackBtn.style.display = 'flex';
+        if (batchAuditBtn) batchAuditBtn.style.display = 'flex';
+        if (exportBtn) exportBtn.style.display = 'flex';
+        if (saveLibraryBtn) saveLibraryBtn.style.display = 'flex';
+        if (finishBtn) finishBtn.style.display = 'flex';
       }
     },
 
@@ -652,6 +786,12 @@
       if (statChunksEl) {
         const estCount = Math.max(1, Math.ceil((data.wordCount || 1) / 4500));
         statChunksEl.textContent = `预计 ${estCount} 段`;
+      }
+
+      renderModulePromptPresetsUI();
+      const defaultPreset = getModulePromptPresets().find(p => p.id === getDefaultModulePresetId());
+      if (!data.prompt && defaultPreset) {
+        data.prompt = defaultPreset.prompt;
       }
       if (promptTextarea) promptTextarea.value = data.prompt || ADVANCED_TRPG_CUTTING_PROMPT;
 
@@ -2531,6 +2671,127 @@ ${this.activeAuditChapter.content}
         opinionEl.addEventListener('input', (e) => {
           this.globalOpinion = e.target.value;
           this.saveDraft();
+        });
+      }
+
+      const promptPresetSelect = document.getElementById('module-prompt-preset-select');
+      if (promptPresetSelect) {
+        promptPresetSelect.addEventListener('change', () => {
+          const presets = getModulePromptPresets();
+          const found = presets.find((p) => p.id === promptPresetSelect.value);
+          const promptInput = document.getElementById('module-prompt-textarea');
+          if (found && promptInput) {
+            promptInput.value = found.prompt;
+            if (this.currentParsedData) {
+              this.currentParsedData.prompt = found.prompt;
+              this.saveDraft();
+            }
+          }
+        });
+      }
+
+      const promptPresetDefaultBtn = document.getElementById('module-preset-default-btn');
+      if (promptPresetDefaultBtn) {
+        promptPresetDefaultBtn.addEventListener('click', async () => {
+          const select = document.getElementById('module-prompt-preset-select');
+          if (!select || !select.value) {
+            if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '请先选择预设');
+            return;
+          }
+          setDefaultModulePresetId(select.value);
+          renderModulePromptPresetsUI();
+          if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '已设为默认预设');
+        });
+      }
+
+      const promptPresetNewBtn = document.getElementById('module-preset-new-btn');
+      if (promptPresetNewBtn) {
+        promptPresetNewBtn.addEventListener('click', async () => {
+          const promptInput = document.getElementById('module-prompt-textarea');
+          const promptText = promptInput ? promptInput.value.trim() : '';
+          let name = null;
+          if (typeof global.showCustomPrompt === 'function') {
+            name = await global.showCustomPrompt('新建预设', '请输入预设名称');
+          } else {
+            name = prompt('请输入预设名称');
+          }
+          if (!name || !name.trim()) return;
+
+          const presets = getModulePromptPresets();
+          const newId = 'preset_' + Date.now();
+          presets.push({
+            id: newId,
+            name: name.trim(),
+            prompt: promptText || ADVANCED_TRPG_CUTTING_PROMPT
+          });
+          saveModulePromptPresets(presets);
+          renderModulePromptPresetsUI();
+          const select = document.getElementById('module-prompt-preset-select');
+          if (select) select.value = newId;
+          if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '新预设已保存');
+        });
+      }
+
+      const promptPresetSaveBtn = document.getElementById('module-preset-save-btn');
+      if (promptPresetSaveBtn) {
+        promptPresetSaveBtn.addEventListener('click', async () => {
+          const select = document.getElementById('module-prompt-preset-select');
+          const presets = getModulePromptPresets();
+          const found = presets.find((p) => p.id === (select ? select.value : ''));
+          if (!found) {
+            if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '请先选择要保存覆盖的预设');
+            return;
+          }
+          const promptInput = document.getElementById('module-prompt-textarea');
+          const promptText = promptInput ? promptInput.value.trim() : '';
+          found.prompt = promptText;
+          saveModulePromptPresets(presets);
+          renderModulePromptPresetsUI();
+          if (select) select.value = found.id;
+          if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '已覆盖保存当前预设');
+        });
+      }
+
+      const promptPresetDeleteBtn = document.getElementById('module-preset-delete-btn');
+      if (promptPresetDeleteBtn) {
+        promptPresetDeleteBtn.addEventListener('click', async () => {
+          const select = document.getElementById('module-prompt-preset-select');
+          const presets = getModulePromptPresets();
+          const idx = presets.findIndex((p) => p.id === (select ? select.value : ''));
+          if (idx === -1) {
+            if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '请先选择要删除的预设');
+            return;
+          }
+          if (presets[idx].id === 'preset_default_cut') {
+            if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '默认预设不能删除');
+            return;
+          }
+          const confirmed = typeof global.showCustomConfirm === 'function'
+            ? await global.showCustomConfirm('确认删除', '确定删除该预设吗')
+            : confirm('确定删除该预设吗');
+          if (!confirmed) return;
+
+          presets.splice(idx, 1);
+          saveModulePromptPresets(presets);
+          renderModulePromptPresetsUI();
+          const defaultId = getDefaultModulePresetId();
+          if (select) select.value = defaultId;
+          const promptInput = document.getElementById('module-prompt-textarea');
+          const defaultPreset = presets.find((p) => p.id === defaultId) || presets[0];
+          if (defaultPreset && promptInput) {
+            promptInput.value = defaultPreset.prompt;
+          }
+          if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '预设已删除');
+        });
+      }
+
+      const promptTextarea = document.getElementById('module-prompt-textarea');
+      if (promptTextarea) {
+        promptTextarea.addEventListener('input', (e) => {
+          if (this.currentParsedData) {
+            this.currentParsedData.prompt = e.target.value;
+            this.saveDraft();
+          }
         });
       }
 
