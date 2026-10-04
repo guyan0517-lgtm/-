@@ -18565,12 +18565,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.openThoughtChainScreen = openThoughtChainScreen;
 
+        let currentTcRenderVersion = 0;
         async function renderThoughtChainPresets() {
           const container = document.getElementById("tc-preset-list");
           if (!container) return;
-          container.innerHTML = "";
 
-          const presets = (await db.thoughtChainPresets.toArray()) || [];
+          const renderVersion = ++currentTcRenderVersion;
+          const rawPresets = (await db.thoughtChainPresets.toArray()) || [];
+          if (renderVersion !== currentTcRenderVersion) return;
+
+          const seenKeys = new Set();
+          const presets = [];
+          const duplicateIdsToDelete = [];
+
+          for (const p of rawPresets) {
+            const key = `${p.name || ''}_${p.generalContent || ''}_${p.cocContent || ''}`;
+            if (seenKeys.has(key)) {
+              if (p.id) duplicateIdsToDelete.push(p.id);
+            } else {
+              seenKeys.add(key);
+              presets.push(p);
+            }
+          }
+
+          if (duplicateIdsToDelete.length > 0) {
+            db.thoughtChainPresets.bulkDelete(duplicateIdsToDelete).catch(() => {});
+          }
+
           const defaultId = state.globalSettings ? state.globalSettings.defaultThoughtChainId : null;
 
           if (presets.length === 0) {
@@ -18583,6 +18604,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
 
+          const fragment = document.createDocumentFragment();
           presets.forEach((preset) => {
             const card = document.createElement("div");
             card.className = "tc-preset-card";
@@ -18638,8 +18660,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             headerRow.appendChild(actionsRow);
             card.appendChild(headerRow);
 
-            container.appendChild(card);
+            fragment.appendChild(card);
           });
+
+          if (renderVersion !== currentTcRenderVersion) return;
+          container.innerHTML = "";
+          container.appendChild(fragment);
         }
 
         async function openThoughtChainEditor(presetId = null) {
@@ -18691,12 +18717,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               await db.thoughtChainPresets.put(preset);
             }
           } else {
-            await db.thoughtChainPresets.add({
-              name,
-              generalContent,
-              cocContent,
-              createdAt: Date.now(),
-            });
+            const existing = await db.thoughtChainPresets.where("name").equals(name).first();
+            if (existing) {
+              existing.generalContent = generalContent;
+              existing.cocContent = cocContent;
+              await db.thoughtChainPresets.put(existing);
+            } else {
+              await db.thoughtChainPresets.add({
+                name,
+                generalContent,
+                cocContent,
+                createdAt: Date.now(),
+              });
+            }
           }
 
           document.getElementById("thought-chain-editor-modal").classList.remove("visible");
@@ -20391,6 +20424,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               taobaoCart,
               userWalletTransactions,
               userStickerCategories,
+              thoughtChainPresets,
             ] = await Promise.all([
               db.chats.toArray(),
               db.worldBooks.toArray(),
@@ -20429,6 +20463,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               db.taobaoCart.toArray(),
               db.userWalletTransactions.toArray(),
               db.userStickerCategories.toArray(),
+              db.thoughtChainPresets ? db.thoughtChainPresets.toArray() : Promise.resolve([]),
             ]);
 
             Object.assign(backupData, {
@@ -20469,6 +20504,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               taobaoCart,
               userWalletTransactions,
               userStickerCategories,
+              thoughtChainPresets,
+              novelaiSettings: {
+                enabled: localStorage.getItem("novelai-enabled"),
+                model: localStorage.getItem("novelai-model"),
+                apiKey: localStorage.getItem("novelai-api-key"),
+                settings: typeof getNovelAISettings === "function" ? getNovelAISettings() : localStorage.getItem("novelai-settings"),
+              },
             });
 
             backupData.homeScreenState = {
@@ -20628,6 +20670,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             taobaoCart,
             userWalletTransactions,
             userStickerCategories,
+            thoughtChainPresets,
           ] = await Promise.all([
             db.chats.toArray(),
             db.worldBooks.toArray(),
@@ -20666,6 +20709,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             db.taobaoCart.toArray(),
             db.userWalletTransactions.toArray(),
             db.userStickerCategories.toArray(),
+            db.thoughtChainPresets ? db.thoughtChainPresets.toArray() : Promise.resolve([]),
           ]);
 
           // 组装数据
@@ -20707,6 +20751,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             taobaoCart,
             userWalletTransactions,
             userStickerCategories,
+            thoughtChainPresets,
+            novelaiSettings: {
+              enabled: localStorage.getItem("novelai-enabled"),
+              model: localStorage.getItem("novelai-model"),
+              apiKey: localStorage.getItem("novelai-api-key"),
+              settings: typeof getNovelAISettings === "function" ? getNovelAISettings() : localStorage.getItem("novelai-settings"),
+            },
           });
 
           // 这里省略了 homeScreenState 的详细抓取，因为它依赖 DOM 元素，
@@ -21174,6 +21225,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 "bubbleStylePresets",
                 "fontPresets",
                 "homeScreenPresets",
+                "thoughtChainPresets",
               ];
 
               // 世界书格式兼容转换代码
@@ -21244,6 +21296,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (data[tableName] && db[tableName]) {
                   console.log(`正在导入设置: ${tableName}...`);
                   await db[tableName].put(data[tableName]);
+                }
+              }
+
+              if (data.novelaiSettings) {
+                if (data.novelaiSettings.enabled !== undefined && data.novelaiSettings.enabled !== null) {
+                  localStorage.setItem("novelai-enabled", String(data.novelaiSettings.enabled));
+                }
+                if (data.novelaiSettings.model) {
+                  localStorage.setItem("novelai-model", data.novelaiSettings.model);
+                }
+                if (data.novelaiSettings.apiKey) {
+                  localStorage.setItem("novelai-api-key", data.novelaiSettings.apiKey);
+                }
+                if (data.novelaiSettings.settings) {
+                  localStorage.setItem(
+                    "novelai-settings",
+                    typeof data.novelaiSettings.settings === "object"
+                      ? JSON.stringify(data.novelaiSettings.settings)
+                      : data.novelaiSettings.settings
+                  );
                 }
               }
             });
@@ -24056,19 +24128,42 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           else if (wallpaper) homeScreen.style.backgroundImage = wallpaper;
         }
 
+        let currentWeatherBookRenderVersion = 0;
         async function renderWorldBookScreen() {
           const listEl = document.getElementById("world-book-list");
-          listEl.innerHTML = "";
+          if (!listEl) return;
 
+          const renderVersion = ++currentWeatherBookRenderVersion;
           // 1. 同时获取所有书籍和所有分类
-          const [books, categories] = await Promise.all([
+          const [rawBooks, categories] = await Promise.all([
             db.worldBooks.toArray(),
             db.worldBookCategories.orderBy("name").toArray(),
           ]);
+          if (renderVersion !== currentWeatherBookRenderVersion) return;
+
+          const seenBookKeys = new Set();
+          const books = [];
+          const duplicateBookIdsToDelete = [];
+
+          for (const b of (rawBooks || [])) {
+            const contentStr = typeof b.content === "string" ? b.content : JSON.stringify(b.content || "");
+            const key = `${b.name || ""}_${b.categoryId || ""}_${contentStr}`;
+            if (seenBookKeys.has(key)) {
+              if (b.id) duplicateBookIdsToDelete.push(b.id);
+            } else {
+              seenBookKeys.add(key);
+              books.push(b);
+            }
+          }
+
+          if (duplicateBookIdsToDelete.length > 0) {
+            db.worldBooks.bulkDelete(duplicateBookIdsToDelete).catch(() => {});
+          }
 
           state.worldBooks = books; // 确保内存中的数据是同步的
 
           if (books.length === 0) {
+            if (renderVersion !== currentWeatherBookRenderVersion) return;
             listEl.innerHTML =
               '<p style="text-align:center; color: #8a8a8a; margin-top: 50px;">点击右上角 "+" 创建你的第一本世界书</p>';
             return;
@@ -24084,6 +24179,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return acc;
           }, {});
 
+          const fragment = document.createDocumentFragment();
+
           // 3. 优先渲染已分类的书籍
           categories.forEach((category) => {
             const booksInCategory = groupedBooks[category.id];
@@ -24092,7 +24189,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 category.name,
                 booksInCategory,
               );
-              listEl.appendChild(groupContainer);
+              fragment.appendChild(groupContainer);
             }
           });
 
@@ -24103,11 +24200,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "未分类",
               uncategorizedBooks,
             );
-            listEl.appendChild(groupContainer);
+            fragment.appendChild(groupContainer);
           }
 
+          if (renderVersion !== currentWeatherBookRenderVersion) return;
+          listEl.innerHTML = "";
+          listEl.appendChild(fragment);
+
           // 5. 为所有分组标题添加折叠事件
-          document
+          listEl
             .querySelectorAll(".world-book-group-header")
             .forEach((header) => {
               header.addEventListener("click", () => {
@@ -25457,16 +25558,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 思维链折叠块渲染
           let thinkingHtml = "";
           const hasThinkingModule = Boolean(chat && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
-          if (extractedThinkingText !== null && extractedThinkingText !== undefined || (!isUser && hasThinkingModule)) {
-            const displayThinkingText = extractedThinkingText ? String(extractedThinkingText).replace(/\n/g, "<br>") : "无思考内容";
+          if (!isUser && hasThinkingModule && extractedThinkingText && String(extractedThinkingText).trim().length > 0) {
+            const displayThinkingText = String(extractedThinkingText).replace(/\n/g, "<br>");
             thinkingHtml = `
               <details class="thought-chain-block">
                 <summary class="thought-chain-summary">
-                  <svg class="thought-chain-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg class="thought-chain-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                   </svg>
-                  <span style="flex-grow: 1;">思考</span>
-                  <svg class="thought-chain-arrow" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <span>思考过程</span>
+                  <svg class="thought-chain-arrow" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="9 18 15 12 9 6"></polyline>
                   </svg>
                 </summary>
@@ -25494,14 +25595,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 2. 拼接最终的气泡内容
           //    将构建好的 quoteHtml (如果存在) 和 contentHtml 组合起来
           // --- 将头像和内容都放回气泡内部 ---
-          bubble.innerHTML = `
+          if (thinkingHtml) {
+            bubble.innerHTML = `
+			        ${avatarHtml}
+			        <div class="bubble-body-column" style="display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; min-width: 0;">
+			            ${thinkingHtml}
+			            <div class="content">
+			                ${quoteHtml}
+			                ${contentHtml}
+			            </div>
+			        </div>
+			    `;
+          } else {
+            bubble.innerHTML = `
 			        ${avatarHtml}
 			        <div class="content">
-			            ${thinkingHtml}
 			            ${quoteHtml}
 			            ${contentHtml}
 			        </div>
 			    `;
+          }
 
           // --- 将完整的“气泡”和“时间戳”放入容器 ---
           wrapper.appendChild(bubble);
@@ -28440,8 +28553,65 @@ ${colSpecs.join('\n')}
               console.log(messagesArray);
             }
 
-            if (extractedThinking && messagesArray && messagesArray.length > 0) {
-              messagesArray[0].thinking = extractedThinking;
+            // 提取并聚合所有思维链内容，消除独立思考气泡
+            let collectedThinking = extractedThinking || "";
+            const filteredMessages = [];
+
+            for (let i = 0; i < messagesArray.length; i++) {
+              let item = messagesArray[i];
+              if (!item) continue;
+
+              let text = String(item.content || item.message || "");
+
+              if (item.type === "thinking" || item.type === "thought") {
+                if (text.trim()) {
+                  collectedThinking = (collectedThinking ? collectedThinking + "\n" : "") + text.trim();
+                }
+                continue;
+              }
+
+              if (/<thinking>[\s\S]*?<\/thinking>/i.test(text)) {
+                const tMatches = text.match(/<thinking>([\s\S]*?)<\/thinking>/gi);
+                if (tMatches) {
+                  tMatches.forEach(m => {
+                    const inner = m.replace(/<\/?thinking>/gi, "").trim();
+                    if (inner) {
+                      collectedThinking = (collectedThinking ? collectedThinking + "\n" : "") + inner;
+                    }
+                  });
+                }
+                text = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
+                if (item.content !== undefined) item.content = text;
+                if (item.message !== undefined) item.message = text;
+              }
+
+              if (item.thinking && typeof item.thinking === "string") {
+                const itemThinking = item.thinking.trim();
+                if (itemThinking) {
+                  collectedThinking = (collectedThinking ? collectedThinking + "\n" : "") + itemThinking;
+                }
+                delete item.thinking;
+              }
+
+              if (!text.trim() && !item.image && !item.type?.includes("image") && !item.type?.includes("share")) {
+                continue;
+              }
+
+              filteredMessages.push(item);
+            }
+
+            if (filteredMessages.length === 0 && collectedThinking) {
+              filteredMessages.push({
+                type: "text",
+                content: "",
+                sender: chat.name,
+              });
+            }
+
+            messagesArray = filteredMessages;
+
+            if (collectedThinking && messagesArray.length > 0) {
+              messagesArray[0].thinking = collectedThinking;
             }
 
             // 无论增加多少个项目，确保开头的系统状态栏项目全部合并为单一气泡，禁止拆分
@@ -58140,8 +58310,7 @@ ${colSpecs.join('\n')}
                   content: "",
                 };
                 await db.worldBooks.add(newBook);
-                state.worldBooks.push(newBook);
-                renderWorldBookScreen();
+                await renderWorldBookScreen();
                 openWorldBookEditor(newBook.id);
               }
             });
@@ -58176,7 +58345,6 @@ ${colSpecs.join('\n')}
                 document.getElementById("world-book-editor-title").textContent =
                   newName;
                 editingWorldBookId = null;
-                renderWorldBookScreen();
                 showScreen("world-book-screen");
               }
             });

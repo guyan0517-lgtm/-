@@ -29907,26 +29907,30 @@ select:focus-visible {
 
 /* Thought Chain Collapsible Bubble Styles */
 .thought-chain-block {
-  background-color: var(--secondary-bg);
-  color: var(--text-secondary);
-  border-left: 3px solid var(--accent-color);
-  border-radius: var(--border-radius, 8px);
-  padding: 6px 10px;
-  margin-bottom: 6px;
-  font-size: 12px;
-  width: 100%;
+  background-color: transparent !important;
+  color: var(--text-secondary, #8e8e93);
+  border: none !important;
+  border-radius: 8px;
+  padding: 0;
+  margin: 0 0 3px 2px;
+  font-size: 11px;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
 .thought-chain-summary {
   cursor: pointer;
-  color: var(--text-secondary);
-  font-weight: 600;
+  color: var(--text-secondary, #8e8e93);
+  font-weight: 500;
   user-select: none;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   opacity: 0.85;
+  background: transparent !important;
+  padding: 1px 2px;
+  border-radius: 4px;
+  list-style: none;
 }
 
 .thought-chain-summary:hover {
@@ -29934,27 +29938,34 @@ select:focus-visible {
 }
 
 .thought-chain-icon {
-  stroke: var(--accent-color);
+  stroke: var(--text-secondary, #8e8e93);
   flex-shrink: 0;
 }
 
 .thought-chain-content {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border-color);
+  margin-top: 3px;
+  margin-bottom: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   line-height: 1.5;
   word-break: break-word;
   white-space: pre-wrap;
   color: var(--text-primary);
-  opacity: 0.9;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+#phone-screen.dark-mode .thought-chain-content {
+  background-color: rgba(45, 45, 48, 0.75);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .thought-chain-summary::-webkit-details-marker {
   display: none;
-}
-
-.thought-chain-summary {
-  list-style: none;
 }
 
 details[open] .thought-chain-arrow {
@@ -29964,6 +29975,7 @@ details[open] .thought-chain-arrow {
 .thought-chain-arrow {
   transition: transform 0.2s ease;
   flex-shrink: 0;
+  stroke: var(--text-secondary, #8e8e93);
 }
 
 #cancel-contact-picker-btn {
