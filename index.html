@@ -5720,6 +5720,23 @@
           </div>
 
           <!-- ============================== -->
+          <!-- 群成员设定卡片 -->
+          <!-- ============================== -->
+          <div class="settings-group-card moe-card" id="group-members-card" style="display: none;">
+            <div class="settings-section-title">👥 群成员设定</div>
+            <div class="form-group" id="group-members-group" style="margin-top: 8px;">
+              <div
+                id="group-members-settings"
+                class="moe-list-box"
+                style="margin-bottom: 10px"
+              ></div>
+              <button id="manage-members-btn" class="moe-btn-secondary">
+                👥 管理群成员
+              </button>
+            </div>
+          </div>
+
+          <!-- ============================== -->
           <!-- 3. 我的人设卡片 -->
           <!-- ============================== -->
           <div class="settings-group-card moe-card" id="my-persona-card">
@@ -5776,18 +5793,6 @@
           <!-- ============================== -->
           <div class="settings-group-card moe-card" id="other-settings-card">
             <div class="settings-section-title">🧠 更多设定与记忆</div>
-
-            <div class="form-group" id="group-members-group">
-              <label>群成员设定</label>
-              <div
-                id="group-members-settings"
-                class="moe-list-box"
-                style="margin-bottom: 10px"
-              ></div>
-              <button id="manage-members-btn" class="moe-btn-secondary">
-                👥 管理群成员
-              </button>
-            </div>
 
             <!-- ★★★ 修改点：将NPC库和表情包并排放在这里 ★★★ -->
             <div style="display: flex; gap: 10px; margin-top: 15px">
@@ -7972,32 +7977,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     </div>
 
     <div id="message-actions-modal" class="modal">
-      <div id="custom-modal" style="width: 250px">
+      <div id="custom-modal" class="message-actions-card">
         <div class="custom-modal-footer">
           <!-- 新的操作按钮 -->
-          <button
-            id="reroll-nai-btn"
-            style="display: none; background-color: #e3f2fd; color: #1976d2"
-          >
-            🎨 重绘图片
-          </button>
+          <button id="reroll-nai-btn" style="display: none"><span>重</span><span>绘</span><span>图</span><span>片</span></button>
           <!-- 新增这行 -->
-          <button id="edit-message-btn">编辑消息</button>
-          <button id="copy-message-btn">复制文本</button>
-          <button id="recall-message-btn">撤回</button>
-          <button id="quote-message-btn">引用</button>
-          <button id="select-message-btn">进入多选</button>
+          <button id="edit-message-btn"><span>编</span><span>辑</span><span>消</span><span>息</span></button>
+          <button id="optimize-message-btn"><span>优</span><span>化</span></button>
+          <button id="copy-message-btn"><span>复</span><span>制</span><span>文</span><span>本</span></button>
+          <button id="recall-message-btn"><span>撤</span><span>回</span></button>
+          <button id="quote-message-btn"><span>引</span><span>用</span></button>
+          <button id="select-message-btn"><span>进</span><span>入</span><span>多</span><span>选</span></button>
           <!-- 取消按钮 -->
-          <button
-            id="cancel-message-action-btn"
-            style="
-              margin-top: 8px;
-              border-radius: 8px;
-              background-color: #f0f0f0;
-            "
-          >
-            取消
-          </button>
+          <button id="cancel-message-action-btn"><span>取</span><span>消</span></button>
         </div>
       </div>
     </div>
@@ -8008,6 +8000,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <button id="edit-post-btn">编辑动态</button>
           <button id="copy-post-btn">复制内容</button>
           <button id="cancel-post-action-btn">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全屏图片展开预览器 -->
+    <div id="image-viewer-modal" class="image-viewer-modal" style="display: none;">
+      <div class="image-viewer-backdrop" id="image-viewer-backdrop"></div>
+      <div class="image-viewer-container">
+        <img id="image-viewer-img" src="" alt="预览大图" />
+        <div class="image-viewer-toolbar">
+          <button id="image-viewer-download-btn" class="image-viewer-btn" title="下载图片">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -16053,19 +16062,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <span id="inner-voice-adopter-name"></span>
           </div>
 
-          <!-- 心声开关 -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 4px 0;">
-            <span class="toggle-switch-text" style="font-weight: 500;">心声</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="inner-voice-switch" />
-              <span class="slider"></span>
-            </label>
-          </div>
-
           <!-- 心声内容 -->
           <div
             id="inner-voice-content-area"
-            style="display: flex; flex-direction: column; gap: 15px"
+            style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 12px;"
           >
             <div>
               <strong style="color: var(--accent-color, #64b5f6)">心声:</strong>
@@ -16074,6 +16074,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 style="margin: 5px 0 0 0; line-height: 1.6; color: var(--text-primary, #555)"
               ></p>
             </div>
+          </div>
+
+          <!-- 心声开关 -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0 0 0; border-top: 1px dashed var(--border-color);">
+            <span class="toggle-switch-text" style="font-weight: 500;">心声</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="inner-voice-switch" />
+              <span class="slider"></span>
+            </label>
           </div>
         </div>
       </div>
@@ -20249,7 +20258,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 senderAvatar =
                   chat.settings.myAvatar ||
                   (chat.isGroup ? defaultMyGroupAvatar : defaultAvatar);
-                //...
               } else {
                 // AI/成员消息
                 if (chat.isGroup) {
@@ -20257,25 +20265,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     (m) => m.originalName === msg.senderName,
                   );
 
-                  // 如果找到了成员信息，就用他的“群昵称”；如果没找到（比如成员被踢了），就还是用消息里的名字作为备用。
-                  senderDisplayName = member
-                    ? member.groupNickname
+                  senderName = member
+                    ? member.groupNickname || member.originalName
                     : msg.senderName || "未知成员";
 
                   senderAvatar = member
                     ? member.avatar
                     : defaultGroupMemberAvatar;
                 } else {
-                  // 单聊的逻辑保持不变
                   senderName = chat.name;
                   senderAvatar = chat.settings.aiAvatar || defaultAvatar;
                 }
               }
 
-              // 后续拼接 headerHtml 和 contentHtml 的逻辑都保持不变
               headerHtml = `<img src="${senderAvatar}" class="avatar"><div class="info"><div class="name">${senderName}</div></div>`;
 
-              if (
+              if (msg.type === "naiimag" || (msg.imageUrl && !msg.content)) {
+                contentHtml = `<img src="${msg.imageUrl}" class="chat-image" style="max-width: 100%; border-radius: 8px;">`;
+              } else if (
                 typeof msg.content === "string" &&
                 STICKER_REGEX.test(msg.content)
               ) {
@@ -20306,16 +20313,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   );
 
                   if (foundSticker) {
-                    // 如果找到了，就显示图片！
-                    bubble.classList.add("is-sticker");
                     contentHtml = `<img src="${foundSticker.url}" alt="${foundSticker.name}" class="sticker-image">`;
                   } else {
-                    // 如果没找到（比如AI自己编了个名字），就还是按普通文字显示
                     contentHtml = messageText.replace(/\n/g, "<br>");
                   }
                 } else {
-                  // 如果不匹配，就是普通的文本消息
-                  contentHtml = messageText.replace(/\n/g, "<br>");
+                  // 如果包含HTML标签，直接展示HTML，不强制用<br>替换标签内部的换行；如果不含HTML标签，将\n转换为<br>
+                  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(messageText);
+                  if (hasHtmlTags) {
+                    contentHtml = messageText;
+                  } else {
+                    contentHtml = messageText.replace(/\n/g, "<br>");
+                  }
                 }
               }
             }
@@ -20324,6 +20333,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 			            <div class="fav-card-header">${headerHtml}<div class="source">${sourceText}</div></div>
 			            <div class="fav-card-content">${contentHtml}</div>
 			            ${footerHtml}`;
+
+            // 为每个收藏卡片绑定长按事件
+            addLongPressListener(card, () => handleFavoriteLongPress(item.id));
 
             listEl.appendChild(card);
           }
@@ -20349,6 +20361,105 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           // 3. 显示所有收藏项
           displayFilteredFavorites(allFavoriteItems);
+        }
+
+        /**
+         * 收藏项长按菜单处理（编辑、保存、删除）
+         */
+        async function handleFavoriteLongPress(favId) {
+          const favoritesView = document.getElementById("favorites-view");
+          if (favoritesView && favoritesView.classList.contains("selection-mode")) return;
+
+          const item = (allFavoriteItems || []).find((f) => f.id === favId) || (await db.favorites.get(favId));
+          if (!item) return;
+
+          const choice = await showChoiceModal("收藏管理", [
+            { text: "编辑", value: "edit" },
+            { text: "保存", value: "save" },
+            { text: "删除", value: "delete" },
+          ]);
+
+          if (choice === "edit") {
+            let currentContent = "";
+            if (item.type === "chat_message") {
+              if (typeof item.content?.content === "string") {
+                currentContent = item.content.content;
+              } else if (typeof item.content === "string") {
+                currentContent = item.content;
+              } else {
+                currentContent = JSON.stringify(item.content?.content || item.content);
+              }
+            } else if (item.type === "qzone_post") {
+              currentContent = item.content?.content || item.content?.publicText || "";
+            } else {
+              currentContent = typeof item.content === "string" ? item.content : JSON.stringify(item.content);
+            }
+
+            const newContent = await showCustomPrompt(
+              "编辑收藏",
+              "在此修改收藏内容...",
+              currentContent,
+              "textarea",
+            );
+
+            if (newContent !== null) {
+              if (item.type === "chat_message") {
+                if (typeof item.content === "object" && item.content !== null) {
+                  item.content.content = newContent;
+                } else {
+                  item.content = newContent;
+                }
+              } else if (item.type === "qzone_post") {
+                if (item.content) {
+                  item.content.content = newContent;
+                  if (item.content.publicText) item.content.publicText = newContent;
+                }
+              } else {
+                item.content = newContent;
+              }
+              await db.favorites.put(item);
+              await renderFavoritesScreen();
+              await showCustomAlert("保存成功", "收藏内容已更新。");
+            }
+          } else if (choice === "save") {
+            let textToSave = "";
+            let imageUrlToSave = null;
+            if (item.type === "chat_message") {
+              const msg = item.content || {};
+              imageUrlToSave = msg.imageUrl || (Array.isArray(msg.content) && msg.content[0]?.image_url?.url) || null;
+              textToSave = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+            } else if (item.type === "qzone_post") {
+              const post = item.content || {};
+              imageUrlToSave = post.imageUrl || (post.imageUrls && post.imageUrls[0]) || null;
+              textToSave = post.content || post.publicText || "";
+            } else {
+              textToSave = typeof item.content === "string" ? item.content : JSON.stringify(item.content);
+            }
+
+            if (imageUrlToSave) {
+              const a = document.createElement("a");
+              a.href = imageUrlToSave;
+              a.download = `favorite_image_${Date.now()}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              await showCustomAlert("保存成功", "图片已开始下载保存。");
+            } else if (textToSave) {
+              try {
+                await navigator.clipboard.writeText(textToSave);
+                await showCustomAlert("保存成功", "内容已复制到剪贴板并完成保存。");
+              } catch (e) {
+                await showCustomAlert("保存成功", "内容已完成保存。");
+              }
+            }
+          } else if (choice === "delete") {
+            const confirmed = await showCustomConfirm("确认删除", "确定要从收藏夹中移除这条内容吗？");
+            if (confirmed) {
+              await db.favorites.delete(item.id);
+              await renderFavoritesScreen();
+              await showCustomAlert("删除成功", "该收藏已移除。");
+            }
+          }
         }
 
         function resetCreatePostModal() {
@@ -26369,6 +26480,17 @@ ${recentHistory || '无'}
                             ...commonParams,
                             params_version: 3,
                             negative_prompt: finalNegativePrompt,
+                            noise_schedule: "karras",
+                            deliberate_euler_ancestral_bug: false,
+                            prefer_brownian: true,
+                            add_original_image: true,
+                            cfg_rescale: 0,
+                            dynamic_thresholding: false,
+                            legacy: false,
+                            legacy_uc: false,
+                            inpaintImg2ImgStrength: 1,
+                            normalize_reference_strength_multiple: true,
+                            characterPrompts: [],
                             v4_prompt: {
                               caption: {
                                 base_caption: finalPositivePrompt,
@@ -26396,6 +26518,7 @@ ${recentHistory || '无'}
                             negative_prompt: finalNegativePrompt,
                             sm: settings.smea,
                             sm_dyn: settings.smea_dyn,
+                            noise_schedule: "native",
                             add_original_image: false,
                           },
                         };
@@ -26521,6 +26644,20 @@ ${recentHistory || '无'}
                           imageUrl: imageDataUrl,
                           prompt: aiPrompt,
                           fullPrompt: finalPositivePrompt,
+                          negativePrompt: finalNegativePrompt,
+                          model: model,
+                          naiSettings: {
+                            resolution: settings.resolution,
+                            width,
+                            height,
+                            steps: settings.steps,
+                            cfg_scale: settings.cfg_scale,
+                            sampler: settings.sampler,
+                            uc_preset: settings.uc_preset,
+                            quality_toggle: settings.quality_toggle,
+                            smea: settings.smea,
+                            smea_dyn: settings.smea_dyn,
+                          },
                         };
                         chat.history.push(imgMsg);
                         await db.chats.put(chat);
@@ -27418,8 +27555,10 @@ ${recentHistory || '无'}
 
               messagesPayload = historySlice
                 .map((msg, index) => {
+                  const effectiveContent = (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") ? msg.optimizedContent : msg.content;
+
                   if (msg.isHidden) {
-                    return { role: "system", content: msg.content };
+                    return { role: "system", content: effectiveContent };
                   }
 
                   if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet") return null;
@@ -27427,7 +27566,7 @@ ${recentHistory || '无'}
                     // 将旁白包装成系统指令发送给AI，强调这是剧情/环境描述
                     return {
                       role: "user",
-                      content: `(Timestamp: ${msg.timestamp}) [剧情/环境旁白: ${msg.content}]`,
+                      content: `(Timestamp: ${msg.timestamp}) [剧情/环境旁白: ${effectiveContent}]`,
                     };
                   }
                   if (msg.role === "assistant") {
@@ -27442,13 +27581,14 @@ ${recentHistory || '无'}
                       assistantMsgObject.meaning = msg.meaning;
                     } else {
                       if (msg.quote) {
+                        const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
                         assistantMsgObject.quote_reply = {
                           target_sender: msg.quote.senderName,
-                          target_content: msg.quote.content,
-                          reply_content: msg.content,
+                          target_content: targetQuoteText,
+                          reply_content: effectiveContent,
                         };
                       } else {
-                        assistantMsgObject.content = msg.content;
+                        assistantMsgObject.content = effectiveContent;
                       }
                     }
                     const assistantContent = JSON.stringify([
@@ -27485,11 +27625,11 @@ ${recentHistory || '无'}
                     // 1. 获取被引用者的名字
                     const quotedSender = msg.quote.senderName || "未知用户";
                     // 2. 获取完整的被引用内容 (移除了截断)
-                    const fullQuotedContent = String(msg.quote.content || "");
+                    const fullQuotedContent = String((msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : ""));
                     // 3. 构造成AI能理解的、清晰的上下文
-                    contentStr += `(回复 ${quotedSender} 的消息: "${fullQuotedContent}"): ${msg.content}`;
+                    contentStr += `(回复 ${quotedSender} 的消息: "${fullQuotedContent}"): ${effectiveContent}`;
                   } else {
-                    contentStr += msg.content;
+                    contentStr += effectiveContent;
                   }
 
                   if (msg.type === "user_photo")
@@ -28059,10 +28199,12 @@ ${colSpecs.join('\n')}
               // 构建单人聊天的messagesPayload
               messagesPayload = historySlice
                 .map((msg) => {
+                  const effectiveContent = (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") ? msg.optimizedContent : msg.content;
+
                   if (msg.isHidden) {
                     // 如果是隐藏消息，就把它作为一条 system 角色的消息发送给AI
                     // AI能看到它，但它不会被误解为是用户的发言
-                    return { role: "system", content: msg.content };
+                    return { role: "system", content: effectiveContent };
                   }
 
                   if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet") return null;
@@ -28077,13 +28219,14 @@ ${colSpecs.join('\n')}
                       assistantMsgObject.meaning = msg.meaning;
                     } else {
                       if (msg.quote) {
+                        const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
                         assistantMsgObject.quote_reply = {
                           target_sender: msg.quote.senderName,
-                          target_content: msg.quote.content,
-                          reply_content: msg.content,
+                          target_content: targetQuoteText,
+                          reply_content: effectiveContent,
                         };
                       } else {
-                        assistantMsgObject.content = msg.content;
+                        assistantMsgObject.content = effectiveContent;
                       }
                     }
                     const assistantContent = JSON.stringify([
@@ -28102,11 +28245,11 @@ ${colSpecs.join('\n')}
                     // 1. 获取被引用者的名字
                     const quotedSender = msg.quote.senderName || "未知用户";
                     // 2. 获取完整的被引用内容 (移除了截断)
-                    const fullQuotedContent = String(msg.quote.content || "");
+                    const fullQuotedContent = String((msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : ""));
                     // 3. 构造成AI能理解的、清晰的上下文
-                    contentStr += `(回复 ${quotedSender} 的消息: "${fullQuotedContent}"): ${msg.content}`;
+                    contentStr += `(回复 ${quotedSender} 的消息: "${fullQuotedContent}"): ${effectiveContent}`;
                   } else {
-                    contentStr += msg.content;
+                    contentStr += effectiveContent;
                   }
 
                   if (msg.type === "user_photo")
@@ -34607,24 +34750,38 @@ ${colSpecs.join('\n')}
           // 关闭菜单
           hideMessageActions();
 
-          // 获取提示词 (优先使用保存的完整提示词 fullPrompt，如果没有则重新构建)
+          // 获取模型与设置 (完全复用第一次生成时的参数)
+          const savedModel = message.model;
+          const model =
+            savedModel ||
+            localStorage.getItem("novelai-model") ||
+            "nai-diffusion-4-5-full";
+
+          const baseSettings = getNovelAISettings();
+          const messageSettings = message.naiSettings || {};
+          const settings = {
+            ...baseSettings,
+            ...messageSettings,
+          };
+
+          // 获取提示词 (优先使用保存的完整正面与负面提示词，如果没有则重新构建)
           let finalPositivePrompt = message.fullPrompt;
           if (!finalPositivePrompt) {
             const naiPrompts = getCharacterNAIPrompts(chat.id);
             const aiPrompt = message.prompt || "a beautiful scene";
-            finalPositivePrompt = aiPrompt + ", " + naiPrompts.positive;
+            finalPositivePrompt = naiPrompts.positive
+              ? aiPrompt + ", " + naiPrompts.positive
+              : aiPrompt;
           }
 
-          // 获取负面提示词
-          const naiPrompts = getCharacterNAIPrompts(chat.id);
-          const finalNegativePrompt = naiPrompts.negative;
+          let finalNegativePrompt = message.negativePrompt;
+          if (typeof finalNegativePrompt === "undefined") {
+            const naiPrompts = getCharacterNAIPrompts(chat.id);
+            finalNegativePrompt = naiPrompts.negative;
+          }
 
-          // 获取设置
+          // 获取 API Key
           const apiKey = localStorage.getItem("novelai-api-key");
-          const model =
-            localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
-          const settings = getNovelAISettings();
-
           if (!apiKey) {
             alert("请先配置 NovelAI API Key！");
             return;
@@ -34637,21 +34794,27 @@ ${colSpecs.join('\n')}
           );
 
           try {
-            const [width, height] = settings.resolution.split("x").map(Number);
-            let requestBody;
+            let width = settings.width;
+            let height = settings.height;
+            if (!width || !height) {
+              const resParts = (settings.resolution || "1024x1024")
+                .split("x")
+                .map(Number);
+              width = resParts[0];
+              height = resParts[1];
+            }
 
-            // 构建请求体 (逻辑与你原有的 generateNovelAIImage 一致)
-            // 这里为了简洁，提取关键构建逻辑
+            let requestBody;
             const commonParams = {
               width,
               height,
-              scale: settings.cfg_scale,
-              sampler: settings.sampler,
-              steps: settings.steps,
-              seed: Math.floor(Math.random() * 4294967295), // 关键：重绘必须用随机种子
+              scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
+              sampler: settings.sampler || "k_euler_ancestral",
+              steps: settings.steps !== undefined ? settings.steps : 28,
+              seed: Math.floor(Math.random() * 4294967295), // 关键：重绘只更换随机种子
               n_samples: 1,
-              ucPreset: settings.uc_preset,
-              qualityToggle: settings.quality_toggle,
+              ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+              qualityToggle: settings.quality_toggle !== false,
             };
 
             if (model.includes("nai-diffusion-4")) {
@@ -34663,6 +34826,17 @@ ${colSpecs.join('\n')}
                   ...commonParams,
                   params_version: 3,
                   negative_prompt: finalNegativePrompt,
+                  noise_schedule: "karras",
+                  deliberate_euler_ancestral_bug: false,
+                  prefer_brownian: true,
+                  add_original_image: true,
+                  cfg_rescale: 0,
+                  dynamic_thresholding: false,
+                  legacy: false,
+                  legacy_uc: false,
+                  inpaintImg2ImgStrength: 1,
+                  normalize_reference_strength_multiple: true,
+                  characterPrompts: [],
                   v4_prompt: {
                     caption: {
                       base_caption: finalPositivePrompt,
@@ -34690,6 +34864,7 @@ ${colSpecs.join('\n')}
                   negative_prompt: finalNegativePrompt,
                   sm: settings.smea,
                   sm_dyn: settings.smea_dyn,
+                  noise_schedule: "native",
                   add_original_image: false,
                 },
               };
@@ -34726,7 +34901,7 @@ ${colSpecs.join('\n')}
             });
             if (!res.ok) throw new Error(`NAI API Error: ${res.status}`);
 
-            // 解析结果 (复用你的解析逻辑)
+            // 解析结果
             const contentType = res.headers.get("content-type");
             let imageDataUrl = null;
             let zipBlob = null;
@@ -34783,31 +34958,154 @@ ${colSpecs.join('\n')}
             }
 
             if (imageDataUrl) {
-              // *** 核心：更新原来的消息 ***
+              // 更新原来的消息并保留参数
               message.imageUrl = imageDataUrl;
+              message.fullPrompt = finalPositivePrompt;
+              message.negativePrompt = finalNegativePrompt;
+              message.model = model;
+              message.naiSettings = {
+                resolution: `${width}x${height}`,
+                width,
+                height,
+                steps: commonParams.steps,
+                cfg_scale: commonParams.scale,
+                sampler: commonParams.sampler,
+                uc_preset: commonParams.ucPreset,
+                quality_toggle: commonParams.qualityToggle,
+                smea: settings.smea,
+                smea_dyn: settings.smea_dyn,
+              };
 
               // 保存数据库
               await db.chats.put(chat);
 
               // 隐藏遮罩
-              document
-                .getElementById("custom-modal-overlay")
-                .classList.remove("visible"); // 假设 showCustomAlert 使用的是这个
+              const overlay = document.getElementById("custom-modal-overlay");
+              if (overlay) overlay.classList.remove("visible");
 
               // 刷新界面
               renderChatInterface(state.activeChatId);
-
-              // 提示成功
-              // alert('图片重绘成功！'); // 可选，因为看到图片变了就知道成功了
             } else {
               throw new Error("未解析到图片数据");
             }
           } catch (error) {
             console.error("重绘失败:", error);
-            document
-              .getElementById("custom-modal-overlay")
-              .classList.remove("visible");
+            const overlay = document.getElementById("custom-modal-overlay");
+            if (overlay) overlay.classList.remove("visible");
             alert(`重绘失败: ${error.message}`);
+          }
+        }
+
+        /**
+         * 优化消息内容（调用副API将HTML提取为纯文本并保存）
+         */
+        async function optimizeMessageContent() {
+          if (!activeMessageTimestamp || !state.activeChatId) return;
+
+          const chat = state.chats[state.activeChatId];
+          const message = (chat.history || []).find(
+            (m) => m.timestamp === activeMessageTimestamp,
+          );
+          if (!message) return;
+
+          hideMessageActions();
+
+          let rawContent = "";
+          if (typeof message.content === "object") {
+            rawContent = JSON.stringify(message.content);
+          } else {
+            rawContent = String(message.content || "");
+          }
+
+          if (!rawContent.trim()) {
+            await showCustomAlert("提示", "该消息内容为空，无需优化。");
+            return;
+          }
+
+          let proxyUrl = state.apiConfig.subProxyUrl || state.apiConfig.proxyUrl || "https://api.openai.com";
+          let apiKey = state.apiConfig.subApiKey || state.apiConfig.apiKey || "";
+          let model = state.apiConfig.subModel || state.apiConfig.model || "gpt-4o-mini";
+
+          if (!apiKey) {
+            await showCustomAlert("提示", "请先在API设置中配置 API Key。");
+            return;
+          }
+
+          await showCustomAlert(
+            "正在优化...",
+            "正在调用副API提取消息纯文本，请稍候...",
+          );
+
+          try {
+            const promptText = "提取以下HTML中的全部文字内容，取出所有标签、样式、格式代码，只保留纯文本";
+            const messagesPayload = [
+              { role: "system", content: promptText },
+              { role: "user", content: rawContent },
+            ];
+
+            let isGemini = proxyUrl === GEMINI_API_URL;
+            let response = null;
+            if (isGemini) {
+              let geminiConfig = typeof toGeminiRequestData === "function"
+                ? toGeminiRequestData(model, apiKey, promptText, [{ role: "user", content: rawContent }], isGemini)
+                : null;
+              if (geminiConfig) {
+                response = await fetch(geminiConfig.url, geminiConfig.data);
+              }
+            } else {
+              response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: model,
+                  messages: messagesPayload,
+                  temperature: 0.1,
+                  stream: false,
+                }),
+              });
+            }
+
+            if (!response || !response.ok) {
+              const errText = response ? await response.text() : "网络请求失败";
+              throw new Error(`API请求失败: ${errText}`);
+            }
+
+            const resData = await response.json();
+            let extractedText = isGemini
+              ? resData?.candidates?.[0]?.content?.parts?.[0]?.text || ""
+              : resData?.choices?.[0]?.message?.content || "";
+
+            extractedText = extractedText.trim();
+            if (!extractedText) {
+              throw new Error("API未返回有效纯文本");
+            }
+
+            message.optimizedContent = extractedText;
+            await db.chats.put(chat);
+
+            const overlay = document.getElementById("custom-modal-overlay");
+            if (overlay) overlay.classList.remove("visible");
+
+            await showCustomAlert("优化成功", "已成功提取纯文本。AI上下文与Token计算将使用优化后的纯文本，玩家界面保持原HTML显示。");
+
+            // 更新Token显示
+            const tokenDisplay = document.getElementById("context-token-count-display");
+            if (tokenDisplay && typeof getTokenDetailedBreakdown === "function") {
+              try {
+                const result = await getTokenDetailedBreakdown(state.activeChatId);
+                if (result) {
+                  tokenDisplay.textContent = `${result.totalTokens} Tokens`;
+                }
+              } catch (e) {}
+            }
+          } catch (error) {
+            console.error("优化消息失败:", error);
+            const overlay = document.getElementById("custom-modal-overlay");
+            if (overlay) overlay.classList.remove("visible");
+            await showCustomAlert("优化失败", error.message || "请求发生错误");
           }
         }
 
@@ -47408,7 +47706,9 @@ ${colSpecs.join('\n')}
                     : "我"
                   : msg.senderName || chat.name;
               let content = "";
-              if (typeof msg.content === "string") {
+              if (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") {
+                content = msg.optimizedContent;
+              } else if (typeof msg.content === "string") {
                 content = msg.content;
               } else if (Array.isArray(msg.content)) {
                 content = "[图片]";
@@ -49232,9 +49532,16 @@ ${colSpecs.join('\n')}
 
         function calculateTokenCount(text) {
           if (!text) return 0;
-          // 简单估算：如果是中文环境，通常可以直接用字符数作为参考
-          // 或者粗略估算：Token ≈ 字符数
-          // 如果你想显示的数值小一点（更接近GPT的Token），可以乘以 0.7
+          if (typeof text !== "string") {
+            try { text = JSON.stringify(text); } catch (e) { return 0; }
+          }
+          // 图片base64数据串不按全字符计算，统一转换为单张图片标准视觉Token估算值258
+          const base64ImgRegex = /data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g;
+          const imgMatches = text.match(base64ImgRegex);
+          if (imgMatches && imgMatches.length > 0) {
+            const textWithoutImages = text.replace(base64ImgRegex, "");
+            return textWithoutImages.length + (imgMatches.length * 258);
+          }
           return text.length;
         }
 
@@ -49327,20 +49634,37 @@ ${colSpecs.join('\n')}
           let aiMsgLen = 0;
 
           contextMessages.forEach((msg) => {
-            let content =
-              typeof msg.content === "string"
-                ? msg.content
-                : JSON.stringify(msg.content);
+            let content = "";
+            if (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") {
+              content = msg.optimizedContent;
+            } else if (Array.isArray(msg.content)) {
+              let textList = [];
+              let imgCount = 0;
+              msg.content.forEach((part) => {
+                if (part && part.type === "image_url") imgCount++;
+                else if (part && part.text) textList.push(part.text);
+              });
+              content = textList.join(" ") + (imgCount > 0 ? ` [图片×${imgCount}]` : "");
+            } else if (typeof msg.content === "string") {
+              content = msg.content;
+            } else if (typeof msg.content === "object" && msg.content !== null) {
+              content = JSON.stringify(msg.content);
+            }
+
             let len = calculateTokenCount(content);
+            if (msg.imageUrl || msg.type === "naiimag" || msg.type === "ai_image" || msg.type === "user_photo") {
+              len += 258;
+            }
             if (msg.thinking) {
               len += calculateTokenCount(String(msg.thinking));
             }
 
             // --- 异常检测逻辑 ---
             if (len > outlierThreshold) {
+              let previewText = content.replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g, "[图片]");
               outliers.push({
                 role: msg.role,
-                preview: content.substring(0, 15) + "...", // 预览前15个字
+                preview: previewText.substring(0, 15) + "...", // 预览前15个字
                 count: len,
                 timestamp: msg.timestamp, // 用于跳转
               });
@@ -49417,7 +49741,9 @@ ${colSpecs.join('\n')}
           const messageText = contextMessages
             .map((msg) => {
               let content = "";
-              if (typeof msg.content === "string") {
+              if (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") {
+                content = msg.optimizedContent;
+              } else if (typeof msg.content === "string") {
                 content = msg.content;
               } else if (Array.isArray(msg.content)) {
                 content = "[图片]"; // 将图片简化为占位符
@@ -58447,6 +58773,15 @@ ${colSpecs.join('\n')}
                 return; // 处理完语音后退出
               }
 
+              // --- 点击图片全屏展开预览 ---
+              const chatImg = e.target.closest(
+                ".chat-image, .realimag-image, .naiimag-image, .post-images-grid img, .message-bubble img:not(.avatar):not(.sticker-image):not(.icon)",
+              );
+              if (chatImg && chatImg.src && !chatImg.src.includes("KYr2qRCK") && !chatImg.classList.contains("ai-generated-image")) {
+                openImageViewer(chatImg.src);
+                return;
+              }
+
               // --- 你原来的其他点击事件逻辑 ---
               const aiImage = e.target.closest(".ai-generated-image");
               if (aiImage) {
@@ -59110,10 +59445,14 @@ ${colSpecs.join('\n')}
               document.getElementById("assign-group-section").style.display =
                 isGroup ? "none" : "block";
 
-              // 显隐对方人设卡片与导入我的人设按钮
+              // 显隐对方人设卡片、群成员卡片与导入我的人设按钮
               const aiPersonaCard = document.getElementById("ai-persona-card");
               if (aiPersonaCard) {
                 aiPersonaCard.style.display = (isGroup || chat.roleType === "dice" || chat.roleType === "system_status") ? "none" : "block";
+              }
+              const groupMembersCard = document.getElementById("group-members-card");
+              if (groupMembersCard) {
+                groupMembersCard.style.display = isGroup ? "block" : "none";
               }
               const systemStatusSettingsCard = document.getElementById("system-status-settings-card");
               if (systemStatusSettingsCard) {
@@ -62219,6 +62558,9 @@ ${colSpecs.join('\n')}
           document
             .getElementById("edit-message-btn")
             .addEventListener("click", openAdvancedMessageEditor);
+          document
+            .getElementById("optimize-message-btn")
+            .addEventListener("click", optimizeMessageContent);
           document
             .getElementById("reroll-nai-btn")
             .addEventListener("click", handleNaiReroll);
@@ -67638,6 +67980,71 @@ ${colSpecs.join('\n')}
         console.log("✅ [NAI下载] 三击下载功能已初始化");
         console.log("💡 [NAI下载] 提示：三击任意NAI图片即可下载");
       })();
+
+      // 全屏图片展开预览器与下载逻辑
+      let currentViewingImageSrc = null;
+
+      function openImageViewer(src) {
+        if (!src || src.includes("KYr2qRCK") || src === "about:blank") return;
+        const modal = document.getElementById("image-viewer-modal");
+        const img = document.getElementById("image-viewer-img");
+        if (!modal || !img) return;
+        currentViewingImageSrc = src;
+        img.src = src;
+        modal.style.display = "flex";
+        void modal.offsetWidth;
+        modal.classList.add("visible");
+      }
+
+      function closeImageViewer() {
+        const modal = document.getElementById("image-viewer-modal");
+        if (!modal) return;
+        modal.classList.remove("visible");
+        setTimeout(() => {
+          if (!modal.classList.contains("visible")) {
+            modal.style.display = "none";
+            const img = document.getElementById("image-viewer-img");
+            if (img) img.src = "";
+            currentViewingImageSrc = null;
+          }
+        }, 260);
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const modal = document.getElementById("image-viewer-modal");
+        const backdrop = document.getElementById("image-viewer-backdrop");
+        const downloadBtn = document.getElementById("image-viewer-download-btn");
+
+        if (backdrop) {
+          backdrop.addEventListener("click", () => {
+            closeImageViewer();
+          });
+        }
+
+        if (modal) {
+          modal.addEventListener("click", (e) => {
+            if (e.target === modal) {
+              closeImageViewer();
+            }
+          });
+        }
+
+        if (downloadBtn) {
+          downloadBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!currentViewingImageSrc) return;
+            const a = document.createElement("a");
+            a.href = currentViewingImageSrc;
+            a.download = `preview_image_${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            if (typeof showCustomAlert === "function") {
+              showCustomAlert("下载成功", "图片已保存至本地设备。");
+            }
+          });
+        }
+      });
     </script>
 
     <input
