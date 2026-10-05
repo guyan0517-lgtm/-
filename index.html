@@ -2149,13 +2149,10 @@
                   </div>
                 </div>
 
-                <!-- 切割提示词编辑框与预设栏 -->
+                <!-- 分析提示词配置区 -->
                 <div class="module-prompt-container" id="module-prompt-container" style="display: none;">
-                  <div class="module-prompt-header">
-                    <span class="module-prompt-title">切割提示词</span>
-                  </div>
-                  <div class="form-group" style="margin-bottom: 10px;">
-                    <select id="module-prompt-preset-select" class="moe-input" style="width: 100%; height: 34px; line-height: 24px; padding: 4px 8px; font-size: 13px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
+                  <div class="form-group" style="margin-bottom: 8px;">
+                    <select id="module-prompt-preset-select" class="moe-input">
                       <option value="">选择预设</option>
                     </select>
                     <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; flex-wrap: wrap;">
@@ -2171,7 +2168,21 @@
 
               <!-- Step 2: 方案确认页 -->
               <div class="module-step-pane" id="module-step2-pane" style="display: none;">
-                <div class="module-step-desc">AI 已通读全文并完成深度带团重构，你可以切换查看章节、目录与地图</div>
+                <!-- 模组元信息与 Tag 徽章栏 -->
+                <div id="module-step2-meta-container" style="display: flex; flex-direction: column; gap: 6px; background: var(--secondary-bg, #F0EFEA); padding: 10px 12px; border-radius: 10px; margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;" id="module-step2-category-badges">
+                      <span class="mod-category-pill coc" id="module-step2-main-cat">COC</span>
+                      <span class="mod-category-pill" id="module-step2-sub-cat">1v1</span>
+                      <span class="mod-category-pill" id="module-step2-type">线性</span>
+                    </div>
+                    <span style="font-size: 11px; color: var(--text-secondary);" id="module-step2-meta-words">约 0 字</span>
+                  </div>
+                  <div id="module-step2-tags-row" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
+                  <div id="module-step2-summary-text" style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;"></div>
+                </div>
+
+                <div class="module-step-desc">AI 已通读全文并完成带团结构规划，你可以切换查看章节、目录与地图</div>
                 <!-- 切割生成模式切换行 -->
                 <div class="module-cut-mode-row" style="display: flex; align-items: center; justify-content: space-between; background-color: var(--secondary-bg, #F0EFEA); padding: 6px 12px; border-radius: 10px; margin-bottom: 8px;">
                   <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">模式</span>
@@ -2185,6 +2196,7 @@
                   <span class="module-subtab active" data-subtab="chapters">章节</span>
                   <span class="module-subtab" data-subtab="toc">目录</span>
                   <span class="module-subtab" data-subtab="map">地图</span>
+                  <span class="module-subtab" data-subtab="gallery">图库</span>
                 </div>
                 <!-- 章节卡片列表 -->
                 <div class="module-plan-card-list module-subpane" id="module-plan-card-list"></div>
@@ -2192,10 +2204,29 @@
                 <div class="module-plan-toc-view module-subpane" id="module-plan-toc-view" style="display: none;"></div>
                 <!-- 模组地图层级树视图 -->
                 <div class="module-plan-map-view module-subpane" id="module-plan-map-view" style="display: none;"></div>
+                <!-- 方案图片库视图 -->
+                <div class="module-plan-gallery-view module-subpane" id="module-plan-gallery-view" style="display: none; flex-direction: column; gap: 10px;"></div>
                 <!-- 全局修改意见框 -->
                 <div class="module-global-opinion-box" id="module-global-opinion-box">
                   <div class="module-global-opinion-header">修改意见</div>
                   <textarea class="module-global-opinion-textarea" id="module-global-opinion-textarea" rows="3" placeholder="在此输入对整体方案的补充调整意见..."></textarea>
+                </div>
+
+                <!-- 切割提示词配置区 -->
+                <div class="module-cutting-prompt-box" id="module-cutting-prompt-box" style="margin-top: 10px; display: flex; flex-direction: column;">
+                  <div class="module-global-opinion-header" style="margin-bottom: 6px;">切割提示词</div>
+                  <div class="form-group" style="margin-bottom: 8px;">
+                    <select id="module-cutting-preset-select" class="moe-input">
+                      <option value="">选择预设</option>
+                    </select>
+                    <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+                      <button type="button" id="module-cutting-preset-default-btn" class="summary-preset-btn">默认</button>
+                      <button type="button" id="module-cutting-preset-new-btn" class="summary-preset-btn">新建</button>
+                      <button type="button" id="module-cutting-preset-save-btn" class="summary-preset-btn">保存</button>
+                      <button type="button" id="module-cutting-preset-delete-btn" class="summary-preset-btn">删除</button>
+                    </div>
+                  </div>
+                  <textarea class="module-prompt-textarea" id="module-cutting-prompt-textarea" rows="6"></textarea>
                 </div>
               </div>
 
@@ -2204,7 +2235,11 @@
                 <div class="module-progress-box">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                     <div class="module-progress-text" id="module-progress-text">准备开始切割...</div>
-                    <div class="module-progress-ctrls" style="display: flex; gap: 6px;">
+                    <div class="module-progress-ctrls" style="display: flex; gap: 6px; align-items: center;">
+                      <div style="display: flex; background: var(--secondary-bg, #F0EFEA); padding: 2px; border-radius: 9999px; margin-right: 4px;">
+                        <button type="button" id="module-step3-view-pc" style="border: none; background: var(--card-bg, #FFFFFF); color: var(--text-primary); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; cursor: pointer;">玩家</button>
+                        <button type="button" id="module-step3-view-kp" style="border: none; background: transparent; color: var(--text-secondary); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 9999px; cursor: pointer;">守秘</button>
+                      </div>
                       <button type="button" class="module-mini-btn" id="module-pause-btn" style="display: none;">暂停</button>
                       <button type="button" class="module-mini-btn" id="module-resume-btn" style="display: none;">继续</button>
                       <button type="button" class="module-mini-btn btn-danger" id="module-cancel-btn" style="display: none;">取消</button>
@@ -2215,48 +2250,273 @@
                   </div>
                 </div>
                 <div class="module-cut-card-list" id="module-cut-card-list"></div>
+
+                <!-- 全局改进与修复平铺面板 -->
+                <div class="module-global-improvement-panel" id="module-global-improvement-panel" style="display: none; flex-direction: column; gap: 8px; margin-top: 12px; padding: 12px; background: var(--secondary-bg, #F9F8F5); border: 1px solid var(--border-color); border-radius: 10px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 600; font-size: 13px; color: var(--text-primary);">改进要求</div>
+                    <span id="module-global-improvement-status" style="font-size: 11.5px; color: var(--text-secondary);">已就绪</span>
+                  </div>
+                  <textarea id="module-global-improvement-textarea" class="module-prompt-textarea" style="min-height: 70px; font-size: 12px;" placeholder="在此输入全局改进要求与补充指令..."></textarea>
+                  <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="module-btn-secondary" id="module-step-by-step-fix-btn" style="height: 30px; font-size: 12px; padding: 0 12px;">逐修</button>
+                    <button type="button" class="module-btn-primary" id="module-global-fix-all-btn" style="height: 30px; font-size: 12px; padding: 0 14px;">全修</button>
+                  </div>
+                </div>
               </div>
             </div>
 
             <!-- 底部操作按钮栏 -->
             <div class="module-bottom-action-bar" id="module-bottom-action-bar" style="display: flex;">
               <!-- 按钮由 JS 动态切换文案与操作 -->
-              <button type="button" class="module-btn-secondary" id="module-secondary-action-btn" style="display: none;">重新选择</button>
-              <button type="button" class="module-btn-secondary" id="module-rethink-action-btn" style="display: none;">重新思考</button>
-              <button type="button" class="module-btn-primary" id="module-primary-action-btn">开始分析</button>
-              <button type="button" class="module-btn-secondary" id="module-step3-back-btn" style="display: none;">上一步</button>
+              <button type="button" class="module-btn-secondary" id="module-secondary-action-btn" style="display: none;">重新</button>
+              <button type="button" class="module-btn-secondary" id="module-rethink-action-btn" style="display: none;">重构</button>
+              <button type="button" class="module-btn-primary" id="module-primary-action-btn">分析</button>
+              <button type="button" class="module-btn-secondary" id="module-step3-back-btn" style="display: none;">返回</button>
               <button type="button" class="module-btn-secondary" id="module-batch-audit-btn" style="display: none;">校验</button>
               <button type="button" class="module-btn-secondary" id="module-export-btn" style="display: none;">导出</button>
               <button type="button" class="module-btn-primary" id="module-save-library-btn" style="display: none;">存入</button>
-              <button type="button" class="module-btn-secondary" id="module-finish-btn" style="display: none;">完成</button>
+              <button type="button" class="module-btn-secondary" id="module-finish-btn" style="display: none;">删除</button>
             </div>
           </div>
 
           <!-- 独立模组库面板 -->
-          <div class="module-library-panel" id="module-library-panel" style="display: none;">
-            <div class="module-library-header-actions" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 14px 0 14px; gap: 10px;">
-              <input type="text" id="module-library-search-input" class="module-tuning-input" style="flex: 1; height: 30px; font-size: 12px;" placeholder="搜索模组名称..." />
-              <input type="file" id="module-library-file-input" accept=".zip, .txt" style="display: none;" />
-              <button type="button" class="module-mini-btn" id="module-library-import-btn" style="height: 30px; padding: 0 12px; font-weight: 600; flex-shrink: 0;">导入模组</button>
-            </div>
-            <div class="module-library-body" id="module-library-body">
-              <div class="module-library-empty" id="module-library-empty">
-                <div class="module-empty-icon">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
-                    <path d="M6 6h10"></path>
-                    <path d="M6 10h10"></path>
-                  </svg>
-                </div>
-                <div class="module-empty-title">暂无已切割模组</div>
-                <div class="module-empty-desc">支持导入已打包的 ZIP 或 TXT 模组文件</div>
+          <div class="module-library-panel" id="module-library-panel" style="display: none; height: 100%; flex-direction: column;">
+            <!-- 视图 1：模组库主列表页 -->
+            <div id="module-library-main-view" style="display: flex; flex-direction: column; height: 100%; width: 100%;">
+              <div class="module-library-header-actions" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 4px 14px; gap: 10px;">
+                <input type="text" id="module-library-search-input" class="module-tuning-input" style="flex: 1; height: 32px; font-size: 12.5px; border-radius: 10px;" placeholder="搜索模组名称..." />
+                <input type="file" id="module-library-file-input" accept=".zip, .txt" style="display: none;" />
+                <button type="button" class="mod-capsule-btn primary" id="module-library-import-btn" style="height: 32px; padding: 0 14px; flex-shrink: 0;">导入</button>
               </div>
-              <div class="module-library-list" id="module-library-list" style="display: none;"></div>
+              <div class="module-library-filter-bar" id="module-library-filter-bar" style="display: flex; gap: 6px; padding: 0 14px 6px 14px; align-items: center;">
+                <span class="mod-filter-pill active" data-filter="all">全部</span>
+                <span class="mod-filter-pill" data-filter="coc">COC</span>
+                <span class="mod-filter-pill" data-filter="coj">COJ</span>
+              </div>
+              <div class="module-library-body" id="module-library-body" style="flex: 1; overflow-y: auto; padding: 6px 14px 16px 14px;">
+                <div class="module-library-empty" id="module-library-empty">
+                  <div class="module-empty-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                      <path d="M6 6h10"></path>
+                      <path d="M6 10h10"></path>
+                    </svg>
+                  </div>
+                  <div class="module-empty-title">暂无已存模组</div>
+                  <div class="module-empty-desc">支持导入已打包的 ZIP 或 TXT 模组文件</div>
+                </div>
+                <div class="module-library-list" id="module-library-list" style="display: none; flex-direction: column; gap: 10px;"></div>
+              </div>
+            </div>
+
+            <!-- 视图 2：整页模组详情页 -->
+            <div id="module-library-detail-view" style="display: none; flex-direction: column; height: 100%; width: 100%;">
+              <!-- 顶部导航栏 -->
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF);">
+                <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;" id="module-detail-back-btn">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                  <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">返回</span>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; padding: 0 8px; min-width: 0;">
+                  <span style="font-size: 14.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;" id="module-detail-title">模组详情</span>
+                  <span style="font-size: 11px; color: var(--text-secondary);" id="module-detail-stats">0 个章节 · 约 0 字</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button type="button" class="mod-capsule-btn" id="module-detail-edit-btn">编辑</button>
+                  <button type="button" class="mod-capsule-btn" id="module-detail-export-btn">导出</button>
+                  <button type="button" class="mod-capsule-btn danger" id="module-detail-delete-btn">删除</button>
+                </div>
+              </div>
+
+              <!-- 模组详情内容区 -->
+              <div style="flex: 1; overflow-y: auto; padding: 12px 14px 20px 14px; display: flex; flex-direction: column; gap: 10px;">
+                <!-- 顶部封面与大纲信息框 -->
+                <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px;">
+                  <div style="display: flex; flex-direction: row; align-items: center; gap: 12px;">
+                    <div id="module-detail-cover" style="width: 52px; height: 52px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color, #4A7A68);">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                        <path d="M6 6h10"></path>
+                        <path d="M6 10h10"></path>
+                      </svg>
+                    </div>
+                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+                      <span style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="module-detail-cover-title">模组名称</span>
+                      <span style="font-size: 11.5px; color: var(--text-secondary);" id="module-detail-cover-desc">结构化跑团模组</span>
+                    </div>
+                  </div>
+                  <div id="module-detail-tags-row" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;"></div>
+                </div>
+
+                <!-- 维度子标签切换 -->
+                <div class="module-step2-tabs" id="module-detail-view-tabs" style="margin-bottom: 2px;">
+                  <span class="module-subtab active" data-tab="chapters">章节</span>
+                  <span class="module-subtab" data-tab="toc">目录</span>
+                  <span class="module-subtab" data-tab="map">地图</span>
+                  <span class="module-subtab" data-tab="gallery">图库</span>
+                </div>
+
+                <!-- 分类分组章节列表 -->
+                <div id="module-detail-grouped-chapters" style="display: flex; flex-direction: column; gap: 6px;"></div>
+
+                <!-- 目录视图 -->
+                <div id="module-detail-toc-view" class="module-plan-toc-view" style="display: none;"></div>
+
+                <!-- 地图视图 -->
+                <div id="module-detail-map-view" class="module-plan-map-view" style="display: none;"></div>
+
+                <!-- 图库视图 -->
+                <div id="module-detail-gallery-view" style="display: none; flex-direction: column; gap: 10px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; flex-wrap: wrap; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-weight: 600; font-size: 13px; color: var(--text-primary);" id="module-gallery-count-label">模组插图 0 张</span>
+                      <div style="display: flex; background: var(--secondary-bg, #F0EFEA); padding: 2px; border-radius: 9999px;">
+                        <button type="button" id="module-gallery-view-pc" style="border: none; background: var(--card-bg, #FFFFFF); color: var(--text-primary); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; cursor: pointer;">玩家</button>
+                        <button type="button" id="module-gallery-view-kp" style="border: none; background: transparent; color: var(--text-secondary); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 9999px; cursor: pointer;">守秘</button>
+                      </div>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                      <input type="file" id="module-gallery-file-input" accept="image/*" multiple style="display: none;" />
+                      <button type="button" class="mod-capsule-btn" id="module-gallery-import-btn">导入</button>
+                      <button type="button" class="mod-capsule-btn primary" id="module-gallery-locate-btn">定位</button>
+                      <button type="button" class="mod-capsule-btn danger" id="module-gallery-clear-btn">清空</button>
+                    </div>
+                  </div>
+                  <div id="module-gallery-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 模组编辑与标签弹窗 -->
+            <div class="modal" id="module-edit-modal" style="display: none;">
+              <div class="modal-content" style="max-width: 520px; padding: 18px; display: flex; flex-direction: column; gap: 12px; max-height: 88vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 600; font-size: 15px; color: var(--text-primary);">编辑模组信息</span>
+                  <span class="modal-close" id="module-edit-modal-close-btn" style="cursor: pointer; font-size: 20px;">&times;</span>
+                </div>
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">模组名称</label>
+                  <input type="text" id="module-edit-name-input" class="moe-input" placeholder="模组名称" />
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                  <div class="form-group">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">结构类型</label>
+                    <select id="module-edit-type-select" class="moe-input">
+                      <option value="线性">线性</option>
+                      <option value="沙盒">沙盒</option>
+                      <option value="其他">其他</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">模组大类</label>
+                    <select id="module-edit-system-select" class="moe-input">
+                      <option value="coc">COC</option>
+                      <option value="coj">COJ</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">规模人数</label>
+                    <select id="module-edit-scale-select" class="moe-input">
+                      <option value="1v1">1v1</option>
+                      <option value="单人">单人</option>
+                      <option value="2ho">2ho</option>
+                      <option value="3ho">3ho</option>
+                      <option value="4ho">4ho</option>
+                      <option value="多ho">多ho</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">模组简介（无剧透）</label>
+                  <textarea id="module-edit-desc-input" class="moe-input" rows="2" style="resize: vertical; font-size: 12px;" placeholder="简要描述模组背景，禁止包含剧透..."></textarea>
+                </div>
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">结局标签（单选）</label>
+                  <div id="module-edit-ending-tags" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                </div>
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">内容标签（多选）</label>
+                  <div id="module-edit-content-tags" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                </div>
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">自定义标签（仅用户自己可见）</label>
+                  <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" id="module-edit-custom-tag-input" class="moe-input" style="flex: 1;" placeholder="输入标签名称..." />
+                    <button type="button" class="moe-btn" id="module-edit-add-tag-btn" style="flex-shrink: 0; padding: 0 14px; height: 34px;">添加</button>
+                  </div>
+                  <div id="module-edit-custom-tags-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px;">
+                  <button type="button" class="module-btn-secondary" id="module-edit-modal-cancel-btn" style="height: 32px; padding: 0 14px;">取消</button>
+                  <button type="button" class="module-btn-primary" id="module-edit-modal-save-btn" style="height: 32px; padding: 0 16px;">保存</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 模组图片大图与详情弹窗 -->
+            <div class="modal" id="module-image-view-modal" style="display: none;">
+              <div class="modal-content" style="max-width: 520px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);" id="module-image-modal-title">插图详情</span>
+                  <span class="modal-close" id="module-image-modal-close-btn" style="cursor: pointer; font-size: 20px;">&times;</span>
+                </div>
+                <div style="display: flex; justify-content: center; align-items: center; background: var(--secondary-bg, #F0EFEA); border-radius: 10px; padding: 8px; min-height: 180px;" id="module-image-modal-preview-box">
+                  <img id="module-image-modal-img" class="mod-constrained-img" src="" alt="插图预览" />
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary);" id="module-image-modal-meta"></div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                  <button type="button" class="module-mini-btn" id="module-image-modal-download-btn">下载</button>
+                  <button type="button" class="module-mini-btn btn-danger" id="module-image-modal-delete-btn">删除</button>
+                  <button type="button" class="module-mini-btn" id="module-image-modal-ok-btn">确定</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 视图 3：整页章节阅读与编辑页 -->
+            <div id="module-library-reader-view" style="display: none; flex-direction: column; height: 100%; width: 100%;">
+              <!-- 顶部导航栏 -->
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF);">
+                <div style="display: flex; align-items: center; gap: 6px; cursor: pointer;" id="module-reader-back-btn">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                  <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">返回</span>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; padding: 0 8px; min-width: 0;">
+                  <span style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;" id="module-reader-title">章节标题</span>
+                  <span style="font-size: 11px; color: var(--text-secondary);" id="module-reader-meta">分类 · 字数</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <div style="display: flex; background: var(--secondary-bg, #F0EFEA); padding: 2px; border-radius: 9999px;">
+                    <button type="button" id="module-reader-view-pc" style="border: none; background: var(--card-bg, #FFFFFF); color: var(--text-primary); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; cursor: pointer;">玩家</button>
+                    <button type="button" id="module-reader-view-kp" style="border: none; background: transparent; color: var(--text-secondary); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 9999px; cursor: pointer;">守秘</button>
+                  </div>
+                  <button type="button" class="mod-capsule-btn primary" id="module-reader-edit-btn" style="padding: 3px 10px;">编辑</button>
+                </div>
+              </div>
+
+              <!-- 正文内容区 -->
+              <div style="flex: 1; overflow-y: auto; padding: 14px 16px 20px 16px; display: flex; flex-direction: column; gap: 12px;">
+                <!-- 只读视图 -->
+                <div id="module-reader-readonly-body" class="mod-reader-pane"></div>
+                <!-- 编辑视图 -->
+                <div id="module-reader-edit-body" style="display: none; flex-direction: column; gap: 8px; flex: 1;">
+                  <textarea id="module-reader-edit-textarea" class="module-prompt-textarea" style="flex: 1; min-height: 380px; font-size: 13.5px; line-height: 1.8;"></textarea>
+                </div>
+                <!-- 底部翻页栏 -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px;">
+                  <button type="button" class="mod-capsule-btn" id="module-reader-prev-btn">上章</button>
+                  <button type="button" class="mod-capsule-btn" id="module-reader-next-btn">下章</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 原文查看弹窗 (带剧透提示触发) -->
+        <!-- 原文查看弹窗 -->
         <div class="modal" id="module-raw-preview-modal" style="display: none;">
           <div class="modal-content" style="max-width: 480px; max-height: 80vh; display: flex; flex-direction: column;">
             <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
@@ -2305,49 +2565,6 @@
               <span id="module-local-pick-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">✕</span>
             </div>
             <div style="flex: 1; overflow-y: auto; padding: 10px 0; display: flex; flex-direction: column; gap: 8px;" id="module-local-pick-list"></div>
-          </div>
-        </div>
-
-        <!-- 模组库模组详情弹窗 -->
-        <div class="modal" id="module-detail-modal" style="display: none;">
-          <div class="modal-content" style="max-width: 480px; max-height: 85vh; display: flex; flex-direction: column; gap: 10px;">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
-              <span style="font-weight: 600; font-size: 15px;" id="module-detail-title">模组详情</span>
-              <span id="module-detail-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">✕</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; background-color: var(--secondary-bg, #F9F8F5); padding: 8px 12px; border-radius: 8px; font-size: 11.5px; color: var(--text-secondary);">
-              <span id="module-detail-stats">0 个章节 · 约 0 字</span>
-              <div style="display: flex; gap: 6px;">
-                <button type="button" class="module-mini-btn" id="module-detail-export-btn">导出</button>
-                <button type="button" class="module-mini-btn btn-danger" id="module-detail-delete-btn">删除</button>
-              </div>
-            </div>
-            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;" id="module-detail-chapter-list"></div>
-          </div>
-        </div>
-
-        <!-- 双视角模组阅读器弹窗 -->
-        <div class="modal" id="module-reader-modal" style="display: none;">
-          <div class="modal-content" style="max-width: 500px; max-height: 85vh; display: flex; flex-direction: column;">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
-              <div style="display: flex; flex-direction: column; gap: 2px;">
-                <span style="font-weight: 600; font-size: 14px;" id="module-reader-title">章节标题</span>
-                <span style="font-size: 11px; color: var(--text-secondary);" id="module-reader-meta">分类 · 字数</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <!-- 视角切换按键 -->
-                <div style="display: flex; background: var(--secondary-bg, #F0EFEA); padding: 2px; border-radius: 6px;">
-                  <button type="button" id="module-reader-view-pc" style="border: none; background: var(--card-bg, #FFFFFF); color: var(--text-primary); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; cursor: pointer;">玩家</button>
-                  <button type="button" id="module-reader-view-kp" style="border: none; background: transparent; color: var(--text-secondary); font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; cursor: pointer;">守秘人</button>
-                </div>
-                <span id="module-reader-close-btn" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">✕</span>
-              </div>
-            </div>
-            <div style="flex: 1; overflow-y: auto; padding: 12px 0; font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; color: var(--text-primary);" id="module-reader-body"></div>
-            <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border-color);">
-              <button type="button" class="module-mini-btn" id="module-reader-prev-btn">上一章</button>
-              <button type="button" class="module-mini-btn" id="module-reader-next-btn">下一章</button>
-            </div>
           </div>
         </div>
 
