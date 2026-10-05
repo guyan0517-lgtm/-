@@ -1455,33 +1455,11 @@
     },
 
     updateModeUI(mode) {
-      this.cutExecutionMode = mode;
-      const singleBtn = document.getElementById('module-mode-single-btn');
-      const batchBtn = document.getElementById('module-mode-batch-btn');
-
-      if (singleBtn && batchBtn) {
-        if (mode === 'single') {
-          singleBtn.style.background = 'var(--card-bg, #FFFFFF)';
-          singleBtn.style.color = 'var(--text-primary, #2A2A2A)';
-          singleBtn.style.fontWeight = '600';
-          singleBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
-
-          batchBtn.style.background = 'transparent';
-          batchBtn.style.color = 'var(--text-secondary, #8A8A8A)';
-          batchBtn.style.fontWeight = '500';
-          batchBtn.style.boxShadow = 'none';
-        } else {
-          batchBtn.style.background = 'var(--card-bg, #FFFFFF)';
-          batchBtn.style.color = 'var(--text-primary, #2A2A2A)';
-          batchBtn.style.fontWeight = '600';
-          batchBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
-
-          singleBtn.style.background = 'transparent';
-          singleBtn.style.color = 'var(--text-secondary, #8A8A8A)';
-          singleBtn.style.fontWeight = '500';
-          singleBtn.style.boxShadow = 'none';
-        }
-      }
+      const parts = this.currentParsedData?.splitParts || 'auto';
+      const step2SplitSelect = document.getElementById('module-step2-split-select');
+      const step1SplitSelect = document.getElementById('module-split-parts-select');
+      if (step2SplitSelect) step2SplitSelect.value = parts;
+      if (step1SplitSelect) step1SplitSelect.value = parts;
       this.saveDraft();
     },
 
@@ -1768,28 +1746,56 @@
         };
       }
 
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: JSON.stringify(requestBody)
-      });
+      let lastError = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const response = await fetch(requestUrl, {
+            method: 'POST',
+            headers: requestHeaders,
+            body: JSON.stringify(requestBody)
+          });
 
-      if (!response.ok) {
-        const errBody = await response.text();
-        throw new Error(`API 响应错误 ${response.status}: ${errBody}`);
-      }
+          if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`API 响应错误 ${response.status}: ${errBody}`);
+          }
 
-      const resData = await response.json();
-      let resText = '';
-      if (isGemini) {
-        resText = resData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      } else {
-        resText = resData.choices?.[0]?.message?.content || '';
+          const resData = await response.json();
+          let resText = '';
+          if (isGemini) {
+            resText = resData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          } else {
+            resText = resData.choices?.[0]?.message?.content || '';
+          }
+          if (!resText || !resText.trim()) {
+            throw new Error('AI 未返回有效内容，请检查模型响应');
+          }
+          return resText;
+        } catch (e) {
+          lastError = e;
+          if (attempt === 0) {
+            await new Promise(r => setTimeout(r, 1200));
+          }
+        }
       }
-      if (!resText || !resText.trim()) {
-        throw new Error('AI 未返回有效内容，请检查模型响应');
+      throw lastError || new Error('网络请求异常');
+    },
+
+    async getLocationsByModuleId(moduleId) {
+      const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+      if (!dbInstance || !dbInstance.moduleLocationNav) return [];
+      let list = [];
+      try {
+        list = await dbInstance.moduleLocationNav.where('moduleId').equals(moduleId).toArray();
+        if (list.length === 0 && typeof moduleId === 'string' && !isNaN(Number(moduleId))) {
+          list = await dbInstance.moduleLocationNav.where('moduleId').equals(Number(moduleId)).toArray();
+        } else if (list.length === 0 && typeof moduleId === 'number') {
+          list = await dbInstance.moduleLocationNav.where('moduleId').equals(String(moduleId)).toArray();
+        }
+      } catch (e) {
+        console.error('查询地点异常', e);
       }
-      return resText;
+      return list;
     },
 
     generateLocalPlan(data) {
@@ -3033,51 +3039,29 @@ ${fullText}`;
 
       this.setWizardStep(3);
 
-      if (this.cutExecutionMode === 'batch') {
-        const fullText = this.currentParsedData?.text || '';
-        const splitSelect = document.getElementById('module-split-parts-select');
-        let requestedParts = splitSelect ? splitSelect.value : (this.currentParsedData?.splitParts || 'auto');
-        let numParts = 1;
-        const totalWords = this.currentParsedData?.wordCount || fullText.length;
-        if (requestedParts === 'auto') {
-          if (totalWords > 40000) numParts = 3;
-          else if (totalWords > 20000) numParts = 2;
-          else numParts = 1;
-        } else {
-          numParts = parseInt(requestedParts, 10) || 1;
-        }
-        const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
-        if (this.batchSegmentsCompleted >= segments.length) {
-          this.batchSegmentsCompleted = 0;
-          this.cuttingCurrentIndex = 0;
-          this.cutChapters = [];
-          const cardList = document.getElementById('module-cut-card-list');
-          if (cardList) cardList.innerHTML = '';
-        }
-        await this.executeBatchCuttingSingleCall();
-        return;
+      const fullText = this.currentParsedData?.text || '';
+      const splitSelect2 = document.getElementById('module-step2-split-select');
+      const splitSelect1 = document.getElementById('module-split-parts-select');
+      let requestedParts = (splitSelect2 ? splitSelect2.value : null) || (splitSelect1 ? splitSelect1.value : null) || (this.currentParsedData?.splitParts || 'auto');
+      let numParts = 1;
+      const totalWords = this.currentParsedData?.wordCount || fullText.length;
+      if (requestedParts === 'auto') {
+        if (totalWords > 80000) numParts = 4;
+        else if (totalWords > 40000) numParts = 3;
+        else if (totalWords > 20000) numParts = 2;
+        else numParts = 1;
+      } else {
+        numParts = parseInt(requestedParts, 10) || 1;
       }
-
-      this.isCuttingRunning = true;
-      this.isCuttingPaused = false;
-      this.isCuttingCancelled = false;
-
-      if (this.cutChapters.length >= this.currentPlan.chunks.length) {
+      const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
+      if (this.batchSegmentsCompleted >= segments.length) {
+        this.batchSegmentsCompleted = 0;
         this.cuttingCurrentIndex = 0;
         this.cutChapters = [];
         const cardList = document.getElementById('module-cut-card-list');
         if (cardList) cardList.innerHTML = '';
-      } else {
-        this.cuttingCurrentIndex = this.cutChapters.length;
       }
-
-      const progressBar = document.getElementById('module-progress-bar');
-      if (progressBar && this.currentPlan.chunks.length > 0) {
-        progressBar.style.width = `${Math.round((this.cutChapters.length / this.currentPlan.chunks.length) * 100)}%`;
-      }
-
-      this.updateBottomActionBar();
-      this.continueAsyncCuttingLoop();
+      await this.executeBatchCuttingSingleCall();
     },
 
     async executeBatchCuttingSingleCall() {
@@ -3089,12 +3073,14 @@ ${fullText}`;
       const resumeBtn = document.getElementById('module-resume-btn');
       const cancelBtn = document.getElementById('module-cancel-btn');
 
-      const splitSelect = document.getElementById('module-split-parts-select');
-      let requestedParts = splitSelect ? splitSelect.value : (this.currentParsedData?.splitParts || 'auto');
+      const splitSelect2 = document.getElementById('module-step2-split-select');
+      const splitSelect1 = document.getElementById('module-split-parts-select');
+      let requestedParts = (splitSelect2 ? splitSelect2.value : null) || (splitSelect1 ? splitSelect1.value : null) || (this.currentParsedData?.splitParts || 'auto');
       let numParts = 1;
       const totalWords = this.currentParsedData?.wordCount || fullText.length;
       if (requestedParts === 'auto') {
-        if (totalWords > 40000) numParts = 3;
+        if (totalWords > 80000) numParts = 4;
+        else if (totalWords > 40000) numParts = 3;
         else if (totalWords > 20000) numParts = 2;
         else numParts = 1;
       } else {
@@ -3138,8 +3124,8 @@ ${fullText}`;
 
         if (progressText) {
           progressText.textContent = totalSegs > 1
-            ? `全篇模式：正在整理第 ${segIdx + 1}/${totalSegs} 卷（已生成 ${this.cutChapters.length} 章）...`
-            : `全篇模式：正在整理输出全篇所有章节...`;
+            ? `分卷模式：正在整理第 ${segIdx + 1}/${totalSegs} 卷（已生成 ${this.cutChapters.length} 章）...`
+            : `正在整理输出全篇所有章节...`;
         }
         if (progressBar) {
           progressBar.style.width = `${Math.round((segIdx / totalSegs) * 100)}%`;
@@ -3172,7 +3158,7 @@ ${fullText}`;
             throw new Error(`第 ${segIdx + 1} 卷未解析出有效章节`);
           }
         } catch (err) {
-          console.warn('[模组] 全篇分卷整理提示:', err);
+          console.warn('[模组] 分卷整理提示:', err);
           if (this.isCuttingCancelled) {
             this.isCuttingRunning = false;
             this.saveDraft();
@@ -3184,12 +3170,12 @@ ${fullText}`;
           if (resumeBtn) resumeBtn.style.display = 'inline-flex';
           if (cancelBtn) cancelBtn.style.display = 'inline-flex';
           if (progressText) {
-            progressText.textContent = `全篇整理第 ${segIdx + 1} 卷遇到波动已暂停（已完成 ${this.cutChapters.length} 章），点击继续重试`;
+            progressText.textContent = `分卷整理第 ${segIdx + 1} 卷遇到网络波动已暂停 已完成 ${this.cutChapters.length} 章 点击继续重试`;
           }
           this.updateBottomActionBar();
           this.saveDraft();
           if (typeof global.showCustomAlert === 'function') {
-            global.showCustomAlert('生成暂停', `全篇模式整理第 ${segIdx + 1} 卷遇到波动：${err.message || err}。已为您自动保存当前进度，点击“继续”可重新从该处以全篇模式继续生成。`);
+            global.showCustomAlert('生成暂停', `分卷整理第 ${segIdx + 1} 卷遇到网络波动：${err.message || err}。已为您自动保存当前进度，点击“继续”可重新从该卷继续生成。`);
           }
           return;
         }
@@ -3200,7 +3186,7 @@ ${fullText}`;
       if (resumeBtn) resumeBtn.style.display = 'none';
       if (cancelBtn) cancelBtn.style.display = 'none';
       if (progressText) {
-        progressText.textContent = `全篇切割生成完成，共整理 ${this.cutChapters.length} 个带团专属章节`;
+        progressText.textContent = `模组切割生成完成 共整理 ${this.cutChapters.length} 个带团专属章节`;
       }
       if (progressBar) progressBar.style.width = '100%';
       this.updateBottomActionBar();
@@ -3989,92 +3975,726 @@ ${chap.content}
       });
     },
 
-    renderModuleDetailMap(chapters) {
+    async renderModuleDetailMap(chapters) {
       const mapContainer = document.getElementById('module-detail-map-view');
       if (!mapContainer) return;
       mapContainer.innerHTML = '';
 
-      if (this.activeDetailModule?.mapNodes && Array.isArray(this.activeDetailModule.mapNodes) && this.activeDetailModule.mapNodes.length > 0) {
-        const mapNodes = this.activeDetailModule.mapNodes;
-        mapNodes.forEach(node => {
-          const nodeEl = document.createElement('div');
-          nodeEl.className = `module-map-node level-${node.level || 1}`;
-          nodeEl.innerHTML = `
-            <div class="module-map-node-title">
-              <span>${node.name}</span>
-              <span class="module-map-badge">${node.level === 1 ? '大区域' : node.level === 2 ? '建筑分区' : '具体场所'}</span>
-            </div>
-            ${node.level < 3 && node.desc ? `<div class="module-map-node-desc">${node.desc}</div>` : ''}
-          `;
-          mapContainer.appendChild(nodeEl);
-        });
-        return;
-      }
+      const mod = this.activeDetailModule;
+      if (!mod) return;
 
-      const locations = [];
-      chapters.forEach((c) => {
-        const title = c.title || '';
-        const content = c.content || '';
-        const isLocation = title.includes('地点') || c.category.includes('地点') || title.includes('室') || title.includes('馆') || title.includes('店') || title.includes('街') || title.includes('厅') || title.includes('屋') || title.includes('岛') || title.includes('洞') || title.includes('楼') || title.includes('山') || title.includes('村');
+      const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+      if (!dbInstance) return;
 
-        if (isLocation || (content.includes('【场景】') || content.includes('【地点】'))) {
-          const cleanDesc = content.replace(/【[^】]+】/g, ' ').replace(/\n+/g, ' ').trim().substring(0, 180);
-          locations.push({
-            name: title,
-            category: c.category || '场景探索',
-            desc: cleanDesc || '场景环境及探索线索',
-            fullContent: content,
-            wordCount: c.wordCount || 0
-          });
+      // 读取数据库中已有的模组地图地点
+      let dbLocations = [];
+      try {
+        if (dbInstance.moduleLocationNav) {
+          dbLocations = await dbInstance.moduleLocationNav.where('moduleId').equals(mod.id).toArray();
+          if (dbLocations.length === 0 && typeof mod.id === 'string' && !isNaN(Number(mod.id))) {
+            dbLocations = await dbInstance.moduleLocationNav.where('moduleId').equals(Number(mod.id)).toArray();
+          } else if (dbLocations.length === 0 && typeof mod.id === 'number') {
+            dbLocations = await dbInstance.moduleLocationNav.where('moduleId').equals(String(mod.id)).toArray();
+          }
         }
-      });
-
-      if (locations.length === 0) {
-        mapContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 28px;">当前模组地图正在动态整理或随剧情推进呈现</div>';
-        return;
+      } catch (e) {
+        console.error('读取模组地点失败', e);
       }
+
+      // 如果数据库中尚无地点，优先从模组分析自带的 mapNodes 载入并同步入库
+      if (dbLocations.length === 0) {
+        const sourceNodes = (mod.mapNodes && Array.isArray(mod.mapNodes) && mod.mapNodes.length > 0)
+          ? mod.mapNodes
+          : (this.currentPlan?.mapNodes && Array.isArray(this.currentPlan.mapNodes) && this.currentPlan.mapNodes.length > 0)
+            ? this.currentPlan.mapNodes
+            : (this.currentParsedData?.mapNodes && Array.isArray(this.currentParsedData.mapNodes) && this.currentParsedData.mapNodes.length > 0)
+              ? this.currentParsedData.mapNodes
+              : null;
+
+        if (sourceNodes && sourceNodes.length > 0) {
+          for (const item of sourceNodes) {
+            const locObj = {
+              moduleId: mod.id,
+              name: item.name,
+              parent: item.parent || '',
+              level: item.level || 1,
+              desc: item.desc || item.description || '',
+              prompt: item.prompt || '',
+              imageUrl: item.imageUrl || '',
+              imageStatus: 'idle'
+            };
+            if (dbInstance.moduleLocationNav) {
+              const id = await dbInstance.moduleLocationNav.add(locObj);
+              locObj.id = id;
+            }
+            dbLocations.push(locObj);
+          }
+        } else if (chapters && chapters.length > 0) {
+          // 兜底：从章节内容中提炼
+          const extracted = [];
+          chapters.forEach((c) => {
+            const title = c.title || '';
+            const content = c.content || '';
+            const isLocation = title.includes('地点') || (c.category && c.category.includes('地点')) || title.includes('室') || title.includes('馆') || title.includes('店') || title.includes('街') || title.includes('厅') || title.includes('屋') || title.includes('岛') || title.includes('洞') || title.includes('楼') || title.includes('山') || title.includes('村');
+
+            if (isLocation || content.includes('场景') || content.includes('地点')) {
+              const cleanDesc = content.replace(/\n+/g, ' ').trim().substring(0, 180);
+              extracted.push({
+                moduleId: mod.id,
+                name: title,
+                parent: '',
+                level: 1,
+                desc: cleanDesc || '场景环境及探索线索',
+                prompt: '',
+                imageUrl: '',
+                imageStatus: 'idle'
+              });
+            }
+          });
+
+          if (extracted.length > 0 && dbInstance.moduleLocationNav) {
+            for (const item of extracted) {
+              const id = await dbInstance.moduleLocationNav.add(item);
+              item.id = id;
+              dbLocations.push(item);
+            }
+          }
+        }
+
+        // 若仍为空，生成默认初始层级结构确保非空
+        if (dbLocations.length === 0) {
+          const fallbackNodes = [
+            { moduleId: mod.id, name: `${mod.name}大区域`, parent: '', level: 1, desc: mod.summary || '主区域环境与主线背景', prompt: '', imageUrl: '', imageStatus: 'idle' },
+            { moduleId: mod.id, name: '核心建筑群', parent: `${mod.name}大区域`, level: 2, desc: '主要探索线索集中区域', prompt: '', imageUrl: '', imageStatus: 'idle' },
+            { moduleId: mod.id, name: '正厅走廊', parent: '核心建筑群', level: 3, desc: '', prompt: '', imageUrl: '', imageStatus: 'idle' },
+            { moduleId: mod.id, name: '侧室庭院', parent: '核心建筑群', level: 3, desc: '', prompt: '', imageUrl: '', imageStatus: 'idle' }
+          ];
+          for (const item of fallbackNodes) {
+            if (dbInstance.moduleLocationNav) {
+              const id = await dbInstance.moduleLocationNav.add(item);
+              item.id = id;
+            }
+            dbLocations.push(item);
+          }
+        }
+
+        // 同步更新 mod.mapNodes 供其他组件读取
+        mod.mapNodes = dbLocations.map(l => ({ name: l.name, parent: l.parent, level: l.level, desc: l.desc, prompt: l.prompt, imageUrl: l.imageUrl }));
+        if (dbInstance.modules && mod.id) {
+          try {
+            await dbInstance.modules.update(mod.id, { mapNodes: mod.mapNodes });
+          } catch (e) {}
+        }
+      }
+
+      // 记忆展示模式：优先读取本地存储或数据库记录
+      const savedMode = localStorage.getItem('module_map_view_mode_' + mod.id) || localStorage.getItem('module_map_view_mode_global') || mod.mapViewMode || 'text';
+      if (!mod._mapViewMode) mod._mapViewMode = savedMode;
+      const isRich = (mod._mapViewMode === 'rich');
+      const isEditing = Boolean(mod._mapEditMode);
+
+      // 顶部操作栏
+      const headerBar = document.createElement('div');
+      headerBar.style.display = 'flex';
+      headerBar.style.justifyContent = 'space-between';
+      headerBar.style.alignItems = 'center';
+      headerBar.style.marginBottom = '10px';
+      headerBar.style.flexWrap = 'wrap';
+      headerBar.style.gap = '8px';
+
+      const leftActions = document.createElement('div');
+      leftActions.style.display = 'flex';
+      leftActions.style.gap = '6px';
+      leftActions.style.alignItems = 'center';
+
+      const modeToggleBtn = document.createElement('button');
+      modeToggleBtn.type = 'button';
+      modeToggleBtn.className = 'mod-capsule-btn';
+      modeToggleBtn.textContent = isRich ? '图文' : '文字';
+      modeToggleBtn.onclick = async () => {
+        mod._mapViewMode = (mod._mapViewMode === 'rich') ? 'text' : 'rich';
+        localStorage.setItem('module_map_view_mode_' + mod.id, mod._mapViewMode);
+        localStorage.setItem('module_map_view_mode_global', mod._mapViewMode);
+        if (dbInstance.modules && mod.id) {
+          try {
+            await dbInstance.modules.update(mod.id, { mapViewMode: mod._mapViewMode });
+          } catch (e) {}
+        }
+        this.renderModuleDetailMap(chapters);
+      };
+      leftActions.appendChild(modeToggleBtn);
+
+      const editModeBtn = document.createElement('button');
+      editModeBtn.type = 'button';
+      editModeBtn.className = `mod-capsule-btn ${isEditing ? 'primary' : ''}`;
+      editModeBtn.textContent = isEditing ? '完成' : '编辑';
+      editModeBtn.onclick = () => {
+        mod._mapEditMode = !isEditing;
+        this.renderModuleDetailMap(chapters);
+      };
+      leftActions.appendChild(editModeBtn);
+
+      if (isEditing) {
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'mod-capsule-btn';
+        addBtn.textContent = '添加';
+        addBtn.onclick = () => {
+          this.openModuleMapEditModal(null, mod.id, chapters);
+        };
+        leftActions.appendChild(addBtn);
+      }
+
+      const rightActions = document.createElement('div');
+      rightActions.style.display = 'flex';
+      rightActions.style.gap = '6px';
+      rightActions.style.alignItems = 'center';
+
+      // 检查完善进度
+      const unpromptedCount = dbLocations.filter(l => !l.prompt).length;
+
+      const fillBtn = document.createElement('button');
+      fillBtn.type = 'button';
+      fillBtn.className = 'mod-capsule-btn primary';
+      fillBtn.id = 'module-map-fill-prompts-btn';
+      fillBtn.textContent = unpromptedCount < dbLocations.length && unpromptedCount > 0 ? '继续' : '完善';
+      fillBtn.onclick = async () => {
+        await this.startModuleMapPromptGeneration(mod.id, chapters, fillBtn);
+      };
+      rightActions.appendChild(fillBtn);
+
+      const drawBtn = document.createElement('button');
+      drawBtn.type = 'button';
+      drawBtn.className = 'mod-capsule-btn';
+      drawBtn.id = 'module-map-draw-images-btn';
+      drawBtn.textContent = '绘制';
+      drawBtn.onclick = async () => {
+        await this.startModuleMapImageDrawing(mod.id, chapters, drawBtn);
+      };
+      rightActions.appendChild(drawBtn);
+
+      headerBar.appendChild(leftActions);
+      headerBar.appendChild(rightActions);
+      mapContainer.appendChild(headerBar);
+
+      // 进度条提示区
+      const progressBox = document.createElement('div');
+      progressBox.id = 'module-map-status-tip';
+      progressBox.style.fontSize = '11px';
+      progressBox.style.color = 'var(--text-secondary)';
+      progressBox.style.marginBottom = '8px';
+      progressBox.style.display = 'none';
+      mapContainer.appendChild(progressBox);
 
       const mapList = document.createElement('div');
       mapList.style.display = 'flex';
       mapList.style.flexDirection = 'column';
-      mapList.style.gap = '10px';
+      mapList.style.gap = '8px';
 
-      locations.forEach((loc) => {
-        const card = document.createElement('div');
-        card.className = 'mod-map-card';
-        card.innerHTML = `
-          <div class="mod-map-card-header">
-            <div class="mod-map-card-title">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color, #4A7A68);">
-                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
-                <circle cx="12" cy="10" r="3"></circle>
-              </svg>
-              <span>${loc.name}</span>
+      const defaultThumbSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>`;
+
+      dbLocations.forEach((loc) => {
+        const nodeEl = document.createElement('div');
+        nodeEl.className = `module-map-node level-${loc.level || 1}`;
+
+        const badgeText = loc.level === 1 ? '大区域' : loc.level === 2 ? '建筑分区' : '具体场所';
+
+        const actionBtnsHtml = isEditing ? `
+          <div style="display: flex; gap: 4px; flex-shrink: 0;">
+            <button type="button" class="module-mini-btn edit-loc-btn" style="font-size: 10px; padding: 2px 6px;">编辑</button>
+            <button type="button" class="module-mini-btn del-loc-btn" style="font-size: 10px; padding: 2px 6px; color: var(--danger-color, #e53935);">删除</button>
+          </div>
+        ` : '';
+
+        if (isRich) {
+          // 图文版：原汁原味左侧加横图
+          nodeEl.innerHTML = `
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+              <div class="mod-map-avatar-container" style="position: relative; width: 68px; height: 50px; border-radius: 6px; overflow: hidden; background: var(--secondary-bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--border-color); margin-top: 2px;">
+                ${loc.imageUrl ? `<img src="${loc.imageUrl}" alt="${loc.name}" style="width: 100%; height: 100%; object-fit: cover;" />` : defaultThumbSvg}
+                <button type="button" class="mod-map-expand-btn" style="position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.55); border: none; border-radius: 4px; color: #fff; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                </button>
+              </div>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
+                <div class="module-map-node-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                  <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap;">
+                    <span style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word;">${loc.name}</span>
+                    <span class="module-map-badge" style="flex-shrink: 0;">${badgeText}</span>
+                  </div>
+                  ${actionBtnsHtml}
+                </div>
+                ${loc.desc ? `<div class="module-map-node-desc" style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; white-space: pre-wrap;">${loc.desc}</div>` : ''}
+              </div>
             </div>
-            <span class="mod-map-card-badge">${loc.category}</span>
-          </div>
-          <div class="mod-map-card-desc">${loc.desc}...</div>
-          <div class="mod-map-drawer" style="display: none; padding-top: 8px; border-top: 1px dashed var(--border-color); font-size: 12px; color: var(--text-primary); white-space: pre-wrap; line-height: 1.6;">${loc.fullContent}</div>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-            <span style="font-size: 11px; color: var(--text-secondary);">${loc.wordCount} 字</span>
-            <button type="button" class="module-mini-btn btn-toggle-map-detail" style="font-size: 11px;">展开详情</button>
-          </div>
-        `;
-
-        const toggleBtn = card.querySelector('.btn-toggle-map-detail');
-        const drawer = card.querySelector('.mod-map-drawer');
-        if (toggleBtn && drawer) {
-          toggleBtn.addEventListener('click', () => {
-            const isHidden = drawer.style.display === 'none';
-            drawer.style.display = isHidden ? 'block' : 'none';
-            toggleBtn.textContent = isHidden ? '收起详情' : '展开详情';
-          });
+          `;
+        } else {
+          // 文字版：与分析阶段完全一致的标准呈现
+          nodeEl.innerHTML = `
+            <div class="module-map-node-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap;">
+                <span style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word;">${loc.name}</span>
+                <span class="module-map-badge" style="flex-shrink: 0;">${badgeText}</span>
+              </div>
+              ${actionBtnsHtml}
+            </div>
+            ${loc.desc ? `<div class="module-map-node-desc" style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; white-space: pre-wrap;">${loc.desc}</div>` : ''}
+          `;
         }
 
-        mapList.appendChild(card);
+        // 编辑按钮
+        const editBtn = nodeEl.querySelector('.edit-loc-btn');
+        if (editBtn) {
+          editBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.openModuleMapEditModal(loc, mod.id, chapters);
+          };
+        }
+
+        // 删除按钮
+        const delBtn = nodeEl.querySelector('.del-loc-btn');
+        if (delBtn) {
+          delBtn.onclick = async (e) => {
+            e.stopPropagation();
+            if (dbInstance.moduleLocationNav) {
+              await dbInstance.moduleLocationNav.delete(loc.id);
+              this.renderModuleDetailMap(chapters);
+            }
+          };
+        }
+
+        // 图文版头像交互：三连击下载、左下角展开大图、长按重新生成
+        if (isRich) {
+          const avatarContainer = nodeEl.querySelector('.mod-map-avatar-container');
+          const expandBtn = nodeEl.querySelector('.mod-map-expand-btn');
+
+          if (expandBtn) {
+            expandBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (loc.imageUrl) {
+                this.openModuleMapExpandModal(loc.name, loc.imageUrl);
+              }
+            };
+          }
+
+          if (avatarContainer) {
+            let clickCount = 0;
+            let clickTimer = null;
+            let pressTimer = null;
+
+            avatarContainer.addEventListener('mousedown', () => {
+              pressTimer = setTimeout(() => {
+                this.openModuleMapRegenModal(loc, mod.id, chapters);
+              }, 700);
+            });
+            avatarContainer.addEventListener('touchstart', () => {
+              pressTimer = setTimeout(() => {
+                this.openModuleMapRegenModal(loc, mod.id, chapters);
+              }, 700);
+            });
+            const clearPress = () => {
+              if (pressTimer) clearTimeout(pressTimer);
+            };
+            avatarContainer.addEventListener('mouseup', clearPress);
+            avatarContainer.addEventListener('mouseleave', clearPress);
+            avatarContainer.addEventListener('touchend', clearPress);
+
+            avatarContainer.addEventListener('click', (e) => {
+              if (e.target.closest('.mod-map-expand-btn')) return;
+              clickCount++;
+              if (clickTimer) clearTimeout(clickTimer);
+              clickTimer = setTimeout(() => {
+                if (clickCount >= 3) {
+                  if (loc.imageUrl) {
+                    const a = document.createElement('a');
+                    a.href = loc.imageUrl;
+                    a.download = `${loc.name}.png`;
+                    a.click();
+                  }
+                }
+                clickCount = 0;
+              }, 500);
+            });
+          }
+        }
+
+        // 长按方框卡片查看与修改 Prompt
+        let cardPressTimer = null;
+        nodeEl.addEventListener('mousedown', (e) => {
+          if (e.target.closest('button') || e.target.closest('.mod-map-avatar-container')) return;
+          cardPressTimer = setTimeout(() => {
+            this.openModuleMapPromptModal(loc, mod.id, chapters);
+          }, 700);
+        });
+        nodeEl.addEventListener('touchstart', (e) => {
+          if (e.target.closest('button') || e.target.closest('.mod-map-avatar-container')) return;
+          cardPressTimer = setTimeout(() => {
+            this.openModuleMapPromptModal(loc, mod.id, chapters);
+          }, 700);
+        });
+        const clearCardPress = () => {
+          if (cardPressTimer) clearTimeout(cardPressTimer);
+        };
+        nodeEl.addEventListener('mouseup', clearCardPress);
+        nodeEl.addEventListener('mouseleave', clearCardPress);
+        nodeEl.addEventListener('touchend', clearCardPress);
+
+        mapList.appendChild(nodeEl);
       });
 
       mapContainer.appendChild(mapList);
+    },
+
+    async startModuleMapPromptGeneration(moduleId, chapters, btn) {
+      const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+      if (!dbInstance || !dbInstance.moduleLocationNav) return;
+
+      let locations = await this.getLocationsByModuleId(moduleId);
+
+      // 如果尚未载入地点，先执行一次 renderModuleDetailMap 加载/入库
+      if (locations.length === 0 && this.activeDetailModule) {
+        await this.renderModuleDetailMap(chapters);
+        locations = await this.getLocationsByModuleId(moduleId);
+      }
+
+      const pendingLocs = locations.filter(l => !l.prompt);
+
+      if (pendingLocs.length === 0) {
+        if (typeof window.showCustomAlert === 'function') {
+          await window.showCustomAlert('提示', '全部地点已填写提示词');
+        }
+        return;
+      }
+
+      if (typeof window.showCustomConfirm === 'function') {
+        const confirmed = await window.showCustomConfirm('完善提示词', '将为未编写提示词的地点自动生成绘图提示词 确认开始吗');
+        if (!confirmed) return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '生成中';
+      }
+
+      const statusTip = document.getElementById('module-map-status-tip');
+      if (statusTip) {
+        statusTip.style.display = 'block';
+        statusTip.textContent = `正在生成提示词 剩余 ${pendingLocs.length} 个地点`;
+      }
+
+      // 汇总模组上下文文本
+      const allText = (chapters || []).map(c => `${c.title} ${c.content || ''}`).join('\n').substring(0, 8000);
+
+      // 一次最多生成10个prompt
+      const batchSize = 10;
+      for (let i = 0; i < pendingLocs.length; i += batchSize) {
+        const chunk = pendingLocs.slice(i, i + batchSize);
+        const locNames = chunk.map(l => `- 地点名称：${l.name}，简介：${l.desc || '无'}`).join('\n');
+
+        const systemPrompt = '你是一位跑团插画提示词专家。请根据模组设定，为各地点编写唯美场景图像的英文绘图提示词。只输出合法JSON数组。';
+        const userPrompt = `模组节选：\n${allText.substring(0, 3000)}\n\n` +
+          `请为以下地点编写提示词：\n${locNames}\n\n` +
+          `格式要求：只输出JSON数组，格式如下：\n` +
+          `[{"name": "地点名称", "prompt": "masterpiece, scenery, highly detailed, landscape, ..."}, ...]`;
+
+        try {
+          const resText = await this.callAI(systemPrompt, userPrompt);
+          if (resText) {
+            const cleanJson = resText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+            const startIdx = cleanJson.indexOf('[');
+            const endIdx = cleanJson.lastIndexOf(']');
+            if (startIdx !== -1 && endIdx !== -1) {
+              const arr = JSON.parse(cleanJson.substring(startIdx, endIdx + 1));
+              for (const item of arr) {
+                const target = chunk.find(c => c.name === item.name);
+                if (target && item.prompt) {
+                  target.prompt = item.prompt;
+                  await dbInstance.moduleLocationNav.put(target);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('批量生成Prompt失败', e);
+        }
+
+        if (statusTip) {
+          const remaining = pendingLocs.length - Math.min(i + batchSize, pendingLocs.length);
+          statusTip.textContent = `正在生成提示词 剩余 ${remaining} 个地点`;
+        }
+      }
+
+      if (statusTip) {
+        statusTip.textContent = '提示词填写完毕 点击绘制开始批量生图';
+      }
+
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '完善';
+      }
+
+      if (typeof window.showCustomAlert === 'function') {
+        await window.showCustomAlert('提示', '全部提示词已填写完成 可以点击绘制开始逐一生图');
+      }
+      this.renderModuleDetailMap(chapters);
+    },
+
+    async startModuleMapImageDrawing(moduleId, chapters, btn) {
+      const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+      if (!dbInstance || !dbInstance.moduleLocationNav) return;
+
+      const locations = await this.getLocationsByModuleId(moduleId);
+      const pendingLocs = locations.filter(l => !l.imageUrl);
+
+      if (pendingLocs.length === 0) {
+        if (typeof window.showCustomAlert === 'function') {
+          await window.showCustomAlert('提示', '全部地点已绘制完成');
+        }
+        return;
+      }
+
+      if (typeof window.showCustomConfirm === 'function') {
+        const confirmed = await window.showCustomConfirm('绘制地图', '将开始为所有未绘制图像的地点逐一绘制唯美场景图 确认开始吗');
+        if (!confirmed) return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '绘制中';
+      }
+
+      const statusTip = document.getElementById('module-map-status-tip');
+      if (statusTip) {
+        statusTip.style.display = 'block';
+        statusTip.textContent = `正在逐一生图 剩余 ${pendingLocs.length} 张`;
+      }
+
+      for (let i = 0; i < pendingLocs.length; i++) {
+        const loc = pendingLocs[i];
+        const prompt = loc.prompt || `masterpiece, scenery, highly detailed, landscape, ${loc.name}`;
+
+        try {
+          if (statusTip) {
+            statusTip.textContent = `正在绘制 ${loc.name} 剩余 ${pendingLocs.length - i} 张`;
+          }
+
+          let imgDataUrl = '';
+          if (typeof window.callNovelAiDirect === 'function') {
+            imgDataUrl = await window.callNovelAiDirect(prompt);
+          } else if (typeof generateNovelAIImageForCharacter === 'function') {
+            imgDataUrl = await generateNovelAIImageForCharacter('', prompt);
+          }
+
+          if (imgDataUrl) {
+            // 默认压缩50%
+            if (typeof compressImage === 'function') {
+              imgDataUrl = await compressImage(imgDataUrl, 0.5, 900);
+            }
+            loc.imageUrl = imgDataUrl;
+            await dbInstance.moduleLocationNav.put(loc);
+            this.renderModuleDetailMap(chapters);
+          } else {
+            throw new Error('未获取到图像数据');
+          }
+
+          // 间隔10秒继续生成下一个
+          if (i < pendingLocs.length - 1) {
+            if (statusTip) statusTip.textContent = `完成 ${loc.name} 等待 10 秒继续下一张`;
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          }
+        } catch (e) {
+          console.error('生图失败', loc.name, e);
+          if (statusTip) statusTip.textContent = `绘制 ${loc.name} 失败 点击绘制可重试`;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = '重试';
+          }
+          alert(`绘制 ${loc.name} 失败 请点击重试继续`);
+          return;
+        }
+      }
+
+      if (statusTip) {
+        statusTip.textContent = '全部地图绘制完成';
+      }
+
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '绘制';
+      }
+
+      this.renderModuleDetailMap(chapters);
+    },
+
+    openModuleMapPromptModal(loc, moduleId, chapters) {
+      const modal = document.getElementById('module-map-prompt-modal');
+      const nameEl = document.getElementById('module-map-prompt-loc-name');
+      const textarea = document.getElementById('module-map-prompt-textarea');
+      const closeBtn = document.getElementById('close-module-map-prompt-modal-btn');
+      const cancelBtn = document.getElementById('cancel-module-map-prompt-btn');
+      const saveBtn = document.getElementById('save-module-map-prompt-btn');
+      if (!modal || !textarea) return;
+
+      if (nameEl) nameEl.textContent = `地点：${loc.name}`;
+      textarea.value = loc.prompt || '';
+
+      const closeModal = () => modal.classList.remove('visible');
+      if (closeBtn) closeBtn.onclick = closeModal;
+      if (cancelBtn) cancelBtn.onclick = closeModal;
+
+      if (saveBtn) {
+        saveBtn.onclick = async () => {
+          loc.prompt = textarea.value.trim();
+          const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+          if (dbInstance && dbInstance.moduleLocationNav) {
+            await dbInstance.moduleLocationNav.put(loc);
+          }
+          closeModal();
+          this.renderModuleDetailMap(chapters);
+        };
+      }
+
+      modal.classList.add('visible');
+    },
+
+    openModuleMapEditModal(loc, moduleId, chapters) {
+      const modal = document.getElementById('module-map-item-edit-modal');
+      const titleEl = document.getElementById('module-map-item-edit-title');
+      const nameInput = document.getElementById('module-map-edit-name-input');
+      const parentSelect = document.getElementById('module-map-edit-parent-select');
+      const descInput = document.getElementById('module-map-edit-desc-input');
+      const closeBtn = document.getElementById('close-module-map-item-edit-btn');
+      const cancelBtn = document.getElementById('cancel-module-map-item-edit-btn');
+      const saveBtn = document.getElementById('save-module-map-item-edit-btn');
+      if (!modal || !nameInput || !parentSelect || !descInput) return;
+
+      const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+
+      titleEl.textContent = loc ? '修改地点' : '添加地点';
+      nameInput.value = loc ? loc.name : '';
+      descInput.value = loc ? (loc.desc || '') : '';
+
+      parentSelect.innerHTML = '<option value="">顶级大地图</option>';
+      if (dbInstance && dbInstance.moduleLocationNav) {
+        dbInstance.moduleLocationNav.where('moduleId').equals(moduleId).toArray().then(allLocs => {
+          allLocs.forEach(l => {
+            if (!loc || l.id !== loc.id) {
+              const opt = document.createElement('option');
+              opt.value = l.name;
+              opt.textContent = l.name;
+              if (loc && loc.parent === l.name) opt.selected = true;
+              parentSelect.appendChild(opt);
+            }
+          });
+        });
+      }
+
+      const closeModal = () => modal.classList.remove('visible');
+      if (closeBtn) closeBtn.onclick = closeModal;
+      if (cancelBtn) cancelBtn.onclick = closeModal;
+
+      if (saveBtn) {
+        saveBtn.onclick = async () => {
+          const name = nameInput.value.trim();
+          if (!name) return;
+          const parent = parentSelect.value;
+          const desc = descInput.value.trim();
+
+          if (loc) {
+            loc.name = name;
+            loc.parent = parent;
+            loc.level = parent ? 2 : 1;
+            loc.desc = desc;
+            if (dbInstance && dbInstance.moduleLocationNav) {
+              await dbInstance.moduleLocationNav.put(loc);
+            }
+          } else {
+            const newLoc = {
+              moduleId: moduleId,
+              name: name,
+              parent: parent,
+              level: parent ? 2 : 1,
+              desc: desc,
+              prompt: '',
+              imageUrl: '',
+              imageStatus: 'idle'
+            };
+            if (dbInstance && dbInstance.moduleLocationNav) {
+              await dbInstance.moduleLocationNav.add(newLoc);
+            }
+          }
+          closeModal();
+          this.renderModuleDetailMap(chapters);
+        };
+      }
+
+      modal.classList.add('visible');
+    },
+
+    openModuleMapRegenModal(loc, moduleId, chapters) {
+      const modal = document.getElementById('module-map-regen-modal');
+      const nameEl = document.getElementById('module-map-regen-loc-name');
+      const closeBtn = document.getElementById('close-module-map-regen-btn');
+      const cancelBtn = document.getElementById('cancel-module-map-regen-btn');
+      const confirmBtn = document.getElementById('confirm-module-map-regen-btn');
+      if (!modal) return;
+
+      if (nameEl) nameEl.textContent = `地点：${loc.name}`;
+
+      const closeModal = () => modal.classList.remove('visible');
+      if (closeBtn) closeBtn.onclick = closeModal;
+      if (cancelBtn) cancelBtn.onclick = closeModal;
+
+      if (confirmBtn) {
+        confirmBtn.onclick = async () => {
+          closeModal();
+          confirmBtn.disabled = true;
+          const prompt = loc.prompt || `masterpiece, scenery, highly detailed, landscape, ${loc.name}`;
+          try {
+            let imgDataUrl = '';
+            if (typeof window.callNovelAiDirect === 'function') {
+              imgDataUrl = await window.callNovelAiDirect(prompt);
+            }
+            if (imgDataUrl) {
+              if (typeof compressImage === 'function') {
+                imgDataUrl = await compressImage(imgDataUrl, 0.5, 900);
+              }
+              loc.imageUrl = imgDataUrl;
+              const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+              if (dbInstance && dbInstance.moduleLocationNav) {
+                await dbInstance.moduleLocationNav.put(loc);
+              }
+              this.renderModuleDetailMap(chapters);
+            }
+          } catch (e) {
+            console.error('单独生图失败', e);
+            alert(`生成 ${loc.name} 图像失败`);
+          } finally {
+            confirmBtn.disabled = false;
+          }
+        };
+      }
+
+      modal.classList.add('visible');
+    },
+
+    openModuleMapExpandModal(title, imageUrl) {
+      const modal = document.getElementById('module-map-expand-modal');
+      const titleEl = document.getElementById('module-map-expand-title');
+      const imgEl = document.getElementById('module-map-expand-img');
+      const closeBtn = document.getElementById('close-module-map-expand-btn');
+      if (!modal || !imgEl) return;
+
+      if (titleEl) titleEl.textContent = title || '';
+      imgEl.src = imageUrl;
+
+      const closeModal = () => modal.classList.remove('visible');
+      if (closeBtn) closeBtn.onclick = closeModal;
+      modal.onclick = (e) => {
+        if (e.target === modal) closeModal();
+      };
+
+      modal.classList.add('visible');
     },
 
     async renderModuleDetailGallery(chapters, moduleId) {
@@ -5805,16 +6425,20 @@ ${imageList}
         });
       });
 
-      const singleBtn = document.getElementById('module-mode-single-btn');
-      const batchBtn = document.getElementById('module-mode-batch-btn');
-      if (singleBtn) {
-        singleBtn.addEventListener('click', () => {
-          this.updateModeUI('single');
+      const step2SplitSelect = document.getElementById('module-step2-split-select');
+      const step1SplitSelect = document.getElementById('module-split-parts-select');
+      if (step2SplitSelect) {
+        step2SplitSelect.addEventListener('change', () => {
+          if (step1SplitSelect) step1SplitSelect.value = step2SplitSelect.value;
+          if (this.currentParsedData) this.currentParsedData.splitParts = step2SplitSelect.value;
+          this.saveDraft();
         });
       }
-      if (batchBtn) {
-        batchBtn.addEventListener('click', () => {
-          this.updateModeUI('batch');
+      if (step1SplitSelect) {
+        step1SplitSelect.addEventListener('change', () => {
+          if (step2SplitSelect) step2SplitSelect.value = step1SplitSelect.value;
+          if (this.currentParsedData) this.currentParsedData.splitParts = step1SplitSelect.value;
+          this.saveDraft();
         });
       }
 

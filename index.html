@@ -2217,12 +2217,21 @@
                 </div>
 
                 <div class="module-step-desc">AI 已通读全文并完成带团结构规划，你可以切换查看章节、目录与地图</div>
-                <!-- 切割生成模式切换行 -->
+                <!-- 切割分卷配置行 -->
                 <div class="module-cut-mode-row" style="display: flex; align-items: center; justify-content: space-between; background-color: var(--secondary-bg, #F0EFEA); padding: 6px 12px; border-radius: 10px; margin-bottom: 8px;">
-                  <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">模式</span>
-                  <div style="display: flex; gap: 6px;">
-                    <button type="button" class="module-mode-btn active" id="module-mode-single-btn" data-mode="single" style="font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 6px; border: none; background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">逐章</button>
-                    <button type="button" class="module-mode-btn" id="module-mode-batch-btn" data-mode="batch" style="font-size: 11px; font-weight: 500; padding: 4px 12px; border-radius: 6px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;">全篇</button>
+                  <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">分卷</span>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <select id="module-step2-split-select" class="moe-input" style="height: 28px; padding: 0 10px; font-size: 11.5px; font-weight: 600; border-radius: 6px;">
+                      <option value="1">1卷</option>
+                      <option value="2">2卷</option>
+                      <option value="3">3卷</option>
+                      <option value="4">4卷</option>
+                      <option value="5">5卷</option>
+                      <option value="6">6卷</option>
+                      <option value="8">8卷</option>
+                      <option value="10">10卷</option>
+                      <option value="auto">自动</option>
+                    </select>
                   </div>
                 </div>
                 <!-- 方案多维度子标签栏 -->
@@ -2977,6 +2986,7 @@
               class="chat-action-icon-btn action-button"
               title="地图"
               type="button"
+              onclick="if(typeof openChatMapModal==='function')openChatMapModal();"
             >
               <svg
                 width="24"
@@ -7812,6 +7822,203 @@
         </div>
         <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
           <button type="button" class="chat-mod-footer-btn secondary" id="close-chat-affection-modal-footer-btn" style="width: 100%; height: 34px;">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 地图面板 -->
+    <div id="chat-map-modal" class="modal">
+      <div class="modal-content" style="max-width: 350px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; max-height: 85vh;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+            <span style="font-weight: 700; font-size: 15px;">地图</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <span id="chat-map-mode-label" style="font-size: 11px; color: var(--text-secondary);">图文</span>
+              <input type="checkbox" id="chat-map-rich-mode-toggle" style="width: 14px; height: 14px; accent-color: var(--accent-color); cursor: pointer; margin: 0;" />
+            </label>
+            <button type="button" class="close-btn" id="close-chat-map-modal-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+          </div>
+        </div>
+        <div class="modal-body" style="padding: 12px 0; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between;">
+            <button type="button" class="chat-map-top-btn primary" id="chat-map-open-mini-btn" style="flex: 1;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+              <span>打开小地图</span>
+            </button>
+            <button type="button" class="chat-map-top-btn" id="chat-map-add-temp-btn" style="font-size: 11px; padding: 0 8px; flex-shrink: 0;" title="添加群聊专属临时地点">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>临时地点</span>
+            </button>
+          </div>
+          <div id="chat-map-list-container" style="display: flex; flex-direction: column; gap: 8px; min-height: 80px;"></div>
+        </div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="close-chat-map-modal-footer-btn" style="width: 100%; height: 34px;">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 小地图展示与风格生成弹窗 -->
+    <div id="chat-mini-map-modal" class="modal">
+      <div class="modal-content" style="max-width: 360px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; max-height: 88vh;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/></svg>
+            <span style="font-weight: 700; font-size: 14px;">示意小地图</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" id="chat-mini-map-regen-btn" class="chat-map-top-btn" style="height: 26px; padding: 0 8px; font-size: 11px;" title="重新选择风格生成">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <span>重新生成</span>
+            </button>
+            <button type="button" class="close-btn" id="close-chat-mini-map-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+          </div>
+        </div>
+        <div class="modal-body" style="padding: 12px 0; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+          <!-- 风格选择区（未生成时或点击重新生成时展示） -->
+          <div id="chat-mini-map-style-panel" style="display: flex; flex-direction: column; gap: 8px; background: var(--secondary-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color);">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">选择小地图视觉风格</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;" id="chat-mini-map-style-grid">
+              <button type="button" class="summary-preset-btn mini-map-style-opt active" data-style="奶油风" style="padding: 6px 2px; font-size: 12px;">奶油风</button>
+              <button type="button" class="summary-preset-btn mini-map-style-opt" data-style="莫兰迪风" style="padding: 6px 2px; font-size: 12px;">莫兰迪风</button>
+              <button type="button" class="summary-preset-btn mini-map-style-opt" data-style="手绘风" style="padding: 6px 2px; font-size: 12px;">手绘风</button>
+              <button type="button" class="summary-preset-btn mini-map-style-opt" data-style="中世纪风" style="padding: 6px 2px; font-size: 12px;">中世纪风</button>
+              <button type="button" class="summary-preset-btn mini-map-style-opt" data-style="ins风" style="padding: 6px 2px; font-size: 12px;">ins风</button>
+              <button type="button" class="summary-preset-btn mini-map-style-opt" data-style="和风" style="padding: 6px 2px; font-size: 12px;">和风</button>
+            </div>
+            <button type="button" id="chat-mini-map-do-generate-btn" class="chat-map-top-btn primary" style="width: 100%; margin-top: 4px; height: 34px;">开始生成地图</button>
+          </div>
+          <!-- 小地图图形展示区（尺寸被前端严格锁死） -->
+          <div id="chat-mini-map-view-box" style="display: none; flex-direction: column; gap: 8px;">
+            <div id="chat-mini-map-container" class="chat-mini-map-viewport"></div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center; line-height: 1.4;" id="chat-mini-map-loc-tip">点击地点标记可查看介绍</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 地点详细介绍白色小卡片 -->
+    <div id="chat-location-detail-modal" class="modal">
+      <div class="modal-content" style="max-width: 290px; padding: 14px; border-radius: 14px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.15);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span id="chat-location-detail-title" style="font-weight: 700; font-size: 13px; color: var(--text-primary);">地点名称</span>
+          </div>
+          <button type="button" id="close-chat-location-detail-btn" style="border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div id="chat-location-detail-desc" style="font-size: 12px; color: var(--text-secondary); line-height: 1.6; white-space: pre-wrap; max-height: 220px; overflow-y: auto;"></div>
+      </div>
+    </div>
+
+    <!-- 添加临时地点弹窗 -->
+    <div id="chat-temp-location-modal" class="modal">
+      <div class="modal-content" style="max-width: 320px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 700; font-size: 14px;">添加临时地点</span>
+          <button type="button" class="close-btn" id="close-chat-temp-loc-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 12px 0; display: flex; flex-direction: column; gap: 10px;">
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地点名称</label>
+            <input type="text" id="chat-temp-loc-name-input" class="moe-input" placeholder="例如：林间小溪" style="width: 100%; height: 32px; font-size: 12px;" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">所属上级地点</label>
+            <select id="chat-temp-loc-parent-select" class="moe-input" style="width: 100%; height: 32px; font-size: 12px;">
+              <option value="">顶级大地图</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地点简介</label>
+            <textarea id="chat-temp-loc-desc-input" class="moe-input" rows="3" placeholder="在此输入地点的详细介绍" style="width: 100%; font-size: 12px; resize: none;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-chat-temp-loc-btn">取消</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="confirm-chat-temp-loc-btn">添加</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 查看与编辑地图提示词弹窗 -->
+    <div id="module-map-prompt-modal" class="modal">
+      <div class="modal-content" style="max-width: 340px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 700; font-size: 14px;" id="module-map-prompt-modal-title">绘图提示词</span>
+          <button type="button" class="close-btn" id="close-module-map-prompt-modal-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 12px 0; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 12px; color: var(--text-secondary);" id="module-map-prompt-loc-name"></div>
+          <textarea id="module-map-prompt-textarea" class="moe-input" rows="5" placeholder="在此查看或修改该地点的生图提示词" style="width: 100%; font-size: 12px; line-height: 1.5; resize: none;"></textarea>
+        </div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-module-map-prompt-btn">取消</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-module-map-prompt-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模组地点添加与修改弹窗 -->
+    <div id="module-map-item-edit-modal" class="modal">
+      <div class="modal-content" style="max-width: 340px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 700; font-size: 14px;" id="module-map-item-edit-title">编辑地点</span>
+          <button type="button" class="close-btn" id="close-module-map-item-edit-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 12px 0; display: flex; flex-direction: column; gap: 10px;">
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地点名称</label>
+            <input type="text" id="module-map-edit-name-input" class="moe-input" placeholder="输入地点名称" style="width: 100%; height: 32px; font-size: 12px;" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">所属上级</label>
+            <select id="module-map-edit-parent-select" class="moe-input" style="width: 100%; height: 32px; font-size: 12px;">
+              <option value="">顶级大地图</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地点简介</label>
+            <textarea id="module-map-edit-desc-input" class="moe-input" rows="3" placeholder="输入地点环境与背景介绍" style="width: 100%; font-size: 12px; resize: none;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-module-map-item-edit-btn">取消</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-module-map-item-edit-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 地图重新生图面板 -->
+    <div id="module-map-regen-modal" class="modal">
+      <div class="modal-content" style="max-width: 320px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 700; font-size: 14px;">重新生成</span>
+          <button type="button" class="close-btn" id="close-module-map-regen-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 12px 0; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 12px; color: var(--text-secondary);" id="module-map-regen-loc-name"></div>
+          <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">点击下方按键将重新调用绘图接口为该地点生成全新图像</div>
+        </div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-module-map-regen-btn">取消</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="confirm-module-map-regen-btn">重新生成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 地图大图展开预览弹窗 -->
+    <div id="module-map-expand-modal" class="modal">
+      <div class="modal-content" style="max-width: 90vw; max-height: 90vh; padding: 10px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center;">
+        <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span id="module-map-expand-title" style="font-size: 13px; font-weight: 600; color: var(--text-primary);"></span>
+          <button type="button" class="close-btn" id="close-module-map-expand-btn" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div style="flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; width: 100%;">
+          <img id="module-map-expand-img" src="" alt="" style="max-width: 100%; max-height: 75vh; border-radius: 10px; object-fit: contain;" />
         </div>
       </div>
     </div>
@@ -25088,6 +25295,184 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
+        async function callNovelAiDirect(prompt) {
+          const apiKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : (localStorage.getItem("novelai-api-key") || "");
+          const model = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : (localStorage.getItem("novelai-model") || "nai-diffusion-4-curated-preview");
+
+          if (!apiKey) {
+            throw new Error("请先配置NovelAI API Key");
+          }
+          if (!prompt) {
+            throw new Error("提示词为空");
+          }
+
+          const settings = typeof getNovelAISettings === "function" ? getNovelAISettings() : {};
+          const [width, height] = (settings.resolution || "832x1216").split("x").map(Number);
+          const negativePrompt = settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry";
+
+          let requestBody;
+          if (model.includes("nai-diffusion-4")) {
+            const finalPrompt = [settings.artist_prompt, prompt].filter(Boolean).join(", ");
+            requestBody = {
+              input: finalPrompt,
+              model: model,
+              action: "generate",
+              parameters: {
+                params_version: 3,
+                width: width,
+                height: height,
+                scale: settings.cfg_scale || 6.0,
+                sampler: settings.sampler || "k_euler",
+                steps: settings.steps || 28,
+                seed: Math.floor(Math.random() * 9999999999),
+                n_samples: 1,
+                ucPreset: settings.uc_preset || 0,
+                qualityToggle: true,
+                autoSmea: false,
+                dynamic_thresholding: false,
+                controlnet_strength: 1,
+                legacy: false,
+                add_original_image: true,
+                cfg_rescale: 0,
+                noise_schedule: "karras",
+                legacy_v3_extend: false,
+                skip_cfg_above_sigma: null,
+                use_coords: false,
+                legacy_uc: false,
+                normalize_reference_strength_multiple: true,
+                inpaintImg2ImgStrength: 1,
+                characterPrompts: [],
+                v4_prompt: {
+                  caption: { base_caption: prompt, char_captions: [] },
+                  use_coords: false,
+                  use_order: true
+                },
+                v4_negative_prompt: {
+                  caption: { base_caption: negativePrompt, char_captions: [] },
+                  legacy_uc: false
+                },
+                negative_prompt: negativePrompt,
+                deliberate_euler_ancestral_bug: false,
+                prefer_brownian: true
+              }
+            };
+          } else {
+            requestBody = {
+              input: prompt,
+              model: model,
+              action: "generate",
+              parameters: {
+                width: width,
+                height: height,
+                scale: settings.cfg_scale || 6.0,
+                sampler: settings.sampler || "k_euler",
+                steps: settings.steps || 28,
+                seed: Math.floor(Math.random() * 9999999999),
+                n_samples: 1,
+                ucPreset: settings.uc_preset || 0,
+                qualityToggle: true,
+                sm: false,
+                sm_dyn: false,
+                dynamic_thresholding: false,
+                controlnet_strength: 1,
+                legacy: false,
+                add_original_image: false,
+                cfg_rescale: 0,
+                noise_schedule: "native",
+                negative_prompt: negativePrompt
+              }
+            };
+          }
+
+          let apiUrl = model.includes("nai-diffusion-4") ? "https://image.novelai.net/ai/generate-image-stream" : "https://image.novelai.net/ai/generate-image";
+          let corsProxy = settings.cors_proxy;
+          if (corsProxy === "custom") corsProxy = settings.custom_proxy_url || "";
+          if (corsProxy && corsProxy !== "") apiUrl = corsProxy + encodeURIComponent(apiUrl);
+
+          const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
+          let fetchOptions = {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + apiKey
+            },
+            body: JSON.stringify(requestBody)
+          };
+
+          if (isChrome) {
+            const cleanHeaders = {};
+            for (const [key, value] of Object.entries(fetchOptions.headers)) {
+              cleanHeaders[key] = value.replace(/[^\x00-\xFF]/g, "");
+            }
+            fetchOptions.headers = cleanHeaders;
+          }
+
+          const response = await fetch(apiUrl, fetchOptions);
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API请求失败: ${errorText}`);
+          }
+
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("text/event-stream")) {
+            const text = await response.text();
+            const lines = text.trim().split("\n");
+            let base64Data = null;
+            for (let i = lines.length - 1; i >= 0; i--) {
+              const line = lines[i].trim();
+              if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                const dataContent = line.substring(6);
+                try {
+                  const jsonData = JSON.parse(dataContent);
+                  if (jsonData.event_type === "final" && jsonData.image) {
+                    base64Data = jsonData.image;
+                    break;
+                  }
+                  if (jsonData.data) {
+                    base64Data = jsonData.data;
+                    break;
+                  }
+                  if (jsonData.image) {
+                    base64Data = jsonData.image;
+                    break;
+                  }
+                } catch (e) {
+                  base64Data = dataContent;
+                  break;
+                }
+              }
+            }
+            if (!base64Data) throw new Error("未能解析出图片数据");
+            if (!base64Data.startsWith("data:image")) {
+              return "data:image/png;base64," + base64Data;
+            }
+            return base64Data;
+          } else {
+            const zipBlob = await response.blob();
+            if (typeof JSZip !== "undefined") {
+              const zip = await JSZip.loadAsync(zipBlob);
+              let imageFile = null;
+              for (let filename in zip.files) {
+                if (filename.match(/\.(png|jpg|jpeg|webp)$/i)) {
+                  imageFile = zip.files[filename];
+                  break;
+                }
+              }
+              if (imageFile) {
+                const b64 = await imageFile.async("base64");
+                return "data:image/png;base64," + b64;
+              }
+            }
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(zipBlob);
+            });
+          }
+        }
+        window.callNovelAiDirect = callNovelAiDirect;
+
         function renderApiSettings() {
           // 1. 更新 API 相关的输入框
           document.getElementById("proxy-url").value =
@@ -27848,6 +28233,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 return `<div class="chat-module-img-slot" data-mod-id="${chat.activeModuleId || ''}" data-img-idx="${imgNum}"></div>`;
               });
             }
+
+            if (/(?:\[?地点\]?)[：:]/i.test(rawContentText)) {
+              rawContentText = rawContentText.replace(/((?:\[?地点\]?)[：:]\s*)([^\n\r<]+)/g, (match, p1, p2) => {
+                const locText = p2.trim();
+                if (!locText || locText === "未知") return match;
+                const parts = locText.split("-");
+                const wrappedParts = parts.map(part => {
+                  const trimmed = part.trim();
+                  return `<span class="chat-location-clickable" data-loc-name="${trimmed}">${trimmed}</span>`;
+                });
+                return `${p1}${wrappedParts.join("-")}`;
+              });
+            }
+
             contentHtml = rawContentText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
           }
 
@@ -27953,6 +28352,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const src = msg.imageUrl || msg.content;
               if (src && typeof openImageViewer === 'function') openImageViewer(src);
             };
+          }
+
+          const locClickables = bubble.querySelectorAll('.chat-location-clickable');
+          if (locClickables.length > 0) {
+            locClickables.forEach(span => {
+              span.onclick = async (e) => {
+                e.stopPropagation();
+                const locName = span.getAttribute('data-loc-name');
+                if (!locName || locName === '未知') return;
+                const allLocs = await getAllChatLocations(chat);
+                const found = allLocs.find(l => l.name === locName || locName.includes(l.name) || l.name.includes(locName));
+                if (found && found.desc) {
+                  openChatLocationDetailModal(found.name, found.desc);
+                }
+              };
+            });
           }
 
           const slots = bubble.querySelectorAll('.chat-module-img-slot');
@@ -28541,6 +28956,479 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
         }
         window.renderChatAffectionList = renderChatAffectionList;
+
+        // ==========================================
+        // 地图面板与小地图相关函数
+        // ==========================================
+        let currentMiniMapStyle = "奶油风";
+
+        async function openChatMapModal() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const modal = document.getElementById("chat-map-modal");
+          if (!modal) return;
+
+          if (!chat.settings) chat.settings = {};
+          if (!chat.settings.mapViewMode) chat.settings.mapViewMode = "text";
+
+          const richToggle = document.getElementById("chat-map-rich-mode-toggle");
+          const richLabel = document.getElementById("chat-map-mode-label");
+          if (richToggle) {
+            richToggle.checked = (chat.settings.mapViewMode === "rich");
+            if (richLabel) richLabel.textContent = richToggle.checked ? "图文" : "文字";
+            richToggle.onchange = async () => {
+              chat.settings.mapViewMode = richToggle.checked ? "rich" : "text";
+              if (richLabel) richLabel.textContent = richToggle.checked ? "图文" : "文字";
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+              await renderChatMapList();
+            };
+          }
+
+          const openMiniBtn = document.getElementById("chat-map-open-mini-btn");
+          if (openMiniBtn) {
+            openMiniBtn.onclick = () => {
+              modal.classList.remove("visible");
+              openChatMiniMapModal();
+            };
+          }
+
+          const addTempBtn = document.getElementById("chat-map-add-temp-btn");
+          if (addTempBtn) {
+            addTempBtn.onclick = () => openChatTempLocationModal();
+          }
+
+          const closeBtn = document.getElementById("close-chat-map-modal-btn");
+          if (closeBtn) closeBtn.onclick = () => modal.classList.remove("visible");
+          const footerCloseBtn = document.getElementById("close-chat-map-modal-footer-btn");
+          if (footerCloseBtn) footerCloseBtn.onclick = () => modal.classList.remove("visible");
+
+          await renderChatMapList();
+          modal.classList.add("visible");
+        }
+        window.openChatMapModal = openChatMapModal;
+
+        async function getAllChatLocations(chat) {
+          let locations = [];
+          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+
+          // 1. 获取模组地图地点
+          if (chat && chat.activeModuleId && dbInstance) {
+            try {
+              let modLocs = [];
+              if (dbInstance.moduleLocationNav) {
+                modLocs = await dbInstance.moduleLocationNav.where("moduleId").equals(chat.activeModuleId).toArray();
+              }
+              if (modLocs.length === 0 && dbInstance.modules) {
+                const mod = await dbInstance.modules.get(chat.activeModuleId);
+                if (mod && Array.isArray(mod.mapNodes) && mod.mapNodes.length > 0) {
+                  modLocs = mod.mapNodes;
+                }
+              }
+              if (modLocs && modLocs.length > 0) {
+                modLocs.forEach(loc => {
+                  locations.push({
+                    id: loc.id || "mod_" + loc.name,
+                    name: loc.name,
+                    parent: loc.parent || "",
+                    level: loc.level || 1,
+                    desc: loc.desc || loc.description || loc.annotation || "",
+                    imageUrl: loc.imageUrl || loc.dataUrl || "",
+                    isTemp: false
+                  });
+                });
+              }
+            } catch (e) {}
+          }
+
+          // 2. 获取当前群聊专属临时地点
+          if (chat && chat.settings && Array.isArray(chat.settings.temporaryLocations)) {
+            chat.settings.temporaryLocations.forEach(loc => {
+              locations.push({
+                id: loc.id,
+                name: loc.name,
+                parent: loc.parent || "",
+                level: loc.level || (loc.parent ? 2 : 1),
+                desc: loc.desc || loc.description || "",
+                imageUrl: loc.imageUrl || "",
+                isTemp: true
+              });
+            });
+          }
+
+          return locations;
+        }
+
+        async function renderChatMapList() {
+          const container = document.getElementById("chat-map-list-container");
+          if (!container || !state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          container.innerHTML = "";
+          const isRich = (chat.settings?.mapViewMode === "rich");
+          const locations = await getAllChatLocations(chat);
+
+          if (locations.length === 0) {
+            container.innerHTML = `
+              <div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 24px 10px; background: var(--secondary-bg); border-radius: 12px; border: 1px dashed var(--border-color); display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                <span>暂无地图地点数据</span>
+                <button type="button" class="chat-map-top-btn" onclick="openChatTempLocationModal()" style="font-size: 11px; height: 28px; padding: 0 10px;">添加临时地点</button>
+              </div>
+            `;
+            return;
+          }
+
+          // 组织层级结构：一级大地图 -> 二级中地图 -> 三级小地图
+          const level1 = locations.filter(l => !l.parent || l.level === 1);
+          const getChildren = (parentName) => locations.filter(l => l.parent && l.parent === parentName);
+
+          const renderNode = (node, indentLevel = 0) => {
+            const nodeDiv = document.createElement("div");
+            nodeDiv.className = "chat-map-level-item";
+            nodeDiv.style.marginLeft = `${indentLevel * 14}px`;
+            nodeDiv.style.borderLeft = indentLevel > 0 ? `2px solid var(--accent-color)` : "1px solid var(--border-color)";
+
+            const children = getChildren(node.name);
+            const hasChildren = (children.length > 0);
+
+            if (isRich) {
+              // 图文版
+              const defaultThumbSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>`;
+              nodeDiv.innerHTML = `
+                <div class="chat-map-rich-card" style="display: flex; gap: 10px; align-items: flex-start;">
+                  <div style="position: relative; width: 68px; height: 50px; border-radius: 6px; overflow: hidden; background: var(--secondary-bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); margin-top: 2px;">
+                    ${node.imageUrl ? `<img src="${node.imageUrl}" class="chat-map-thumb-img" alt="${node.name}" style="width: 100%; height: 100%; object-fit: cover;" />` : defaultThumbSvg}
+                  </div>
+                  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%;">
+                      <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap;">
+                        <span style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word;">${node.name}</span>
+                        ${node.isTemp ? `<span style="font-size: 10px; color: var(--accent-color); background: var(--card-bg); padding: 1px 4px; border-radius: 4px; border: 1px solid var(--border-color); flex-shrink: 0;">临时</span>` : ''}
+                      </div>
+                      ${node.isTemp ? `<button type="button" class="del-temp-loc-btn" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer; padding: 2px; font-size: 14px; line-height: 1; flex-shrink: 0;">&times;</button>` : ''}
+                    </div>
+                    ${node.desc ? `<div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; white-space: pre-wrap;">${node.desc}</div>` : ''}
+                  </div>
+                </div>
+              `;
+            } else {
+              // 纯文字版（折叠层级）
+              nodeDiv.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; cursor: ${hasChildren ? 'pointer' : 'default'}; user-select: none;">
+                  <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; flex-wrap: wrap;">
+                    ${hasChildren ? `<svg class="tree-toggle-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); flex-shrink: 0; transition: transform 0.18s ease;"><polyline points="9 18 15 12 9 6"></polyline></svg>` : `<span style="width: 12px; flex-shrink: 0;"></span>`}
+                    <span style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word;">${node.name}</span>
+                    ${node.isTemp ? `<span style="font-size: 10px; color: var(--accent-color); background: var(--card-bg); padding: 1px 4px; border-radius: 4px; border: 1px solid var(--border-color); flex-shrink: 0;">临时</span>` : ''}
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                    ${node.desc ? `<button type="button" class="view-loc-desc-btn" style="border: none; background: var(--card-bg); color: var(--text-secondary); padding: 2px 6px; font-size: 10px; border-radius: 4px; border: 1px solid var(--border-color); cursor: pointer;">详情</button>` : ''}
+                    ${node.isTemp ? `<button type="button" class="del-temp-loc-btn" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer; padding: 2px 4px; font-size: 14px; line-height: 1;">&times;</button>` : ''}
+                  </div>
+                </div>
+                ${node.desc ? `<div class="loc-desc-line" style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; padding-left: 18px; word-break: break-word; white-space: pre-wrap; margin-top: 3px;">${node.desc}</div>` : ''}
+                ${hasChildren ? `<div class="loc-children-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;"></div>` : ''}
+              `;
+            }
+
+            // 删除临时地点
+            const delBtn = nodeDiv.querySelector(".del-temp-loc-btn");
+            if (delBtn) {
+              delBtn.onclick = async (e) => {
+                e.stopPropagation();
+                if (chat.settings?.temporaryLocations) {
+                  chat.settings.temporaryLocations = chat.settings.temporaryLocations.filter(t => t.id !== node.id && t.name !== node.name);
+                  const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
+                  await renderChatMapList();
+                }
+              };
+            }
+
+            // 查看详情按钮
+            const descBtn = nodeDiv.querySelector(".view-loc-desc-btn");
+            if (descBtn) {
+              descBtn.onclick = (e) => {
+                e.stopPropagation();
+                openChatLocationDetailModal(node.name, node.desc);
+              };
+            }
+
+            // 纯文字版子级折叠
+            if (!isRich && hasChildren) {
+              const childrenContainer = nodeDiv.querySelector(".loc-children-container");
+              const arrow = nodeDiv.querySelector(".tree-toggle-arrow");
+              if (childrenContainer) {
+                children.forEach(ch => {
+                  childrenContainer.appendChild(renderNode(ch, indentLevel + 1));
+                });
+              }
+              let isExpanded = true;
+              nodeDiv.querySelector("div").onclick = (e) => {
+                if (e.target.closest("button")) return;
+                isExpanded = !isExpanded;
+                if (childrenContainer) childrenContainer.style.display = isExpanded ? "flex" : "none";
+                if (arrow) arrow.style.transform = isExpanded ? "rotate(90deg)" : "rotate(0deg)";
+              };
+              if (arrow) arrow.style.transform = "rotate(90deg)";
+            }
+
+            return nodeDiv;
+          };
+
+          if (isRich) {
+            locations.forEach(loc => {
+              container.appendChild(renderNode(loc, 0));
+            });
+          } else {
+            level1.forEach(l1 => {
+              container.appendChild(renderNode(l1, 0));
+            });
+            // 处理没有上级但非level1的孤立项
+            locations.forEach(loc => {
+              if (loc.parent && !locations.some(p => p.name === loc.parent)) {
+                container.appendChild(renderNode(loc, 0));
+              }
+            });
+          }
+        }
+        window.renderChatMapList = renderChatMapList;
+
+        function openChatLocationDetailModal(title, desc) {
+          if (!desc) return;
+          const modal = document.getElementById("chat-location-detail-modal");
+          const titleEl = document.getElementById("chat-location-detail-title");
+          const descEl = document.getElementById("chat-location-detail-desc");
+          const closeBtn = document.getElementById("close-chat-location-detail-btn");
+          if (!modal || !titleEl || !descEl) return;
+
+          titleEl.textContent = title || "地点详情";
+          descEl.textContent = desc;
+          if (closeBtn) closeBtn.onclick = () => modal.classList.remove("visible");
+          modal.classList.add("visible");
+        }
+        window.openChatLocationDetailModal = openChatLocationDetailModal;
+
+        async function openChatTempLocationModal() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const modal = document.getElementById("chat-temp-location-modal");
+          const nameInput = document.getElementById("chat-temp-loc-name-input");
+          const parentSelect = document.getElementById("chat-temp-loc-parent-select");
+          const descInput = document.getElementById("chat-temp-loc-desc-input");
+          const closeBtn = document.getElementById("close-chat-temp-loc-btn");
+          const cancelBtn = document.getElementById("cancel-chat-temp-loc-btn");
+          const confirmBtn = document.getElementById("confirm-chat-temp-loc-btn");
+          if (!modal || !nameInput || !parentSelect || !descInput) return;
+
+          nameInput.value = "";
+          descInput.value = "";
+          parentSelect.innerHTML = `<option value="">无（作为一级大地图）</option>`;
+
+          const locations = await getAllChatLocations(chat);
+          locations.forEach(loc => {
+            const opt = document.createElement("option");
+            opt.value = loc.name;
+            opt.textContent = loc.name;
+            parentSelect.appendChild(opt);
+          });
+
+          const closeModal = () => modal.classList.remove("visible");
+          if (closeBtn) closeBtn.onclick = closeModal;
+          if (cancelBtn) cancelBtn.onclick = closeModal;
+
+          if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+              const name = nameInput.value.trim();
+              if (!name) return;
+              const parent = parentSelect.value;
+              const desc = descInput.value.trim();
+
+              if (!chat.settings) chat.settings = {};
+              if (!Array.isArray(chat.settings.temporaryLocations)) {
+                chat.settings.temporaryLocations = [];
+              }
+              chat.settings.temporaryLocations.push({
+                id: "temp_loc_" + Date.now(),
+                name: name,
+                parent: parent,
+                desc: desc,
+                level: parent ? 2 : 1
+              });
+
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+              closeModal();
+              await renderChatMapList();
+            };
+          }
+
+          modal.classList.add("visible");
+        }
+        window.openChatTempLocationModal = openChatTempLocationModal;
+
+        // 小地图弹窗与生成逻辑
+        async function openChatMiniMapModal() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const modal = document.getElementById("chat-mini-map-modal");
+          const stylePanel = document.getElementById("chat-mini-map-style-panel");
+          const viewBox = document.getElementById("chat-mini-map-view-box");
+          const container = document.getElementById("chat-mini-map-container");
+          const closeBtn = document.getElementById("close-chat-mini-map-btn");
+          const regenBtn = document.getElementById("chat-mini-map-regen-btn");
+          const doGenBtn = document.getElementById("chat-mini-map-do-generate-btn");
+          if (!modal) return;
+
+          if (closeBtn) closeBtn.onclick = () => modal.classList.remove("visible");
+
+          // 风格选择按钮绑定
+          const styleOpts = document.querySelectorAll(".mini-map-style-opt");
+          styleOpts.forEach(btn => {
+            btn.onclick = () => {
+              styleOpts.forEach(b => b.classList.remove("active"));
+              btn.classList.add("active");
+              currentMiniMapStyle = btn.dataset.style || "奶油风";
+            };
+          });
+
+          if (regenBtn) {
+            regenBtn.onclick = () => {
+              if (stylePanel) stylePanel.style.display = "flex";
+              if (viewBox) viewBox.style.display = "none";
+            };
+          }
+
+          if (doGenBtn) {
+            doGenBtn.onclick = async () => {
+              doGenBtn.disabled = true;
+              doGenBtn.textContent = "正在绘制小地图...";
+              try {
+                await generateChatMiniMapSvg(currentMiniMapStyle);
+                if (stylePanel) stylePanel.style.display = "none";
+                if (viewBox) viewBox.style.display = "flex";
+                renderChatMiniMap();
+              } catch (e) {
+                console.error("生成小地图错误:", e);
+              } finally {
+                doGenBtn.disabled = false;
+                doGenBtn.textContent = "开始生成地图";
+              }
+            };
+          }
+
+          // 检查是否已有缓存的地图
+          if (chat.settings?.miniMapSvg) {
+            if (stylePanel) stylePanel.style.display = "none";
+            if (viewBox) viewBox.style.display = "flex";
+            renderChatMiniMap();
+          } else {
+            if (stylePanel) stylePanel.style.display = "flex";
+            if (viewBox) viewBox.style.display = "none";
+          }
+
+          modal.classList.add("visible");
+        }
+        window.openChatMiniMapModal = openChatMiniMapModal;
+
+        function renderChatMiniMap() {
+          const container = document.getElementById("chat-mini-map-container");
+          if (!container || !state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat || !chat.settings?.miniMapSvg) return;
+
+          container.innerHTML = chat.settings.miniMapSvg;
+
+          // 绑定所有具有 data-name 的地点标记
+          const locNodes = container.querySelectorAll("[data-name]");
+          locNodes.forEach(node => {
+            node.style.cursor = "pointer";
+            node.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              const locName = node.getAttribute("data-name");
+              const locs = await getAllChatLocations(chat);
+              const found = locs.find(l => l.name === locName || locName.includes(l.name) || l.name.includes(locName));
+              if (found && found.desc) {
+                openChatLocationDetailModal(found.name, found.desc);
+              }
+            });
+          });
+
+          // 检查当前状态栏最新地点，进行高亮
+          let latestLocation = "";
+          const history = chat.history || [];
+          for (let i = history.length - 1; i >= 0; i--) {
+            const h = history[i];
+            if (!h || typeof h.content !== "string") continue;
+            const match = h.content.match(/(?:\[?地点\]?)[：:]\s*([^\n\r]+)/);
+            if (match) {
+              latestLocation = match[1].trim();
+              break;
+            }
+          }
+
+          if (latestLocation && latestLocation !== "未知") {
+            const parts = latestLocation.split("-").map(p => p.trim());
+            const targetLocName = parts[parts.length - 1] || parts[0];
+            let matchedNode = null;
+            locNodes.forEach(node => {
+              const dName = node.getAttribute("data-name");
+              if (dName === targetLocName || dName === latestLocation || parts.includes(dName)) {
+                matchedNode = node;
+              }
+            });
+            if (matchedNode) {
+              matchedNode.classList.add("map-location-pin");
+              matchedNode.style.filter = "drop-shadow(0 0 6px var(--accent-color))";
+            }
+          }
+        }
+        window.renderChatMiniMap = renderChatMiniMap;
+
+        async function generateChatMiniMapSvg(styleName) {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const locations = await getAllChatLocations(chat);
+          const locSummary = locations.map(l => `- ${l.name}（上级：${l.parent || '无'}，简介：${l.desc || '无'}）`).join("\n");
+
+          const prompt = `你是一位高阶矢量图形设计师。请为跑团模组设计一张【${styleName}】风格的示意小地图（纯SVG代码）。\n` +
+            `模组包含以下地点：\n${locSummary || '地点：中心广场、旧书店、钟楼、后巷'}\n\n` +
+            `设计与格式要求：\n` +
+            `1. 只输出单个完整的 <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; border-radius:10px;"> ... </svg> 标签代码，绝不要使用任何Markdown代码块，不要包含任何解释文字。\n` +
+            `2. 严格契合【${styleName}】的色调与构图（如奶油风用温润米白与软萌圆角块，中世纪风用羊皮纸棕与复古印章，莫兰迪风用高级灰调与几何块，和风用水墨色块与木纹边框）。\n` +
+            `3. 为图中的每个地点色块或标记图标，必须添加属性 data-name="地点名称"，地点名称必须与上述地点完全一致，以便用户点击交互与位置高亮定位。\n` +
+            `4. 在地点之间绘制虚线小路或连线连接它们，绘制优雅的地点文字标签。\n` +
+            `5. 严格自适应比例，绝不能出现外部网络图片链接。`;
+
+          let svgCode = "";
+          if (typeof callGeminiApi === "function") {
+            const res = await callGeminiApi(prompt, [], { systemInstruction: "你是一个专业的矢量SVG地图生成器。只输出纯净合法的SVG代码。" });
+            if (res) svgCode = res;
+          } else if (typeof callAi === "function") {
+            const res = await callAi(prompt, { systemInstruction: "你是一个专业的矢量SVG地图生成器。只输出纯净合法的SVG代码。" });
+            if (res) svgCode = res;
+          }
+
+          if (svgCode) {
+            svgCode = svgCode.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
+            const svgMatch = svgCode.match(/<svg[\s\S]*?<\/svg>/i);
+            if (svgMatch) svgCode = svgMatch[0];
+            if (!chat.settings) chat.settings = {};
+            chat.settings.miniMapSvg = svgCode;
+            chat.settings.miniMapStyle = styleName;
+            const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+            if (dbInstance) await dbInstance.chats.put(chat);
+          }
+        }
+        window.generateChatMiniMapSvg = generateChatMiniMapSvg;
 
         async function generateSystemStatusContent(targetObj, groupChat = null) {
           try {
@@ -62265,6 +63153,7 @@ ${colSpecs.join('\n')}
               const isLuck = (col.type === "luck");
               const isDate = (col.type === "date");
               const isTime = (col.type === "time");
+              const isLocation = (col.type === "location");
               const isFormatFixed = (isDate || isTime || isWeather || isLuck || isAffection);
               const isLabelFixed = isWeather;
 
@@ -62277,6 +63166,14 @@ ${colSpecs.join('\n')}
                     <span class="col-weather-pool-name" style="color: var(--text-primary); font-size: 13px; font-weight: 600;">${firstChar}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); flex-shrink: 0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
                   </div>
+                `;
+              } else if (isLocation) {
+                const locMode = col.mode || "module";
+                rightControlHtml = `
+                  <select class="moe-input col-location-mode-select" style="flex: 1; min-width: 0; height: 34px; padding: 0 8px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); text-align: center;">
+                    <option value="module" ${locMode !== "realtime" ? "selected" : ""}>模组</option>
+                    <option value="realtime" ${locMode === "realtime" ? "selected" : ""}>实时</option>
+                  </select>
                 `;
               } else {
                 rightControlHtml = `

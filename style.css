@@ -31108,6 +31108,8 @@ details[open] .thought-chain-arrow {
 .mod-capsule-btn {
   border-radius: 9999px;
   padding: 4px 12px;
+  min-height: 28px;
+  line-height: 1.2;
   font-size: 12px;
   font-weight: 500;
   border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
@@ -31121,6 +31123,30 @@ details[open] .thought-chain-arrow {
   transition: all 0.2s ease;
   font-family: inherit;
   white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.module-mini-btn {
+  border-radius: 6px;
+  padding: 3px 8px;
+  min-height: 22px;
+  line-height: 1.2;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  background-color: var(--card-bg, #FFFFFF);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .mod-capsule-btn:active {
@@ -31990,6 +32016,125 @@ select.gender-select-box {
 
 .chat-affection-btn-step:hover {
   border-color: var(--accent-color) !important;
+  color: var(--accent-color) !important;
+}
+
+/* 地图面板美化样式 */
+#chat-map-modal .modal-content,
+#chat-mini-map-modal .modal-content,
+#chat-location-detail-modal .modal-content,
+#chat-temp-location-modal .modal-content {
+  max-width: 360px !important;
+  border-radius: 16px !important;
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
+  padding: 16px !important;
+}
+
+.chat-map-top-btn {
+  height: 32px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border-color) !important;
+  background-color: var(--secondary-bg) !important;
+  color: var(--text-primary) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  transition: all 0.18s ease !important;
+  padding: 0 10px !important;
+}
+
+.chat-map-top-btn:hover {
+  background-color: var(--card-bg) !important;
+  border-color: var(--accent-color) !important;
+  color: var(--accent-color) !important;
+}
+
+.chat-map-top-btn.primary {
+  background-color: var(--accent-color) !important;
+  color: #FFFFFF !important;
+  border-color: var(--accent-color) !important;
+}
+
+.chat-map-level-item {
+  display: flex !important;
+  flex-direction: column !important;
+  background-color: var(--secondary-bg) !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--border-color) !important;
+  padding: 8px 10px !important;
+  gap: 4px !important;
+  transition: all 0.15s ease !important;
+  text-align: left !important;
+}
+
+.chat-map-level-item:hover {
+  border-color: var(--accent-color) !important;
+}
+
+.chat-map-rich-card {
+  display: flex !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+.chat-map-thumb-img {
+  width: 64px !important;
+  height: 44px !important;
+  border-radius: 6px !important;
+  object-fit: cover !important;
+  background-color: var(--card-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  flex-shrink: 0 !important;
+}
+
+.chat-mini-map-viewport {
+  width: 100% !important;
+  max-width: 100% !important;
+  max-height: 320px !important;
+  overflow: auto !important;
+  background-color: var(--secondary-bg) !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--border-color) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  padding: 10px !important;
+  box-sizing: border-box !important;
+}
+
+.chat-mini-map-viewport svg {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  margin: 0 auto !important;
+}
+
+@keyframes map-pin-pulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.9; }
+}
+
+.map-location-pin {
+  animation: map-pin-pulse 1.8s infinite ease-in-out !important;
+  transform-origin: center !important;
+}
+
+.chat-location-clickable {
+  cursor: pointer !important;
+  text-decoration: underline dotted var(--accent-color) !important;
+  transition: color 0.15s ease !important;
+}
+
+.chat-location-clickable:hover {
   color: var(--accent-color) !important;
 }
 
