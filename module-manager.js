@@ -236,7 +236,19 @@
       const raw = localStorage.getItem('coc_module_prompt_presets');
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const def = parsed.find((p) => p.id === 'preset_default_analysis');
+          if (def) {
+            def.prompt = DEFAULT_TRPG_ANALYSIS_PROMPT;
+          } else {
+            parsed.unshift({
+              id: 'preset_default_analysis',
+              name: '默认分析',
+              prompt: DEFAULT_TRPG_ANALYSIS_PROMPT
+            });
+          }
+          return parsed;
+        }
       }
     } catch (e) {}
     return [
@@ -295,7 +307,19 @@
       const raw = localStorage.getItem('coc_module_cutting_presets');
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const def = parsed.find((p) => p.id === 'preset_default_cut');
+          if (def) {
+            def.prompt = DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT;
+          } else {
+            parsed.unshift({
+              id: 'preset_default_cut',
+              name: '默认切割',
+              prompt: DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT
+            });
+          }
+          return parsed;
+        }
       }
     } catch (e) {}
     return [
@@ -429,7 +453,7 @@
     currentStep: 1,
     activeSubPanel: 'wizard',
     activeSubTab: 'chapters',
-    cutExecutionMode: 'single',
+    cutExecutionMode: 'batch',
 
     sortModuleTags(tagsOrBg, bgOrEnding, endingOrContent, contentOrCustom, maybeCustom) {
       if (Array.isArray(tagsOrBg)) {
@@ -508,7 +532,7 @@
           currentStep: this.currentStep,
           activeSubPanel: this.activeSubPanel,
           activeSubTab: this.activeSubTab,
-          cutExecutionMode: this.cutExecutionMode || 'single',
+          cutExecutionMode: this.cutExecutionMode || 'batch',
           batchSegmentsCompleted: this.batchSegmentsCompleted || 0,
           currentParsedData: this.currentParsedData,
           currentPlan: this.currentPlan,
@@ -534,7 +558,7 @@
           this.currentStep = draft.currentStep || 1;
           this.activeSubPanel = draft.activeSubPanel || 'wizard';
           this.activeSubTab = draft.activeSubTab || 'chapters';
-          this.cutExecutionMode = draft.cutExecutionMode || 'single';
+          this.cutExecutionMode = draft.cutExecutionMode || 'batch';
           this.batchSegmentsCompleted = typeof draft.batchSegmentsCompleted === 'number' ? draft.batchSegmentsCompleted : 0;
           this.currentParsedData = draft.currentParsedData;
           this.currentPlan = draft.currentPlan || null;
@@ -1418,7 +1442,8 @@
       }
 
       if (stepNumber === 2) {
-        this.updateModeUI(this.cutExecutionMode || 'single');
+        this.updateModeUI(this.cutExecutionMode || 'batch');
+        this.switchStep2SubTab('chapters');
         this.renderStep2GalleryUI();
       }
 
@@ -1452,7 +1477,7 @@
       if (this.currentStep === 1) {
         if (secondaryBtn) {
           secondaryBtn.style.display = this.currentParsedData ? 'flex' : 'none';
-          secondaryBtn.textContent = '重新';
+          secondaryBtn.textContent = '重选';
         }
         if (rethinkBtn) rethinkBtn.style.display = 'none';
         if (primaryBtn) {
@@ -1498,6 +1523,7 @@
       this.isCuttingRunning = false;
       this.isCuttingPaused = false;
       this.isCuttingCancelled = false;
+      this.cutExecutionMode = 'batch';
       this.clearDraft();
 
       const fileInput = document.getElementById('module-file-input');
@@ -1535,11 +1561,8 @@
       if (fileNameEl) fileNameEl.textContent = data.fileName || '模组文档';
       if (fileFormatEl) fileFormatEl.textContent = data.fileType || '文档';
       if (statWordsEl) {
-        const count = data.wordCount || 0;
-        const wordsFormatted = count > 10000 
-          ? `约 ${(count / 10000).toFixed(1)} 万字` 
-          : `约 ${count} 字`;
-        statWordsEl.textContent = wordsFormatted;
+        const count = data.wordCount || (data.text ? this.countWords(data.text) : 0);
+        statWordsEl.textContent = `${count} 字`;
       }
       if (statImagesEl) statImagesEl.textContent = `${(data.images || []).length} 张`;
       if (statChunksEl) {
@@ -1739,110 +1762,119 @@
 
       const sortedTags = this.sortModuleTags(bgTag, endingTag, contentTags, []);
 
+      const slicePub = text.substring(0, Math.min(1500, totalLen));
       chunks.push({
         id: 'chunk_pub',
         order: 1,
         name: '00-模组已知信息',
         category: '事前公开',
-        wordCount: 800,
-        rawSlice: text.substring(0, Math.min(1500, totalLen)),
+        wordCount: this.countWords(slicePub),
+        rawSlice: slicePub,
         prefixPreview: '【开局背景】本篇包含公开给调查员了解的基础世界观与已知线索...',
         reason: '玩家开局前可见的已知背景与创建人物须知，完全无剧透',
         userInstruction: ''
       });
 
+      const sliceGuide = text.substring(0, Math.min(2500, totalLen));
       chunks.push({
         id: 'chunk_guide',
         order: 2,
         name: '01-模组导读与带团大纲',
         category: '带团引导',
-        wordCount: 1200,
-        rawSlice: text.substring(0, Math.min(2500, totalLen)),
+        wordCount: this.countWords(sliceGuide),
+        rawSlice: sliceGuide,
         prefixPreview: '【全局大纲】全模组章节导航、带团节奏建议与判定机制说明...',
         reason: '给守秘人的全局带团总纲与章节导航',
         userInstruction: ''
       });
 
+      const sliceTruth = text.substring(0, Math.min(4000, totalLen));
       chunks.push({
         id: 'chunk_truth',
         order: 3,
         name: '02-幕后真相与机制总览',
         category: 'KP信息',
-        wordCount: 2600,
-        rawSlice: text.substring(0, Math.min(4000, totalLen)),
+        wordCount: this.countWords(sliceTruth),
+        rawSlice: sliceTruth,
         prefixPreview: '【幕后真相】事件起因、隐藏设定与判定对抗机制...',
         reason: '汇总全文散落的背景真相与暗线机制',
         userInstruction: ''
       });
 
       if (!is1v1 && (text.includes('HO') || text.includes('ho1') || text.includes('秘密'))) {
+        const sliceHo1 = text.substring(0, Math.min(3500, totalLen));
         chunks.push({
           id: 'chunk_ho1_secret',
           order: 4,
           name: 'HO1秘密与设定',
           category: 'HO秘密',
-          wordCount: 2400,
-          rawSlice: text.substring(0, Math.min(3500, totalLen)),
+          wordCount: this.countWords(sliceHo1),
+          rawSlice: sliceHo1,
           prefixPreview: '【HO1专属秘密与设定】整合全篇散落关于HO1的所有背景与私密动机...',
           reason: '通读全文提取HO1散落在各处的全部设定并彻底去重整合',
           userInstruction: ''
         });
 
+        const sliceHo2 = text.substring(0, Math.min(3500, totalLen));
         chunks.push({
           id: 'chunk_ho2_secret',
           order: 5,
           name: 'HO2秘密与设定',
           category: 'HO秘密',
-          wordCount: 2400,
-          rawSlice: text.substring(0, Math.min(3500, totalLen)),
+          wordCount: this.countWords(sliceHo2),
+          rawSlice: sliceHo2,
           prefixPreview: '【HO2专属秘密与设定】整合全篇散落关于HO2的所有背景与私密动机...',
           reason: '通读全文提取HO2散落在各处的全部设定并彻底去重整合',
           userInstruction: ''
         });
 
+        const sliceSolo1 = text.substring(0, Math.min(3500, totalLen));
         chunks.push({
           id: 'chunk_solo_1',
           order: 6,
           name: '02.5-ho1单人线',
           category: '单人线',
-          wordCount: 2200,
-          rawSlice: text.substring(0, Math.min(3500, totalLen)),
+          wordCount: this.countWords(sliceSolo1),
+          rawSlice: sliceSolo1,
           prefixPreview: '【HO1专属单人线】HO1调查员单独遭遇的个人专属事件...',
           reason: '独立隔离HO1单人剧情，私聊进行',
           userInstruction: ''
         });
 
+        const sliceSolo2 = text.substring(0, Math.min(3500, totalLen));
         chunks.push({
           id: 'chunk_solo_2',
           order: 7,
           name: '02.6-ho2单人线',
           category: '单人线',
-          wordCount: 2200,
-          rawSlice: text.substring(0, Math.min(3500, totalLen)),
+          wordCount: this.countWords(sliceSolo2),
+          rawSlice: sliceSolo2,
           prefixPreview: '【HO2专属单人线】HO2调查员单独遭遇的个人专属事件...',
           reason: '独立隔离HO2单人剧情，私聊进行',
           userInstruction: ''
         });
 
+        const sliceCat1 = text.substring(0, Math.min(2500, totalLen));
         chunks.push({
           id: 'chunk_cat_1',
           order: 8,
           name: '猫-ho1-核心角色',
           category: '猫人设',
-          wordCount: 1600,
-          rawSlice: text.substring(0, Math.min(2500, totalLen)),
+          wordCount: this.countWords(sliceCat1),
+          rawSlice: sliceCat1,
           prefixPreview: '【HO1专属猫人设】与HO1深度绑定的NPC性格描写与对话风格...',
           reason: 'HO1对应专属猫人设档案，不杂揉进导入或正文',
           userInstruction: ''
         });
 
+        const sliceCat2 = text.substring(0, Math.min(2500, totalLen));
         chunks.push({
           id: 'chunk_cat_2',
           order: 9,
           name: '猫-ho2-核心角色',
           category: '猫人设',
-          wordCount: 1600,
-          rawSlice: text.substring(0, Math.min(2500, totalLen)),
+          wordCount: this.countWords(sliceCat2),
+          rawSlice: sliceCat2,
           prefixPreview: '【HO2专属猫人设】与HO2深度绑定的NPC性格描写与对话风格...',
           reason: 'HO2对应专属猫人设档案，不杂揉进导入或正文',
           userInstruction: ''
@@ -2115,16 +2147,19 @@ JSON 格式如下：
             totalWords: this.currentParsedData.wordCount,
             chunks: allParsedChunks.map((c, idx) => {
               const cName = this.cleanChapterTitle(c.name, this.currentParsedData.moduleName);
+              const slice = this.findSemanticSection(this.currentParsedData.text, cName, c.category);
+              const sliceWords = slice ? this.countWords(slice) : 0;
+              const words = (sliceWords > 50) ? sliceWords : (c.wordCount && c.wordCount > 50 ? c.wordCount : Math.round(this.countWords(this.currentParsedData.text) / Math.max(1, allParsedChunks.length)));
               return {
                 id: 'chunk_' + (idx + 1),
                 order: idx + 1,
                 name: cName,
                 category: c.category || '正文',
-                wordCount: c.wordCount || 3000,
+                wordCount: words,
                 prefixPreview: c.prefixPreview || '',
                 reason: c.reason || 'AI根据带团逻辑架构提炼',
                 userInstruction: '',
-                rawSlice: this.findSemanticSection(this.currentParsedData.text, cName, c.category)
+                rawSlice: slice
               };
             }),
             mapNodes: combinedMapNodes
@@ -2195,7 +2230,7 @@ JSON 格式如下：
         typeEl.onclick = () => this.showTagAnnotation(struct);
       }
       if (wordsEl) {
-        wordsEl.textContent = `约 ${totalWords} 字 · ${chapterCount} 章节`;
+        wordsEl.textContent = `${chapterCount} 章节`;
       }
       if (summaryEl) {
         summaryEl.textContent = this.currentPlan.summary || '';
@@ -2231,9 +2266,6 @@ JSON 格式如下：
           card.id = `plan-card-${chunk.id}`;
 
           const cleanTitle = this.cleanChapterTitle(chunk.name, this.currentPlan.moduleName);
-          const wordsStr = chunk.wordCount > 10000
-            ? `${(chunk.wordCount / 10000).toFixed(1)}万字`
-            : `${chunk.wordCount}字`;
 
           card.innerHTML = `
             <div class="module-plan-card-header" data-chunk-id="${chunk.id}">
@@ -2241,7 +2273,6 @@ JSON 格式如下：
                 <span class="module-plan-name" title="${cleanTitle}">${cleanTitle}</span>
               </div>
               <div class="module-plan-card-meta">
-                <span class="module-plan-words">${wordsStr}</span>
                 <span class="module-plan-tag">${chunk.category}</span>
                 <span class="module-plan-chevron">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2360,6 +2391,7 @@ JSON 格式如下：
       if (cuttingPromptTextarea && this.currentParsedData) {
         cuttingPromptTextarea.value = this.currentParsedData.cuttingPrompt || DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT;
       }
+      this.updateModeUI(this.cutExecutionMode || 'batch');
     },
 
     showRawPreviewModal(chunk) {
@@ -2674,7 +2706,7 @@ ${fullText}`;
           <span>正文 ${chapterObj.stats?.mainTextCount || 0} 条</span>
           <span>KP信息 ${chapterObj.stats?.kpInfoCount || 0} 条</span>
           <span>秘密 ${chapterObj.stats?.secretCount || 0} 条</span>
-          <span>约 ${chapterObj.wordCount || 0} 字</span>
+          <span>${chapterObj.wordCount || 0} 字</span>
         </div>
         <div class="module-cut-card-actions">
           <button type="button" class="module-mini-btn btn-view-chapter" data-chapter-index="${idx}">查看内容</button>
@@ -2932,6 +2964,26 @@ ${fullText}`;
       this.setWizardStep(3);
 
       if (this.cutExecutionMode === 'batch') {
+        const fullText = this.currentParsedData?.text || '';
+        const splitSelect = document.getElementById('module-split-parts-select');
+        let requestedParts = splitSelect ? splitSelect.value : (this.currentParsedData?.splitParts || 'auto');
+        let numParts = 1;
+        const totalWords = this.currentParsedData?.wordCount || fullText.length;
+        if (requestedParts === 'auto') {
+          if (totalWords > 40000) numParts = 3;
+          else if (totalWords > 20000) numParts = 2;
+          else numParts = 1;
+        } else {
+          numParts = parseInt(requestedParts, 10) || 1;
+        }
+        const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
+        if (this.batchSegmentsCompleted >= segments.length) {
+          this.batchSegmentsCompleted = 0;
+          this.cuttingCurrentIndex = 0;
+          this.cutChapters = [];
+          const cardList = document.getElementById('module-cut-card-list');
+          if (cardList) cardList.innerHTML = '';
+        }
         await this.executeBatchCuttingSingleCall();
         return;
       }
@@ -3056,10 +3108,19 @@ ${fullText}`;
             this.saveDraft();
             return;
           }
-          if (typeof global.showCustomAlert === 'function') {
-            global.showCustomAlert('提示', `第 ${segIdx + 1} 卷全篇输出遇到波动，已自动转为逐章继续生成。`);
+          this.isCuttingRunning = false;
+          this.isCuttingPaused = true;
+          if (pauseBtn) pauseBtn.style.display = 'none';
+          if (resumeBtn) resumeBtn.style.display = 'inline-flex';
+          if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+          if (progressText) {
+            progressText.textContent = `全篇整理第 ${segIdx + 1} 卷遇到波动已暂停（已完成 ${this.cutChapters.length} 章），点击继续重试`;
           }
-          this.continueAsyncCuttingLoop();
+          this.updateBottomActionBar();
+          this.saveDraft();
+          if (typeof global.showCustomAlert === 'function') {
+            global.showCustomAlert('生成暂停', `全篇模式整理第 ${segIdx + 1} 卷遇到波动：${err.message || err}。已为您自动保存当前进度，点击“继续”可重新从该处以全篇模式继续生成。`);
+          }
           return;
         }
       }
@@ -3546,7 +3607,7 @@ ${chap.content}
               <span class="module-plan-tag">${fileRecord.fileType || '文档'}</span>
             </div>
             <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
-              <span>约 ${fileRecord.wordCount || 0} 字</span> · 
+              <span>${fileRecord.wordCount || 0} 字</span> · 
               <span>${new Date(fileRecord.uploadedAt || Date.now()).toLocaleDateString()}</span>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
@@ -3596,6 +3657,19 @@ ${chap.content}
       this.activeDetailModule = mod;
       const chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
 
+      // 动态计算并同步所有章节的真实字数与总字数
+      const realTotalWords = chapters.reduce((sum, c) => {
+        const cWords = c.wordCount || (c.content ? c.content.length : 0);
+        c.wordCount = cWords;
+        return sum + cWords;
+      }, 0);
+      mod.wordCount = realTotalWords;
+      mod.chapterCount = chapters.length;
+
+      if (database && database.modules && mod.id) {
+        await database.modules.update(mod.id, { wordCount: realTotalWords, chapterCount: chapters.length });
+      }
+
       const mainView = document.getElementById('module-library-main-view');
       const detailView = document.getElementById('module-library-detail-view');
       const readerView = document.getElementById('module-library-reader-view');
@@ -3614,7 +3688,7 @@ ${chap.content}
       const tagsRow = document.getElementById('module-detail-tags-row');
 
       if (titleEl) titleEl.textContent = mod.name;
-      if (statsEl) statsEl.textContent = `${chapters.length} 个章节 · 约 ${mod.wordCount || 0} 字`;
+      if (statsEl) statsEl.textContent = `${chapters.length} 个章节 · ${realTotalWords} 字`;
       if (coverTitleEl) coverTitleEl.textContent = mod.name;
 
       if (coverEl) {
@@ -3638,15 +3712,25 @@ ${chap.content}
         coverInput.onchange = async (e) => {
           const file = e.target.files && e.target.files[0];
           if (file) {
-            const reader = new FileReader();
-            reader.onload = async (re) => {
-              const base64Img = re.target.result;
-              mod.coverImage = base64Img;
-              await database.modules.update(mod.id, { coverImage: base64Img });
-              await this.openModuleDetail(mod.id);
-              await this.renderLibraryList();
-            };
-            reader.readAsDataURL(file);
+            try {
+              const base64Img = await this.compressImageFile(file, 600, 600, 0.85);
+              if (base64Img) {
+                mod.coverImage = base64Img;
+                if (this.activeDetailModule) {
+                  this.activeDetailModule.coverImage = base64Img;
+                }
+                const targetId = mod.id || (this.activeDetailModule && this.activeDetailModule.id);
+                if (database && database.modules && targetId) {
+                  await database.modules.update(targetId, { coverImage: base64Img });
+                }
+                if (coverEl) {
+                  coverEl.innerHTML = `<img src="${base64Img}" style="width: 100%; height: 100%; object-fit: cover;" alt="模组封面" />`;
+                }
+                await this.renderLibraryList();
+              }
+            } catch (err) {
+              console.warn('[模组] 头像上传异常:', err);
+            }
           }
           coverInput.value = '';
         };
@@ -3656,7 +3740,7 @@ ${chap.content}
       const struct = mod.type || '线性';
       const scale = mod.scaleType || '1v1';
       if (metaLineEl) {
-        metaLineEl.textContent = `${sysUpper} · ${struct} · ${scale} · 约 ${mod.wordCount || 0} 字 · ${chapters.length} 章节`;
+        metaLineEl.textContent = `${sysUpper} · ${struct} · ${scale} · ${realTotalWords} 字 · ${chapters.length} 章节`;
       }
       if (descEl) {
         descEl.textContent = mod.summary || mod.description || '暂无模组简介概述';
@@ -3781,7 +3865,7 @@ ${chap.content}
           const cleanTitle = this.cleanChapterTitle(chapter.title, this.activeDetailModule?.name);
           row.innerHTML = `
             <span class="mod-chapter-name">${cleanTitle}</span>
-            <span class="mod-chapter-words">约 ${chapter.wordCount || 0} 字</span>
+            <span class="mod-chapter-words">${chapter.wordCount || 0} 字</span>
           `;
 
           row.addEventListener('click', () => {
@@ -3889,7 +3973,7 @@ ${chap.content}
           <div class="mod-map-card-desc">${loc.desc}...</div>
           <div class="mod-map-drawer" style="display: none; padding-top: 8px; border-top: 1px dashed var(--border-color); font-size: 12px; color: var(--text-primary); white-space: pre-wrap; line-height: 1.6;">${loc.fullContent}</div>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-            <span style="font-size: 11px; color: var(--text-secondary);">约 ${loc.wordCount} 字</span>
+            <span style="font-size: 11px; color: var(--text-secondary);">${loc.wordCount} 字</span>
             <button type="button" class="module-mini-btn btn-toggle-map-detail" style="font-size: 11px;">展开详情</button>
           </div>
         `;
@@ -4055,14 +4139,15 @@ ${chap.content}
     showImageViewModal(img, moduleId) {
       const modal = document.getElementById('module-image-view-modal');
       const titleEl = document.getElementById('module-image-modal-title');
-      const imgEl = document.getElementById('module-image-modal-img');
       const previewBox = document.getElementById('module-image-modal-preview-box');
       const metaEl = document.getElementById('module-image-modal-meta');
       const delBtn = document.getElementById('module-image-modal-delete-btn');
       const okBtn = document.getElementById('module-image-modal-ok-btn');
       const closeBtn = document.getElementById('module-image-modal-close-btn');
 
-      if (!modal || !imgEl) return;
+      if (!modal) return;
+      modal.classList.add('visible');
+      modal.style.display = 'flex';
 
       const isPlayerView = moduleId === 'draft'
         ? (this.step2GalleryViewMode !== 'kp')
@@ -4112,6 +4197,41 @@ ${chap.content}
         };
       }
 
+      const setCoverBtn = document.getElementById('module-image-modal-set-cover-btn');
+      if (setCoverBtn) {
+        setCoverBtn.onclick = async () => {
+          try {
+            const compressedCover = await this.compressImageFile(img.dataUrl, 600, 600, 0.85).catch(() => img.dataUrl);
+            if (moduleId === 'draft') {
+              if (this.currentParsedData) {
+                this.currentParsedData.coverImage = compressedCover;
+              }
+              this.saveDraft();
+            } else {
+              const database = this.getDB();
+              const targetId = moduleId || (this.activeDetailModule && this.activeDetailModule.id);
+              if (database && database.modules && targetId) {
+                await database.modules.update(targetId, { coverImage: compressedCover });
+                if (this.activeDetailModule) {
+                  this.activeDetailModule.coverImage = compressedCover;
+                }
+                const coverEl = document.getElementById('module-detail-cover');
+                if (coverEl) {
+                  coverEl.innerHTML = `<img src="${compressedCover}" style="width: 100%; height: 100%; object-fit: cover;" alt="模组封面" />`;
+                }
+                await this.renderLibraryList();
+              }
+            }
+            if (typeof global.showCustomAlert === 'function') {
+              global.showCustomAlert('设置成功', '已将此图片设为当前模组封面头像');
+            }
+          } catch (err) {
+            console.warn('[模组] 设为头像异常:', err);
+          }
+          modal.style.display = 'none';
+        };
+      }
+
       const hide = () => {
         modal.style.display = 'none';
       };
@@ -4153,10 +4273,9 @@ ${chap.content}
       modal.style.display = 'flex';
     },
 
-    async compressImageFile(file, maxWidth = 1200, maxHeight = 1200, quality = 0.8) {
+    async compressImageFile(fileOrDataUrl, maxWidth = 1200, maxHeight = 1200, quality = 0.8) {
       return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
+        const processImage = (src) => {
           const img = new Image();
           img.onload = () => {
             let width = img.width;
@@ -4184,10 +4303,19 @@ ${chap.content}
             }
           };
           img.onerror = reject;
-          img.src = e.target.result;
+          img.src = src;
         };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+
+        if (typeof fileOrDataUrl === 'string') {
+          processImage(fileOrDataUrl);
+        } else if (fileOrDataUrl instanceof Blob || fileOrDataUrl instanceof File) {
+          const reader = new FileReader();
+          reader.onload = (e) => processImage(e.target.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(fileOrDataUrl);
+        } else {
+          resolve('');
+        }
       });
     },
 
@@ -4341,7 +4469,7 @@ ${imageList}
 
       const currentChap = chapters[index];
       if (titleEl) titleEl.textContent = currentChap.title;
-      if (metaEl) metaEl.textContent = `${currentChap.category || '正文'} · 约 ${currentChap.wordCount || 0} 字`;
+      if (metaEl) metaEl.textContent = `${currentChap.category || '正文'} · ${currentChap.wordCount || 0} 字`;
 
       if (pcBtn && kpBtn) {
         if (viewMode === 'pc') {
@@ -4431,7 +4559,7 @@ ${imageList}
         }
         if (editBody) editBody.style.display = 'none';
         if (editBtn) editBtn.textContent = '编辑';
-        if (metaEl) metaEl.textContent = `${currentChap.category || '正文'} · 约 ${currentChap.wordCount || 0} 字`;
+        if (metaEl) metaEl.textContent = `${currentChap.category || '正文'} · ${currentChap.wordCount || 0} 字`;
 
         if (typeof global.showCustomAlert === 'function') {
           global.showCustomAlert('保存成功', '章节内容与字数统计已更新');
@@ -4481,6 +4609,14 @@ ${imageList}
       const customTags = this.currentPlan?.customTags || [];
       const allTags = this.sortModuleTags(bgTag, endingTag, contentTags, customTags);
 
+      const chaptersToSave = this.cutChapters.map(chap => ({
+        ...chap,
+        wordCount: chap.wordCount || this.countWords(chap.content) || 0,
+        moduleId: moduleId
+      }));
+
+      const realTotalWords = chaptersToSave.reduce((sum, c) => sum + (c.wordCount || 0), 0);
+
       const moduleRecord = {
         id: moduleId,
         name: this.currentParsedData?.moduleName || '跑团模组',
@@ -4495,17 +4631,12 @@ ${imageList}
         tags: allTags,
         mapNodes: this.currentPlan?.mapNodes || [],
         group: '默认分组',
-        wordCount: this.currentParsedData?.wordCount || 0,
-        chapterCount: this.cutChapters.length,
+        wordCount: realTotalWords,
+        chapterCount: chaptersToSave.length,
         status: 'ready',
         githubSync: false,
         createdAt: Date.now()
       };
-
-      const chaptersToSave = this.cutChapters.map(chap => ({
-        ...chap,
-        moduleId: moduleId
-      }));
 
       const imagesToSave = (this.currentParsedData?.images || []).map(img => ({
         moduleId: moduleId,
@@ -4762,15 +4893,18 @@ ${imageList}
 
       if (coverUploadBtn && coverFileInput) {
         coverUploadBtn.onclick = () => coverFileInput.click();
-        coverFileInput.onchange = (e) => {
+        coverFileInput.onchange = async (e) => {
           const file = e.target.files && e.target.files[0];
           if (file) {
-            const reader = new FileReader();
-            reader.onload = (re) => {
-              this.activeEditModule.coverImage = re.target.result;
-              renderCoverPreview();
-            };
-            reader.readAsDataURL(file);
+            try {
+              const base64Img = await this.compressImageFile(file, 600, 600, 0.85);
+              if (base64Img) {
+                this.activeEditModule.coverImage = base64Img;
+                renderCoverPreview();
+              }
+            } catch (err) {
+              console.warn('[模组] 封面压缩异常:', err);
+            }
           }
           coverFileInput.value = '';
         };
@@ -5144,10 +5278,30 @@ ${imageList}
       emptyContainer.style.display = 'none';
       listContainer.innerHTML = '';
 
+      let allChapters = [];
+      try {
+        if (database && database.moduleChapters) {
+          allChapters = await database.moduleChapters.toArray();
+        }
+      } catch (e) {}
+
+      const chapsByMod = new Map();
+      allChapters.forEach(c => {
+        const mId = String(c.moduleId);
+        if (!chapsByMod.has(mId)) chapsByMod.set(mId, []);
+        chapsByMod.get(mId).push(c);
+      });
+
       allModules.forEach(mod => {
         const item = document.createElement('div');
         item.className = 'mod-lib-card';
         item.style.cursor = 'pointer';
+
+        const modChaps = chapsByMod.get(String(mod.id)) || [];
+        const realChapterCount = modChaps.length > 0 ? modChaps.length : (mod.chapterCount || 0);
+        const realWordCount = modChaps.length > 0
+          ? modChaps.reduce((acc, c) => acc + (c.wordCount || (c.content ? c.content.length : 0)), 0)
+          : (mod.wordCount || 0);
 
         const sysUpper = (mod.ruleSystem || 'coc').toUpperCase();
         const struct = mod.type || '线性';
@@ -5187,7 +5341,7 @@ ${imageList}
               <!-- 第 3 排：普通 Tag 标签 -->
               ${tagsHtml ? `<div class="mod-tags-horizontal-row" style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px;">${tagsHtml}</div>` : ''}
               <!-- 第 4 排：字数与统计 -->
-              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${mod.chapterCount || 0} 章节 · 约 ${mod.wordCount || 0} 字 · ${new Date(mod.createdAt).toLocaleDateString()}</div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${realChapterCount} 章节 · ${realWordCount} 字 · ${new Date(mod.createdAt).toLocaleDateString()}</div>
             </div>
           </div>
         `;

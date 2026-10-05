@@ -30164,6 +30164,8 @@ details[open] .thought-chain-arrow {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 .module-wizard-panel,
@@ -30851,39 +30853,41 @@ details[open] .thought-chain-arrow {
   background-color: #FFFFFF;
 }
 
-/* 底部紧凑型操作按钮栏 (缩小二分之一) */
+/* 底部紧凑型操作按钮栏 */
 .module-bottom-action-bar {
   flex-shrink: 0;
   display: flex;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 8px;
+  padding: 10px 14px;
   background-color: var(--card-bg, #FFFFFF);
-  border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
-  overflow-x: auto;
+  border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
   align-items: center;
+  box-sizing: border-box;
 }
 
 .module-bottom-action-bar button {
   font-family: inherit;
   white-space: nowrap;
-}
-
-.module-btn-primary {
   flex: 1;
-  min-width: 60px;
-  height: 32px;
+  min-width: 0;
+  height: 36px;
   border-radius: 8px;
-  background-color: var(--accent-color, #4A7A68);
-  color: #FFFFFF;
-  border: none;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  border: 1px solid var(--border-color);
   transition: all 0.2s ease;
-  box-shadow: 0 1px 4px rgba(74, 122, 104, 0.2);
+  box-sizing: border-box;
+}
+
+.module-btn-primary {
+  background-color: var(--accent-color, #4A7A68);
+  color: #FFFFFF !important;
+  border-color: var(--accent-color, #4A7A68) !important;
+  font-weight: 600 !important;
 }
 
 .module-btn-primary:active {
@@ -30892,20 +30896,9 @@ details[open] .thought-chain-arrow {
 }
 
 .module-btn-secondary {
-  flex: 1;
-  min-width: 50px;
-  height: 32px;
-  border-radius: 8px;
   background-color: var(--secondary-bg, #F0EFEA);
-  color: var(--text-primary, #2A2A2A);
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
-  font-size: 12px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  color: var(--text-secondary, #757575) !important;
+  border-color: var(--border-color);
 }
 
 .module-btn-secondary:active {
@@ -31616,6 +31609,159 @@ details[open] .thought-chain-arrow {
 .mod-tag-select-item input[type="radio"] {
   cursor: pointer;
   accent-color: var(--accent-color, #4A7A68);
+}
+
+/* 聊天模组与章节选择弹窗样式 */
+.chat-module-strip-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background-color: var(--secondary-bg, #F9F8F5);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+  gap: 10px;
+}
+
+.chat-module-strip-item:hover {
+  border-color: var(--accent-color, #4A7A68);
+  background-color: var(--card-bg, #FFFFFF);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.chat-module-strip-item.selected {
+  border-color: var(--accent-color, #4A7A68);
+  background-color: rgba(74, 122, 104, 0.06);
+}
+
+.chat-mod-cover-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  object-fit: cover;
+  background-color: var(--secondary-bg, #F0EFEA);
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.chat-mod-capsule-btn {
+  height: 28px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  border: 1px solid var(--border-color) !important;
+  background-color: var(--card-bg, #FFFFFF) !important;
+  color: var(--text-primary) !important;
+  transition: all 0.15s ease !important;
+}
+
+.chat-mod-capsule-btn.primary {
+  background-color: var(--accent-color, #4A7A68) !important;
+  color: #FFFFFF !important;
+  border-color: var(--accent-color, #4A7A68) !important;
+}
+
+.chat-mod-capsule-btn.selected {
+  background-color: var(--secondary-bg, #F0EFEA) !important;
+  color: var(--text-secondary, #8A8A8A) !important;
+  border-color: var(--border-color) !important;
+  opacity: 0.7 !important;
+  cursor: default !important;
+}
+
+.chat-mod-chaps-group {
+  flex-shrink: 0 !important;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: var(--card-bg, #FFFFFF);
+  margin-bottom: 8px;
+}
+
+.chat-mod-chaps-group-header {
+  flex-shrink: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background-color: var(--secondary-bg, #F0EFEA);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #2A2A2A);
+  user-select: none;
+}
+
+.chat-mod-chaps-group-body {
+  display: none;
+  flex-direction: column;
+  background-color: var(--card-bg, #FFFFFF);
+}
+
+.chat-mod-chap-row {
+  flex-shrink: 0 !important;
+  min-height: 48px !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background-color: var(--card-bg, #FFFFFF);
+  border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  font-size: 12.5px;
+  color: var(--text-primary, #2A2A2A);
+  box-sizing: border-box !important;
+  transition: background-color 0.15s ease;
+}
+
+.chat-mod-chap-row:last-child {
+  border-bottom: none;
+}
+
+.chat-mod-chap-row:hover {
+  background-color: var(--secondary-bg, #F9F8F5);
+}
+
+/* 弹窗底部统一按钮 */
+.chat-mod-footer-btn {
+  flex: 1 !important;
+  height: 38px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transition: all 0.15s ease !important;
+  line-height: 1 !important;
+}
+
+.chat-mod-footer-btn.secondary {
+  background-color: var(--secondary-bg, #F0EFEA) !important;
+  color: var(--text-secondary, #757575) !important;
+  border: 1px solid var(--border-color, rgba(0,0,0,0.12)) !important;
+}
+
+.chat-mod-footer-btn.primary {
+  background-color: var(--accent-color, #4A7A68) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--accent-color, #4A7A68) !important;
+}
+
+.chat-mod-footer-btn:active {
+  transform: scale(0.98);
 }
 
 

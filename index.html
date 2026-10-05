@@ -2141,7 +2141,7 @@
                   <div class="module-file-stats-row">
                     <div class="module-stat-cell">
                       <span class="stat-label">总字数</span>
-                      <span class="stat-value" id="module-stat-words">约 0 字</span>
+                      <span class="stat-value" id="module-stat-words">0 字</span>
                     </div>
                     <div class="module-stat-cell">
                       <span class="stat-label">图片提取</span>
@@ -2150,8 +2150,8 @@
                     <div class="module-stat-cell">
                       <span class="stat-label">分卷</span>
                       <select id="module-split-parts-select" style="border: none; background: transparent; font-size: 12px; font-weight: 600; color: var(--text-primary); cursor: pointer; padding: 0; outline: none;">
+                        <option value="1" selected>单卷</option>
                         <option value="auto">自动</option>
-                        <option value="1">单卷</option>
                         <option value="2">2卷</option>
                         <option value="3">3卷</option>
                         <option value="4">4卷</option>
@@ -2186,7 +2186,7 @@
                     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                       <span class="mod-category-pill coc" id="module-step2-main-cat">COC</span>
                     </div>
-                    <span style="font-size: 11px; color: var(--text-secondary);" id="module-step2-meta-words">约 0 字 · 0 章节</span>
+                    <span style="font-size: 11px; color: var(--text-secondary);" id="module-step2-meta-words">0 字 · 0 章节</span>
                   </div>
                   <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;" id="module-step2-category-badges">
                     <span class="mod-category-pill" id="module-step2-sub-cat">1v1</span>
@@ -2342,7 +2342,7 @@
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; padding: 0 8px; min-width: 0;">
                   <span style="font-size: 14.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;" id="module-detail-title">模组详情</span>
-                  <span style="font-size: 11px; color: var(--text-secondary);" id="module-detail-stats">0 个章节 · 约 0 字</span>
+                  <span style="font-size: 11px; color: var(--text-secondary);" id="module-detail-stats">0 个章节 · 0 字</span>
                 </div>
                 <div style="display: flex; gap: 6px;">
                   <button type="button" class="mod-capsule-btn" id="module-detail-edit-btn">编辑</button>
@@ -2366,7 +2366,7 @@
                     <input type="file" id="module-detail-cover-input" accept="image/*" style="display: none;" />
                     <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
                       <span style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="module-detail-cover-title">模组名称</span>
-                      <span style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;" id="module-detail-meta-line">COC · 线性 · 1v1 · 约 0 字 · 0 章节</span>
+                      <span style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;" id="module-detail-meta-line">COC · 线性 · 1v1 · 0 字 · 0 章节</span>
                     </div>
                   </div>
                   <div id="module-detail-tags-row" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px;"></div>
@@ -2535,25 +2535,6 @@
                 <div id="module-annotation-desc-text" style="font-size: 12px; color: var(--text-primary); line-height: 1.5; background: var(--secondary-bg, #F9F8F5); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color, rgba(0,0,0,0.06));"></div>
                 <div style="display: flex; justify-content: flex-end;">
                   <button type="button" class="module-btn-primary" id="module-annotation-ok-btn" style="height: 28px; padding: 0 16px; font-size: 11.5px; border-radius: 6px;">知道了</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- 模组图片大图与详情弹窗 -->
-            <div class="modal" id="module-image-view-modal" style="display: none;">
-              <div class="modal-content" style="max-width: 520px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);" id="module-image-modal-title">插图详情</span>
-                  <span class="modal-close" id="module-image-modal-close-btn" style="cursor: pointer; font-size: 20px;">&times;</span>
-                </div>
-                <div style="display: flex; justify-content: center; align-items: center; background: var(--secondary-bg, #F0EFEA); border-radius: 10px; padding: 8px; min-height: 180px;" id="module-image-modal-preview-box">
-                  <img id="module-image-modal-img" class="mod-constrained-img" src="" alt="插图预览" />
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary);" id="module-image-modal-meta"></div>
-                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
-                  <button type="button" class="module-mini-btn" id="module-image-modal-download-btn">下载</button>
-                  <button type="button" class="module-mini-btn btn-danger" id="module-image-modal-delete-btn">删除</button>
-                  <button type="button" class="module-mini-btn" id="module-image-modal-ok-btn">确定</button>
                 </div>
               </div>
             </div>
@@ -6011,7 +5992,10 @@
           <!-- 1. 基础资料卡片 -->
           <!-- ============================== -->
           <div class="settings-group-card moe-card">
-            <div class="settings-section-title">📝 基础资料</div>
+            <div class="settings-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>📝 基础资料</span>
+              <button type="button" id="open-chat-module-btn" class="moe-btn-mini" style="font-size: 11px; width: 40px; min-width: 40px; max-width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; line-height: 1; height: 20px; box-sizing: border-box;">模组</button>
+            </div>
             <div class="form-group" id="chat-name-group">
               <label>角色真名 /群聊名称(AI只认这个，修改会影响记忆)</label>
               <input type="text" id="chat-name-input" class="moe-input" />
@@ -6460,45 +6444,6 @@
                   id="world-book-checkboxes-container"
                   class="checkboxes-container"
                 ></div>
-              </div>
-            </div>
-
-            <!-- 模组专属加载与带团设置 -->
-            <div class="moe-divider"></div>
-            <div class="form-group" id="chat-module-link-group">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <label style="margin: 0; font-weight: 600;">模组</label>
-                <span id="chat-module-status-tag" class="module-plan-tag" style="font-size: 11px;">未加载</span>
-              </div>
-              
-              <!-- 模组可折叠主面板 -->
-              <div class="chat-module-panel" id="chat-module-panel" style="background: var(--secondary-bg, #F9F8F5); border: 1px solid var(--border-color, rgba(0,0,0,0.06)); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
-                <!-- 模组选择下拉框 -->
-                <div style="display: flex; gap: 8px; align-items: center;">
-                  <select id="chat-module-select" class="moe-input" style="flex: 1; height: 32px; font-size: 12px;">
-                    <option value="">-- 选择要加载的模组 --</option>
-                  </select>
-                </div>
-
-                <!-- 模组配置区 -->
-                <div id="chat-module-config-body" style="display: none; flex-direction: column; gap: 8px;">
-                  <!-- 切换模式 -->
-                  <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card-bg, #FFFFFF); padding: 6px 10px; border-radius: 8px;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">切换模式</span>
-                    <select id="chat-module-mode-select" class="moe-input" style="width: 100px; height: 26px; font-size: 11px; padding: 0 4px;">
-                      <option value="auto">自动</option>
-                      <option value="semi">半自动</option>
-                      <option value="manual">手动</option>
-                    </select>
-                  </div>
-
-                  <!-- HO 角色位分配区 -->
-                  <div id="chat-module-ho-slots" style="display: flex; flex-direction: column; gap: 4px;"></div>
-
-                  <!-- 章节勾选目录树 -->
-                  <div style="font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--text-primary);">章节勾选</div>
-                  <div id="chat-module-chapters-tree" style="max-height: 180px; overflow-y: auto; background: var(--card-bg, #FFFFFF); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px;"></div>
-                </div>
               </div>
             </div>
 
@@ -8342,6 +8287,100 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 16px;">
           <button type="button" class="moe-btn-secondary" id="cancel-thought-chain-bind-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">取消</button>
           <button type="button" class="moe-btn" id="save-thought-chain-bind-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 聊天模组选择弹窗 -->
+    <div id="chat-module-picker-modal" class="modal">
+      <div class="modal-content" style="max-width: 440px; width: 92%; height: 80vh; max-height: 80vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); box-sizing: border-box;">
+        <div class="modal-header" style="display: flex; justify-content: center; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 600; font-size: 16px; color: var(--text-primary);">模组选择</span>
+        </div>
+        
+        <!-- 筛选分类行 -->
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button type="button" class="chat-mod-filter-btn" data-filter="all" style="flex: 1; padding: 6px 0; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer;">全部</button>
+          <button type="button" class="chat-mod-filter-btn" data-filter="coc" style="flex: 1; padding: 6px 0; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer;">COC</button>
+          <button type="button" class="chat-mod-filter-btn" data-filter="coj" style="flex: 1; padding: 6px 0; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer;">COJ</button>
+        </div>
+
+        <!-- 模组列表 -->
+        <div class="modal-body" id="chat-module-picker-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px;">
+          <!-- 动态渲染横条条目 -->
+        </div>
+
+        <!-- 底部操作栏 -->
+        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+          <button type="button" class="chat-mod-footer-btn secondary" id="chat-module-picker-cancel-btn">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="chat-module-picker-confirm-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模组章节管理与加载弹窗 -->
+    <div id="chat-module-chapters-modal" class="modal">
+      <div class="modal-content" style="max-width: 440px; width: 92%; height: 82vh; max-height: 82vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); box-sizing: border-box; overflow: hidden;">
+        <div class="modal-header" style="flex-shrink: 0; display: flex; justify-content: center; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); text-align: center;">
+          <span id="chat-module-chapters-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">模组章节</span>
+        </div>
+
+        <!-- 章节与目录视图切换 -->
+        <div class="module-step2-tabs" id="chat-module-view-tabs" style="flex-shrink: 0; margin-bottom: 8px;">
+          <span class="module-subtab active" id="chat-mod-tab-chapters" data-tab="chapters">章节</span>
+          <span class="module-subtab" id="chat-mod-tab-toc" data-tab="toc">目录</span>
+        </div>
+
+        <!-- 章节视图容器 -->
+        <div id="chat-module-chapters-view" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
+          <!-- 快速全选/清空行 -->
+          <div style="flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 4px;">
+            <span id="chat-module-selected-count-text" style="font-size: 12px; color: var(--text-secondary);">已加载 0 个章节</span>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="chat-mod-chaps-select-all" class="summary-preset-btn" style="font-size: 11px; padding: 2px 8px;">全选</button>
+              <button type="button" id="chat-mod-chaps-clear-all" class="summary-preset-btn" style="font-size: 11px; padding: 2px 8px;">清空</button>
+            </div>
+          </div>
+
+          <!-- 章节分类折叠列表 -->
+          <div class="modal-body" id="chat-module-chapters-grouped-list" style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 2px 4px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
+            <!-- 分组折叠内容动态渲染 -->
+          </div>
+        </div>
+
+        <!-- 目录视图容器 -->
+        <div id="chat-module-toc-view" style="flex: 1; min-height: 0; display: none; flex-direction: column; gap: 8px; overflow: hidden;">
+          <label style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--secondary-bg); border-radius: 8px; cursor: pointer;">
+            <span style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);">加载模组目录到 AI 记忆</span>
+            <input type="checkbox" id="chat-module-load-toc-checkbox" style="width: 18px; height: 18px; accent-color: var(--accent-color); cursor: pointer;" />
+          </label>
+          <div id="chat-module-toc-list" style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 2px 4px; box-sizing: border-box; -webkit-overflow-scrolling: touch;"></div>
+        </div>
+
+        <!-- 底部操作栏 -->
+        <div class="modal-footer" style="flex-shrink: 0; display: flex; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+          <button type="button" class="chat-mod-footer-btn secondary" id="chat-module-chapters-back-btn">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="chat-module-chapters-save-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模组图片大图与详情弹窗（全局可用，两侧预留空间并等比例缩放） -->
+    <div class="modal" id="module-image-view-modal" style="display: none;">
+      <div class="modal-content" style="width: calc(100% - 48px); max-width: 380px; max-height: 85vh; padding: 16px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; background: var(--card-bg); box-sizing: border-box; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+          <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);" id="module-image-modal-title">插图详情</span>
+          <span class="modal-close" id="module-image-modal-close-btn" style="cursor: pointer; font-size: 20px; color: var(--text-secondary);">&times;</span>
+        </div>
+        <div style="display: flex; justify-content: center; align-items: center; background: var(--secondary-bg); border-radius: 10px; padding: 10px; min-height: 140px; max-height: 48vh; overflow: hidden;" id="module-image-modal-preview-box">
+          <img id="module-image-modal-img" class="mod-constrained-img" style="max-width: 100%; max-height: 46vh; width: auto; height: auto; object-fit: contain; border-radius: 6px; display: block; margin: 0 auto;" src="" alt="插图预览" />
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary);" id="module-image-modal-meta"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+          <button type="button" class="module-mini-btn" id="module-image-modal-set-cover-btn">设为头像</button>
+          <button type="button" class="module-mini-btn" id="module-image-modal-download-btn">下载</button>
+          <button type="button" class="module-mini-btn btn-danger" id="module-image-modal-delete-btn">删除</button>
+          <button type="button" class="module-mini-btn" id="module-image-modal-ok-btn">确定</button>
         </div>
       </div>
     </div>
@@ -19599,7 +19638,558 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return "";
           }
         }
+
+        // ===================================================================
+        // 跑团模组聊天加载与章节注入逻辑
+        // ===================================================================
+        async function getChatModulePromptBlock(chat) {
+          if (!chat || !chat.activeModuleId) return "";
+          try {
+            const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+            if (!dbInstance || !dbInstance.moduleChapters) return "";
+
+            let mod = null;
+            try {
+              mod = await dbInstance.modules.get(chat.activeModuleId);
+            } catch (e) {}
+            if (!mod) {
+              const allMods = await dbInstance.modules.toArray();
+              mod = allMods.find(m => String(m.id) === String(chat.activeModuleId));
+            }
+            if (!mod) return "";
+
+            const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
+            allChaps.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+            let block = `\n# 【跑团模组世界书与带团设定库】\n当前加载模组：《${mod.name}》\n\n`;
+
+            // 目录注入最高优先级：若勾选加载目录，置于最顶层
+            if (chat.loadModuleToc) {
+              block += `## 模组总目录与章节导航\n`;
+              if (Array.isArray(mod.toc) && mod.toc.length > 0) {
+                mod.toc.forEach((item, idx) => {
+                  const tTitle = typeof item === 'string' ? item : (item.title || item.name || `第${idx + 1}节`);
+                  block += `${idx + 1}. ${tTitle}\n`;
+                });
+              } else {
+                allChaps.forEach((c, idx) => {
+                  block += `${idx + 1}. ${c.title} 【${c.category || '正文'}】\n`;
+                });
+              }
+              block += `\n`;
+            }
+
+            const selectedIds = chat.selectedModuleChapterIds || [];
+            if (selectedIds.length > 0) {
+              const loadedChaps = allChaps.filter(c => selectedIds.includes(String(c.id)) || selectedIds.includes(c.id));
+              if (loadedChaps.length > 0) {
+                block += `以下为守秘人当前激活加载的模组章节内容：\n\n`;
+                loadedChaps.forEach((chap, idx) => {
+                  block += `## 章节 ${idx + 1}：${chap.title} 【分类：${chap.category || '正文'}】\n${chap.content}\n\n`;
+                });
+              }
+            }
+
+            return block + "\n";
+          } catch (e) {
+            console.error("加载模组章节错误:", e);
+            return "";
+          }
+        }
+        window.getChatModulePromptBlock = getChatModulePromptBlock;
+
+        let currentModulePickerFilter = 'all';
+        let currentViewingModuleId = null;
+
+        async function openChatModulePickerModal() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const modal = document.getElementById("chat-module-picker-modal");
+          if (!modal) return;
+
+          modal.classList.add("visible");
+          modal.style.display = "flex";
+          await renderChatModulePickerList(currentModulePickerFilter);
+        }
+        window.openChatModulePickerModal = openChatModulePickerModal;
+
+        function getTagClassHelper(tag) {
+          if (!tag) return 'tag-content-custom';
+          const t = tag.trim();
+          if (t === '日模') return 'tag-bg-japan';
+          if (t === '美模') return 'tag-bg-us';
+          if (t === '现代中国') return 'tag-bg-china';
+          if (t === '古风') return 'tag-bg-ancient';
+          if (t === '安全') return 'tag-ending-safe';
+          if (t === '普通') return 'tag-ending-normal';
+          if (t === '危险') return 'tag-ending-danger';
+          if (t === '校园') return 'tag-content-school';
+          if (t === '复活') return 'tag-content-revive';
+          if (t === '粉红') return 'tag-content-pink';
+          if (t === 'NTR') return 'tag-content-ntr';
+          if (t === '血腥暴力') return 'tag-content-bloody';
+          if (t === '纯爱') return 'tag-content-pure';
+          if (t === '茶番') return 'tag-content-comedy';
+          if (t === '恐怖') return 'tag-content-horror';
+          if (t === 'Meta') return 'tag-content-meta';
+          return 'tag-content-custom';
+        }
+
+        async function renderChatModulePickerList(filter = 'all') {
+          currentModulePickerFilter = filter;
+          const listEl = document.getElementById("chat-module-picker-list");
+          if (!listEl) return;
+
+          const filterBtns = document.querySelectorAll(".chat-mod-filter-btn");
+          filterBtns.forEach(btn => {
+            const f = btn.dataset.filter;
+            if (f === filter) {
+              btn.style.background = "var(--secondary-bg, #F0EFEA)";
+              btn.style.color = "var(--text-primary, #2A2A2A)";
+              btn.style.fontWeight = "600";
+            } else {
+              btn.style.background = "var(--card-bg, #FFFFFF)";
+              btn.style.color = "var(--text-secondary, #8A8A8A)";
+              btn.style.fontWeight = "500";
+            }
+          });
+
+          const chat = state.activeChatId ? state.chats[state.activeChatId] : null;
+          const activeModId = chat ? chat.activeModuleId : null;
+
+          listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">加载中...</div>';
+
+          try {
+            const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+            if (!dbInstance || !dbInstance.modules) {
+              listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 30px;">暂无模组</div>';
+              return;
+            }
+
+            let modules = await dbInstance.modules.toArray();
+            let allChapters = [];
+            try {
+              if (dbInstance.moduleChapters) {
+                allChapters = await dbInstance.moduleChapters.toArray();
+              }
+            } catch (e) {}
+
+            const chapsMap = new Map();
+            allChapters.forEach(c => {
+              const mId = String(c.moduleId);
+              if (!chapsMap.has(mId)) chapsMap.set(mId, []);
+              chapsMap.get(mId).push(c);
+            });
+
+            if (filter === 'coc') {
+              modules = modules.filter(m => !m.ruleSystem || m.ruleSystem.toLowerCase() === 'coc');
+            } else if (filter === 'coj') {
+              modules = modules.filter(m => m.ruleSystem && m.ruleSystem.toLowerCase() === 'coj');
+            }
+
+            if (modules.length === 0) {
+              listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 40px 10px; font-size: 13px;">暂无模组</div>';
+              return;
+            }
+
+            listEl.innerHTML = '';
+            modules.forEach(mod => {
+              const isCurrentActive = activeModId && String(activeModId) === String(mod.id);
+              const modChaps = chapsMap.get(String(mod.id)) || [];
+              const realChapterCount = modChaps.length > 0 ? modChaps.length : (mod.chapterCount || 0);
+              const realWordCount = modChaps.length > 0
+                ? modChaps.reduce((acc, c) => acc + (c.wordCount || (c.content ? c.content.length : 0)), 0)
+                : (mod.wordCount || 0);
+
+              const item = document.createElement("div");
+              item.className = `mod-lib-card ${isCurrentActive ? "selected" : ""}`;
+              item.style.cursor = "pointer";
+              item.style.border = isCurrentActive ? "1.5px solid var(--accent-color)" : "1px solid var(--border-color)";
+              item.style.boxShadow = isCurrentActive ? "0 2px 8px rgba(74, 122, 104, 0.15)" : "none";
+
+              const sysUpper = (mod.ruleSystem || 'coc').toUpperCase();
+              const struct = mod.type || '线性';
+              const scale = mod.scaleType || '1v1';
+
+              let tags = [];
+              if (Array.isArray(mod.tags) && mod.tags.length > 0) {
+                tags = mod.tags;
+              } else if (window.ModuleManager && typeof window.ModuleManager.sortModuleTags === 'function') {
+                tags = window.ModuleManager.sortModuleTags(mod.bgTag, mod.endingTag, mod.contentTags, mod.customTags);
+              } else {
+                tags = [mod.bgTag || '日模', mod.endingTag || '普通', ...(mod.contentTags || []), ...(mod.customTags || [])].filter(Boolean);
+              }
+
+              let tagsHtml = '';
+              tags.forEach(t => {
+                const cls = getTagClassHelper(t);
+                tagsHtml += `<span class="mod-tag-badge ${cls}" data-tag="${t}">${t}</span>`;
+              });
+
+              const coverHtml = mod.coverImage
+                ? `<div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border-color);"><img src="${mod.coverImage}" style="width: 100%; height: 100%; object-fit: cover;" alt="封面" /></div>`
+                : `<div style="width: 44px; height: 44px; border-radius: 8px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color, #4A7A68); border: 1px solid var(--border-color);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M6 6h10"></path><path d="M6 10h10"></path></svg></div>`;
+
+              const selectBtnHtml = isCurrentActive
+                ? `<button type="button" class="mod-capsule-btn btn-chat-mod-select-action" data-mod-id="${mod.id}" style="flex-shrink: 0; background: var(--secondary-bg, #F0EFEA); color: var(--text-secondary, #8A8A8A); border: 1px solid var(--border-color, rgba(0,0,0,0.12)); cursor: default; font-weight: 600;">已选</button>`
+                : `<button type="button" class="mod-capsule-btn btn-chat-mod-select-action" data-mod-id="${mod.id}" style="flex-shrink: 0; background: var(--accent-color, #4A7A68); color: #FFFFFF; border: 1px solid var(--accent-color, #4A7A68); cursor: pointer; font-weight: 600;">选择</button>`;
+
+              item.innerHTML = `
+                <div style="display: flex; gap: 10px; align-items: flex-start;">
+                  ${coverHtml}
+                  <div style="flex: 1; min-width: 0;">
+                    <!-- 第 1 排：名称与规则系统与选择按键 -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                      <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; min-width: 0;">
+                        <span style="font-weight: 600; font-size: 14px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${mod.name}</span>
+                        <span class="mod-category-pill ${sysUpper.toLowerCase()}">${sysUpper}</span>
+                      </div>
+                      ${selectBtnHtml}
+                    </div>
+                    <!-- 第 2 排：规模人数与结构类型 -->
+                    <div style="display: flex; align-items: center; gap: 5px; margin-top: 4px;">
+                      <span class="mod-category-pill">${scale}</span>
+                      <span class="mod-category-pill">${struct}</span>
+                    </div>
+                    <!-- 第 3 排：普通 Tag 标签 -->
+                    ${tagsHtml ? `<div class="mod-tags-horizontal-row" style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px;">${tagsHtml}</div>` : ''}
+                    <!-- 第 4 排：字数与统计 -->
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${realChapterCount} 章节 · ${realWordCount} 字 · ${new Date(mod.createdAt).toLocaleDateString()}</div>
+                  </div>
+                </div>
+              `;
+
+              const selectBtn = item.querySelector(".btn-chat-mod-select-action");
+              if (selectBtn) {
+                selectBtn.addEventListener("click", async (e) => {
+                  e.stopPropagation();
+                  if (chat) {
+                    if (chat.activeModuleId === mod.id) {
+                      chat.activeModuleId = null;
+                      chat.selectedModuleChapterIds = [];
+                    } else {
+                      chat.activeModuleId = mod.id;
+                      if (!chat.selectedModuleChapterIds) chat.selectedModuleChapterIds = [];
+                    }
+                    await db.chats.put(chat);
+                    await renderChatModulePickerList(currentModulePickerFilter);
+                    if (typeof updateChatModuleMapBar === 'function') {
+                      updateChatModuleMapBar(chat);
+                    }
+                  }
+                });
+              }
+
+              item.addEventListener("click", (e) => {
+                if (e.target.closest("button")) return;
+                openChatModuleChaptersModal(mod.id);
+              });
+
+              listEl.appendChild(item);
+            });
+          } catch (e) {
+            console.error("渲染聊天模组列表失败:", e);
+            listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">读取模组列表出错</div>';
+          }
+        }
+        window.renderChatModulePickerList = renderChatModulePickerList;
+
+        async function openChatModuleChaptersModal(moduleId) {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          currentViewingModuleId = moduleId;
+          const modal = document.getElementById("chat-module-chapters-modal");
+          const titleEl = document.getElementById("chat-module-chapters-title");
+          const listEl = document.getElementById("chat-module-chapters-grouped-list");
+          const tocListEl = document.getElementById("chat-module-toc-list");
+          const countEl = document.getElementById("chat-module-selected-count-text");
+          const tocCheckbox = document.getElementById("chat-module-load-toc-checkbox");
+          if (!modal || !listEl) return;
+
+          const pickerModal = document.getElementById("chat-module-picker-modal");
+          if (pickerModal) {
+            pickerModal.classList.remove("visible");
+            pickerModal.style.display = "none";
+          }
+
+          modal.classList.add("visible");
+          modal.style.display = "flex";
+          listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">加载章节中...</div>';
+
+          // 初始化标签切换状态
+          const tabChapters = document.getElementById("chat-mod-tab-chapters");
+          const tabToc = document.getElementById("chat-mod-tab-toc");
+          const viewChapters = document.getElementById("chat-module-chapters-view");
+          const viewToc = document.getElementById("chat-module-toc-view");
+
+          const switchTab = (tabName) => {
+            if (tabName === 'toc') {
+              if (tabToc) tabToc.classList.add("active");
+              if (tabChapters) tabChapters.classList.remove("active");
+              if (viewToc) viewToc.style.display = "flex";
+              if (viewChapters) viewChapters.style.display = "none";
+            } else {
+              if (tabChapters) tabChapters.classList.add("active");
+              if (tabToc) tabToc.classList.remove("active");
+              if (viewChapters) viewChapters.style.display = "flex";
+              if (viewToc) viewToc.style.display = "none";
+            }
+          };
+
+          if (tabChapters) {
+            tabChapters.onclick = () => switchTab('chapters');
+          }
+          if (tabToc) {
+            tabToc.onclick = () => switchTab('toc');
+          }
+          switchTab('chapters');
+
+          try {
+            const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+            let mod = null;
+            try {
+              mod = await dbInstance.modules.get(moduleId);
+            } catch (e) {}
+            if (!mod) {
+              const allMods = await dbInstance.modules.toArray();
+              mod = allMods.find(m => String(m.id) === String(moduleId));
+            }
+            if (!mod) {
+              listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">未找到该模组</div>';
+              return;
+            }
+
+            if (titleEl) titleEl.textContent = mod.name;
+
+            const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
+            allChaps.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+            // 更新每个章节真实字数
+            allChaps.forEach(c => {
+              if (!c.wordCount || c.wordCount === 0) {
+                c.wordCount = c.content ? c.content.length : 0;
+              }
+            });
+
+            if (!chat.selectedModuleChapterIds) chat.selectedModuleChapterIds = [];
+            const isThisModActive = chat.activeModuleId && String(chat.activeModuleId) === String(mod.id);
+
+            const updateSelectedCountDisplay = () => {
+              const count = isThisModActive ? (chat.selectedModuleChapterIds || []).length : 0;
+              if (countEl) countEl.textContent = `已加载 ${count} 个章节`;
+            };
+            updateSelectedCountDisplay();
+
+            // 目录视图渲染与勾选
+            if (tocCheckbox) {
+              tocCheckbox.checked = !!chat.loadModuleToc;
+              tocCheckbox.onchange = async () => {
+                if (chat.activeModuleId !== mod.id) {
+                  chat.activeModuleId = mod.id;
+                }
+                chat.loadModuleToc = tocCheckbox.checked;
+                await db.chats.put(chat);
+              };
+            }
+
+            if (tocListEl) {
+              tocListEl.innerHTML = '';
+              if (Array.isArray(mod.toc) && mod.toc.length > 0) {
+                mod.toc.forEach((item, idx) => {
+                  const itemEl = document.createElement("div");
+                  itemEl.style.padding = "8px 12px";
+                  itemEl.style.background = "var(--secondary-bg)";
+                  itemEl.style.borderRadius = "8px";
+                  itemEl.style.fontSize = "12px";
+                  itemEl.style.color = "var(--text-primary)";
+                  const tTitle = typeof item === 'string' ? item : (item.title || item.name || `第${idx + 1}节`);
+                  itemEl.textContent = `${idx + 1}. ${tTitle}`;
+                  tocListEl.appendChild(itemEl);
+                });
+              } else if (allChaps.length > 0) {
+                allChaps.forEach((c, idx) => {
+                  const itemEl = document.createElement("div");
+                  itemEl.style.padding = "8px 12px";
+                  itemEl.style.background = "var(--secondary-bg)";
+                  itemEl.style.borderRadius = "8px";
+                  itemEl.style.display = "flex";
+                  itemEl.style.justifyContent = "space-between";
+                  itemEl.style.alignItems = "center";
+                  itemEl.innerHTML = `
+                    <span style="font-size: 12.5px; font-weight: 500; color: var(--text-primary);">${idx + 1}. ${c.title}</span>
+                    <span style="font-size: 11px; color: var(--text-secondary);">${c.wordCount || 0} 字</span>
+                  `;
+                  tocListEl.appendChild(itemEl);
+                });
+              } else {
+                tocListEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">暂无目录数据</div>';
+              }
+            }
+
+            const CATEGORY_ORDER = [
+              '人设',
+              '导入',
+              'HO秘密与设定',
+              '单人线',
+              '正文',
+              '结局',
+              'NPC与猫',
+              '地点',
+              '事件',
+              '其他'
+            ];
+
+            const normalizeCat = (rawCat = '', rawTitle = '') => {
+              const c = String(rawCat).toLowerCase();
+              const t = String(rawTitle).toLowerCase();
+              if (c.includes('人设') || c.includes('调查员') || c.includes('pc') || t.includes('人设')) return '人设';
+              if (c.includes('导入') || c.includes('公开') || c.includes('事前') || c.includes('引导') || c.includes('kp') || t.includes('导入') || t.includes('序幕') || t.includes('开局')) return '导入';
+              if (c.includes('ho') || c.includes('秘密') || c.includes('设定') || t.includes('ho') || t.includes('秘密')) return 'HO秘密与设定';
+              if (c.includes('单人') || c.includes('个人') || t.includes('单人') || t.includes('个人线')) return '单人线';
+              if (c.includes('npc') || c.includes('猫') || t.includes('npc') || t.includes('猫')) return 'NPC与猫';
+              if (c.includes('结局') || c.includes('结末') || c.includes('尾声') || c.includes('真相') || t.includes('结局') || t.includes('尾声')) return '结局';
+              if (c.includes('地点') || c.includes('场所') || c.includes('地图') || t.includes('地点') || t.includes('室') || t.includes('馆')) return '地点';
+              if (c.includes('事件') || c.includes('线索') || c.includes('机制') || t.includes('事件')) return '事件';
+              if (c.includes('正文') || c.includes('主线') || t.includes('第') || t.includes('章')) return '正文';
+              return '其他';
+            };
+
+            const groupedMap = new Map();
+            CATEGORY_ORDER.forEach(cat => groupedMap.set(cat, []));
+
+            allChaps.forEach(chap => {
+              const cat = normalizeCat(chap.category, chap.title);
+              if (!groupedMap.has(cat)) groupedMap.set(cat, []);
+              groupedMap.get(cat).push(chap);
+            });
+
+            listEl.innerHTML = '';
+
+            groupedMap.forEach((chaps, categoryName) => {
+              if (!chaps || chaps.length === 0) return;
+
+              const groupEl = document.createElement("div");
+              groupEl.className = "chat-mod-chaps-group";
+
+              const header = document.createElement("div");
+              header.className = "chat-mod-chaps-group-header";
+              header.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span>${categoryName}</span>
+                  <span style="font-size: 11px; padding: 1px 6px; border-radius: 9999px; background: var(--card-bg); color: var(--text-secondary);">${chaps.length}章</span>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="group-chevron" style="transition: transform 0.2s ease;">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              `;
+
+              const body = document.createElement("div");
+              body.className = "chat-mod-chaps-group-body";
+              body.style.display = "none";
+
+              chaps.forEach(chap => {
+                const isChecked = isThisModActive && (chat.selectedModuleChapterIds || []).includes(chap.id);
+                const row = document.createElement("div");
+                row.className = "chat-mod-chap-row";
+                row.innerHTML = `
+                  <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; padding-right: 8px;">
+                    <span style="font-weight: 600; font-size: 12.5px; color: var(--text-primary); white-space: normal; word-break: break-word;">${chap.title}</span>
+                    <span style="font-size: 11px; color: var(--text-secondary);">${chap.wordCount || 0} 字</span>
+                  </div>
+                  <input type="checkbox" class="chat-mod-chap-checkbox" data-chap-id="${chap.id}" ${isChecked ? "checked" : ""} style="cursor: pointer; width: 17px; height: 17px; margin: 0; accent-color: var(--accent-color);" />
+                `;
+
+                const cb = row.querySelector(".chat-mod-chap-checkbox");
+                cb.addEventListener("change", async () => {
+                  if (chat.activeModuleId !== mod.id) {
+                    chat.activeModuleId = mod.id;
+                    chat.selectedModuleChapterIds = [];
+                  }
+                  if (cb.checked) {
+                    if (!chat.selectedModuleChapterIds.includes(chap.id)) {
+                      chat.selectedModuleChapterIds.push(chap.id);
+                    }
+                  } else {
+                    chat.selectedModuleChapterIds = chat.selectedModuleChapterIds.filter(id => id !== chap.id);
+                  }
+                  await db.chats.put(chat);
+                  updateSelectedCountDisplay();
+                  if (typeof updateChatModuleMapBar === 'function') {
+                    updateChatModuleMapBar(chat);
+                  }
+                });
+
+                body.appendChild(row);
+              });
+
+              header.addEventListener("click", () => {
+                const isOpen = body.style.display === "flex";
+                body.style.display = isOpen ? "none" : "flex";
+                const chevron = header.querySelector(".group-chevron");
+                if (chevron) {
+                  chevron.style.transform = isOpen ? "rotate(0deg)" : "rotate(180deg)";
+                }
+              });
+
+              groupEl.appendChild(header);
+              groupEl.appendChild(body);
+              listEl.appendChild(groupEl);
+            });
+
+            const selectAllBtn = document.getElementById("chat-mod-chaps-select-all");
+            if (selectAllBtn) {
+              selectAllBtn.onclick = async () => {
+                chat.activeModuleId = mod.id;
+                chat.selectedModuleChapterIds = allChaps.map(c => c.id);
+                await db.chats.put(chat);
+                document.querySelectorAll(".chat-mod-chap-checkbox").forEach(c => c.checked = true);
+                updateSelectedCountDisplay();
+                if (typeof updateChatModuleMapBar === 'function') {
+                  updateChatModuleMapBar(chat);
+                }
+              };
+            }
+
+            const clearAllBtn = document.getElementById("chat-mod-chaps-clear-all");
+            if (clearAllBtn) {
+              clearAllBtn.onclick = async () => {
+                chat.selectedModuleChapterIds = [];
+                await db.chats.put(chat);
+                document.querySelectorAll(".chat-mod-chap-checkbox").forEach(c => c.checked = false);
+                updateSelectedCountDisplay();
+                if (typeof updateChatModuleMapBar === 'function') {
+                  updateChatModuleMapBar(chat);
+                }
+              };
+            }
+
+          } catch (e) {
+            console.error("加载模组章节列表失败:", e);
+            listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">读取模组章节出错</div>';
+          }
+        }
+        window.openChatModuleChaptersModal = openChatModuleChaptersModal;
+
+        function updateChatModuleMapBar(chat) {
+          // 地图栏预留接口
+          try {
+            const mapContainer = document.getElementById("chat-module-map-bar-container");
+            if (mapContainer) {
+              if (chat && chat.activeModuleId && (chat.selectedModuleChapterIds || []).length > 0) {
+                mapContainer.style.display = "flex";
+              } else {
+                mapContainer.style.display = "none";
+              }
+            }
+          } catch (e) {}
+        }
+        window.updateChatModuleMapBar = updateChatModuleMapBar;
         // === 修改结束 ===
+
 
         // ===================================================================
         // 3. 所有功能函数定义
@@ -28134,6 +28724,7 @@ ${recentHistory || '无'}
             }
 
             const thoughtChainPromptBlock = await getThoughtChainPromptBlock(chat);
+            const moduleChaptersPromptBlock = await getChatModulePromptBlock(chat);
 
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
@@ -28375,6 +28966,7 @@ ${recentHistory || '无'}
 			${summaryContext}
 			${announcementContext}
 			${worldBookContent}
+			${moduleChaptersPromptBlock}
 			${thoughtChainPromptBlock}
 			${musicContext}
 			${countdownContext} 
@@ -29021,6 +29613,7 @@ ${colSpecs.join('\n')}
 
 			- **世界观设定集**:
 			${worldBookContent}
+			${moduleChaptersPromptBlock}
 			${thoughtChainPromptBlock}
 			${linkedMemoryContext}
 			${elemeContext}
@@ -50630,7 +51223,16 @@ ${colSpecs.join('\n')}
             count: calculateTokenCount(summaryText),
           });
 
-          // 4.5 思维链预设 & 游戏模组
+          // 4.5 跑团模组章节 & 思维链预设 & 游戏模组
+          let modulePromptText = "";
+          if (typeof getChatModulePromptBlock === "function") {
+            modulePromptText = await getChatModulePromptBlock(chat);
+          }
+          breakdown.push({
+            name: "模组章节",
+            count: calculateTokenCount(modulePromptText),
+          });
+
           let tcPromptText = "";
           if (typeof getThoughtChainPromptBlock === "function") {
             tcPromptText = await getThoughtChainPromptBlock(chat);
@@ -53633,13 +54235,13 @@ ${colSpecs.join('\n')}
             let skippedCount = 0;
 
             const SKIP_KEYS = new Set([
-              "avatar", "myAvatar", "aiAvatar", "userAvatar", "memberAvatar", "senderAvatar",
+              "myAvatar", "aiAvatar", "userAvatar", "memberAvatar", "senderAvatar",
               "background", "backgroundImage", "chatBackground", "chatBg", "homeBackground",
               "homeBg", "mainBg", "wallpaper", "lockscreenWallpaper", "chatBgImage", "appBackground",
-              "customAvatarFrames", "custom_avatar", "themeCss", "icon", "cover", "sticker", "stickers"
+              "customAvatarFrames", "custom_avatar", "themeCss", "icon", "sticker", "stickers"
             ]);
 
-            const findAndCompressImagesInObject = async (obj) => {
+            const findAndCompressImagesInObject = async (obj, isModuleScope = false) => {
               if (!obj || typeof obj !== "object") return false;
               if (obj._compressed === true || obj.imageCompressed === true) {
                 skippedCount++;
@@ -53648,7 +54250,7 @@ ${colSpecs.join('\n')}
 
               let hasCompressed = false;
               for (const key in obj) {
-                if (SKIP_KEYS.has(key)) continue;
+                if (!isModuleScope && SKIP_KEYS.has(key)) continue;
 
                 const val = obj[key];
                 if (typeof val === "string" && val.startsWith("data:image")) {
@@ -53670,8 +54272,35 @@ ${colSpecs.join('\n')}
                   } else {
                     skippedCount++;
                   }
+                } else if (typeof val === "string" && (val.includes("data:image/") || val.includes("data:image%2F"))) {
+                  const dataUrlRegex = /data:image\/[a-zA-Z0-9+]+;base64,[A-Za-z0-9+/=]+/g;
+                  const matches = val.match(dataUrlRegex);
+                  if (matches && matches.length > 0) {
+                    let newContent = val;
+                    for (const dataUrl of matches) {
+                      if (dataUrl.startsWith("data:image/gif")) {
+                        skippedCount++;
+                        continue;
+                      }
+                      if (dataUrl.startsWith("data:image/jpeg;base64,") && dataUrl.length < 350000) {
+                        skippedCount++;
+                        continue;
+                      }
+                      const compUrl = await compressImage(dataUrl, quality, 1280);
+                      if (compUrl !== dataUrl && compUrl.length < dataUrl.length) {
+                        newContent = newContent.replaceAll(dataUrl, compUrl);
+                        hasCompressed = true;
+                        compressedCount++;
+                      } else {
+                        skippedCount++;
+                      }
+                    }
+                    if (newContent !== val) {
+                      obj[key] = newContent;
+                    }
+                  }
                 } else if (typeof val === "object" && val !== null) {
-                  if (await findAndCompressImagesInObject(val)) {
+                  if (await findAndCompressImagesInObject(val, isModuleScope)) {
                     hasCompressed = true;
                   }
                 }
@@ -53684,7 +54313,7 @@ ${colSpecs.join('\n')}
               return hasCompressed;
             };
 
-            const targetTableNames = ["chats", "qzonePosts", "datingScenes", "generationHistory", "gallery"].filter(name => {
+            const targetTableNames = ["chats", "qzonePosts", "datingScenes", "generationHistory", "gallery", "modules", "moduleImages", "moduleChapters", "moduleRawFiles"].filter(name => {
               try { return Boolean(db.table(name)); } catch (e) { return false; }
             });
             const allTableNames = targetTableNames.length > 0 ? targetTableNames : (db.tables ? db.tables.map((t) => t.name) : []);
@@ -53694,11 +54323,12 @@ ${colSpecs.join('\n')}
               const table = db.table(tableName);
               if (!table) continue;
 
+              const isModuleTable = tableName.startsWith("module") || tableName === "modules";
               const itemsToUpdate = [];
               const allItems = await table.toArray();
 
               for (const item of allItems) {
-                if (await findAndCompressImagesInObject(item)) {
+                if (await findAndCompressImagesInObject(item, isModuleTable)) {
                   itemsToUpdate.push(item);
                 }
                 itemsProcessed++;
@@ -57870,6 +58500,71 @@ ${colSpecs.join('\n')}
           const saveTcBindBtn = document.getElementById("save-thought-chain-bind-btn");
           if (saveTcBindBtn) saveTcBindBtn.addEventListener("click", saveThoughtChainBind);
 
+          // 跑团模组聊天加载事件绑定
+          const openChatModBtn = document.getElementById("open-chat-module-btn");
+          if (openChatModBtn) openChatModBtn.addEventListener("click", openChatModulePickerModal);
+
+          const closeChatModPickerBtn = document.getElementById("close-chat-module-picker-btn");
+          if (closeChatModPickerBtn) closeChatModPickerBtn.addEventListener("click", () => {
+            const m = document.getElementById("chat-module-picker-modal");
+            if (m) {
+              m.classList.remove("visible");
+              m.style.display = "none";
+            }
+          });
+
+          const cancelChatModPickerBtn = document.getElementById("chat-module-picker-cancel-btn");
+          if (cancelChatModPickerBtn) cancelChatModPickerBtn.addEventListener("click", () => {
+            const m = document.getElementById("chat-module-picker-modal");
+            if (m) {
+              m.classList.remove("visible");
+              m.style.display = "none";
+            }
+          });
+
+          const confirmChatModPickerBtn = document.getElementById("chat-module-picker-confirm-btn");
+          if (confirmChatModPickerBtn) confirmChatModPickerBtn.addEventListener("click", () => {
+            const m = document.getElementById("chat-module-picker-modal");
+            if (m) {
+              m.classList.remove("visible");
+              m.style.display = "none";
+            }
+          });
+
+          document.querySelectorAll(".chat-mod-filter-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+              renderChatModulePickerList(btn.dataset.filter);
+            });
+          });
+
+          const closeChatModChapsBtn = document.getElementById("close-chat-module-chapters-btn");
+          if (closeChatModChapsBtn) closeChatModChapsBtn.addEventListener("click", () => {
+            const m = document.getElementById("chat-module-chapters-modal");
+            if (m) {
+              m.classList.remove("visible");
+              m.style.display = "none";
+            }
+          });
+
+          const backChatModChapsBtn = document.getElementById("chat-module-chapters-back-btn");
+          if (backChatModChapsBtn) backChatModChapsBtn.addEventListener("click", () => {
+            const m = document.getElementById("chat-module-chapters-modal");
+            if (m) {
+              m.classList.remove("visible");
+              m.style.display = "none";
+            }
+            openChatModulePickerModal();
+          });
+
+          const saveChatModChapsBtn = document.getElementById("chat-module-chapters-save-btn");
+          if (saveChatModChapsBtn) saveChatModChapsBtn.addEventListener("click", () => {
+            const m = document.getElementById("chat-module-chapters-modal");
+            if (m) {
+              m.classList.remove("visible");
+              m.style.display = "none";
+            }
+          });
+
           document
             .getElementById("delete-expired-songs-btn")
             .addEventListener("click", deleteExpiredSearchedSongs);
@@ -58957,10 +59652,20 @@ ${colSpecs.join('\n')}
           });
 
           const chatInput = document.getElementById("chat-input");
+          const sendBtn = document.getElementById("send-btn");
 
-          document
-            .getElementById("send-btn")
-            .addEventListener("click", async () => {
+          if (sendBtn) {
+            sendBtn.addEventListener("mousedown", (e) => {
+              if (document.activeElement === chatInput) {
+                e.preventDefault();
+              }
+            });
+            sendBtn.addEventListener("pointerdown", (e) => {
+              if (document.activeElement === chatInput) {
+                e.preventDefault();
+              }
+            });
+            sendBtn.addEventListener("click", async () => {
               const content = chatInput.value.trim();
               if (!content || !state.activeChatId) return;
 
@@ -59131,6 +59836,7 @@ ${colSpecs.join('\n')}
                 }
               }
             });
+          }
           document
             .getElementById("wait-reply-btn")
             .addEventListener("click", triggerAiResponse);
