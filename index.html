@@ -2951,6 +2951,28 @@
             </button>
 
             <button
+              id="chat-affection-btn"
+              class="chat-action-icon-btn action-button"
+              title="好感度"
+              type="button"
+              onclick="if(typeof openChatAffectionModal==='function')openChatAffectionModal();"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+              </svg>
+            </button>
+
+            <button
               id="chat-map-btn"
               class="chat-action-icon-btn action-button"
               title="地图"
@@ -7760,6 +7782,40 @@
       </div>
     </div>
 
+    <div id="chat-affection-modal" class="modal">
+      <div class="modal-content" style="max-width: 340px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; max-height: 80vh;">
+        <div class="modal-header" style="font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            <span>好感度面板</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; color: var(--text-secondary); user-select: none;">
+              <input type="checkbox" id="chat-affection-enabled-toggle" style="accent-color: var(--accent-color); width: 14px; height: 14px;">
+              <span>启用</span>
+            </label>
+            <button type="button" class="close-btn" id="close-chat-affection-modal-btn" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+          </div>
+        </div>
+        <div class="modal-body" style="padding: 12px 0; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button type="button" class="chat-affection-top-btn" id="chat-affection-add-char-btn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>添加角色</span>
+            </button>
+            <button type="button" class="chat-affection-top-btn" id="chat-affection-import-btn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span>导入成员</span>
+            </button>
+          </div>
+          <div id="chat-affection-list-container" style="display: flex; flex-direction: column; gap: 8px; min-height: 80px;"></div>
+        </div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="close-chat-affection-modal-footer-btn" style="width: 100%; height: 34px;">关闭</button>
+        </div>
+      </div>
+    </div>
+
     <div id="custom-modal-overlay">
       <div id="custom-modal">
         <div class="custom-modal-header" id="custom-modal-title"></div>
@@ -8550,9 +8606,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <!-- 模组章节管理与加载弹窗 -->
     <div id="chat-module-chapters-modal" class="modal">
-      <div class="modal-content" style="max-width: 440px; width: 92%; height: 82vh; max-height: 82vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); box-sizing: border-box; overflow: hidden;">
-        <div class="modal-header" style="flex-shrink: 0; display: flex; justify-content: center; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); text-align: center;">
-          <span id="chat-module-chapters-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">模组章节</span>
+      <div class="modal-content" style="max-width: 440px; width: 92%; height: 82vh; max-height: 82vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); box-sizing: border-box; overflow: hidden; position: relative;">
+        <div class="modal-header" style="flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); position: relative;">
+          <span id="chat-module-chapters-title" style="font-weight: 600; font-size: 15px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%;">模组章节</span>
+          <!-- 顶部右上角切换模式下拉按键 -->
+          <div style="position: relative;">
+            <button type="button" id="chat-mod-mode-btn" style="display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 76px; padding: 4px 10px; border-radius: 9999px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 12px; font-weight: 600; cursor: pointer;">
+              <span id="chat-mod-mode-label">手动</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; color: var(--text-secondary);">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <!-- 竖条下拉模式菜单 -->
+            <div id="chat-mod-mode-dropdown" style="display: none; position: absolute; right: 0; top: calc(100% + 4px); z-index: 100; min-width: 140px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); overflow: hidden; flex-direction: column;">
+              <div class="chat-mod-mode-opt" data-mode="auto" style="display: flex; align-items: center; padding: 8px 10px; gap: 8px; cursor: pointer; border-bottom: 1px solid var(--border-color);">
+                <input type="radio" name="chat-mod-switch-mode" value="auto" style="width: 14px; height: 14px; margin: 0; accent-color: var(--accent-color); cursor: pointer;" />
+                <span class="chat-mod-mode-text" style="font-size: 12px; font-weight: 600; color: var(--text-primary); flex: 1;">自动</span>
+              </div>
+              <div class="chat-mod-mode-opt" data-mode="semi" style="display: flex; align-items: center; padding: 8px 10px; gap: 8px; cursor: pointer; border-bottom: 1px solid var(--border-color);">
+                <input type="radio" name="chat-mod-switch-mode" value="semi" style="width: 14px; height: 14px; margin: 0; accent-color: var(--accent-color); cursor: pointer;" />
+                <span class="chat-mod-mode-text" style="font-size: 12px; font-weight: 600; color: var(--text-primary); flex: 1;">半自动</span>
+              </div>
+              <div class="chat-mod-mode-opt" data-mode="manual" style="display: flex; align-items: center; padding: 8px 10px; gap: 8px; cursor: pointer;">
+                <input type="radio" name="chat-mod-switch-mode" value="manual" style="width: 14px; height: 14px; margin: 0; accent-color: var(--accent-color); cursor: pointer;" />
+                <span class="chat-mod-mode-text" style="font-size: 12px; font-weight: 600; color: var(--text-primary); flex: 1;">手动</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 章节与目录视图切换 -->
@@ -8563,10 +8643,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         <!-- 章节视图容器 -->
         <div id="chat-module-chapters-view" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
-          <!-- 快速全选/清空行 -->
+          <!-- 快速控制行 -->
           <div style="flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 4px;">
-            <span id="chat-module-selected-count-text" style="font-size: 12px; color: var(--text-secondary);">已加载 0 个章节</span>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span id="chat-module-selected-count-text" style="font-size: 12px; color: var(--text-secondary);">已加载 0 个章节</span>
+              <span style="font-size: 10px; color: var(--text-secondary); opacity: 0.8;">[左管辖·右加载]</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-primary); cursor: pointer; padding: 2px 7px; background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color); user-select: none;">
+                <input type="checkbox" id="chat-module-load-images-checkbox" style="width: 14px; height: 14px; accent-color: var(--accent-color); cursor: pointer; margin: 0;" />
+                <span>图片</span>
+              </label>
               <button type="button" id="chat-mod-chaps-select-all" class="summary-preset-btn" style="font-size: 11px; padding: 2px 8px;">全选</button>
               <button type="button" id="chat-mod-chaps-clear-all" class="summary-preset-btn" style="font-size: 11px; padding: 2px 8px;">清空</button>
             </div>
@@ -19923,6 +20010,63 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
+            // 模组插图与带团触发规则（仅在勾选图片时注入给AI）
+            if (chat.loadModuleImages) {
+              let modImages = [];
+              if (dbInstance.moduleImages) {
+                try {
+                  modImages = await dbInstance.moduleImages.where('moduleId').equals(mod.id).toArray();
+                } catch (e) {}
+              }
+              if (modImages && modImages.length > 0) {
+                block += `## 模组插图触发与呈现规则\n当前模组已启用插图联动。请在带团叙述推进到对应剧情节点、场景地点、NPC出场或线索呈现时，在回复中自然包含对应的【图N】标记，系统将自动将该编号的插图呈现给玩家：\n`;
+                modImages.forEach((img, idx) => {
+                  const num = img.imageIndex || (idx + 1);
+                  const name = img.name || `插图 ${num}`;
+                  const desc = img.annotation || img.description || img.placement || '线索插图';
+                  const horrorWarning = (img.isHorror || img.isSensitive) ? '【恐怖内容/剧透】' : '';
+                  block += `- 【图${num}】${name}：${desc} ${horrorWarning}\n`;
+                });
+                block += `\n`;
+              }
+            }
+
+            // 章节切换模式提示词注入（自动模式与半自动模式）
+            const switchMode = chat.moduleSwitchMode || 'manual';
+            if (switchMode === 'auto' || switchMode === 'semi') {
+              const scopeIds = chat.moduleAiScopeChapterIds || [];
+              const scopeChaps = allChaps.filter(c => scopeIds.includes(c.id) || scopeIds.includes(String(c.id)));
+              const activeScopeList = (scopeChaps.length > 0 ? scopeChaps : allChaps)
+                .map((sc, idx) => `${idx + 1}. ${sc.title} (ID: ${sc.id})`)
+                .join('\n');
+
+              if (switchMode === 'auto') {
+                block += `## 模组章节自动切换与多章管理规则\n` +
+                  `当前处于【自动模式】。你拥有在AI管辖章节范围内根据剧情进展自动改勾选的权限，支持同时开启多个关联章节（如地点与事件）以及同时关闭已完成的章节。\n` +
+                  `AI管辖章节列表：\n${activeScopeList}\n\n` +
+                  `自动改勾选的核心前提与触发逻辑（极度重要）：\n` +
+                  `1. 【核心前提】：你必须首先将当前章节的正文剧情完整带完、带到了本章末尾的交接点。单个章节内可能包含多个不同地点或场景，在当前章节剧情未彻底走完前，哪怕玩家在章节内的不同地点之间走动、探索或聊天，你都坚决不能提前切换章节！\n` +
+                  `2. 【必须显式输出指令代码】：系统依赖你在消息内容中附带的代码来触发换章与生成气泡。严禁仅在口头上用自然语言说换章，必须在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
+                  `   - 多章节同时管理：\`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID1", "要开启的章节ID2"], "closeChapterIds": ["要关闭的章节ID"]}\`\n` +
+                  `   - 单章节直接切换：\`{"type": "switch_chapter", "chapterId": "目标章节ID", "chapterTitle": "目标章节名称"}\`\n` +
+                  `3. 【换章触发点】：当且仅当当前章节剧情已真正带到了末尾（例如NPC或KPC提出去睡觉、准备进入下一阶段），并且玩家明确表示同意推进（例如玩家回复"好吧我们去睡觉"、"那进入下一天吧"、"出发去下一个大阶段"）时，你在回复中输出上述换章指令代码，系统会自动执行改勾选并生成独立的章节切换通知气泡。\n` +
+                  `4. 【玩家保留意愿时不切换】：如果当前章节已到末尾，但玩家表示还想继续互动（例如"我不想睡觉，还想再玩会"、"我还有事情要做"），你必须坚决保持当前章节不切换，继续陪玩家互动，严禁输出换章指令代码，直到玩家后续真正确认同意推进时才输出换章指令代码。\n` +
+                  `5. 用户手动勾选的其他非管辖章节为固定参考资料，你绝不可关闭或覆盖它们。\n\n`;
+              } else if (switchMode === 'semi') {
+                block += `## 模组章节半自动切换与多章管理规则\n` +
+                  `当前处于【半自动模式】。你拥有判断剧情完结并提请换章的权限，支持同时建议开启或关闭多个章节。\n` +
+                  `AI管辖章节列表：\n${activeScopeList}\n\n` +
+                  `带团操作与切换细节：\n` +
+                  `1. 当你带完当前章节的核心剧情后，严禁仅在口头上提议换章，必须在回复正文最后完整输出包含以下换章建议指令代码：\n` +
+                  `   - 多章节建议格式：\`{"type": "suggest_manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "本章已带完，是否切换下一章？"}\`\n` +
+                  `   - 单章节建议格式：\`{"type": "suggest_switch_chapter", "nextChapterId": "目标章节ID", "nextChapterTitle": "目标章节名称"}\`\n` +
+                  `2. 系统会在聊天中独立渲染带有【继续】按钮的确认卡片气泡。\n` +
+                  `3. 当玩家点击【继续】按钮或在对话中回复"继续"、"进入下一章"、"推进"等意图时，系统将改勾选并加载对应章节。\n` +
+                  `4. 若玩家拒绝或忽略，切换挂起：不加载下一章，当前章节保持不变，玩家可继续在当前场景自由互动；挂起后想继续时，玩家任何时候表达推进意图或点击提示中的继续按钮，随时可恢复切换。\n` +
+                  `5. 用户手动勾选的其他非管辖章节为固定参考资料，不可关闭或覆盖。\n\n`;
+              }
+            }
+
             return block + "\n";
           } catch (e) {
             console.error("加载模组章节错误:", e);
@@ -20207,19 +20351,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const tabToc = document.getElementById("chat-mod-tab-toc");
           const viewChapters = document.getElementById("chat-module-chapters-view");
           const viewToc = document.getElementById("chat-module-toc-view");
+          const imagesCheckbox = document.getElementById("chat-module-load-images-checkbox");
 
           const switchTab = (tabName) => {
-            if (tabName === 'toc') {
-              if (tabToc) tabToc.classList.add("active");
-              if (tabChapters) tabChapters.classList.remove("active");
-              if (viewToc) viewToc.style.display = "flex";
-              if (viewChapters) viewChapters.style.display = "none";
-            } else {
-              if (tabChapters) tabChapters.classList.add("active");
-              if (tabToc) tabToc.classList.remove("active");
-              if (viewChapters) viewChapters.style.display = "flex";
-              if (viewToc) viewToc.style.display = "none";
-            }
+            if (tabChapters) tabChapters.classList.toggle("active", tabName === 'chapters');
+            if (tabToc) tabToc.classList.toggle("active", tabName === 'toc');
+
+            if (viewChapters) viewChapters.style.display = tabName === 'chapters' ? "flex" : "none";
+            if (viewToc) viewToc.style.display = tabName === 'toc' ? "flex" : "none";
           };
 
           if (tabChapters) {
@@ -20258,7 +20397,74 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             });
 
             if (!chat.selectedModuleChapterIds) chat.selectedModuleChapterIds = [];
+            if (!chat.moduleAiScopeChapterIds) {
+              chat.moduleAiScopeChapterIds = allChaps
+                .filter(c => (c.category || '').includes('正文') || c.title.includes('第') || c.title.includes('章'))
+                .map(c => c.id);
+            }
             const isThisModActive = chat.activeModuleId && String(chat.activeModuleId) === String(mod.id);
+
+            // 模式选择下拉逻辑
+            const modeBtn = document.getElementById("chat-mod-mode-btn");
+            const modeLabel = document.getElementById("chat-mod-mode-label");
+            const modeDropdown = document.getElementById("chat-mod-mode-dropdown");
+            const modeRadios = document.querySelectorAll("input[name='chat-mod-switch-mode']");
+
+            const currentMode = chat.moduleSwitchMode || "manual";
+            const modeMap = {
+              auto: "自动",
+              semi: "半自动",
+              manual: "手动"
+            };
+            if (modeLabel) modeLabel.textContent = modeMap[currentMode] || "手动";
+            modeRadios.forEach(r => {
+              r.checked = r.value === currentMode;
+            });
+
+            if (modeBtn && modeDropdown) {
+              modeBtn.onclick = (e) => {
+                e.stopPropagation();
+                const isShown = modeDropdown.style.display === "flex";
+                modeDropdown.style.display = isShown ? "none" : "flex";
+              };
+              document.addEventListener("click", () => {
+                if (modeDropdown) modeDropdown.style.display = "none";
+              });
+              modeDropdown.onclick = (e) => e.stopPropagation();
+            }
+
+            const modeOptions = document.querySelectorAll(".chat-mod-mode-opt");
+            modeOptions.forEach(opt => {
+              const modeVal = opt.dataset.mode;
+              const textSpan = opt.querySelector(".chat-mod-mode-text");
+
+              if (textSpan) {
+                textSpan.onclick = async (e) => {
+                  e.stopPropagation();
+                  let note = "";
+                  if (modeVal === "auto") {
+                    note = "自动模式：AI必须完整带完当前章节且剧情走到本章结尾，并且玩家确认同意推进时，AI才自动改勾选加载下一章；若章节未走完或玩家在章末还想继续玩，AI坚决保持当前章节不切换。";
+                  } else if (modeVal === "semi") {
+                    note = "半自动模式：AI带完当前章后在聊天内提示本章已带完是否切换下一章，附带继续按钮。玩家点击继续或回复继续时AI改勾选加载下一章；若玩家拒绝或忽略则切换挂起，随时可恢复继续。";
+                  } else {
+                    note = "手动模式：不带任何自动逻辑，由玩家在模组面板中自主勾选与取消章节。";
+                  }
+                  if (typeof showCustomAlert === "function") {
+                    await showCustomAlert(`${modeMap[modeVal]}模式注解`, note);
+                  }
+                };
+              }
+
+              opt.onclick = async () => {
+                chat.moduleSwitchMode = modeVal;
+                if (modeLabel) modeLabel.textContent = modeMap[modeVal] || "手动";
+                modeRadios.forEach(r => {
+                  r.checked = r.value === modeVal;
+                });
+                if (modeDropdown) modeDropdown.style.display = "none";
+                await db.chats.put(chat);
+              };
+            });
 
             const updateSelectedCountDisplay = () => {
               const count = isThisModActive ? (chat.selectedModuleChapterIds || []).length : 0;
@@ -20274,6 +20480,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   chat.activeModuleId = mod.id;
                 }
                 chat.loadModuleToc = tocCheckbox.checked;
+                await db.chats.put(chat);
+              };
+            }
+
+            // 图片联动与勾选
+            if (imagesCheckbox) {
+              imagesCheckbox.checked = !!chat.loadModuleImages;
+              imagesCheckbox.onchange = async () => {
+                if (chat.activeModuleId !== mod.id) {
+                  chat.activeModuleId = mod.id;
+                }
+                chat.loadModuleImages = imagesCheckbox.checked;
                 await db.chats.put(chat);
               };
             }
@@ -20375,6 +20593,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               chaps.forEach(chap => {
                 const isChecked = isThisModActive && (chat.selectedModuleChapterIds || []).includes(chap.id);
+                const isAiScope = (chat.moduleAiScopeChapterIds || []).includes(chap.id);
                 const row = document.createElement("div");
                 row.className = "chat-mod-chap-row";
                 row.innerHTML = `
@@ -20382,8 +20601,30 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     <span style="font-weight: 600; font-size: 12.5px; color: var(--text-primary); white-space: normal; word-break: break-word;">${chap.title}</span>
                     <span style="font-size: 11px; color: var(--text-secondary);">${chap.wordCount || 0} 字</span>
                   </div>
-                  <input type="checkbox" class="chat-mod-chap-checkbox" data-chap-id="${chap.id}" ${isChecked ? "checked" : ""} style="cursor: pointer; width: 17px; height: 17px; margin: 0; accent-color: var(--accent-color);" />
+                  <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                    <label title="AI自动或半自动管辖范围" style="display: inline-flex; align-items: center; cursor: pointer; margin: 0;">
+                      <input type="checkbox" class="chat-mod-chap-ai-scope-checkbox" data-chap-id="${chap.id}" ${isAiScope ? "checked" : ""} style="cursor: pointer; width: 16px; height: 16px; margin: 0; accent-color: #D97706; outline: 1px dashed #D97706; border-radius: 3px;" />
+                    </label>
+                    <label title="当前激活加载" style="display: inline-flex; align-items: center; cursor: pointer; margin: 0;">
+                      <input type="checkbox" class="chat-mod-chap-checkbox" data-chap-id="${chap.id}" ${isChecked ? "checked" : ""} style="cursor: pointer; width: 17px; height: 17px; margin: 0; accent-color: var(--accent-color);" />
+                    </label>
+                  </div>
                 `;
+
+                const scopeCb = row.querySelector(".chat-mod-chap-ai-scope-checkbox");
+                if (scopeCb) {
+                  scopeCb.addEventListener("change", async () => {
+                    if (!chat.moduleAiScopeChapterIds) chat.moduleAiScopeChapterIds = [];
+                    if (scopeCb.checked) {
+                      if (!chat.moduleAiScopeChapterIds.includes(chap.id)) {
+                        chat.moduleAiScopeChapterIds.push(chap.id);
+                      }
+                    } else {
+                      chat.moduleAiScopeChapterIds = chat.moduleAiScopeChapterIds.filter(id => id !== chap.id);
+                    }
+                    await db.chats.put(chat);
+                  });
+                }
 
                 const cb = row.querySelector(".chat-mod-chap-checkbox");
                 cb.addEventListener("change", async () => {
@@ -26398,6 +26639,111 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return null;
           }
 
+          if (msg.type === "module_switch_notice") {
+            const wrapper = document.createElement("div");
+            wrapper.className = "message-wrapper system-pat";
+            wrapper.style.maxWidth = "88%";
+            wrapper.style.width = "100%";
+            wrapper.style.display = "flex";
+            wrapper.style.justifyContent = "center";
+            wrapper.style.margin = "6px auto";
+
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble system-bubble";
+            bubble.dataset.timestamp = msg.timestamp;
+            bubble.style.cssText = "max-width: 88%; padding: 5px 14px; border-radius: 12px; text-align: center; line-height: 1.5; font-size: 12px; color: var(--text-secondary); word-break: break-word; overflow-wrap: break-word; white-space: normal; display: inline-block; margin: 0 auto;";
+            bubble.innerHTML = `<span style="display: inline-block; text-align: center; word-break: break-word; overflow-wrap: break-word;">${msg.content}</span>`;
+            wrapper.appendChild(bubble);
+            addLongPressListener(wrapper, () =>
+              showMessageActions(msg.timestamp),
+            );
+            wrapper.addEventListener("click", () => {
+              if (isSelectionMode) toggleMessageSelection(msg.timestamp);
+            });
+            return wrapper;
+          }
+
+          if (msg.type === "module_semi_switch_card") {
+            const wrapper = document.createElement("div");
+            wrapper.className = "message-wrapper system-pat";
+            wrapper.style.maxWidth = "92%";
+            wrapper.style.width = "100%";
+            wrapper.style.display = "flex";
+            wrapper.style.justifyContent = "center";
+            wrapper.style.margin = "6px auto";
+
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble system-bubble";
+            bubble.dataset.timestamp = msg.timestamp;
+            bubble.style.textAlign = "left";
+            bubble.style.display = "block";
+            bubble.style.width = "100%";
+            bubble.style.maxWidth = "100%";
+            bubble.style.boxSizing = "border-box";
+            bubble.style.padding = "10px 14px";
+            bubble.style.background = "var(--secondary-bg)";
+            bubble.style.border = "1px solid var(--border-color)";
+            bubble.style.borderRadius = "12px";
+
+            const pData = msg.pendingData || {};
+            const isExecuted = !!msg.isExecuted;
+            const targetTitle = pData.nextChapterTitle || pData.summary || "下一章节";
+            let detailText = "";
+            if (pData.openChapterTitles && pData.openChapterTitles.length > 0) {
+              detailText += `开启：${pData.openChapterTitles.join("、")}`;
+            }
+            if (pData.closeChapterTitles && pData.closeChapterTitles.length > 0) {
+              if (detailText) detailText += "，";
+              detailText += `关闭：${pData.closeChapterTitles.join("、")}`;
+            }
+            if (!detailText && targetTitle) {
+              detailText = `下一章：${targetTitle}`;
+            }
+
+            bubble.innerHTML = `
+              <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px;">
+                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word; line-height: 1.4; flex: 1;">本章已带完，是否切换下一章？</div>
+                <button type="button" class="summary-preset-btn btn-semi-switch-continue-card" ${isExecuted ? 'disabled style="padding: 3px 10px; font-size: 11px; background: var(--border-color); color: var(--text-secondary); border: none; border-radius: 6px; cursor: default; flex-shrink: 0; white-space: nowrap;"' : 'style="padding: 3px 12px; font-size: 11px; background: var(--accent-color); color: #FFFFFF; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; flex-shrink: 0; white-space: nowrap;"'}>${isExecuted ? '已切换' : '继续'}</button>
+              </div>
+              <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; word-break: break-word; overflow-wrap: break-word;">${detailText}</div>
+            `;
+
+            if (!isExecuted) {
+              const continueBtn = bubble.querySelector('.btn-semi-switch-continue-card');
+              if (continueBtn) {
+                continueBtn.onclick = async (e) => {
+                  e.stopPropagation();
+                  msg.isExecuted = true;
+                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
+                  continueBtn.textContent = '已切换';
+                  continueBtn.disabled = true;
+                  continueBtn.style.background = 'var(--border-color)';
+                  continueBtn.style.color = 'var(--text-secondary)';
+                  continueBtn.style.cursor = 'default';
+                  if (pData.openChapterIds || pData.closeChapterIds) {
+                    if (typeof window.executeChapterManage === 'function') {
+                      await window.executeChapterManage(pData.openChapterIds || [], pData.closeChapterIds || [], '', true);
+                    }
+                  } else if (pData.nextChapterId) {
+                    if (typeof window.executeChapterSwitch === 'function') {
+                      await window.executeChapterSwitch(pData.nextChapterId, pData.nextChapterTitle, true);
+                    }
+                  }
+                };
+              }
+            }
+
+            wrapper.appendChild(bubble);
+            addLongPressListener(wrapper, () =>
+              showMessageActions(msg.timestamp),
+            );
+            wrapper.addEventListener("click", () => {
+              if (isSelectionMode) toggleMessageSelection(msg.timestamp);
+            });
+            return wrapper;
+          }
+
           if (msg.type === "pat_message") {
             const wrapper = document.createElement("div");
             wrapper.className = "message-wrapper system-pat";
@@ -27342,6 +27688,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             bubble.classList.add("has-image");
             const imageUrl = msg.content[0].image_url.url;
             contentHtml = `<img src="${imageUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+          } else if (msg.type === "module_pure_image") {
+            bubble.classList.add("has-image");
+            const imageUrl = msg.imageUrl || msg.content;
+            const imgName = msg.name || "模组插图";
+            const imgDesc = msg.description ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">${msg.description}</div>` : "";
+            contentHtml = `
+              <div class="chat-module-pure-image-card" style="cursor: pointer;">
+                <img src="${imageUrl}" class="chat-image" alt="${imgName}" loading="lazy" decoding="async" style="max-width: 100%; border-radius: 8px; display: block;" />
+                ${imgDesc}
+              </div>
+            `;
           } else if (msg.type === "naiimag") {
             // NovelAI图片渲染（复用realimag样式）
             bubble.classList.add("is-realimag", "is-card-like");
@@ -27363,6 +27720,133 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
                 rawContentText = rawContentText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
               }
+            }
+
+            // 自动模式换章与多章节管理指令解析（独立生成通知气泡）
+            if (rawContentText.includes('"type": "manage_chapters"') || rawContentText.includes('"type":"manage_chapters"')) {
+              try {
+                const manageMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"manage_chapters"[\s\S]*?\}/);
+                if (manageMatch) {
+                  const manageObj = JSON.parse(manageMatch[0]);
+                  rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"manage_chapters"[\s\S]*?\}\s*```/g, "").replace(manageMatch[0], "").trim();
+                  if (chat && chat.activeModuleId && !msg._chapterManaged) {
+                    msg._chapterManaged = true;
+                    setTimeout(async () => {
+                      if (typeof window.executeChapterManage === 'function') {
+                        await window.executeChapterManage(manageObj.openChapterIds || [], manageObj.closeChapterIds || [], manageObj.summary || '', true);
+                      }
+                    }, 50);
+                  }
+                }
+              } catch (e) {}
+            } else if (rawContentText.includes('"type": "switch_chapter"') || rawContentText.includes('"type":"switch_chapter"')) {
+              try {
+                const switchMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"switch_chapter"[\s\S]*?\}/);
+                if (switchMatch) {
+                  const switchObj = JSON.parse(switchMatch[0]);
+                  rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"switch_chapter"[\s\S]*?\}\s*```/g, "").replace(switchMatch[0], "").trim();
+                  if (chat && chat.activeModuleId && switchObj.chapterId && !msg._chapterSwitched) {
+                    msg._chapterSwitched = true;
+                    setTimeout(async () => {
+                      if (typeof window.executeChapterSwitch === 'function') {
+                        await window.executeChapterSwitch(switchObj.chapterId, switchObj.chapterTitle, true);
+                      }
+                    }, 50);
+                  }
+                }
+              } catch (e) {}
+            }
+
+            // 半自动模式换章建议解析（独立渲染成确认卡片气泡）
+            if (rawContentText.includes('"type": "suggest_manage_chapters"') || rawContentText.includes('"type":"suggest_manage_chapters"')) {
+              try {
+                const suggestMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"suggest_manage_chapters"[\s\S]*?\}/);
+                if (suggestMatch) {
+                  const suggestObj = JSON.parse(suggestMatch[0]);
+                  rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"suggest_manage_chapters"[\s\S]*?\}\s*```/g, "").replace(suggestMatch[0], "").trim();
+                  if (chat && !msg._chapterSuggested) {
+                    msg._chapterSuggested = true;
+                    chat.pendingChapterManage = {
+                      openChapterIds: suggestObj.openChapterIds || [],
+                      closeChapterIds: suggestObj.closeChapterIds || [],
+                      openChapterTitles: suggestObj.openChapterTitles || [],
+                      closeChapterTitles: suggestObj.closeChapterTitles || [],
+                      summary: suggestObj.summary || '本章已带完，是否切换下一章？'
+                    };
+                    setTimeout(async () => {
+                      const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                      let openTitles = suggestObj.openChapterTitles || [];
+                      let closeTitles = suggestObj.closeChapterTitles || [];
+                      if ((!openTitles.length || !closeTitles.length) && dbInstance && dbInstance.moduleChapters && chat.activeModuleId) {
+                        try {
+                          const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
+                          if (!openTitles.length && suggestObj.openChapterIds) {
+                            openTitles = allChaps.filter(c => (suggestObj.openChapterIds || []).includes(c.id) || (suggestObj.openChapterIds || []).includes(String(c.id))).map(c => c.title);
+                          }
+                          if (!closeTitles.length && suggestObj.closeChapterIds) {
+                            closeTitles = allChaps.filter(c => (suggestObj.closeChapterIds || []).includes(c.id) || (suggestObj.closeChapterIds || []).includes(String(c.id))).map(c => c.title);
+                          }
+                        } catch (e) {}
+                      }
+                      const cardMsg = {
+                        id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                        role: "system",
+                        type: "module_semi_switch_card",
+                        content: suggestObj.summary || "本章已带完，是否切换下一章？",
+                        pendingData: {
+                          openChapterIds: suggestObj.openChapterIds || [],
+                          closeChapterIds: suggestObj.closeChapterIds || [],
+                          openChapterTitles: openTitles,
+                          closeChapterTitles: closeTitles,
+                          summary: suggestObj.summary || "本章已带完，是否切换下一章？"
+                        },
+                        timestamp: Date.now()
+                      };
+                      chat.history.push(cardMsg);
+                      if (dbInstance) await dbInstance.chats.put(chat);
+                      appendMessage(cardMsg, chat);
+                    }, 50);
+                  }
+                }
+              } catch (e) {}
+            } else if (rawContentText.includes('"type": "suggest_switch_chapter"') || rawContentText.includes('"type":"suggest_switch_chapter"')) {
+              try {
+                const suggestMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"suggest_switch_chapter"[\s\S]*?\}/);
+                if (suggestMatch) {
+                  const suggestObj = JSON.parse(suggestMatch[0]);
+                  rawContentText = rawContentText.replace(suggestMatch[0], "").trim();
+                  const targetId = suggestObj.nextChapterId || suggestObj.chapterId;
+                  const targetTitle = suggestObj.nextChapterTitle || suggestObj.chapterTitle || "下一章";
+                  if (targetId && chat && !msg._chapterSuggested) {
+                    msg._chapterSuggested = true;
+                    chat.pendingChapterSwitch = { nextChapterId: targetId, nextChapterTitle: targetTitle };
+                    setTimeout(async () => {
+                      const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                      const cardMsg = {
+                        id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                        role: "system",
+                        type: "module_semi_switch_card",
+                        content: "本章已带完，是否切换下一章？",
+                        pendingData: {
+                          nextChapterId: targetId,
+                          nextChapterTitle: targetTitle
+                        },
+                        timestamp: Date.now()
+                      };
+                      chat.history.push(cardMsg);
+                      if (dbInstance) await dbInstance.chats.put(chat);
+                      appendMessage(cardMsg, chat);
+                    }, 50);
+                  }
+                }
+              } catch (e) {}
+            }
+
+            if (rawContentText.includes("【图")) {
+              rawContentText = rawContentText.replace(/【图(\d+)】/g, (match, p1) => {
+                const imgNum = parseInt(p1, 10);
+                return `<div class="chat-module-img-slot" data-mod-id="${chat.activeModuleId || ''}" data-img-idx="${imgNum}"></div>`;
+              });
             }
             contentHtml = rawContentText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
           }
@@ -27462,8 +27946,212 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
 
+          const pureImgCard = bubble.querySelector('.chat-module-pure-image-card');
+          if (pureImgCard) {
+            pureImgCard.onclick = (e) => {
+              e.stopPropagation();
+              const src = msg.imageUrl || msg.content;
+              if (src && typeof openImageViewer === 'function') openImageViewer(src);
+            };
+          }
+
+          const slots = bubble.querySelectorAll('.chat-module-img-slot');
+          if (slots.length > 0) {
+            slots.forEach(async (slot) => {
+              const modId = slot.dataset.modId || chat.activeModuleId;
+              const imgIdx = parseInt(slot.dataset.imgIdx, 10);
+              const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+              if (!dbInstance || !dbInstance.moduleImages || !modId) {
+                slot.innerHTML = `<div class="chat-module-missing-img-tag" style="display: inline-block; padding: 2px 6px; font-size: 11px; color: var(--text-secondary); background: var(--secondary-bg); border-radius: 4px; border: 1px dashed var(--border-color);">图${imgIdx} 缺失</div>`;
+                return;
+              }
+              try {
+                let img = null;
+                const modImgs = await dbInstance.moduleImages.where('moduleId').equals(modId).toArray();
+                img = modImgs.find(m => m.imageIndex === imgIdx) || modImgs[imgIdx - 1];
+                if (!img || !img.dataUrl) {
+                  slot.innerHTML = `<div class="chat-module-missing-img-tag" style="display: inline-block; padding: 2px 6px; font-size: 11px; color: var(--text-secondary); background: var(--secondary-bg); border-radius: 4px; border: 1px dashed var(--border-color);">图${imgIdx} 缺失</div>`;
+                  return;
+                }
+
+                if (img.isHorror) {
+                  slot.innerHTML = `
+                    <div class="chat-horror-confirm-card" style="margin: 8px 0; padding: 10px 12px; background: var(--secondary-bg); border: 1px dashed var(--border-color); border-radius: 8px; font-size: 12px;">
+                      <div class="horror-prompt-header" style="display: flex; align-items: center; gap: 6px; color: var(--text-primary); font-weight: 600; margin-bottom: 6px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #EF4444;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span>此图可能包含不适内容，是否观看</span>
+                      </div>
+                      <div class="horror-prompt-actions" style="display: flex; gap: 8px;">
+                        <button type="button" class="summary-preset-btn btn-horror-yes" style="padding: 3px 12px; font-size: 11px;">是</button>
+                        <button type="button" class="summary-preset-btn btn-horror-no" style="padding: 3px 12px; font-size: 11px;">否</button>
+                      </div>
+                      <div class="horror-revealed-img" style="display: none; margin-top: 8px;">
+                        <img src="${img.dataUrl}" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;" alt="${img.name || ''}" />
+                        ${img.description ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${img.description}</div>` : ''}
+                      </div>
+                    </div>
+                  `;
+                  const card = slot.querySelector('.chat-horror-confirm-card');
+                  const btnYes = slot.querySelector('.btn-horror-yes');
+                  const btnNo = slot.querySelector('.btn-horror-no');
+                  const revealed = slot.querySelector('.horror-revealed-img');
+                  const promptHeader = slot.querySelector('.horror-prompt-header');
+                  const promptActions = slot.querySelector('.horror-prompt-actions');
+                  if (btnYes) {
+                    btnYes.onclick = (e) => {
+                      e.stopPropagation();
+                      if (promptHeader) promptHeader.style.display = 'none';
+                      if (promptActions) promptActions.style.display = 'none';
+                      if (revealed) revealed.style.display = 'block';
+                    };
+                  }
+                  if (btnNo) {
+                    btnNo.onclick = (e) => {
+                      e.stopPropagation();
+                      card.innerHTML = `<div style="font-size: 11px; color: var(--text-secondary); font-style: italic;">[已选择不查看图${imgIdx}]</div>`;
+                    };
+                  }
+                } else {
+                  slot.innerHTML = `
+                    <div class="chat-module-inline-img-card" style="margin: 8px 0;">
+                      <img src="${img.dataUrl}" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;" alt="${img.name || ''}" />
+                      ${img.description ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${img.description}</div>` : ''}
+                    </div>
+                  `;
+                }
+
+                const imgEl = slot.querySelector('img');
+                if (imgEl) {
+                  imgEl.onclick = (e) => {
+                    e.stopPropagation();
+                    if (typeof openImageViewer === 'function') openImageViewer(img.dataUrl);
+                  };
+                }
+              } catch (err) {
+                console.warn("加载模组插图失败:", err);
+                slot.innerHTML = `<div class="chat-module-missing-img-tag" style="display: inline-block; padding: 2px 6px; font-size: 11px; color: var(--text-secondary); background: var(--secondary-bg); border-radius: 4px; border: 1px dashed var(--border-color);">图${imgIdx} 缺失</div>`;
+              }
+            });
+          }
+
+          const semiBtn = bubble.querySelector('.btn-semi-switch-continue');
+          if (semiBtn) {
+            semiBtn.onclick = async (e) => {
+              e.stopPropagation();
+              const tid = semiBtn.dataset.targetId;
+              const tTitle = semiBtn.dataset.targetTitle;
+              semiBtn.disabled = true;
+              semiBtn.textContent = "已切换";
+              semiBtn.style.opacity = "0.6";
+              if (typeof window.executeChapterSwitch === 'function') {
+                await window.executeChapterSwitch(tid, tTitle, true);
+              }
+            };
+          }
+
           return wrapper;
         }
+
+        window.executeChapterManage = async function(openChapterIds = [], closeChapterIds = [], summary = '', shouldNotify = true) {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat || !chat.activeModuleId) return;
+          const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+          if (!dbInstance) return;
+
+          let currentSelected = (chat.selectedModuleChapterIds || []).slice();
+          const scopeIds = chat.moduleAiScopeChapterIds || [];
+
+          // 关闭指定章节（仅在管辖范围或列表中移除）
+          if (closeChapterIds && closeChapterIds.length > 0) {
+            currentSelected = currentSelected.filter(id => !closeChapterIds.includes(id) && !closeChapterIds.includes(String(id)));
+          }
+
+          // 开启指定章节
+          if (openChapterIds && openChapterIds.length > 0) {
+            for (const oId of openChapterIds) {
+              if (!currentSelected.includes(oId) && !currentSelected.includes(String(oId))) {
+                currentSelected.push(oId);
+              }
+            }
+          }
+
+          chat.selectedModuleChapterIds = currentSelected;
+          delete chat.pendingChapterSwitch;
+          delete chat.pendingChapterManage;
+          await dbInstance.chats.put(chat);
+
+          if (shouldNotify) {
+            let notifyText = summary || '';
+            if (!notifyText) {
+              let allChaps = [];
+              try {
+                allChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
+              } catch (e) {}
+              const openedTitles = allChaps.filter(c => (openChapterIds || []).includes(c.id) || (openChapterIds || []).includes(String(c.id))).map(c => c.title);
+              const closedTitles = allChaps.filter(c => (closeChapterIds || []).includes(c.id) || (closeChapterIds || []).includes(String(c.id))).map(c => c.title);
+              let parts = [];
+              if (openedTitles.length > 0) parts.push(`开启 ${openedTitles.join('、')}`);
+              if (closedTitles.length > 0) parts.push(`关闭 ${closedTitles.join('、')}`);
+              notifyText = parts.length > 0 ? `已更新章节：${parts.join('，')}` : '已更新模组章节';
+            }
+
+            const sysMsg = {
+              id: "msg_" + Date.now(),
+              role: "system",
+              type: "module_switch_notice",
+              content: notifyText,
+              timestamp: Date.now()
+            };
+            chat.history.push(sysMsg);
+            await dbInstance.chats.put(chat);
+            appendMessage(sysMsg, chat);
+            const msgsDiv = document.getElementById("chat-messages");
+            if (msgsDiv) msgsDiv.scrollTop = msgsDiv.scrollHeight;
+          }
+          if (typeof renderChatModulePickerList === 'function') {
+            await renderChatModulePickerList();
+          }
+        };
+
+        window.executeChapterSwitch = async function(targetChapterId, targetChapterTitle, shouldNotify = true) {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat || !chat.activeModuleId) return;
+          const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+          if (!dbInstance) return;
+
+          const scopeIds = chat.moduleAiScopeChapterIds || [];
+          let currentSelected = (chat.selectedModuleChapterIds || []).slice();
+          if (scopeIds.length > 0) {
+            currentSelected = currentSelected.filter(id => !scopeIds.includes(id) && !scopeIds.includes(String(id)));
+          }
+          if (!currentSelected.includes(targetChapterId)) {
+            currentSelected.push(targetChapterId);
+          }
+          chat.selectedModuleChapterIds = currentSelected;
+          delete chat.pendingChapterSwitch;
+          delete chat.pendingChapterManage;
+          await dbInstance.chats.put(chat);
+
+          if (shouldNotify) {
+            const sysMsg = {
+              id: "msg_" + Date.now(),
+              role: "system",
+              type: "module_switch_notice",
+              content: `已进入下一章：${targetChapterTitle || '下一章节'}`,
+              timestamp: Date.now()
+            };
+            chat.history.push(sysMsg);
+            await dbInstance.chats.put(chat);
+            appendMessage(sysMsg, chat);
+            const msgsDiv = document.getElementById("chat-messages");
+            if (msgsDiv) msgsDiv.scrollTop = msgsDiv.scrollHeight;
+          }
+          if (typeof renderChatModulePickerList === 'function') {
+            await renderChatModulePickerList();
+          }
+        };
 
         function prependMessage(msg, chat) {
           const messagesContainer = document.getElementById("chat-messages");
@@ -27586,6 +28274,274 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.formatMessageForContext = formatMessageForContext;
 
+        async function postProcessStatusReply(content, chat, settings) {
+          if (!content || typeof content !== "string") return content;
+          if (!settings || !settings.columns) return content;
+          const cols = settings.columns || [];
+
+          // 1. 提取日期
+          const dateMatch = content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
+          let year = new Date().getFullYear();
+          let month = new Date().getMonth() + 1;
+          let day = new Date().getDate();
+          if (dateMatch) {
+            year = parseInt(dateMatch[1], 10);
+            month = parseInt(dateMatch[2], 10);
+            day = parseInt(dateMatch[3], 10);
+          }
+          const currentDateStr = `${year}年${month}月${day}日`;
+
+          // 2. 检查历史中上一条状态栏的日期与天气
+          let lastStatusDate = null;
+          let lastStatusWeather = null;
+          const history = chat.history || [];
+          for (let i = history.length - 1; i >= 0; i--) {
+            const hMsg = history[i];
+            if (!hMsg || typeof hMsg.content !== "string") continue;
+            const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+年\d+月\d+日)/);
+            const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
+            if (dM && wM) {
+              lastStatusDate = dM[1].trim();
+              lastStatusWeather = wM[1].trim();
+              break;
+            }
+          }
+
+          // 3. 抽取天气或沿用同日天气
+          let drawnWeather = "";
+          if (lastStatusDate && lastStatusDate === currentDateStr && lastStatusWeather) {
+            drawnWeather = lastStatusWeather;
+          } else {
+            const weatherCol = cols.find(c => c.type === "weather");
+            const chosenPoolName = weatherCol?.format || "温带气候";
+            if (typeof window.drawWeatherFromCurrentPool === "function") {
+              const drawn = window.drawWeatherFromCurrentPool(month, chosenPoolName);
+              drawnWeather = drawn ? drawn.name : "晴天";
+            } else {
+              drawnWeather = "晴天";
+            }
+          }
+
+          content = content.replace(/(?:\[?天气\]?)[：:][^\n\r]*/g, `[天气]：${drawnWeather}`);
+
+          // 4. 幸运区间抽取（1d100，只显示区间名称）
+          if (cols.some(c => c.type === "luck")) {
+            const luckIntervals = settings.luckIntervals || [];
+            const roll = Math.floor(Math.random() * 100) + 1;
+            const hit = luckIntervals.find(it => roll >= it.min && roll < it.max) || luckIntervals[0] || { name: "波澜不惊" };
+            content = content.replace(/(?:\[?幸运\]?)[：:][^\n\r]*/g, `[幸运]：${hit.name}`);
+          }
+
+          // 5. 好感度实时联动更新（支持全局多角色匹配）
+          const affRegex = /(?:\[?好感度\]?)[：:]\s*\[?([^\]\s\n\r+=\-]+?)\]?(?:好感度)?\s*([+\-])\s*(\d+)(?:\s*[=＝]\s*(\d+))?/g;
+          let affMatch;
+          let affUpdated = false;
+          if (!chat.settings) chat.settings = {};
+          if (!Array.isArray(chat.settings.affectionList)) chat.settings.affectionList = [];
+
+          while ((affMatch = affRegex.exec(content)) !== null) {
+            const charName = affMatch[1].trim();
+            const sign = affMatch[2];
+            const deltaVal = parseInt(affMatch[3], 10);
+            const finalVal = affMatch[4] ? parseInt(affMatch[4], 10) : null;
+            const delta = (sign === "-") ? -deltaVal : deltaVal;
+
+            let matchedChar = chat.settings.affectionList.find(c => c.name === charName);
+            if (matchedChar) {
+              if (finalVal !== null && !isNaN(finalVal)) {
+                matchedChar.affection = finalVal;
+              } else {
+                matchedChar.affection = Math.max(0, (matchedChar.affection || 50) + delta);
+              }
+              affUpdated = true;
+            }
+          }
+
+          if (affUpdated) {
+            const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+            if (dbInstance) await dbInstance.chats.put(chat);
+            if (typeof window.renderChatAffectionList === "function") {
+              window.renderChatAffectionList();
+            }
+          }
+
+          return content;
+        }
+        window.postProcessStatusReply = postProcessStatusReply;
+
+        async function openChatAffectionModal() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const modal = document.getElementById("chat-affection-modal");
+          if (!modal) return;
+
+          if (!chat.settings) chat.settings = {};
+          if (chat.settings.affectionEnabled === undefined) {
+            chat.settings.affectionEnabled = true;
+          }
+          if (!Array.isArray(chat.settings.affectionList)) {
+            chat.settings.affectionList = [];
+            if (chat.isGroup && Array.isArray(chat.members)) {
+              chat.members.forEach(m => {
+                const name = m.groupNickname || m.originalName || m.name;
+                if (name && m.roleType !== "system_status" && m.roleType !== "dice") {
+                  chat.settings.affectionList.push({ name: name, affection: 50 });
+                }
+              });
+            } else if (!chat.isGroup && chat.roleType !== "system_status" && chat.roleType !== "dice") {
+              chat.settings.affectionList.push({ name: chat.name, affection: (typeof chat.affection === "number" ? chat.affection : 50) });
+            }
+            const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+            if (dbInstance) await dbInstance.chats.put(chat);
+          }
+
+          const toggleEl = document.getElementById("chat-affection-enabled-toggle");
+          if (toggleEl) {
+            toggleEl.checked = !!chat.settings.affectionEnabled;
+            toggleEl.onchange = async () => {
+              chat.settings.affectionEnabled = toggleEl.checked;
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+            };
+          }
+
+          const addBtn = document.getElementById("chat-affection-add-char-btn");
+          if (addBtn) {
+            addBtn.onclick = async () => {
+              const defaultName = `角色${chat.settings.affectionList.length + 1}`;
+              chat.settings.affectionList.push({ name: defaultName, affection: 50 });
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+              renderChatAffectionList();
+            };
+          }
+
+          const importBtn = document.getElementById("chat-affection-import-btn");
+          if (importBtn) {
+            importBtn.onclick = async () => {
+              let namesToAdd = [];
+              if (chat.isGroup && Array.isArray(chat.members)) {
+                chat.members.forEach(m => {
+                  const name = m.groupNickname || m.originalName || m.name;
+                  if (name && m.roleType !== "system_status" && m.roleType !== "dice") {
+                    namesToAdd.push(name);
+                  }
+                });
+              } else {
+                Object.values(state.chats).forEach(c => {
+                  if (!c.isGroup && c.roleType !== "system_status" && c.roleType !== "dice" && c.name) {
+                    namesToAdd.push(c.name);
+                  }
+                });
+              }
+
+              let addedCount = 0;
+              namesToAdd.forEach(n => {
+                if (!chat.settings.affectionList.some(c => c.name === n)) {
+                  chat.settings.affectionList.push({ name: n, affection: 50 });
+                  addedCount++;
+                }
+              });
+
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+              renderChatAffectionList();
+            };
+          }
+
+          const closeBtn = document.getElementById("close-chat-affection-modal-btn");
+          if (closeBtn) closeBtn.onclick = () => modal.classList.remove("visible");
+          const footerCloseBtn = document.getElementById("close-chat-affection-modal-footer-btn");
+          if (footerCloseBtn) footerCloseBtn.onclick = () => modal.classList.remove("visible");
+
+          renderChatAffectionList();
+          modal.classList.add("visible");
+        }
+        window.openChatAffectionModal = openChatAffectionModal;
+
+        function renderChatAffectionList() {
+          const container = document.getElementById("chat-affection-list-container");
+          if (!container || !state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat || !chat.settings) return;
+
+          container.innerHTML = "";
+          const list = chat.settings.affectionList || [];
+
+          if (list.length === 0) {
+            container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 20px 0; background: var(--secondary-bg); border-radius: 8px; border: 1px dashed var(--border-color);">暂无好感度角色，请点击上方添加或导入</div>`;
+            return;
+          }
+
+          list.forEach((item, idx) => {
+            const row = document.createElement("div");
+            row.className = "chat-affection-item";
+
+            row.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                <div class="chat-affection-avatar">
+                  ${(item.name || "角")[0]}
+                </div>
+                <input type="text" class="moe-input aff-name-input" value="${item.name || ''}" placeholder="角色名" style="flex: 1; min-width: 0; height: 28px; font-size: 12px; border-radius: 6px; padding: 2px 8px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-primary);">
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                <button type="button" class="chat-affection-btn-step aff-dec-btn">-</button>
+                <input type="number" class="moe-input aff-val-input" value="${item.affection ?? 50}" style="width: 44px; height: 28px; text-align: center; font-size: 12px; border-radius: 6px; padding: 2px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 600;">
+                <button type="button" class="chat-affection-btn-step aff-inc-btn">+</button>
+                <button type="button" class="chat-affection-btn-step aff-del-btn" style="color: var(--text-secondary); margin-left: 2px;" title="删除">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            `;
+
+            const nameInput = row.querySelector(".aff-name-input");
+            const valInput = row.querySelector(".aff-val-input");
+            const decBtn = row.querySelector(".aff-dec-btn");
+            const incBtn = row.querySelector(".aff-inc-btn");
+            const delBtn = row.querySelector(".aff-del-btn");
+
+            const saveAffection = async () => {
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+            };
+
+            nameInput?.addEventListener("change", async (e) => {
+              item.name = e.target.value.trim();
+              const avatar = row.querySelector(".chat-affection-avatar");
+              if (avatar) avatar.textContent = (item.name || "角")[0];
+              await saveAffection();
+            });
+
+            valInput?.addEventListener("change", async (e) => {
+              item.affection = parseInt(e.target.value, 10) || 0;
+              await saveAffection();
+            });
+
+            decBtn?.addEventListener("click", async () => {
+              item.affection = Math.max(0, (item.affection || 50) - 1);
+              valInput.value = item.affection;
+              await saveAffection();
+            });
+
+            incBtn?.addEventListener("click", async () => {
+              item.affection = (item.affection || 50) + 1;
+              valInput.value = item.affection;
+              await saveAffection();
+            });
+
+            delBtn?.addEventListener("click", async () => {
+              chat.settings.affectionList.splice(idx, 1);
+              await saveAffection();
+              renderChatAffectionList();
+            });
+
+            container.appendChild(row);
+          });
+        }
+        window.renderChatAffectionList = renderChatAffectionList;
+
         async function generateSystemStatusContent(targetObj, groupChat = null) {
           try {
             if (!targetObj) return null;
@@ -27593,197 +28549,155 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const cols = settings.columns || [];
             if (cols.length === 0) return "暂无配置状态栏项目";
 
-            // 1. 幸运：只显示命中的区间名称，不显示数字
-            const luckRoll = Math.floor(Math.random() * 100) + 1;
-            const luckIntervals = settings.luckIntervals || [];
-            const hitLuck = (luckIntervals || []).find(it => luckRoll >= it.min && luckRoll < it.max) || (luckIntervals || [])[0] || { name: "波澜不惊" };
-
-            // 2. 基础时间与日期
+            const chat = groupChat || state.chats[state.activeChatId] || targetObj;
             const now = new Date();
             let dateValues = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
             let timeValues = { hour: String(now.getHours()).padStart(2, '0'), minute: String(now.getMinutes()).padStart(2, '0') };
 
-            // 3. 好感度面板角色登记列表
-            const registeredChars = Object.values(state.chats).filter(c => !c.isGroup && c.roleType !== "system_status" && c.roleType !== "dice");
-            const maxInc = settings.affectionConfig?.maxIncrease ?? 10;
-            const maxDec = settings.affectionConfig?.maxDecrease ?? 10;
-
-            let affectionResult = null;
-            let customSlots = {};
-
-            const hasDate = cols.some(c => c.type === "date");
-            const hasAffection = cols.some(c => c.type === "affection");
-            const customCols = cols.filter(c => c.type !== "weather" && c.type !== "luck" && c.type !== "date" && c.type !== "affection" && c.type !== "time");
-
-            const apiKey = state.apiConfig?.apiKey;
-            const proxyUrl = state.apiConfig?.proxyUrl || "https://api.openai.com";
-            const model = state.apiConfig?.model || "gpt-3.5-turbo";
-
-            const currentHistory = (groupChat ? groupChat.history : targetObj.history) || [];
-
-            // AI 先回传数据（日期、时间、好感度判定与自定义字段）
-            if (apiKey && (hasDate || hasAffection || customCols.length > 0)) {
-              try {
-                const recentHistory = currentHistory.slice(-6).map(m => `${m.senderName || m.name || m.sender || '某人'}: ${m.content}`).join("\n");
-                const charListStr = registeredChars.map(c => `- ${c.name} 当前好感度: ${(typeof c.affection === "number") ? c.affection : 50}`).join("\n");
-                const customColHints = customCols.map(c => `- ${c.label}：${c.note || '结合上下文填写简要词'}`).join("\n");
-                const promptText = `你作为系统状态栏的数据判定器。请结合上文剧情，严格输出纯 JSON 数据。
-【已登记角色列表】:
-${charListStr || "- 无特定角色"}
-【好感度规则】:
-1. 仅当本回合剧情角色产生情感增减时才调整好感度，单次最大增加 +${maxInc}，最大减少 -${maxDec}。
-2. 如果好感度无变化，delta 必须为 0。
-3. character 必须使用上述列表中已登记的角色全名，严禁把角色名写成好感度或其它词。
-【日期规则】:
-1. 只能填入年、月、日的纯数字，如 year: ${dateValues.year}, month: ${dateValues.month}, day: ${dateValues.day}，严禁包含汉字年、月、日，严禁包含标点符号或其它文本。
-【天气铁律】:
-天气完全由系统在后台抽取，AI绝对严禁在任何地方填空、生成、修改或自创天气！
-【幸运】:
-幸运已由系统后台命中【${hitLuck.name}】，AI严禁生成数字。
-${customCols.length > 0 ? `【其他栏目】:\n${customColHints}` : ''}
-
-聊天背景：
-${recentHistory || '无'}
-
-请严格且仅返回如下格式的 JSON 对象，严禁输出任何 markdown 代码块或解释：
-{"date": {"year": ${dateValues.year}, "month": ${dateValues.month}, "day": ${dateValues.day}}, "time": {"hour": "${timeValues.hour}", "minute": "${timeValues.minute}"}, "affection": {"character": "${registeredChars[0]?.name || ''}", "delta": 0}, "customSlots": {}}`;
-
-                let isGemini = proxyUrl === GEMINI_API_URL;
-                let response = null;
-                if (isGemini) {
-                  let geminiConfig = typeof toGeminiRequestData === "function"
-                    ? toGeminiRequestData(model, apiKey, promptText, [{ role: "user", content: "请输出状态栏JSON" }], isGemini)
-                    : null;
-                  if (geminiConfig) {
-                    response = await fetch(geminiConfig.url, geminiConfig.data);
-                  }
-                } else {
-                  response = await fetch(`${proxyUrl}/v1/chat/completions`, {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${apiKey}`,
-                    },
-                    body: JSON.stringify({
-                      model: model,
-                      messages: [{ role: "system", content: promptText }, { role: "user", content: "输出状态栏JSON" }],
-                      temperature: 0.2,
-                      stream: false,
-                    }),
-                  });
-                }
-
-                if (response && response.ok) {
-                  const resData = await response.json();
-                  let rawText = isGemini
-                    ? resData?.candidates?.[0]?.content?.parts?.[0]?.text || ""
-                    : resData?.choices?.[0]?.message?.content || "";
-                  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-                  if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    if (parsed.date) {
-                      const y = parseInt(String(parsed.date.year).replace(/\D/g, ""));
-                      const m = parseInt(String(parsed.date.month).replace(/\D/g, ""));
-                      const d = parseInt(String(parsed.date.day).replace(/\D/g, ""));
-                      if (y && m && d) dateValues = { year: y, month: m, day: d };
-                    }
-                    if (parsed.time && parsed.time.hour) {
-                      timeValues = {
-                        hour: String(parsed.time.hour).replace(/\D/g, "").padStart(2, "0"),
-                        minute: String(parsed.time.minute || "00").replace(/\D/g, "").padStart(2, "0")
-                      };
-                    }
-                    if (parsed.affection && typeof parsed.affection.delta === "number" && parsed.affection.delta !== 0) {
-                      const matchedChar = registeredChars.find(c => c.name === parsed.affection.character);
-                      if (matchedChar && matchedChar.name !== "好感度") {
-                        let clampedDelta = Math.round(parsed.affection.delta);
-                        if (clampedDelta > maxInc) clampedDelta = maxInc;
-                        if (clampedDelta < -maxDec) clampedDelta = -maxDec;
-                        if (clampedDelta !== 0) {
-                          affectionResult = {
-                            character: matchedChar.name,
-                            delta: clampedDelta,
-                            charObj: matchedChar
-                          };
-                        }
-                      }
-                    }
-                    if (parsed.customSlots && typeof parsed.customSlots === "object") {
-                      customSlots = parsed.customSlots;
-                    }
-                  }
-                }
-              } catch (aiErr) {
-                console.warn("系统状态栏 AI 判定退避:", aiErr);
-              }
-            }
-
-            // 4. 天气：系统识别当前日期，日期与上一条状态栏相同时保持一致，否则按季节抽取
-            const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
+            // 检查历史提取最新日期与天气
             let lastStatusDate = null;
             let lastStatusWeather = null;
-
-            for (let i = currentHistory.length - 1; i >= 0; i--) {
-              const hMsg = currentHistory[i];
+            const history = (chat && chat.history) ? chat.history : [];
+            for (let i = history.length - 1; i >= 0; i--) {
+              const hMsg = history[i];
               if (!hMsg || typeof hMsg.content !== "string") continue;
-              const dMatch = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+年\d+月\d+日)/);
-              const wMatch = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
-              if (dMatch && wMatch) {
-                lastStatusDate = dMatch[1].trim();
-                lastStatusWeather = wMatch[1].trim();
+              const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
+              const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
+              if (dM && wM) {
+                lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                lastStatusWeather = wM[1].trim();
+                dateValues.year = parseInt(dM[1], 10);
+                dateValues.month = parseInt(dM[2], 10);
+                dateValues.day = parseInt(dM[3], 10);
                 break;
               }
             }
+            const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
 
-            let drawnWeatherName = "";
+            // 抽取天气
+            const weatherCol = cols.find(c => c.type === "weather");
+            const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
+            let drawnWeatherName = "晴天";
             if (lastStatusDate && lastStatusDate === currentDateStr && lastStatusWeather) {
-              // 日期与上一条相同时，天气保持一致，当天不重复抽取
               drawnWeatherName = lastStatusWeather;
-            } else {
-              const monthNum = parseInt(dateValues.month, 10) || (new Date().getMonth() + 1);
-              const weatherCol = cols.find(c => c.type === "weather");
-              const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
-              if (typeof window.drawWeatherFromCurrentPool === "function") {
-                const drawn = window.drawWeatherFromCurrentPool(monthNum, chosenPoolName);
-                drawnWeatherName = drawn ? drawn.name : "晴天";
-              } else {
-                drawnWeatherName = "晴天";
-              }
+            } else if (typeof window.drawWeatherFromCurrentPool === "function") {
+              const drawn = window.drawWeatherFromCurrentPool(dateValues.month, chosenPoolName);
+              if (drawn) drawnWeatherName = drawn.name;
             }
 
-            // 5. 组装全部栏目，合成一条消息发送
-            let resultLines = [];
-            for (const col of cols) {
-              let label = col.label || "栏目";
-              let fmt = col.format || "*";
+            // 幸运区间抽取（1d100）
+            const luckRoll = Math.floor(Math.random() * 100) + 1;
+            const luckIntervals = settings.luckIntervals || [];
+            const hitLuck = (luckIntervals || []).find(it => luckRoll >= it.min && luckRoll < it.max) || (luckIntervals || [])[0] || { name: "波澜不惊", note: "" };
 
-              if (col.type === "date") {
-                resultLines.push(`${label}：${dateValues.year}年${dateValues.month}月${dateValues.day}日`);
-              } else if (col.type === "time") {
-                resultLines.push(`${label}：${timeValues.hour}:${timeValues.minute}`);
-              } else if (col.type === "weather") {
-                resultLines.push(`${label}：${drawnWeatherName}`);
-              } else if (col.type === "luck") {
-                resultLines.push(`${label}：${hitLuck.name}`);
-              } else if (col.type === "affection") {
-                if (affectionResult && affectionResult.delta !== 0 && affectionResult.charObj) {
-                  const targetChar = affectionResult.charObj;
-                  const oldAff = (typeof targetChar.affection === "number") ? targetChar.affection : 50;
-                  const delta = affectionResult.delta;
-                  const newAff = Math.max(0, oldAff + delta);
-                  targetChar.affection = newAff;
-                  await db.chats.put(targetChar);
+            // 如果配置了 API，调用 AI 生成并根据备注填空
+            let aiGeneratedContent = null;
+            const { proxyUrl, apiKey, model } = state.apiConfig || {};
+            if (apiKey && proxyUrl && model) {
+              try {
+                const persona = targetObj.settings?.aiPersona || targetObj.personality || "你是一个系统状态栏角色，负责记录当前剧情的客观状态。";
+                const columnPrompts = cols.map(c => {
+                  let line = `- 栏目: ${c.label || '栏目'}`;
+                  if (c.type === "date") line += ` | 固定值: ${currentDateStr}`;
+                  else if (c.type === "time") line += ` | 固定值: ${timeValues.hour}:${timeValues.minute}`;
+                  else if (c.type === "weather") line += ` | 固定值: ${drawnWeatherName}`;
+                  else if (c.type === "luck") line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'})`;
+                  else if (c.type === "affection") {
+                    const listStr = (chat.settings?.affectionList || []).map(a => `${a.name}:${a.affection}`).join(", ") || "暂无";
+                    line += ` | 格式: [好感度]：[角色全名]好感度[+/-]*=* (当前好感列表: ${listStr}，若无好感变动则整栏不输出)`;
+                  } else {
+                    line += ` | 格式: ${c.format || '*'} | 备注: ${c.note || '根据当前剧情填空'}`;
+                  }
+                  return line;
+                }).join("\n");
 
-                  const sign = delta > 0 ? `+${delta}` : `${delta}`;
-                  resultLines.push(`${label}：${targetChar.name}好感度${sign}=${newAff}`);
+                const recentHistoryText = (history.slice(-6) || []).map(m => {
+                  const sender = m.name || (m.role === "user" ? "用户" : "NPC");
+                  return `${sender}: ${m.content}`;
+                }).join("\n");
+
+                const prompt = `# 系统状态栏生成任务
+${persona}
+
+## 栏目配置要求
+${columnPrompts}
+
+## 最近剧情上下文
+${recentHistoryText}
+
+## 输出规则
+1. 请根据上述栏目配置要求和剧情进展，生成系统状态栏。
+2. 每行输出一个栏目，格式为：[标签]：填空内容
+3. 对于自定义栏目，请根据对应的格式与备注进行填空。
+4. 仅输出状态栏内容文本，禁止包含任何闲聊、解释或多余标记。`;
+
+                let isGemini = proxyUrl === GEMINI_API_URL;
+                let requestUrl = isGemini
+                  ? `${GEMINI_API_URL}/${model}:generateContent?key=${getRandomValue(apiKey)}`
+                  : `${proxyUrl}/v1/chat/completions`;
+                let requestHeaders = isGemini
+                  ? { "Content-Type": "application/json" }
+                  : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` };
+
+                let requestBody = isGemini
+                  ? {
+                      contents: [{ role: "user", parts: [{ text: prompt }] }],
+                      generationConfig: { temperature: 0.3 }
+                    }
+                  : {
+                      model: model,
+                      messages: [{ role: "user", content: prompt }],
+                      temperature: 0.3,
+                      stream: false
+                    };
+
+                const resp = await fetch(requestUrl, {
+                  method: "POST",
+                  headers: requestHeaders,
+                  body: JSON.stringify(requestBody)
+                });
+
+                if (resp.ok) {
+                  const respData = await resp.json();
+                  const rawText = isGemini
+                    ? respData?.candidates?.[0]?.content?.parts?.[0]?.text
+                    : respData?.choices?.[0]?.message?.content;
+                  if (rawText && rawText.trim()) {
+                    aiGeneratedContent = rawText.trim();
+                  }
                 }
-              } else {
-                let val = customSlots[label] || customSlots[col.id] || fmt;
-                resultLines.push(`${label}：${val}`);
+              } catch (aiErr) {
+                console.warn("调用 AI 生成状态栏异常，使用本地模板回退:", aiErr);
               }
             }
 
-            return resultLines.join("\n");
+            let finalContent = "";
+            if (aiGeneratedContent) {
+              finalContent = aiGeneratedContent;
+            } else {
+              let resultLines = [];
+              for (const col of cols) {
+                let label = col.label || "栏目";
+                let fmt = col.format || "*";
+                if (col.type === "date") {
+                  resultLines.push(`${label}：${currentDateStr}`);
+                } else if (col.type === "time") {
+                  resultLines.push(`${label}：${timeValues.hour}:${timeValues.minute}`);
+                } else if (col.type === "weather") {
+                  resultLines.push(`${label}：${drawnWeatherName}`);
+                } else if (col.type === "luck") {
+                  resultLines.push(`${label}：${hitLuck.name}`);
+                } else if (col.type === "affection") {
+                  // 好感度无变化时不默认输出
+                } else {
+                  resultLines.push(`${label}：${fmt}`);
+                }
+              }
+              finalContent = resultLines.join("\n");
+            }
+
+            finalContent = await postProcessStatusReply(finalContent, chat, settings);
+            return finalContent;
           } catch (err) {
             console.warn("generateSystemStatusContent 异常降级:", err);
             return null;
@@ -27847,9 +28761,13 @@ ${recentHistory || '无'}
             return;
           }
 
-          // 群聊处理：检查群成员中的系统状态栏角色，按触发模式生成状态栏消息
+          // 提取系统状态栏配置（单次API调用并在最顶端渲染）
+          let systemStatusContext = "";
+          let statusColumns = [];
+          let statusSettings = null;
+          let statusMember = null;
           if (chat.isGroup) {
-            const statusMember = (chat.members || []).find(
+            statusMember = (chat.members || []).find(
               (m) => m.roleType === "system_status" || (state.chats[m.id] && state.chats[m.id].roleType === "system_status")
             );
             if (statusMember) {
@@ -27858,30 +28776,76 @@ ${recentHistory || '无'}
               if ((!statusMember.settings || !statusMember.settings.columns) && sourceChat && sourceChat.settings) {
                 statusMember.settings = JSON.parse(JSON.stringify(sourceChat.settings));
               }
-              const triggerMode = statusMember.settings?.triggerMode || statusMember.triggerMode || (sourceChat && sourceChat.settings?.triggerMode) || "always";
-              if (triggerMode === "always" || triggerMode === "default") {
-                const statusContent = await generateSystemStatusContent(statusMember, chat);
-                if (statusContent) {
-                  const statusMsg = {
-                    id: "msg_" + Date.now(),
-                    sender: "ai",
-                    role: "assistant",
-                    senderName: statusMember.groupNickname || statusMember.originalName || "系统状态",
-                    name: statusMember.groupNickname || statusMember.originalName || "系统状态",
-                    avatar: statusMember.avatar || (sourceChat && sourceChat.settings?.aiAvatar) || DEFAULT_STATUS_AVATAR,
-                    content: statusContent,
-                    timestamp: Date.now()
-                  };
-                  if (!chat.history) chat.history = [];
-                  chat.history.push(statusMsg);
-                  await incrementMessageCount(chatId);
-                  await db.chats.put(chat);
-                  if (state.activeChatId === chatId) {
-                    appendMessage(statusMsg, chat);
-                  }
-                  renderChatList();
+              statusSettings = statusMember.settings || {};
+              statusColumns = statusSettings.columns || [];
+            } else if (chat.settings && chat.settings.columns && chat.settings.columns.length > 0) {
+              statusSettings = chat.settings;
+              statusColumns = chat.settings.columns;
+            }
+
+            if (statusColumns.length > 0) {
+              const nowTime = new Date();
+              let dateValues = { year: nowTime.getFullYear(), month: nowTime.getMonth() + 1, day: nowTime.getDate() };
+              let timeValues = { hour: String(nowTime.getHours()).padStart(2, '0'), minute: String(nowTime.getMinutes()).padStart(2, '0') };
+
+              let lastStatusDate = null;
+              let lastStatusWeather = null;
+              const history = chat.history || [];
+              for (let i = history.length - 1; i >= 0; i--) {
+                const hMsg = history[i];
+                if (!hMsg || typeof hMsg.content !== "string") continue;
+                const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
+                const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
+                if (dM && wM) {
+                  lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                  lastStatusWeather = wM[1].trim();
+                  dateValues.year = parseInt(dM[1], 10);
+                  dateValues.month = parseInt(dM[2], 10);
+                  dateValues.day = parseInt(dM[3], 10);
+                  break;
                 }
               }
+              const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
+
+              const weatherCol = statusColumns.find(c => c.type === "weather");
+              const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
+              let drawnWeatherName = "晴天";
+              if (lastStatusDate && lastStatusDate === currentDateStr && lastStatusWeather) {
+                drawnWeatherName = lastStatusWeather;
+              } else if (typeof window.drawWeatherFromCurrentPool === "function") {
+                const drawn = window.drawWeatherFromCurrentPool(dateValues.month, chosenPoolName);
+                if (drawn) drawnWeatherName = drawn.name;
+              }
+
+              const luckRoll = Math.floor(Math.random() * 100) + 1;
+              const luckIntervals = statusSettings.luckIntervals || [];
+              const hitLuck = (luckIntervals || []).find(it => luckRoll >= it.min && luckRoll < it.max) || (luckIntervals || [])[0] || { name: "波澜不惊", note: "" };
+
+              const columnPrompts = statusColumns.map(c => {
+                let line = `- 栏目: ${c.label || '栏目'}`;
+                if (c.type === "date") line += ` | 固定值: ${currentDateStr}`;
+                else if (c.type === "time") line += ` | 固定值: ${timeValues.hour}:${timeValues.minute}`;
+                else if (c.type === "weather") line += ` | 固定值: ${drawnWeatherName}`;
+                else if (c.type === "luck") line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'})`;
+                else if (c.type === "affection") {
+                  const listStr = (chat.settings?.affectionList || []).map(a => `${a.name}:${a.affection}`).join(", ") || "暂无";
+                  line += ` | 格式: [好感度]：[角色全名]好感度[+/-]*=* (当前好感列表: ${listStr}，若无好感变动则整栏不输出)`;
+                } else {
+                  line += ` | 格式: ${c.format || '*'} | 备注: ${c.note || '根据当前剧情填空'}`;
+                }
+                return line;
+              }).join("\n");
+
+              const statusSenderName = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : "系统状态";
+
+              systemStatusContext = `
+# 【系统状态栏生成指令（必须在本次回复的最顶端输出第一条消息）】
+在本次单次回复的 JSON 数组中，【第一条消息】必须是系统状态栏消息，用于在对话最顶端渲染当前状态：
+- 第一条消息格式: {"type": "text", "name": "${statusSenderName}", "content": "状态栏所有栏目内容"}
+- 栏目格式要求（每行输出一个栏目，严格按以下格式输出，自定义栏目根据备注填空）：
+${columnPrompts}
+- 在第一条状态栏消息之后，再继续生成其他群成员角色的正常互动消息。
+`;
             }
 
             const roleplayMembers = (chat.members || []).filter(
@@ -29261,6 +30225,7 @@ ${recentHistory || '无'}
 			${worldBookContent}
 			${moduleChaptersPromptBlock}
 			${thoughtChainPromptBlock}
+			${systemStatusContext}
 			${musicContext}
 			${countdownContext} 
 			${sharedContext}
@@ -29281,7 +30246,7 @@ ${recentHistory || '无'}
                     return { role: "system", content: effectiveContent };
                   }
 
-                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet") return null;
+                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly) return null;
                   if (msg.type === "narrative") {
                     // 将旁白包装成系统指令发送给AI，强调这是剧情/环境描述
                     return {
@@ -29925,7 +30890,7 @@ ${colSpecs.join('\n')}
                     return { role: "system", content: effectiveContent };
                   }
 
-                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet") return null;
+                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly) return null;
 
                   if (msg.role === "assistant") {
                     let assistantMsgObject = { type: msg.type || "text" };
@@ -30406,6 +31371,13 @@ ${colSpecs.join('\n')}
                 Array.isArray(fullResponse.chatResponse)
               ) {
                 messagesArray = fullResponse.chatResponse;
+              } else if (
+                fullResponse.messages &&
+                Array.isArray(fullResponse.messages)
+              ) {
+                messagesArray = fullResponse.messages;
+              } else if (Array.isArray(fullResponse)) {
+                messagesArray = fullResponse;
               }
               if (
                 fullResponse.innerVoice &&
@@ -30497,7 +31469,9 @@ ${colSpecs.join('\n')}
                 delete item.thinking;
               }
 
-              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request") {
+              const isChapterSwitchType = item.type === "suggest_switch_chapter" || item.type === "switch_chapter" || item.type === "suggest_manage_chapters" || item.type === "manage_chapters";
+
+              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType) {
                 continue;
               }
 
@@ -30506,7 +31480,7 @@ ${colSpecs.join('\n')}
 
             messagesArray = filteredMessages;
 
-            // 无论增加多少个项目，确保开头的系统状态栏项目全部合并为单一气泡，禁止拆分
+            // 无论增加多少个项目，确保开头的系统状态栏项目全部合并为单一气泡置于最顶端，并执行好感度与天气后处理
             if (messagesArray && messagesArray.length > 0) {
               if (isStatusBubble(messagesArray[0])) {
                 let statusContents = [];
@@ -30519,9 +31493,13 @@ ${colSpecs.join('\n')}
                     break;
                   }
                 }
-                if (mergeCount > 1) {
-                  const mergedText = statusContents.join("\n");
+                if (mergeCount > 0) {
+                  let mergedText = statusContents.join("\n");
+                  mergedText = await postProcessStatusReply(mergedText, chat, statusSettings || chat.settings);
                   const firstMsg = { ...messagesArray[0] };
+                  if (statusMember) {
+                    firstMsg.name = statusMember.groupNickname || statusMember.originalName || "系统状态";
+                  }
                   if (firstMsg.content !== undefined) firstMsg.content = mergedText;
                   if (firstMsg.message !== undefined) firstMsg.message = mergedText;
                   messagesArray.splice(0, mergeCount, firstMsg);
@@ -30738,6 +31716,97 @@ ${colSpecs.join('\n')}
               }
 
               switch (msgData.type) {
+                case "suggest_switch_chapter": {
+                  const targetId = msgData.nextChapterId || msgData.chapterId;
+                  const targetTitle = msgData.nextChapterTitle || msgData.chapterTitle || "下一章";
+                  if (targetId && chat) {
+                    chat.pendingChapterSwitch = { nextChapterId: targetId, nextChapterTitle: targetTitle };
+                    const cardMsg = {
+                      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                      role: "system",
+                      type: "module_semi_switch_card",
+                      content: msgData.summary || "本章已带完，是否切换下一章？",
+                      pendingData: {
+                        nextChapterId: targetId,
+                        nextChapterTitle: targetTitle
+                      },
+                      timestamp: messageTimestamp++
+                    };
+                    chat.history.push(cardMsg);
+                    await db.chats.put(chat);
+                    if (isViewingThisChat) {
+                      appendMessage(cardMsg, chat);
+                    }
+                  }
+                  continue;
+                }
+                case "switch_chapter": {
+                  const targetId = msgData.nextChapterId || msgData.chapterId;
+                  const targetTitle = msgData.nextChapterTitle || msgData.chapterTitle || "下一章";
+                  if (targetId && chat && chat.activeModuleId) {
+                    setTimeout(async () => {
+                      if (typeof window.executeChapterSwitch === 'function') {
+                        await window.executeChapterSwitch(targetId, targetTitle, true);
+                      }
+                    }, 50);
+                  }
+                  continue;
+                }
+                case "suggest_manage_chapters": {
+                  if (chat) {
+                    const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                    let openTitles = msgData.openChapterTitles || [];
+                    let closeTitles = msgData.closeChapterTitles || [];
+                    if ((!openTitles.length || !closeTitles.length) && dbInstance && dbInstance.moduleChapters && chat.activeModuleId) {
+                      try {
+                        const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
+                        if (!openTitles.length && msgData.openChapterIds) {
+                          openTitles = allChaps.filter(c => (msgData.openChapterIds || []).includes(c.id) || (msgData.openChapterIds || []).includes(String(c.id))).map(c => c.title);
+                        }
+                        if (!closeTitles.length && msgData.closeChapterIds) {
+                          closeTitles = allChaps.filter(c => (msgData.closeChapterIds || []).includes(c.id) || (msgData.closeChapterIds || []).includes(String(c.id))).map(c => c.title);
+                        }
+                      } catch (e) {}
+                    }
+                    chat.pendingChapterManage = {
+                      openChapterIds: msgData.openChapterIds || [],
+                      closeChapterIds: msgData.closeChapterIds || [],
+                      openChapterTitles: openTitles,
+                      closeChapterTitles: closeTitles,
+                      summary: msgData.summary || "本章已带完，是否切换下一章？"
+                    };
+                    const cardMsg = {
+                      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                      role: "system",
+                      type: "module_semi_switch_card",
+                      content: msgData.summary || "本章已带完，是否切换下一章？",
+                      pendingData: {
+                        openChapterIds: msgData.openChapterIds || [],
+                        closeChapterIds: msgData.closeChapterIds || [],
+                        openChapterTitles: openTitles,
+                        closeChapterTitles: closeTitles,
+                        summary: msgData.summary || "本章已带完，是否切换下一章？"
+                      },
+                      timestamp: messageTimestamp++
+                    };
+                    chat.history.push(cardMsg);
+                    await db.chats.put(chat);
+                    if (isViewingThisChat) {
+                      appendMessage(cardMsg, chat);
+                    }
+                  }
+                  continue;
+                }
+                case "manage_chapters": {
+                  if (chat && chat.activeModuleId) {
+                    setTimeout(async () => {
+                      if (typeof window.executeChapterManage === 'function') {
+                        await window.executeChapterManage(msgData.openChapterIds || [], msgData.closeChapterIds || [], msgData.summary || '', true);
+                      }
+                    }, 50);
+                  }
+                  continue;
+                }
                 case "sticker": {
                   // 这是为群聊设计的表情包逻辑
                   const stickerName = msgData.sticker_name;
@@ -43939,64 +45008,36 @@ ${colSpecs.join('\n')}
             .classList.remove("visible");
         }
 
-        // “一键重roll”功能核心代码
-
-        /**
-         * 智能查找AI上一轮回复的所有消息
-         * @param {Array} history - 完整的聊天历史记录
-         * @returns {Array} - 一个包含了上一轮AI所有消息对象的数组
-         */
-        function findLastAiTurnMessages(history) {
-          const turnMessages = [];
-          let lastMessageIndex = history.length - 1;
-
-          // 从最后一条消息开始，向前查找
-          for (let i = lastMessageIndex; i >= 0; i--) {
-            const message = history[i];
-
-            // 如果是AI的消息，就把它加入我们的“待删除列表”
-            if (message.role === "assistant") {
-              turnMessages.unshift(message); // 使用 unshift 保持原始顺序
-            }
-            // 一旦遇到非AI的消息（用户的或系统的），说明AI的这一轮回复已经结束了，立刻停止查找
-            else {
-              break;
-            }
-          }
-          return turnMessages;
-        }
-
-        /**
-         * “重roll”按钮被点击时的主处理函数
-         */
+        // 重新生成功能核心代码
         async function handleRerollClick() {
           if (!state.activeChatId) return;
           const chat = state.chats[state.activeChatId];
+          if (!chat || !chat.history || chat.history.length === 0) return;
 
-          // 1. 调用我们的智能查找函数，找出需要删除的消息
-          const messagesToReroll = findLastAiTurnMessages(chat.history);
-
-          // 2. 如果没找到（比如最后一条是用户发的），就提示并退出
-          if (messagesToReroll.length === 0) {
-            alert("请在AI回复后使用此功能。");
-            return;
+          // 1. 查找玩家最后一条消息的位置
+          let lastUserIndex = -1;
+          for (let i = chat.history.length - 1; i >= 0; i--) {
+            if (chat.history[i].role === "user") {
+              lastUserIndex = i;
+              break;
+            }
           }
 
-          // 3. 从聊天记录中过滤掉这些旧消息
-          const timestampsToReroll = new Set(
-            messagesToReroll.map((m) => m.timestamp),
-          );
-          chat.history = chat.history.filter(
-            (msg) => !timestampsToReroll.has(msg.timestamp),
-          );
+          // 2. 将玩家最后一次回复之后的所有内容全部删除
+          if (lastUserIndex !== -1) {
+            chat.history = chat.history.slice(0, lastUserIndex + 1);
+          } else {
+            // 如果玩家尚未发言过，保留首条开场白，清除后续内容
+            chat.history = chat.history.slice(0, 1);
+          }
 
-          // 4. 保存更新后的聊天记录到数据库
+          // 3. 保存更新后的聊天记录到数据库
           await db.chats.put(chat);
 
-          // 5. 刷新聊天界面，让旧消息瞬间消失
+          // 4. 刷新聊天界面，消除被删除的消息
           renderChatInterface(state.activeChatId);
 
-          // 6. 触发一次新的AI响应，就像用户点击了“等待回复”一样
+          // 5. 再次请求 API 生成最新回复
           triggerAiResponse();
         }
 
@@ -50256,6 +51297,15 @@ ${colSpecs.join('\n')}
             .replace(/'/g, "&#039;");
         }
 
+        function formatDebugDisplay(data) {
+          if (data === null || data === undefined) return "无";
+          let str = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+          try {
+            str = str.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "  ");
+          } catch (e) {}
+          return escapeDebugHtml(str);
+        }
+
         function recordChatDebugLog(chatId, sentPayload, receivedPayload) {
           if (!state.chatDebugLogs) state.chatDebugLogs = {};
           if (!state.chatDebugLogs[chatId]) state.chatDebugLogs[chatId] = [];
@@ -50333,7 +51383,7 @@ ${colSpecs.join('\n')}
                       <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
                         系统提示词
                       </summary>
-                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(cleanedSent?.systemPrompt || "无")}</pre>
+                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${formatDebugDisplay(cleanedSent?.systemPrompt || "无")}</pre>
                     </details>
                     <details style="background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color);">
                       <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
@@ -50345,7 +51395,7 @@ ${colSpecs.join('\n')}
                             <summary style="padding: 4px 6px; font-size: 11px; color: var(--text-primary); cursor: pointer;">
                               第 ${mIdx + 1} 条 · ${m.role || "消息"}
                             </summary>
-                            <pre style="margin: 0; padding: 6px; font-size: 10px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(JSON.stringify(m, null, 2))}</pre>
+                            <pre style="margin: 0; padding: 6px; font-size: 10px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; border-top: 1px dashed var(--border-color);">${formatDebugDisplay(m)}</pre>
                           </details>
                         `).join("")}
                       </div>
@@ -50354,7 +51404,7 @@ ${colSpecs.join('\n')}
                       <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
                         完整发送载荷
                       </summary>
-                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(JSON.stringify(cleanedSent, null, 2))}</pre>
+                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${formatDebugDisplay(cleanedSent)}</pre>
                     </details>
                   </div>
                 </details>
@@ -50369,13 +51419,13 @@ ${colSpecs.join('\n')}
                       <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
                         AI回复内容
                       </summary>
-                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(cleanedReceived?.rawContent || "无")}</pre>
+                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${formatDebugDisplay(cleanedReceived?.rawContent || "无")}</pre>
                     </details>
                     <details style="background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color);">
                       <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
                         接口完整返回
                       </summary>
-                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(JSON.stringify(cleanedReceived?.fullData || {}, null, 2))}</pre>
+                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${formatDebugDisplay(cleanedReceived?.fullData || {})}</pre>
                     </details>
                   </div>
                 </details>
@@ -61210,10 +62260,13 @@ ${colSpecs.join('\n')}
               itemDiv.className = "status-col-item";
               itemDiv.style.cssText = "display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;";
 
-              const isPreset = (col.type && col.type !== "general");
               const isWeather = (col.type === "weather");
               const isAffection = (col.type === "affection");
               const isLuck = (col.type === "luck");
+              const isDate = (col.type === "date");
+              const isTime = (col.type === "time");
+              const isFormatFixed = (isDate || isTime || isWeather || isLuck || isAffection);
+              const isLabelFixed = isWeather;
 
               let rightControlHtml = "";
               if (isWeather) {
@@ -61227,7 +62280,7 @@ ${colSpecs.join('\n')}
                 `;
               } else {
                 rightControlHtml = `
-                  <input type="text" class="moe-input col-format-input" value="${col.format || ''}" placeholder="格式" ${isPreset ? 'readonly' : ''} style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary); ${isPreset ? 'cursor: not-allowed;' : ''}">
+                  <input type="text" class="moe-input col-format-input" value="${col.format || ''}" placeholder="格式" ${isFormatFixed ? 'readonly' : ''} style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary); ${isFormatFixed ? 'cursor: not-allowed;' : ''}">
                 `;
               }
 
@@ -61250,7 +62303,12 @@ ${colSpecs.join('\n')}
                   <div style="margin-top: 2px; display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                       <span style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">幸运区间设置 1d100</span>
-                      <button type="button" class="col-add-luck-btn" style="${circleBtnCss}">+</button>
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <button type="button" class="col-toggle-luck-btn" style="${circleBtnCss}" title="折叠">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M6 15l6-6 6 6z"/></svg>
+                        </button>
+                        <button type="button" class="col-add-luck-btn" style="${circleBtnCss}" title="添加">+</button>
+                      </div>
                     </div>
                     <div class="col-luck-intervals-container" style="display: flex; flex-direction: column; gap: 6px;"></div>
                   </div>
@@ -61259,7 +62317,7 @@ ${colSpecs.join('\n')}
 
               itemDiv.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
-                  <input type="text" class="moe-input col-label-input" value="${col.label || ''}" placeholder="标签" ${isPreset ? 'readonly' : ''} style="width: 76px; min-width: 76px; max-width: 76px; height: 34px; box-sizing: border-box; flex-shrink: 0; padding: 6px 4px; text-align: center; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); ${isPreset ? 'cursor: not-allowed;' : ''}">
+                  <input type="text" class="moe-input col-label-input" value="${col.label || ''}" placeholder="标签" ${isLabelFixed ? 'readonly' : ''} style="width: 76px; min-width: 76px; max-width: 76px; height: 34px; box-sizing: border-box; flex-shrink: 0; padding: 6px 4px; text-align: center; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); ${isLabelFixed ? 'cursor: not-allowed;' : ''}">
                   <span style="color: var(--text-secondary); font-weight: bold; flex-shrink: 0;">:</span>
                   ${rightControlHtml}
                   <button type="button" class="col-up-btn" style="${circleBtnCss}" title="上移">
@@ -61314,10 +62372,12 @@ ${colSpecs.join('\n')}
                 renderSystemStatusColumnsList(targetObj, containerId);
               });
 
-              if (!isPreset) {
+              if (!isLabelFixed) {
                 itemDiv.querySelector(".col-label-input")?.addEventListener("input", (e) => {
                   targetObj.settings.columns[index].label = e.target.value;
                 });
+              }
+              if (!isFormatFixed) {
                 itemDiv.querySelector(".col-format-input")?.addEventListener("input", (e) => {
                   targetObj.settings.columns[index].format = e.target.value;
                 });
@@ -61350,7 +62410,22 @@ ${colSpecs.join('\n')}
               if (isLuck) {
                 const luckContainer = itemDiv.querySelector(".col-luck-intervals-container");
                 const addLuckBtn = itemDiv.querySelector(".col-add-luck-btn");
+                const toggleLuckBtn = itemDiv.querySelector(".col-toggle-luck-btn");
                 if (!targetObj.settings.luckIntervals) targetObj.settings.luckIntervals = [];
+
+                let isLuckCollapsed = false;
+                toggleLuckBtn?.addEventListener("click", () => {
+                  isLuckCollapsed = !isLuckCollapsed;
+                  if (isLuckCollapsed) {
+                    if (luckContainer) luckContainer.style.display = "none";
+                    toggleLuckBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M6 9l6 6 6-6z"/></svg>`;
+                    toggleLuckBtn.title = "展开";
+                  } else {
+                    if (luckContainer) luckContainer.style.display = "flex";
+                    toggleLuckBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M6 15l6-6 6 6z"/></svg>`;
+                    toggleLuckBtn.title = "折叠";
+                  }
+                });
 
                 function renderLuckSubList() {
                   if (!luckContainer) return;
@@ -61652,6 +62727,21 @@ ${colSpecs.join('\n')}
               if (!content || !state.activeChatId) return;
 
               const chat = state.chats[state.activeChatId];
+
+              // 挂起换章触发逻辑（半自动模式）
+              if (chat && (content.includes("继续") || content.includes("进入下一章") || content.includes("睡觉") || content.includes("到第二天") || content.includes("下一站") || content.includes("推进"))) {
+                if (chat.pendingChapterManage) {
+                  const pM = chat.pendingChapterManage;
+                  if (typeof window.executeChapterManage === 'function') {
+                    window.executeChapterManage(pM.openChapterIds || [], pM.closeChapterIds || [], '', true);
+                  }
+                } else if (chat.pendingChapterSwitch) {
+                  const pending = chat.pendingChapterSwitch;
+                  if (typeof window.executeChapterSwitch === 'function') {
+                    window.executeChapterSwitch(pending.nextChapterId, pending.nextChapterTitle, true);
+                  }
+                }
+              }
 
               // 旁白拦截逻辑
               // 检查是否以 <旁白> 开头

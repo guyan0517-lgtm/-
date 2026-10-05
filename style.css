@@ -31908,6 +31908,92 @@ select.gender-select-box {
   cursor: pointer !important;
 }
 
+/* 好感度面板美化样式 */
+#chat-affection-modal .modal-content {
+  max-width: 340px !important;
+  border-radius: 16px !important;
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
+  padding: 16px !important;
+}
+
+.chat-affection-top-btn {
+  flex: 1 !important;
+  height: 32px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border-color) !important;
+  background-color: var(--secondary-bg) !important;
+  color: var(--text-primary) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  transition: all 0.18s ease !important;
+}
+
+.chat-affection-top-btn:hover {
+  background-color: var(--card-bg) !important;
+  border-color: var(--accent-color) !important;
+  color: var(--accent-color) !important;
+}
+
+.chat-affection-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 10px !important;
+  background-color: var(--secondary-bg) !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--border-color) !important;
+  gap: 8px !important;
+  transition: all 0.15s ease !important;
+}
+
+.chat-affection-item:hover {
+  border-color: var(--accent-color) !important;
+}
+
+.chat-affection-avatar {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+  background-color: var(--accent-color) !important;
+  color: #FFFFFF !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  flex-shrink: 0 !important;
+}
+
+.chat-affection-btn-step {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--border-color) !important;
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  transition: all 0.15s ease !important;
+}
+
+.chat-affection-btn-step:hover {
+  border-color: var(--accent-color) !important;
+  color: var(--accent-color) !important;
+}
+
+
 
 
 

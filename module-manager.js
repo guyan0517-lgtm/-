@@ -2085,6 +2085,7 @@ JSON 格式如下：
 8. imageAnalysis 必须逐一甄别所有提取插图：
    - shouldInclude: 布尔值。若为纯文本页面扫描、无意义分隔线条、重复花边、装饰图标则设为 false；若为有意义的立绘、地图、手迹、怪物图、CG则设为 true。
    - isSensitive: 布尔值。若为后期决战、幕后黑手真相、神话生物真面目、隐藏密室等核心剧透，设为 true；若为公开世界观地图、已知NPC立绘、开局已知信息则设为 false。
+   - isHorror: 布尔值。对恐怖元素极度敏感（低判定阈值）：包含半人半骨骼、骷髅、尸体血迹、怪物触手、异形异变、夜晚昏暗阴森场景、诡异压抑画面、心理恐怖氛围等不论真恐怖还是心理恐怖，一律判定为 true；常规明亮普通立绘或正常地图设为 false。
    - name: 精炼插图名称。
    - description: 图像视觉内容描述。
    - annotation: 针对守秘人带团与插图场景用途的精炼中文注释。`;
@@ -2163,6 +2164,7 @@ JSON 格式如下：
                     if (assess) {
                       if (assess.shouldInclude === false || assess.isUseful === false) return;
                       if (typeof assess.isSensitive === 'boolean') img.isSensitive = assess.isSensitive;
+                      if (typeof assess.isHorror === 'boolean') img.isHorror = assess.isHorror;
                       if (assess.name) img.name = assess.name;
                       if (assess.description) img.description = assess.description;
                       if (assess.annotation) img.annotation = assess.annotation;
