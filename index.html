@@ -2583,6 +2583,7 @@
               id="open-sticker-panel-btn"
               class="chat-action-icon-btn action-button"
               title="表情面板"
+              onclick="if(typeof renderStickerPanel==='function'){renderStickerPanel();const sp=document.getElementById('sticker-panel');if(sp)sp.classList.add('visible');}"
             >
               <svg
                 width="24"
@@ -2601,7 +2602,7 @@
             </button>
 
             <!-- “重新生成回复”按钮的新家 -->
-            <button id="reroll-btn" class="action-button" title="重新生成回复">
+            <button id="reroll-btn" class="action-button" title="重新生成回复" onclick="if(typeof handleRerollClick==='function')handleRerollClick();">
               <svg
                 width="24"
                 height="24"
@@ -2892,6 +2893,7 @@
               id="timeline-branch-btn"
               class="chat-action-icon-btn action-button"
               title="时间轴/存档"
+              onclick="if(typeof openBranchingModal==='function')openBranchingModal();"
             >
               <svg
                 width="24"
@@ -2918,6 +2920,7 @@
               id="open-tarot-btn"
               class="chat-action-icon-btn action-button"
               title="塔罗占卜"
+              onclick="if(typeof openTarotModal==='function')openTarotModal();"
             >
               <svg
                 width="24"
@@ -6421,10 +6424,10 @@
                 ></textarea>
               </div>
               <div class="moe-btn-group">
-                <button id="view-summaries-btn" class="moe-btn-secondary">
+                <button id="view-summaries-btn" class="moe-btn-secondary" onclick="if(typeof openSummaryViewer==='function')openSummaryViewer();">
                   查看/管理总结
                 </button>
-                <button id="manual-summary-btn" class="moe-btn-secondary">
+                <button id="manual-summary-btn" class="moe-btn-secondary" onclick="if(typeof handleManualSummary==='function')handleManualSummary(event);else if(typeof openManualSummaryOptions==='function'){const sm=document.getElementById('chat-settings-modal');if(sm)sm.classList.remove('visible');openManualSummaryOptions();}">
                   立即手动总结
                 </button>
               </div>
@@ -55005,14 +55008,13 @@ ${colSpecs.join('\n')}
             }
           } else if (mode === "custom") {
             const imgFile =
-              document.getElementById("aurora-custom-img").files[0];
+              document.getElementById("aurora-custom-img")?.files?.[0];
             const audioFile = document.getElementById("aurora-custom-audio")
-              .files[0];
+              ?.files?.[0];
             const subFile = document.getElementById("aurora-sub-file-custom")
-              .files[0];
-            const subUrl = document
-              .getElementById("aurora-sub-url-custom")
-              .value.trim();
+              ?.files?.[0];
+            const subUrlEl = document.getElementById("aurora-sub-url-custom");
+            const subUrl = subUrlEl ? subUrlEl.value.trim() : "";
 
             if (!imgFile || !audioFile) {
               alert("图片和音频文件都是必填的哦！");
@@ -63592,29 +63594,27 @@ ${colSpecs.join('\n')}
           }
 
           // 约定/倒计时功能事件绑定
-          document
-            .getElementById("add-countdown-btn")
-            .addEventListener("click", () => {
-              document
-                .getElementById("create-countdown-modal")
-                .classList.add("visible");
+          const addCountdownBtn = document.getElementById("add-countdown-btn");
+          if (addCountdownBtn) {
+            addCountdownBtn.addEventListener("click", () => {
+              const modal = document.getElementById("create-countdown-modal");
+              if (modal) modal.classList.add("visible");
             });
-          document
-            .getElementById("cancel-create-countdown-btn")
-            .addEventListener("click", () => {
-              document
-                .getElementById("create-countdown-modal")
-                .classList.remove("visible");
+          }
+          const cancelCreateCountdownBtn = document.getElementById("cancel-create-countdown-btn");
+          if (cancelCreateCountdownBtn) {
+            cancelCreateCountdownBtn.addEventListener("click", () => {
+              const modal = document.getElementById("create-countdown-modal");
+              if (modal) modal.classList.remove("visible");
             });
-          document
-            .getElementById("confirm-create-countdown-btn")
-            .addEventListener("click", async () => {
-              const title = document
-                .getElementById("countdown-title-input")
-                .value.trim();
-              const dateValue = document.getElementById(
-                "countdown-date-input",
-              ).value;
+          }
+          const confirmCreateCountdownBtn = document.getElementById("confirm-create-countdown-btn");
+          if (confirmCreateCountdownBtn) {
+            confirmCreateCountdownBtn.addEventListener("click", async () => {
+              const titleEl = document.getElementById("countdown-title-input");
+              const title = titleEl ? titleEl.value.trim() : "";
+              const dateEl = document.getElementById("countdown-date-input");
+              const dateValue = dateEl ? dateEl.value : "";
 
               if (!title || !dateValue) {
                 alert("请填写完整的约定标题和日期！");
@@ -63637,11 +63637,13 @@ ${colSpecs.join('\n')}
               };
 
               await db.memories.add(newCountdown);
-              document
-                .getElementById("create-countdown-modal")
-                .classList.remove("visible");
-              renderMemoriesScreen();
+              const modal = document.getElementById("create-countdown-modal");
+              if (modal) modal.classList.remove("visible");
+              if (typeof renderMemoriesScreen === "function") {
+                renderMemoriesScreen();
+              }
             });
+          }
 
           // 拉黑功能事件绑定
           document
