@@ -618,10 +618,69 @@
     },
 
     countWords(text) {
+      if (typeof window !== 'undefined' && typeof window.calculateTokenCount === 'function') {
+        return window.calculateTokenCount(text);
+      }
       if (!text) return 0;
-      const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
-      const englishWords = (text.replace(/[\u4e00-\u9fa5]/g, ' ').match(/[a-zA-Z0-9_-]+/g) || []).length;
-      return chineseChars + englishWords;
+      if (typeof text !== 'string') {
+        try { text = JSON.stringify(text); } catch (e) { return 0; }
+      }
+      const base64ImgRegex = /data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g;
+      const imgMatches = text.match(base64ImgRegex);
+      if (imgMatches && imgMatches.length > 0) {
+        const textWithoutImages = text.replace(base64ImgRegex, "");
+        return textWithoutImages.length + (imgMatches.length * 258);
+      }
+      return text.length;
+    },
+
+    getTocWordCount(mod, chapters = []) {
+      let tocStr = "## 模组总目录与章节导航\n";
+      if (mod && Array.isArray(mod.toc) && mod.toc.length > 0) {
+        mod.toc.forEach((item, idx) => {
+          const tTitle = typeof item === 'string' ? item : (item.title || item.name || `第${idx + 1}节`);
+          tocStr += `${idx + 1}. ${tTitle}\n`;
+        });
+      } else if (chapters && chapters.length > 0) {
+        chapters.forEach((c, idx) => {
+          tocStr += `${idx + 1}. ${c.title || ''} 【${c.category || '正文'}】\n`;
+        });
+      }
+      return this.countWords(tocStr);
+    },
+
+    getMapWordCount(mod, chapters = []) {
+      let mapStr = "";
+      if (mod && Array.isArray(mod.mapNodes) && mod.mapNodes.length > 0) {
+        mod.mapNodes.forEach(node => {
+          mapStr += `${node.name || ''} ${node.desc || node.description || ''}\n`;
+        });
+      } else if (chapters && chapters.length > 0) {
+        chapters.forEach((c) => {
+          const title = c.title || '';
+          const content = c.content || '';
+          const isLocation = title.includes('地点') || (c.category && c.category.includes('地点')) || title.includes('室') || title.includes('馆') || title.includes('店') || title.includes('街') || title.includes('厅') || title.includes('屋') || title.includes('岛') || title.includes('洞') || title.includes('楼') || title.includes('山') || title.includes('村');
+          if (isLocation || (content.includes('【场景】') || content.includes('【地点】'))) {
+            const cleanDesc = content.replace(/【[^】]+】/g, ' ').replace(/\n+/g, ' ').trim().substring(0, 180);
+            mapStr += `${title} ${cleanDesc}\n`;
+          }
+        });
+      }
+      return mapStr ? this.countWords(mapStr) : 0;
+    },
+
+    getImagesWordCount(mod, images = []) {
+      let imgStr = "";
+      if (Array.isArray(images) && images.length > 0) {
+        images.forEach(img => {
+          const name = img.name || '';
+          const desc = img.annotation || img.description || img.desc || img.summary || img.placement || '';
+          if (name || desc) {
+            imgStr += `${name} ${desc}\n`;
+          }
+        });
+      }
+      return imgStr ? this.countWords(imgStr) : 0;
     },
 
     async parseTxtFile(file) {
@@ -1658,15 +1717,22 @@
     },
 
     async callAI(systemPrompt, userPrompt) {
-      const stateObj = global.state || {};
-      const apiConfig = stateObj.apiConfig;
+      const stateObj = global.state || (typeof window !== 'undefined' ? window.state : {}) || {};
+      const apiCfg = (typeof global.getEffectiveApiConfig === 'function')
+        ? global.getEffectiveApiConfig('module')
+        : ((typeof window !== 'undefined' && typeof window.getEffectiveApiConfig === 'function')
+            ? window.getEffectiveApiConfig('module')
+            : (stateObj.apiConfig || {}));
 
-      if (!apiConfig || !apiConfig.apiKey) {
+      const proxyUrl = apiCfg.proxyUrl || stateObj.apiConfig?.proxyUrl || "https://api.openai.com";
+      const apiKey = apiCfg.apiKey || stateObj.apiConfig?.apiKey || "";
+      const model = apiCfg.model || stateObj.apiConfig?.model || "gpt-3.5-turbo";
+      const temperature = apiCfg.temperature !== undefined ? apiCfg.temperature : (stateObj.apiConfig?.temperature || 0.2);
+
+      if (!apiKey) {
         console.warn('[模组] 未配置 API Key');
-        throw new Error('未检测到 API Key，请先在聊天设置中配置有效 API 密钥与模型');
+        throw new Error('未检测到 API Key，请先在API设置中配置主 API 密钥与模型');
       }
-
-      const { proxyUrl, apiKey, model, temperature } = apiConfig;
       const GEMINI_URL = global.GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models';
       const isGemini = proxyUrl === GEMINI_URL;
 
@@ -3659,12 +3725,23 @@ ${chap.content}
       this.activeDetailModule = mod;
       const chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
 
-      // 动态计算并同步所有章节的真实字数与总字数
-      const realTotalWords = chapters.reduce((sum, c) => {
-        const cWords = c.wordCount || (c.content ? c.content.length : 0);
+      // 动态计算并同步所有章节的真实字数与总字数（含目录字数、地图字数、图片简介字数）
+      let chapsTotalWords = 0;
+      chapters.forEach(c => {
+        const cWords = this.countWords(c.content || '');
         c.wordCount = cWords;
-        return sum + cWords;
-      }, 0);
+        chapsTotalWords += cWords;
+      });
+      let images = [];
+      if (database && database.moduleImages) {
+        try {
+          images = await database.moduleImages.where('moduleId').equals(moduleId).toArray();
+        } catch (e) {}
+      }
+      const tocWords = this.getTocWordCount(mod, chapters);
+      const mapWords = this.getMapWordCount(mod, chapters);
+      const imgWords = this.getImagesWordCount(mod, images);
+      const realTotalWords = chapsTotalWords + tocWords + mapWords + imgWords;
       mod.wordCount = realTotalWords;
       mod.chapterCount = chapters.length;
 
@@ -3865,9 +3942,11 @@ ${chap.content}
           const row = document.createElement('div');
           row.className = 'mod-chapter-item-row';
           const cleanTitle = this.cleanChapterTitle(chapter.title, this.activeDetailModule?.name);
+          const cWords = this.countWords(chapter.content || '');
+          chapter.wordCount = cWords;
           row.innerHTML = `
             <span class="mod-chapter-name">${cleanTitle}</span>
-            <span class="mod-chapter-words">${chapter.wordCount || 0} 字</span>
+            <span class="mod-chapter-words">${cWords} 字</span>
           `;
 
           row.addEventListener('click', () => {
@@ -4548,7 +4627,22 @@ ${imageList}
             await db.moduleChapters.put(currentChap);
             if (this.activeDetailModule) {
               const allChaps = await db.moduleChapters.where('moduleId').equals(this.activeDetailModule.id).toArray();
-              const totalWords = allChaps.reduce((sum, c) => sum + (c.wordCount || 0), 0);
+              let allImages = [];
+              if (db.moduleImages) {
+                try {
+                  allImages = await db.moduleImages.where('moduleId').equals(this.activeDetailModule.id).toArray();
+                } catch (e) {}
+              }
+              let allChapsWords = 0;
+              allChaps.forEach(c => {
+                const cWords = this.countWords(c.content || '');
+                c.wordCount = cWords;
+                allChapsWords += cWords;
+              });
+              const tocWords = this.getTocWordCount(this.activeDetailModule, allChaps);
+              const mapWords = this.getMapWordCount(this.activeDetailModule, allChaps);
+              const imgWords = this.getImagesWordCount(this.activeDetailModule, allImages);
+              const totalWords = allChapsWords + tocWords + mapWords + imgWords;
               this.activeDetailModule.wordCount = totalWords;
               await db.modules.update(this.activeDetailModule.id, { wordCount: totalWords });
             }
@@ -4614,11 +4708,35 @@ ${imageList}
 
       const chaptersToSave = this.cutChapters.map(chap => ({
         ...chap,
-        wordCount: chap.wordCount || this.countWords(chap.content) || 0,
+        wordCount: this.countWords(chap.content || ''),
         moduleId: moduleId
       }));
 
-      const realTotalWords = chaptersToSave.reduce((sum, c) => sum + (c.wordCount || 0), 0);
+      const imagesToSave = (this.currentParsedData?.images || []).map(img => ({
+        moduleId: moduleId,
+        imageIndex: img.imageIndex,
+        name: img.name,
+        dataUrl: img.dataUrl,
+        isSensitive: !!img.isSensitive,
+        isDiscarded: !!img.isDiscarded,
+        pageNumber: img.pageNumber || 1,
+        width: img.width || 800,
+        height: img.height || 600,
+        format: img.format || 'JPEG',
+        description: img.description || '',
+        annotation: img.annotation || '',
+        placement: img.placement || '文档插图'
+      }));
+
+      const tempModForToc = {
+        name: this.currentParsedData?.moduleName || '跑团模组',
+        toc: this.currentPlan?.toc || [],
+        mapNodes: this.currentPlan?.mapNodes || []
+      };
+      const tocWords = this.getTocWordCount(tempModForToc, chaptersToSave);
+      const mapWords = this.getMapWordCount(tempModForToc, chaptersToSave);
+      const imgWords = this.getImagesWordCount(tempModForToc, imagesToSave);
+      const realTotalWords = chaptersToSave.reduce((sum, c) => sum + (c.wordCount || 0), 0) + tocWords + mapWords + imgWords;
 
       const moduleRecord = {
         id: moduleId,
@@ -4640,22 +4758,6 @@ ${imageList}
         githubSync: false,
         createdAt: Date.now()
       };
-
-      const imagesToSave = (this.currentParsedData?.images || []).map(img => ({
-        moduleId: moduleId,
-        imageIndex: img.imageIndex,
-        name: img.name,
-        dataUrl: img.dataUrl,
-        isSensitive: !!img.isSensitive,
-        isDiscarded: !!img.isDiscarded,
-        pageNumber: img.pageNumber || 1,
-        width: img.width || 800,
-        height: img.height || 600,
-        format: img.format || 'JPEG',
-        description: img.description || '',
-        annotation: img.annotation || '',
-        placement: img.placement || '文档插图'
-      }));
 
       await this.safeDBOperation('保存模组到数据库', async (db) => {
         await db.modules.put(moduleRecord);
@@ -4804,6 +4906,13 @@ ${imageList}
           return;
         }
 
+        let chapsTotalWords = 0;
+        chapters.forEach(c => {
+          const cWords = this.countWords(c.content || '');
+          c.wordCount = cWords;
+          chapsTotalWords += cWords;
+        });
+
         const moduleRecord = {
           id: moduleId,
           name: baseName,
@@ -4816,12 +4925,17 @@ ${imageList}
           customTags: [],
           tags: ['普通'],
           group: '默认分组',
-          wordCount: chapters.reduce((sum, c) => sum + (c.wordCount || 0), 0),
+          wordCount: 0,
           chapterCount: chapters.length,
           status: 'ready',
           githubSync: false,
           createdAt: Date.now()
         };
+
+        const tocWords = this.getTocWordCount(moduleRecord, chapters);
+        const mapWords = this.getMapWordCount(moduleRecord, chapters);
+        const imgWords = this.getImagesWordCount(moduleRecord, []);
+        moduleRecord.wordCount = chapsTotalWords + tocWords + mapWords + imgWords;
 
         await this.safeDBOperation('直接导入模组', async (db) => {
           await db.modules.put(moduleRecord);
@@ -5301,9 +5415,13 @@ ${imageList}
       listContainer.innerHTML = '';
 
       let allChapters = [];
+      let allImages = [];
       try {
         if (database && database.moduleChapters) {
           allChapters = await database.moduleChapters.toArray();
+        }
+        if (database && database.moduleImages) {
+          allImages = await database.moduleImages.toArray();
         }
       } catch (e) {}
 
@@ -5314,15 +5432,32 @@ ${imageList}
         chapsByMod.get(mId).push(c);
       });
 
+      const imgsByMod = new Map();
+      allImages.forEach(img => {
+        const mId = String(img.moduleId);
+        if (!imgsByMod.has(mId)) imgsByMod.set(mId, []);
+        imgsByMod.get(mId).push(img);
+      });
+
       allModules.forEach(mod => {
         const item = document.createElement('div');
         item.className = 'mod-lib-card';
         item.style.cursor = 'pointer';
 
         const modChaps = chapsByMod.get(String(mod.id)) || [];
+        const modImgs = imgsByMod.get(String(mod.id)) || [];
         const realChapterCount = modChaps.length > 0 ? modChaps.length : (mod.chapterCount || 0);
+        let chapsTotalWords = 0;
+        modChaps.forEach(c => {
+          const cWords = this.countWords(c.content || '');
+          c.wordCount = cWords;
+          chapsTotalWords += cWords;
+        });
+        const tocWords = modChaps.length > 0 ? this.getTocWordCount(mod, modChaps) : 0;
+        const mapWords = modChaps.length > 0 ? this.getMapWordCount(mod, modChaps) : 0;
+        const imgWords = this.getImagesWordCount(mod, modImgs);
         const realWordCount = modChaps.length > 0
-          ? modChaps.reduce((acc, c) => acc + (c.wordCount || (c.content ? c.content.length : 0)), 0)
+          ? (chapsTotalWords + tocWords + mapWords + imgWords)
           : (mod.wordCount || 0);
 
         const sysUpper = (mod.ruleSystem || 'coc').toUpperCase();

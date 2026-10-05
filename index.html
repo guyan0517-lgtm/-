@@ -20003,9 +20003,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             let modules = await dbInstance.modules.toArray();
             let allChapters = [];
+            let allImages = [];
             try {
               if (dbInstance.moduleChapters) {
                 allChapters = await dbInstance.moduleChapters.toArray();
+              }
+              if (dbInstance.moduleImages) {
+                allImages = await dbInstance.moduleImages.toArray();
               }
             } catch (e) {}
 
@@ -20014,6 +20018,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const mId = String(c.moduleId);
               if (!chapsMap.has(mId)) chapsMap.set(mId, []);
               chapsMap.get(mId).push(c);
+            });
+
+            const imgsMap = new Map();
+            allImages.forEach(img => {
+              const mId = String(img.moduleId);
+              if (!imgsMap.has(mId)) imgsMap.set(mId, []);
+              imgsMap.get(mId).push(img);
             });
 
             if (filter === 'coc') {
@@ -20031,9 +20042,47 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             modules.forEach(mod => {
               const isCurrentActive = activeModId && String(activeModId) === String(mod.id);
               const modChaps = chapsMap.get(String(mod.id)) || [];
+              const modImgs = imgsMap.get(String(mod.id)) || [];
               const realChapterCount = modChaps.length > 0 ? modChaps.length : (mod.chapterCount || 0);
+              let chapsTotalWords = 0;
+              modChaps.forEach(c => {
+                const cWords = typeof calculateTokenCount === "function"
+                  ? calculateTokenCount(c.content || "")
+                  : (c.content ? c.content.length : (c.wordCount || 0));
+                c.wordCount = cWords;
+                chapsTotalWords += cWords;
+              });
+
+              let tocWords = 0;
+              let mapWords = 0;
+              let imgWords = 0;
+              if (window.ModuleManager) {
+                if (typeof window.ModuleManager.getTocWordCount === "function") {
+                  tocWords = window.ModuleManager.getTocWordCount(mod, modChaps);
+                }
+                if (typeof window.ModuleManager.getMapWordCount === "function") {
+                  mapWords = window.ModuleManager.getMapWordCount(mod, modChaps);
+                }
+                if (typeof window.ModuleManager.getImagesWordCount === "function") {
+                  imgWords = window.ModuleManager.getImagesWordCount(mod, modImgs);
+                }
+              } else {
+                let tocStr = "## 模组总目录与章节导航\n";
+                if (Array.isArray(mod.toc) && mod.toc.length > 0) {
+                  mod.toc.forEach((item, idx) => {
+                    const tTitle = typeof item === "string" ? item : (item.title || item.name || `第${idx + 1}节`);
+                    tocStr += `${idx + 1}. ${tTitle}\n`;
+                  });
+                } else if (modChaps.length > 0) {
+                  modChaps.forEach((c, idx) => {
+                    tocStr += `${idx + 1}. ${c.title || ""} 【${c.category || "正文"}】\n`;
+                  });
+                }
+                tocWords = typeof calculateTokenCount === "function" ? calculateTokenCount(tocStr) : tocStr.length;
+              }
+
               const realWordCount = modChaps.length > 0
-                ? modChaps.reduce((acc, c) => acc + (c.wordCount || (c.content ? c.content.length : 0)), 0)
+                ? (chapsTotalWords + tocWords + mapWords + imgWords)
                 : (mod.wordCount || 0);
 
               const item = document.createElement("div");
@@ -20201,11 +20250,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
             allChaps.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
-            // 更新每个章节真实字数
+            // 更新每个章节真实字数（与Token分析计算方式完全一致）
             allChaps.forEach(c => {
-              if (!c.wordCount || c.wordCount === 0) {
-                c.wordCount = c.content ? c.content.length : 0;
-              }
+              c.wordCount = typeof calculateTokenCount === "function"
+                ? calculateTokenCount(c.content || "")
+                : (c.content ? c.content.length : (c.wordCount || 0));
             });
 
             if (!chat.selectedModuleChapterIds) chat.selectedModuleChapterIds = [];
@@ -23823,21 +23872,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         function getEffectiveApiConfig(purpose) {
-          const uses = state.apiConfig.subApiUses || {};
-          if (purpose && uses[purpose] && state.apiConfig.subProxyUrl && state.apiConfig.subApiKey) {
+          const cfg = (state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
+          const uses = cfg.subApiUses || {};
+          // 仅当传入了 purpose、且在用途中勾选了该项、且副 API 填写了有效 Key 时，才切换副 API
+          if (purpose && uses[purpose] && cfg.subApiKey && cfg.subApiKey.trim() !== '') {
             return {
-              proxyUrl: state.apiConfig.subProxyUrl || state.apiConfig.proxyUrl || "https://api.openai.com",
-              apiKey: state.apiConfig.subApiKey || state.apiConfig.apiKey || "",
-              model: state.apiConfig.subModel || state.apiConfig.model || "gpt-4",
-              temperature: state.apiConfig.subTemperature !== undefined ? parseFloat(state.apiConfig.subTemperature) : (parseFloat(state.apiConfig.temperature) || 0.8),
+              proxyUrl: cfg.subProxyUrl || cfg.proxyUrl || "https://api.openai.com",
+              apiKey: cfg.subApiKey.trim(),
+              model: cfg.subModel || cfg.model || "gpt-4",
+              temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (parseFloat(cfg.temperature) || 0.8),
               isSub: true,
             };
           }
+          // 默认全局所有功能、小窗、模块统一调用主 API
           return {
-            proxyUrl: state.apiConfig.proxyUrl || "https://api.openai.com",
-            apiKey: state.apiConfig.apiKey || "",
-            model: state.apiConfig.model || "gpt-4",
-            temperature: parseFloat(state.apiConfig.temperature) || 0.8,
+            proxyUrl: cfg.proxyUrl || "https://api.openai.com",
+            apiKey: cfg.apiKey || "",
+            model: cfg.model || "gpt-4",
+            temperature: cfg.temperature !== undefined ? parseFloat(cfg.temperature) : 0.8,
             isSub: false,
           };
         }
@@ -28389,9 +28441,10 @@ ${recentHistory || '无'}
 
           // 1. 准备专属表情包列表 (现在对单聊和群聊都生效)
           let stickerContext = "";
+          let exclusiveStickerContext = "";
+          let commonStickerContext = "";
           if (state.globalSettings && state.globalSettings.enableStickers) {
             const exclusiveStickers = chat.settings.stickerLibrary || [];
-            let exclusiveStickerContext = "";
             if (exclusiveStickers.length > 0) {
               exclusiveStickerContext = `
 			## ${chat.isGroup ? "本群专属表情包" : "你的专属表情包"} (只有你能用):
@@ -28401,7 +28454,6 @@ ${recentHistory || '无'}
 
             // 2. 准备通用表情包列表
             const commonStickers = state.charStickers || [];
-            let commonStickerContext = "";
             if (commonStickers.length > 0) {
               commonStickerContext = `
 			## 通用表情包 (所有角色都能用):
@@ -52778,6 +52830,7 @@ ${colSpecs.join('\n')}
           }
           return text.length;
         }
+        window.calculateTokenCount = calculateTokenCount;
 
         /**
          * 【升级版】获取Token详情 + 异常消息检测
