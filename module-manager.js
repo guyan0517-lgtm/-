@@ -362,6 +362,17 @@
   global.renderModuleCuttingPresetsUI = renderModuleCuttingPresetsUI;
 
   const TAG_DEFINITIONS = {
+    'COC': { category: '规则体系', desc: '基于克苏鲁的呼唤TRPG规则体系' },
+    'COJ': { category: '规则体系', desc: '基于日系COC衍生风格与叙事规则体系' },
+    '线性': { category: '结构类型', desc: '按固定前后顺序依次推进的主线剧情模组' },
+    '沙盒': { category: '结构类型', desc: '高自由度开放探索与多线并行架构模组' },
+    '其他': { category: '结构类型', desc: '特殊交互或非标准网状结构的模组' },
+    '1v1': { category: '规模人数', desc: '1位KP与1位PL专属单挑带团规模' },
+    '单人': { category: '规模人数', desc: '单人单调查员沉浸式探索模组' },
+    '2ho': { category: '规模人数', desc: '双主角专属秘密背景分工模组' },
+    '3ho': { category: '规模人数', desc: '三位调查员专属秘密背景模组' },
+    '4ho': { category: '规模人数', desc: '四位调查员团队协作与暗线模组' },
+    '多ho': { category: '规模人数', desc: '多位调查员各自持有专属秘密背景' },
     '日模': { category: '背景分类', desc: '模组故事背景设定在日本' },
     '美模': { category: '背景分类', desc: '模组故事背景设定在美国' },
     '现代中国': { category: '背景分类', desc: '模组故事背景设定在现代中国' },
@@ -498,6 +509,7 @@
           activeSubPanel: this.activeSubPanel,
           activeSubTab: this.activeSubTab,
           cutExecutionMode: this.cutExecutionMode || 'single',
+          batchSegmentsCompleted: this.batchSegmentsCompleted || 0,
           currentParsedData: this.currentParsedData,
           currentPlan: this.currentPlan,
           globalOpinion: this.globalOpinion,
@@ -523,6 +535,7 @@
           this.activeSubPanel = draft.activeSubPanel || 'wizard';
           this.activeSubTab = draft.activeSubTab || 'chapters';
           this.cutExecutionMode = draft.cutExecutionMode || 'single';
+          this.batchSegmentsCompleted = typeof draft.batchSegmentsCompleted === 'number' ? draft.batchSegmentsCompleted : 0;
           this.currentParsedData = draft.currentParsedData;
           this.currentPlan = draft.currentPlan || null;
           this.globalOpinion = draft.globalOpinion || '';
@@ -1561,12 +1574,14 @@
       if (!rawName) return '章节小标题';
       let title = rawName.trim();
       if (moduleName) {
-        const rawMod = moduleName.replace(/\.[^/.]+$/, '').trim();
-        const pureMod = rawMod.replace(/[《》【】\[\]()（）]/g, '').trim();
+        let pureMod = moduleName.replace(/\.[^/.]+$/, '').replace(/[\(\[\{（【][^\)\]\}）】]*[\)\]\}）】]/g, '').trim();
+        pureMod = pureMod.replace(/[《》【】\[\]()（）]/g, '').trim();
         if (pureMod && pureMod.length >= 2) {
           const escaped = pureMod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const reg = new RegExp(`^(?:《?${escaped}》?|【?${escaped}】?)[\\s\\-_—:：·|/\\\\]*`, 'i');
-          title = title.replace(reg, '').trim();
+          const prefixReg = new RegExp(`^(?:《?${escaped}》?|【?${escaped}】?|\\[?${escaped}\\]?)[\\s\\-_—杠:：·|/\\\\]*`, 'i');
+          title = title.replace(prefixReg, '').trim();
+          const suffixReg = new RegExp(`[\\s\\-_—杠:：·|/\\\\]*(?:《?${escaped}》?|【?${escaped}】?|\\[?${escaped}\\]?)$`, 'i');
+          title = title.replace(suffixReg, '').trim();
         }
       }
       title = title.replace(/^[0-9]+[-_—\s]+/, '').trim();
@@ -2150,6 +2165,61 @@ JSON 格式如下：
     renderPlanUI() {
       if (!this.currentPlan) return;
 
+      const mainCatEl = document.getElementById('module-step2-main-cat');
+      const subCatEl = document.getElementById('module-step2-sub-cat');
+      const typeEl = document.getElementById('module-step2-type');
+      const wordsEl = document.getElementById('module-step2-meta-words');
+      const tagsRowEl = document.getElementById('module-step2-tags-row');
+      const summaryEl = document.getElementById('module-step2-summary-text');
+
+      const sysUpper = (this.currentPlan.ruleSystem || 'coc').toUpperCase();
+      const struct = this.currentPlan.moduleType || '线性';
+      const scale = this.currentPlan.scaleType || '1v1';
+      const totalWords = this.currentPlan.totalWords || this.currentParsedData?.wordCount || 0;
+      const chapterCount = (this.currentPlan.chunks || []).length;
+
+      if (mainCatEl) {
+        mainCatEl.textContent = sysUpper;
+        mainCatEl.className = `mod-category-pill ${sysUpper.toLowerCase()}`;
+        mainCatEl.style.cursor = 'pointer';
+        mainCatEl.onclick = () => this.showTagAnnotation(sysUpper);
+      }
+      if (subCatEl) {
+        subCatEl.textContent = scale;
+        subCatEl.style.cursor = 'pointer';
+        subCatEl.onclick = () => this.showTagAnnotation(scale);
+      }
+      if (typeEl) {
+        typeEl.textContent = struct;
+        typeEl.style.cursor = 'pointer';
+        typeEl.onclick = () => this.showTagAnnotation(struct);
+      }
+      if (wordsEl) {
+        wordsEl.textContent = `约 ${totalWords} 字 · ${chapterCount} 章节`;
+      }
+      if (summaryEl) {
+        summaryEl.textContent = this.currentPlan.summary || '';
+        summaryEl.style.display = this.currentPlan.summary ? 'block' : 'none';
+      }
+
+      if (tagsRowEl) {
+        tagsRowEl.innerHTML = '';
+        const tags = Array.isArray(this.currentPlan.tags) && this.currentPlan.tags.length > 0
+          ? this.currentPlan.tags
+          : this.sortModuleTags(this.currentPlan.bgTag, this.currentPlan.endingTag, this.currentPlan.contentTags, this.currentPlan.customTags);
+        tags.forEach(t => {
+          const span = document.createElement('span');
+          span.className = `mod-tag-badge ${this.getTagClass(t)}`;
+          span.textContent = t;
+          span.style.cursor = 'pointer';
+          span.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showTagAnnotation(t);
+          });
+          tagsRowEl.appendChild(span);
+        });
+      }
+
       const cardListContainer = document.getElementById('module-plan-card-list');
       if (cardListContainer) {
         cardListContainer.innerHTML = '';
@@ -2384,13 +2454,16 @@ ${fullText}`;
       return generated;
     },
 
-    async generateBatchAllChaptersWithAI(fullText) {
+    async generateBatchAllChaptersWithAI(fullText, segIdx, totalSegs) {
       const analysisPrompt = this.currentParsedData?.analysisPrompt || this.currentParsedData?.prompt || DEFAULT_TRPG_ANALYSIS_PROMPT;
       const cuttingPrompt = this.currentParsedData?.cuttingPrompt || DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT;
       const allChunks = this.currentPlan?.chunks || [];
       const planOutline = allChunks.map((c, i) => `${i + 1}. 【${c.name}】(${c.category}) - ${c.reason || '按内容性质提取'}`).join('\n');
 
-      const systemPrompt = `你是模组切割与整理 AI 专家。你的任务是根据规划大纲，只调用一次，将跑团模组全文一次性整理并输出为全部独立章节。
+      const isSegmented = typeof segIdx === 'number' && typeof totalSegs === 'number' && totalSegs > 1;
+      const segNotice = isSegmented ? `\n【当前正在处理的分卷】：第 ${segIdx + 1} / ${totalSegs} 卷（请仅整理并输出属于本卷内容的章节）\n` : '';
+
+      const systemPrompt = `你是模组切割与整理 AI 专家。你的任务是根据规划大纲，将跑团模组内容整理并输出为全部对应章节。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【一、初稿分析大纲规范】
@@ -2405,7 +2478,7 @@ ${cuttingPrompt}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【三、单次输出与章节分隔符标准格式（必须严格遵循）】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-请按规划大纲顺序，一次性输出全部章节。每一个章节必须用标准起止标记严格包裹，格式如下：
+请按大纲顺序输出章节。每一个章节必须用标准起止标记严格包裹，格式如下：
 
 ===CHAPTER_START: 章节名称 | 分类===
 【该章节的整理文本内容】
@@ -2416,16 +2489,18 @@ ${cuttingPrompt}
 1. 【各章节边界清晰，绝无主观臆造与脑补】：
    - 导入：仅开场玩家剧情，绝无NPC数值/真相/人设；
    - 幕后真相/KP信息：仅守秘人背景机制，绝无主观心理/恋爱哲学，绝无从正文挪走的剧情；若原文只有KP信息，直接归为KP信息，绝不重复生成多处；
-   - HO专属秘密：仅属于该HO的专属私密线索与背景（从KP区/QA/附录整合，正文剧情绝不挪动）；
+   - HO专属秘密：仅属于该HO的专属私密线索与背景；
    - NPC/猫人设：仅正文外的属性与背景，绝无正文剧情对话抄录，绝无行为模式指南；
    - 主线正文/地点/事件：仅公开剧情与对白，一字不改，严禁在段落间插入分析点评！
 2. 【标签合并同类项】：
    连续同类内容（如连续几段都是KP信息或都是正文剧情）只在该块的首段开头打上【KP信息】或【正文】，后续相同类别的自然段不需要每行重复打标！直到出现秘密、检定、插图或切换类型时才打新标签！
 3. 【禁止作者前言废话与页码】：作者推荐人数、页码、横线等一律彻底剔除！
-4. 直接按上述起止标记格式输出全部章节内容。`;
+4. 【章节标题净化】：章节名称严禁重复附加模组名称！直接使用纯净章节名。
+5. 直接按上述起止标记格式输出全部章节内容。`;
 
-      const userPrompt = `【全模组规划章节大纲（需一次性全部生成）】：
+      const userPrompt = `【全模组规划章节大纲】：
 ${planOutline}
+${segNotice}
 ${this.globalOpinion ? `\n【用户全局修改意见】：\n${this.globalOpinion}\n` : ''}
 【模组参考原文】：
 ${fullText}`;
@@ -2441,16 +2516,17 @@ ${fullText}`;
       let index = 0;
 
       while ((match = regexPrimary.exec(generated)) !== null) {
-        const title = (match[1] || '').trim();
+        const rawTitle = (match[1] || '').trim();
         const category = (match[2] || '正文').trim();
         const content = (match[3] || '').trim();
         if (content.length > 20) {
           index++;
           const words = this.countWords(content);
+          const cleanTitle = this.cleanChapterTitle(rawTitle || `第${index}章`, this.currentParsedData?.moduleName);
           parsedChapters.push({
             id: 'chap_' + Date.now() + '_' + index,
             moduleId: this.currentParsedData?.moduleName || '跑团模组',
-            title: title || `第${index}章`,
+            title: cleanTitle,
             category: category,
             wordCount: words,
             content: content,
@@ -2475,10 +2551,11 @@ ${fullText}`;
           if (content.length > 20) {
             index++;
             const words = this.countWords(content);
+            const cleanTitle = this.cleanChapterTitle(rawTitle || `第${index}章`, this.currentParsedData?.moduleName);
             parsedChapters.push({
               id: 'chap_' + Date.now() + '_' + index,
               moduleId: this.currentParsedData?.moduleName || '跑团模组',
-              title: rawTitle || `第${index}章`,
+              title: cleanTitle,
               category: category,
               wordCount: words,
               content: content,
@@ -2504,11 +2581,12 @@ ${fullText}`;
           const rest = firstLineEnd !== -1 ? sec.substring(firstLineEnd).trim() : '';
           const planChunk = allChunks[idx] || { name: firstLine || `第${idx + 1}章`, category: '正文' };
           const words = this.countWords(rest || sec);
+          const cleanTitle = this.cleanChapterTitle(planChunk.name, this.currentParsedData?.moduleName);
 
           parsedChapters.push({
             id: 'chap_' + Date.now() + '_' + (idx + 1),
             moduleId: this.currentParsedData?.moduleName || '跑团模组',
-            title: planChunk.name,
+            title: cleanTitle,
             category: planChunk.category,
             wordCount: words,
             content: rest || sec,
@@ -2641,7 +2719,11 @@ ${fullText}`;
       if (pauseBtn) pauseBtn.style.display = 'inline-flex';
       if (resumeBtn) resumeBtn.style.display = 'none';
 
-      this.continueAsyncCuttingLoop();
+      if (this.cutExecutionMode === 'batch') {
+        this.executeBatchCuttingSingleCall();
+      } else {
+        this.continueAsyncCuttingLoop();
+      }
     },
 
     cancelCutting() {
@@ -2884,7 +2966,21 @@ ${fullText}`;
       const pauseBtn = document.getElementById('module-pause-btn');
       const resumeBtn = document.getElementById('module-resume-btn');
       const cancelBtn = document.getElementById('module-cancel-btn');
-      const totalChunks = this.currentPlan?.chunks?.length || 0;
+
+      const splitSelect = document.getElementById('module-split-parts-select');
+      let requestedParts = splitSelect ? splitSelect.value : (this.currentParsedData?.splitParts || 'auto');
+      let numParts = 1;
+      const totalWords = this.currentParsedData?.wordCount || fullText.length;
+      if (requestedParts === 'auto') {
+        if (totalWords > 40000) numParts = 3;
+        else if (totalWords > 20000) numParts = 2;
+        else numParts = 1;
+      } else {
+        numParts = parseInt(requestedParts, 10) || 1;
+      }
+
+      const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
+      const totalSegs = segments.length;
 
       this.isCuttingRunning = true;
       this.isCuttingPaused = false;
@@ -2894,48 +2990,90 @@ ${fullText}`;
       if (resumeBtn) resumeBtn.style.display = 'none';
       if (cancelBtn) cancelBtn.style.display = 'inline-flex';
 
-      if (progressText) {
-        progressText.textContent = `全篇模式：正在调用一次 AI 整理全篇 ${totalChunks} 个章节...`;
-      }
-      if (progressBar) progressBar.style.width = '35%';
-      if (cardList) cardList.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 24px;">AI 正在单次通读并输出全篇所有章节，请稍候...</div>';
+      const startSegIdx = this.batchSegmentsCompleted || 0;
 
-      try {
-        const parsed = await this.generateBatchAllChaptersWithAI(fullText);
-        if (this.isCuttingCancelled) {
-          if (progressText) progressText.textContent = '已取消后续任务，已生成章节已妥善保存';
-          return;
-        }
-        if (parsed && parsed.length > 0) {
-          this.cutChapters = parsed;
-          this.cuttingCurrentIndex = this.cutChapters.length;
-          this.saveDraft();
-          this.renderCutChaptersUI();
-          if (progressText) {
-            progressText.textContent = `全篇切割生成完成，共整理 ${this.cutChapters.length} 个带团专属章节`;
-          }
-          if (progressBar) progressBar.style.width = '100%';
-        } else {
-          throw new Error('未能从全篇单次输出中解析出章节');
-        }
-      } catch (err) {
-        console.warn('[模组] 全篇单次调用提示:', err);
-        if (this.isCuttingCancelled) {
-          if (progressText) progressText.textContent = '已取消任务';
-          return;
-        }
-        if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('提示', '全篇单次输出遇到问题，已为您自动转为逐章顺序生成。');
-        }
-        this.continueAsyncCuttingLoop();
-      } finally {
-        this.isCuttingRunning = false;
-        if (pauseBtn) pauseBtn.style.display = 'none';
-        if (resumeBtn) resumeBtn.style.display = 'none';
-        if (cancelBtn) cancelBtn.style.display = 'none';
-        this.updateBottomActionBar();
-        this.saveDraft();
+      if (cardList && cardList.children.length === 0 && this.cutChapters.length > 0) {
+        this.cutChapters.forEach((chap, idx) => {
+          cardList.appendChild(this.createChapterCardElement(chap, idx));
+        });
       }
+
+      for (let segIdx = startSegIdx; segIdx < totalSegs; segIdx++) {
+        if (this.isCuttingCancelled) {
+          this.isCuttingRunning = false;
+          this.saveDraft();
+          return;
+        }
+
+        while (this.isCuttingPaused) {
+          await new Promise(r => setTimeout(r, 300));
+          if (this.isCuttingCancelled) {
+            this.isCuttingRunning = false;
+            this.saveDraft();
+            return;
+          }
+        }
+
+        if (progressText) {
+          progressText.textContent = totalSegs > 1
+            ? `全篇模式：正在整理第 ${segIdx + 1}/${totalSegs} 卷（已生成 ${this.cutChapters.length} 章）...`
+            : `全篇模式：正在整理输出全篇所有章节...`;
+        }
+        if (progressBar) {
+          progressBar.style.width = `${Math.round((segIdx / totalSegs) * 100)}%`;
+        }
+
+        try {
+          const segText = segments[segIdx];
+          const parsed = await this.generateBatchAllChaptersWithAI(segText, segIdx, totalSegs);
+          if (this.isCuttingCancelled) {
+            this.isCuttingRunning = false;
+            this.saveDraft();
+            return;
+          }
+
+          if (parsed && parsed.length > 0) {
+            parsed.forEach(chap => {
+              chap.id = 'chap_' + (this.cutChapters.length + 1);
+              chap.sortOrder = this.cutChapters.length + 1;
+              chap.title = this.cleanChapterTitle(chap.title, this.currentParsedData?.moduleName);
+              this.cutChapters.push(chap);
+              if (cardList) {
+                cardList.appendChild(this.createChapterCardElement(chap, this.cutChapters.length - 1));
+              }
+            });
+            this.batchSegmentsCompleted = segIdx + 1;
+            this.cuttingCurrentIndex = this.cutChapters.length;
+            this.saveDraft();
+            this.renderCutChaptersUI();
+          } else {
+            throw new Error(`第 ${segIdx + 1} 卷未解析出有效章节`);
+          }
+        } catch (err) {
+          console.warn('[模组] 全篇分卷整理提示:', err);
+          if (this.isCuttingCancelled) {
+            this.isCuttingRunning = false;
+            this.saveDraft();
+            return;
+          }
+          if (typeof global.showCustomAlert === 'function') {
+            global.showCustomAlert('提示', `第 ${segIdx + 1} 卷全篇输出遇到波动，已自动转为逐章继续生成。`);
+          }
+          this.continueAsyncCuttingLoop();
+          return;
+        }
+      }
+
+      this.isCuttingRunning = false;
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      if (resumeBtn) resumeBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      if (progressText) {
+        progressText.textContent = `全篇切割生成完成，共整理 ${this.cutChapters.length} 个带团专属章节`;
+      }
+      if (progressBar) progressBar.style.width = '100%';
+      this.updateBottomActionBar();
+      this.saveDraft();
     },
 
     renderCutChaptersUI() {
@@ -3469,25 +3607,60 @@ ${chap.content}
       const titleEl = document.getElementById('module-detail-title');
       const statsEl = document.getElementById('module-detail-stats');
       const coverTitleEl = document.getElementById('module-detail-cover-title');
-      const coverDescEl = document.getElementById('module-detail-cover-desc');
+      const coverEl = document.getElementById('module-detail-cover');
+      const coverInput = document.getElementById('module-detail-cover-input');
+      const metaLineEl = document.getElementById('module-detail-meta-line') || document.getElementById('module-detail-cover-desc');
+      const descEl = document.getElementById('module-detail-desc');
       const tagsRow = document.getElementById('module-detail-tags-row');
 
       if (titleEl) titleEl.textContent = mod.name;
       if (statsEl) statsEl.textContent = `${chapters.length} 个章节 · 约 ${mod.wordCount || 0} 字`;
       if (coverTitleEl) coverTitleEl.textContent = mod.name;
 
+      if (coverEl) {
+        if (mod.coverImage) {
+          coverEl.innerHTML = `<img src="${mod.coverImage}" style="width: 100%; height: 100%; object-fit: cover;" alt="模组封面" />`;
+        } else {
+          coverEl.innerHTML = `
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+              <path d="M6 6h10"></path>
+              <path d="M6 10h10"></path>
+            </svg>
+          `;
+        }
+        coverEl.onclick = () => {
+          if (coverInput) coverInput.click();
+        };
+      }
+
+      if (coverInput) {
+        coverInput.onchange = async (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = async (re) => {
+              const base64Img = re.target.result;
+              mod.coverImage = base64Img;
+              await database.modules.update(mod.id, { coverImage: base64Img });
+              await this.openModuleDetail(mod.id);
+              await this.renderLibraryList();
+            };
+            reader.readAsDataURL(file);
+          }
+          coverInput.value = '';
+        };
+      }
+
       const sysUpper = (mod.ruleSystem || 'coc').toUpperCase();
       const struct = mod.type || '线性';
       const scale = mod.scaleType || '1v1';
-      const catBadges = document.getElementById('module-detail-category-badges');
-      if (catBadges) {
-        catBadges.innerHTML = `
-          <span class="mod-category-pill ${sysUpper.toLowerCase()}">${sysUpper}</span>
-          <span class="mod-category-pill">${struct}</span>
-          <span class="mod-category-pill">${scale}</span>
-        `;
+      if (metaLineEl) {
+        metaLineEl.textContent = `${sysUpper} · ${struct} · ${scale} · 约 ${mod.wordCount || 0} 字 · ${chapters.length} 章节`;
       }
-      if (coverDescEl) coverDescEl.textContent = `${sysUpper} · ${struct} · ${scale} · ${chapters.length} 章节 · 约 ${mod.wordCount || 0} 字`;
+      if (descEl) {
+        descEl.textContent = mod.summary || mod.description || '暂无模组简介概述';
+      }
 
       if (tagsRow) {
         tagsRow.innerHTML = '';
@@ -3605,8 +3778,9 @@ ${chap.content}
         list.forEach(({ chapter, originalIndex }) => {
           const row = document.createElement('div');
           row.className = 'mod-chapter-item-row';
+          const cleanTitle = this.cleanChapterTitle(chapter.title, this.activeDetailModule?.name);
           row.innerHTML = `
-            <span class="mod-chapter-name">${chapter.title}</span>
+            <span class="mod-chapter-name">${cleanTitle}</span>
             <span class="mod-chapter-words">约 ${chapter.wordCount || 0} 字</span>
           `;
 
@@ -3629,9 +3803,10 @@ ${chap.content}
       let html = '<div style="font-weight: 600; font-size: 13px; margin-bottom: 8px;">模组章节顺序总览</div>';
       html += '<div style="display: flex; flex-direction: column; gap: 6px;">';
       chapters.forEach((chap, idx) => {
+        const cleanTitle = this.cleanChapterTitle(chap.title, this.activeDetailModule?.name);
         html += `
           <div style="display: flex; justify-content: space-between; align-items: center; background: var(--secondary-bg, #F9F8F5); padding: 8px 12px; border-radius: 8px; cursor: pointer;" class="mod-toc-item-row" data-idx="${idx}">
-            <span style="font-weight: 500; font-size: 12.5px;">${idx + 1}. ${chap.title}</span>
+            <span style="font-weight: 500; font-size: 12.5px;">${idx + 1}. ${cleanTitle}</span>
             <span class="module-plan-tag">${chap.category || '正文'}</span>
           </div>
         `;
@@ -4562,6 +4737,51 @@ ${imageList}
       if (descInput) descInput.value = mod.summary || '';
       if (customTagInput) customTagInput.value = '';
 
+      const coverPreview = document.getElementById('module-edit-cover-preview');
+      const coverUploadBtn = document.getElementById('module-edit-cover-upload-btn');
+      const coverRemoveBtn = document.getElementById('module-edit-cover-remove-btn');
+      const coverFileInput = document.getElementById('module-edit-cover-file-input');
+
+      const renderCoverPreview = () => {
+        if (!coverPreview) return;
+        if (this.activeEditModule.coverImage) {
+          coverPreview.innerHTML = `<img src="${this.activeEditModule.coverImage}" style="width: 100%; height: 100%; object-fit: cover;" alt="封面" />`;
+          if (coverRemoveBtn) coverRemoveBtn.style.display = 'inline-flex';
+        } else {
+          coverPreview.innerHTML = `
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+              <path d="M6 6h10"></path>
+              <path d="M6 10h10"></path>
+            </svg>
+          `;
+          if (coverRemoveBtn) coverRemoveBtn.style.display = 'none';
+        }
+      };
+      renderCoverPreview();
+
+      if (coverUploadBtn && coverFileInput) {
+        coverUploadBtn.onclick = () => coverFileInput.click();
+        coverFileInput.onchange = (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (re) => {
+              this.activeEditModule.coverImage = re.target.result;
+              renderCoverPreview();
+            };
+            reader.readAsDataURL(file);
+          }
+          coverFileInput.value = '';
+        };
+      }
+      if (coverRemoveBtn) {
+        coverRemoveBtn.onclick = () => {
+          this.activeEditModule.coverImage = '';
+          renderCoverPreview();
+        };
+      }
+
       if (!this.activeEditModule.bgTag) {
         this.activeEditModule.bgTag = '日模';
       }
@@ -4704,6 +4924,7 @@ ${imageList}
         ruleSystem: newSystem,
         scaleType: newScale,
         summary: newDesc,
+        coverImage: this.activeEditModule.coverImage || '',
         bgTag: bgTag,
         endingTag: endingTag,
         contentTags: contentTags,
@@ -4798,6 +5019,7 @@ ${imageList}
           const pill = document.createElement('button');
           pill.type = 'button';
           pill.className = `mod-tag-badge ${this.getTagClass(tag)}`;
+          pill.textContent = tag;
           pill.style.cursor = 'pointer';
           pill.style.border = '1px solid var(--border-color)';
           pill.style.padding = '4px 10px';
@@ -4843,7 +5065,7 @@ ${imageList}
       this.selectedFilterTags = new Set(this.tempFilterTags || []);
       this.hideTagFilterModal();
 
-      const filterBtn = document.getElementById('module-library-filter-btn');
+      const filterBtn = document.getElementById('module-library-tag-filter-btn') || document.getElementById('module-library-filter-btn');
       if (filterBtn) {
         if (this.selectedFilterTags.size > 0) {
           filterBtn.style.color = 'var(--accent-color, #4A7A68)';
@@ -4864,7 +5086,7 @@ ${imageList}
       this.tempFilterTags = new Set();
       this.hideTagFilterModal();
 
-      const filterBtn = document.getElementById('module-library-filter-btn');
+      const filterBtn = document.getElementById('module-library-tag-filter-btn') || document.getElementById('module-library-filter-btn');
       if (filterBtn) {
         filterBtn.style.color = 'var(--text-secondary)';
         filterBtn.style.borderColor = 'var(--border-color)';
@@ -4941,20 +5163,31 @@ ${imageList}
           tagsHtml += `<span class="mod-tag-badge ${cls}" data-tag="${t}">${t}</span>`;
         });
 
+        const coverHtml = mod.coverImage
+          ? `<div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border-color);"><img src="${mod.coverImage}" style="width: 100%; height: 100%; object-fit: cover;" alt="封面" /></div>`
+          : `<div style="width: 44px; height: 44px; border-radius: 8px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color, #4A7A68); border: 1px solid var(--border-color);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M6 6h10"></path><path d="M6 10h10"></path></svg></div>`;
+
         item.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div style="display: flex; gap: 10px; align-items: flex-start;">
+            ${coverHtml}
             <div style="flex: 1; min-width: 0;">
-              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <span style="font-weight: 600; font-size: 14px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${mod.name}</span>
-                <span class="mod-category-pill ${sysUpper.toLowerCase()}">${sysUpper}</span>
-                <span class="mod-category-pill">${struct}</span>
-                <span class="mod-category-pill">${scale}</span>
+              <!-- 第 1 排：名称与规则系统 -->
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; min-width: 0;">
+                  <span style="font-weight: 600; font-size: 14px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${mod.name}</span>
+                  <span class="mod-category-pill ${sysUpper.toLowerCase()}">${sysUpper}</span>
+                </div>
+                <button type="button" class="mod-capsule-btn danger btn-delete-mod" data-mod-id="${mod.id}" style="flex-shrink: 0;">删除</button>
               </div>
-              ${tagsHtml ? `<div class="mod-tags-horizontal-row" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px;">${tagsHtml}</div>` : ''}
-              <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 5px;">${mod.chapterCount || 0} 章节 · 约 ${mod.wordCount || 0} 字 · ${new Date(mod.createdAt).toLocaleDateString()}</div>
-            </div>
-            <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
-              <button type="button" class="mod-capsule-btn danger btn-delete-mod" data-mod-id="${mod.id}">删除</button>
+              <!-- 第 2 排：规模人数与结构类型 -->
+              <div style="display: flex; align-items: center; gap: 5px; margin-top: 4px;">
+                <span class="mod-category-pill">${scale}</span>
+                <span class="mod-category-pill">${struct}</span>
+              </div>
+              <!-- 第 3 排：普通 Tag 标签 -->
+              ${tagsHtml ? `<div class="mod-tags-horizontal-row" style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px;">${tagsHtml}</div>` : ''}
+              <!-- 第 4 排：字数与统计 -->
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${mod.chapterCount || 0} 章节 · 约 ${mod.wordCount || 0} 字 · ${new Date(mod.createdAt).toLocaleDateString()}</div>
             </div>
           </div>
         `;

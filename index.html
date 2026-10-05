@@ -2183,12 +2183,14 @@
                 <!-- 模组元信息与 Tag 徽章栏 -->
                 <div id="module-step2-meta-container" style="display: flex; flex-direction: column; gap: 6px; background: var(--secondary-bg, #F0EFEA); padding: 10px 12px; border-radius: 10px; margin-bottom: 8px;">
                   <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
-                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;" id="module-step2-category-badges">
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                       <span class="mod-category-pill coc" id="module-step2-main-cat">COC</span>
-                      <span class="mod-category-pill" id="module-step2-sub-cat">1v1</span>
-                      <span class="mod-category-pill" id="module-step2-type">线性</span>
                     </div>
-                    <span style="font-size: 11px; color: var(--text-secondary);" id="module-step2-meta-words">约 0 字</span>
+                    <span style="font-size: 11px; color: var(--text-secondary);" id="module-step2-meta-words">约 0 字 · 0 章节</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;" id="module-step2-category-badges">
+                    <span class="mod-category-pill" id="module-step2-sub-cat">1v1</span>
+                    <span class="mod-category-pill" id="module-step2-type">线性</span>
                   </div>
                   <div id="module-step2-tags-row" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
                   <div id="module-step2-summary-text" style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;"></div>
@@ -2354,19 +2356,21 @@
                 <!-- 顶部封面与大纲信息框 -->
                 <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px;">
                   <div style="display: flex; flex-direction: row; align-items: center; gap: 12px;">
-                    <div id="module-detail-cover" style="width: 52px; height: 52px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color, #4A7A68);">
+                    <div id="module-detail-cover" style="position: relative; width: 52px; height: 52px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color, #4A7A68); cursor: pointer; overflow: hidden; border: 1px solid var(--border-color);" title="点击上传封面头像">
                       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
                         <path d="M6 6h10"></path>
                         <path d="M6 10h10"></path>
                       </svg>
                     </div>
+                    <input type="file" id="module-detail-cover-input" accept="image/*" style="display: none;" />
                     <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
                       <span style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="module-detail-cover-title">模组名称</span>
-                      <div id="module-detail-category-badges" style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;"></div>
+                      <span style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;" id="module-detail-meta-line">COC · 线性 · 1v1 · 约 0 字 · 0 章节</span>
                     </div>
                   </div>
-                  <div id="module-detail-tags-row" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px;"></div>
+                  <div id="module-detail-tags-row" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px;"></div>
+                  <div id="module-detail-desc" style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--border-color); white-space: pre-wrap;"></div>
                 </div>
 
                 <!-- 维度子标签切换 -->
@@ -2418,6 +2422,24 @@
                 </div>
                 <!-- 滚动主体区 -->
                 <div style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 9px;">
+                  <!-- 模组封面与头像设置 -->
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">模组封面</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <div id="module-edit-cover-preview" style="width: 44px; height: 44px; border-radius: 8px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border-color); color: var(--accent-color, #4A7A68);">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                          <path d="M6 6h10"></path>
+                          <path d="M6 10h10"></path>
+                        </svg>
+                      </div>
+                      <div style="display: flex; gap: 6px; align-items: center;">
+                        <button type="button" class="moe-btn" id="module-edit-cover-upload-btn" style="height: 28px; padding: 0 12px; font-size: 11.5px; border-radius: 6px;">上传</button>
+                        <button type="button" class="module-btn-secondary" id="module-edit-cover-remove-btn" style="height: 28px; padding: 0 10px; font-size: 11.5px; border-radius: 6px; display: none;">移除</button>
+                        <input type="file" id="module-edit-cover-file-input" accept="image/*" style="display: none;" />
+                      </div>
+                    </div>
+                  </div>
                   <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">模组名称</label>
                     <input type="text" id="module-edit-name-input" class="moe-input" style="height: 30px; font-size: 12px; padding: 0 8px; border-radius: 6px;" placeholder="输入模组名称" />
@@ -2425,7 +2447,7 @@
                   <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
                     <div class="form-group" style="margin-bottom: 0;">
                       <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">结构类型</label>
-                      <select id="module-edit-type-select" class="moe-input" style="height: 30px; font-size: 11.5px; padding: 0 4px; border-radius: 6px;">
+                      <select id="module-edit-type-select" style="width: 100%; height: 30px; line-height: 30px; font-size: 12px; padding: 0 4px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
                         <option value="线性">线性</option>
                         <option value="沙盒">沙盒</option>
                         <option value="其他">其他</option>
@@ -2433,14 +2455,14 @@
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                       <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">模组大类</label>
-                      <select id="module-edit-system-select" class="moe-input" style="height: 30px; font-size: 11.5px; padding: 0 4px; border-radius: 6px;">
+                      <select id="module-edit-system-select" style="width: 100%; height: 30px; line-height: 30px; font-size: 12px; padding: 0 4px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
                         <option value="coc">COC</option>
                         <option value="coj">COJ</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                       <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">规模人数</label>
-                      <select id="module-edit-scale-select" class="moe-input" style="height: 30px; font-size: 11.5px; padding: 0 4px; border-radius: 6px;">
+                      <select id="module-edit-scale-select" style="width: 100%; height: 30px; line-height: 30px; font-size: 12px; padding: 0 4px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
                         <option value="1v1">1v1</option>
                         <option value="单人">单人</option>
                         <option value="2ho">2ho</option>
