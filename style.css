@@ -7912,7 +7912,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 #desktop-app-container {
   display: grid;
   grid-template-columns: 1fr 1fr; /* 两列图标 */
-  gap: 25px;
+  gap: 12px 20px;
   align-content: start;
 }
 .desktop-app-icon {
@@ -31762,6 +31762,150 @@ details[open] .thought-chain-arrow {
 
 .chat-mod-footer-btn:active {
   transform: scale(0.98);
+}
+
+/* 守密人列表项样式与单选框修复 */
+.keeper-member-item {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 8px 12px !important;
+  background-color: var(--secondary-bg, rgba(0,0,0,0.03)) !important;
+  border: 1px solid var(--border-color, #e0e0e0) !important;
+  border-radius: 10px !important;
+  transition: background-color 0.2s !important;
+  cursor: pointer !important;
+  gap: 10px !important;
+}
+.keeper-member-item:hover {
+  background-color: rgba(0,0,0,0.06) !important;
+}
+.keeper-member-left {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  text-align: left !important;
+}
+/* 强行解除 .form-group input 对单选框的100%宽度覆盖 */
+.form-group input[type="radio"].keeper-radio,
+.keeper-member-item input[type="radio"],
+input[type="radio"].keeper-radio {
+  width: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  flex: 0 0 18px !important;
+  cursor: pointer !important;
+  accent-color: var(--accent-color, #4A7A68) !important;
+  display: inline-block !important;
+  box-shadow: none !important;
+}
+.keeper-avatar {
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  flex: 0 0 32px !important;
+  border: 1px solid var(--border-color) !important;
+  display: block !important;
+}
+.keeper-name {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex: 1 1 auto !important;
+  text-align: left !important;
+}
+.keeper-prompt-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 12px !important;
+  padding: 4px 10px !important;
+  border-radius: 8px !important;
+  background-color: var(--card-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  flex: 0 0 auto !important;
+  transition: all 0.15s !important;
+  height: 28px !important;
+  box-sizing: border-box !important;
+}
+.keeper-prompt-btn:hover {
+  border-color: var(--accent-color) !important;
+  color: var(--accent-color) !important;
+}
+
+/* 预设下拉选择框文字完整居中无挤压 */
+select#keeper-prompt-preset-select,
+.form-group select#keeper-prompt-preset-select {
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  line-height: normal !important;
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+  border-radius: 8px !important;
+  background: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  text-align: left !important;
+}
+
+#rerender-nai-from-editor-btn {
+  width: auto !important;
+  max-width: 72px !important;
+  height: 26px !important;
+  line-height: 24px !important;
+  padding: 0 8px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+}
+
+select.gender-select-box {
+  width: 68px !important;
+  height: 28px !important;
+  line-height: normal !important;
+  padding: 0 4px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  text-align: center !important;
+  text-align-last: center !important;
+  color: var(--text-primary) !important;
+  background-color: var(--card-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+  position: relative !important;
+  z-index: 100 !important;
+  cursor: pointer !important;
 }
 
 

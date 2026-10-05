@@ -286,6 +286,16 @@
                     </div>
                     <span class="label">微博</span>
                   </div>
+                  <div class="desktop-app-icon" id="sticker-app-icon">
+                    <div class="icon-bg-desktop">
+                      <img
+                        id="icon-img-sticker"
+                        src="https://i.postimg.cc/mDCHYy8t/sticker-icon.png"
+                        alt="表情包"
+                      />
+                    </div>
+                    <span class="label">表情包</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1291,6 +1301,10 @@
                     <span style="font-size: 14px; color: var(--text-primary);">头像、道具生图</span>
                   </label>
                   <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-forced-image" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">强制生图</span>
+                  </label>
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
                     <input type="checkbox" id="sub-api-use-map" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
                     <span style="font-size: 14px; color: var(--text-primary);">地图</span>
                   </label>
@@ -1348,6 +1362,22 @@
                 <div style="display: flex; gap: 8px;">
                   <button type="button" id="enable-all-weibo-btn" class="moe-btn-small">开启</button>
                   <button type="button" id="disable-all-weibo-btn" class="moe-btn-small" style="background-color: var(--secondary-bg, #f0f0f0); color: var(--text-primary, #333);">关闭</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 表情包卡片 -->
+          <div class="moe-card">
+            <div class="moe-card-header">
+              <h3>表情包</h3>
+            </div>
+            <div class="moe-card-body">
+              <div class="form-group" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>全局表情包</span>
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" id="enable-global-stickers-btn" class="moe-btn-small">开启</button>
+                  <button type="button" id="disable-global-stickers-btn" class="moe-btn-small" style="background-color: var(--secondary-bg, #f0f0f0); color: var(--text-primary, #333);">关闭</button>
                 </div>
               </div>
             </div>
@@ -2465,6 +2495,8 @@
                       <select id="module-edit-scale-select" style="width: 100%; height: 30px; line-height: 30px; font-size: 12px; padding: 0 4px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
                         <option value="1v1">1v1</option>
                         <option value="单人">单人</option>
+                        <option value="2-4人">2-4人</option>
+                        <option value="3-5人">3-5人</option>
                         <option value="2ho">2ho</option>
                         <option value="3ho">3ho</option>
                         <option value="4ho">4ho</option>
@@ -2860,28 +2892,6 @@
           </div>
 
           <div id="chat-input-actions-top">
-            <button
-              id="open-sticker-panel-btn"
-              class="chat-action-icon-btn action-button"
-              title="表情面板"
-              onclick="if(typeof renderStickerPanel==='function'){renderStickerPanel();const sp=document.getElementById('sticker-panel');if(sp)sp.classList.add('visible');}"
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            </button>
-
             <!-- “重新生成回复”按钮的新家 -->
             <button id="reroll-btn" class="action-button" title="重新生成回复" onclick="if(typeof handleRerollClick==='function')handleRerollClick();">
               <svg
@@ -2924,6 +2934,52 @@
                 <!-- 里面的两行文字线，代表预设内容 -->
                 <line x1="8" y1="9" x2="16" y2="9"></line>
                 <line x1="8" y1="13" x2="14" y2="13"></line>
+              </svg>
+            </button>
+
+            <button
+              id="chat-inventory-btn"
+              class="chat-action-icon-btn action-button"
+              title="物品"
+              type="button"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                <path d="m3.3 7 8.7 5 8.7-5"></path>
+                <path d="M12 22V12"></path>
+              </svg>
+            </button>
+
+            <button
+              id="chat-map-btn"
+              class="chat-action-icon-btn action-button"
+              title="地图"
+              type="button"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                <line x1="8" y1="2" x2="8" y2="18"></line>
+                <line x1="16" y1="6" x2="16" y2="22"></line>
               </svg>
             </button>
 
@@ -6007,15 +6063,16 @@
               style="display: none"
             >
               <label>备注名 (仅显示用，AI不知道)</label>
-              <div class="input-with-btn-row" style="display: flex; gap: 8px;">
+              <div class="input-with-btn-row" style="display: flex; gap: 6px; align-items: center;">
                 <input
                   type="text"
                   id="chat-remark-input"
                   class="moe-input"
-                  style="flex: 1;"
+                  style="width: 110px; max-width: 120px; flex: 0 0 110px; min-width: 0;"
                   placeholder="设置一个备注..."
                 />
                 <button type="button" id="open-thought-chain-bind-btn-single" class="moe-btn-small" style="width: auto; flex-shrink: 0; white-space: nowrap;">思维链</button>
+                <button type="button" id="open-keeper-panel-btn-single" class="moe-btn-small" style="width: auto; flex-shrink: 0; white-space: nowrap;">守密人</button>
               </div>
             </div>
 
@@ -6035,14 +6092,15 @@
 
             <div class="form-group" id="my-group-nickname-group">
               <label for="my-group-nickname-input">我的群昵称</label>
-              <div class="input-with-btn-row" style="display: flex; gap: 8px;">
+              <div class="input-with-btn-row" style="display: flex; gap: 6px; align-items: center;">
                 <input
                   type="text"
                   id="my-group-nickname-input"
                   class="moe-input"
-                  style="flex: 1;"
+                  style="width: 110px; max-width: 120px; flex: 0 0 110px; min-width: 0;"
                 />
                 <button type="button" id="open-thought-chain-bind-btn-group" class="moe-btn-small" style="width: auto; flex-shrink: 0; white-space: nowrap;">思维链</button>
+                <button type="button" id="open-keeper-panel-btn-group" class="moe-btn-small" style="width: auto; flex-shrink: 0; white-space: nowrap;">守密人</button>
               </div>
             </div>
 
@@ -6074,6 +6132,13 @@
                     >
                       图库
                     </button>
+                    <button
+                      type="button"
+                      id="gen-ai-avatar-btn"
+                      class="moe-btn-mini"
+                    >
+                      生图
+                    </button>
                   </div>
                   <input
                     type="file"
@@ -6100,6 +6165,13 @@
                       class="moe-btn-mini"
                     >
                       上传
+                    </button>
+                    <button
+                      type="button"
+                      id="gen-group-avatar-btn"
+                      class="moe-btn-mini"
+                    >
+                      生图
                     </button>
                   </div>
                   <input
@@ -6133,6 +6205,13 @@
                     </button>
                     <button id="open-persona-library-btn" class="moe-btn-mini">
                       预设
+                    </button>
+                    <button
+                      type="button"
+                      id="gen-my-avatar-btn"
+                      class="moe-btn-mini"
+                    >
+                      生图
                     </button>
                   </div>
                   <input
@@ -6250,13 +6329,13 @@
 
             <div class="form-group" style="margin-top: 4px;">
               <label for="ai-gender-select" style="font-size: 11px; margin-bottom: 2px;">性别</label>
-              <div style="display: flex; gap: 6px;">
-                <select id="ai-gender-select" class="moe-input" style="width: 64px; flex-shrink: 0; padding: 2px 4px; font-size: 11px; height: 26px;">
+              <div style="display: flex; gap: 6px; align-items: center; position: relative; z-index: 100;">
+                <select id="ai-gender-select" class="moe-input gender-select-box" style="width: 68px; flex-shrink: 0; padding: 0 4px; font-size: 13px; font-weight: 500; height: 28px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; position: relative; z-index: 100; display: inline-block; vertical-align: middle; box-sizing: border-box; cursor: pointer;">
                   <option value="">选择</option>
                   <option value="男">男</option>
                   <option value="女">女</option>
                 </select>
-                <input type="text" id="ai-gender-note-input" class="moe-input" placeholder="" style="flex: 1; padding: 2px 6px; font-size: 11px; height: 26px;">
+                <input type="text" id="ai-gender-note-input" class="moe-input" placeholder="" style="flex: 1; padding: 0 6px; font-size: 11px; height: 28px; line-height: 26px; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; position: relative; z-index: 10; box-sizing: border-box;">
               </div>
             </div>
 
@@ -6353,13 +6432,13 @@
 
             <div class="form-group" style="margin-top: 4px;">
               <label for="my-gender-select" style="font-size: 11px; margin-bottom: 2px;">性别</label>
-              <div style="display: flex; gap: 6px;">
-                <select id="my-gender-select" class="moe-input" style="width: 64px; flex-shrink: 0; padding: 2px 4px; font-size: 11px; height: 26px;">
+              <div style="display: flex; gap: 6px; align-items: center; position: relative; z-index: 100;">
+                <select id="my-gender-select" class="moe-input gender-select-box" style="width: 68px; flex-shrink: 0; padding: 0 4px; font-size: 13px; font-weight: 500; height: 28px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; position: relative; z-index: 100; display: inline-block; vertical-align: middle; box-sizing: border-box; cursor: pointer;">
                   <option value="">选择</option>
                   <option value="男">男</option>
                   <option value="女">女</option>
                 </select>
-                <input type="text" id="my-gender-note-input" class="moe-input" placeholder="" style="flex: 1; padding: 2px 6px; font-size: 11px; height: 26px;">
+                <input type="text" id="my-gender-note-input" class="moe-input" placeholder="" style="flex: 1; padding: 0 6px; font-size: 11px; height: 28px; line-height: 26px; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; position: relative; z-index: 10; box-sizing: border-box;">
               </div>
             </div>
 
@@ -6376,30 +6455,6 @@
           <!-- ============================== -->
           <div class="settings-group-card moe-card" id="other-settings-card">
             <div class="settings-section-title">🧠 更多设定与记忆</div>
-
-            <!-- ★★★ 修改点：将NPC库和表情包并排放在这里 ★★★ -->
-            <div style="display: flex; gap: 10px; margin-top: 15px">
-              <!-- NPC库按钮 -->
-              <div id="npc-library-group" style="flex: 1">
-                <button
-                  id="manage-npcs-btn"
-                  class="moe-btn-secondary"
-                  style="margin-top: 0; width: 100%"
-                >
-                  🤖 NPC库
-                </button>
-              </div>
-              <!-- 表情包按钮 -->
-              <div id="char-sticker-group" style="flex: 1">
-                <button
-                  id="manage-char-stickers-btn"
-                  class="moe-btn-secondary"
-                  style="margin-top: 0; width: 100%"
-                >
-                  😶 表情包
-                </button>
-              </div>
-            </div>
 
             <!-- 微博设定 -->
             <div class="form-group" id="weibo-toggle-group">
@@ -6432,7 +6487,6 @@
             </div>
 
             <!-- 关联设定 -->
-            <div class="moe-divider"></div>
             <div class="form-group" id="world-book-link-group">
               <label>关联世界书 (多选)</label>
               <div class="custom-multiselect">
@@ -6974,288 +7028,296 @@
           <!-- ============================== -->
           <!-- 5. 视觉美化卡片 -->
           <!-- ============================== -->
-          <div class="settings-group-card moe-card">
-            <div class="settings-section-title">🎨 视觉美化</div>
+          <div class="settings-group-card moe-card" id="visual-beautify-card">
+            <div class="settings-section-title" style="display: flex; justify-content: space-between; align-items: center; white-space: nowrap; width: 100%; box-sizing: border-box;">
+              <span style="white-space: nowrap; flex-shrink: 0; display: inline-block;">🎨 视觉美化</span>
+              <label class="toggle-switch-label" style="margin: 0 0 0 auto; cursor: pointer; flex-shrink: 0;">
+                <input type="checkbox" id="visual-beautify-switch" />
+                <span class="toggle-switch-slider"></span>
+              </label>
+            </div>
 
-            <div class="form-group">
-              <label>聊天背景</label>
-              <div class="bg-upload-container">
-                <div class="bg-preview-wrapper">
-                  <img
-                    id="bg-preview"
-                    class="bg-preview-img"
-                    style="width: 100px; height: 150px; border-radius: 10px"
-                  />
+            <div id="visual-beautify-details-group" style="display: none; margin-top: 10px;">
+              <div class="form-group">
+                <label>聊天背景</label>
+                <div class="bg-upload-container">
+                  <div class="bg-preview-wrapper">
+                    <img
+                      id="bg-preview"
+                      class="bg-preview-img"
+                      style="width: 100px; height: 150px; border-radius: 10px"
+                    />
+                    <button
+                      id="remove-bg-btn"
+                      style="
+                        position: absolute;
+                        top: -5px;
+                        right: -5px;
+                        width: 20px;
+                        height: 20px;
+                        border-radius: 50%;
+                        background: red;
+                        color: white;
+                        border: none;
+                        cursor: pointer;
+                      "
+                    >
+                      ×
+                    </button>
+                  </div>
                   <button
-                    id="remove-bg-btn"
-                    style="
-                      position: absolute;
-                      top: -5px;
-                      right: -5px;
-                      width: 20px;
-                      height: 20px;
-                      border-radius: 50%;
-                      background: red;
-                      color: white;
-                      border: none;
-                      cursor: pointer;
-                    "
+                    onclick="document.getElementById('bg-input').click()"
+                    class="moe-btn-small"
+                    style="width: auto"
                   >
-                    ×
+                    上传
                   </button>
+                  <input type="file" id="bg-input" accept="image/*" hidden />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>气泡主题</label>
+                <div
+                  class="theme-selector"
+                  style="display: flex; flex-wrap: wrap; gap: 10px"
+                >
+                  <!-- 原生单选按钮，JS会填充或保持原样 -->
+                  <label
+                    ><input
+                      type="radio"
+                      name="theme-select"
+                      value="default"
+                      id="theme-default"
+                    />
+                    默认</label
+                  >
+                  <label
+                    ><input type="radio" name="theme-select" value="pink_blue" />
+                    粉蓝</label
+                  >
+                  <label
+                    ><input type="radio" name="theme-select" value="blue_white" />
+                    蓝白</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="theme-select"
+                      value="purple_yellow"
+                    />
+                    紫黄</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="theme-select"
+                      value="black_white"
+                    />
+                    黑白</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="theme-select"
+                      value="yellow_white"
+                    />
+                    黄白</label
+                  >
+                  <label
+                    ><input type="radio" name="theme-select" value="red_black" />
+                    红黑</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="theme-select"
+                      value="blue_yellow"
+                    />
+                    蓝黄</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="theme-select"
+                      value="pink_yellow"
+                    />
+                    粉黄</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="theme-select"
+                      value="pink_purple"
+                    />
+                    粉紫</label
+                  >
+                  <label
+                    ><input type="radio" name="theme-select" value="gray_white" />
+                    灰白</label
+                  >
+                  <label
+                    ><input type="radio" name="theme-select" value="blue_green" />
+                    蓝绿</label
+                  >
+                  <label
+                    ><input type="radio" name="theme-select" value="pink_white" />
+                    粉白</label
+                  >
+                  <label
+                    ><input type="radio" name="theme-select" value="pink_black" />
+                    粉黑</label
+                  >
+                  <label
+                    ><input type="radio" name="theme-select" value="pink_green" />
+                    粉绿</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="theme-select"
+                      value="green_black"
+                    />
+                    绿黑</label
+                  >
                 </div>
                 <button
-                  onclick="document.getElementById('bg-input').click()"
-                  class="moe-btn-small"
-                  style="width: auto"
-                >
-                  上传
-                </button>
-                <input type="file" id="bg-input" accept="image/*" hidden />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>气泡主题</label>
-              <div
-                class="theme-selector"
-                style="display: flex; flex-wrap: wrap; gap: 10px"
-              >
-                <!-- 原生单选按钮，JS会填充或保持原样 -->
-                <label
-                  ><input
-                    type="radio"
-                    name="theme-select"
-                    value="default"
-                    id="theme-default"
-                  />
-                  默认</label
-                >
-                <label
-                  ><input type="radio" name="theme-select" value="pink_blue" />
-                  粉蓝</label
-                >
-                <label
-                  ><input type="radio" name="theme-select" value="blue_white" />
-                  蓝白</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="theme-select"
-                    value="purple_yellow"
-                  />
-                  紫黄</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="theme-select"
-                    value="black_white"
-                  />
-                  黑白</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="theme-select"
-                    value="yellow_white"
-                  />
-                  黄白</label
-                >
-                <label
-                  ><input type="radio" name="theme-select" value="red_black" />
-                  红黑</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="theme-select"
-                    value="blue_yellow"
-                  />
-                  蓝黄</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="theme-select"
-                    value="pink_yellow"
-                  />
-                  粉黄</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="theme-select"
-                    value="pink_purple"
-                  />
-                  粉紫</label
-                >
-                <label
-                  ><input type="radio" name="theme-select" value="gray_white" />
-                  灰白</label
-                >
-                <label
-                  ><input type="radio" name="theme-select" value="blue_green" />
-                  蓝绿</label
-                >
-                <label
-                  ><input type="radio" name="theme-select" value="pink_white" />
-                  粉白</label
-                >
-                <label
-                  ><input type="radio" name="theme-select" value="pink_black" />
-                  粉黑</label
-                >
-                <label
-                  ><input type="radio" name="theme-select" value="pink_green" />
-                  粉绿</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="theme-select"
-                    value="green_black"
-                  />
-                  绿黑</label
-                >
-              </div>
-              <button
-                id="reset-theme-btn"
-                class="moe-btn-mini"
-                style="width: auto; margin-top: 5px"
-              >
-                恢复默认主题
-              </button>
-            </div>
-
-            <div class="form-group">
-              <label>字体大小: <span id="font-size-value">13px</span></label>
-              <input
-                type="range"
-                id="font-size-slider"
-                min="12"
-                max="20"
-                step="1"
-                class="moe-slider"
-              />
-            </div>
-
-            <div class="form-group">
-              <label>气泡样式预设</label>
-              <div class="input-with-btn-row">
-                <select
-                  id="bubble-style-preset-select"
-                  class="moe-input"
-                ></select>
-                <button id="manage-bubble-presets-btn" class="moe-btn-small">
-                  管理
-                </button>
-              </div>
-              <div class="moe-btn-group">
-                <button id="export-bubble-preset-btn" class="moe-btn-mini">
-                  导出
-                </button>
-                <button id="import-bubble-preset-btn" class="moe-btn-mini">
-                  导入
-                </button>
-              </div>
-              <input
-                type="file"
-                id="import-bubble-preset-input"
-                accept=".json, .txt, .css, .docx"
-                hidden
-              />
-            </div>
-
-            <div class="form-group">
-              <label
-                >自定义CSS
-                <button
-                  id="reset-custom-css-btn"
+                  id="reset-theme-btn"
                   class="moe-btn-mini"
-                  style="margin-left: 5px; padding: 2px 6px"
+                  style="width: auto; margin-top: 5px"
                 >
-                  重置
-                </button></label
-              >
-              <textarea
-                id="custom-css-input"
-                rows="4"
-                class="moe-input code-area"
-                placeholder="/* 在此输入自定义CSS代码 */"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label>实时预览</label>
-              <div id="settings-preview-area" class="preview-box"></div>
-            </div>
-
-            <!-- NAI出图设置 -->
-            <div
-              class="form-group"
-              id="nai-character-settings-group"
-              style="display: none"
-            >
-              <div class="moe-divider"></div>
-              <label>NovelAI 出图 (单聊)</label>
-              <div style="display: flex; gap: 15px; margin: 10px 0">
-                <label
-                  ><input
-                    type="radio"
-                    name="nai-prompt-source"
-                    value="system"
-                    checked
-                  />
-                  系统默认</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="nai-prompt-source"
-                    value="character"
-                  />
-                  角色专属</label
-                >
+                  恢复默认主题
+                </button>
               </div>
-              <button id="character-nai-prompts-btn" class="moe-btn-secondary">
-                配置角色专属提示词
-              </button>
-            </div>
 
-            <div
-              class="form-group"
-              id="group-nai-settings-group"
-              style="display: none"
-            >
-              <div class="moe-divider"></div>
-              <label>NovelAI 出图 (群聊)</label>
-              <div style="display: flex; gap: 15px; margin: 10px 0">
-                <label
-                  ><input
-                    type="radio"
-                    name="group-nai-prompt-source"
-                    value="system"
-                    checked
-                  />
-                  系统默认</label
-                >
-                <label
-                  ><input
-                    type="radio"
-                    name="group-nai-prompt-source"
-                    value="character"
-                  />
-                  角色专属</label
-                >
+              <div class="form-group">
+                <label>字体大小: <span id="font-size-value">13px</span></label>
+                <input
+                  type="range"
+                  id="font-size-slider"
+                  min="12"
+                  max="20"
+                  step="1"
+                  class="moe-slider"
+                />
               </div>
-              <button
-                id="group-character-nai-prompts-btn"
-                class="moe-btn-secondary"
+
+              <div class="form-group">
+                <label>气泡样式预设</label>
+                <div class="input-with-btn-row">
+                  <select
+                    id="bubble-style-preset-select"
+                    class="moe-input"
+                  ></select>
+                  <button id="manage-bubble-presets-btn" class="moe-btn-small">
+                    管理
+                  </button>
+                </div>
+                <div class="moe-btn-group">
+                  <button id="export-bubble-preset-btn" class="moe-btn-mini">
+                    导出
+                  </button>
+                  <button id="import-bubble-preset-btn" class="moe-btn-mini">
+                    导入
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  id="import-bubble-preset-input"
+                  accept=".json, .txt, .css, .docx"
+                  hidden
+                />
+              </div>
+
+              <div class="form-group">
+                <label
+                  >自定义CSS
+                  <button
+                    id="reset-custom-css-btn"
+                    class="moe-btn-mini"
+                    style="margin-left: 5px; padding: 2px 6px"
+                  >
+                    重置
+                  </button></label
+                >
+                <textarea
+                  id="custom-css-input"
+                  rows="4"
+                  class="moe-input code-area"
+                  placeholder="/* 在此输入自定义CSS代码 */"
+                ></textarea>
+              </div>
+
+              <div class="form-group">
+                <label>实时预览</label>
+                <div id="settings-preview-area" class="preview-box"></div>
+              </div>
+
+              <!-- NAI出图设置 -->
+              <div
+                class="form-group"
+                id="nai-character-settings-group"
+                style="display: none"
               >
-                配置角色专属提示词
-              </button>
+                <div class="moe-divider"></div>
+                <label>NovelAI 出图 (单聊)</label>
+                <div style="display: flex; gap: 15px; margin: 10px 0">
+                  <label
+                    ><input
+                      type="radio"
+                      name="nai-prompt-source"
+                      value="system"
+                      checked
+                    />
+                    系统默认</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="nai-prompt-source"
+                      value="character"
+                    />
+                    角色专属</label
+                  >
+                </div>
+                <button id="character-nai-prompts-btn" class="moe-btn-secondary">
+                  配置角色专属提示词
+                </button>
+              </div>
+
+              <div
+                class="form-group"
+                id="group-nai-settings-group"
+                style="display: none"
+              >
+                <div class="moe-divider"></div>
+                <label>NovelAI 出图 (群聊)</label>
+                <div style="display: flex; gap: 15px; margin: 10px 0">
+                  <label
+                    ><input
+                      type="radio"
+                      name="group-nai-prompt-source"
+                      value="system"
+                      checked
+                    />
+                    系统默认</label
+                  >
+                  <label
+                    ><input
+                      type="radio"
+                      name="group-nai-prompt-source"
+                      value="character"
+                    />
+                    角色专属</label
+                  >
+                </div>
+                <button
+                  id="group-character-nai-prompts-btn"
+                  class="moe-btn-secondary"
+                >
+                  配置角色专属提示词
+                </button>
+              </div>
             </div>
           </div>
 
@@ -7294,6 +7356,17 @@
                 style="flex: 1;"
               >
                 回顶
+              </button>
+            </div>
+
+            <div style="display: flex; justify-content: center; margin-top: 10px;">
+              <button
+                type="button"
+                id="open-debug-console-btn"
+                class="moe-btn-secondary"
+                style="width: 100%; text-align: center;"
+              >
+                调试台
               </button>
             </div>
 
@@ -7450,13 +7523,13 @@
 
           <div class="form-group" id="member-gender-group" style="margin-top: 4px;">
             <label for="member-gender-select" style="font-size: 11px; margin-bottom: 2px;">性别</label>
-            <div style="display: flex; gap: 6px;">
-              <select id="member-gender-select" class="moe-input" style="width: 64px; flex-shrink: 0; padding: 2px 4px; font-size: 11px; height: 26px;">
+            <div style="display: flex; gap: 6px; align-items: center; position: relative; z-index: 100;">
+              <select id="member-gender-select" class="moe-input gender-select-box" style="width: 68px; flex-shrink: 0; padding: 0 4px; font-size: 13px; font-weight: 500; height: 28px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; position: relative; z-index: 100; display: inline-block; vertical-align: middle; box-sizing: border-box; cursor: pointer;">
                 <option value="">选择</option>
                 <option value="男">男</option>
                 <option value="女">女</option>
               </select>
-              <input type="text" id="member-gender-note-input" class="moe-input" placeholder="" style="flex: 1; padding: 2px 6px; font-size: 11px; height: 26px;" />
+              <input type="text" id="member-gender-note-input" class="moe-input" placeholder="" style="flex: 1; padding: 0 6px; font-size: 11px; height: 28px; line-height: 26px; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; position: relative; z-index: 10; box-sizing: border-box;" />
             </div>
           </div>
 
@@ -7475,6 +7548,14 @@
                 class="change-frame-btn"
               >
                 更换头像框
+              </button>
+              <button
+                type="button"
+                id="gen-member-avatar-btn"
+                class="change-frame-btn"
+                style="background-color: var(--secondary-bg); color: var(--text-primary);"
+              >
+                生图
               </button>
               <input
                 type="file"
@@ -8240,7 +8321,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     </div>
 
     <div id="thought-chain-editor-modal" class="modal">
-      <div class="modal-content" style="max-width: 420px; width: 90%; height: auto; max-height: 88vh; padding: 20px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg);">
+      <div class="modal-content" style="max-width: 350px; width: 85%; height: auto; max-height: 86vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); margin: auto; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden;">
         <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
           <span id="tc-editor-modal-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">编辑思维链</span>
           <button type="button" class="close-btn" id="close-tc-editor-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
@@ -8259,15 +8340,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <textarea id="tc-preset-coc-input" class="moe-input" rows="4" placeholder="输入跑团模块专属指令..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
           </div>
         </div>
-        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 16px;">
-          <button type="button" class="moe-btn-secondary" id="cancel-tc-editor-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">取消</button>
-          <button type="button" class="moe-btn" id="save-tc-editor-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">保存</button>
+        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-tc-editor-btn">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-tc-editor-btn">保存</button>
         </div>
       </div>
     </div>
 
     <div id="thought-chain-bind-modal" class="modal">
-      <div class="modal-content" style="max-width: 380px; width: 90%; height: auto; max-height: 85vh; padding: 20px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg);">
+      <div class="modal-content" style="max-width: 340px; width: 84%; height: auto; max-height: 85vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); margin: auto; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden;">
         <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
           <span style="font-weight: 600; font-size: 16px; color: var(--text-primary);">思维链绑定</span>
           <button type="button" class="close-btn" id="close-thought-chain-bind-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
@@ -8284,9 +8365,168 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">选择思维链预设</div>
           <div id="tc-preset-select-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
         </div>
-        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 16px;">
-          <button type="button" class="moe-btn-secondary" id="cancel-thought-chain-bind-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">取消</button>
-          <button type="button" class="moe-btn" id="save-thought-chain-bind-btn" style="flex: 1; height: 36px; font-size: 13px; border-radius: 10px;">保存</button>
+        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-thought-chain-bind-btn">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-thought-chain-bind-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 调试台模态框 -->
+    <div id="debug-console-modal" class="modal">
+      <div class="modal-content" style="max-width: 440px; width: 90%; height: 82vh; max-height: 82vh; display: flex; flex-direction: column; border-radius: 18px; padding: 0; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden; margin: auto;">
+        <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg);">
+          <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">调试台</span>
+          <span id="close-debug-console-x" style="cursor: pointer; font-size: 20px; color: var(--text-secondary); line-height: 1;">×</span>
+        </div>
+        <div class="modal-body" id="debug-console-body" style="padding: 14px 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; background: var(--card-bg);"></div>
+        <div class="modal-footer" style="display: flex; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border-color); background: var(--card-bg);">
+          <button type="button" class="chat-mod-footer-btn secondary" id="close-debug-console-btn">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 守密人配置模态框 -->
+    <div id="keeper-modal" class="modal">
+      <div class="modal-content" style="max-width: 360px; width: 86%; max-height: 85vh; display: flex; flex-direction: column; border-radius: 18px; padding: 0; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden; margin: auto;">
+        <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg);">
+          <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">守密人</span>
+          <span id="close-keeper-modal-x" style="cursor: pointer; font-size: 20px; color: var(--text-secondary); line-height: 1;">×</span>
+        </div>
+        <div class="modal-body" style="padding: 16px 18px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; background: var(--card-bg);">
+          <!-- 每回合末尾强制生图开关 -->
+          <div class="form-group" style="margin: 0; padding-bottom: 12px; border-bottom: 1px dashed var(--border-color);">
+            <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin: 0;">
+              <span class="toggle-switch-text" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">每回合末尾强制生图</span>
+              <input type="checkbox" id="keeper-forced-draw-switch" />
+              <span class="toggle-switch-slider"></span>
+            </label>
+          </div>
+
+          <!-- 生图提示词与预设 -->
+          <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin: 0;">生图指令</label>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px;">
+              <select id="keeper-prompt-preset-select" class="moe-input" style="width: 100%; height: 36px; min-height: 36px; line-height: normal; padding: 6px 10px; font-size: 13px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block; text-align: left;">
+                <option value="">选择预设</option>
+              </select>
+              <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+                <button type="button" id="keeper-preset-default-btn" class="summary-preset-btn" style="border-radius: 6px; font-size: 12px; height: 24px; padding: 0 8px;">默认</button>
+                <button type="button" id="keeper-preset-new-btn" class="summary-preset-btn" style="border-radius: 6px; font-size: 12px; height: 24px; padding: 0 8px;">新建</button>
+                <button type="button" id="keeper-preset-save-btn" class="summary-preset-btn" style="border-radius: 6px; font-size: 12px; height: 24px; padding: 0 8px;">保存</button>
+                <button type="button" id="keeper-preset-delete-btn" class="summary-preset-btn" style="border-radius: 6px; font-size: 12px; height: 24px; padding: 0 8px;">删除</button>
+              </div>
+            </div>
+            <textarea id="keeper-prompt-input" class="moe-input" rows="8" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4; border-radius: 10px; padding: 8px 10px; color: #444; background: var(--card-bg); border: 1px solid var(--border-color); resize: vertical;" placeholder="输入生图指令提示词..."></textarea>
+          </div>
+
+          <!-- 选择守密人 -->
+          <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin: 0;">选择守密人</label>
+            <div id="keeper-members-list" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px;"></div>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border-color); background: var(--card-bg);">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-keeper-modal-btn">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-keeper-modal-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 守密人角色提示词配置弹窗 -->
+    <div id="keeper-char-prompt-modal" class="modal">
+      <div class="modal-content" style="max-width: 360px; width: 86%; border-radius: 16px; padding: 0; background: var(--card-bg); border: 1px solid var(--border-color); overflow: hidden; margin: auto;">
+        <div class="modal-header" style="padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg);">
+          <span id="keeper-char-prompt-title" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">角色提示词</span>
+          <span id="close-keeper-char-prompt-x" style="cursor: pointer; font-size: 18px; color: var(--text-secondary); line-height: 1;">×</span>
+        </div>
+        <div class="modal-body" style="padding: 14px 16px; background: var(--card-bg);">
+          <textarea id="keeper-char-prompt-input" class="moe-input" rows="6" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4; border-radius: 8px; padding: 8px; color: #444; background: var(--card-bg); border: 1px solid var(--border-color); resize: vertical;" placeholder="输入该角色的生图提示词..."></textarea>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border-color); background: var(--card-bg);">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-keeper-char-prompt-btn">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-keeper-char-prompt-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 头像生图模态框 -->
+    <div id="avatar-gen-modal" class="modal">
+      <div class="modal-content" style="max-width: 360px; width: 86%; max-height: 85vh; height: 85vh; display: flex; flex-direction: column; border-radius: 18px; padding: 0; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: none; overflow: hidden; margin: auto;">
+        <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); flex-shrink: 0; box-shadow: none;">
+          <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">生图</span>
+          <span id="close-avatar-gen-modal-x" style="cursor: pointer; font-size: 20px; color: var(--text-secondary); line-height: 1;">×</span>
+        </div>
+        <div class="modal-body" style="padding: 16px 18px; overflow-y: auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; background: var(--card-bg); box-shadow: none;">
+          <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin: 0;">提示词</label>
+              <span style="font-size: 11px; color: var(--text-secondary);">用来给ai阅读</span>
+            </div>
+            <textarea id="avatar-gen-persona-input" class="moe-input" rows="3" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4; border-radius: 10px; padding: 8px 10px; color: var(--text-primary); background: var(--card-bg); border: 1px solid var(--border-color); resize: vertical; box-shadow: none;" placeholder="输入人设描述"></textarea>
+          </div>
+
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+            <button type="button" id="avatar-gen-create-prompt-btn" style="width: fit-content; min-width: 0; height: 28px; padding: 0 14px; border-radius: 8px; font-size: 12px; font-weight: 500; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: pointer; box-sizing: border-box; box-shadow: none; display: inline-flex; align-items: center; justify-content: center;">生成词条</button>
+            <span style="font-size: 11px; color: var(--text-secondary);">点击调用api生成prompt</span>
+          </div>
+
+          <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin: 0;">词条</label>
+            <textarea id="avatar-gen-prompt-input" class="moe-input" rows="3" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4; border-radius: 10px; padding: 8px 10px; color: var(--text-primary); background: var(--card-bg); border: 1px solid var(--border-color); resize: vertical; box-shadow: none;" placeholder="生成或输入英文生图词条"></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: center; align-items: center; width: 100%;">
+            <button type="button" id="avatar-gen-execute-btn" style="width: fit-content; min-width: 0; height: 30px; padding: 0 18px; border-radius: 8px; font-size: 12px; font-weight: 500; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: pointer; box-sizing: border-box; box-shadow: none; display: inline-flex; align-items: center; justify-content: center;">生图</button>
+          </div>
+
+          <div id="avatar-gen-preview-container" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; border: 1px solid var(--border-color); background: var(--secondary-bg); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; box-shadow: none; touch-action: none;">
+            <div id="avatar-gen-placeholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-secondary);">
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="var(--text-secondary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </div>
+            <img id="avatar-gen-result-image" style="display: none; width: 100%; height: 100%; object-fit: cover; transition: transform 0.1s ease; cursor: grab; user-select: none;" />
+            <div id="avatar-gen-expand-btn" style="display: none; position: absolute; right: 8px; bottom: 8px; width: 26px; height: 26px; border-radius: 6px; background: rgba(0,0,0,0.5); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; box-shadow: none;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <polyline points="9 21 3 21 3 15"></polyline>
+                <line x1="21" y1="3" x2="14" y2="10"></line>
+                <line x1="3" y1="21" x2="10" y2="14"></line>
+              </svg>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: center; align-items: center; gap: 16px; flex-shrink: 0; padding-bottom: 4px;">
+            <button type="button" id="avatar-gen-flip-btn" style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: none;">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="8 3 4 7 8 11"></polyline>
+                <polyline points="16 21 20 17 16 13"></polyline>
+                <line x1="4" y1="7" x2="20" y2="7"></line>
+                <line x1="20" y1="17" x2="4" y2="17"></line>
+              </svg>
+            </button>
+            <button type="button" id="avatar-gen-rotate-left-btn" style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: none;">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+            </button>
+            <button type="button" id="avatar-gen-rotate-right-btn" style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: none;">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border-color); background: var(--card-bg); flex-shrink: 0; box-shadow: none;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-avatar-gen-btn">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-avatar-gen-btn">保存</button>
         </div>
       </div>
     </div>
@@ -8693,8 +8933,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <button id="reroll-nai-btn" style="display: none"><span>重</span><span>绘</span><span>图</span><span>片</span></button>
           <!-- 新增这行 -->
           <button id="edit-message-btn"><span>编</span><span>辑</span><span>消</span><span>息</span></button>
-          <button id="optimize-message-btn"><span>优</span><span>化</span></button>
           <button id="copy-message-btn"><span>复</span><span>制</span><span>文</span><span>本</span></button>
+          <button id="optimize-message-btn"><span>优</span><span>化</span></button>
           <button id="recall-message-btn"><span>隐</span><span>藏</span></button>
           <button id="quote-message-btn"><span>引</span><span>用</span></button>
           <button id="select-message-btn"><span>进</span><span>入</span><span>多</span><span>选</span></button>
@@ -8753,8 +8993,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 可视化消息编辑器模态框 -->
     <div id="message-editor-modal" class="modal">
       <div class="modal-content" style="height: 75%">
-        <div class="modal-header">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
           <span>编辑与拆分消息</span>
+          <button type="button" id="rerender-nai-from-editor-btn" class="moe-btn-mini" style="display: none; width: auto; min-width: 54px; max-width: 68px; height: 24px; padding: 0 8px; font-size: 11px; margin: 0; border-radius: 6px; flex-shrink: 0; box-sizing: border-box; background-color: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">重新渲染</button>
         </div>
         <div class="modal-body" id="message-editor-body">
           <!-- 编辑器容器，JS会在这里动态生成文本框 -->
@@ -18981,6 +19222,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           font: "https://i.postimg.cc/pXxk1JXk/IMG-6442.jpg",
           "check-phone": "https://i.postimg.cc/RVwpwr0r/IMG-8348.jpg",
           weibo: "https://i.postimg.cc/PqBY5wBq/weibo-icon.png",
+          sticker: "https://i.postimg.cc/mDCHYy8t/sticker-icon.png",
           forum: "https://i.postimg.cc/pr0T3WfC/douban-icon.png",
           "lovers-space": "https://i.postimg.cc/d1wZ39xW/lovers-space-icon.png",
           "game-hall": "https://i.postimg.cc/P5gL5z2g/game-controller-icon.png",
@@ -19000,6 +19242,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           font: "字体",
           "check-phone": "查手机",
           weibo: "微博",
+          sticker: "表情包",
           forum: "圈子",
           "lovers-space": "情侣空间",
           "game-hall": "游戏大厅",
@@ -23433,6 +23676,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             password: "",
             fontUrl: "",
             enableBackgroundActivity: false,
+            enableStickers: false,
             backgroundActivityInterval: 60,
             blockCooldownHours: 1,
             appIcons: { ...DEFAULT_APP_ICONS },
@@ -23453,6 +23697,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 确保即使从旧数据库加载，这个属性也存在
           if (!state.globalSettings.widgetData) {
             state.globalSettings.widgetData = {};
+          }
+          if (typeof state.globalSettings.enableStickers === "undefined") {
+            state.globalSettings.enableStickers = false;
           }
 
           if (!state.globalSettings.homeIconWidgetTextColor) {
@@ -24646,6 +24893,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (subOptimize) subOptimize.checked = !!uses.optimize;
           const subDraw = document.getElementById("sub-api-use-draw");
           if (subDraw) subDraw.checked = !!uses.draw;
+          const subForcedImage = document.getElementById("sub-api-use-forced-image");
+          if (subForcedImage) subForcedImage.checked = !!uses.forcedImage;
           const subMap = document.getElementById("sub-api-use-map");
           if (subMap) subMap.checked = !!uses.map;
 
@@ -28149,29 +28398,30 @@ ${recentHistory || '无'}
           }
 
           // 1. 准备专属表情包列表 (现在对单聊和群聊都生效)
-          const exclusiveStickers = chat.settings.stickerLibrary || [];
-          let exclusiveStickerContext = "";
-          if (exclusiveStickers.length > 0) {
-            exclusiveStickerContext = `
+          let stickerContext = "";
+          if (state.globalSettings && state.globalSettings.enableStickers) {
+            const exclusiveStickers = chat.settings.stickerLibrary || [];
+            let exclusiveStickerContext = "";
+            if (exclusiveStickers.length > 0) {
+              exclusiveStickerContext = `
 			## ${chat.isGroup ? "本群专属表情包" : "你的专属表情包"} (只有你能用):
 			${exclusiveStickers.map((s) => `- ${s.name}`).join("\n")}
 			`;
-          }
+            }
 
-          // 2. 准备通用表情包列表
-          const commonStickers = state.charStickers || [];
-          let commonStickerContext = "";
-          if (commonStickers.length > 0) {
-            commonStickerContext = `
+            // 2. 准备通用表情包列表
+            const commonStickers = state.charStickers || [];
+            let commonStickerContext = "";
+            if (commonStickers.length > 0) {
+              commonStickerContext = `
 			## 通用表情包 (所有角色都能用):
 			${commonStickers.map((s) => `- ${s.name}`).join("\n")}
 			`;
-          }
+            }
 
-          // 3. 组合成最终的表情包指令
-          let stickerContext = "";
-          if (exclusiveStickerContext || commonStickerContext) {
-            stickerContext = `
+            // 3. 组合成最终的表情包指令
+            if (exclusiveStickerContext || commonStickerContext) {
+              stickerContext = `
 			# 关于表情包的【绝对规则】
 			1.  你拥有一个表情包列表，分为“专属”和“通用”。
 			2.  当你扮演的角色想要发送表情时，【必须且只能】使用以下JSON格式：
@@ -28181,6 +28431,7 @@ ${recentHistory || '无'}
 			${exclusiveStickerContext}
 			${commonStickerContext}
 			`;
+            }
           }
 
           const { proxyUrl, apiKey, model } = state.apiConfig;
@@ -29365,8 +29616,7 @@ ${colSpecs.join('\n')}
 			- **核心人设**: ${chat.settings.aiPersona}${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.aiCocPanel) ? " [状态: " + window.getCocPromptStatus(chat.settings.aiCocPanel) + "]" : ""}${chat.settings.age ? `\n\t\t\t- **年龄**: ${chat.settings.age}` : ""}${chat.settings.birthday ? `\n\t\t\t- **生日**: ${chat.settings.birthday}` : ""}${chat.settings.gender ? `\n\t\t\t- **性别**: ${chat.settings.gender}${chat.settings.genderNote ? " " + chat.settings.genderNote : ""}` : ""}
 			- **总结**:${summaryContext}
 			- **情侣头像**: ${coupleAvatarContext}
-      -情侣头像库：${coupleAvatarLibraryContext}
-			- **世界观/NPC**: ${npcContext}
+      -情侣头像库：${coupleAvatarLibraryContext}${npcContext ? `\n\t\t\t- **世界观/NPC**: ${npcContext}` : ""}
 			${petContext}
 			${systemStatusPromptBlock}
 			**2. 你的当前状态:**
@@ -30044,6 +30294,19 @@ ${colSpecs.join('\n')}
             const aiResponseContent = isGemini
               ? data?.candidates?.[0]?.content?.parts?.[0]?.text
               : data?.choices?.[0]?.message?.content;
+
+            // 记录调试台日志
+            if (typeof recordChatDebugLog === "function") {
+              recordChatDebugLog(chatId, {
+                systemPrompt: systemPrompt,
+                messages: messagesPayload,
+                model: model,
+                temperature: state.apiConfig?.temperature || 0.8,
+              }, {
+                rawContent: aiResponseContent,
+                fullData: data,
+              });
+            }
 
             // 检查修复后的结果是否真的拿到了内容
             if (!aiResponseContent) {
@@ -33848,6 +34111,11 @@ ${colSpecs.join('\n')}
               // 如果火花天数发生了变化，就刷新聊天列表
               renderChatList();
             }
+
+            // --- 守密人末尾强制生图 ---
+            if (chat.settings && chat.settings.keeperForcedDraw) {
+              await executeKeeperForcedDraw(chatId);
+            }
           } catch (error) {
             chat.history = chat.history.filter((msg) => !msg.isTemporary);
             if (
@@ -33904,8 +34172,12 @@ ${colSpecs.join('\n')}
         }
 
         async function sendSticker(sticker) {
-          if (!state.activeChatId) return;
+          const chatScreen = document.getElementById("chat-interface-screen");
+          if (!state.activeChatId || !chatScreen || !chatScreen.classList.contains("active")) {
+            return;
+          }
           const chat = state.chats[state.activeChatId];
+          if (!chat) return;
           const msg = {
             role: "user",
             content: sticker.url,
@@ -36886,39 +37158,83 @@ ${colSpecs.join('\n')}
 
           // 3. 准备初始内容
           let initialContent;
-          const isSpecialType =
-            message.type &&
-            ["voice_message", "ai_image", "transfer"].includes(message.type);
-          if (isSpecialType) {
-            let fullMessageObject = { type: message.type };
-            if (message.type === "voice_message")
-              fullMessageObject.content = message.content;
-            else if (message.type === "ai_image")
-              fullMessageObject.description = message.content;
-            else if (message.type === "transfer") {
-              fullMessageObject.amount = message.amount;
-              fullMessageObject.note = message.note;
-            }
-            initialContent = JSON.stringify(fullMessageObject, null, 2);
-          } else if (typeof message.content === "object") {
-            initialContent = JSON.stringify(message.content, null, 2);
+          if (message.type === "naiimag") {
+            const rawNai = {
+              type: "naiimag",
+              prompt: message.prompt || message.fullPrompt || "",
+            };
+            initialContent = JSON.stringify(rawNai, null, 2);
           } else {
-            if (
-              message.type === "sticker" ||
-              (typeof message.content === "string" &&
-                STICKER_REGEX.test(message.content))
-            ) {
-              initialContent = message.meaning
-                ? `[sticker:${message.meaning}]`
-                : message.content;
+            const isSpecialType =
+              message.type &&
+              ["voice_message", "ai_image", "transfer"].includes(message.type);
+            if (isSpecialType) {
+              let fullMessageObject = { type: message.type };
+              if (message.type === "voice_message")
+                fullMessageObject.content = message.content;
+              else if (message.type === "ai_image")
+                fullMessageObject.description = message.content;
+              else if (message.type === "transfer") {
+                fullMessageObject.amount = message.amount;
+                fullMessageObject.note = message.note;
+              }
+              initialContent = JSON.stringify(fullMessageObject, null, 2);
+            } else if (typeof message.content === "object") {
+              initialContent = JSON.stringify(message.content, null, 2);
             } else {
-              initialContent = message.content;
+              if (
+                message.type === "sticker" ||
+                (typeof message.content === "string" &&
+                  STICKER_REGEX.test(message.content))
+              ) {
+                initialContent = message.meaning
+                  ? `[sticker:${message.meaning}]`
+                  : message.content;
+              } else {
+                initialContent = message.content;
+              }
             }
           }
 
           const optContent = typeof message.optimizedContent === "string" ? message.optimizedContent : null;
           const firstBlock = createMessageEditorBlock(initialContent, optContent);
           editorContainer.appendChild(firstBlock);
+
+          // 绑定重新渲染按钮
+          const rerenderNaiBtn = document.getElementById("rerender-nai-from-editor-btn");
+          if (rerenderNaiBtn) {
+            if (message.type === "naiimag") {
+              rerenderNaiBtn.style.display = "inline-block";
+              const newRerenderBtn = rerenderNaiBtn.cloneNode(true);
+              rerenderNaiBtn.parentNode.replaceChild(newRerenderBtn, rerenderNaiBtn);
+              newRerenderBtn.addEventListener("click", async () => {
+                const mainTextarea = editorContainer.querySelector(".main-textarea") || editorContainer.querySelector("textarea");
+                const currentText = mainTextarea ? mainTextarea.value.trim() : "";
+                let updatedPrompt = message.prompt || "";
+                let updatedFullPrompt = message.fullPrompt || "";
+                if (currentText.startsWith("{") && currentText.endsWith("}")) {
+                  try {
+                    const parsed = JSON.parse(currentText);
+                    if (parsed.prompt) {
+                      updatedPrompt = parsed.prompt;
+                      updatedFullPrompt = parsed.fullPrompt || parsed.prompt;
+                    }
+                  } catch (e) {
+                    console.warn("解析编辑框JSON失败", e);
+                  }
+                } else if (currentText) {
+                  updatedPrompt = currentText;
+                  updatedFullPrompt = currentText;
+                }
+                message.prompt = updatedPrompt;
+                message.fullPrompt = updatedFullPrompt;
+                editorModal.classList.remove("visible");
+                await handleNaiRerollForMessage(message, updatedPrompt, updatedFullPrompt);
+              });
+            } else {
+              rerenderNaiBtn.style.display = "none";
+            }
+          }
 
           // 4. 动态绑定所有控制按钮的事件
           // 为了防止事件重复绑定，我们使用克隆节点的方法来清除旧监听器
@@ -44269,8 +44585,7 @@ ${colSpecs.join('\n')}
                     .map((npc) => `- **${npc.name}**: ${npc.persona}`)
                     .join("\n");
               } else {
-                npcContext =
-                  "# 你的专属NPC好友列表\n(你当前没有专属NPC，请虚构2-3个普通朋友并生成对话)";
+                npcContext = "";
               }
             }
 
@@ -44686,8 +45001,7 @@ ${colSpecs.join('\n')}
                   .map((npc) => `- **${npc.name}**: ${npc.persona}`)
                   .join("\n");
             } else {
-              npcContext =
-                "# 你的专属NPC好友列表\n(你没有专属NPC，请虚构一些普通朋友)";
+              npcContext = "";
             }
 
             let npcChatHistoryContext = "";
@@ -49856,6 +50170,1319 @@ ${colSpecs.join('\n')}
           else alert("总结提示词已保存");
         }
 
+        // ==========================================
+        // 调试台 (Debug Console) 逻辑
+        // ==========================================
+        function sanitizeDebugData(data) {
+          if (data === null || data === undefined) return data;
+          if (typeof data === "string") {
+            if (data.startsWith("data:image/") || (data.startsWith("http") && (data.includes("blob:") || data.includes(".png") || data.includes(".jpg") || data.includes(".webp") || data.length > 80))) {
+              return "[图片已省略]";
+            }
+            return data;
+          }
+          if (Array.isArray(data)) {
+            return data.map((item) => sanitizeDebugData(item));
+          }
+          if (typeof data === "object") {
+            if (data.type === "naiimag" || data.type === "ai_image" || (data.prompt && (data.url || data.imageUrl || data.compressedUrl))) {
+              return {
+                type: "生图",
+                prompt: data.prompt || data.fullPrompt || "",
+              };
+            }
+            const copy = {};
+            for (const k in data) {
+              if (!Object.prototype.hasOwnProperty.call(data, k)) continue;
+              if (["url", "imageUrl", "compressedUrl", "originalUrl", "src", "base64", "compressed"].includes(k)) {
+                continue;
+              }
+              copy[k] = sanitizeDebugData(data[k]);
+            }
+            return copy;
+          }
+          return data;
+        }
+
+        function escapeDebugHtml(str) {
+          if (typeof str !== "string") return String(str);
+          return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+        }
+
+        function recordChatDebugLog(chatId, sentPayload, receivedPayload) {
+          if (!state.chatDebugLogs) state.chatDebugLogs = {};
+          if (!state.chatDebugLogs[chatId]) state.chatDebugLogs[chatId] = [];
+          state.chatDebugLogs[chatId].push({
+            timestamp: Date.now(),
+            sent: sentPayload,
+            received: receivedPayload,
+          });
+          if (state.chatDebugLogs[chatId].length > 5) {
+            state.chatDebugLogs[chatId].shift();
+          }
+        }
+
+        function openDebugConsoleModal() {
+          const modal = document.getElementById("debug-console-modal");
+          const body = document.getElementById("debug-console-body");
+          if (!modal || !body) return;
+
+          const chat = state.chats[state.activeChatId];
+          const logs = (state.chatDebugLogs && chat && state.chatDebugLogs[chat.id]) || [];
+
+          body.innerHTML = "";
+
+          const listEl = document.createElement("div");
+          listEl.style.cssText = "display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px;";
+
+          if (logs.length === 0) {
+            const recentHistory = (chat && chat.history ? chat.history.filter((m) => !m.isHidden && !m.isTemporary).slice(-5) : []);
+            if (recentHistory.length === 0) {
+              body.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 40px 10px; font-size: 13px;">暂无调试数据，请在发送消息后查看。</div>`;
+              modal.classList.add("visible");
+              return;
+            }
+            recentHistory.forEach((msg, idx) => {
+              const itemEl = document.createElement("div");
+              itemEl.style.cssText = "background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px;";
+              const timeStr = new Date(msg.timestamp || Date.now()).toLocaleTimeString();
+              const isAi = msg.role === "assistant";
+              const cleanedMsg = sanitizeDebugData(msg);
+              itemEl.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                  <span style="font-weight: 600; font-size: 12px; color: var(--text-primary);">第 ${idx + 1} 条 · ${isAi ? "AI 返回字段" : "发送字段"}</span>
+                  <span style="font-size: 11px; color: var(--text-secondary);">${timeStr}</span>
+                </div>
+                <details style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+                  <summary style="padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;">
+                    查看完整字段 (默认折叠)
+                  </summary>
+                  <pre style="margin: 0; padding: 8px 10px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(JSON.stringify(cleanedMsg, null, 2))}</pre>
+                </details>
+              `;
+              listEl.appendChild(itemEl);
+            });
+          } else {
+            logs.slice(-5).forEach((entry, idx) => {
+              const itemEl = document.createElement("div");
+              itemEl.style.cssText = "background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px;";
+              const timeStr = new Date(entry.timestamp).toLocaleTimeString();
+              const cleanedSent = sanitizeDebugData(entry.sent);
+              const cleanedReceived = sanitizeDebugData(entry.received);
+
+              itemEl.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                  <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">第 ${idx + 1} 轮记录</span>
+                  <span style="font-size: 11px; color: var(--text-secondary);">${timeStr}</span>
+                </div>
+
+                <details style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+                  <summary style="padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;">
+                    <span>发送给AI的全部字段</span>
+                    <span style="font-size: 11px; color: var(--text-secondary); font-weight: normal;">点击展开</span>
+                  </summary>
+                  <div style="padding: 8px 10px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 8px;">
+                    <details style="background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+                      <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                        系统提示词
+                      </summary>
+                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(cleanedSent?.systemPrompt || "无")}</pre>
+                    </details>
+                    <details style="background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+                      <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                        上下文消息
+                      </summary>
+                      <div style="padding: 6px 8px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 6px; max-height: 250px; overflow-y: auto;">
+                        ${(cleanedSent?.messages || []).map((m, mIdx) => `
+                          <details style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px;">
+                            <summary style="padding: 4px 6px; font-size: 11px; color: var(--text-primary); cursor: pointer;">
+                              第 ${mIdx + 1} 条 · ${m.role || "消息"}
+                            </summary>
+                            <pre style="margin: 0; padding: 6px; font-size: 10px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(JSON.stringify(m, null, 2))}</pre>
+                          </details>
+                        `).join("")}
+                      </div>
+                    </details>
+                    <details style="background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+                      <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                        完整发送载荷
+                      </summary>
+                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(JSON.stringify(cleanedSent, null, 2))}</pre>
+                    </details>
+                  </div>
+                </details>
+
+                <details style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+                  <summary style="padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;">
+                    <span>AI返回的全部字段</span>
+                    <span style="font-size: 11px; color: var(--text-secondary); font-weight: normal;">点击展开</span>
+                  </summary>
+                  <div style="padding: 8px 10px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 8px;">
+                    <details style="background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+                      <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                        AI回复内容
+                      </summary>
+                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(cleanedReceived?.rawContent || "无")}</pre>
+                    </details>
+                    <details style="background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+                      <summary style="padding: 6px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer;">
+                        接口完整返回
+                      </summary>
+                      <pre style="margin: 0; padding: 6px 8px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(JSON.stringify(cleanedReceived?.fullData || {}, null, 2))}</pre>
+                    </details>
+                  </div>
+                </details>
+              `;
+              listEl.appendChild(itemEl);
+            });
+          }
+
+          body.appendChild(listEl);
+          modal.classList.add("visible");
+          setTimeout(() => {
+            body.scrollTop = body.scrollHeight;
+          }, 50);
+        }
+
+        // ==========================================
+        // 守密人 (Keeper) 模块与末尾强制生图逻辑
+        // ==========================================
+        const DEFAULT_KEEPER_PROMPT = `【末尾强制生图指令】
+
+本轮回复的末尾，你必须执行一次强制生图。生图是本轮输出不可省略的一部分。
+
+【生图格式（严格遵守，任何一条违反都算失败）】
+输出且仅输出一个 JSON 对象，格式如下：
+{"type": "naiimag", "prompt": "masterpiece, ..."}
+字段要求：
+1. type 必须且只能是 "naiimag"（一个字母都不能错，不能写成 nai_image 或 novelai）；
+2. 数据字段名必须且只能是 "prompt"（不能写成 content，也不能留空）；
+3. prompt 内容必须写在同一行，禁止出现真实换行符（需分隔时用逗号，不要按回车）；
+4. prompt 内如需引用文字、对话、标语，一律使用中文引号“”，严禁使用英文双引号，防止 JSON 解析报错；
+5. JSON 对象前后不得出现任何其他文字、解释、代码块标记或符号。
+
+【场景人数拆分规则】
+1. 每张生图最多容纳两个人；
+2. 若当前场景中的人数超过两人（3人及以上），必须将人物拆分、生成多张图：每张图只包含其中两人（或两人以内），依次拆完，每人只出现一次；
+3. 拆分时各自保留完整的角色特征、动作与当前状态，不得张冠李戴。
+
+【成年人画风修饰】
+1. 生图中出现的人物若为成年人（非幼年、非少年角色），必须在 prompt 中加入以下画风特征词：small face（小脸）、long slim eyes（细长眼睛）、long narrow face（细长脸）、beautiful（漂亮）等修饰词；
+2. 未成年人角色禁止添加上述修饰，禁止任何性暗示内容。
+
+【角色既有提示词与衣装】
+1. 所生成的人物若在设定中已有写好的提示词（角色专属 prompt 词条），必须默认沿用这些提示词中的外貌，而性器官衣着自己看情况；
+2. 衣装以人物当前实际状态为准：若该角色在当前剧情中已经脱去衣物，则描写他【现在的穿着状态】（即当前实际穿着什么，如"赤裸上身""只着内衣"），而不是他原本的服饰。
+**视觉生成规范（NovelAI）**
+*   **强制生图**：回复前必须检查 \`naiimag\` 字段并生成图片。
+*   **Prompt撰写**：必须根据当前剧情的视觉焦点生成。
+    *   **镜头判定**：若焦点是物体（如信件、染血匕首），仅生成该物体，禁止人物入镜。若在肢体接触或情感爆发时，必须生成互动双人人物CG。
+▷若两人正在互动或者一起出去玩，一起待在家里，面对面坐着的时候，必须生成两个人同时在场的图，而禁止生成一个人的图
+    **权重隔离（防止乱炖）**：为了防止A的特征跑到B身上，**必须**使用分段隔离写法，并施加**大括号作为重要细节的权重**。
+   *强制格式*：
+      \`( A - [Name]:):  [完整外貌Tags], [当前动作], [当前表情] 
+      \`(以此类推）
+**【背景完善度锁】**：必须根据剧情提取3-5个背景环境词（如：\` \`depth of field, detailed background\` 确保背景不糊、不空。
+- **【色彩与光影质感】**：根据时间段加入朦胧、温馨的光源词（如：\`morning light, rim lighting\`）。
+
+- **【禁止崩坏】**`;
+
+        let tempKeeperCharPrompts = {};
+        let editingKeeperCharId = null;
+
+        function getKeeperPresets() {
+          try {
+            const raw = localStorage.getItem("chat_keeper_prompt_presets");
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list) && list.length > 0) return list;
+            }
+          } catch (e) {}
+          return [
+            {
+              id: "preset_default",
+              name: "默认生图指令",
+              prompt: DEFAULT_KEEPER_PROMPT,
+            },
+          ];
+        }
+
+        function saveKeeperPresets(presets) {
+          try {
+            localStorage.setItem("chat_keeper_prompt_presets", JSON.stringify(presets));
+          } catch (e) {}
+        }
+
+        function getDefaultKeeperPresetId() {
+          try {
+            return localStorage.getItem("chat_keeper_default_preset_id") || "preset_default";
+          } catch (e) {
+            return "preset_default";
+          }
+        }
+
+        function setDefaultKeeperPresetId(id) {
+          try {
+            if (id) localStorage.setItem("chat_keeper_default_preset_id", id);
+            else localStorage.removeItem("chat_keeper_default_preset_id");
+          } catch (e) {}
+        }
+
+        function renderKeeperPresetsUI() {
+          const select = document.getElementById("keeper-prompt-preset-select");
+          if (!select) return;
+          const presets = getKeeperPresets();
+          const defaultId = getDefaultKeeperPresetId();
+          const currentVal = select.value || defaultId;
+          let optionsHtml = '<option value="">选择预设</option>';
+          optionsHtml += presets
+            .map((p) => {
+              const isDef = p.id === defaultId;
+              const prefix = isDef ? "默认 · " : "";
+              const isSel = p.id === currentVal;
+              return `<option value="${p.id}" ${isSel ? "selected" : ""}>${prefix}${p.name}</option>`;
+            })
+            .join("");
+          select.innerHTML = optionsHtml;
+        }
+
+        async function openKeeperModal() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          if (!chat.settings) chat.settings = {};
+          tempKeeperCharPrompts = JSON.parse(JSON.stringify(chat.settings.keeperCharPrompts || {}));
+
+          const forcedSwitch = document.getElementById("keeper-forced-draw-switch");
+          if (forcedSwitch) {
+            forcedSwitch.checked = chat.settings.keeperForcedDraw === true;
+          }
+
+          const promptInput = document.getElementById("keeper-prompt-input");
+          if (promptInput) {
+            promptInput.value = chat.settings.keeperPrompt || DEFAULT_KEEPER_PROMPT;
+          }
+
+          renderKeeperPresetsUI();
+
+          const listContainer = document.getElementById("keeper-members-list");
+          if (listContainer) {
+            listContainer.innerHTML = "";
+
+            const noneSelected = !chat.settings.keeperTargetId || chat.settings.keeperTargetId === "none";
+            const noneItem = document.createElement("div");
+            noneItem.className = "keeper-member-item";
+            noneItem.innerHTML = `
+              <div class="keeper-member-left" style="display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; flex: 1 1 auto; min-width: 0;">
+                <input type="radio" name="keeper-target-radio" value="none" class="keeper-radio" style="width: 18px !important; min-width: 18px !important; max-width: 18px !important; height: 18px !important; margin: 0 !important; flex: 0 0 18px !important; cursor: pointer;" ${noneSelected ? "checked" : ""}>
+                <span class="keeper-name" style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; text-align: left;">无</span>
+              </div>
+            `;
+            noneItem.addEventListener("click", (e) => {
+              if (e.target.tagName !== "INPUT") {
+                const r = noneItem.querySelector('input[type="radio"]');
+                if (r) r.checked = true;
+              }
+            });
+            listContainer.appendChild(noneItem);
+
+            const members = [];
+            if (chat.isGroup) {
+              const groupMembers = chat.members || [];
+              groupMembers.forEach((m) => {
+                const sourceChat = (m.id && state.chats[m.id]) ? state.chats[m.id] : null;
+                const isDice = m.isDice || m.roleType === "dice" || m.type === "dice" || (sourceChat && (sourceChat.isDice || sourceChat.roleType === "dice"));
+                const isStatus = m.isStatus || m.roleType === "status" || m.roleType === "system_status" || m.type === "status" || m.type === "system_status" || (sourceChat && (sourceChat.roleType === "system_status" || sourceChat.isStatus));
+                const memberName = m.groupNickname || m.name || m.nickname || m.characterName || m.personaName || (sourceChat && sourceChat.name) || (typeof m === "string" ? m : "群成员");
+                if (isDice || isStatus || memberName === "骰子" || memberName === "系统状态栏" || memberName.includes("系统状态") || memberName.includes("骰子")) {
+                  return;
+                }
+                const memberId = m.id || m.name || memberName;
+                members.push({
+                  id: memberId,
+                  name: memberName,
+                  avatar: m.avatar || (sourceChat && sourceChat.settings?.aiAvatar) || defaultAvatar,
+                });
+              });
+              const myGroupName = chat.settings?.myNickname || chat.settings?.myName || "我";
+              members.push({
+                id: "me",
+                name: myGroupName,
+                avatar: chat.settings?.myAvatar || defaultMyGroupAvatar,
+              });
+            } else {
+              const aiChatName = chat.name || chat.remark || chat.characterName || chat.settings?.aiName || chat.settings?.characterName || "对方";
+              const mySingleName = chat.settings?.myName || chat.settings?.myNickname || "我";
+              members.push({
+                id: chat.id || "ai",
+                name: aiChatName,
+                avatar: chat.avatar || defaultAvatar,
+              });
+              members.push({
+                id: "me",
+                name: mySingleName,
+                avatar: chat.settings?.myAvatar || defaultAvatar,
+              });
+            }
+
+            const currentTargetId = chat.settings.keeperTargetId || (chat.isGroup ? "none" : (chat.id || "ai"));
+
+            members.forEach((mem) => {
+              const isChecked = currentTargetId === mem.id;
+              const safeName = String(mem.name || "角色").replace(/^undefined$/i, "角色");
+              const item = document.createElement("div");
+              item.className = "keeper-member-item";
+              item.innerHTML = `
+                <div class="keeper-member-left" style="display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; flex: 1 1 auto; min-width: 0;">
+                  <input type="radio" name="keeper-target-radio" value="${mem.id}" class="keeper-radio" style="width: 18px !important; min-width: 18px !important; max-width: 18px !important; height: 18px !important; margin: 0 !important; flex: 0 0 18px !important; cursor: pointer;" ${isChecked ? "checked" : ""}>
+                  <img src="${mem.avatar}" class="keeper-avatar" style="width: 32px !important; min-width: 32px !important; height: 32px !important; border-radius: 50%; object-fit: cover; flex: 0 0 32px !important; border: 1px solid var(--border-color);" />
+                  <span class="keeper-name" style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; text-align: left;">${safeName}</span>
+                </div>
+                <button type="button" class="keeper-prompt-btn" data-char-id="${mem.id}">提示词</button>
+              `;
+
+              item.addEventListener("click", (e) => {
+                if (e.target.tagName !== "BUTTON" && e.target.tagName !== "INPUT") {
+                  const r = item.querySelector('input[type="radio"]');
+                  if (r) r.checked = true;
+                }
+              });
+
+              const promptBtn = item.querySelector(".keeper-prompt-btn");
+              if (promptBtn) {
+                promptBtn.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  openKeeperCharPromptModal(mem.id, safeName);
+                });
+              }
+
+              listContainer.appendChild(item);
+            });
+          }
+
+          document.getElementById("keeper-modal").classList.add("visible");
+        }
+
+        function openKeeperCharPromptModal(charId, charName) {
+          editingKeeperCharId = charId;
+          const title = document.getElementById("keeper-char-prompt-title");
+          if (title) title.textContent = `${charName} 的提示词`;
+
+          const input = document.getElementById("keeper-char-prompt-input");
+          if (input) {
+            let existingPrompt = tempKeeperCharPrompts[charId];
+            if (typeof existingPrompt === "undefined") {
+              const chat = state.chats[state.activeChatId];
+              existingPrompt = (chat && chat.settings && chat.settings.keeperCharPrompts && chat.settings.keeperCharPrompts[charId]) || "";
+            }
+            input.value = existingPrompt;
+          }
+
+          document.getElementById("keeper-char-prompt-modal").classList.add("visible");
+        }
+
+        async function saveKeeperSettings() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          if (!chat.settings) chat.settings = {};
+
+          const forcedSwitch = document.getElementById("keeper-forced-draw-switch");
+          chat.settings.keeperForcedDraw = forcedSwitch ? forcedSwitch.checked : false;
+
+          const promptInput = document.getElementById("keeper-prompt-input");
+          chat.settings.keeperPrompt = promptInput ? promptInput.value.trim() : DEFAULT_KEEPER_PROMPT;
+
+          const selectedRadio = document.querySelector('input[name="keeper-target-radio"]:checked');
+          chat.settings.keeperTargetId = selectedRadio ? selectedRadio.value : "none";
+
+          chat.settings.keeperCharPrompts = JSON.parse(JSON.stringify(tempKeeperCharPrompts));
+
+          await db.chats.put(chat);
+          document.getElementById("keeper-modal").classList.remove("visible");
+
+          if (typeof showCustomAlert === "function") await showCustomAlert("成功", "守密人配置已保存！");
+          else alert("守密人配置已保存！");
+        }
+
+        async function handleNaiRerollForMessage(message, customPrompt, customFullPrompt) {
+          if (!message || !state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const baseSettings = getNovelAISettings();
+          const settings = { ...baseSettings, ...(message.naiSettings || {}) };
+          const model = message.model || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const apiKey = localStorage.getItem("novelai-api-key");
+          if (!apiKey) {
+            alert("请先配置 NovelAI API Key！");
+            return;
+          }
+
+          const naiPrompts = getCharacterNAIPrompts(chat.id);
+          let finalPositivePrompt = "";
+          if (customPrompt) {
+            if (naiPrompts.positive) {
+              finalPositivePrompt = customPrompt + ", " + naiPrompts.positive;
+            } else {
+              finalPositivePrompt = customPrompt;
+            }
+          } else {
+            finalPositivePrompt = customFullPrompt || message.fullPrompt || (naiPrompts.positive ? (message.prompt || "a beautiful scene") + ", " + naiPrompts.positive : (message.prompt || "a beautiful scene"));
+          }
+
+          let finalNegativePrompt = message.negativePrompt;
+          if (typeof finalNegativePrompt === "undefined") {
+            finalNegativePrompt = naiPrompts.negative || "";
+          }
+
+          await showCustomAlert("正在重新渲染...", "正在连接 NovelAI 生成图片，请稍候...");
+
+          try {
+            let width = settings.width;
+            let height = settings.height;
+            if (!width || !height) {
+              const resParts = (settings.resolution || "1024x1024").split("x").map(Number);
+              width = resParts[0];
+              height = resParts[1];
+            }
+
+            const commonParams = {
+              width: width || 1024,
+              height: height || 1024,
+              scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
+              sampler: settings.sampler || "k_euler_ancestral",
+              steps: settings.steps !== undefined ? settings.steps : 28,
+              seed: Math.floor(Math.random() * 4294967295),
+              n_samples: 1,
+              ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+              qualityToggle: settings.quality_toggle !== false,
+            };
+
+            let requestBody;
+            if (model.includes("nai-diffusion-4")) {
+              requestBody = {
+                input: finalPositivePrompt,
+                model: model,
+                action: "generate",
+                parameters: {
+                  ...commonParams,
+                  params_version: 3,
+                  negative_prompt: finalNegativePrompt,
+                  noise_schedule: "karras",
+                  deliberate_euler_ancestral_bug: false,
+                  prefer_brownian: true,
+                  add_original_image: true,
+                  cfg_rescale: 0,
+                  dynamic_thresholding: false,
+                  legacy: false,
+                  legacy_uc: false,
+                  inpaintImg2ImgStrength: 1,
+                  normalize_reference_strength_multiple: true,
+                  characterPrompts: [],
+                  v4_prompt: { caption: { base_caption: finalPositivePrompt, char_captions: [] }, use_coords: false, use_order: true },
+                  v4_negative_prompt: { caption: { base_caption: finalNegativePrompt, char_captions: [] }, legacy_uc: false },
+                },
+              };
+            } else {
+              requestBody = {
+                input: finalPositivePrompt,
+                model: model,
+                action: "generate",
+                parameters: {
+                  ...commonParams,
+                  negative_prompt: finalNegativePrompt,
+                  sm: settings.smea,
+                  sm_dyn: settings.smea_dyn,
+                  noise_schedule: "native",
+                  add_original_image: false,
+                },
+              };
+            }
+
+            let apiUrl = model.includes("nai-diffusion-4")
+              ? "https://image.novelai.net/ai/generate-image-stream"
+              : "https://image.novelai.net/ai/generate-image";
+            let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
+            if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
+
+            const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
+            let headers = {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + apiKey,
+            };
+            if (isChrome) {
+              const cleanHeaders = {};
+              for (const [k, v] of Object.entries(headers)) cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
+              headers = cleanHeaders;
+            }
+
+            const res = await fetch(apiUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify(requestBody),
+            });
+            if (!res.ok) throw new Error(`NAI API Error: ${res.status}`);
+
+            const contentType = res.headers.get("content-type");
+            let imageDataUrl = null;
+
+            if (contentType && contentType.includes("text/event-stream")) {
+              const text = await res.text();
+              const lines = text.trim().split("\n");
+              for (let i = lines.length - 1; i >= 0; i--) {
+                const line = lines[i].trim();
+                if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                  const dataContent = line.substring(6);
+                  try {
+                    const jsonData = JSON.parse(dataContent);
+                    if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                      const base64Data = jsonData.image || jsonData.data;
+                      const isPNG = base64Data.startsWith("iVBORw0KGgo");
+                      imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                      break;
+                    }
+                  } catch (e) {}
+                }
+              }
+            } else {
+              const arrayBuffer = await res.arrayBuffer();
+              const zip = await JSZip.loadAsync(arrayBuffer);
+              const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg"));
+              if (imageFileName) {
+                const imageBlob = await zip.files[imageFileName].async("blob");
+                imageDataUrl = await new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result);
+                  reader.readAsDataURL(imageBlob);
+                });
+              }
+            }
+
+            if (!imageDataUrl) throw new Error("无法解析生成得到的图片数据");
+
+            message.imageUrl = imageDataUrl;
+            message.prompt = customPrompt || message.prompt;
+            message.fullPrompt = finalPositivePrompt;
+            await db.chats.put(chat);
+            renderChatInterface(state.activeChatId);
+            await showCustomAlert("成功", "图片已重新渲染！");
+          } catch (err) {
+            console.error("重新渲染图片失败:", err);
+            await showCustomAlert("失败", `重新渲染失败: ${err.message}`);
+          }
+        }
+
+        // ==========================================
+        // 头像生图 逻辑
+        // ==========================================
+        let avatarGenState = {
+          currentTarget: "ai",
+          currentImage: null,
+          rotation: 0,
+          flipX: 1,
+          scale: 1,
+          translateX: 0,
+          translateY: 0,
+        };
+
+        function openAvatarGenModal(targetType) {
+          avatarGenState.currentTarget = targetType;
+          avatarGenState.currentImage = null;
+          avatarGenState.rotation = 0;
+          avatarGenState.flipX = 1;
+          avatarGenState.scale = 1;
+          avatarGenState.translateX = 0;
+          avatarGenState.translateY = 0;
+
+          const chat = state.chats[state.activeChatId];
+          let personaVal = "";
+          let savedPromptVal = "";
+
+          if (targetType === "my") {
+            personaVal = (chat && chat.settings && (chat.settings.myPersona || chat.settings.userPersona)) || state.userPersona || "";
+            savedPromptVal = (chat && chat.settings && chat.settings.lastMyAvatarPrompt) || "";
+          } else if (targetType === "ai") {
+            personaVal = (chat && chat.settings && chat.settings.aiPersona) || (chat && chat.persona) || "";
+            savedPromptVal = (chat && chat.settings && chat.settings.lastAiAvatarPrompt) || "";
+          } else if (targetType === "group") {
+            personaVal = (chat && chat.settings && (chat.settings.groupDescription || chat.description)) || "";
+            savedPromptVal = (chat && chat.settings && chat.settings.lastGroupAvatarPrompt) || "";
+          } else if (targetType === "member") {
+            if (chat && editingMemberId) {
+              const mem = (chat.members || []).find((m) => m.id === editingMemberId);
+              personaVal = (mem && (mem.persona || (mem.settings && mem.settings.aiPersona))) || "";
+              savedPromptVal = (mem && mem.lastAvatarPrompt) || "";
+            }
+          }
+
+          const personaInput = document.getElementById("avatar-gen-persona-input");
+          if (personaInput) personaInput.value = personaVal;
+
+          const promptInput = document.getElementById("avatar-gen-prompt-input");
+          if (promptInput) promptInput.value = savedPromptVal;
+
+          const placeholder = document.getElementById("avatar-gen-placeholder");
+          if (placeholder) placeholder.style.display = "flex";
+
+          const resultImg = document.getElementById("avatar-gen-result-image");
+          if (resultImg) {
+            resultImg.style.display = "none";
+            resultImg.src = "";
+            resultImg.style.transform = "none";
+          }
+
+          const expandBtn = document.getElementById("avatar-gen-expand-btn");
+          if (expandBtn) expandBtn.style.display = "none";
+
+          document.getElementById("avatar-gen-modal").classList.add("visible");
+        }
+
+        function applyAvatarGenTransform() {
+          const resultImg = document.getElementById("avatar-gen-result-image");
+          if (resultImg) {
+            resultImg.style.transform = `translate(${avatarGenState.translateX}px, ${avatarGenState.translateY}px) scaleX(${avatarGenState.flipX}) rotate(${avatarGenState.rotation}deg) scale(${avatarGenState.scale})`;
+          }
+        }
+
+        async function generateAvatarPromptFromPersona() {
+          const personaInput = document.getElementById("avatar-gen-persona-input");
+          const personaText = personaInput ? personaInput.value.trim() : "";
+          if (!personaText) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先在上方输入人设描述");
+            else alert("请先在上方输入人设描述");
+            return;
+          }
+
+          const createBtn = document.getElementById("avatar-gen-create-prompt-btn");
+          const originalText = createBtn ? createBtn.textContent : "生成词条";
+          if (createBtn) {
+            createBtn.disabled = true;
+            createBtn.textContent = "生成中...";
+          }
+
+          try {
+            const systemPrompt = "You are an expert anime image prompt engineer. Convert the user character description into concise NovelAI Danbooru tags for an avatar portrait. Include character visual appearance, hair style and color, eye color, facial expression, outfit, lighting, masterpiece, best quality, solo, portrait. Output ONLY comma-separated English tags on a single line. Do not output markdown, explanations, or quotes.";
+            const userContent = `Character description:\n${personaText}`;
+            const messagesForApi = [{ role: "user", content: userContent }];
+
+            const apiCfg = getEffectiveApiConfig("draw");
+            const { proxyUrl, apiKey, model, temperature } = apiCfg;
+
+            if (!apiKey) {
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "未配置 API Key，请先前往设置填写。");
+              else alert("未配置 API Key，请先前往设置填写。");
+              return;
+            }
+
+            let isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
+            let response;
+            if (isGemini) {
+              const geminiConfig = toGeminiRequestData(model, apiKey, systemPrompt, messagesForApi, isGemini, temperature);
+              response = await fetch(geminiConfig.url, geminiConfig.data);
+            } else {
+              response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: model,
+                  messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userContent },
+                  ],
+                  temperature: temperature || 0.7,
+                }),
+              });
+            }
+
+            if (!response.ok) {
+              throw new Error(`API Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            let generatedPrompt = data?.choices?.[0]?.message?.content || data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            generatedPrompt = generatedPrompt.replace(/^```[a-z]*\s*/i, "").replace(/```$/i, "").replace(/["'\n\r]/g, " ").trim();
+
+            const promptInput = document.getElementById("avatar-gen-prompt-input");
+            if (promptInput) promptInput.value = generatedPrompt;
+
+            const chat = state.chats[state.activeChatId];
+            if (chat) {
+              if (!chat.settings) chat.settings = {};
+              if (avatarGenState.currentTarget === "ai") chat.settings.lastAiAvatarPrompt = generatedPrompt;
+              else if (avatarGenState.currentTarget === "my") chat.settings.lastMyAvatarPrompt = generatedPrompt;
+              else if (avatarGenState.currentTarget === "group") chat.settings.lastGroupAvatarPrompt = generatedPrompt;
+              else if (avatarGenState.currentTarget === "member" && editingMemberId) {
+                const mem = (chat.members || []).find((m) => m.id === editingMemberId);
+                if (mem) mem.lastAvatarPrompt = generatedPrompt;
+              }
+              await db.chats.put(chat);
+            }
+          } catch (err) {
+            console.error("生成提示词失败:", err);
+            if (typeof showCustomAlert === "function") await showCustomAlert("失败", `生成提示词失败: ${err.message}`);
+            else alert(`生成提示词失败: ${err.message}`);
+          } finally {
+            if (createBtn) {
+              createBtn.disabled = false;
+              createBtn.textContent = originalText;
+            }
+          }
+        }
+
+        async function executeAvatarImageGen() {
+          const promptInput = document.getElementById("avatar-gen-prompt-input");
+          const promptText = promptInput ? promptInput.value.trim() : "";
+          if (!promptText) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先生成或输入词条");
+            else alert("请先生成或输入词条");
+            return;
+          }
+
+          const apiKey = localStorage.getItem("novelai-api-key");
+          if (!apiKey) {
+            alert("请先在设置中配置 NovelAI API Key！");
+            return;
+          }
+
+          const model = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const settings = getNovelAISettings();
+          const artist = settings.artist_prompt || "";
+          const fullPositivePrompt = [promptText, artist].filter(Boolean).join(", ");
+          const fullNegativePrompt = settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry";
+
+          const execBtn = document.getElementById("avatar-gen-execute-btn");
+          const originalText = execBtn ? execBtn.textContent : "生图";
+          if (execBtn) {
+            execBtn.disabled = true;
+            execBtn.textContent = "生图中...";
+          }
+
+          try {
+            const commonParams = {
+              width: 1024,
+              height: 1024,
+              scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
+              sampler: settings.sampler || "k_euler_ancestral",
+              steps: settings.steps !== undefined ? settings.steps : 28,
+              seed: Math.floor(Math.random() * 4294967295),
+              n_samples: 1,
+              ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+              qualityToggle: true,
+            };
+
+            let requestBody;
+            if (model.includes("nai-diffusion-4")) {
+              requestBody = {
+                input: fullPositivePrompt,
+                model: model,
+                action: "generate",
+                parameters: {
+                  ...commonParams,
+                  params_version: 3,
+                  negative_prompt: fullNegativePrompt,
+                  noise_schedule: "karras",
+                  deliberate_euler_ancestral_bug: false,
+                  prefer_brownian: true,
+                  add_original_image: true,
+                  cfg_rescale: 0,
+                  dynamic_thresholding: false,
+                  legacy: false,
+                  legacy_uc: false,
+                  inpaintImg2ImgStrength: 1,
+                  normalize_reference_strength_multiple: true,
+                  characterPrompts: [],
+                  v4_prompt: { caption: { base_caption: fullPositivePrompt, char_captions: [] }, use_coords: false, use_order: true },
+                  v4_negative_prompt: { caption: { base_caption: fullNegativePrompt, char_captions: [] }, legacy_uc: false },
+                },
+              };
+            } else {
+              requestBody = {
+                input: fullPositivePrompt,
+                model: model,
+                action: "generate",
+                parameters: {
+                  ...commonParams,
+                  negative_prompt: fullNegativePrompt,
+                  sm: settings.smea,
+                  sm_dyn: settings.smea_dyn,
+                  noise_schedule: "native",
+                  add_original_image: false,
+                },
+              };
+            }
+
+            let apiUrl = model.includes("nai-diffusion-4")
+              ? "https://image.novelai.net/ai/generate-image-stream"
+              : "https://image.novelai.net/ai/generate-image";
+            let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
+            if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
+
+            const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
+            let headers = {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + apiKey,
+            };
+            if (isChrome) {
+              const cleanHeaders = {};
+              for (const [k, v] of Object.entries(headers)) cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
+              headers = cleanHeaders;
+            }
+
+            const res = await fetch(apiUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify(requestBody),
+            });
+            if (!res.ok) throw new Error(`NAI API Error: ${res.status}`);
+
+            const contentType = res.headers.get("content-type");
+            let imageDataUrl = null;
+
+            if (contentType && contentType.includes("text/event-stream")) {
+              const text = await res.text();
+              const lines = text.trim().split("\n");
+              for (let i = lines.length - 1; i >= 0; i--) {
+                const line = lines[i].trim();
+                if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                  const dataContent = line.substring(6);
+                  try {
+                    const jsonData = JSON.parse(dataContent);
+                    if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                      const base64Data = jsonData.image || jsonData.data;
+                      const isPNG = base64Data.startsWith("iVBORw0KGgo");
+                      imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                      break;
+                    }
+                  } catch (e) {}
+                }
+              }
+            } else {
+              const arrayBuffer = await res.arrayBuffer();
+              const zip = await JSZip.loadAsync(arrayBuffer);
+              const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg"));
+              if (imageFileName) {
+                const imageBlob = await zip.files[imageFileName].async("blob");
+                imageDataUrl = await new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result);
+                  reader.readAsDataURL(imageBlob);
+                });
+              }
+            }
+
+            if (!imageDataUrl) throw new Error("无法解析生成得到的图片数据");
+
+            avatarGenState.currentImage = imageDataUrl;
+            avatarGenState.rotation = 0;
+            avatarGenState.flipX = 1;
+
+            const placeholder = document.getElementById("avatar-gen-placeholder");
+            if (placeholder) placeholder.style.display = "none";
+
+            const resultImg = document.getElementById("avatar-gen-result-image");
+            if (resultImg) {
+              resultImg.src = imageDataUrl;
+              resultImg.style.display = "block";
+              resultImg.style.transform = "none";
+            }
+
+            const expandBtn = document.getElementById("avatar-gen-expand-btn");
+            if (expandBtn) expandBtn.style.display = "flex";
+          } catch (err) {
+            console.error("生成头像失败:", err);
+            if (typeof showCustomAlert === "function") await showCustomAlert("失败", `生图失败: ${err.message}`);
+            else alert(`生图失败: ${err.message}`);
+          } finally {
+            if (execBtn) {
+              execBtn.disabled = false;
+              execBtn.textContent = originalText;
+            }
+          }
+        }
+
+        async function saveGeneratedAvatar() {
+          if (!avatarGenState.currentImage) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先生成图片");
+            else alert("请先生成图片");
+            return;
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = 1024;
+          canvas.height = 1024;
+          const ctx = canvas.getContext("2d");
+          const imgObj = new Image();
+
+          imgObj.onload = async () => {
+            ctx.save();
+            ctx.translate(512 + avatarGenState.translateX, 512 + avatarGenState.translateY);
+            ctx.scale(avatarGenState.flipX * avatarGenState.scale, avatarGenState.scale);
+            ctx.rotate((avatarGenState.rotation * Math.PI) / 180);
+            ctx.drawImage(imgObj, -512, -512, 1024, 1024);
+            ctx.restore();
+
+            const finalDataUrl = canvas.toDataURL("image/jpeg", 0.88);
+            const promptInput = document.getElementById("avatar-gen-prompt-input");
+            const currentPromptVal = promptInput ? promptInput.value.trim() : "";
+            const chat = state.chats[state.activeChatId];
+
+            if (avatarGenState.currentTarget === "ai") {
+              const p = document.getElementById("ai-avatar-preview");
+              if (p) p.src = finalDataUrl;
+              if (chat) {
+                if (!chat.settings) chat.settings = {};
+                chat.settings.aiAvatar = finalDataUrl;
+                chat.avatar = finalDataUrl;
+                chat.settings.lastAiAvatarPrompt = currentPromptVal;
+                await db.chats.put(chat);
+              }
+            } else if (avatarGenState.currentTarget === "my") {
+              const p = document.getElementById("my-avatar-preview");
+              if (p) p.src = finalDataUrl;
+              if (chat) {
+                if (!chat.settings) chat.settings = {};
+                chat.settings.myAvatar = finalDataUrl;
+                chat.settings.lastMyAvatarPrompt = currentPromptVal;
+                await db.chats.put(chat);
+              }
+            } else if (avatarGenState.currentTarget === "group") {
+              const p = document.getElementById("group-avatar-preview");
+              if (p) p.src = finalDataUrl;
+              if (chat) {
+                if (!chat.settings) chat.settings = {};
+                chat.settings.groupAvatar = finalDataUrl;
+                chat.avatar = finalDataUrl;
+                chat.settings.lastGroupAvatarPrompt = currentPromptVal;
+                await db.chats.put(chat);
+              }
+            } else if (avatarGenState.currentTarget === "member") {
+              const p = document.getElementById("member-avatar-preview");
+              if (p) p.src = finalDataUrl;
+              if (chat && editingMemberId) {
+                const member = (chat.members || []).find((m) => m.id === editingMemberId);
+                if (member) {
+                  member.avatar = finalDataUrl;
+                  member.lastAvatarPrompt = currentPromptVal;
+                  await db.chats.put(chat);
+                }
+              }
+            }
+
+            document.getElementById("avatar-gen-modal").classList.remove("visible");
+            if (typeof showCustomAlert === "function") await showCustomAlert("成功", "头像已保存");
+          };
+
+          imgObj.src = avatarGenState.currentImage;
+        }
+
+        async function executeKeeperForcedDraw(chatId) {
+          const chat = state.chats[chatId];
+          if (!chat || !chat.settings || !chat.settings.keeperForcedDraw) return;
+
+          try {
+            console.log("执行守密人末尾强制生图...");
+            const maxMem = chat.settings.maxMemory || 10;
+            const recentMsgs = (chat.history || [])
+              .filter((m) => !m.isHidden && !m.isTemporary && m.type !== "naiimag")
+              .slice(-maxMem);
+
+            let historyText = "";
+            recentMsgs.forEach((m) => {
+              const name = m.senderName || m.name || (m.role === "user" ? "用户" : "AI");
+              const content = typeof m.content === "object" ? JSON.stringify(m.content) : String(m.content || "");
+              if (content.trim()) {
+                historyText += `${name}: ${content}\n`;
+              }
+            });
+
+            const moduleBlock = (typeof getChatModulePromptBlock === "function") ? await getChatModulePromptBlock(chat) : "";
+            let personaBlock = "";
+            if (chat.isGroup) {
+              const memberNames = (chat.members || []).map((m) => `${m.name}: ${m.persona || ""}`).join("\n");
+              personaBlock = `群成员人设:\n${memberNames}\n我的人设: ${chat.settings.myPersona || ""}`;
+            } else {
+              personaBlock = `对方人设: ${chat.settings.aiPersona || ""}\n我的人设: ${chat.settings.myPersona || ""}`;
+            }
+
+            let worldBookContent = "";
+            if (chat.settings.linkedWorldBookIds && chat.settings.linkedWorldBookIds.length > 0) {
+              const linkedContents = chat.settings.linkedWorldBookIds
+                .map((id) => {
+                  const book = (state.worldBooks || []).find((b) => b.id === id);
+                  return book ? book.entries.map((e) => `[${e.keys}]: ${e.content}`).join("\n") : "";
+                })
+                .filter(Boolean)
+                .join("\n");
+              if (linkedContents) {
+                worldBookContent = `# 核心世界观设定:\n${linkedContents}`;
+              }
+            }
+
+            const targetCharId = chat.settings.keeperTargetId;
+            let charPromptBlock = "";
+            if (targetCharId && targetCharId !== "none") {
+              const cp = chat.settings.keeperCharPrompts?.[targetCharId];
+              if (cp) charPromptBlock = `当前生图角色专属Prompt: ${cp}`;
+            }
+
+            const keeperSystemPrompt = [
+              "【生图与代码生成指令】",
+              chat.settings.keeperPrompt || DEFAULT_KEEPER_PROMPT,
+              charPromptBlock,
+              personaBlock,
+              moduleBlock,
+              worldBookContent,
+            ].filter(Boolean).join("\n\n");
+
+            const messagesForApi = [
+              { role: "system", content: keeperSystemPrompt },
+              { role: "user", content: `以下是近期对话剧情：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON 对象。` }
+            ];
+
+            const apiCfg = getEffectiveApiConfig("forcedImage");
+            const { proxyUrl, apiKey, model, temperature } = apiCfg;
+
+            if (!apiKey) {
+              console.warn("未配置 API Key，无法执行守密人生图。");
+              return;
+            }
+
+            const isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
+            const geminiConfig = isGemini ? toGeminiRequestData(model, apiKey, keeperSystemPrompt, messagesForApi, isGemini, temperature) : null;
+
+            const response = isGemini
+              ? await fetch(geminiConfig.url, geminiConfig.data)
+              : await fetch(`${proxyUrl}/v1/chat/completions`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${apiKey}`,
+                  },
+                  body: JSON.stringify({
+                    model: model,
+                    messages: messagesForApi,
+                    temperature: temperature || 0.7,
+                  }),
+                });
+
+            if (!response.ok) throw new Error(await response.text());
+            const data = await response.json();
+            const rawContent = isGemini
+              ? data?.candidates?.[0]?.content?.parts?.[0]?.text
+              : data?.choices?.[0]?.message?.content;
+
+            if (!rawContent || !rawContent.trim()) return;
+
+            let generatedPrompt = "";
+            try {
+              const jsonMatch = rawContent.match(/\{[\s\S]*?"type"\s*:\s*"naiimag"[\s\S]*?\}/);
+              if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                generatedPrompt = parsed.prompt || "";
+              } else {
+                const anyJson = rawContent.match(/\{[\s\S]*?\}/);
+                if (anyJson) {
+                  const parsed = JSON.parse(anyJson[0]);
+                  generatedPrompt = parsed.prompt || "";
+                }
+              }
+            } catch (pe) {
+              console.warn("解析生图 JSON 异常:", pe);
+            }
+
+            if (!generatedPrompt) {
+              generatedPrompt = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
+            }
+
+            if (!generatedPrompt) return;
+
+            await generateAndAppendKeeperNaiImage(chat, generatedPrompt);
+          } catch (err) {
+            console.error("守密人强制生图失败:", err);
+          }
+        }
+
+        async function generateAndAppendKeeperNaiImage(chat, aiPrompt) {
+          const naiPrompts = getCharacterNAIPrompts(chat.id);
+          const finalPositivePrompt = naiPrompts.positive ? aiPrompt + ", " + naiPrompts.positive : aiPrompt;
+          const finalNegativePrompt = naiPrompts.negative || "";
+
+          const apiKey = localStorage.getItem("novelai-api-key");
+          const model = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const settings = getNovelAISettings();
+
+          if (!apiKey) {
+            console.warn("NovelAI API Key 未配置");
+            return;
+          }
+
+          const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
+          let requestBody;
+          if (model.includes("nai-diffusion-4")) {
+            requestBody = {
+              input: finalPositivePrompt,
+              model: model,
+              action: "generate",
+              parameters: {
+                params_version: 3,
+                width: width || 1024,
+                height: height || 1024,
+                scale: settings.cfg_scale || 5,
+                sampler: settings.sampler || "k_euler_ancestral",
+                steps: settings.steps || 28,
+                seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
+                n_samples: 1,
+                ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+                qualityToggle: settings.quality_toggle !== false,
+                negative_prompt: finalNegativePrompt,
+                noise_schedule: "karras",
+                deliberate_euler_ancestral_bug: false,
+                prefer_brownian: true,
+                add_original_image: true,
+                cfg_rescale: 0,
+                dynamic_thresholding: false,
+                legacy: false,
+                legacy_uc: false,
+                inpaintImg2ImgStrength: 1,
+                normalize_reference_strength_multiple: true,
+                characterPrompts: [],
+                v4_prompt: { caption: { base_caption: finalPositivePrompt, char_captions: [] }, use_coords: false, use_order: true },
+                v4_negative_prompt: { caption: { base_caption: finalNegativePrompt, char_captions: [] }, legacy_uc: false },
+              },
+            };
+          } else {
+            requestBody = {
+              input: finalPositivePrompt,
+              model: model,
+              action: "generate",
+              parameters: {
+                width: width || 1024,
+                height: height || 1024,
+                scale: settings.cfg_scale || 5,
+                sampler: settings.sampler || "k_euler_ancestral",
+                steps: settings.steps || 28,
+                seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
+                n_samples: 1,
+                ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+                qualityToggle: settings.quality_toggle !== false,
+                negative_prompt: finalNegativePrompt,
+                sm: settings.smea,
+                sm_dyn: settings.smea_dyn,
+                noise_schedule: "native",
+                add_original_image: false,
+              },
+            };
+          }
+
+          let apiUrl = model.includes("nai-diffusion-4")
+            ? "https://image.novelai.net/ai/generate-image-stream"
+            : "https://image.novelai.net/ai/generate-image";
+          let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
+          if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
+
+          const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
+          let headers = {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + apiKey,
+          };
+          if (isChrome) {
+            const cleanHeaders = {};
+            for (const [k, v] of Object.entries(headers)) cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
+            headers = cleanHeaders;
+          }
+
+          const res = await fetch(apiUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(requestBody),
+          });
+
+          if (!res.ok) throw new Error(await res.text());
+
+          const contentType = res.headers.get("content-type");
+          let imageDataUrl = null;
+
+          if (contentType && contentType.includes("text/event-stream")) {
+            const text = await res.text();
+            const lines = text.trim().split("\n");
+            for (let i = lines.length - 1; i >= 0; i--) {
+              const line = lines[i].trim();
+              if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                const dataContent = line.substring(6);
+                try {
+                  const jsonData = JSON.parse(dataContent);
+                  if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                    const base64Data = jsonData.image || jsonData.data;
+                    const isPNG = base64Data.startsWith("iVBORw0KGgo");
+                    imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                    break;
+                  }
+                } catch (e) {}
+              }
+            }
+          } else {
+            const arrayBuffer = await res.arrayBuffer();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg"));
+            if (!imageFileName) throw new Error("ZIP内未找到图片文件");
+            const imageBlob = await zip.files[imageFileName].async("blob");
+            imageDataUrl = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.readAsDataURL(imageBlob);
+            });
+          }
+
+          if (!imageDataUrl) throw new Error("无法解析生图数据");
+
+          let senderName = chat.isGroup ? "系统消息" : chat.name;
+          let senderAvatar = chat.isGroup ? defaultGroupAvatar : chat.avatar;
+          if (chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none") {
+            if (chat.settings.keeperTargetId === "me") {
+              senderName = chat.settings.myName || "我";
+              senderAvatar = chat.settings.myAvatar || defaultAvatar;
+            } else if (chat.isGroup) {
+              const mem = (chat.members || []).find((m) => (m.id || m.name) === chat.settings.keeperTargetId);
+              if (mem) {
+                senderName = mem.name;
+                senderAvatar = mem.avatar || defaultAvatar;
+              }
+            }
+          }
+
+          const aiMessage = {
+            role: "assistant",
+            sender: senderName,
+            senderName: senderName,
+            name: senderName,
+            avatar: senderAvatar,
+            senderAvatar: senderAvatar,
+            type: "naiimag",
+            imageUrl: imageDataUrl,
+            _compressed: true,
+            prompt: aiPrompt,
+            fullPrompt: finalPositivePrompt,
+            timestamp: Date.now(),
+          };
+
+          chat.history.push(aiMessage);
+          await db.chats.put(chat);
+          if (state.activeChatId === chat.id) {
+            appendMessage(aiMessage, chat);
+          }
+        }
+
         async function openSummaryViewer() {
           const chat = state.chats[state.activeChatId];
           if (!chat) return;
@@ -51202,12 +52829,14 @@ ${colSpecs.join('\n')}
 
           // 3. 表情包定义
           let stickerText = "";
-          const allStickers = [
-            ...(settings.stickerLibrary || []),
-            ...(state.charStickers || []),
-          ];
-          if (allStickers.length > 0)
-            stickerText = allStickers.map((s) => s.name).join("");
+          if (state.globalSettings && state.globalSettings.enableStickers) {
+            const allStickers = [
+              ...(settings.stickerLibrary || []),
+              ...(state.charStickers || []),
+            ];
+            if (allStickers.length > 0)
+              stickerText = allStickers.map((s) => s.name).join("");
+          }
           breakdown.push({
             name: "表情包定义",
             count: calculateTokenCount(stickerText),
@@ -58461,6 +60090,20 @@ ${colSpecs.join('\n')}
             .getElementById("create-weibo-post-btn")
             .addEventListener("click", openWeiboPublisherClean);
 
+          // 调试台 事件绑定
+          const debugConsoleBtn = document.getElementById("open-debug-console-btn");
+          if (debugConsoleBtn) debugConsoleBtn.addEventListener("click", openDebugConsoleModal);
+
+          const closeDebugConsoleX = document.getElementById("close-debug-console-x");
+          if (closeDebugConsoleX) closeDebugConsoleX.addEventListener("click", () => {
+            document.getElementById("debug-console-modal").classList.remove("visible");
+          });
+
+          const closeDebugConsoleBtn = document.getElementById("close-debug-console-btn");
+          if (closeDebugConsoleBtn) closeDebugConsoleBtn.addEventListener("click", () => {
+            document.getElementById("debug-console-modal").classList.remove("visible");
+          });
+
           // 思维链 模块事件绑定
           const tcAddBtn = document.getElementById("tc-add-preset-btn");
           if (tcAddBtn) tcAddBtn.addEventListener("click", () => openThoughtChainEditor());
@@ -58473,6 +60116,149 @@ ${colSpecs.join('\n')}
 
           const openTcBindGroup = document.getElementById("open-thought-chain-bind-btn-group");
           if (openTcBindGroup) openTcBindGroup.addEventListener("click", openThoughtChainBindModal);
+
+          // 守密人 模块事件绑定
+          const openKeeperSingle = document.getElementById("open-keeper-panel-btn-single");
+          if (openKeeperSingle) openKeeperSingle.addEventListener("click", openKeeperModal);
+
+          const openKeeperGroup = document.getElementById("open-keeper-panel-btn-group");
+          if (openKeeperGroup) openKeeperGroup.addEventListener("click", openKeeperModal);
+
+          const closeKeeperX = document.getElementById("close-keeper-modal-x");
+          if (closeKeeperX) closeKeeperX.addEventListener("click", () => {
+            document.getElementById("keeper-modal").classList.remove("visible");
+          });
+
+          const cancelKeeperBtn = document.getElementById("cancel-keeper-modal-btn");
+          if (cancelKeeperBtn) cancelKeeperBtn.addEventListener("click", () => {
+            document.getElementById("keeper-modal").classList.remove("visible");
+          });
+
+          const saveKeeperBtn = document.getElementById("save-keeper-modal-btn");
+          if (saveKeeperBtn) saveKeeperBtn.addEventListener("click", saveKeeperSettings);
+
+          const closeKeeperCharX = document.getElementById("close-keeper-char-prompt-x");
+          if (closeKeeperCharX) closeKeeperCharX.addEventListener("click", () => {
+            document.getElementById("keeper-char-prompt-modal").classList.remove("visible");
+          });
+
+          const cancelKeeperCharBtn = document.getElementById("cancel-keeper-char-prompt-btn");
+          if (cancelKeeperCharBtn) cancelKeeperCharBtn.addEventListener("click", () => {
+            document.getElementById("keeper-char-prompt-modal").classList.remove("visible");
+          });
+
+          const saveKeeperCharBtn = document.getElementById("save-keeper-char-prompt-btn");
+          if (saveKeeperCharBtn) saveKeeperCharBtn.addEventListener("click", () => {
+            const input = document.getElementById("keeper-char-prompt-input");
+            if (editingKeeperCharId && input) {
+              tempKeeperCharPrompts[editingKeeperCharId] = input.value.trim();
+            }
+            document.getElementById("keeper-char-prompt-modal").classList.remove("visible");
+          });
+
+          // 守密人预设事件
+          const keeperPresetSelect = document.getElementById("keeper-prompt-preset-select");
+          if (keeperPresetSelect) {
+            keeperPresetSelect.addEventListener("change", () => {
+              const presets = getKeeperPresets();
+              const found = presets.find((p) => p.id === keeperPresetSelect.value);
+              const promptInput = document.getElementById("keeper-prompt-input");
+              if (found && promptInput) {
+                promptInput.value = found.prompt;
+              }
+            });
+          }
+
+          const keeperPresetDefaultBtn = document.getElementById("keeper-preset-default-btn");
+          if (keeperPresetDefaultBtn) {
+            keeperPresetDefaultBtn.addEventListener("click", async () => {
+              const select = document.getElementById("keeper-prompt-preset-select");
+              if (!select || !select.value) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先选择预设");
+                else alert("请先选择预设");
+                return;
+              }
+              setDefaultKeeperPresetId(select.value);
+              renderKeeperPresetsUI();
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已设为默认预设");
+              else alert("已设为默认预设");
+            });
+          }
+
+          const keeperPresetNewBtn = document.getElementById("keeper-preset-new-btn");
+          if (keeperPresetNewBtn) {
+            keeperPresetNewBtn.addEventListener("click", async () => {
+              const promptInput = document.getElementById("keeper-prompt-input");
+              const promptText = promptInput ? promptInput.value.trim() : "";
+              let name = null;
+              if (typeof showCustomPrompt === "function") {
+                name = await showCustomPrompt("新建预设", "请输入预设名称");
+              } else {
+                name = prompt("请输入预设名称");
+              }
+              if (!name || !name.trim()) return;
+
+              const presets = getKeeperPresets();
+              const newId = "preset_" + Date.now();
+              presets.push({
+                id: newId,
+                name: name.trim(),
+                prompt: promptText,
+              });
+              saveKeeperPresets(presets);
+              renderKeeperPresetsUI();
+              const select = document.getElementById("keeper-prompt-preset-select");
+              if (select) select.value = newId;
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "新预设已保存");
+              else alert("新预设已保存");
+            });
+          }
+
+          const keeperPresetSaveBtn = document.getElementById("keeper-preset-save-btn");
+          if (keeperPresetSaveBtn) {
+            keeperPresetSaveBtn.addEventListener("click", async () => {
+              const select = document.getElementById("keeper-prompt-preset-select");
+              const presets = getKeeperPresets();
+              const found = presets.find((p) => p.id === (select ? select.value : ""));
+              if (!found) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先选择要保存覆盖的预设");
+                else alert("请先选择要保存覆盖的预设");
+                return;
+              }
+              const promptInput = document.getElementById("keeper-prompt-input");
+              const promptText = promptInput ? promptInput.value.trim() : "";
+              found.prompt = promptText;
+              saveKeeperPresets(presets);
+              renderKeeperPresetsUI();
+              if (select) select.value = found.id;
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已覆盖保存当前预设");
+              else alert("已覆盖保存当前预设");
+            });
+          }
+
+          const keeperPresetDeleteBtn = document.getElementById("keeper-preset-delete-btn");
+          if (keeperPresetDeleteBtn) {
+            keeperPresetDeleteBtn.addEventListener("click", async () => {
+              const select = document.getElementById("keeper-prompt-preset-select");
+              const presets = getKeeperPresets();
+              const idx = presets.findIndex((p) => p.id === (select ? select.value : ""));
+              if (idx === -1) {
+                if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先选择要删除的预设");
+                else alert("请先选择要删除的预设");
+                return;
+              }
+              const confirmed = typeof showCustomConfirm === "function"
+                ? await showCustomConfirm("确认删除", "确定删除该预设吗")
+                : confirm("确定删除该预设吗");
+              if (!confirmed) return;
+
+              presets.splice(idx, 1);
+              saveKeeperPresets(presets);
+              renderKeeperPresetsUI();
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "预设已删除");
+              else alert("预设已删除");
+            });
+          }
 
           const closeTcEditorBtn = document.getElementById("close-tc-editor-modal-btn");
           if (closeTcEditorBtn) closeTcEditorBtn.addEventListener("click", () => {
@@ -58499,6 +60285,159 @@ ${colSpecs.join('\n')}
 
           const saveTcBindBtn = document.getElementById("save-thought-chain-bind-btn");
           if (saveTcBindBtn) saveTcBindBtn.addEventListener("click", saveThoughtChainBind);
+
+          // 头像生图 模块事件绑定
+          const genAiAvatarBtn = document.getElementById("gen-ai-avatar-btn");
+          if (genAiAvatarBtn) genAiAvatarBtn.addEventListener("click", () => openAvatarGenModal("ai"));
+
+          const genGroupAvatarBtn = document.getElementById("gen-group-avatar-btn");
+          if (genGroupAvatarBtn) genGroupAvatarBtn.addEventListener("click", () => openAvatarGenModal("group"));
+
+          const genMyAvatarBtn = document.getElementById("gen-my-avatar-btn");
+          if (genMyAvatarBtn) genMyAvatarBtn.addEventListener("click", () => openAvatarGenModal("my"));
+
+          const genMemberAvatarBtn = document.getElementById("gen-member-avatar-btn");
+          if (genMemberAvatarBtn) genMemberAvatarBtn.addEventListener("click", () => openAvatarGenModal("member"));
+
+          const closeAvatarGenX = document.getElementById("close-avatar-gen-modal-x");
+          if (closeAvatarGenX) closeAvatarGenX.addEventListener("click", () => {
+            document.getElementById("avatar-gen-modal").classList.remove("visible");
+          });
+
+          const cancelAvatarGenBtn = document.getElementById("cancel-avatar-gen-btn");
+          if (cancelAvatarGenBtn) cancelAvatarGenBtn.addEventListener("click", () => {
+            document.getElementById("avatar-gen-modal").classList.remove("visible");
+          });
+
+          const saveAvatarGenBtn = document.getElementById("save-avatar-gen-btn");
+          if (saveAvatarGenBtn) saveAvatarGenBtn.addEventListener("click", saveGeneratedAvatar);
+
+          const createAvatarPromptBtn = document.getElementById("avatar-gen-create-prompt-btn");
+          if (createAvatarPromptBtn) createAvatarPromptBtn.addEventListener("click", generateAvatarPromptFromPersona);
+
+          const execAvatarGenBtn = document.getElementById("avatar-gen-execute-btn");
+          if (execAvatarGenBtn) execAvatarGenBtn.addEventListener("click", executeAvatarImageGen);
+
+          const avatarFlipBtn = document.getElementById("avatar-gen-flip-btn");
+          if (avatarFlipBtn) {
+            avatarFlipBtn.addEventListener("click", () => {
+              avatarGenState.flipX *= -1;
+              applyAvatarGenTransform();
+            });
+          }
+
+          const avatarRotateLeftBtn = document.getElementById("avatar-gen-rotate-left-btn");
+          if (avatarRotateLeftBtn) {
+            avatarRotateLeftBtn.addEventListener("click", () => {
+              avatarGenState.rotation = (avatarGenState.rotation - 15) % 360;
+              applyAvatarGenTransform();
+            });
+          }
+
+          const avatarRotateRightBtn = document.getElementById("avatar-gen-rotate-right-btn");
+          if (avatarRotateRightBtn) {
+            avatarRotateRightBtn.addEventListener("click", () => {
+              avatarGenState.rotation = (avatarGenState.rotation + 15) % 360;
+              applyAvatarGenTransform();
+            });
+          }
+
+          const avatarExpandBtn = document.getElementById("avatar-gen-expand-btn");
+          if (avatarExpandBtn) {
+            avatarExpandBtn.addEventListener("click", () => {
+              if (avatarGenState.currentImage && typeof openImageViewer === "function") {
+                openImageViewer(avatarGenState.currentImage);
+              }
+            });
+          }
+
+          const avatarPreviewContainer = document.getElementById("avatar-gen-preview-container");
+          if (avatarPreviewContainer) {
+            let touchState = {
+              startX: 0,
+              startY: 0,
+              startDistance: 0,
+              initialScale: 1,
+              initialTx: 0,
+              initialTy: 0,
+              isDragging: false,
+            };
+
+            avatarPreviewContainer.addEventListener("touchstart", (e) => {
+              if (!avatarGenState.currentImage) return;
+              touchState.isDragging = true;
+              if (e.touches.length === 1) {
+                touchState.startX = e.touches[0].clientX;
+                touchState.startY = e.touches[0].clientY;
+                touchState.initialTx = avatarGenState.translateX;
+                touchState.initialTy = avatarGenState.translateY;
+              } else if (e.touches.length >= 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                touchState.startDistance = Math.hypot(dx, dy);
+                touchState.initialScale = avatarGenState.scale;
+                touchState.startX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                touchState.startY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                touchState.initialTx = avatarGenState.translateX;
+                touchState.initialTy = avatarGenState.translateY;
+              }
+            }, { passive: true });
+
+            avatarPreviewContainer.addEventListener("touchmove", (e) => {
+              if (!touchState.isDragging || !avatarGenState.currentImage) return;
+              if (e.touches.length === 1) {
+                const dx = e.touches[0].clientX - touchState.startX;
+                const dy = e.touches[0].clientY - touchState.startY;
+                avatarGenState.translateX = touchState.initialTx + dx;
+                avatarGenState.translateY = touchState.initialTy + dy;
+                applyAvatarGenTransform();
+              } else if (e.touches.length >= 2) {
+                if (e.cancelable) e.preventDefault();
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy);
+                if (touchState.startDistance > 0) {
+                  const factor = dist / touchState.startDistance;
+                  avatarGenState.scale = Math.max(0.5, Math.min(4, touchState.initialScale * factor));
+                }
+                const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                avatarGenState.translateX = touchState.initialTx + (midX - touchState.startX);
+                avatarGenState.translateY = touchState.initialTy + (midY - touchState.startY);
+                applyAvatarGenTransform();
+              }
+            }, { passive: false });
+
+            const endTouch = () => {
+              touchState.isDragging = false;
+            };
+            avatarPreviewContainer.addEventListener("touchend", endTouch);
+            avatarPreviewContainer.addEventListener("touchcancel", endTouch);
+          }
+
+          const avatarResultImg = document.getElementById("avatar-gen-result-image");
+          if (avatarResultImg) {
+            let avatarClickCount = 0;
+            let avatarLastClickTime = 0;
+            avatarResultImg.addEventListener("click", () => {
+              const now = Date.now();
+              if (now - avatarLastClickTime < 350) {
+                avatarClickCount++;
+                if (avatarClickCount >= 3) {
+                  avatarClickCount = 0;
+                  if (avatarGenState.currentImage) {
+                    const link = document.createElement("a");
+                    link.href = avatarGenState.currentImage;
+                    link.download = "avatar-" + Date.now() + ".png";
+                    link.click();
+                  }
+                }
+              } else {
+                avatarClickCount = 1;
+              }
+              avatarLastClickTime = now;
+            });
+          }
 
           // 跑团模组聊天加载事件绑定
           const openChatModBtn = document.getElementById("open-chat-module-btn");
@@ -60011,6 +61950,7 @@ ${colSpecs.join('\n')}
               const subModuleEl = document.getElementById("sub-api-use-module");
               const subOptimizeEl = document.getElementById("sub-api-use-optimize");
               const subDrawEl = document.getElementById("sub-api-use-draw");
+              const subForcedImageEl = document.getElementById("sub-api-use-forced-image");
               const subMapEl = document.getElementById("sub-api-use-map");
 
               state.apiConfig.subApiUses = {
@@ -60019,6 +61959,7 @@ ${colSpecs.join('\n')}
                 module: subModuleEl ? subModuleEl.checked : false,
                 optimize: subOptimizeEl ? subOptimizeEl.checked : false,
                 draw: subDrawEl ? subDrawEl.checked : false,
+                forcedImage: subForcedImageEl ? subForcedImageEl.checked : false,
                 map: subMapEl ? subMapEl.checked : false,
               };
 
@@ -60813,7 +62754,16 @@ ${colSpecs.join('\n')}
             const inp = document.getElementById(`${prefix}-gender-input`);
             if (inp) inp.value = val || "";
             const sel = document.getElementById(`${prefix}-gender-select`);
-            if (sel) sel.value = val || "";
+            if (sel) {
+              const cleanVal = (val || "").trim();
+              if (cleanVal && !Array.from(sel.options).some((opt) => opt.value === cleanVal)) {
+                const opt = document.createElement("option");
+                opt.value = cleanVal;
+                opt.textContent = cleanVal;
+                sel.appendChild(opt);
+              }
+              sel.value = cleanVal;
+            }
           }
 
           function getGenderInputValue(prefix) {
@@ -61181,8 +63131,10 @@ ${colSpecs.join('\n')}
                 ? "none"
                 : "block";
 
-              document.getElementById("npc-library-group").style.display =
-                isGroup ? "none" : "block";
+              const npcLibGroup = document.getElementById("npc-library-group");
+              if (npcLibGroup) {
+                npcLibGroup.style.display = isGroup ? "none" : "block";
+              }
 
               // NAI出图设置的显示/隐藏和加载
               const naiCharacterSettingsGroup = document.getElementById(
@@ -61292,6 +63244,16 @@ ${colSpecs.join('\n')}
               if (weiboDetailsGroup) {
                 weiboDetailsGroup.style.display = isWeiboOn ? "block" : "none";
               }
+              // 视觉美化折叠控制
+              const visualBeautifySwitch = document.getElementById("visual-beautify-switch");
+              const visualBeautifyDetails = document.getElementById("visual-beautify-details-group");
+              if (visualBeautifySwitch && visualBeautifyDetails) {
+                visualBeautifyDetails.style.display = visualBeautifySwitch.checked ? "block" : "none";
+                visualBeautifySwitch.onchange = () => {
+                  visualBeautifyDetails.style.display = visualBeautifySwitch.checked ? "block" : "none";
+                };
+              }
+
               // 根据是否为群聊，显示或隐藏“好友分组”区域
               document.getElementById("assign-group-section").style.display =
                 isGroup ? "none" : "block";
@@ -62888,17 +64850,26 @@ ${colSpecs.join('\n')}
             });
 
           const stickerPanel = document.getElementById("sticker-panel");
-          document
-            .getElementById("open-sticker-panel-btn")
-            .addEventListener("click", () => {
+          const openStickerBtn = document.getElementById("open-sticker-panel-btn");
+          if (openStickerBtn) {
+            openStickerBtn.addEventListener("click", () => {
               renderStickerPanel();
-              stickerPanel.classList.add("visible");
+              if (stickerPanel) stickerPanel.classList.add("visible");
             });
-          document
-            .getElementById("close-sticker-panel-btn")
-            .addEventListener("click", () =>
+          }
+          const stickerAppIcon = document.getElementById("sticker-app-icon");
+          if (stickerAppIcon) {
+            stickerAppIcon.addEventListener("click", () => {
+              renderStickerPanel();
+              if (stickerPanel) stickerPanel.classList.add("visible");
+            });
+          }
+          const closeStickerBtn = document.getElementById("close-sticker-panel-btn");
+          if (closeStickerBtn && stickerPanel) {
+            closeStickerBtn.addEventListener("click", () =>
               stickerPanel.classList.remove("visible"),
             );
+          }
 
           document
             .getElementById("add-sticker-btn")
@@ -66357,6 +68328,34 @@ ${colSpecs.join('\n')}
                 await showCustomAlert("提示", "已关闭全体好友微博");
               } else {
                 alert("已关闭全体好友微博");
+              }
+            });
+          }
+
+          // 开启全局表情包按钮
+          const enableGlobalStickersBtn = document.getElementById("enable-global-stickers-btn");
+          if (enableGlobalStickersBtn) {
+            enableGlobalStickersBtn.addEventListener("click", async () => {
+              state.globalSettings.enableStickers = true;
+              await db.globalSettings.put(state.globalSettings);
+              if (typeof showCustomAlert === "function") {
+                await showCustomAlert("提示", "已开启全局表情包");
+              } else {
+                alert("已开启全局表情包");
+              }
+            });
+          }
+
+          // 关闭全局表情包按钮
+          const disableGlobalStickersBtn = document.getElementById("disable-global-stickers-btn");
+          if (disableGlobalStickersBtn) {
+            disableGlobalStickersBtn.addEventListener("click", async () => {
+              state.globalSettings.enableStickers = false;
+              await db.globalSettings.put(state.globalSettings);
+              if (typeof showCustomAlert === "function") {
+                await showCustomAlert("提示", "已关闭全局表情包");
+              } else {
+                alert("已关闭全局表情包");
               }
             });
           }

@@ -141,8 +141,10 @@
       * 沙盒
       * 其他
     - 模组大类（ruleSystem）：只能为 "coc" 或 "coj"；
-    - 规模人数（scaleType）：判定为 "1v1"、"单人" 或 "几ho"（如 2ho、3ho、4ho、多ho）；
-    - 模组简介（summary）：客观概括模组核心背景，严禁附带任何剧透！
+    - 规模人数（scaleType）：判定模组适用的游玩人数与HO位机制（模组开头信息处通常会有介绍人数与HO设定）：
+      * 若模组设有专属 HO 位（作者为该位置设定了部分专属设定与特殊剧情）：按实际 HO 数量判定为 "2ho"、"3ho"、"4ho"；当 HO 位数量大于 4 人（>4人有ho）时，必须判定为 "多ho"；
+      * 若模组为无 HO 位的模组（无专属剧情设定与个人秘密）：若为单人则判定为 "1v1" 或 "单人"；若为多人无 HO 位模组，则根据模组开头信息中介绍的游玩人数填写为 "*人" 或 "*-*人"（例如 "2人"、"3人"、"4人"、"2-4人"、"3-5人" 等）；
+    - 模组简介（summary）：绝对不能出现任何剧透，绝对不能出现任何剧情的走向！一般来说作者都会在模组介绍中写模组的简介，直接沿用作者的原版简介即可；若作者未在模组开头写简介，则这个地方就只需要写最最最最最最开头最基础、没有任何剧情走向、没有任何剧透、没有任何已知消息以外、没有任何正文中的内容的内容！
 23. 【地域背景 Tag 判定规范（单选互斥，排在全部标签第1位）】：
     AI 必须根据模组故事发生的舞台背景，严格判定并赋予以下四种之一，且绝不允许同时出现多个，且在所有标签中必须排序为第一个：
     - 日模：模组故事背景设定在日本；
@@ -396,7 +398,7 @@
     '2ho': { category: '规模人数', desc: '双主角专属秘密背景分工模组' },
     '3ho': { category: '规模人数', desc: '三位调查员专属秘密背景模组' },
     '4ho': { category: '规模人数', desc: '四位调查员团队协作与暗线模组' },
-    '多ho': { category: '规模人数', desc: '多位调查员各自持有专属秘密背景' },
+    '多ho': { category: '规模人数', desc: '大于4位调查员且持有专属秘密背景的模组' },
     '日模': { category: '背景分类', desc: '模组故事背景设定在日本' },
     '美模': { category: '背景分类', desc: '模组故事背景设定在美国' },
     '现代中国': { category: '背景分类', desc: '模组故事背景设定在现代中国' },
@@ -441,7 +443,7 @@
     });
     const activeCustom = (customTags && customTags.length > 0)
       ? customTags
-      : (Array.isArray(tags) ? tags : []).filter(t => !BG_TAGS.includes(t) && !ENDING_TAGS.includes(t) && !CONTENT_TAGS.includes(t) && t !== '1v1' && t !== '单人' && !t.includes('ho'));
+      : (Array.isArray(tags) ? tags : []).filter(t => !BG_TAGS.includes(t) && !ENDING_TAGS.includes(t) && !CONTENT_TAGS.includes(t) && t !== '1v1' && t !== '单人' && !t.includes('ho') && !t.endsWith('人'));
     activeCustom.forEach(t => {
       if (!list.includes(t)) list.push(t);
     });
@@ -1596,18 +1598,18 @@
     cleanChapterTitle(rawName, moduleName) {
       if (!rawName) return '章节小标题';
       let title = rawName.trim();
-      if (moduleName) {
-        let pureMod = moduleName.replace(/\.[^/.]+$/, '').replace(/[\(\[\{（【][^\)\]\}）】]*[\)\]\}）】]/g, '').trim();
+      const modName = moduleName || this.activeDetailModule?.name || this.currentParsedData?.moduleName || this.currentPlan?.moduleName || '';
+      if (modName) {
+        let pureMod = modName.replace(/\.[^/.]+$/, '').replace(/[\(\[\{（【][^\)\]\}）】]*[\)\]\}）】]/g, '').trim();
         pureMod = pureMod.replace(/[《》【】\[\]()（）]/g, '').trim();
-        if (pureMod && pureMod.length >= 2) {
+        if (pureMod && pureMod.length >= 1) {
           const escaped = pureMod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const prefixReg = new RegExp(`^(?:《?${escaped}》?|【?${escaped}】?|\\[?${escaped}\\]?)[\\s\\-_—杠:：·|/\\\\]*`, 'i');
+          const prefixReg = new RegExp(`^(?:《?${escaped}》?|【?${escaped}】?|\\[?${escaped}\\]?)[\\s\\-_—杠:：·|/\\\\]*`, 'gi');
           title = title.replace(prefixReg, '').trim();
-          const suffixReg = new RegExp(`[\\s\\-_—杠:：·|/\\\\]*(?:《?${escaped}》?|【?${escaped}】?|\\[?${escaped}\\]?)$`, 'i');
+          const suffixReg = new RegExp(`[\\s\\-_—杠:：·|/\\\\]*(?:《?${escaped}》?|【?${escaped}】?|\\[?${escaped}\\]?)$`, 'gi');
           title = title.replace(suffixReg, '').trim();
         }
       }
-      title = title.replace(/^[0-9]+[-_—\s]+/, '').trim();
       return title || rawName;
     },
 
@@ -2009,8 +2011,8 @@ JSON 格式如下：
 注意：
 1. moduleType 只能是 "线性"、"沙盒" 或 "其他" 三者之一，禁止附带任何注解。
 2. ruleSystem 只能是 "coc" 或 "coj"。
-3. scaleType 为 "1v1"、"单人" 或 "几ho"（如 2ho, 3ho, 4ho, 多ho）。
-4. summary 严禁包含任何剧透。
+3. scaleType: 若模组设有专属 HO 位，按数量判定为 "2ho"、"3ho"、"4ho"，若大于4人有ho则判定为 "多ho"；若为无 HO 位模组，单人判定为 "1v1" 或 "单人"，多人则根据模组开头游玩人数填写为 "*人" 或 "*-*人"（例如 "2-4人"、"3-5人" 等）。
+4. summary: 绝对不能出现任何剧透与剧情走向。直接沿用作者在模组介绍中写的模组简介；若无原简介则只写最最最最最最开头最基础的已知内容，绝不包含正文剧情走向。
 5. bgTag 必须单选，只能是 "日模"、"美模"、"现代中国"、"古风" 四者之一，禁止其它值。
 6. endingTag 必须单选，只能是 "危险"、"普通" 或 "安全" 三者之一。
 7. contentTags 必须为多选数组，只能从预设列表 ["校园", "复活", "粉红", "NTR", "血腥暴力", "纯爱", "茶番", "恐怖", "Meta"] 中挑选，符合几个选几个，不符合留空数组 []。
@@ -4468,7 +4470,8 @@ ${imageList}
       const kpBtn = document.getElementById('module-reader-view-kp');
 
       const currentChap = chapters[index];
-      if (titleEl) titleEl.textContent = currentChap.title;
+      const cleanTitle = this.cleanChapterTitle(currentChap.title, this.activeDetailModule?.name || this.currentParsedData?.moduleName);
+      if (titleEl) titleEl.textContent = cleanTitle;
       if (metaEl) metaEl.textContent = `${currentChap.category || '正文'} · ${currentChap.wordCount || 0} 字`;
 
       if (pcBtn && kpBtn) {
@@ -4864,7 +4867,17 @@ ${imageList}
       if (nameInput) nameInput.value = mod.name || '';
       if (typeSelect) typeSelect.value = mod.type || '线性';
       if (systemSelect) systemSelect.value = (mod.ruleSystem || 'coc').toLowerCase();
-      if (scaleSelect) scaleSelect.value = mod.scaleType || '1v1';
+      if (scaleSelect) {
+        const curScale = mod.scaleType || '1v1';
+        const hasOpt = Array.from(scaleSelect.options).some(opt => opt.value === curScale);
+        if (!hasOpt) {
+          const newOpt = document.createElement('option');
+          newOpt.value = curScale;
+          newOpt.textContent = curScale;
+          scaleSelect.appendChild(newOpt);
+        }
+        scaleSelect.value = curScale;
+      }
       if (descInput) descInput.value = mod.summary || '';
       if (customTagInput) customTagInput.value = '';
 
@@ -5087,10 +5100,19 @@ ${imageList}
       const descEl = document.getElementById('module-annotation-desc-text') || document.getElementById('module-annotation-tag-desc');
       if (!modal) return;
 
-      const def = TAG_DEFINITIONS[cleanTag] || {
-        category: '自定义标签',
-        desc: '用户自定义添加的模组分类标签'
-      };
+      let def = TAG_DEFINITIONS[cleanTag];
+      if (!def) {
+        if (cleanTag === '多ho') {
+          def = { category: '规模人数', desc: '大于4位调查员且持有专属秘密背景的模组' };
+        } else if (/^\d+(?:-\d+)?人$/.test(cleanTag)) {
+          def = { category: '规模人数', desc: `${cleanTag}无HO位普通调查员规模模组` };
+        } else {
+          def = {
+            category: '自定义标签',
+            desc: '用户自定义添加的模组分类标签'
+          };
+        }
+      }
 
       if (badgeEl) {
         badgeEl.textContent = cleanTag;
