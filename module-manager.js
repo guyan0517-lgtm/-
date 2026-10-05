@@ -143,13 +143,21 @@
     - 模组大类（ruleSystem）：只能为 "coc" 或 "coj"；
     - 规模人数（scaleType）：判定为 "1v1"、"单人" 或 "几ho"（如 2ho、3ho、4ho、多ho）；
     - 模组简介（summary）：客观概括模组核心背景，严禁附带任何剧透！
-23. 【结局 Tag 判定规范（单选，一次只能打一个，禁止自定义）】：
+23. 【地域背景 Tag 判定规范（单选互斥，排在全部标签第1位）】：
+    AI 必须根据模组故事发生的舞台背景，严格判定并赋予以下四种之一，且绝不允许同时出现多个，且在所有标签中必须排序为第一个：
+    - 日模：模组故事背景设定在日本；
+    - 美模：模组故事背景设定在美国；
+    - 现代中国：模组故事背景设定在现代中国；
+    - 古风：单指中国古风背景。
+24. 【结局 Tag 判定规范（单选，排在地域背景之后第2位）】：
     AI 必须通读全模组结局分支，严格判定并仅能赋予以下三种之一：
     - 危险：若结局中没有任何一个好结局，并且 kpc 和 PC 有一方或者两方死亡且没有复活，必须打上【危险】；
     - 普通：若没有传统意义上的好结局，但是两人却没有死亡（例如永远被困在某处但存活），必须打上【普通】；
     - 安全：若存在传统意义上的好结局，打上【安全】。
-24. 【内容 Tag 判定规范（多选，AI 可打多个，禁止自定义）】：
+25. 【内容与目的 Tag 判定规范（多选，AI 可选多个）】：
     AI 只能从以下预设标签列表中选择符合的内容打标，不允许自定义任何其他标签：
+    - 校园：必须是模组全篇几乎全以校园生活与场景为主，而不是仅有校园出现；
+    - 复活：本模组创作或开团的核心目的就是为了复活 pc 或者 kpc；
     - 粉红：内容包含 nsfw 或 r18 剧情；
     - NTR：内容包含多人、ntr 剧情；
     - 血腥暴力：内容包含暴力、血腥等非纯爱内容（如被虐待、殴打、被非恋人对象侵犯等）；
@@ -157,9 +165,11 @@
     - 茶番：内容主要为吃饭、睡觉、玩游戏、聚餐，或作者在简介标明茶番；
     - 恐怖：内容含有明确恐怖元素；
     - Meta：内容含有 Meta 叙事与打破第四面墙元素。
-25. 【插图智能筛选与剧透甄别】：
-    - 针对文档提取的图片进行智能判定：过滤掉纯文字排版扫描页、纯文字转图与无意义装饰边框，仅保留有价值的跑团插图（如角色立绘、场景CG、道具图、地图等）；
-    - 判定剧透属性：包含后期黑幕、伤亡CG、隐藏密室等关键剧透标记为 isSensitive: true（仅守秘人可见），公开区域或初始立绘标记为 isSensitive: false（玩家公开）。`;
+26. 【插图深度筛选、详细注释与剧透甄别】：
+    - 针对文档提取的图片进行深度判定：过滤掉纯文字排版扫描页、纯文字转图与无意义装饰边框（设 isUseful: false 进行排除），仅保留有价值的跑团插图（如角色立绘、场景CG、线索手札、道具图、地图等）；
+    - 判定剧透属性：包含后期黑幕、伤亡CG、隐藏密室等关键剧透标记为 isSensitive: true（仅守秘人可见），公开区域或初始立绘标记为 isSensitive: false（玩家公开）；
+    - 为保留的每张图片生成精炼详细的中文内容注释（description），明确说明该图片的内容与在模组中的具体用途（严禁仅标记页码）；
+    - 图片在图库与预览中默认展示模式为玩家模式，所有剧透图片默认进行遮挡防护。`;
 
   // 切割执行阶段完整提示词（6部分15条深度切割与整理规范）
   const DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT = `你是模组切割 AI。你将收到：①模组原文全文；②一份切割方案初稿（分析阶段生成的章节计划）。你的任务：按初稿的章节划分，把原文整理分类成多个可直接用于带团的章节，严禁添加主观个人理解与总结点评。初稿是参考，不是圣旨——执行中若发现初稿切得不合理（章节错位、该合并的没合并、该拆的没拆、归属放错），你可以修正，但修正之处要在结果说明中注明。你只做文本的分类整理与标签标注，不涉及任何代码实现。所有输出使用中文。
@@ -351,6 +361,58 @@
   global.setDefaultModuleCuttingPresetId = setDefaultModuleCuttingPresetId;
   global.renderModuleCuttingPresetsUI = renderModuleCuttingPresetsUI;
 
+  const TAG_DEFINITIONS = {
+    '日模': { category: '背景分类', desc: '模组故事背景设定在日本' },
+    '美模': { category: '背景分类', desc: '模组故事背景设定在美国' },
+    '现代中国': { category: '背景分类', desc: '模组故事背景设定在现代中国' },
+    '古风': { category: '背景分类', desc: '模组故事背景单指中国古风传统' },
+    '危险': { category: '结局分类', desc: '结局无生还或主角死亡且未复活' },
+    '普通': { category: '结局分类', desc: '无传统好结局但人员幸存' },
+    '安全': { category: '结局分类', desc: '存在传统意义生还胜利好结局' },
+    '校园': { category: '内容特色', desc: '模组全篇以校园生活与场景为主' },
+    '复活': { category: '创作目的', desc: '模组核心目的为复活调查员或伙伴' },
+    '粉红': { category: '内容特色', desc: '包含成人向恋爱互动与情感剧情' },
+    'NTR': { category: '内容特色', desc: '包含多角情感纠葛与关系剧情' },
+    '血腥暴力': { category: '内容特色', desc: '包含肢体伤害或拷问等重度场面' },
+    '纯爱': { category: '内容特色', desc: '纯粹甜蜜互动无虐点' },
+    '茶番': { category: '内容特色', desc: '以轻松搞笑日常聚餐玩乐为主' },
+    '恐怖': { category: '内容特色', desc: '含有明确惊悚克苏鲁怪异元素' },
+    'Meta': { category: '内容特色', desc: '包含打破第四面墙与叙事诡计' }
+  };
+
+  const BG_TAGS = ['日模', '美模', '现代中国', '古风'];
+  const ENDING_TAGS = ['危险', '普通', '安全'];
+  const CONTENT_TAGS = ['校园', '复活', '粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta'];
+
+  function sortModuleTags(tags, bgTag, endingTag, contentTags, customTags) {
+    if (typeof tags === 'string' && !bgTag) {
+      bgTag = tags;
+      tags = null;
+    }
+    const list = [];
+    const activeBg = bgTag || (Array.isArray(tags) && tags.find(t => BG_TAGS.includes(t))) || '';
+    if (activeBg && BG_TAGS.includes(activeBg)) {
+      list.push(activeBg);
+    }
+    const activeEnding = endingTag || (Array.isArray(tags) && tags.find(t => ENDING_TAGS.includes(t))) || '';
+    if (activeEnding && ENDING_TAGS.includes(activeEnding)) {
+      list.push(activeEnding);
+    }
+    const activeContent = (contentTags && contentTags.length > 0)
+      ? contentTags
+      : (Array.isArray(tags) ? tags : []).filter(t => CONTENT_TAGS.includes(t) && t !== activeBg && t !== activeEnding);
+    activeContent.forEach(t => {
+      if (!list.includes(t)) list.push(t);
+    });
+    const activeCustom = (customTags && customTags.length > 0)
+      ? customTags
+      : (Array.isArray(tags) ? tags : []).filter(t => !BG_TAGS.includes(t) && !ENDING_TAGS.includes(t) && !CONTENT_TAGS.includes(t) && t !== '1v1' && t !== '单人' && !t.includes('ho'));
+    activeCustom.forEach(t => {
+      if (!list.includes(t)) list.push(t);
+    });
+    return list;
+  }
+
   const ModuleManager = {
     version: '2.9.0',
     currentStep: 1,
@@ -358,17 +420,30 @@
     activeSubTab: 'chapters',
     cutExecutionMode: 'single',
 
+    sortModuleTags(tagsOrBg, bgOrEnding, endingOrContent, contentOrCustom, maybeCustom) {
+      if (Array.isArray(tagsOrBg)) {
+        return sortModuleTags(tagsOrBg, bgOrEnding, endingOrContent, contentOrCustom, maybeCustom);
+      }
+      return sortModuleTags(null, tagsOrBg, bgOrEnding, endingOrContent, contentOrCustom);
+    },
+
     // 异步切割生命周期控制
     isCuttingRunning: false,
     isCuttingPaused: false,
     isCuttingCancelled: false,
     cuttingCurrentIndex: 0,
 
-    // 阅读器与详情状态
+    // 阅读器与详情状态（默认均为玩家防剧透模式）
     currentReadingChapters: [],
     currentReadingIndex: 0,
-    currentReadingViewMode: 'kp',
+    currentReadingViewMode: 'pc',
+    step2GalleryViewMode: 'pc',
+    step3ViewMode: 'pc',
     activeDetailModule: null,
+
+    // 模组库筛选状态
+    selectedFilterTags: new Set(),
+    currentLibraryFilter: 'all',
 
     // 同步内存缓存 (供提示词实时组装)
     chaptersMemoryCache: new Map(),
@@ -1058,7 +1133,7 @@
       if (!container) return;
       container.innerHTML = '';
 
-      if (!this.step2GalleryViewMode) this.step2GalleryViewMode = 'kp';
+      if (!this.step2GalleryViewMode) this.step2GalleryViewMode = 'pc';
       const images = this.currentParsedData?.images || [];
 
       const header = document.createElement('div');
@@ -1080,6 +1155,7 @@
         <div style="display: flex; gap: 6px;">
           <input type="file" id="module-step2-image-input" accept="image/*" multiple style="display: none;" />
           <button type="button" class="mod-capsule-btn" id="module-step2-import-img-btn">导入</button>
+          <button type="button" class="mod-capsule-btn" id="module-step2-clear-discard-btn">清理废弃</button>
           ${images.length > 0 ? '<button type="button" class="mod-capsule-btn danger" id="module-step2-clear-img-btn">清空</button>' : ''}
         </div>
       `;
@@ -1087,6 +1163,7 @@
       const viewPcBtn = header.querySelector('#module-step2-view-pc-btn');
       const viewKpBtn = header.querySelector('#module-step2-view-kp-btn');
       const importBtn = header.querySelector('#module-step2-import-img-btn');
+      const clearDiscardBtn = header.querySelector('#module-step2-clear-discard-btn');
       const fileInput = header.querySelector('#module-step2-image-input');
       const clearBtn = header.querySelector('#module-step2-clear-img-btn');
 
@@ -1098,9 +1175,31 @@
       }
 
       if (viewKpBtn) {
-        viewKpBtn.addEventListener('click', () => {
-          this.step2GalleryViewMode = 'kp';
+        viewKpBtn.addEventListener('click', async () => {
+          let confirmed = true;
+          if (typeof global.showCustomConfirm === 'function') {
+            confirmed = await global.showCustomConfirm('防剧透提示', '守秘人模式包含剧情真相与核心剧透，确认开启吗');
+          } else if (typeof global.showCustomAlert === 'function') {
+            confirmed = confirm('守秘人模式包含剧情真相与核心剧透，确认开启吗');
+          }
+          if (confirmed) {
+            this.step2GalleryViewMode = 'kp';
+            this.renderStep2GalleryUI();
+          }
+        });
+      }
+
+      if (clearDiscardBtn) {
+        clearDiscardBtn.addEventListener('click', async () => {
+          if (!this.currentParsedData?.images) return;
+          const beforeCount = this.currentParsedData.images.length;
+          this.currentParsedData.images = this.currentParsedData.images.filter(img => !img.isDiscarded && !img.isJunk && !img.name?.includes('废弃') && !img.name?.includes('封面') && !img.name?.includes('装饰'));
+          const removedCount = beforeCount - this.currentParsedData.images.length;
+          this.saveDraft();
           this.renderStep2GalleryUI();
+          if (typeof global.showCustomAlert === 'function') {
+            global.showCustomAlert('清理完成', `已清理 ${removedCount} 张废弃与装饰图片`);
+          }
         });
       }
 
@@ -1124,6 +1223,7 @@
               description: '本地导入插图',
               dataUrl: dataUrl,
               isSensitive: false,
+              isDiscarded: false,
               placement: '文档插图'
             });
           }
@@ -1168,6 +1268,7 @@
         card.className = 'mod-gallery-card';
 
         const isSpoiler = !!img.isSensitive;
+        const isDiscarded = !!img.isDiscarded;
         const showPlaceholder = isPlayerView && isSpoiler;
 
         let thumbHtml = '';
@@ -1190,7 +1291,10 @@
           thumbHtml = `
             <div style="position: relative; overflow: hidden; background: var(--secondary-bg, #F0EFEA); min-height: 90px; display: flex; align-items: center; justify-content: center;">
               <img src="${img.dataUrl}" class="mod-gallery-thumb" alt="${img.name || '插图'}" loading="lazy" />
-              ${isSpoiler ? '<span class="mod-gallery-tag sensitive" style="position: absolute; top: 4px; right: 4px;">守秘剧透</span>' : ''}
+              <div style="position: absolute; top: 4px; right: 4px; display: flex; gap: 3px; flex-direction: column; align-items: flex-end;">
+                ${isSpoiler ? '<span class="mod-gallery-tag sensitive">守秘剧透</span>' : ''}
+                ${isDiscarded ? '<span class="mod-gallery-tag" style="background: rgba(100,100,100,0.8); color: #FFF;">已废弃</span>' : ''}
+              </div>
             </div>
           `;
         }
@@ -1206,8 +1310,10 @@
               <span>${pageLabel}</span>
               <span>${dimLabel}</span>
             </div>
+            ${img.annotation ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${img.annotation}</div>` : ''}
             <div style="display: flex; gap: 4px; justify-content: flex-end; margin-top: 6px; flex-wrap: wrap;">
               <button type="button" class="module-mini-btn btn-toggle-spoiler" style="font-size: 10px; padding: 2px 5px;">${isSpoiler ? '公开' : '剧透'}</button>
+              <button type="button" class="module-mini-btn btn-toggle-discard" style="font-size: 10px; padding: 2px 5px;">${isDiscarded ? '恢复' : '废弃'}</button>
               <button type="button" class="module-mini-btn btn-download-img" style="font-size: 10px; padding: 2px 5px;">下载</button>
               <button type="button" class="module-mini-btn btn-danger btn-del-step2-img" style="font-size: 10px; padding: 2px 5px;">删除</button>
             </div>
@@ -1217,6 +1323,13 @@
         card.querySelector('.btn-toggle-spoiler')?.addEventListener('click', (e) => {
           e.stopPropagation();
           img.isSensitive = !img.isSensitive;
+          this.saveDraft();
+          this.renderStep2GalleryUI();
+        });
+
+        card.querySelector('.btn-toggle-discard')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          img.isDiscarded = !img.isDiscarded;
           this.saveDraft();
           this.renderStep2GalleryUI();
         });
@@ -1447,11 +1560,61 @@
     cleanChapterTitle(rawName, moduleName) {
       if (!rawName) return '章节小标题';
       let title = rawName.trim();
-      if (moduleName && title.startsWith(moduleName)) {
-        title = title.substring(moduleName.length).replace(/^[-_—\s0-9]+/, '');
+      if (moduleName) {
+        const rawMod = moduleName.replace(/\.[^/.]+$/, '').trim();
+        const pureMod = rawMod.replace(/[《》【】\[\]()（）]/g, '').trim();
+        if (pureMod && pureMod.length >= 2) {
+          const escaped = pureMod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const reg = new RegExp(`^(?:《?${escaped}》?|【?${escaped}】?)[\\s\\-_—:：·|/\\\\]*`, 'i');
+          title = title.replace(reg, '').trim();
+        }
       }
-      title = title.replace(/^[0-9]+[-_—\s]+/, '');
+      title = title.replace(/^[0-9]+[-_—\s]+/, '').trim();
       return title || rawName;
+    },
+
+    splitTextIntoBalancedSegments(text, numParts) {
+      if (!text || numParts <= 1) return [text];
+      const totalLen = text.length;
+      const targetChunkSize = Math.floor(totalLen / numParts);
+      const segments = [];
+      let currentStart = 0;
+
+      for (let i = 0; i < numParts - 1; i++) {
+        const idealEnd = currentStart + targetChunkSize;
+        if (idealEnd >= totalLen) break;
+
+        const searchStart = Math.max(currentStart + 1000, idealEnd - 1500);
+        const searchEnd = Math.min(totalLen, idealEnd + 1500);
+        const searchWindow = text.substring(searchStart, searchEnd);
+
+        let cutOffset = -1;
+        const chapterMatch = searchWindow.search(/\n(?:第[0-9一二三四五六七八九十百]+[章节回幕部]|【[^】]+】|#{1,3}\s+|={4,}|-{4,})/);
+        if (chapterMatch !== -1) {
+          cutOffset = searchStart + chapterMatch + 1;
+        } else {
+          const doubleNewline = searchWindow.lastIndexOf('\n\n');
+          if (doubleNewline !== -1) {
+            cutOffset = searchStart + doubleNewline + 2;
+          } else {
+            const singleNewline = searchWindow.lastIndexOf('\n');
+            if (singleNewline !== -1) {
+              cutOffset = searchStart + singleNewline + 1;
+            } else {
+              cutOffset = idealEnd;
+            }
+          }
+        }
+
+        segments.push(text.substring(currentStart, cutOffset));
+        currentStart = cutOffset;
+      }
+
+      if (currentStart < totalLen) {
+        segments.push(text.substring(currentStart));
+      }
+
+      return segments.filter(s => s.trim().length > 0);
     },
 
     async callAI(systemPrompt, userPrompt) {
@@ -1532,6 +1695,15 @@
       const isSandbox = text.includes('沙盒') || text.includes('探索') || text.includes('自由');
       const isCoj = text.includes('coj') || text.includes('COJ') || text.includes('秘密');
 
+      let bgTag = '日模';
+      if (text.includes('美国') || text.includes('波士顿') || text.includes('阿卡姆') || text.includes('纽约') || text.includes('加州') || text.includes('得州') || text.includes('芝加哥') || text.includes('旧金山') || text.includes('密斯卡托尼克')) {
+        bgTag = '美模';
+      } else if (text.includes('古代') || text.includes('江湖') || text.includes('武侠') || text.includes('朝廷') || text.includes('大唐') || text.includes('大宋') || text.includes('大明') || text.includes('大清') || text.includes('修仙') || text.includes('修真') || text.includes('客栈') || text.includes('镖局') || text.includes('古风')) {
+        bgTag = '古风';
+      } else if (text.includes('现代中国') || text.includes('中国') || text.includes('北京') || text.includes('上海') || text.includes('广州') || text.includes('深圳') || text.includes('重庆') || text.includes('成都') || text.includes('国内') || text.includes('公安') || text.includes('派出所') || text.includes('省') || text.includes('市')) {
+        bgTag = '现代中国';
+      }
+
       let endingTag = '普通';
       if (text.includes('全员存活') || text.includes('生还') || text.includes('TE') || text.includes('True End') || text.includes('好结局')) {
         endingTag = '安全';
@@ -1540,6 +1712,8 @@
       }
 
       const contentTags = [];
+      if (text.includes('学校') || text.includes('校园') || text.includes('高中') || text.includes('大学') || text.includes('教室') || text.includes('学园') || text.includes('学生会')) contentTags.push('校园');
+      if (text.includes('复活') || text.includes('起死回生') || text.includes('召回灵魂') || text.includes('还魂')) contentTags.push('复活');
       if (text.includes('r18') || text.includes('R18') || text.includes('nsfw') || text.includes('工口') || text.includes('性')) contentTags.push('粉红');
       if (text.includes('ntr') || text.includes('NTR') || text.includes('多人关系')) contentTags.push('NTR');
       if (text.includes('虐待') || text.includes('殴打') || text.includes('断肢') || text.includes('血腥') || text.includes('暴力') || text.includes('拷问')) contentTags.push('血腥暴力');
@@ -1547,6 +1721,8 @@
       if (text.includes('茶番') || text.includes('日常') || text.includes('聚餐') || text.includes('玩游戏') || text.includes('吃饭')) contentTags.push('茶番');
       if (text.includes('恐怖') || text.includes('惊悚') || text.includes('san check') || text.includes('怪异')) contentTags.push('恐怖');
       if (text.includes('meta') || text.includes('Meta') || text.includes('第四面墙') || text.includes('叙述性诡计')) contentTags.push('Meta');
+
+      const sortedTags = this.sortModuleTags(bgTag, endingTag, contentTags, []);
 
       chunks.push({
         id: 'chunk_pub',
@@ -1710,9 +1886,11 @@
         ruleSystem: isCoj ? 'coj' : 'coc',
         scaleType: is1v1 ? '1v1' : '2ho',
         summary: '无剧透模组概览',
+        bgTag: bgTag,
         endingTag: endingTag,
         contentTags: contentTags,
         customTags: [],
+        tags: sortedTags,
         moduleName: moduleName,
         totalWords: data.wordCount,
         chunks: chunks,
@@ -1752,8 +1930,9 @@ JSON 格式如下：
   "ruleSystem": "coc",
   "scaleType": "1v1",
   "summary": "模组无剧透简介",
+  "bgTag": "日模",
   "endingTag": "普通",
-  "contentTags": ["纯爱", "恐怖"],
+  "contentTags": ["校园", "恐怖"],
   "chunks": [
     {
       "order": 1,
@@ -1770,7 +1949,14 @@ JSON 格式如下：
     { "name": "具体场所", "parent": "建筑分区", "level": 3, "desc": "" }
   ],
   "imageAnalysis": [
-    { "imageIndex": 1, "isUseful": true, "isSensitive": false, "name": "角色立绘", "description": "主角初始外观立绘" }
+    {
+      "imageIndex": 1,
+      "shouldInclude": true,
+      "isSensitive": false,
+      "name": "角色立绘",
+      "description": "主角初始外观立绘",
+      "annotation": "开场NPC外观展示"
+    }
   ]
 }
 注意：
@@ -1778,108 +1964,156 @@ JSON 格式如下：
 2. ruleSystem 只能是 "coc" 或 "coj"。
 3. scaleType 为 "1v1"、"单人" 或 "几ho"（如 2ho, 3ho, 4ho, 多ho）。
 4. summary 严禁包含任何剧透。
-5. endingTag 为单选，只能是 "危险"、"普通" 或 "安全" 之一。
-6. contentTags 为多选数组，只能从预设列表 ["粉红", "NTR", "血腥暴力", "纯爱", "茶番", "恐怖", "Meta"] 中选择，禁止自定义。
-7. imageAnalysis 针对提取的图片进行甄别：纯文本扫描或无意义边框设 isUseful: false；涉及核心剧透设 isSensitive: true。`;
+5. bgTag 必须单选，只能是 "日模"、"美模"、"现代中国"、"古风" 四者之一，禁止其它值。
+6. endingTag 必须单选，只能是 "危险"、"普通" 或 "安全" 三者之一。
+7. contentTags 必须为多选数组，只能从预设列表 ["校园", "复活", "粉红", "NTR", "血腥暴力", "纯爱", "茶番", "恐怖", "Meta"] 中挑选，符合几个选几个，不符合留空数组 []。
+8. imageAnalysis 必须逐一甄别所有提取插图：
+   - shouldInclude: 布尔值。若为纯文本页面扫描、无意义分隔线条、重复花边、装饰图标则设为 false；若为有意义的立绘、地图、手迹、怪物图、CG则设为 true。
+   - isSensitive: 布尔值。若为后期决战、幕后黑手真相、神话生物真面目、隐藏密室等核心剧透，设为 true；若为公开世界观地图、已知NPC立绘、开局已知信息则设为 false。
+   - name: 精炼插图名称。
+   - description: 图像视觉内容描述。
+   - annotation: 针对守秘人带团与插图场景用途的精炼中文注释。`;
 
-        const sampleText = this.currentParsedData.text.substring(0, 48000);
-        let userPrompt = `模组名称：${this.currentParsedData.moduleName}\n总字数：${this.currentParsedData.wordCount}\n\n重构分析提示词：\n${activePrompt}`;
-        if (this.globalOpinion) {
-          userPrompt += `\n\n用户针对此重构方案的个性化补充意见：\n${this.globalOpinion}`;
+        const splitSelect = document.getElementById('module-split-parts-select');
+        let requestedParts = splitSelect ? splitSelect.value : 'auto';
+        let numParts = 1;
+        const totalWords = this.currentParsedData.wordCount || this.currentParsedData.text.length;
+        if (requestedParts === 'auto') {
+          if (totalWords > 40000) numParts = 3;
+          else if (totalWords > 20000) numParts = 2;
+          else numParts = 1;
+        } else {
+          numParts = parseInt(requestedParts, 10) || 1;
         }
-        if (this.currentParsedData.images && this.currentParsedData.images.length > 0) {
-          const imgListDesc = this.currentParsedData.images.map((img, i) => `图${i + 1}: 页码${img.pageNumber || '未知'}, 尺寸${img.width}x${img.height}, 格式${img.format}`).join('\n');
-          userPrompt += `\n\n【提取到的候选插图列表】：\n${imgListDesc}`;
-        }
-        userPrompt += `\n\n模组参考全文（前部核心内容）：\n${sampleText}`;
 
-        const aiResultText = await this.callAI(systemPrompt, userPrompt);
-        if (aiResultText) {
-          const cleanJson = aiResultText.replace(/```json/gi, '').replace(/```/g, '').trim();
-          const parsedAiPlan = JSON.parse(cleanJson);
-          if (parsedAiPlan && Array.isArray(parsedAiPlan.chunks) && parsedAiPlan.chunks.length > 0) {
-            let finalType = '线性';
-            if (parsedAiPlan.moduleType) {
-              if (parsedAiPlan.moduleType.includes('沙盒')) finalType = '沙盒';
-              else if (parsedAiPlan.moduleType.includes('其他')) finalType = '其他';
-              else finalType = '线性';
-            }
+        const segments = this.splitTextIntoBalancedSegments(this.currentParsedData.text, numParts);
+        const allParsedChunks = [];
+        let combinedMapNodes = [];
+        let finalType = '线性';
+        let finalRuleSystem = 'coc';
+        let finalScaleType = '1v1';
+        let finalBgTag = '日模';
+        let finalEndingTag = '普通';
+        let finalContentTags = [];
+        let finalSummary = '无剧透模组导览';
 
-            let finalRuleSystem = 'coc';
-            if (parsedAiPlan.ruleSystem && parsedAiPlan.ruleSystem.toLowerCase().includes('coj')) {
-              finalRuleSystem = 'coj';
-            }
-
-            let finalScaleType = '1v1';
-            if (parsedAiPlan.scaleType) {
-              finalScaleType = parsedAiPlan.scaleType.trim();
-            }
-
-            let finalEndingTag = '普通';
-            if (['危险', '普通', '安全'].includes(parsedAiPlan.endingTag)) {
-              finalEndingTag = parsedAiPlan.endingTag;
-            }
-
-            const ALLOWED_CONTENT_TAGS = ['粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta'];
-            let finalContentTags = [];
-            if (Array.isArray(parsedAiPlan.contentTags)) {
-              finalContentTags = parsedAiPlan.contentTags.filter(t => ALLOWED_CONTENT_TAGS.includes(t));
-            }
-
-            // 处理图片智能甄别与剧透过滤
-            if (Array.isArray(parsedAiPlan.imageAnalysis) && this.currentParsedData.images) {
-              const assessmentMap = new Map();
-              parsedAiPlan.imageAnalysis.forEach(a => {
-                if (a && typeof a.imageIndex === 'number') {
-                  assessmentMap.set(a.imageIndex, a);
-                }
-              });
-
-              const filteredImages = [];
-              this.currentParsedData.images.forEach((img, idx) => {
-                const assess = assessmentMap.get(idx + 1) || assessmentMap.get(img.imageIndex);
-                if (assess) {
-                  if (assess.isUseful === false) {
-                    return;
-                  }
-                  if (typeof assess.isSensitive === 'boolean') {
-                    img.isSensitive = assess.isSensitive;
-                  }
-                  if (assess.name) img.name = assess.name;
-                  if (assess.description) img.description = assess.description;
-                }
-                filteredImages.push(img);
-              });
-              this.currentParsedData.images = filteredImages;
-            }
-
-            plan = {
-              moduleType: finalType,
-              ruleSystem: finalRuleSystem,
-              scaleType: finalScaleType,
-              summary: parsedAiPlan.summary || '无剧透模组导览',
-              endingTag: finalEndingTag,
-              contentTags: finalContentTags,
-              customTags: [],
-              moduleName: this.currentParsedData.moduleName,
-              totalWords: this.currentParsedData.wordCount,
-              chunks: parsedAiPlan.chunks.map((c, idx) => {
-                const cName = this.cleanChapterTitle(c.name, this.currentParsedData.moduleName);
-                return {
-                  id: 'chunk_' + (idx + 1),
-                  order: idx + 1,
-                  name: cName,
-                  category: c.category || '正文',
-                  wordCount: c.wordCount || 3000,
-                  prefixPreview: c.prefixPreview || '',
-                  reason: c.reason || 'AI根据带团逻辑架构提炼',
-                  userInstruction: '',
-                  rawSlice: this.findSemanticSection(this.currentParsedData.text, cName, c.category)
-                };
-              }),
-              mapNodes: parsedAiPlan.mapNodes || []
-            };
+        for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+          const segText = segments[segIdx].substring(0, 42000);
+          let userPrompt = `模组名称：${this.currentParsedData.moduleName}\n总字数：${this.currentParsedData.wordCount}\n当前分析分卷：第 ${segIdx + 1} / ${segments.length} 卷\n\n重构分析提示词：\n${activePrompt}`;
+          if (this.globalOpinion) {
+            userPrompt += `\n\n用户针对此重构方案的个性化补充意见：\n${this.globalOpinion}`;
           }
+          if (segIdx === 0 && this.currentParsedData.images && this.currentParsedData.images.length > 0) {
+            const imgListDesc = this.currentParsedData.images.map((img, i) => `图${i + 1}: 页码${img.pageNumber || '未知'}, 尺寸${img.width}x${img.height}, 格式${img.format}`).join('\n');
+            userPrompt += `\n\n【提取到的候选插图列表】：\n${imgListDesc}`;
+          }
+          userPrompt += `\n\n模组参考全文（当前分卷内容）：\n${segText}`;
+
+          const aiResultText = await this.callAI(systemPrompt, userPrompt);
+          if (aiResultText) {
+            const cleanJson = aiResultText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const parsedAiPlan = JSON.parse(cleanJson);
+            if (parsedAiPlan) {
+              if (segIdx === 0) {
+                if (parsedAiPlan.moduleType) {
+                  if (parsedAiPlan.moduleType.includes('沙盒')) finalType = '沙盒';
+                  else if (parsedAiPlan.moduleType.includes('其他')) finalType = '其他';
+                  else finalType = '线性';
+                }
+                if (parsedAiPlan.ruleSystem && parsedAiPlan.ruleSystem.toLowerCase().includes('coj')) {
+                  finalRuleSystem = 'coj';
+                }
+                if (parsedAiPlan.scaleType) {
+                  finalScaleType = parsedAiPlan.scaleType.trim();
+                }
+                if (['日模', '美模', '现代中国', '古风'].includes(parsedAiPlan.bgTag)) {
+                  finalBgTag = parsedAiPlan.bgTag;
+                }
+                if (['危险', '普通', '安全'].includes(parsedAiPlan.endingTag)) {
+                  finalEndingTag = parsedAiPlan.endingTag;
+                }
+                if (parsedAiPlan.summary) {
+                  finalSummary = parsedAiPlan.summary;
+                }
+                if (Array.isArray(parsedAiPlan.imageAnalysis) && this.currentParsedData.images) {
+                  const assessmentMap = new Map();
+                  parsedAiPlan.imageAnalysis.forEach(a => {
+                    if (a && typeof a.imageIndex === 'number') {
+                      assessmentMap.set(a.imageIndex, a);
+                    }
+                  });
+                  const filteredImages = [];
+                  this.currentParsedData.images.forEach((img, idx) => {
+                    const assess = assessmentMap.get(idx + 1) || assessmentMap.get(img.imageIndex);
+                    if (assess) {
+                      if (assess.shouldInclude === false || assess.isUseful === false) return;
+                      if (typeof assess.isSensitive === 'boolean') img.isSensitive = assess.isSensitive;
+                      if (assess.name) img.name = assess.name;
+                      if (assess.description) img.description = assess.description;
+                      if (assess.annotation) img.annotation = assess.annotation;
+                    }
+                    filteredImages.push(img);
+                  });
+                  this.currentParsedData.images = filteredImages;
+                }
+              }
+
+              const ALLOWED_CONTENT_TAGS = ['校园', '复活', '粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta'];
+              if (Array.isArray(parsedAiPlan.contentTags)) {
+                parsedAiPlan.contentTags.forEach(t => {
+                  if (ALLOWED_CONTENT_TAGS.includes(t) && !finalContentTags.includes(t)) {
+                    finalContentTags.push(t);
+                  }
+                });
+              }
+
+              if (Array.isArray(parsedAiPlan.chunks)) {
+                parsedAiPlan.chunks.forEach(c => {
+                  allParsedChunks.push(c);
+                });
+              }
+
+              if (Array.isArray(parsedAiPlan.mapNodes)) {
+                parsedAiPlan.mapNodes.forEach(node => {
+                  if (!combinedMapNodes.some(n => n.name === node.name)) {
+                    combinedMapNodes.push(node);
+                  }
+                });
+              }
+            }
+          }
+        }
+
+        if (allParsedChunks.length > 0) {
+          const sortedTags = this.sortModuleTags(finalBgTag, finalEndingTag, finalContentTags, []);
+          plan = {
+            moduleType: finalType,
+            ruleSystem: finalRuleSystem,
+            scaleType: finalScaleType,
+            summary: finalSummary,
+            bgTag: finalBgTag,
+            endingTag: finalEndingTag,
+            contentTags: finalContentTags,
+            customTags: [],
+            tags: sortedTags,
+            moduleName: this.currentParsedData.moduleName,
+            totalWords: this.currentParsedData.wordCount,
+            chunks: allParsedChunks.map((c, idx) => {
+              const cName = this.cleanChapterTitle(c.name, this.currentParsedData.moduleName);
+              return {
+                id: 'chunk_' + (idx + 1),
+                order: idx + 1,
+                name: cName,
+                category: c.category || '正文',
+                wordCount: c.wordCount || 3000,
+                prefixPreview: c.prefixPreview || '',
+                reason: c.reason || 'AI根据带团逻辑架构提炼',
+                userInstruction: '',
+                rawSlice: this.findSemanticSection(this.currentParsedData.text, cName, c.category)
+              };
+            }),
+            mapNodes: combinedMapNodes
+          };
         }
       } catch (err) {
         console.warn('[模组] AI 重构提示，使用内置带团结构重组引擎', err);
@@ -3245,17 +3479,30 @@ ${chap.content}
       const sysUpper = (mod.ruleSystem || 'coc').toUpperCase();
       const struct = mod.type || '线性';
       const scale = mod.scaleType || '1v1';
+      const catBadges = document.getElementById('module-detail-category-badges');
+      if (catBadges) {
+        catBadges.innerHTML = `
+          <span class="mod-category-pill ${sysUpper.toLowerCase()}">${sysUpper}</span>
+          <span class="mod-category-pill">${struct}</span>
+          <span class="mod-category-pill">${scale}</span>
+        `;
+      }
       if (coverDescEl) coverDescEl.textContent = `${sysUpper} · ${struct} · ${scale} · ${chapters.length} 章节 · 约 ${mod.wordCount || 0} 字`;
 
       if (tagsRow) {
         tagsRow.innerHTML = '';
         const tags = Array.isArray(mod.tags) && mod.tags.length > 0
           ? mod.tags
-          : [mod.endingTag || '普通', ...(mod.contentTags || []), ...(mod.customTags || [])].filter(Boolean);
+          : this.sortModuleTags(mod.bgTag, mod.endingTag, mod.contentTags, mod.customTags);
         tags.forEach(t => {
           const span = document.createElement('span');
           span.className = `mod-tag-badge ${this.getTagClass(t)}`;
           span.textContent = t;
+          span.style.cursor = 'pointer';
+          span.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showTagAnnotation(t);
+          });
           tagsRow.appendChild(span);
         });
       }
@@ -3405,6 +3652,23 @@ ${chap.content}
       if (!mapContainer) return;
       mapContainer.innerHTML = '';
 
+      if (this.activeDetailModule?.mapNodes && Array.isArray(this.activeDetailModule.mapNodes) && this.activeDetailModule.mapNodes.length > 0) {
+        const mapNodes = this.activeDetailModule.mapNodes;
+        mapNodes.forEach(node => {
+          const nodeEl = document.createElement('div');
+          nodeEl.className = `module-map-node level-${node.level || 1}`;
+          nodeEl.innerHTML = `
+            <div class="module-map-node-title">
+              <span>${node.name}</span>
+              <span class="module-map-badge">${node.level === 1 ? '大区域' : node.level === 2 ? '建筑分区' : '具体场所'}</span>
+            </div>
+            ${node.level < 3 && node.desc ? `<div class="module-map-node-desc">${node.desc}</div>` : ''}
+          `;
+          mapContainer.appendChild(nodeEl);
+        });
+        return;
+      }
+
       const locations = [];
       chapters.forEach((c) => {
         const title = c.title || '';
@@ -3433,7 +3697,7 @@ ${chap.content}
       mapList.style.flexDirection = 'column';
       mapList.style.gap = '10px';
 
-      locations.forEach((loc, idx) => {
+      locations.forEach((loc) => {
         const card = document.createElement('div');
         card.className = 'mod-map-card';
         card.innerHTML = `
@@ -3475,7 +3739,29 @@ ${chap.content}
       const galleryView = document.getElementById('module-detail-gallery-view');
       const grid = document.getElementById('module-gallery-grid');
       const countLabel = document.getElementById('module-gallery-count-label');
+      const viewPcBtn = document.getElementById('module-gallery-view-pc');
+      const viewKpBtn = document.getElementById('module-gallery-view-kp');
       if (!galleryView || !grid) return;
+
+      if (!this.detailGalleryViewMode) this.detailGalleryViewMode = 'pc';
+
+      if (viewPcBtn && viewKpBtn) {
+        if (this.detailGalleryViewMode === 'pc') {
+          viewPcBtn.style.background = 'var(--card-bg, #FFFFFF)';
+          viewPcBtn.style.color = 'var(--text-primary)';
+          viewPcBtn.style.fontWeight = '600';
+          viewKpBtn.style.background = 'transparent';
+          viewKpBtn.style.color = 'var(--text-secondary)';
+          viewKpBtn.style.fontWeight = '500';
+        } else {
+          viewKpBtn.style.background = 'var(--card-bg, #FFFFFF)';
+          viewKpBtn.style.color = 'var(--text-primary)';
+          viewKpBtn.style.fontWeight = '600';
+          viewPcBtn.style.background = 'transparent';
+          viewPcBtn.style.color = 'var(--text-secondary)';
+          viewPcBtn.style.fontWeight = '500';
+        }
+      }
 
       grid.innerHTML = '';
       const database = this.getDB();
@@ -3493,13 +3779,14 @@ ${chap.content}
         return;
       }
 
-      const isPlayerView = this.currentReadingViewMode === 'pc';
+      const isPlayerView = this.detailGalleryViewMode !== 'kp';
 
       images.forEach((img, idx) => {
         const card = document.createElement('div');
         card.className = 'mod-gallery-card';
 
         const isSpoiler = !!img.isSensitive;
+        const isDiscarded = !!img.isDiscarded;
         const showPlaceholder = isPlayerView && isSpoiler;
 
         let thumbHtml = '';
@@ -3520,9 +3807,12 @@ ${chap.content}
           `;
         } else {
           thumbHtml = `
-            <div style="position: relative; overflow: hidden;">
+            <div style="position: relative; overflow: hidden; background: var(--secondary-bg, #F0EFEA); min-height: 90px; display: flex; align-items: center; justify-content: center;">
               <img src="${img.dataUrl}" class="mod-gallery-thumb" alt="${img.name || '插图'}" loading="lazy" />
-              ${isSpoiler ? '<span class="mod-gallery-tag sensitive" style="position: absolute; top: 4px; right: 4px;">守秘剧透</span>' : ''}
+              <div style="position: absolute; top: 4px; right: 4px; display: flex; gap: 3px; flex-direction: column; align-items: flex-end;">
+                ${isSpoiler ? '<span class="mod-gallery-tag sensitive">守秘剧透</span>' : ''}
+                ${isDiscarded ? '<span class="mod-gallery-tag" style="background: rgba(100,100,100,0.8); color: #FFF;">已废弃</span>' : ''}
+              </div>
             </div>
           `;
         }
@@ -3534,13 +3824,50 @@ ${chap.content}
           ${thumbHtml}
           <div class="mod-gallery-meta">
             <div class="mod-gallery-name">${img.name || `插图 ${idx + 1}`}</div>
-            <div class="mod-gallery-placement">${img.placement || pageLabel}</div>
             <div class="mod-gallery-details">
               <span>${pageLabel}</span>
               <span>${dimLabel}</span>
             </div>
+            ${img.annotation ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${img.annotation}</div>` : ''}
+            <div style="display: flex; gap: 4px; justify-content: flex-end; margin-top: 6px; flex-wrap: wrap;">
+              <button type="button" class="module-mini-btn btn-toggle-detail-spoiler" style="font-size: 10px; padding: 2px 5px;">${isSpoiler ? '公开' : '剧透'}</button>
+              <button type="button" class="module-mini-btn btn-toggle-detail-discard" style="font-size: 10px; padding: 2px 5px;">${isDiscarded ? '恢复' : '废弃'}</button>
+              <button type="button" class="module-mini-btn btn-download-detail-img" style="font-size: 10px; padding: 2px 5px;">下载</button>
+              <button type="button" class="module-mini-btn btn-danger btn-del-detail-img" style="font-size: 10px; padding: 2px 5px;">删除</button>
+            </div>
           </div>
         `;
+
+        card.querySelector('.btn-toggle-detail-spoiler')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          img.isSensitive = !img.isSensitive;
+          if (database && database.moduleImages && img.id) {
+            await database.moduleImages.update(img.id, { isSensitive: img.isSensitive });
+          }
+          await this.renderModuleDetailGallery(chapters, moduleId);
+        });
+
+        card.querySelector('.btn-toggle-detail-discard')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          img.isDiscarded = !img.isDiscarded;
+          if (database && database.moduleImages && img.id) {
+            await database.moduleImages.update(img.id, { isDiscarded: img.isDiscarded });
+          }
+          await this.renderModuleDetailGallery(chapters, moduleId);
+        });
+
+        card.querySelector('.btn-download-detail-img')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.downloadImage(img.dataUrl, img.name);
+        });
+
+        card.querySelector('.btn-del-detail-img')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (database && database.moduleImages && img.id) {
+            await database.moduleImages.delete(img.id);
+          }
+          await this.renderModuleDetailGallery(chapters, moduleId);
+        });
 
         card.addEventListener('click', () => {
           this.showImageViewModal(img, moduleId);
@@ -3562,7 +3889,9 @@ ${chap.content}
 
       if (!modal || !imgEl) return;
 
-      const isPlayerView = this.currentReadingViewMode === 'pc';
+      const isPlayerView = moduleId === 'draft'
+        ? (this.step2GalleryViewMode !== 'kp')
+        : (this.detailGalleryViewMode !== 'kp');
       const isSpoiler = !!img.isSensitive;
 
       if (titleEl) titleEl.textContent = img.name || '插图详情';
@@ -3594,8 +3923,9 @@ ${chap.content}
         metaEl.innerHTML = `
           <div>来源：${img.pageNumber ? `文档第 ${img.pageNumber} 页` : '本地导入'}</div>
           <div>原始分辨率：${img.width || '自适应'} × ${img.height || '自适应'} · 格式：${img.format || 'JPEG'}</div>
-          <div>剧透分级：${isSpoiler ? '<span style="color: #D9534F; font-weight: 600;">守秘人剧透</span>' : '<span style="color: var(--accent-color, #4A7A68); font-weight: 600;">玩家公开</span>'}</div>
+          <div>剧透分级：${isSpoiler ? '<span style="color: #8A5B57; font-weight: 600;">守秘人剧透</span>' : '<span style="color: var(--accent-color, #4A7A68); font-weight: 600;">玩家公开</span>'}</div>
           <div>内容简述：${img.description || '跑团插图资源'}</div>
+          ${img.annotation ? `<div>带团注释：${img.annotation}</div>` : ''}
           <div>插图定位：${img.placement || '未指定章节'}</div>
         `;
       }
@@ -3634,19 +3964,13 @@ ${chap.content}
               this.renderStep2GalleryUI();
             } else {
               const database = this.getDB();
-              if (database && database.moduleImages) {
-                if (img.id) {
-                  await database.moduleImages.delete(img.id);
-                } else {
-                  await database.moduleImages.where('dataUrl').equals(img.dataUrl).delete();
-                }
+              if (database && database.moduleImages && img.id) {
+                await database.moduleImages.delete(img.id);
               }
-              if (database && database.moduleChapters) {
-                const chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
-                await this.renderModuleDetailGallery(chapters, moduleId);
-              }
+              const chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
+              await this.renderModuleDetailGallery(chapters, moduleId);
             }
-            hide();
+            modal.style.display = 'none';
           }
         };
       }
@@ -3976,10 +4300,11 @@ ${imageList}
       }
 
       const moduleId = 'mod_' + Date.now();
+      const bgTag = this.currentPlan?.bgTag || '日模';
       const endingTag = this.currentPlan?.endingTag || '普通';
       const contentTags = this.currentPlan?.contentTags || [];
       const customTags = this.currentPlan?.customTags || [];
-      const allTags = [endingTag, ...contentTags, ...customTags].filter(Boolean);
+      const allTags = this.sortModuleTags(bgTag, endingTag, contentTags, customTags);
 
       const moduleRecord = {
         id: moduleId,
@@ -3988,10 +4313,12 @@ ${imageList}
         ruleSystem: this.currentPlan?.ruleSystem || 'coc',
         scaleType: this.currentPlan?.scaleType || '1v1',
         summary: this.currentPlan?.summary || '无剧透模组概览',
+        bgTag: bgTag,
         endingTag: endingTag,
         contentTags: contentTags,
         customTags: customTags,
         tags: allTags,
+        mapNodes: this.currentPlan?.mapNodes || [],
         group: '默认分组',
         wordCount: this.currentParsedData?.wordCount || 0,
         chapterCount: this.cutChapters.length,
@@ -4011,11 +4338,13 @@ ${imageList}
         name: img.name,
         dataUrl: img.dataUrl,
         isSensitive: !!img.isSensitive,
+        isDiscarded: !!img.isDiscarded,
         pageNumber: img.pageNumber || 1,
         width: img.width || 800,
         height: img.height || 600,
         format: img.format || 'JPEG',
         description: img.description || '',
+        annotation: img.annotation || '',
         placement: img.placement || '文档插图'
       }));
 
@@ -4218,6 +4547,7 @@ ${imageList}
       const systemSelect = document.getElementById('module-edit-system-select');
       const scaleSelect = document.getElementById('module-edit-scale-select');
       const descInput = document.getElementById('module-edit-desc-input');
+      const bgTagsContainer = document.getElementById('module-edit-bg-tags');
       const endingTagsContainer = document.getElementById('module-edit-ending-tags');
       const contentTagsContainer = document.getElementById('module-edit-content-tags');
       const customTagsList = document.getElementById('module-edit-custom-tags-list');
@@ -4232,14 +4562,38 @@ ${imageList}
       if (descInput) descInput.value = mod.summary || '';
       if (customTagInput) customTagInput.value = '';
 
-      if (!this.activeEditModule.customTags) {
-        this.activeEditModule.customTags = [];
+      if (!this.activeEditModule.bgTag) {
+        this.activeEditModule.bgTag = '日模';
+      }
+      if (!this.activeEditModule.endingTag) {
+        this.activeEditModule.endingTag = '普通';
       }
       if (!this.activeEditModule.contentTags) {
         this.activeEditModule.contentTags = [];
       }
-      if (!this.activeEditModule.endingTag) {
-        this.activeEditModule.endingTag = '普通';
+      if (!this.activeEditModule.customTags) {
+        this.activeEditModule.customTags = [];
+      }
+
+      // 渲染背景标签 (单选互斥)
+      if (bgTagsContainer) {
+        bgTagsContainer.innerHTML = '';
+        const bgOptions = ['日模', '美模', '现代中国', '古风'];
+        bgOptions.forEach(opt => {
+          const label = document.createElement('label');
+          label.className = `mod-tag-select-item ${this.getTagClass(opt)}`;
+          const isChecked = this.activeEditModule.bgTag === opt;
+          label.innerHTML = `
+            <input type="radio" name="edit-bg-tag" value="${opt}" ${isChecked ? 'checked' : ''} />
+            <span>${opt}</span>
+          `;
+          label.querySelector('input').addEventListener('change', (e) => {
+            if (e.target.checked) {
+              this.activeEditModule.bgTag = opt;
+            }
+          });
+          bgTagsContainer.appendChild(label);
+        });
       }
 
       // 渲染结局标签 (单选)
@@ -4266,7 +4620,7 @@ ${imageList}
       // 渲染内容标签 (多选)
       if (contentTagsContainer) {
         contentTagsContainer.innerHTML = '';
-        const contentOptions = ['粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta'];
+        const contentOptions = ['校园', '复活', '粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta'];
         contentOptions.forEach(opt => {
           const label = document.createElement('label');
           label.className = `mod-tag-select-item ${this.getTagClass(opt)}`;
@@ -4337,11 +4691,12 @@ ${imageList}
       const newScale = scaleSelect ? scaleSelect.value : (this.activeEditModule.scaleType || '1v1');
       const newDesc = descInput ? descInput.value.trim() : (this.activeEditModule.summary || '');
 
-      const updatedTags = [
-        this.activeEditModule.endingTag || '普通',
-        ...(this.activeEditModule.contentTags || []),
-        ...(this.activeEditModule.customTags || [])
-      ].filter(Boolean);
+      const bgTag = this.activeEditModule.bgTag || '日模';
+      const endingTag = this.activeEditModule.endingTag || '普通';
+      const contentTags = this.activeEditModule.contentTags || [];
+      const customTags = this.activeEditModule.customTags || [];
+
+      const updatedTags = this.sortModuleTags(bgTag, endingTag, contentTags, customTags);
 
       const updateObj = {
         name: newName || '跑团模组',
@@ -4349,9 +4704,10 @@ ${imageList}
         ruleSystem: newSystem,
         scaleType: newScale,
         summary: newDesc,
-        endingTag: this.activeEditModule.endingTag || '普通',
-        contentTags: this.activeEditModule.contentTags || [],
-        customTags: this.activeEditModule.customTags || [],
+        bgTag: bgTag,
+        endingTag: endingTag,
+        contentTags: contentTags,
+        customTags: customTags,
         tags: updatedTags
       };
 
@@ -4365,6 +4721,157 @@ ${imageList}
       if (typeof global.showCustomAlert === 'function') {
         global.showCustomAlert('保存成功', '模组信息与分类标签已更新');
       }
+    },
+
+    showTagAnnotation(tagName) {
+      if (!tagName) return;
+      const cleanTag = tagName.trim();
+      const modal = document.getElementById('module-tag-annotation-modal');
+      const badgeEl = document.getElementById('module-annotation-tag-badge');
+      const catEl = document.getElementById('module-annotation-category-text') || document.getElementById('module-annotation-tag-category');
+      const descEl = document.getElementById('module-annotation-desc-text') || document.getElementById('module-annotation-tag-desc');
+      if (!modal) return;
+
+      const def = TAG_DEFINITIONS[cleanTag] || {
+        category: '自定义标签',
+        desc: '用户自定义添加的模组分类标签'
+      };
+
+      if (badgeEl) {
+        badgeEl.textContent = cleanTag;
+        badgeEl.className = `mod-tag-badge ${this.getTagClass(cleanTag)}`;
+      }
+      if (catEl) catEl.textContent = def.category;
+      if (descEl) descEl.textContent = def.desc;
+
+      modal.style.display = 'flex';
+    },
+
+    hideTagAnnotation() {
+      const modal = document.getElementById('module-tag-annotation-modal');
+      if (modal) modal.style.display = 'none';
+    },
+
+    openTagFilterModal() {
+      const modal = document.getElementById('module-tag-filter-modal');
+      const container = document.getElementById('module-tag-filter-options');
+      if (!modal || !container) return;
+
+      if (!this.selectedFilterTags) this.selectedFilterTags = new Set();
+      this.tempFilterTags = new Set(this.selectedFilterTags);
+
+      container.innerHTML = '';
+
+      const groups = [
+        {
+          title: '背景标签',
+          tags: ['日模', '美模', '现代中国', '古风']
+        },
+        {
+          title: '结局标签',
+          tags: ['危险', '普通', '安全']
+        },
+        {
+          title: '内容标签',
+          tags: ['校园', '复活', '粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta']
+        }
+      ];
+
+      groups.forEach(g => {
+        const groupEl = document.createElement('div');
+        groupEl.style.marginBottom = '12px';
+
+        const titleEl = document.createElement('div');
+        titleEl.style.fontSize = '12px';
+        titleEl.style.fontWeight = '600';
+        titleEl.style.color = 'var(--text-secondary)';
+        titleEl.style.marginBottom = '6px';
+        titleEl.textContent = g.title;
+        groupEl.appendChild(titleEl);
+
+        const tagsRow = document.createElement('div');
+        tagsRow.style.display = 'flex';
+        tagsRow.style.flexWrap = 'wrap';
+        tagsRow.style.gap = '6px';
+
+        g.tags.forEach(tag => {
+          const pill = document.createElement('button');
+          pill.type = 'button';
+          pill.className = `mod-tag-badge ${this.getTagClass(tag)}`;
+          pill.style.cursor = 'pointer';
+          pill.style.border = '1px solid var(--border-color)';
+          pill.style.padding = '4px 10px';
+          pill.style.fontSize = '12px';
+
+          const updatePillState = () => {
+            if (this.tempFilterTags.has(tag)) {
+              pill.style.boxShadow = '0 0 0 2px var(--accent-color, #4A7A68)';
+              pill.style.fontWeight = '700';
+            } else {
+              pill.style.boxShadow = 'none';
+              pill.style.fontWeight = '500';
+            }
+          };
+
+          updatePillState();
+
+          pill.addEventListener('click', () => {
+            if (this.tempFilterTags.has(tag)) {
+              this.tempFilterTags.delete(tag);
+            } else {
+              this.tempFilterTags.add(tag);
+            }
+            updatePillState();
+          });
+
+          tagsRow.appendChild(pill);
+        });
+
+        groupEl.appendChild(tagsRow);
+        container.appendChild(groupEl);
+      });
+
+      modal.style.display = 'flex';
+    },
+
+    hideTagFilterModal() {
+      const modal = document.getElementById('module-tag-filter-modal');
+      if (modal) modal.style.display = 'none';
+    },
+
+    applyTagFilter() {
+      this.selectedFilterTags = new Set(this.tempFilterTags || []);
+      this.hideTagFilterModal();
+
+      const filterBtn = document.getElementById('module-library-filter-btn');
+      if (filterBtn) {
+        if (this.selectedFilterTags.size > 0) {
+          filterBtn.style.color = 'var(--accent-color, #4A7A68)';
+          filterBtn.style.borderColor = 'var(--accent-color, #4A7A68)';
+          filterBtn.style.fontWeight = '600';
+        } else {
+          filterBtn.style.color = 'var(--text-secondary)';
+          filterBtn.style.borderColor = 'var(--border-color)';
+          filterBtn.style.fontWeight = '500';
+        }
+      }
+
+      this.renderLibraryList();
+    },
+
+    resetTagFilter() {
+      this.selectedFilterTags = new Set();
+      this.tempFilterTags = new Set();
+      this.hideTagFilterModal();
+
+      const filterBtn = document.getElementById('module-library-filter-btn');
+      if (filterBtn) {
+        filterBtn.style.color = 'var(--text-secondary)';
+        filterBtn.style.borderColor = 'var(--border-color)';
+        filterBtn.style.fontWeight = '500';
+      }
+
+      this.renderLibraryList();
     },
 
     async renderLibraryList(searchKeyword = '') {
@@ -4392,6 +4899,19 @@ ${imageList}
         });
       }
 
+      if (this.selectedFilterTags && this.selectedFilterTags.size > 0) {
+        allModules = allModules.filter(m => {
+          const modTags = Array.isArray(m.tags) && m.tags.length > 0
+            ? m.tags
+            : [m.bgTag || '日模', m.endingTag || '普通', ...(m.contentTags || []), ...(m.customTags || [])].filter(Boolean);
+          const tagSet = new Set(modTags);
+          for (let fTag of this.selectedFilterTags) {
+            if (!tagSet.has(fTag)) return false;
+          }
+          return true;
+        });
+      }
+
       if (!allModules || allModules.length === 0) {
         listContainer.style.display = 'none';
         emptyContainer.style.display = 'flex';
@@ -4413,12 +4933,12 @@ ${imageList}
 
         const tags = Array.isArray(mod.tags) && mod.tags.length > 0
           ? mod.tags
-          : [mod.endingTag || '普通', ...(mod.contentTags || []), ...(mod.customTags || [])].filter(Boolean);
+          : this.sortModuleTags(mod.bgTag, mod.endingTag, mod.contentTags, mod.customTags);
 
         let tagsHtml = '';
         tags.forEach(t => {
           const cls = this.getTagClass(t);
-          tagsHtml += `<span class="mod-tag-badge ${cls}">${t}</span>`;
+          tagsHtml += `<span class="mod-tag-badge ${cls}" data-tag="${t}">${t}</span>`;
         });
 
         item.innerHTML = `
@@ -4430,23 +4950,25 @@ ${imageList}
                 <span class="mod-category-pill">${struct}</span>
                 <span class="mod-category-pill">${scale}</span>
               </div>
-              ${tagsHtml ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">${tagsHtml}</div>` : ''}
+              ${tagsHtml ? `<div class="mod-tags-horizontal-row" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px;">${tagsHtml}</div>` : ''}
               <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 5px;">${mod.chapterCount || 0} 章节 · 约 ${mod.wordCount || 0} 字 · ${new Date(mod.createdAt).toLocaleDateString()}</div>
             </div>
-            <div style="display: flex; gap: 6px; flex-shrink: 0;">
-              <button type="button" class="mod-capsule-btn btn-view-mod-detail" data-mod-id="${mod.id}">查看</button>
+            <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
               <button type="button" class="mod-capsule-btn danger btn-delete-mod" data-mod-id="${mod.id}">删除</button>
             </div>
           </div>
         `;
 
-        item.addEventListener('click', (e) => {
-          if (e.target.closest('button')) return;
-          this.openModuleDetail(mod.id);
+        item.querySelectorAll('.mod-tag-badge').forEach(badge => {
+          badge.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const tag = badge.dataset.tag;
+            if (tag) this.showTagAnnotation(tag);
+          });
         });
 
-        item.querySelector('.btn-view-mod-detail')?.addEventListener('click', (e) => {
-          e.stopPropagation();
+        item.addEventListener('click', (e) => {
+          if (e.target.closest('button') || e.target.closest('.mod-tag-badge')) return;
           this.openModuleDetail(mod.id);
         });
 
@@ -5464,6 +5986,53 @@ ${imageList}
         });
       }
 
+      const galleryViewPc = document.getElementById('module-gallery-view-pc');
+      const galleryViewKp = document.getElementById('module-gallery-view-kp');
+      if (galleryViewPc) {
+        galleryViewPc.addEventListener('click', () => {
+          this.detailGalleryViewMode = 'pc';
+          if (this.activeDetailModule) {
+            this.renderModuleDetailGallery(this.currentReadingChapters, this.activeDetailModule.id);
+          }
+        });
+      }
+      if (galleryViewKp) {
+        galleryViewKp.addEventListener('click', async () => {
+          let confirmed = true;
+          if (typeof global.showCustomConfirm === 'function') {
+            confirmed = await global.showCustomConfirm('防剧透提示', '守秘人模式包含剧情真相与核心剧透，确认开启吗');
+          } else if (typeof global.showCustomAlert === 'function') {
+            confirmed = confirm('守秘人模式包含剧情真相与核心剧透，确认开启吗');
+          }
+          if (confirmed) {
+            this.detailGalleryViewMode = 'kp';
+            if (this.activeDetailModule) {
+              this.renderModuleDetailGallery(this.currentReadingChapters, this.activeDetailModule.id);
+            }
+          }
+        });
+      }
+
+      const galleryClearDiscardedBtn = document.getElementById('module-gallery-clear-discarded-btn');
+      if (galleryClearDiscardedBtn) {
+        galleryClearDiscardedBtn.addEventListener('click', async () => {
+          if (!this.activeDetailModule) return;
+          const database = this.getDB();
+          if (database && database.moduleImages) {
+            const allImages = await database.moduleImages.where('moduleId').equals(this.activeDetailModule.id).toArray();
+            const discardedIds = allImages.filter(img => img.isDiscarded || img.isJunk || img.name?.includes('废弃') || img.name?.includes('封面') || img.name?.includes('装饰')).map(img => img.id);
+            if (discardedIds.length > 0) {
+              await database.moduleImages.bulkDelete(discardedIds);
+            }
+            const chapters = await database.moduleChapters.where('moduleId').equals(this.activeDetailModule.id).sortBy('sortOrder');
+            await this.renderModuleDetailGallery(chapters, this.activeDetailModule.id);
+            if (typeof global.showCustomAlert === 'function') {
+              global.showCustomAlert('清理完成', `已清理 ${discardedIds.length} 张废弃与装饰图片`);
+            }
+          }
+        });
+      }
+
       const galleryClearBtn = document.getElementById('module-gallery-clear-btn');
       if (galleryClearBtn) {
         galleryClearBtn.addEventListener('click', async () => {
@@ -5511,32 +6080,85 @@ ${imageList}
       }
 
       // 模组库顶部筛选按键
-      const filterPills = document.querySelectorAll('.mod-filter-bar .mod-filter-pill');
+      const filterPills = document.querySelectorAll('.module-library-filter-bar .mod-filter-pill, .mod-filter-bar .mod-filter-pill');
       filterPills.forEach((pill) => {
         pill.addEventListener('click', () => {
+          filterPills.forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
           this.currentLibraryFilter = pill.dataset.filter || 'all';
           this.renderLibraryList();
         });
       });
 
+      const libFilterBtn = document.getElementById('module-library-tag-filter-btn') || document.getElementById('module-library-filter-btn');
+      if (libFilterBtn) {
+        libFilterBtn.addEventListener('click', () => {
+          this.openTagFilterModal();
+        });
+      }
+
+      const filterModalClose = document.getElementById('module-tag-filter-close-btn') || document.getElementById('module-tag-filter-close');
+      const filterModalCancel = document.getElementById('module-tag-filter-cancel-btn') || document.getElementById('module-tag-filter-cancel');
+      const filterModalReset = document.getElementById('module-tag-filter-reset-btn') || document.getElementById('module-tag-filter-reset');
+      const filterModalApply = document.getElementById('module-tag-filter-confirm-btn') || document.getElementById('module-tag-filter-apply');
+
+      if (filterModalClose) filterModalClose.addEventListener('click', () => this.hideTagFilterModal());
+      if (filterModalCancel) filterModalCancel.addEventListener('click', () => this.hideTagFilterModal());
+      if (filterModalReset) filterModalReset.addEventListener('click', () => this.resetTagFilter());
+      if (filterModalApply) filterModalApply.addEventListener('click', () => this.applyTagFilter());
+
+      const filterModal = document.getElementById('module-tag-filter-modal');
+      if (filterModal) {
+        filterModal.addEventListener('click', (e) => {
+          if (e.target === filterModal) this.hideTagFilterModal();
+        });
+      }
+
+      const annoClose = document.getElementById('module-tag-annotation-close-btn') || document.getElementById('module-tag-annotation-close');
+      const annoOk = document.getElementById('module-annotation-ok-btn') || document.getElementById('module-tag-annotation-ok');
+      if (annoClose) annoClose.addEventListener('click', () => this.hideTagAnnotation());
+      if (annoOk) annoOk.addEventListener('click', () => this.hideTagAnnotation());
+
+      const annoModal = document.getElementById('module-tag-annotation-modal');
+      if (annoModal) {
+        annoModal.addEventListener('click', (e) => {
+          if (e.target === annoModal) this.hideTagAnnotation();
+        });
+      }
+
+      const sectionSettingsBtn = document.getElementById('module-section-settings-btn');
+      if (sectionSettingsBtn) {
+        sectionSettingsBtn.addEventListener('click', () => {
+          if (typeof global.showCustomAlert === 'function') {
+            global.showCustomAlert('模组设置', 'GitHub 云端同步与模组仓库功能正在接入中');
+          } else if (typeof alert === 'function') {
+            alert('GitHub 云端同步与模组仓库功能正在接入中');
+          }
+        });
+      }
+
       // 模组编辑弹窗
-      const modalClose = document.getElementById('module-edit-modal-close');
-      const modalCancel = document.getElementById('module-edit-modal-cancel');
-      const modalSave = document.getElementById('module-edit-modal-save');
+      const modalClose = document.getElementById('module-edit-modal-close-btn') || document.getElementById('module-edit-modal-close');
+      const modalCancel = document.getElementById('module-edit-modal-cancel-btn') || document.getElementById('module-edit-modal-cancel');
+      const modalSave = document.getElementById('module-edit-modal-save-btn') || document.getElementById('module-edit-modal-save');
       if (modalClose) modalClose.addEventListener('click', () => this.hideModuleEditModal());
       if (modalCancel) modalCancel.addEventListener('click', () => this.hideModuleEditModal());
-      if (modalSave) modalSave.addEventListener('click', () => this.saveModuleEditModal());
+      if (modalSave) modalSave.addEventListener('click', () => this.saveModuleEdit());
 
-      const addCustomTagBtn = document.getElementById('module-edit-custom-tag-add');
+      const addCustomTagBtn = document.getElementById('module-edit-add-tag-btn') || document.getElementById('module-edit-custom-tag-add');
       const customTagInput = document.getElementById('module-edit-custom-tag-input');
       const handleAddCustomTag = () => {
         if (!customTagInput) return;
         const val = customTagInput.value.trim();
         if (!val) return;
-        if (!this.editingModuleTags) this.editingModuleTags = [];
-        if (!this.editingModuleTags.includes(val)) {
-          this.editingModuleTags.push(val);
-          this.renderEditingTags();
+        if (this.activeEditModule) {
+          if (!this.activeEditModule.customTags) this.activeEditModule.customTags = [];
+          if (!this.activeEditModule.customTags.includes(val)) {
+            this.activeEditModule.customTags.push(val);
+            if (typeof this.renderCustomTagsUI === 'function') {
+              this.renderCustomTagsUI();
+            }
+          }
         }
         customTagInput.value = '';
       };

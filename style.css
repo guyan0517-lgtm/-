@@ -31409,84 +31409,142 @@ details[open] .thought-chain-arrow {
   margin: 6px auto;
 }
 
-/* 莫兰迪色系 Tag 体系 (低饱和度、高明度) */
+/* 莫兰迪色系 Tag 体系 (纯白底色、低饱和度莫兰迪边框与字体) */
 .mod-tag-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   padding: 2px 8px;
   border-radius: 6px;
-  border: 1px solid transparent;
+  background: var(--card-bg, #FFFFFF) !important;
+  border: 1px solid var(--border-color, #E0DED7);
+  color: var(--text-secondary, #6B7280);
   line-height: 1.4;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.mod-tag-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.mod-tag-badge:active {
+  transform: scale(0.96);
+}
+
+/* 地域背景专属 Tag (低饱和莫兰迪色) */
+.mod-tag-bg {
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #5C6B84 !important;
+  border-color: #A3B1C6 !important;
+}
+
+.mod-tag-japan {
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #536E85 !important;
+  border-color: #92AABF !important;
+}
+
+.mod-tag-usa {
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #6C627A !important;
+  border-color: #A89EBA !important;
+}
+
+.mod-tag-china {
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #8C6A5E !important;
+  border-color: #C2A79E !important;
+}
+
+.mod-tag-ancient {
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #70685E !important;
+  border-color: #AAA399 !important;
+}
+
+/* 内容与目的 Tag (低饱和莫兰迪色) */
+.mod-tag-campus {
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #536E60 !important;
+  border-color: #92AA9D !important;
+}
+
+.mod-tag-revive {
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #827552 !important;
+  border-color: #BAAF8E !important;
 }
 
 .mod-tag-danger {
-  background: rgba(232, 165, 152, 0.35) !important;
-  color: #8E3E34 !important;
-  border-color: rgba(232, 165, 152, 0.6) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #8A5B57 !important;
+  border-color: #C09894 !important;
 }
 
 .mod-tag-normal {
-  background: rgba(213, 216, 220, 0.45) !important;
-  color: #566573 !important;
-  border-color: rgba(213, 216, 220, 0.7) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #69706E !important;
+  border-color: #A6ADAB !important;
 }
 
 .mod-tag-safe {
-  background: rgba(200, 230, 201, 0.4) !important;
-  color: #2E7D32 !important;
-  border-color: rgba(200, 230, 201, 0.65) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #526E5E !important;
+  border-color: #93AB9E !important;
 }
 
 .mod-tag-pink {
-  background: rgba(248, 187, 208, 0.4) !important;
-  color: #AD1457 !important;
-  border-color: rgba(248, 187, 208, 0.65) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #8C5E6B !important;
+  border-color: #C49BA6 !important;
 }
 
 .mod-tag-ntr {
-  background: rgba(209, 196, 233, 0.4) !important;
-  color: #512DA8 !important;
-  border-color: rgba(209, 196, 233, 0.65) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #695E78 !important;
+  border-color: #A59BBA !important;
 }
 
 .mod-tag-bloody {
-  background: rgba(215, 204, 200, 0.45) !important;
-  color: #5D4037 !important;
-  border-color: rgba(215, 204, 200, 0.7) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #785E5A !important;
+  border-color: #AF9B97 !important;
 }
 
 .mod-tag-purelove {
-  background: rgba(255, 224, 178, 0.45) !important;
-  color: #E65100 !important;
-  border-color: rgba(255, 224, 178, 0.7) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #8A6E59 !important;
+  border-color: #C2A895 !important;
 }
 
 .mod-tag-chaban {
-  background: rgba(255, 249, 196, 0.55) !important;
-  color: #F57F17 !important;
-  border-color: rgba(255, 249, 196, 0.8) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #7D7854 !important;
+  border-color: #B8B393 !important;
 }
 
 .mod-tag-horror {
-  background: rgba(207, 216, 220, 0.45) !important;
-  color: #455A64 !important;
-  border-color: rgba(207, 216, 220, 0.7) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #576569 !important;
+  border-color: #96A3A6 !important;
 }
 
 .mod-tag-meta {
-  background: rgba(178, 235, 242, 0.4) !important;
-  color: #00838F !important;
-  border-color: rgba(178, 235, 242, 0.65) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #506D73 !important;
+  border-color: #90A9AE !important;
 }
 
 .mod-tag-custom {
-  background: rgba(238, 238, 238, 0.45) !important;
-  color: #424242 !important;
-  border-color: rgba(224, 224, 224, 0.7) !important;
+  background: var(--card-bg, #FFFFFF) !important;
+  color: #6B6B6B !important;
+  border-color: #B0B0B0 !important;
 }
 
 .mod-tag-del-icon {
