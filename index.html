@@ -19038,13 +19038,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               titleGroup.appendChild(defBadge);
             }
 
-            if (hasCoc) {
-              const cocBadge = document.createElement("span");
-              cocBadge.className = "tc-badge-coc";
-              cocBadge.textContent = "跑团";
-              titleGroup.appendChild(cocBadge);
-            }
-
             headerRow.appendChild(titleGroup);
 
             const actionsRow = document.createElement("div");
@@ -19242,7 +19235,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 <div style="display:flex; align-items:center; gap:8px;">
                   <input type="radio" name="tc_bind_radio" value="${preset.id}" ${isChecked ? "checked" : ""} style="cursor:pointer;" />
                   <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${preset.name}</span>
-                  ${hasCoc ? '<span class="tc-badge-coc">跑团</span>' : ""}
                 </div>
               </div>
               <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;" onclick="event.stopPropagation();">
@@ -26721,6 +26713,7 @@ ${recentHistory || '无'}
           }
 
           const messagesContainer = document.getElementById("chat-messages");
+          const aiTurnStartHistoryLength = (chat.history || []).length;
 
           let summaryContext = "";
           const summaries = chat.history.filter(
@@ -28116,7 +28109,7 @@ ${recentHistory || '无'}
                     let assistantMsgObject = { type: msg.type || "text" };
                     assistantMsgObject.name = msg.senderName;
                     if (msg.thinking) {
-                      assistantMsgObject.thinking = "<thinking>思维链内容已隐藏</thinking>";
+                      assistantMsgObject.thinking = "在此处渲染了思维链";
                     }
                     if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
@@ -28752,7 +28745,7 @@ ${colSpecs.join('\n')}
                   if (msg.role === "assistant") {
                     let assistantMsgObject = { type: msg.type || "text" };
                     if (msg.thinking) {
-                      assistantMsgObject.thinking = "<thinking>思维链内容已隐藏</thinking>";
+                      assistantMsgObject.thinking = "在此处渲染了思维链";
                     }
                     if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
@@ -32850,6 +32843,110 @@ ${colSpecs.join('\n')}
                 alert("无人接听群聊邀请。");
               }
             }
+
+            // --- AI 发送骰子指令识别与回复 ---
+            if (typeof window.executeDiceCommand === "function") {
+              const newAiMsgs = (chat.history || []).slice(aiTurnStartHistoryLength);
+              let diceRole = null;
+              if (!chat.isGroup) {
+                if (chat.roleType === "dice") {
+                  diceRole = {
+                    id: chat.id,
+                    name: chat.name || "骰娘",
+                    avatar: chat.settings?.aiAvatar || defaultAvatar,
+                  };
+                }
+              } else if (Array.isArray(chat.members)) {
+                const dm = (chat.members || []).find(
+                  (m) =>
+                    m.roleType === "dice" ||
+                    (state.chats[m.id] && state.chats[m.id].roleType === "dice"),
+                );
+                if (dm) {
+                  const src = state.chats[dm.id];
+                  diceRole = {
+                    id: dm.id,
+                    name: dm.groupNickname || dm.originalName || (src && src.name) || "骰娘",
+                    avatar: dm.avatar || (src && src.settings?.aiAvatar) || defaultAvatar,
+                  };
+                }
+              }
+
+              if (diceRole) {
+                const isViewingThisChat =
+                  document.getElementById("chat-interface-screen").classList.contains("active") &&
+                  state.activeChatId === chatId;
+
+                for (const aiMsg of newAiMsgs) {
+                  if (aiMsg.sender === diceRole.name || aiMsg.senderName === diceRole.name) continue;
+                  const rawContent = typeof aiMsg.content === "string" ? aiMsg.content : "";
+                  if (!rawContent) continue;
+
+                  const rawLines = rawContent.split(/\r?\n/);
+                  for (const line of rawLines) {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith(".") || trimmedLine.startsWith("。")) {
+                      const cmdClean = trimmedLine.slice(1).trim();
+                      if (/^(r|ra|rh|st|sc|hp|en|ti|coc|coc5)(\s|$)/i.test(cmdClean)) {
+                        let senderName = aiMsg.senderName || aiMsg.name || chat.name || "AI";
+                        let senderCocPanel = null;
+                        let onSaveCoc = null;
+
+                        if (chat.isGroup && Array.isArray(chat.members)) {
+                          const mem = chat.members.find(
+                            (m) => m.id === aiMsg.senderId || m.groupNickname === senderName || m.originalName === senderName
+                          );
+                          if (mem) {
+                            senderCocPanel = mem.cocPanel;
+                            onSaveCoc = (newCoc) => {
+                              mem.cocPanel = newCoc;
+                              const sChat = state.chats[mem.id];
+                              if (sChat) {
+                                if (!sChat.settings) sChat.settings = {};
+                                sChat.settings.aiCocPanel = newCoc;
+                              }
+                            };
+                          }
+                        } else {
+                          senderCocPanel = chat.settings?.aiCocPanel;
+                          onSaveCoc = (newCoc) => {
+                            if (!chat.settings) chat.settings = {};
+                            chat.settings.aiCocPanel = newCoc;
+                          };
+                        }
+
+                        const diceRes = window.executeDiceCommand(trimmedLine, chat, diceRole, {
+                          name: senderName,
+                          cocPanel: senderCocPanel,
+                          onSaveCoc: onSaveCoc,
+                        });
+
+                        if (diceRes && diceRes.handled) {
+                          const diceMsg = {
+                            id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                            role: "assistant",
+                            sender: diceRole.name,
+                            senderName: diceRole.name,
+                            name: diceRole.name,
+                            avatar: diceRole.avatar,
+                            senderAvatar: diceRole.avatar,
+                            content: diceRes.text,
+                            htmlContent: diceRes.html || null,
+                            timestamp: Date.now(),
+                          };
+                          chat.history.push(diceMsg);
+                          await incrementMessageCount(chatId);
+                          if (isViewingThisChat) {
+                            appendMessage(diceMsg, chat);
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
             await db.chats.put(chat);
             checkAndTriggerSummary(chatId);
 
@@ -50281,11 +50378,10 @@ ${colSpecs.join('\n')}
             }
 
             let len = calculateTokenCount(content);
-            if (msg.imageUrl || msg.type === "naiimag" || msg.type === "ai_image" || msg.type === "user_photo") {
-              len += 258;
-            }
-            if (msg.thinking) {
-              len += calculateTokenCount(String(msg.thinking));
+            if (!isOptimized) {
+              if (msg.imageUrl || msg.type === "naiimag" || msg.type === "ai_image" || msg.type === "user_photo") {
+                len += 258;
+              }
             }
 
             // --- 异常检测逻辑 ---
@@ -60827,6 +60923,7 @@ ${colSpecs.join('\n')}
                   sourceChat.settings.affectionConfig = member.settings.affectionConfig;
                   sourceChat.settings.triggerMode = triggerModeVal;
                   sourceChat.settings.aiPersona = member.persona;
+                  sourceChat.settings.aiAvatar = member.avatar;
                   await db.chats.put(sourceChat);
                 }
               }
@@ -61356,6 +61453,10 @@ ${colSpecs.join('\n')}
                   maxIncrease: maxInc ? (parseInt(maxInc.value) || 10) : 10,
                   maxDecrease: maxDec ? (parseInt(maxDec.value) || 10) : 10,
                 };
+                const statusAvatarEl = document.getElementById("ai-avatar-preview");
+                if (statusAvatarEl && statusAvatarEl.src) {
+                  chat.settings.aiAvatar = statusAvatarEl.src;
+                }
               } else {
                 chat.settings.aiPersona =
                   document.getElementById("ai-persona").value;

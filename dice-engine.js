@@ -577,7 +577,7 @@ const COC_KEY_MAP = {
 };
 
 // 核心指令解析函数
-window.executeDiceCommand = function(rawContent, chat, diceInfo) {
+window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
   if (!rawContent || typeof rawContent !== "string") return null;
 
   const trimmed = rawContent.trim();
@@ -591,8 +591,20 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo) {
   const activePreset = getActiveDicePreset();
   const templates = { ...DEFAULT_DICE_TEMPLATES, ...(activePreset.templates || {}) };
 
-  const userName = chat.settings?.myNickname || chat.settings?.myName || "我";
-  let userCoc = chat.settings?.myCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} });
+  const userName = (senderInfo && senderInfo.name) ? senderInfo.name : (chat.settings?.myNickname || chat.settings?.myName || "我");
+  let userCoc = (senderInfo && senderInfo.cocPanel) ? senderInfo.cocPanel : (chat.settings?.myCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} }));
+
+  const persistCocData = () => {
+    if (senderInfo && typeof senderInfo.onSaveCoc === "function") {
+      senderInfo.onSaveCoc(userCoc);
+    } else {
+      if (!chat.settings) chat.settings = {};
+      chat.settings.myCocPanel = userCoc;
+      if (window.myCocPanel) {
+        window.myCocPanel.setData(userCoc);
+      }
+    }
+  };
 
   // 1. 普通投掷 .r 或 .r xdy
   const rMatch = cmdLine.match(/^r(?:\s+(.+))?$/i);
@@ -747,11 +759,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo) {
     }
 
     if (changes.length > 0) {
-      if (!chat.settings) chat.settings = {};
-      chat.settings.myCocPanel = userCoc;
-      if (window.myCocPanel) {
-        window.myCocPanel.setData(userCoc);
-      }
+      persistCocData();
       const text = `${userName} 修改属性成功：${changes.join(" | ")}`;
       return { handled: true, text, persistChat: true };
     }
@@ -781,8 +789,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo) {
 
     if (!userCoc.calculated) userCoc.calculated = {};
     userCoc.calculated.san = newSan;
-    if (!chat.settings) chat.settings = {};
-    chat.settings.myCocPanel = userCoc;
+    persistCocData();
 
     const text = formatDiceTemplate(templates.sc || DEFAULT_DICE_TEMPLATES.sc, {
       角色名: userName,
@@ -806,8 +813,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo) {
 
     if (!userCoc.calculated) userCoc.calculated = {};
     userCoc.calculated.hp = newHp;
-    if (!chat.settings) chat.settings = {};
-    chat.settings.myCocPanel = userCoc;
+    persistCocData();
 
     const text = formatDiceTemplate(templates.hp || DEFAULT_DICE_TEMPLATES.hp, {
       角色名: userName,
@@ -832,8 +838,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo) {
       const newVal = currentVal + growthNum;
       if (!userCoc.skills) userCoc.skills = {};
       userCoc.skills[skillName] = newVal;
-      if (!chat.settings) chat.settings = {};
-      chat.settings.myCocPanel = userCoc;
+      persistCocData();
 
       const text = `${userName} 进行 ${skillName} 成长检定：D100=${rollVal}/${currentVal} 成功 技能增加 ${growthNum} 点 当前为 ${newVal}`;
       return { handled: true, text, persistChat: true };
