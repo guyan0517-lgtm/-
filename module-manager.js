@@ -3869,30 +3869,34 @@ ${chap.content}
       if (!container) return;
       container.innerHTML = '';
 
+      const isEditing = Boolean(this._chapterEditMode);
+
       const GROUP_ORDER = [
-        '导入',
         '事前公开',
         '大纲与真相',
         'NPC与猫',
         '人设',
+        '导入',
+        '正文',
         'HO秘密与设定',
         '单人线',
-        '正文',
         '结局',
+        '附录与规则',
         '其他分类'
       ];
 
       const classify = (chap) => {
         const c = (chap.category || '').toLowerCase();
         const t = (chap.title || '').toLowerCase();
+        if (c.includes('公开') || t.includes('公开') || c.includes('事前') || t.includes('事前') || c.includes('须知') || t.includes('须知') || c.includes('背景') || t.includes('背景')) return '事前公开';
+        if (c.includes('真相') || c.includes('kp信息') || c.includes('大纲') || c.includes('带团') || c.includes('导读') || t.includes('真相') || t.includes('大纲') || t.includes('机制') || t.includes('导读') || t.includes('kp信息')) return '大纲与真相';
+        if (c.includes('npc与猫') || c.includes('猫') || t.includes('猫') || (c.includes('npc') && c.includes('猫'))) return 'NPC与猫';
+        if (c.includes('npc') || t.includes('npc') || c.includes('人设') || t.includes('人设') || t.includes('人物设定')) return '人设';
         if (c.includes('导入') || t.includes('导入') || t.includes('开局') || t.includes('序幕')) return '导入';
-        if (c.includes('公开') || t.includes('公开') || t.includes('事前') || t.includes('须知')) return '事前公开';
-        if (c.includes('真相') || c.includes('kp信息') || c.includes('大纲') || c.includes('带团') || t.includes('真相') || t.includes('大纲') || t.includes('机制')) return '大纲与真相';
-        if (c.includes('npc') || c.includes('猫') || t.includes('npc') || t.includes('猫')) return 'NPC与猫';
-        if (c.includes('人设') || t.includes('人设') || t.includes('人物设定')) return '人设';
         if (c.includes('ho') || c.includes('秘密') || t.includes('ho') || t.includes('秘密')) return 'HO秘密与设定';
         if (c.includes('单人') || t.includes('单人')) return '单人线';
         if (c.includes('结局') || t.includes('结局') || t.includes('结末') || t.includes('尾声')) return '结局';
+        if (c.includes('附录') || c.includes('道具') || c.includes('数值') || c.includes('规则')) return '附录与规则';
         if (c.includes('正文') || c.includes('主线') || c.includes('地点') || c.includes('时间') || t.includes('第') || t.includes('章')) return '正文';
         return '其他分类';
       };
@@ -3907,6 +3911,8 @@ ${chap.content}
         }
         groupMap.get(groupName).push({ chapter: chap, originalIndex: idx });
       });
+
+      const database = this.getDB();
 
       GROUP_ORDER.forEach(groupName => {
         const list = groupMap.get(groupName) || [];
@@ -3929,7 +3935,8 @@ ${chap.content}
           </span>
         `;
 
-        header.addEventListener('click', () => {
+        header.addEventListener('click', (e) => {
+          if (e.target.closest('button') || e.target.closest('input')) return;
           groupBox.classList.toggle('collapsed');
         });
 
@@ -3939,17 +3946,120 @@ ${chap.content}
         list.forEach(({ chapter, originalIndex }) => {
           const row = document.createElement('div');
           row.className = 'mod-chapter-item-row';
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.justifyContent = 'space-between';
+          row.style.gap = '8px';
+
           const cleanTitle = this.cleanChapterTitle(chapter.title, this.activeDetailModule?.name);
           const cWords = this.countWords(chapter.content || '');
           chapter.wordCount = cWords;
-          row.innerHTML = `
-            <span class="mod-chapter-name">${cleanTitle}</span>
-            <span class="mod-chapter-words">${cWords} 字</span>
-          `;
 
-          row.addEventListener('click', () => {
-            this.openChapterReader(chapters, originalIndex, 'pc');
-          });
+          if (isEditing) {
+            row.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                <div style="display: flex; flex-direction: column; gap: 2px; flex-shrink: 0;">
+                  <button type="button" class="chap-move-up-btn" style="border: none; background: transparent; cursor: pointer; padding: 0 2px; color: var(--text-secondary); line-height: 1;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                  </button>
+                  <button type="button" class="chap-move-down-btn" style="border: none; background: transparent; cursor: pointer; padding: 0 2px; color: var(--text-secondary); line-height: 1;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                </div>
+                <span class="mod-chapter-name editable-chap-title" style="cursor: pointer; text-decoration: underline dotted var(--accent-color); text-underline-offset: 3px; font-weight: 600; color: var(--text-primary); word-break: break-word;" title="点击修改章节名称">${cleanTitle}</span>
+                <span class="mod-chapter-words" style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">${cWords} 字</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                <button type="button" class="module-mini-btn chap-change-cat-btn" style="font-size: 10.5px; padding: 3px 8px; border-radius: 5px;">分类</button>
+                <button type="button" class="module-mini-btn chap-del-btn" style="font-size: 10.5px; padding: 3px 8px; border-radius: 5px; color: var(--danger-color, #e53935);">删除</button>
+              </div>
+            `;
+
+            // 点击修改标题
+            const titleEl = row.querySelector('.editable-chap-title');
+            if (titleEl) {
+              titleEl.onclick = async (e) => {
+                e.stopPropagation();
+                const newTitle = prompt('请输入新的章节名称', chapter.title);
+                if (newTitle && newTitle.trim()) {
+                  chapter.title = newTitle.trim();
+                  if (database && database.moduleChapters && chapter.id) {
+                    await database.moduleChapters.update(chapter.id, { title: chapter.title });
+                  }
+                  this.renderModuleDetailGroupedChapters(chapters);
+                  this.renderModuleDetailToc(chapters);
+                }
+              };
+            }
+
+            // 修改分类
+            const catBtn = row.querySelector('.chap-change-cat-btn');
+            if (catBtn) {
+              catBtn.onclick = async (e) => {
+                e.stopPropagation();
+                this.openChangeChapterCategoryModal(chapter, chapters);
+              };
+            }
+
+            // 删除章节
+            const delBtn = row.querySelector('.chap-del-btn');
+            if (delBtn) {
+              delBtn.onclick = async (e) => {
+                e.stopPropagation();
+                const confirmDel = (typeof window.showCustomConfirm === 'function')
+                  ? await window.showCustomConfirm('删除章节', `确认删除章节【${chapter.title}】吗`)
+                  : confirm(`确认删除章节【${chapter.title}】吗`);
+                if (confirmDel) {
+                  if (database && database.moduleChapters && chapter.id) {
+                    await database.moduleChapters.delete(chapter.id);
+                  }
+                  const idxInArr = chapters.findIndex(c => c.id === chapter.id);
+                  if (idxInArr !== -1) chapters.splice(idxInArr, 1);
+                  this.renderModuleDetailGroupedChapters(chapters);
+                  this.renderModuleDetailToc(chapters);
+                }
+              };
+            }
+
+            // 上下移动排序
+            const upBtn = row.querySelector('.chap-move-up-btn');
+            const downBtn = row.querySelector('.chap-move-down-btn');
+            if (upBtn) {
+              upBtn.onclick = async (e) => {
+                e.stopPropagation();
+                if (originalIndex > 0) {
+                  const temp = chapters[originalIndex];
+                  chapters[originalIndex] = chapters[originalIndex - 1];
+                  chapters[originalIndex - 1] = temp;
+                  await this.persistChapterOrder(chapters);
+                  this.renderModuleDetailGroupedChapters(chapters);
+                  this.renderModuleDetailToc(chapters);
+                }
+              };
+            }
+            if (downBtn) {
+              downBtn.onclick = async (e) => {
+                e.stopPropagation();
+                if (originalIndex < chapters.length - 1) {
+                  const temp = chapters[originalIndex];
+                  chapters[originalIndex] = chapters[originalIndex + 1];
+                  chapters[originalIndex + 1] = temp;
+                  await this.persistChapterOrder(chapters);
+                  this.renderModuleDetailGroupedChapters(chapters);
+                  this.renderModuleDetailToc(chapters);
+                }
+              };
+            }
+          } else {
+            row.innerHTML = `
+              <span class="mod-chapter-name">${cleanTitle}</span>
+              <span class="mod-chapter-words">${cWords} 字</span>
+            `;
+
+            row.addEventListener('click', () => {
+              this.openChapterReader(chapters, originalIndex, 'pc');
+            });
+          }
 
           itemsList.appendChild(row);
         });
@@ -3960,29 +4070,169 @@ ${chap.content}
       });
     },
 
+    openChangeChapterCategoryModal(chapter, chapters) {
+      const categories = [
+        '事前公开',
+        '大纲与真相',
+        'NPC与猫',
+        '人设',
+        '导入',
+        '正文',
+        'HO秘密与设定',
+        '单人线',
+        '结局',
+        '附录与规则'
+      ];
+
+      const modal = document.createElement('div');
+      modal.className = 'modal visible';
+      modal.style.zIndex = '99999';
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width: 260px; width: calc(100% - 80px); margin: 0 auto; padding: 14px; border-radius: 14px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+            <span style="font-weight: 700; font-size: 13px;">选择分类</span>
+            <button type="button" class="close-cat-modal-btn" style="border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--text-secondary);">&times;</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; max-height: 200px; overflow-y: auto;">
+            ${categories.map(c => `
+              <button type="button" class="moe-btn-secondary cat-opt-btn ${c === chapter.category ? 'active' : ''}" data-cat="${c}" style="font-size: 11px; padding: 6px 4px; text-align: center; border-radius: 6px; font-family: inherit;">${c}</button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      const closeModal = () => modal.remove();
+      modal.querySelector('.close-cat-modal-btn').onclick = closeModal;
+      modal.onclick = (e) => {
+        if (e.target === modal) closeModal();
+      };
+
+      const database = this.getDB();
+      modal.querySelectorAll('.cat-opt-btn').forEach(btn => {
+        btn.onclick = async () => {
+          const chosen = btn.getAttribute('data-cat');
+          chapter.category = chosen;
+          if (database && database.moduleChapters && chapter.id) {
+            await database.moduleChapters.update(chapter.id, { category: chosen });
+          }
+          closeModal();
+          this.renderModuleDetailGroupedChapters(chapters);
+          this.renderModuleDetailToc(chapters);
+        };
+      });
+
+      document.body.appendChild(modal);
+    },
+
+    async persistChapterOrder(chapters) {
+      const database = this.getDB();
+      if (!database || !database.moduleChapters) return;
+      for (let i = 0; i < chapters.length; i++) {
+        chapters[i].sortOrder = i;
+        if (chapters[i].id) {
+          await database.moduleChapters.update(chapters[i].id, { sortOrder: i });
+        }
+      }
+    },
+
     renderModuleDetailToc(chapters) {
       const tocContainer = document.getElementById('module-detail-toc-view');
       if (!tocContainer) return;
+
+      const isEditing = Boolean(this._chapterEditMode);
+      const database = this.getDB();
+
       let html = '<div style="font-weight: 600; font-size: 13px; margin-bottom: 8px;">模组章节顺序总览</div>';
-      html += '<div style="display: flex; flex-direction: column; gap: 6px;">';
+      html += '<div style="display: flex; flex-direction: column; gap: 6px;" id="mod-toc-items-container">';
       chapters.forEach((chap, idx) => {
         const cleanTitle = this.cleanChapterTitle(chap.title, this.activeDetailModule?.name);
-        html += `
-          <div style="display: flex; justify-content: space-between; align-items: center; background: var(--secondary-bg, #F9F8F5); padding: 8px 12px; border-radius: 8px; cursor: pointer;" class="mod-toc-item-row" data-idx="${idx}">
-            <span style="font-weight: 500; font-size: 12.5px;">${idx + 1}. ${cleanTitle}</span>
-            <span class="module-plan-tag">${chap.category || '正文'}</span>
-          </div>
-        `;
+        if (isEditing) {
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: var(--secondary-bg, #F9F8F5); padding: 6px 10px; border-radius: 8px;" class="mod-toc-item-row" data-idx="${idx}">
+              <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                <div style="display: flex; flex-direction: column; gap: 2px; flex-shrink: 0;">
+                  <button type="button" class="toc-move-up-btn" style="border: none; background: transparent; cursor: pointer; padding: 0 2px; color: var(--text-secondary); line-height: 1;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                  </button>
+                  <button type="button" class="toc-move-down-btn" style="border: none; background: transparent; cursor: pointer; padding: 0 2px; color: var(--text-secondary); line-height: 1;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                </div>
+                <span class="editable-toc-title" style="font-weight: 500; font-size: 12.5px; cursor: pointer; text-decoration: underline dotted var(--accent-color); text-underline-offset: 3px; word-break: break-word;">${idx + 1}. ${cleanTitle}</span>
+              </div>
+              <span class="module-plan-tag" style="flex-shrink: 0;">${chap.category || '正文'}</span>
+            </div>
+          `;
+        } else {
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: var(--secondary-bg, #F9F8F5); padding: 8px 12px; border-radius: 8px; cursor: pointer;" class="mod-toc-item-row" data-idx="${idx}">
+              <span style="font-weight: 500; font-size: 12.5px;">${idx + 1}. ${cleanTitle}</span>
+              <span class="module-plan-tag">${chap.category || '正文'}</span>
+            </div>
+          `;
+        }
       });
       html += '</div>';
       tocContainer.innerHTML = html;
 
-      tocContainer.querySelectorAll('.mod-toc-item-row').forEach(el => {
-        el.addEventListener('click', () => {
-          const idx = parseInt(el.dataset.idx, 10);
-          this.openChapterReader(chapters, idx, 'pc');
+      if (isEditing) {
+        tocContainer.querySelectorAll('.mod-toc-item-row').forEach(row => {
+          const idx = parseInt(row.dataset.idx, 10);
+          const chap = chapters[idx];
+
+          const titleEl = row.querySelector('.editable-toc-title');
+          if (titleEl && chap) {
+            titleEl.onclick = async (e) => {
+              e.stopPropagation();
+              const newTitle = prompt('请输入新的章节名称', chap.title);
+              if (newTitle && newTitle.trim()) {
+                chap.title = newTitle.trim();
+                if (database && database.moduleChapters && chap.id) {
+                  await database.moduleChapters.update(chap.id, { title: chap.title });
+                }
+                this.renderModuleDetailGroupedChapters(chapters);
+                this.renderModuleDetailToc(chapters);
+              }
+            };
+          }
+
+          const upBtn = row.querySelector('.toc-move-up-btn');
+          const downBtn = row.querySelector('.toc-move-down-btn');
+          if (upBtn) {
+            upBtn.onclick = async (e) => {
+              e.stopPropagation();
+              if (idx > 0) {
+                const temp = chapters[idx];
+                chapters[idx] = chapters[idx - 1];
+                chapters[idx - 1] = temp;
+                await this.persistChapterOrder(chapters);
+                this.renderModuleDetailGroupedChapters(chapters);
+                this.renderModuleDetailToc(chapters);
+              }
+            };
+          }
+          if (downBtn) {
+            downBtn.onclick = async (e) => {
+              e.stopPropagation();
+              if (idx < chapters.length - 1) {
+                const temp = chapters[idx];
+                chapters[idx] = chapters[idx + 1];
+                chapters[idx + 1] = temp;
+                await this.persistChapterOrder(chapters);
+                this.renderModuleDetailGroupedChapters(chapters);
+                this.renderModuleDetailToc(chapters);
+              }
+            };
+          }
         });
-      });
+      } else {
+        tocContainer.querySelectorAll('.mod-toc-item-row').forEach(el => {
+          el.addEventListener('click', () => {
+            const idx = parseInt(el.dataset.idx, 10);
+            this.openChapterReader(chapters, idx, 'pc');
+          });
+        });
+      }
     },
 
     async renderModuleDetailMap(chapters) {
@@ -4178,8 +4428,8 @@ ${chap.content}
       drawBtn.className = 'mod-capsule-btn';
       drawBtn.id = 'module-map-draw-images-btn';
       drawBtn.textContent = '绘制';
-      drawBtn.onclick = async () => {
-        await this.startModuleMapImageDrawing(mod.id, chapters, drawBtn);
+      drawBtn.onclick = () => {
+        this.openModuleDrawPromptModal(mod.id, chapters, drawBtn);
       };
       rightActions.appendChild(drawBtn);
 
@@ -4462,6 +4712,44 @@ ${chap.content}
       this.renderModuleDetailMap(chapters);
     },
 
+    openModuleDrawPromptModal(moduleId, chapters, btn) {
+      const defaultGlobalPrompt = '1.2::artist:goguma wagamja  ::, 1.2::artist:sushisushi iiii  ::,';
+      const currentPrompt = localStorage.getItem('coc_module_draw_global_prompt') || defaultGlobalPrompt;
+
+      const modal = document.createElement('div');
+      modal.className = 'modal visible';
+      modal.style.zIndex = '99999';
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width: 320px; width: calc(100% - 60px); margin: 0 auto; padding: 14px; border-radius: 14px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+            <span style="font-weight: 700; font-size: 13px;">绘制全局提示词</span>
+            <button type="button" class="close-draw-modal-btn" style="border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--text-secondary);">&times;</button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <input type="text" id="module-draw-global-prompt-input" class="moe-input" value="${currentPrompt.replace(/"/g, '&quot;')}" placeholder="全局通用生图提示词" style="width: 100%; height: 32px; font-size: 11.5px; background: #FFFFFF;" />
+          </div>
+          <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 2px;">
+            <button type="button" class="chat-mod-footer-btn secondary cancel-draw-modal-btn" style="height: 26px; font-size: 11px; padding: 0 10px; font-family: inherit;">取消</button>
+            <button type="button" class="chat-mod-footer-btn primary confirm-draw-modal-btn" style="height: 26px; font-size: 11px; padding: 0 12px; font-family: inherit;">开始绘制</button>
+          </div>
+        </div>
+      `;
+
+      const promptInput = modal.querySelector('#module-draw-global-prompt-input');
+      const closeModal = () => modal.remove();
+      modal.querySelector('.close-draw-modal-btn').onclick = closeModal;
+      modal.querySelector('.cancel-draw-modal-btn').onclick = closeModal;
+
+      modal.querySelector('.confirm-draw-modal-btn').onclick = async () => {
+        const val = promptInput ? promptInput.value.trim() : '';
+        localStorage.setItem('coc_module_draw_global_prompt', val || defaultGlobalPrompt);
+        closeModal();
+        await this.startModuleMapImageDrawing(moduleId, chapters, btn);
+      };
+
+      document.body.appendChild(modal);
+    },
+
     async startModuleMapImageDrawing(moduleId, chapters, btn) {
       const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
       if (!dbInstance) return;
@@ -4499,6 +4787,8 @@ ${chap.content}
         statusTip.textContent = `准备开始生图 剩余 ${targetLocs.length} 张`;
       }
 
+      const globalDrawPrompt = (localStorage.getItem('coc_module_draw_global_prompt') || '1.2::artist:goguma wagamja  ::, 1.2::artist:sushisushi iiii  ::,').trim();
+
       for (let i = 0; i < targetLocs.length; i++) {
         const loc = targetLocs[i];
         const naiSettings = typeof window.getNovelAISettings === 'function' ? window.getNovelAISettings() : {};
@@ -4508,6 +4798,8 @@ ${chap.content}
         const defaultNeg = (domNegative || naiSettings.default_negative || '').trim();
         const locPromptText = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
 
+        const fullArtistPrompt = [globalDrawPrompt, artist].filter(Boolean).join(', ');
+
         try {
           if (statusTip) {
             statusTip.textContent = `正在绘制 第 ${i + 1} 张 共 ${targetLocs.length} 张 地点：${loc.name}`;
@@ -4516,13 +4808,14 @@ ${chap.content}
           let imgDataUrl = '';
           if (typeof window.callNovelAiDirect === 'function') {
             imgDataUrl = await window.callNovelAiDirect(locPromptText, {
-              artist: artist,
+              artist: fullArtistPrompt,
               negativePrompt: defaultNeg,
-              resolution: naiSettings.resolution || '1024x1024'
+              resolution: naiSettings.resolution || '1024x1024',
+              seed: Math.floor(Math.random() * 4294967295)
             });
           } else if (typeof generateNovelAIImageForCharacter === 'function') {
             const promptParts = [];
-            if (artist) promptParts.push(artist);
+            if (fullArtistPrompt) promptParts.push(fullArtistPrompt);
             if (locPromptText) promptParts.push(locPromptText);
             imgDataUrl = await generateNovelAIImageForCharacter('', promptParts.join(', '));
           }
@@ -4731,6 +5024,8 @@ ${chap.content}
           const artist = (domArtist || naiSettings.artist_prompt || '').trim();
           const defaultNeg = (domNegative || naiSettings.default_negative || '').trim();
           const locPromptText = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
+          const globalDrawPrompt = (localStorage.getItem('coc_module_draw_global_prompt') || '1.2::artist:goguma wagamja  ::, 1.2::artist:sushisushi iiii  ::,').trim();
+          const fullArtistPrompt = [globalDrawPrompt, artist].filter(Boolean).join(', ');
 
           try {
             if (typeof window.callNovelAiDirect !== 'function') {
@@ -4738,9 +5033,10 @@ ${chap.content}
             }
 
             let imgDataUrl = await window.callNovelAiDirect(locPromptText, {
-              artist: artist,
+              artist: fullArtistPrompt,
               negativePrompt: defaultNeg,
-              resolution: naiSettings.resolution || '1024x1024'
+              resolution: naiSettings.resolution || '1024x1024',
+              seed: Math.floor(Math.random() * 4294967295)
             });
             if (!imgDataUrl) {
               throw new Error('未获取到图像数据');
@@ -7568,9 +7864,18 @@ ${imageList}
       // 模组简介框右上角章节与目录编辑按键
       const detailEditChaptersBtn = document.getElementById('module-detail-edit-chapters-btn');
       if (detailEditChaptersBtn) {
-        detailEditChaptersBtn.addEventListener('click', () => {
+        detailEditChaptersBtn.addEventListener('click', async () => {
           if (this.activeDetailModule) {
-            this.openModuleChaptersEditModal(this.activeDetailModule.id);
+            this._chapterEditMode = !this._chapterEditMode;
+            detailEditChaptersBtn.textContent = this._chapterEditMode ? '完成' : '编辑';
+            detailEditChaptersBtn.className = `mod-capsule-btn ${this._chapterEditMode ? 'primary' : ''}`;
+            const database = this.getDB();
+            let chapters = [];
+            if (database && database.moduleChapters) {
+              chapters = await database.moduleChapters.where('moduleId').equals(this.activeDetailModule.id).sortBy('sortOrder');
+            }
+            this.renderModuleDetailGroupedChapters(chapters);
+            this.renderModuleDetailToc(chapters);
           }
         });
       }

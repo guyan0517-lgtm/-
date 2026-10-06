@@ -7902,25 +7902,35 @@
           <button type="button" id="close-mini-map-style-btn" style="border: none; background: transparent; font-size: 15px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 2px;">&times;</button>
         </div>
         <div id="mini-map-style-options-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 2px 0; max-height: 170px; overflow-y: auto;">
-          <button type="button" class="moe-btn-secondary mini-map-style-opt active" data-style="自适应" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit; font-weight: 700;">自适应</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="奶油风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">奶油风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="莫兰迪" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">莫兰迪</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="极简INS" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">极简INS</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="日式奇幻" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">日式奇幻</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="魔法风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">魔法风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="现代风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">现代风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="航海风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">航海风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="希腊风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">希腊风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="中世纪" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">中世纪</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="纽约风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">纽约风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="赛博朋克" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">赛博朋克</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="水彩风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">水彩风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="复古胶片" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">复古胶片</button>
         </div>
-        <div style="display: flex; gap: 5px; justify-content: flex-end; margin-top: 2px;">
-          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-mini-map-style-btn" style="height: 24px; font-size: 11px; padding: 0 8px; font-family: inherit;">取消</button>
-          <button type="button" class="chat-mod-footer-btn primary" id="confirm-mini-map-style-btn" style="height: 24px; font-size: 11px; padding: 0 10px; font-family: inherit;">生成地图</button>
+        <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px; width: 100%;">
+          <input type="text" id="mini-map-global-req-input" class="moe-input" placeholder="全局要求" style="flex: 1; min-width: 0; height: 28px; font-size: 11px; padding: 0 8px; background: #FFFFFF; color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px;" />
+          <button type="button" class="chat-mod-footer-btn primary" id="confirm-mini-map-style-btn" style="flex: 1; min-width: 0; height: 28px; font-size: 11px; padding: 0; font-family: inherit; display: inline-flex; align-items: center; justify-content: center;">生成地图</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 添加自定义地图风格弹窗 -->
+    <div id="chat-mini-map-custom-style-modal" class="modal">
+      <div class="modal-content" style="max-width: 260px; width: calc(100% - 80px); margin: 0 auto; padding: 12px 14px; border-radius: 14px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; box-shadow: 0 16px 40px rgba(0,0,0,0.25);">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 700; font-size: 13px;">添加风格</span>
+          <button type="button" id="close-custom-map-style-btn" style="border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 2px;">&times;</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="form-group" style="margin: 0;">
+            <input type="text" id="custom-map-style-name-input" class="moe-input" placeholder="名称" maxlength="8" style="width: 100%; height: 32px; font-size: 12px; background: #FFFFFF;" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <textarea id="custom-map-style-req-input" class="moe-input" rows="3" placeholder="要求" style="width: 100%; font-size: 12px; resize: none; background: #FFFFFF;"></textarea>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 2px;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-custom-map-style-btn" style="height: 26px; font-size: 11px; padding: 0 10px; font-family: inherit;">取消</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-custom-map-style-btn" style="height: 26px; font-size: 11px; padding: 0 12px; font-family: inherit;">保存</button>
+        </div>
+      </div>
+    </div>
       </div>
     </div>
 
@@ -25383,12 +25393,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
           const localModel = localStorage.getItem("novelai-model") || "";
-          const model = options.model || domModel || localModel || "nai-diffusion-4-curated-preview";
+          const model = options.model || localModel || domModel || "nai-diffusion-4-5-full";
 
           if (!apiKey) {
-            throw new Error("请先在设置中配置NovelAI API Key");
+            throw new Error("请先在设置中配置 NovelAI API Key");
           }
-          if (!prompt) {
+          if (!prompt || !prompt.trim()) {
             throw new Error("提示词为空");
           }
 
@@ -25399,12 +25409,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const negativePrompt = (options.negativePrompt || domNegative || settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry").trim();
 
           const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
-          const artist = (options.artist || domArtist || settings.artist_prompt || "").trim();
+          const artist = (options.artist !== undefined ? options.artist : (domArtist || settings.artist_prompt || "")).trim();
 
           let promptPieces = [];
           if (artist && !prompt.includes(artist)) promptPieces.push(artist);
           if (prompt && prompt.trim()) promptPieces.push(prompt.trim());
           const finalPrompt = promptPieces.filter(Boolean).join(", ");
+
+          const seedToUse = options.seed !== undefined ? options.seed : (settings.seed !== -1 && settings.seed !== undefined ? settings.seed : Math.floor(Math.random() * 4294967295));
+
+          const commonParams = {
+            width: width || 1024,
+            height: height || 1024,
+            scale: options.scale || (settings.cfg_scale !== undefined ? settings.cfg_scale : 5.0),
+            sampler: options.sampler || settings.sampler || "k_euler_ancestral",
+            steps: options.steps || (settings.steps !== undefined ? settings.steps : 28),
+            seed: seedToUse,
+            n_samples: 1,
+            ucPreset: options.ucPreset !== undefined ? options.ucPreset : (settings.uc_preset !== undefined ? settings.uc_preset : 1),
+            qualityToggle: settings.quality_toggle !== false,
+          };
 
           let requestBody;
           if (model.includes("nai-diffusion-4")) {
@@ -25413,29 +25437,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               model: model,
               action: "generate",
               parameters: {
+                ...commonParams,
                 params_version: 3,
-                width: width || 1024,
-                height: height || 1024,
-                scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5.0,
-                sampler: settings.sampler || "k_euler_ancestral",
-                steps: settings.steps || 28,
-                seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
-                n_samples: 1,
-                ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
-                qualityToggle: settings.quality_toggle !== false,
-                autoSmea: false,
-                dynamic_thresholding: false,
-                controlnet_strength: 1,
-                legacy: false,
+                negative_prompt: negativePrompt,
+                noise_schedule: "karras",
+                deliberate_euler_ancestral_bug: false,
+                prefer_brownian: true,
                 add_original_image: true,
                 cfg_rescale: 0,
-                noise_schedule: "karras",
-                legacy_v3_extend: false,
-                skip_cfg_above_sigma: null,
-                use_coords: false,
+                dynamic_thresholding: false,
+                legacy: false,
                 legacy_uc: false,
-                normalize_reference_strength_multiple: true,
                 inpaintImg2ImgStrength: 1,
+                normalize_reference_strength_multiple: true,
                 characterPrompts: [],
                 v4_prompt: {
                   caption: { base_caption: finalPrompt, char_captions: [] },
@@ -25445,10 +25459,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 v4_negative_prompt: {
                   caption: { base_caption: negativePrompt, char_captions: [] },
                   legacy_uc: false
-                },
-                negative_prompt: negativePrompt,
-                deliberate_euler_ancestral_bug: false,
-                prefer_brownian: true
+                }
               }
             };
           } else {
@@ -25457,114 +25468,94 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               model: model,
               action: "generate",
               parameters: {
-                width: width,
-                height: height,
-                scale: settings.cfg_scale || 6.0,
-                sampler: settings.sampler || "k_euler",
-                steps: settings.steps || 28,
-                seed: Math.floor(Math.random() * 9999999999),
-                n_samples: 1,
-                ucPreset: settings.uc_preset || 0,
-                qualityToggle: true,
-                sm: false,
-                sm_dyn: false,
-                dynamic_thresholding: false,
-                controlnet_strength: 1,
-                legacy: false,
-                add_original_image: false,
-                cfg_rescale: 0,
+                ...commonParams,
+                negative_prompt: negativePrompt,
+                sm: settings.smea,
+                sm_dyn: settings.smea_dyn,
                 noise_schedule: "native",
-                negative_prompt: negativePrompt
+                add_original_image: false,
+                cfg_rescale: 0
               }
             };
           }
 
-          let apiUrl = model.includes("nai-diffusion-4") ? "https://image.novelai.net/ai/generate-image-stream" : "https://image.novelai.net/ai/generate-image";
-          let corsProxy = settings.cors_proxy;
-          if (corsProxy === "custom") corsProxy = settings.custom_proxy_url || "";
-          if (corsProxy && corsProxy !== "") apiUrl = corsProxy + encodeURIComponent(apiUrl);
+          let apiUrl = model.includes("nai-diffusion-4")
+            ? "https://image.novelai.net/ai/generate-image-stream"
+            : "https://image.novelai.net/ai/generate-image";
+          let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
+          if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
 
           const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
-          let fetchOptions = {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: "Bearer " + apiKey
-            },
-            body: JSON.stringify(requestBody)
+          let headers = {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + apiKey,
           };
-
           if (isChrome) {
             const cleanHeaders = {};
-            for (const [key, value] of Object.entries(fetchOptions.headers)) {
-              cleanHeaders[key] = value.replace(/[^\x00-\xFF]/g, "");
+            for (const [k, v] of Object.entries(headers)) {
+              cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
             }
-            fetchOptions.headers = cleanHeaders;
+            headers = cleanHeaders;
           }
 
-          const response = await fetch(apiUrl, fetchOptions);
+          const response = await fetch(apiUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(requestBody)
+          });
+
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`API请求失败: ${errorText}`);
+            throw new Error(`API请求失败 (${response.status}): ${errorText}`);
           }
 
           const contentType = response.headers.get("content-type");
+          let imageDataUrl = null;
+
           if (contentType && contentType.includes("text/event-stream")) {
             const text = await response.text();
             const lines = text.trim().split("\n");
-            let base64Data = null;
             for (let i = lines.length - 1; i >= 0; i--) {
               const line = lines[i].trim();
               if (line.startsWith("data: ") && line !== "data: [DONE]") {
                 const dataContent = line.substring(6);
                 try {
                   const jsonData = JSON.parse(dataContent);
-                  if (jsonData.event_type === "final" && jsonData.image) {
-                    base64Data = jsonData.image;
-                    break;
-                  }
-                  if (jsonData.data) {
-                    base64Data = jsonData.data;
-                    break;
-                  }
-                  if (jsonData.image) {
-                    base64Data = jsonData.image;
+                  if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                    const base64Data = jsonData.image || jsonData.data;
+                    const isPNG = base64Data.startsWith("iVBORw0KGgo");
+                    imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
                     break;
                   }
                 } catch (e) {
-                  base64Data = dataContent;
-                  break;
+                  if (dataContent.startsWith("iVBORw0KGgo")) {
+                    imageDataUrl = "data:image/png;base64," + dataContent;
+                    break;
+                  }
                 }
               }
             }
-            if (!base64Data) throw new Error("未能解析出图片数据");
-            if (!base64Data.startsWith("data:image")) {
-              return "data:image/png;base64," + base64Data;
-            }
-            return base64Data;
           } else {
-            const zipBlob = await response.blob();
+            const arrayBuffer = await response.arrayBuffer();
             if (typeof JSZip !== "undefined") {
-              const zip = await JSZip.loadAsync(zipBlob);
-              let imageFile = null;
-              for (let filename in zip.files) {
-                if (filename.match(/\.(png|jpg|jpeg|webp)$/i)) {
-                  imageFile = zip.files[filename];
-                  break;
-                }
-              }
-              if (imageFile) {
-                const b64 = await imageFile.async("base64");
-                return "data:image/png;base64," + b64;
+              const zip = await JSZip.loadAsync(arrayBuffer);
+              const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg") || fn.endsWith(".webp"));
+              if (imageFileName) {
+                const imageBlob = await zip.files[imageFileName].async("blob");
+                imageDataUrl = await new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result);
+                  reader.readAsDataURL(imageBlob);
+                });
               }
             }
-            return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(zipBlob);
-            });
           }
+
+          if (!imageDataUrl) {
+            throw new Error("未能解析出图片数据，请检查NovelAI配置或网络");
+          }
+
+          return imageDataUrl;
         }
         window.callNovelAiDirect = callNovelAiDirect;
 
@@ -29058,36 +29049,165 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         let currentMiniMapStyle = "奶油风";
         let activeLocationBubbleTarget = null;
 
-        function openMiniMapStylePickerModal(onConfirmCallback) {
-          const modal = document.getElementById("chat-mini-map-style-modal");
-          const closeBtn = document.getElementById("close-mini-map-style-btn");
-          const cancelBtn = document.getElementById("cancel-mini-map-style-btn");
-          const confirmBtn = document.getElementById("confirm-mini-map-style-btn");
-          const optBtns = document.querySelectorAll(".mini-map-style-opt");
-          if (!modal) return;
+        const DEFAULT_MINI_MAP_STYLES = [
+          "自适应", "奶油风", "莫兰迪", "极简INS", "日式奇幻", "魔法风",
+          "现代风", "航海风", "希腊风", "中世纪", "纽约风", "赛博朋克", "水彩风", "复古胶片"
+        ];
 
-          let selectedStyle = currentMiniMapStyle || "奶油风";
+        function getCustomMapStyles() {
+          try {
+            const raw = localStorage.getItem("custom_mini_map_styles");
+            return raw ? JSON.parse(raw) : [];
+          } catch (e) {
+            return [];
+          }
+        }
 
-          optBtns.forEach((btn) => {
-            if (btn.getAttribute("data-style") === selectedStyle) {
-              btn.classList.add("active");
-            } else {
-              btn.classList.remove("active");
-            }
-            btn.onclick = () => {
-              optBtns.forEach((b) => b.classList.remove("active"));
-              btn.classList.add("active");
-              selectedStyle = btn.getAttribute("data-style") || "奶油风";
-            };
-          });
+        function saveCustomMapStyles(styles) {
+          try {
+            localStorage.setItem("custom_mini_map_styles", JSON.stringify(styles));
+          } catch (e) {}
+        }
+
+        function openAddCustomMapStyleModal(onAddedCallback) {
+          const modal = document.getElementById("chat-mini-map-custom-style-modal");
+          const nameInput = document.getElementById("custom-map-style-name-input");
+          const reqInput = document.getElementById("custom-map-style-req-input");
+          const closeBtn = document.getElementById("close-custom-map-style-btn");
+          const cancelBtn = document.getElementById("cancel-custom-map-style-btn");
+          const saveBtn = document.getElementById("save-custom-map-style-btn");
+          if (!modal || !nameInput || !reqInput) return;
+
+          nameInput.value = "";
+          reqInput.value = "";
 
           const closeModal = () => modal.classList.remove("visible");
           if (closeBtn) closeBtn.onclick = closeModal;
           if (cancelBtn) cancelBtn.onclick = closeModal;
 
+          if (saveBtn) {
+            saveBtn.onclick = () => {
+              const name = nameInput.value.trim();
+              const req = reqInput.value.trim();
+              if (!name) return;
+
+              const customStyles = getCustomMapStyles();
+              const existingIdx = customStyles.findIndex(s => s.name === name);
+              if (existingIdx !== -1) {
+                customStyles[existingIdx].req = req;
+              } else {
+                customStyles.push({ name, req });
+              }
+              saveCustomMapStyles(customStyles);
+              closeModal();
+              if (typeof onAddedCallback === "function") {
+                onAddedCallback(name);
+              }
+            };
+          }
+
+          modal.classList.add("visible");
+        }
+
+        function openMiniMapStylePickerModal(onConfirmCallback) {
+          const modal = document.getElementById("chat-mini-map-style-modal");
+          const grid = document.getElementById("mini-map-style-options-grid");
+          const closeBtn = document.getElementById("close-mini-map-style-btn");
+          const confirmBtn = document.getElementById("confirm-mini-map-style-btn");
+          const globalReqInput = document.getElementById("mini-map-global-req-input");
+          if (!modal || !grid) return;
+
+          if (globalReqInput) {
+            globalReqInput.value = localStorage.getItem("mini_map_global_requirement") || "";
+            globalReqInput.oninput = () => {
+              localStorage.setItem("mini_map_global_requirement", globalReqInput.value.trim());
+            };
+          }
+
+          let selectedStyle = currentMiniMapStyle || "奶油风";
+
+          const renderGrid = () => {
+            grid.innerHTML = "";
+            const customStyles = getCustomMapStyles();
+            const allStyles = [...DEFAULT_MINI_MAP_STYLES, ...customStyles.map(s => s.name)];
+
+            if (!allStyles.includes(selectedStyle)) {
+              selectedStyle = DEFAULT_MINI_MAP_STYLES[0];
+            }
+
+            allStyles.forEach(stName => {
+              const isCustom = customStyles.some(s => s.name === stName);
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = `moe-btn-secondary mini-map-style-opt ${stName === selectedStyle ? "active" : ""}`;
+              btn.setAttribute("data-style", stName);
+              btn.style.cssText = "font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit; position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+              if (stName === selectedStyle) {
+                btn.style.fontWeight = "700";
+              }
+              btn.textContent = stName;
+
+              btn.onclick = () => {
+                selectedStyle = stName;
+                renderGrid();
+              };
+
+              if (isCustom) {
+                let pressTimer = null;
+                const startPress = () => {
+                  pressTimer = setTimeout(async () => {
+                    const confirmDel = (typeof window.showCustomConfirm === "function")
+                      ? await window.showCustomConfirm("删除风格", `确认删除自定义风格【${stName}】吗`)
+                      : confirm(`确认删除自定义风格【${stName}】吗`);
+                    if (confirmDel) {
+                      const cur = getCustomMapStyles().filter(s => s.name !== stName);
+                      saveCustomMapStyles(cur);
+                      if (selectedStyle === stName) {
+                        selectedStyle = DEFAULT_MINI_MAP_STYLES[0];
+                      }
+                      renderGrid();
+                    }
+                  }, 650);
+                };
+                const cancelPress = () => {
+                  if (pressTimer) clearTimeout(pressTimer);
+                };
+                btn.addEventListener("mousedown", startPress);
+                btn.addEventListener("touchstart", startPress, { passive: true });
+                btn.addEventListener("mouseup", cancelPress);
+                btn.addEventListener("mouseleave", cancelPress);
+                btn.addEventListener("touchend", cancelPress);
+              }
+
+              grid.appendChild(btn);
+            });
+
+            // 永远排在最后的加号按钮
+            const addBtn = document.createElement("button");
+            addBtn.type = "button";
+            addBtn.className = "moe-btn-secondary mini-map-style-opt";
+            addBtn.style.cssText = "font-size: 13px; font-weight: 700; padding: 2px; text-align: center; border-radius: 5px; font-family: inherit; display: flex; align-items: center; justify-content: center; color: var(--accent-color); border: 1px dashed var(--border-color);";
+            addBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+            addBtn.onclick = () => {
+              openAddCustomMapStyleModal((newStyleName) => {
+                selectedStyle = newStyleName;
+                renderGrid();
+              });
+            };
+            grid.appendChild(addBtn);
+          };
+
+          renderGrid();
+
+          const closeModal = () => modal.classList.remove("visible");
+          if (closeBtn) closeBtn.onclick = closeModal;
+
           if (confirmBtn) {
             confirmBtn.onclick = async () => {
               currentMiniMapStyle = selectedStyle;
+              if (globalReqInput) {
+                localStorage.setItem("mini_map_global_requirement", globalReqInput.value.trim());
+              }
               closeModal();
               if (typeof onConfirmCallback === "function") {
                 await onConfirmCallback(selectedStyle);
@@ -29925,18 +30045,38 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.openChatMiniMapModal = openChatMiniMapModal;
 
+        let mapInnerZoom = 1;
+        let mapInnerPanX = 0;
+        let mapInnerPanY = 0;
+        let mapTransformRaf = null;
+
+        function updateMiniMapInnerTransform(isInstant = true) {
+          if (mapTransformRaf) cancelAnimationFrame(mapTransformRaf);
+          mapTransformRaf = requestAnimationFrame(() => {
+            const svgEl = document.querySelector("#chat-mini-map-container svg");
+            if (svgEl) {
+              svgEl.style.transformOrigin = "center center";
+              svgEl.style.willChange = "transform";
+              svgEl.style.transition = isInstant ? "none" : "transform 0.15s cubic-bezier(0.25, 1, 0.5, 1)";
+              svgEl.style.transform = `translate3d(${mapInnerPanX}px, ${mapInnerPanY}px, 0px) scale(${mapInnerZoom})`;
+            }
+          });
+        }
+
         function initMiniMapCardDragAndScale(card) {
           const dragHandle = document.getElementById("chat-mini-map-drag-handle");
           const resizeHandle = document.getElementById("chat-mini-map-resize-handle");
+          const viewBox = document.getElementById("chat-mini-map-view-box");
+          const container = document.getElementById("chat-mini-map-container");
           if (!card || !dragHandle) return;
 
-          let isDragging = false;
+          let isCardDragging = false;
           let dragStartX = 0, dragStartY = 0;
           let cardStartLeft = 0, cardStartTop = 0;
 
-          const onDragStart = (e) => {
-            if (e.target.closest("button")) return;
-            isDragging = true;
+          const onCardDragStart = (e) => {
+            if (e.target.closest("button") || e.target.closest(".chat-mini-map-resize-handle-br")) return;
+            isCardDragging = true;
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             dragStartX = clientX;
@@ -29947,14 +30087,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             card.style.transform = "none";
             card.style.left = cardStartLeft + "px";
             card.style.top = cardStartTop + "px";
-            document.addEventListener("mousemove", onDragMove);
-            document.addEventListener("mouseup", onDragEnd);
-            document.addEventListener("touchmove", onDragMove, { passive: false });
-            document.addEventListener("touchend", onDragEnd);
+            document.addEventListener("mousemove", onCardDragMove);
+            document.addEventListener("mouseup", onCardDragEnd);
+            document.addEventListener("touchmove", onCardDragMove, { passive: false });
+            document.addEventListener("touchend", onCardDragEnd);
           };
 
-          const onDragMove = (e) => {
-            if (!isDragging) return;
+          const onCardDragMove = (e) => {
+            if (!isCardDragging) return;
             if (e.cancelable) e.preventDefault();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -29968,17 +30108,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             card.style.top = newTop + "px";
           };
 
-          const onDragEnd = () => {
-            isDragging = false;
-            document.removeEventListener("mousemove", onDragMove);
-            document.removeEventListener("mouseup", onDragEnd);
-            document.removeEventListener("touchmove", onDragMove);
-            document.removeEventListener("touchend", onDragEnd);
+          const onCardDragEnd = () => {
+            isCardDragging = false;
+            document.removeEventListener("mousemove", onCardDragMove);
+            document.removeEventListener("mouseup", onCardDragEnd);
+            document.removeEventListener("touchmove", onCardDragMove);
+            document.removeEventListener("touchend", onCardDragEnd);
           };
 
-          dragHandle.addEventListener("mousedown", onDragStart);
-          dragHandle.addEventListener("touchstart", onDragStart, { passive: false });
+          dragHandle.addEventListener("mousedown", onCardDragStart);
+          dragHandle.addEventListener("touchstart", onCardDragStart, { passive: false });
 
+          // 右下角等比缩放整个卡片外框
           if (resizeHandle) {
             let isResizing = false;
             let resizeStartX = 0, initialWidth = 350;
@@ -30002,7 +30143,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (e.cancelable) e.preventDefault();
               const clientX = e.touches ? e.touches[0].clientX : e.clientX;
               const dx = clientX - resizeStartX;
-              const newWidth = Math.max(180, Math.min(window.innerWidth - 20, initialWidth + dx));
+              const newWidth = Math.max(220, Math.min(window.innerWidth - 20, initialWidth + dx));
               card.style.width = newWidth + "px";
             };
 
@@ -30018,55 +30159,118 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             resizeHandle.addEventListener("touchstart", onResizeStart, { passive: false });
           }
 
-          card.addEventListener("wheel", (e) => {
-            e.preventDefault();
-            const currentWidth = card.offsetWidth;
-            const delta = e.deltaY < 0 ? 20 : -20;
-            const newWidth = Math.max(180, Math.min(window.innerWidth - 20, currentWidth + delta));
-            const rect = card.getBoundingClientRect();
-            const deltaW = newWidth - currentWidth;
-            card.style.width = newWidth + "px";
-            card.style.left = Math.max(10, rect.left - deltaW / 2) + "px";
-          }, { passive: false });
+          // 地图内部双指手势缩放与拖拽移动
+          if (viewBox) {
+            viewBox.style.overflow = "hidden";
+            viewBox.style.touchAction = "none";
 
-          let initialPinchDistance = null;
-          let initialPinchWidth = null;
+            let isMapPanning = false;
+            let mapPanStartX = 0, mapPanStartY = 0;
+            let startPanX = 0, startPanY = 0;
+            let initialPinchDistance = null;
+            let initialPinchScale = 1;
 
-          const getDistance = (t1, t2) => {
-            const dx = t1.clientX - t2.clientX;
-            const dy = t1.clientY - t2.clientY;
-            return Math.sqrt(dx * dx + dy * dy);
-          };
+            const getTouchDistance = (t1, t2) => {
+              const dx = t1.clientX - t2.clientX;
+              const dy = t1.clientY - t2.clientY;
+              return Math.sqrt(dx * dx + dy * dy);
+            };
 
-          card.addEventListener("touchstart", (e) => {
-            if (e.touches.length === 2) {
-              initialPinchDistance = getDistance(e.touches[0], e.touches[1]);
-              initialPinchWidth = card.offsetWidth;
-              isDragging = false;
-            }
-          }, { passive: true });
+            const clampPanAndZoom = () => {
+              if (mapInnerZoom <= 1.0) {
+                mapInnerZoom = 1.0;
+                mapInnerPanX = 0;
+                mapInnerPanY = 0;
+              } else {
+                const vbRect = viewBox.getBoundingClientRect();
+                const maxPanX = (vbRect.width * (mapInnerZoom - 1)) / 2;
+                const maxPanY = (vbRect.height * (mapInnerZoom - 1)) / 2;
+                mapInnerPanX = Math.max(-maxPanX, Math.min(maxPanX, mapInnerPanX));
+                mapInnerPanY = Math.max(-maxPanY, Math.min(maxPanY, mapInnerPanY));
+              }
+            };
 
-          card.addEventListener("touchmove", (e) => {
-            if (e.touches.length === 2 && initialPinchDistance && initialPinchWidth) {
-              if (e.cancelable) e.preventDefault();
-              const currentDistance = getDistance(e.touches[0], e.touches[1]);
-              const scaleRatio = currentDistance / initialPinchDistance;
-              const newWidth = Math.max(180, Math.min(window.innerWidth - 20, initialPinchWidth * scaleRatio));
-              const currentW = card.offsetWidth;
-              const deltaW = newWidth - currentW;
-              card.style.width = newWidth + "px";
-              const currentLeft = parseFloat(card.style.left) || card.getBoundingClientRect().left;
-              const newLeft = Math.max(10, Math.min(window.innerWidth - newWidth - 10, currentLeft - deltaW / 2));
-              card.style.left = newLeft + "px";
-            }
-          }, { passive: false });
+            viewBox.addEventListener("touchstart", (e) => {
+              if (e.touches.length === 2) {
+                isMapPanning = false;
+                initialPinchDistance = getTouchDistance(e.touches[0], e.touches[1]);
+                initialPinchScale = mapInnerZoom;
+              } else if (e.touches.length === 1) {
+                isMapPanning = true;
+                mapPanStartX = e.touches[0].clientX;
+                mapPanStartY = e.touches[0].clientY;
+                startPanX = mapInnerPanX;
+                startPanY = mapInnerPanY;
+              }
+            }, { passive: false });
 
-          card.addEventListener("touchend", (e) => {
-            if (e.touches.length < 2) {
-              initialPinchDistance = null;
-              initialPinchWidth = null;
-            }
-          });
+            viewBox.addEventListener("touchmove", (e) => {
+              if (e.touches.length === 2 && initialPinchDistance) {
+                if (e.cancelable) e.preventDefault();
+                const curDist = getTouchDistance(e.touches[0], e.touches[1]);
+                const ratio = curDist / initialPinchDistance;
+                mapInnerZoom = Math.max(1.0, Math.min(5.0, initialPinchScale * ratio));
+                clampPanAndZoom();
+                updateMiniMapInnerTransform(true);
+              } else if (e.touches.length === 1 && isMapPanning && mapInnerZoom > 1.0) {
+                if (e.cancelable) e.preventDefault();
+                const dx = e.touches[0].clientX - mapPanStartX;
+                const dy = e.touches[0].clientY - mapPanStartY;
+                mapInnerPanX = startPanX + dx;
+                mapInnerPanY = startPanY + dy;
+                clampPanAndZoom();
+                updateMiniMapInnerTransform(true);
+              }
+            }, { passive: false });
+
+            viewBox.addEventListener("touchend", (e) => {
+              if (e.touches.length < 2) {
+                initialPinchDistance = null;
+              }
+              if (e.touches.length === 0) {
+                isMapPanning = false;
+                clampPanAndZoom();
+                updateMiniMapInnerTransform(false);
+              }
+            });
+
+            // 鼠标滚轮缩放地图内部
+            viewBox.addEventListener("wheel", (e) => {
+              e.preventDefault();
+              const delta = e.deltaY < 0 ? 0.15 : -0.15;
+              mapInnerZoom = Math.max(1.0, Math.min(5.0, mapInnerZoom + delta));
+              clampPanAndZoom();
+              updateMiniMapInnerTransform(true);
+            }, { passive: false });
+
+            // 鼠标拖拽平移地图内部
+            let isMouseDownPan = false;
+            viewBox.addEventListener("mousedown", (e) => {
+              if (e.target.closest(".map-location-node") || e.target.closest("button")) return;
+              if (mapInnerZoom <= 1.0) return;
+              isMouseDownPan = true;
+              mapPanStartX = e.clientX;
+              mapPanStartY = e.clientY;
+              startPanX = mapInnerPanX;
+              startPanY = mapInnerPanY;
+            });
+            window.addEventListener("mousemove", (e) => {
+              if (!isMouseDownPan) return;
+              const dx = e.clientX - mapPanStartX;
+              const dy = e.clientY - mapPanStartY;
+              mapInnerPanX = startPanX + dx;
+              mapInnerPanY = startPanY + dy;
+              clampPanAndZoom();
+              updateMiniMapInnerTransform(true);
+            });
+            window.addEventListener("mouseup", () => {
+              if (isMouseDownPan) {
+                isMouseDownPan = false;
+                clampPanAndZoom();
+                updateMiniMapInnerTransform(false);
+              }
+            });
+          }
         }
 
         function renderChatMiniMap() {
@@ -30076,19 +30280,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!chat || !chat.settings?.miniMapSvg) return;
 
           container.innerHTML = chat.settings.miniMapSvg;
+          updateMiniMapInnerTransform();
 
-          const locNodes = container.querySelectorAll("[data-name]");
+          const locNodes = container.querySelectorAll("[data-name], .map-location-node");
           locNodes.forEach(node => {
             node.style.cursor = "pointer";
             node.addEventListener("click", async (e) => {
+              e.preventDefault();
               e.stopPropagation();
-              const locName = node.getAttribute("data-name");
+              const locName = node.getAttribute("data-name") || node.textContent.trim();
               const locs = await getAllChatLocations(chat);
               const found = locs.find(l => l.name === locName || locName.includes(l.name) || l.name.includes(locName));
               if (found && found.desc) {
                 showLocationBubble(node, found.name, found.desc);
               }
             });
+          });
+
+          // 拦截内部所有可能的外链与跳转，保持纯净内联
+          container.querySelectorAll("a").forEach(a => {
+            a.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            };
           });
 
           let latestLocation = "";
@@ -30118,6 +30332,45 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               matchedNode.style.filter = "drop-shadow(0 0 6px var(--accent-color))";
             }
           }
+
+          // 连击三下自动收藏生成的HTML
+          let mapHtmlClickCount = 0;
+          let mapHtmlClickTimer = null;
+          container.onclick = async (e) => {
+            if (e.target.closest(".map-location-node")) return;
+            mapHtmlClickCount++;
+            if (mapHtmlClickCount === 1) {
+              clearTimeout(mapHtmlClickTimer);
+              mapHtmlClickTimer = setTimeout(() => {
+                mapHtmlClickCount = 0;
+              }, 450);
+            } else if (mapHtmlClickCount >= 3) {
+              clearTimeout(mapHtmlClickTimer);
+              mapHtmlClickCount = 0;
+              const currentChat = state.chats[state.activeChatId] || { name: "地图" };
+              const htmlToSave = (chat && chat.settings?.miniMapSvg) ? chat.settings.miniMapSvg : container.innerHTML;
+              const favItem = {
+                type: "chat_message",
+                content: {
+                  role: "assistant",
+                  content: htmlToSave,
+                  senderName: currentChat.name || "地图生成",
+                  timestamp: Date.now()
+                },
+                chatId: state.activeChatId || "global",
+                timestamp: Date.now(),
+                originalTimestamp: Date.now()
+              };
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance && dbInstance.favorites) {
+                await dbInstance.favorites.add(favItem);
+                allFavoriteItems = await dbInstance.favorites.orderBy("timestamp").reverse().toArray();
+                if (typeof showCustomAlert === "function") {
+                  await showCustomAlert("收藏成功", "已保存到我的收藏");
+                }
+              }
+            }
+          };
         }
         window.renderChatMiniMap = renderChatMiniMap;
 
@@ -30312,7 +30565,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           let environmentDecorSvg = "";
           if (isIndoor) {
-            // 室内平面图环境：走廊通道、墙体隔断与房间格局
             environmentDecorSvg = `
               <g opacity="0.35">
                 <path d="M 40 50 L 500 50 L 500 350 L 40 350 Z" fill="none" stroke="${theme.border}" stroke-width="4" />
@@ -30322,7 +30574,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 <text x="260" y="204" font-size="9" fill="${theme.text}" text-anchor="middle" font-weight="600" opacity="0.7">主要过道</text>
               </g>`;
           } else if (isParkOrAqua) {
-            // 园区与水域风貌：蜿蜒主干步道、水系水池、绿植群落
             environmentDecorSvg = `
               <g opacity="0.4">
                 <path d="M 40 200 Q 150 140 270 200 T 500 200" fill="none" stroke="${theme.badgeBorder}" stroke-width="14" stroke-linecap="round" opacity="0.6" />
@@ -30337,7 +30588,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 <circle cx="440" cy="320" r="16" fill="${theme.subAccent}" opacity="0.35" />
               </g>`;
           } else {
-            // 真实城市或广袤地貌：河流水系、主干大道、空地广场与建筑剪影
             environmentDecorSvg = `
               <g opacity="0.35">
                 <path d="M 0 120 Q 180 220 320 160 T 540 240" fill="none" stroke="${theme.subAccent}" stroke-width="20" stroke-linecap="round" opacity="0.4" />
@@ -30438,18 +30688,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return `【图库插图${idx + 1}】名称：${img.name || '未命名'}，分类与说明：${img.desc || img.annotation || img.category || '模组插图'}${img.dataUrl ? '，包含图像数据' : ''}`;
           }).join("\n");
 
-          const prompt = `你是一位顶尖的跑团游戏矢量插画师与建筑制图大师。请根据以下地点清单、模组图库插图与环境设定，绘制一张极其精致、高雅且环境丰富的【${styleName}】风格全矢量示意小地图（纯SVG代码）。\n\n` +
+          const customStyles = getCustomMapStyles();
+          const matchedCustom = customStyles.find(s => s.name === styleName);
+          const customStyleInstruction = matchedCustom && matchedCustom.req ? `\n【所选风格特定要求】（风格名称：${styleName}）：\n${matchedCustom.req}\n` : "";
+
+          const globalReq = (localStorage.getItem("mini_map_global_requirement") || "").trim();
+          const globalReqInstruction = globalReq ? `\n【用户全局要求】：\n${globalReq}\n` : "";
+
+          const prompt = `你是一位顶尖的跑团游戏矢量插画师与建筑制图大师。请根据以下地点清单、模组图库插图、所选风格及环境设定，绘制一张极其精致、高雅且环境丰富的【${styleName}】风格全矢量示意小地图（纯SVG代码）。\n\n` +
             `地点层级清单：\n${locSummary || '地点：中央广场、旧钟楼、静谧小巷、圣辉神殿'}\n\n` +
-            `模组图库插图与介绍数据：\n${gallerySummary || '暂无额外图库插图'}\n\n` +
-            `制图与图库深度判断规则：\n` +
-            `1. 风格自主判断：若所选风格为默认或自适应，请根据世界观与地点氛围自主决定最契合的高级配色与艺术质感，保证美观精致；\n` +
-            `2. 图库与地图自动判断分类：\n` +
-            `   - 第一种情况（全域大地图）：若图库或地点中包含整个区域的全景或宏观大地图，你必须参考该图的宏观地理格局、地块分布与主要路线作为整体HTML/SVG布局基准，而具体的艺术风格、增添的细化路段、绿化、河流与装饰物由你自主发挥添加；\n` +
-            `   - 第二种情况（中地图/小地图区域）：若图库或地点中包含的是某个局部中地图或具体小地图地段的图片，你初始生成的地图必须依然是完整的大地图全貌并囊括各大区域，且其中的中地图/小地图地段必须精准参考该图片的格局与特征；\n` +
-            `   - 第三种情况（中地图展开与可下钻探索）：所有中地图区域均需在地图上清晰可辨识，支持点击该中地图区域展开查看其下属小地图与精细场所；\n` +
-            `3. 真实与架空地理融合：若为真实世界地点，依据真实地理风貌美化构建；若为架空世界，依据世界观自主设计周边的地形、水系、植被、步道与建筑剪影；\n` +
-            `4. 【关键交互标记】：清单与图库中每一个具体地点的最外层 <g> 分组标签上必须加上属性 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致！\n` +
-            `5. 纯净输出：只输出单个完整的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，不带Markdown代码块，严禁多余解释。`;
+            `模组图库插图与介绍数据：\n${gallerySummary || '暂无额外图库插图'}\n` +
+            customStyleInstruction +
+            globalReqInstruction + `\n` +
+            `制图、排版与图库深度参考规则：\n` +
+            `1. 精细地图结构与装饰物：让地图具有非常丰富的结构感，自主加入大量细腻的小装饰（如石板路纹理、蜿蜒河流、树木灌木丛、木桥石径、路标石碑、建筑外立面细节、光晕阴影等），呈现极佳的视觉美感与空间层次；\n` +
+            `2. 严格参考图库中已有地图的排版与方位：\n` +
+            `   - 仔细研读图库插图数据中是否存在全景地图、区域地图或佛像/神龛/局部地段地图；\n` +
+            `   - 若图库中有某局部的地图（例如只展示了山脚部分、或特定殿堂部分）：必须精准参考该图中的路线走向、建筑坐落与方位排版来构建该区域；\n` +
+            `   - 未画出的其余大地图区域（例如山腰、山顶、周边林道）：AI必须主动思考并完整发散绘制出来，绝不允许省略或简写！整体产出的依然是一张包含全部区域的完整大地图；\n` +
+            `3. 区域与场所可识别可交互：每个具体地点或区域均在SVG中清晰可点，最外层 <g> 标签必须严格附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单一致；\n` +
+            `4. 纯净内联SVG与防跳出铁律：绝不允许输出任何 <a> 标签、href超链接或外部页面跳转代码，同一个HTML页面只渲染这单个完整的SVG地图；\n` +
+            `5. 只输出纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，不带任何Markdown代码块与解释。`;
 
           const apiConfig = (typeof getEffectiveApiConfig === "function")
             ? getEffectiveApiConfig("map")
@@ -63460,8 +63719,37 @@ ${colSpecs.join('\n')}
             });
           }
 
+          // 头像生图图片区域点击三下自动下载与手势操作
           const avatarPreviewContainer = document.getElementById("avatar-gen-preview-container");
           if (avatarPreviewContainer) {
+            let avatarImgClickCount = 0;
+            let avatarImgClickTimer = null;
+            avatarPreviewContainer.addEventListener("click", (e) => {
+              if (e.target.closest("#avatar-gen-expand-btn")) return;
+              avatarImgClickCount++;
+              if (avatarImgClickCount === 1) {
+                clearTimeout(avatarImgClickTimer);
+                avatarImgClickTimer = setTimeout(() => {
+                  avatarImgClickCount = 0;
+                }, 450);
+              } else if (avatarImgClickCount >= 3) {
+                clearTimeout(avatarImgClickTimer);
+                avatarImgClickCount = 0;
+                const imgData = avatarGenState.currentImage || document.getElementById("avatar-gen-result-image")?.src;
+                if (imgData && imgData.startsWith("data:image")) {
+                  const a = document.createElement("a");
+                  a.href = imgData;
+                  a.download = `avatar_${Date.now()}.png`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  if (typeof showCustomAlert === "function") {
+                    showCustomAlert("下载成功", "头像图片已开始下载");
+                  }
+                }
+              }
+            });
+
             let touchState = {
               startX: 0,
               startY: 0,
