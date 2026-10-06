@@ -5797,11 +5797,12 @@ ${imageList}
       }
     },
 
-    async exportModuleZipBundle(specificChapters = null, specificName = null) {
+    async exportModuleZipBundle(specificChapters = null, specificName = null, specificModuleId = null) {
       const chaptersToExport = specificChapters || this.cutChapters;
       if (!chaptersToExport || chaptersToExport.length === 0) return;
 
-      const modName = specificName || this.currentParsedData?.moduleName || '模组';
+      const modName = specificName || this.activeDetailModule?.name || this.currentParsedData?.moduleName || '模组';
+      const targetModuleId = specificModuleId || this.activeDetailModule?.id || chaptersToExport[0]?.moduleId || null;
 
       if (!global.JSZip) {
         this.exportModuleFallbackTxt(chaptersToExport, modName);
@@ -5814,18 +5815,75 @@ ${imageList}
 
         chaptersToExport.forEach((chap, idx) => {
           const numStr = String(idx + 1).padStart(2, '0');
-          const fileName = `${numStr}_${chap.title}.txt`;
-          zip.file(fileName, chap.content);
-          overviewText += `${numStr}. ${chap.title} (分类: ${chap.category}, 字数: ${chap.wordCount})\n`;
+          const cleanTitle = (chap.title || `章节_${idx + 1}`).replace(/[\\/:*?"<>|]/g, '_');
+          const fileName = `${numStr}_${cleanTitle}.txt`;
+          zip.file(fileName, chap.content || '');
+          overviewText += `${numStr}. ${chap.title} (分类: ${chap.category || '正文'}, 字数: ${chap.wordCount || 0})\n`;
         });
 
         zip.file('00_模组总览与导读.txt', overviewText);
+
+        // 打包完整的结构化模组元数据，确保导入时 100% 还原格式、地图、分类与立绘
+        let fullModuleRecord = this.activeDetailModule || null;
+        let locationNavList = [];
+        let imagesList = [];
+        let cluePointersList = [];
+        let hoRolesList = [];
+
+        const database = this.getDB();
+        if (database && targetModuleId) {
+          try {
+            if (!fullModuleRecord && database.modules) {
+              fullModuleRecord = await database.modules.get(targetModuleId);
+            }
+            if (database.moduleLocationNav) {
+              locationNavList = await database.moduleLocationNav.where('moduleId').equals(targetModuleId).toArray();
+            }
+            if (database.moduleImages) {
+              imagesList = await database.moduleImages.where('moduleId').equals(targetModuleId).toArray();
+            }
+            if (database.moduleCluePointers) {
+              cluePointersList = await database.moduleCluePointers.where('moduleId').equals(targetModuleId).toArray();
+            }
+            if (database.moduleHoRoles) {
+              hoRolesList = await database.moduleHoRoles.where('moduleId').equals(targetModuleId).toArray();
+            }
+          } catch (dbErr) {
+            console.warn('[模组] 读取关联数据库数据异常:', dbErr);
+          }
+        }
+
+        if (!fullModuleRecord) {
+          fullModuleRecord = {
+            name: modName,
+            type: '线性',
+            ruleSystem: 'coc',
+            scaleType: '1v1',
+            summary: '跑团模组',
+            tags: ['普通'],
+            group: '默认分组',
+            chapterCount: chaptersToExport.length
+          };
+        }
+
+        const bundleManifest = {
+          version: 2,
+          exportedAt: Date.now(),
+          module: fullModuleRecord,
+          chapters: chaptersToExport,
+          locationNav: locationNavList,
+          images: imagesList,
+          cluePointers: cluePointersList,
+          hoRoles: hoRolesList
+        };
+
+        zip.file('module_data.json', JSON.stringify(bundleManifest, null, 2));
 
         const contentBlob = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(contentBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${modName}_跑团章节包.zip`;
+        a.download = `${modName}_跑团模组包.zip`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -5862,28 +5920,129 @@ ${imageList}
       const baseName = file.name.replace(/\.[^/.]+$/, '').trim() || '导入模组';
 
       try {
-        const moduleId = 'mod_' + Date.now();
-        const chapters = [];
+        const newModuleId = 'mod_' + Date.now();
+        let moduleRecord = null;
+        let chapters = [];
+        let locationNavList = [];
+        let imagesList = [];
+        let cluePointersList = [];
+        let hoRolesList = [];
 
         if (fileName.endsWith('.zip') && global.JSZip) {
           const zip = await global.JSZip.loadAsync(file);
-          const txtFileNames = Object.keys(zip.files).filter(name => name.endsWith('.txt') && !name.startsWith('__MACOSX'));
-          txtFileNames.sort();
 
-          let order = 1;
-          for (const name of txtFileNames) {
-            const content = await zip.file(name).async('text');
-            const cleanTitle = name.replace(/\.txt$/i, '').replace(/^[0-9]+[_\-\s]+/, '');
-            chapters.push({
-              id: 'chap_' + Date.now() + '_' + order,
-              moduleId: moduleId,
-              title: cleanTitle,
-              category: '正文',
-              wordCount: this.countWords(content),
-              content: content,
-              sortOrder: order
-            });
-            order++;
+          // 优先检查是否存在完整元数据 JSON（支持无损还原全部结构与地图、立绘）
+          const manifestFile = zip.file('module_data.json') || zip.file('module.json') || zip.file('manifest.json');
+          if (manifestFile) {
+            try {
+              const jsonText = await manifestFile.async('text');
+              const bundleData = JSON.parse(jsonText);
+
+              if (bundleData && (bundleData.module || bundleData.chapters)) {
+                moduleRecord = bundleData.module ? { ...bundleData.module } : {};
+                moduleRecord.id = newModuleId;
+                if (!moduleRecord.name) moduleRecord.name = baseName;
+                moduleRecord.createdAt = Date.now();
+
+                const rawChapters = Array.isArray(bundleData.chapters) ? bundleData.chapters : [];
+                chapters = rawChapters.map((c, idx) => ({
+                  ...c,
+                  id: 'chap_' + Date.now() + '_' + (idx + 1),
+                  moduleId: newModuleId,
+                  sortOrder: c.sortOrder || (idx + 1),
+                  wordCount: c.wordCount || this.countWords(c.content || '')
+                }));
+
+                if (Array.isArray(bundleData.locationNav)) {
+                  locationNavList = bundleData.locationNav.map((l, lIdx) => ({
+                    ...l,
+                    id: undefined,
+                    moduleId: newModuleId
+                  }));
+                }
+
+                if (Array.isArray(bundleData.images)) {
+                  imagesList = bundleData.images.map((img, iIdx) => ({
+                    ...img,
+                    id: undefined,
+                    moduleId: newModuleId
+                  }));
+                }
+
+                if (Array.isArray(bundleData.cluePointers)) {
+                  cluePointersList = bundleData.cluePointers.map(cp => ({
+                    ...cp,
+                    id: undefined,
+                    moduleId: newModuleId
+                  }));
+                }
+
+                if (Array.isArray(bundleData.hoRoles)) {
+                  hoRolesList = bundleData.hoRoles.map(hr => ({
+                    ...hr,
+                    id: undefined,
+                    moduleId: newModuleId
+                  }));
+                }
+              }
+            } catch (jsonErr) {
+              console.warn('[模组] 解析压缩包内 JSON 元数据失败，回退至纯文本模式', jsonErr);
+            }
+          }
+
+          // 若未包含 JSON 元数据或解析失败，按纯文本章节导入
+          if (chapters.length === 0) {
+            const txtFileNames = Object.keys(zip.files).filter(name =>
+              name.endsWith('.txt') &&
+              !name.startsWith('__MACOSX') &&
+              !name.includes('00_模组总览与导读')
+            );
+            txtFileNames.sort();
+
+            let order = 1;
+            for (const name of txtFileNames) {
+              const content = await zip.file(name).async('text');
+              const cleanTitle = name.replace(/\.txt$/i, '').replace(/^[0-9]+[_\-\s]+/, '');
+              chapters.push({
+                id: 'chap_' + Date.now() + '_' + order,
+                moduleId: newModuleId,
+                title: cleanTitle,
+                category: '正文',
+                wordCount: this.countWords(content),
+                content: content,
+                sortOrder: order
+              });
+              order++;
+            }
+          }
+        } else if (fileName.endsWith('.json')) {
+          const text = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsText(file, 'UTF-8');
+          });
+
+          const bundleData = JSON.parse(text);
+          moduleRecord = bundleData.module ? { ...bundleData.module } : {};
+          moduleRecord.id = newModuleId;
+          if (!moduleRecord.name) moduleRecord.name = baseName;
+          moduleRecord.createdAt = Date.now();
+
+          const rawChapters = Array.isArray(bundleData.chapters) ? bundleData.chapters : (Array.isArray(bundleData) ? bundleData : []);
+          chapters = rawChapters.map((c, idx) => ({
+            ...c,
+            id: 'chap_' + Date.now() + '_' + (idx + 1),
+            moduleId: newModuleId,
+            sortOrder: c.sortOrder || (idx + 1),
+            wordCount: c.wordCount || this.countWords(c.content || '')
+          }));
+
+          if (Array.isArray(bundleData.locationNav)) {
+            locationNavList = bundleData.locationNav.map(l => ({ ...l, id: undefined, moduleId: newModuleId }));
+          }
+          if (Array.isArray(bundleData.images)) {
+            imagesList = bundleData.images.map(img => ({ ...img, id: undefined, moduleId: newModuleId }));
           }
         } else if (fileName.endsWith('.txt')) {
           const text = await new Promise((resolve, reject) => {
@@ -5899,7 +6058,7 @@ ${imageList}
               const firstLine = sec.split('\n')[0].substring(0, 30).trim();
               chapters.push({
                 id: 'chap_' + Date.now() + '_' + (idx + 1),
-                moduleId: moduleId,
+                moduleId: newModuleId,
                 title: firstLine || `章节 ${idx + 1}`,
                 category: '正文',
                 wordCount: this.countWords(sec),
@@ -5910,7 +6069,7 @@ ${imageList}
           } else {
             chapters.push({
               id: 'chap_' + Date.now() + '_1',
-              moduleId: moduleId,
+              moduleId: newModuleId,
               title: baseName,
               category: '正文',
               wordCount: this.countWords(text),
@@ -5934,40 +6093,55 @@ ${imageList}
           chapsTotalWords += cWords;
         });
 
-        const moduleRecord = {
-          id: moduleId,
-          name: baseName,
-          type: '线性',
-          ruleSystem: 'coc',
-          scaleType: '1v1',
-          summary: '导入模组',
-          endingTag: '普通',
-          contentTags: [],
-          customTags: [],
-          tags: ['普通'],
-          group: '默认分组',
-          wordCount: 0,
-          chapterCount: chapters.length,
-          status: 'ready',
-          githubSync: false,
-          createdAt: Date.now()
-        };
+        if (!moduleRecord) {
+          moduleRecord = {
+            id: newModuleId,
+            name: baseName,
+            type: '线性',
+            ruleSystem: 'coc',
+            scaleType: '1v1',
+            summary: '导入模组',
+            endingTag: '普通',
+            contentTags: [],
+            customTags: [],
+            tags: ['普通'],
+            group: '默认分组',
+            wordCount: 0,
+            chapterCount: chapters.length,
+            status: 'ready',
+            githubSync: false,
+            createdAt: Date.now()
+          };
+        }
 
         const tocWords = this.getTocWordCount(moduleRecord, chapters);
         const mapWords = this.getMapWordCount(moduleRecord, chapters);
-        const imgWords = this.getImagesWordCount(moduleRecord, []);
+        const imgWords = this.getImagesWordCount(moduleRecord, imagesList);
         moduleRecord.wordCount = chapsTotalWords + tocWords + mapWords + imgWords;
+        moduleRecord.chapterCount = chapters.length;
 
-        await this.safeDBOperation('直接导入模组', async (db) => {
+        await this.safeDBOperation('导入完整模组', async (db) => {
           await db.modules.put(moduleRecord);
           await db.moduleChapters.bulkPut(chapters);
+          if (locationNavList.length > 0 && db.moduleLocationNav) {
+            await db.moduleLocationNav.bulkPut(locationNavList);
+          }
+          if (imagesList.length > 0 && db.moduleImages) {
+            await db.moduleImages.bulkPut(imagesList);
+          }
+          if (cluePointersList.length > 0 && db.moduleCluePointers) {
+            await db.moduleCluePointers.bulkPut(cluePointersList);
+          }
+          if (hoRolesList.length > 0 && db.moduleHoRoles) {
+            await db.moduleHoRoles.bulkPut(hoRolesList);
+          }
           return true;
         });
 
         await this.renderLibraryList();
 
         if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('导入成功', `成功将模组【${baseName}】及 ${chapters.length} 个章节存入模组库！`);
+          global.showCustomAlert('导入成功', `成功导入模组【${moduleRecord.name}】，包含 ${chapters.length} 个章节及完整地图设定！`);
         }
       } catch (err) {
         console.warn('[模组] 导入模组库异常:', err);
@@ -6997,8 +7171,10 @@ ${imageList}
       const backBtn = document.getElementById('modules-back-btn');
       if (backBtn) {
         backBtn.addEventListener('click', () => {
-          if (typeof global.showScreen === 'function') {
-            global.showScreen('home-screen');
+          if (typeof window.showScreen === 'function') {
+            window.showScreen('home-screen');
+          } else if (typeof showScreen === 'function') {
+            showScreen('home-screen');
           }
         });
       }
@@ -7846,7 +8022,7 @@ ${imageList}
             const database = this.getDB();
             if (database && database.moduleChapters) {
               const chapters = await database.moduleChapters.where('moduleId').equals(this.activeDetailModule.id).sortBy('sortOrder');
-              this.exportModuleZipBundle(chapters, this.activeDetailModule.name);
+              this.exportModuleZipBundle(chapters, this.activeDetailModule.name, this.activeDetailModule.id);
             }
           }
         });

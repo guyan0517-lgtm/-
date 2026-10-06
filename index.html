@@ -967,7 +967,7 @@
 
       <div id="world-book-screen" class="screen">
         <div class="header">
-          <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+          <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span>世界书</span>
           <div class="header-actions">
             <span
@@ -1095,7 +1095,7 @@
 
       <div id="api-settings-screen" class="screen moe-theme">
         <div class="header">
-          <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+          <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span> API设置 </span>
           <span style="width: 30px"></span>
         </div>
@@ -1778,6 +1778,14 @@
               >
                 高级导入/导出
               </button>
+              <button
+                class="moe-btn-secondary"
+                id="storage-breakdown-btn"
+                style="margin-top: 8px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <span>内存细分</span>
+              </button>
 
               <div class="moe-divider"></div>
               <button class="moe-btn-danger" id="clear-orphaned-data-btn">
@@ -1880,7 +1888,7 @@
       <div id="chat-list-screen" class="screen">
         <!-- 主头部 (只在消息列表显示) -->
         <div class="header" id="main-chat-list-header">
-          <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+          <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span id="chat-list-title">消息</span>
           <div class="header-actions">
             <span class="action-btn" id="add-group-chat-btn" title="创建群聊">
@@ -1965,7 +1973,7 @@
         <!-- 动态界面视图 -->
         <div id="qzone-screen" class="chat-list-view">
           <div class="qzone-header">
-            <span class="back-btn" id="qzone-back-btn">‹</span>
+            <span class="back-btn" id="qzone-back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
             <!-- 这个按钮现在只负责从动态返回 -->
             <span>好友动态</span>
 
@@ -2043,7 +2051,7 @@
         <!-- 收藏界面视图 -->
         <div id="favorites-view" class="chat-list-view">
           <div class="header">
-            <span class="back-btn" id="favorites-back-btn">‹</span>
+            <span class="back-btn" id="favorites-back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
             <span>我的收藏</span>
             <!-- 新增的编辑按钮 -->
             <span class="action-btn" id="favorites-edit-btn">编辑</span>
@@ -2080,7 +2088,7 @@
         <!-- 模组界面视图 -->
         <div id="modules-view" class="chat-list-view">
           <div class="header" id="modules-view-header">
-            <span class="back-btn" id="modules-back-btn">‹</span>
+            <span class="back-btn" id="modules-back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
             <div class="module-header-nav" id="module-header-nav">
               <span class="module-header-tab active" data-tab="wizard">切割</span>
               <span class="module-header-tab" data-tab="library">模组库</span>
@@ -2329,7 +2337,7 @@
             <div id="module-library-main-view" style="display: flex; flex-direction: column; height: 100%; width: 100%;">
               <div class="module-library-header-actions" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 4px 14px; gap: 10px;">
                 <input type="text" id="module-library-search-input" class="module-tuning-input" style="flex: 1; height: 32px; font-size: 12.5px; border-radius: 10px;" placeholder="搜索模组名称..." />
-                <input type="file" id="module-library-file-input" accept=".zip, .txt" style="display: none;" />
+                <input type="file" id="module-library-file-input" accept=".zip, .txt, .json" style="display: none;" />
                 <button type="button" class="mod-capsule-btn primary" id="module-library-import-btn" style="height: 32px; padding: 0 14px; flex-shrink: 0;">导入</button>
               </div>
               <div class="module-library-filter-bar" id="module-library-filter-bar" style="display: flex; gap: 6px; padding: 0 14px 6px 14px; align-items: center; overflow-x: auto;">
@@ -2703,7 +2711,7 @@
 
       <div id="thought-chain-screen" class="screen">
         <div class="header">
-          <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+          <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span>思维链</span>
           <div class="header-actions">
             <button type="button" id="tc-set-default-btn" class="tc-btn-action">设默认</button>
@@ -2718,7 +2726,7 @@
       <div id="album-screen" class="screen">
         <!-- 1. 页面头部，包含返回按钮和标题 -->
         <div class="header">
-          <span class="back-btn" id="album-back-btn">‹</span>
+          <span class="back-btn" id="album-back-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span>我的相册</span>
           <span class="action-btn" id="create-album-btn-page">+</span>
         </div>
@@ -2734,7 +2742,7 @@
       <div id="album-photos-screen" class="screen">
         <!-- 1. 页面头部 -->
         <div class="header">
-          <span class="back-btn" id="album-photos-back-btn">‹</span>
+          <span class="back-btn" id="album-photos-back-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span id="album-photos-title">相册名称</span>
           <span class="action-btn" id="album-upload-photo-btn">上传</span>
         </div>
@@ -2775,7 +2783,7 @@
         <div class="header">
           <!-- 默认控件：包含标题、状态栏和常规按钮 -->
           <div class="default-controls">
-            <span class="back-btn" id="back-to-list-btn">‹</span>
+            <span class="back-btn" id="back-to-list-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
 
             <!-- 标题和状态的容器 -->
             <div id="chat-header-title-wrapper">
@@ -2834,11 +2842,22 @@
                   />
                 </svg>
               </span>
-              <span class="action-btn" id="listen-together-btn" title="一起听"
-                ><img
-                  src="https://i.postimg.cc/CxjpF6gK/yi-qi-ting.png"
-                  alt="一起听"
-              /></span>
+              <span class="action-btn" id="listen-together-btn" title="地图" onclick="if(typeof openChatMapModal==='function')openChatMapModal();" style="cursor: pointer;"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="1 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
+                  <line x1="8" y1="2" x2="8" y2="18"></line>
+                  <line x1="16" y1="6" x2="16" y2="22"></line>
+                </svg></span>
               <span class="action-btn" id="chat-settings-btn" title="聊天设置"
                 ><img
                   src="https://i.postimg.cc/bvPq64cv/CCA834-BA-5-A90-408-D-94-FA-7-EE156-B6-A765.png"
@@ -3633,7 +3652,7 @@
     <!-- 外观设置页面 (已修复ID和布局) -->
     <div id="wallpaper-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>外观设置</span>
         <span style="width: 30px"></span>
       </div>
@@ -4008,7 +4027,7 @@
     <!-- 分享链接功能 HTML -->
     <div id="browser-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="browser-back-btn">‹</span>
+        <span class="back-btn" id="browser-back-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="browser-title"></span>
         <span style="width: 30px"></span>
       </div>
@@ -4019,7 +4038,7 @@
 
     <div id="font-settings-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>字体预设</span>
         <span style="width: 30px"></span>
         <!-- 保留这个占位符，让标题能完美居中 -->
@@ -4075,7 +4094,7 @@
     <!-- 1. 角色选择屏幕 (保持不变) -->
     <div id="character-selection-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>选择要查看的手机</span>
         <span style="width: 30px"></span>
       </div>
@@ -5220,7 +5239,7 @@
     <!-- 群成员管理屏幕 -->
     <div id="member-management-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-member-management">‹</span>
+        <span class="back-btn" id="back-from-member-management"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>群成员管理</span>
         <span style="width: 30px"></span>
       </div>
@@ -5349,7 +5368,7 @@
 
     <div id="char-sticker-manager-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-sticker-manager">‹</span>
+        <span class="back-btn" id="back-from-sticker-manager"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="sticker-manager-title">表情包管理</span>
         <!-- 在这里添加“编辑/完成”按钮 -->
         <div class="header-actions">
@@ -5635,7 +5654,7 @@
     <!-- 通话记录页面 -->
     <div id="call-history-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="call-history-back-btn">‹</span>
+        <span class="back-btn" id="call-history-back-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="call-history-title">通话记录</span>
         <span style="width: 30px"></span>
         <!-- 占位符，保持标题居中 -->
@@ -5651,7 +5670,7 @@
 
     <div id="chat-search-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="search-back-btn">‹</span>
+        <span class="back-btn" id="search-back-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>查找聊天记录</span>
         <span style="width: 30px"></span>
         <!-- 占位符 -->
@@ -5713,7 +5732,7 @@
       <div id="ls-header">
         <div class="ls-header-overlay"></div>
         <div class="ls-header-top-bar">
-          <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+          <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span id="ls-char-name"></span>
           <div class="header-actions">
             <span class="action-btn" id="ls-settings-btn" title="空间设置">
@@ -7816,6 +7835,24 @@
       </div>
     </div>
 
+    <!-- 内存细分弹窗 -->
+    <div id="storage-breakdown-modal" class="modal">
+      <div class="modal-content" style="max-width: 360px; width: calc(100% - 40px); margin: 0 auto; padding: 18px; border-radius: 20px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 14px; max-height: 85vh; box-shadow: 0 16px 40px rgba(0,0,0,0.2);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+            <span style="font-size: 15px; font-weight: 700; color: var(--text-primary);">内存细分</span>
+          </div>
+          <button type="button" class="close-btn" id="close-storage-breakdown-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div class="modal-body" id="storage-breakdown-body" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 2px;">
+        </div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="close-storage-breakdown-footer-btn" style="width: 100%; height: 34px;">关闭</button>
+        </div>
+      </div>
+    </div>
+
     <div id="chat-affection-modal" class="modal">
       <div class="modal-content" style="max-width: 300px; width: calc(100% - 80px); margin: 0 auto; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; max-height: 80vh;">
         <div class="modal-header" style="font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
@@ -7823,7 +7860,8 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
             <span>好感度面板</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-affection-edit-btn" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px;">编辑</button>
             <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; color: var(--text-secondary); user-select: none;">
               <input type="checkbox" id="chat-affection-enabled-toggle" style="accent-color: var(--accent-color); width: 14px; height: 14px;">
               <span>启用</span>
@@ -7832,7 +7870,7 @@
           </div>
         </div>
         <div class="modal-body" style="padding: 12px 0; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div id="chat-affection-top-actions" style="display: none; gap: 8px; align-items: center;">
             <button type="button" class="chat-affection-top-btn" id="chat-affection-add-char-btn">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               <span>添加角色</span>
@@ -7862,9 +7900,15 @@
         </div>
         
         <div style="padding: 2px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-          <button type="button" class="chat-mod-footer-btn primary" id="chat-map-open-mini-btn" style="width: 100%; height: 34px; font-size: 13px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px;">
+          <button type="button" class="chat-mod-footer-btn primary" id="chat-map-open-mini-btn" style="flex: 2; min-width: 0; height: 34px; font-size: 13px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
             打开小地图
+          </button>
+          <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-top-regen-btn" style="flex: 1; min-width: 0; height: 34px; font-size: 12px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 10px;">
+            重绘
+          </button>
+          <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-top-import-btn" style="flex: 1; min-width: 0; height: 34px; font-size: 12px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 10px;">
+            导入
           </button>
         </div>
 
@@ -7879,9 +7923,8 @@
           </div>
           <div id="chat-map-footer-btns-row" style="display: flex; align-items: center; gap: 8px; width: 100%;">
             <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-view-toggle-btn" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">图文</button>
-            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-write-btn" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: none; align-items: center; justify-content: center;">编写</button>
-            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-regen-mini-btn" title="重绘" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">重绘</button>
-            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-import-btn" title="导入" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">导入</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-write-btn" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">编写</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-draw-btn" title="绘制" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">绘制</button>
             <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-add-temp-btn" title="添加" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">添加</button>
           </div>
         </div>
@@ -7931,6 +7974,12 @@
         </div>
       </div>
     </div>
+
+    <!-- 地图节点头像/图片大图展开查看弹窗（无暗色遮罩，1:1 方框展示） -->
+    <div id="chat-map-image-modal" class="modal" style="z-index: 10000000; display: none; align-items: center; justify-content: center; background: transparent !important;">
+      <div class="modal-backdrop" id="chat-map-image-backdrop" style="position: absolute; inset: 0; background: transparent !important; cursor: pointer;"></div>
+      <div style="position: relative; max-width: 90vw; max-height: 90vh; display: flex; align-items: center; justify-content: center; z-index: 1; pointer-events: none;">
+        <img id="chat-map-image-modal-img" src="" alt="地图图片预览" style="width: min(80vw, 320px); height: min(80vw, 320px); aspect-ratio: 1 / 1; border-radius: 12px; object-fit: cover; box-shadow: 0 12px 36px rgba(0,0,0,0.22); border: 2px solid var(--border-color); background: var(--card-bg); pointer-events: auto;" />
       </div>
     </div>
 
@@ -8081,14 +8130,15 @@
     </div>
 
     <!-- 地图大图展开预览弹窗 -->
-    <div id="module-map-expand-modal" class="modal">
-      <div class="modal-content" style="max-width: 90vw; max-height: 90vh; padding: 10px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center;">
+    <div id="module-map-expand-modal" class="modal" style="background: transparent !important;">
+      <div class="modal-backdrop" id="close-module-map-expand-backdrop" style="position: absolute; inset: 0; background: transparent !important; cursor: pointer;"></div>
+      <div class="modal-content" style="position: relative; z-index: 1; width: min(84vw, 320px); padding: 12px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; box-shadow: 0 12px 36px rgba(0,0,0,0.22);">
         <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <span id="module-map-expand-title" style="font-size: 13px; font-weight: 600; color: var(--text-primary);"></span>
           <button type="button" class="close-btn" id="close-module-map-expand-btn" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
         </div>
-        <div style="flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; width: 100%;">
-          <img id="module-map-expand-img" src="" alt="" style="max-width: 100%; max-height: 75vh; border-radius: 10px; object-fit: contain;" />
+        <div style="display: flex; align-items: center; justify-content: center; width: 100%;">
+          <img id="module-map-expand-img" src="" alt="" style="width: min(76vw, 290px); height: min(76vw, 290px); aspect-ratio: 1 / 1; border-radius: 10px; object-fit: cover;" />
         </div>
       </div>
     </div>
@@ -9889,7 +9939,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 角色专属NPC库管理界面 -->
     <div id="npc-management-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-npc-management">‹</span>
+        <span class="back-btn" id="back-from-npc-management"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="npc-management-title">NPC 库管理</span>
         <span class="action-btn" id="add-new-npc-btn">+</span>
       </div>
@@ -9901,18 +9951,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. 论坛主屏幕 (显示所有小组) -->
     <div id="forum-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>圈子</span>
         <div class="header-actions">
           <span
-            class="action-btn filter-btn"
-            id="forum-filter-btn"
-            title="筛选"
+            class="action-btn"
+            id="forum-favorites-btn"
+            title="收藏"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
+              width="22"
+              height="22"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -9920,9 +9970,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               stroke-linecap="round"
               stroke-linejoin="round"
             >
-              <polygon
-                points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
-              ></polygon>
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
             </svg>
           </span>
           <span class="action-btn" id="open-forum-bookshelf-btn" title="书架">
@@ -9971,18 +10019,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <div id="group-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-to-forum-list">‹</span>
+        <span class="back-btn" id="back-to-forum-list"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="group-screen-title">小组名称</span>
         <div class="header-actions">
           <span
-            class="action-btn filter-btn"
-            id="group-filter-btn"
-            title="筛选"
+            class="action-btn"
+            id="group-favorites-btn"
+            title="收藏"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
+              width="22"
+              height="22"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -9990,9 +10038,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               stroke-linecap="round"
               stroke-linejoin="round"
             >
-              <polygon
-                points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
-              ></polygon>
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
             </svg>
           </span>
 
@@ -10108,7 +10154,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 3. 单个帖子页面 (显示帖子内容和评论) -->
     <div id="post-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-to-group-screen">‹</span>
+        <span class="back-btn" id="back-to-group-screen"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>帖子详情</span>
         <div class="header-actions">
           <span class="action-btn" id="repost-to-chat-btn">转载</span>
@@ -10121,26 +10167,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
       >
         <!-- 帖子和评论将由JS动态生成在这里 -->
       </div>
-      <!-- 帖子页的评论输入框 -->
+      <!-- 帖子页底部操作栏 -->
       <div
-        id="post-comment-input-area"
-        class="chat-input-area"
-        style="visibility: visible"
+        id="post-bottom-bar"
+        style="padding: 10px 16px; background: var(--background-color); border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: flex-end; gap: 10px;"
       >
-        <div class="chat-input-main-row">
-          <textarea
-            id="post-comment-input"
-            rows="1"
-            placeholder="发布你的评论..."
-          ></textarea>
-          <button id="send-post-comment-btn" class="action-button">发送</button>
-        </div>
+        <button id="post-fav-btn" class="moe-btn" style="min-width: 90px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+          <span id="post-fav-text">收藏</span>
+        </button>
       </div>
     </div>
 
     <div id="forum-bookshelf-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-forum-bookshelf">?</span>
+        <span class="back-btn" id="back-from-forum-bookshelf"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>圈子书架</span>
       </div>
       <div
@@ -10154,7 +10195,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <div id="forum-series-detail-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-series-detail">?</span>
+        <span class="back-btn" id="back-from-series-detail"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="forum-series-detail-title">连载详情</span>
         <div class="header-actions">
           <span class="action-btn" id="series-next-chapter-btn">追更</span>
@@ -10170,6 +10211,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         class="list-container forum-series-chapter-list"
         style="padding-top: 0"
       ></div>
+    </div>
+
+    <div id="forum-favorites-screen" class="screen">
+      <div class="header">
+        <span class="back-btn" id="back-from-forum-favorites"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
+        <span id="forum-favorites-title">收藏文章</span>
+      </div>
+      <div
+        id="forum-favorites-list"
+        class="list-container"
+        style="padding: 12px; display: flex; flex-direction: column; gap: 10px;"
+      >
+        <!-- 收藏的章节或故事将由JS动态生成在这里 -->
+      </div>
     </div>
 
     <div id="forum-filter-modal" class="modal">
@@ -11625,7 +11680,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <div id="game-hall-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>游戏大厅</span>
         <span style="width: 30px"></span>
         <!-- 占位符 -->
@@ -11698,7 +11753,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. 狼人杀游戏设置屏幕 -->
     <div id="werewolf-setup-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('game-hall-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('game-hall-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>狼人杀 - 游戏设置</span>
       </div>
       <div class="form-container">
@@ -11735,7 +11790,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 2. 狼人杀游戏主界面 -->
     <div id="werewolf-game-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="exit-werewolf-game-btn">‹ 退出</span>
+        <span class="back-btn" id="exit-werewolf-game-btn"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg> 退出</span>
         <span id="werewolf-game-title">狼人杀</span>
         <span class="action-btn" id="werewolf-my-role-btn">我的身份</span>
       </div>
@@ -11813,7 +11868,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. 海龟汤游戏主界面 -->
     <div id="sea-turtle-soup-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="exit-sts-game-btn">‹ 退出</span>
+        <span class="back-btn" id="exit-sts-game-btn"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg> 退出</span>
         <span>海龟汤</span>
         <span class="action-btn" id="reveal-sts-answer-btn">揭晓答案</span>
       </div>
@@ -12007,7 +12062,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. 剧本杀游戏设置屏幕 -->
     <div id="script-kill-setup-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('game-hall-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('game-hall-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>剧本杀 - 游戏设置</span>
       </div>
       <div class="form-container">
@@ -12059,7 +12114,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 2. 剧本杀游戏主界面 -->
     <div id="script-kill-game-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="exit-script-kill-game-btn">‹ 退出</span>
+        <span class="back-btn" id="exit-script-kill-game-btn"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg> 退出</span>
         <span id="script-kill-game-title">剧本杀</span>
         <div class="header-actions">
           <span class="action-btn" id="script-kill-my-role-btn">我的角色</span>
@@ -12486,7 +12541,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. “你说我猜”游戏设置屏幕 -->
     <div id="guess-what-setup-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('game-hall-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('game-hall-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>你说我猜 - 游戏设置</span>
       </div>
       <div class="form-container">
@@ -12544,7 +12599,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 2. “你说我猜”游戏主界面 -->
     <div id="guess-what-game-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="exit-guess-what-game-btn">‹ 退出</span>
+        <span class="back-btn" id="exit-guess-what-game-btn"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg> 退出</span>
         <span id="guess-what-game-title">你说我猜</span>
         <span class="action-btn" id="give-up-guess-what-btn">放弃</span>
       </div>
@@ -12624,7 +12679,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. 飞行棋游戏设置屏幕 -->
     <div id="ludo-setup-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('game-hall-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('game-hall-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>心动飞行棋 - 游戏设置</span>
       </div>
       <div class="form-container">
@@ -12666,7 +12721,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 2. 飞行棋游戏主界面 -->
     <div id="ludo-game-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="exit-ludo-game-btn">‹ 退出</span>
+        <span class="back-btn" id="exit-ludo-game-btn"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg> 退出</span>
         <span>心动飞行棋</span>
         <!-- 这里可以放一个重置游戏的按钮 -->
         <span class="action-btn" id="restart-ludo-game-btn" title="重新开始">
@@ -12711,7 +12766,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 微博私信列表页面 -->
     <div id="weibo-dm-list-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-dm-list">‹</span>
+        <span class="back-btn" id="back-from-dm-list"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="weibo-dm-list-title">粉丝私信</span>
         <!-- 这是你要求的“继续生成”按钮 -->
         <div class="header-actions">
@@ -12762,7 +12817,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <div id="weibo-dm-detail-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-dm-detail">‹</span>
+        <span class="back-btn" id="back-from-dm-detail"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="weibo-dm-detail-title"></span>
         <span style="width: 30px"></span>
         <!-- 占位符 -->
@@ -12786,7 +12841,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <div id="taobao-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>桃宝</span>
         <div class="header-actions">
           <span
@@ -13012,7 +13067,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 物流详情页面 -->
     <div id="logistics-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="logistics-back-btn">‹</span>
+        <span class="back-btn" id="logistics-back-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>物流详情</span>
         <span style="width: 30px"></span>
         <!-- 占位符，让标题居中 -->
@@ -13025,7 +13080,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. “谁是卧底”游戏设置屏幕 -->
     <div id="undercover-setup-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('game-hall-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('game-hall-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>谁是卧底 - 游戏设置</span>
       </div>
       <div class="form-container">
@@ -13109,7 +13164,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 2. “谁是卧底”游戏主界面 -->
     <div id="undercover-game-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="exit-undercover-game-btn">‹ 退出</span>
+        <span class="back-btn" id="exit-undercover-game-btn"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg> 退出</span>
         <span id="undercover-game-title">谁是卧底</span>
         <span class="action-btn" id="undercover-my-word-btn">我的词语</span>
       </div>
@@ -13200,7 +13255,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. User私信列表页面 -->
     <div id="user-dm-list-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-user-dm-list">‹</span>
+        <span class="back-btn" id="back-from-user-dm-list"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>我的私信</span>
         <div class="header-actions">
           <!-- 这个按钮用于让AI生成新的粉丝私信 -->
@@ -13258,7 +13313,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 2. User私信详情页面 (与粉丝聊天) -->
     <div id="user-dm-detail-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-user-dm-detail">‹</span>
+        <span class="back-btn" id="back-from-user-dm-detail"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="user-dm-detail-title"></span>
         <!-- 粉丝名字 -->
         <span style="width: 30px"></span>
@@ -13342,7 +13397,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <div id="weibo-char-profile-screen" class="screen">
       <!-- 头部，包含返回按钮和角色名字 -->
       <div class="header">
-        <span class="back-btn" id="back-from-char-profile">‹</span>
+        <span class="back-btn" id="back-from-char-profile"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="weibo-char-profile-title">角色主页</span>
         <div class="header-actions">
           <span
@@ -13504,7 +13559,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <div id="date-a-live-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>约会大作战</span>
         <div class="header-actions">
           <!-- “+”号按钮 -->
@@ -14007,7 +14062,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <div id="ludo-question-editor-modal" class="modal">
       <div class="modal-content" style="height: 80%">
         <div class="modal-header">
-          <span class="back-btn" id="back-to-qbank-manager-btn">‹</span>
+          <span class="back-btn" id="back-to-qbank-manager-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span id="ludo-question-editor-title">编辑问题</span>
           <span
             class="action-btn"
@@ -14847,7 +14902,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <div id="tukey-accounting-screen" class="screen">
       <!-- 1. 页面头部 (保持不变) -->
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="tukey-header-title">记账群聊</span>
         <span style="width: 30px"></span>
       </div>
@@ -15283,7 +15338,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 1. 查岗 - 角色选择屏幕 -->
     <div id="kk-char-selection-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>要查谁的岗？</span>
         <span style="width: 30px"></span>
       </div>
@@ -15306,7 +15361,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           border-bottom: none;
         "
       >
-        <span class="back-btn" id="kk-back-from-house-view">‹</span>
+        <span class="back-btn" id="kk-back-from-house-view"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="kk-house-owner-name"></span>
         <!-- 标题会自动居中 -->
 
@@ -15467,7 +15522,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           border-bottom: none;
         "
       >
-        <span class="back-btn" id="kk-back-from-area-view">‹</span>
+        <span class="back-btn" id="kk-back-from-area-view"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="kk-area-name"></span>
         <span style="width: 30px"></span>
       </div>
@@ -15482,7 +15537,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- kk查岗-监控屏幕 -->
     <div id="kk-monitor-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="kk-back-from-monitor">‹</span>
+        <span class="back-btn" id="kk-back-from-monitor"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="kk-monitor-title">监控中心</span>
         <div class="header-actions">
           <!-- 刷新监控按钮：统一成刷新箭头 -->
@@ -15552,7 +15607,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- KK查岗 - 沉浸式衣帽间屏幕 -->
     <div id="kk-wardrobe-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="kk-back-from-wardrobe">‹</span>
+        <span class="back-btn" id="kk-back-from-wardrobe"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>Ta的衣帽间</span>
         <div class="header-actions">
           <!-- 新增：添加衣服按钮 -->
@@ -15662,7 +15717,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 约会历史记录界面 -->
     <div id="dating-history-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="dating-history-back-btn">‹</span>
+        <span class="back-btn" id="dating-history-back-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>历史约会</span>
         <span style="width: 30px"></span>
         <!-- 占位符，保持标题居中 -->
@@ -15926,7 +15981,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <div id="studio-screen" class="screen">
       <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="studio-main-title">法则</span>
         <div class="header-actions">
           <span class="action-btn" id="cmd-tab-rules" style="font-size: 13px; margin-right: 8px; cursor: pointer;">规则</span>
@@ -15942,7 +15997,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 2. 小剧场剧本编辑器 -->
     <div id="studio-editor-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-studio-editor">‹</span>
+        <span class="back-btn" id="back-from-studio-editor"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="studio-editor-title">编辑剧本</span>
         <div class="header-actions">
           <span class="action-btn" id="ai-generate-script-btn">AI补充</span>
@@ -16028,7 +16083,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 3. 小剧场角色扮演界面 -->
     <div id="studio-play-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="exit-studio-play-btn">‹</span>
+        <span class="back-btn" id="exit-studio-play-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span id="studio-play-title">剧本名称</span>
         <div class="header-actions">
           <span class="action-btn" id="reroll-studio-play-btn">刷新</span>
@@ -16171,7 +16226,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 小剧场 - 故事记录屏幕 -->
     <div id="studio-history-screen" class="screen">
       <div class="header">
-        <span class="back-btn" id="back-from-studio-history">‹</span>
+        <span class="back-btn" id="back-from-studio-history"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>故事记录</span>
         <span style="width: 30px"></span>
         <!-- 占位符 -->
@@ -21771,6 +21826,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return { x: e.pageX, y: e.pageY };
         }
 
+        function ensureAllBackButtonsSvg() {
+          const backSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block; pointer-events: none;"><path d="M15 18l-6-6 6-6" /></svg>`;
+          document.querySelectorAll(".back-btn").forEach(btn => {
+            if (!btn.querySelector("svg") && !btn.querySelector("img")) {
+              const text = btn.textContent.trim();
+              if (text.includes("退出")) {
+                btn.innerHTML = `${backSvg}<span style="font-size:13px; margin-left:2px; font-weight: 500;">退出</span>`;
+              } else {
+                btn.innerHTML = backSvg;
+              }
+            }
+          });
+        }
+        window.ensureAllBackButtonsSvg = ensureAllBackButtonsSvg;
+
         function showScreen(screenId) {
           if (typeof hideLocationBubble === "function") {
             try { hideLocationBubble(); } catch (_) {}
@@ -21805,6 +21875,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (screenToShow) {
             screenToShow.classList.add("active");
           }
+
+          ensureAllBackButtonsSvg();
 
           if (screenId === "chat-interface-screen") {
             updateListenTogetherIcon(state.activeChatId);
@@ -28870,6 +28942,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.postProcessStatusReply = postProcessStatusReply;
 
+        let isAffectionEditing = false;
+
         async function openChatAffectionModal() {
           if (!state.activeChatId) return;
           const chat = state.chats[state.activeChatId];
@@ -28877,6 +28951,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const modal = document.getElementById("chat-affection-modal");
           if (!modal) return;
+
+          isAffectionEditing = false;
+          const editBtn = document.getElementById("chat-affection-edit-btn");
+          if (editBtn) editBtn.textContent = "编辑";
 
           if (!chat.settings) chat.settings = {};
           if (chat.settings.affectionEnabled === undefined) {
@@ -28897,6 +28975,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
             if (dbInstance) await dbInstance.chats.put(chat);
           }
+
+          if (editBtn) {
+            editBtn.onclick = () => {
+              isAffectionEditing = !isAffectionEditing;
+              editBtn.textContent = isAffectionEditing ? "完成" : "编辑";
+              const topActions = document.getElementById("chat-affection-top-actions");
+              if (topActions) topActions.style.display = isAffectionEditing ? "flex" : "none";
+              renderChatAffectionList();
+            };
+          }
+
+          const topActions = document.getElementById("chat-affection-top-actions");
+          if (topActions) topActions.style.display = "none";
 
           const toggleEl = document.getElementById("chat-affection-enabled-toggle");
           if (toggleEl) {
@@ -28980,18 +29071,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const row = document.createElement("div");
             row.className = "chat-affection-item";
 
+            const btnDisplay = isAffectionEditing ? "inline-flex" : "none";
+            const readOnlyAttr = isAffectionEditing ? "" : "readonly";
+            const inputBg = isAffectionEditing ? "var(--card-bg)" : "transparent";
+            const inputBorder = isAffectionEditing ? "1px solid var(--border-color)" : "1px solid transparent";
+
             row.innerHTML = `
               <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
                 <div class="chat-affection-avatar">
                   ${(item.name || "角")[0]}
                 </div>
-                <input type="text" class="moe-input aff-name-input" value="${item.name || ''}" placeholder="角色名" style="flex: 1; min-width: 0; height: 28px; font-size: 12px; border-radius: 6px; padding: 2px 8px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-primary);">
+                <input type="text" class="moe-input aff-name-input" value="${item.name || ''}" placeholder="角色名" ${readOnlyAttr} style="flex: 1; min-width: 0; height: 28px; font-size: 12px; border-radius: 6px; padding: 2px 8px; background: ${inputBg}; border: ${inputBorder}; color: var(--text-primary); font-weight: 500;">
               </div>
               <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                <button type="button" class="chat-affection-btn-step aff-dec-btn">-</button>
-                <input type="number" class="moe-input aff-val-input" value="${item.affection ?? 50}" style="width: 44px; height: 28px; text-align: center; font-size: 12px; border-radius: 6px; padding: 2px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-primary); font-weight: 600;">
-                <button type="button" class="chat-affection-btn-step aff-inc-btn">+</button>
-                <button type="button" class="chat-affection-btn-step aff-del-btn" style="color: var(--text-secondary); margin-left: 2px;" title="删除">
+                <button type="button" class="chat-affection-btn-step aff-dec-btn" style="display: ${btnDisplay};">-</button>
+                <input type="number" class="moe-input aff-val-input" value="${item.affection ?? 50}" ${readOnlyAttr} style="width: 44px; height: 28px; text-align: center; font-size: 12px; border-radius: 6px; padding: 2px; background: ${inputBg}; border: ${inputBorder}; color: var(--text-primary); font-weight: 600;">
+                <button type="button" class="chat-affection-btn-step aff-inc-btn" style="display: ${btnDisplay};">+</button>
+                <button type="button" class="chat-affection-btn-step aff-del-btn" style="display: ${btnDisplay}; color: var(--text-secondary); margin-left: 2px;" title="删除">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
               </div>
@@ -29008,31 +29104,40 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (dbInstance) await dbInstance.chats.put(chat);
             };
 
-            nameInput?.addEventListener("change", async (e) => {
-              item.name = e.target.value.trim();
-              const avatar = row.querySelector(".chat-affection-avatar");
-              if (avatar) avatar.textContent = (item.name || "角")[0];
-              await saveAffection();
-            });
+            if (nameInput) {
+              nameInput.addEventListener("change", async (e) => {
+                if (!isAffectionEditing) return;
+                item.name = e.target.value.trim();
+                const avatar = row.querySelector(".chat-affection-avatar");
+                if (avatar) avatar.textContent = (item.name || "角")[0];
+                await saveAffection();
+              });
+            }
 
-            valInput?.addEventListener("change", async (e) => {
-              item.affection = parseInt(e.target.value, 10) || 0;
-              await saveAffection();
-            });
+            if (valInput) {
+              valInput.addEventListener("change", async (e) => {
+                if (!isAffectionEditing) return;
+                item.affection = parseInt(e.target.value, 10) || 0;
+                await saveAffection();
+              });
+            }
 
             decBtn?.addEventListener("click", async () => {
+              if (!isAffectionEditing) return;
               item.affection = Math.max(0, (item.affection || 50) - 1);
               valInput.value = item.affection;
               await saveAffection();
             });
 
             incBtn?.addEventListener("click", async () => {
+              if (!isAffectionEditing) return;
               item.affection = (item.affection || 50) + 1;
               valInput.value = item.affection;
               await saveAffection();
             });
 
             delBtn?.addEventListener("click", async () => {
+              if (!isAffectionEditing) return;
               chat.settings.affectionList.splice(idx, 1);
               await saveAffection();
               renderChatAffectionList();
@@ -29457,25 +29562,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const useModToggle = document.getElementById("chat-map-use-module-toggle");
           const viewToggleBtn = document.getElementById("chat-map-view-toggle-btn");
           const writeBtn = document.getElementById("chat-map-write-btn");
-          const regenMiniBtn = document.getElementById("chat-map-regen-mini-btn");
-          const importBtn = document.getElementById("chat-map-import-btn");
+          const drawBtn = document.getElementById("chat-map-draw-btn");
+          const topRegenBtn = document.getElementById("chat-map-top-regen-btn");
+          const topImportBtn = document.getElementById("chat-map-top-import-btn");
           const addTempBtn = document.getElementById("chat-map-add-temp-btn");
 
           const updateFooterButtons = () => {
             const useMod = chat.settings.useModuleMap !== false;
             const hasModule = Boolean(chat.activeModuleId);
 
-            if (useMod) {
-              if (viewToggleBtn) {
-                viewToggleBtn.style.display = hasModule ? "inline-flex" : "none";
-                viewToggleBtn.textContent = chat.settings.mapViewMode === "rich" ? "文字" : "图文";
-              }
-              if (writeBtn) writeBtn.style.display = "none";
-              if (importBtn) importBtn.style.display = "inline-flex";
-            } else {
-              if (viewToggleBtn) viewToggleBtn.style.display = "none";
-              if (writeBtn) writeBtn.style.display = "inline-flex";
-              if (importBtn) importBtn.style.display = "none";
+            if (viewToggleBtn) {
+              viewToggleBtn.style.display = "inline-flex";
+              viewToggleBtn.textContent = chat.settings.mapViewMode === "rich" ? "文字" : "图文";
+            }
+            if (writeBtn) {
+              writeBtn.style.display = "inline-flex";
+            }
+            if (drawBtn) {
+              drawBtn.style.display = "inline-flex";
             }
           };
 
@@ -29501,6 +29605,32 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           updateFooterButtons();
+
+          if (topRegenBtn) {
+            topRegenBtn.onclick = async () => {
+              modal.classList.remove("visible");
+              hideLocationBubble();
+              openMiniMapStylePickerModal(async (style) => {
+                try {
+                  await generateChatMiniMapSvg(style);
+                  openChatMiniMapModal();
+                } catch (e) {
+                  console.error("重绘小地图失败:", e);
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("生成失败", e.message || String(e));
+                  }
+                }
+              });
+            };
+          }
+
+          if (topImportBtn) {
+            topImportBtn.onclick = () => {
+              modal.classList.remove("visible");
+              hideLocationBubble();
+              openChatMapImportModal();
+            };
+          }
 
           if (viewToggleBtn) {
             viewToggleBtn.onclick = async () => {
@@ -29532,6 +29662,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
+          if (drawBtn) {
+            drawBtn.onclick = async () => {
+              chat.settings.mapViewMode = "rich";
+              if (viewToggleBtn) viewToggleBtn.textContent = "文字";
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+              await renderChatMapList();
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("图文模式", "已切换至图文模式，可逐一查看或编写每个地点的绘图提示词与生成效果。");
+              }
+            };
+          }
+
           const openMiniBtn = document.getElementById("chat-map-open-mini-btn");
           if (openMiniBtn) {
             openMiniBtn.onclick = async () => {
@@ -29541,9 +29684,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 openChatMiniMapModal();
               } else {
                 openMiniMapStylePickerModal(async (style) => {
-                  if (typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("提示", "正在生成地图，请稍候");
-                  }
                   try {
                     await generateChatMiniMapSvg(style);
                     openChatMiniMapModal();
@@ -29555,35 +29695,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   }
                 });
               }
-            };
-          }
-
-          if (regenMiniBtn) {
-            regenMiniBtn.onclick = async () => {
-              modal.classList.remove("visible");
-              hideLocationBubble();
-              openMiniMapStylePickerModal(async (style) => {
-                if (typeof window.showCustomAlert === "function") {
-                  window.showCustomAlert("提示", "正在生成地图，请稍候");
-                }
-                try {
-                  await generateChatMiniMapSvg(style);
-                  openChatMiniMapModal();
-                } catch (e) {
-                  console.error("重绘小地图失败:", e);
-                  if (typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("生成失败", e.message || String(e));
-                  }
-                }
-              });
-            };
-          }
-
-          if (importBtn) {
-            importBtn.onclick = () => {
-              modal.classList.remove("visible");
-              hideLocationBubble();
-              openChatMapImportModal();
             };
           }
 
@@ -29602,6 +29713,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               hideLocationBubble();
             };
           }
+
+          modal.onclick = (e) => {
+            if (e.target === modal) {
+              modal.classList.remove("visible");
+              hideLocationBubble();
+            }
+          };
 
           await renderChatMapList();
           modal.classList.add("visible");
@@ -29649,6 +29767,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           activeLocationBubbleTarget = null;
         }
+
+        function showImageModal(url) {
+          if (!url) return;
+          const modal = document.getElementById("chat-map-image-modal");
+          const img = document.getElementById("chat-map-image-modal-img");
+          const backdrop = document.getElementById("chat-map-image-backdrop");
+          if (!modal || !img) return;
+          img.src = url;
+          modal.style.display = "flex";
+          const closeModal = (e) => {
+            if (e) e.stopPropagation();
+            modal.style.display = "none";
+            img.src = "";
+          };
+          if (backdrop) backdrop.onclick = closeModal;
+          modal.onclick = (e) => {
+            if (e.target !== img) {
+              closeModal(e);
+            }
+          };
+        }
+        window.showImageModal = showImageModal;
+        window.viewImage = showImageModal;
 
         window.addEventListener("pointerdown", (e) => {
           const bubble = document.getElementById("chat-location-bubble");
@@ -29760,7 +29901,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           const useModule = (chat.settings?.useModuleMap !== false);
-          const isRich = (useModule && Boolean(chat.activeModuleId) && chat.settings?.mapViewMode === "rich");
+          const isRich = (chat.settings?.mapViewMode === "rich");
           const level1 = locations.filter((l) => !l.parent || l.level === 1);
           const getChildren = (parentName) => locations.filter((l) => l.parent && l.parent === parentName);
 
@@ -29776,15 +29917,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             row.className = "chat-map-strip-row";
 
             const hasImg = Boolean(node.imageUrl && isRich);
-            const imgHtml = hasImg ? `<img src="${node.imageUrl}" class="strip-thumb" style="width: 28px; height: 20px; border-radius: 4px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color); cursor: pointer;" />` : "";
+            const imgHtml = hasImg ? `<img src="${node.imageUrl}" class="strip-thumb" style="width: 44px; height: 44px; aspect-ratio: 1 / 1; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color); cursor: pointer;" />` : "";
+
+            if (isRich && hasImg) {
+              row.style.minHeight = "52px";
+              row.style.padding = "6px 10px";
+            } else {
+              row.style.minHeight = "44px";
+              row.style.padding = "6px 10px";
+            }
 
             row.innerHTML = `
-              <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
                 ${hasChildren ? `<svg class="strip-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink: 0; transform: rotate(90deg); transition: transform 0.15s ease; cursor: pointer;"><polyline points="9 18 15 12 9 6"></polyline></svg>` : `<span style="width: 12px; flex-shrink: 0;"></span>`}
                 ${imgHtml}
-                <span class="chat-map-name-label">${node.name}</span>
-                ${node.isTemp ? `<span style="font-size: 9px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 3px; padding: 0 3px; flex-shrink: 0;">临</span>` : ""}
-                ${node.desc ? `<span style="font-size: 11px; color: var(--text-secondary); margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; opacity: 0.85;">${node.desc}</span>` : ""}
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; flex: 1;">
+                  <div style="display: flex; align-items: center; gap: 4px; min-width: 0; width: 100%;">
+                    <span class="chat-map-name-label" style="font-weight: 600; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;">${node.name}</span>
+                    ${node.isTemp ? `<span style="font-size: 9px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 3px; padding: 0 3px; flex-shrink: 0;">临</span>` : ""}
+                  </div>
+                  ${node.desc ? `<span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; opacity: 0.85; line-height: 1.3;">${node.desc}</span>` : ""}
+                </div>
               </div>
               <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
                 ${node.isTemp ? `<button type="button" class="del-temp-btn" style="border: none; background: transparent; color: var(--text-secondary); font-size: 15px; cursor: pointer; padding: 0 4px; line-height: 1;">&times;</button>` : ""}
@@ -30282,6 +30435,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           container.innerHTML = chat.settings.miniMapSvg;
           updateMiniMapInnerTransform();
 
+          // 清洗与防御 SVG 内部可能包含的 transform 样式，彻底杜绝点击导致节点飞到左上角 (0,0) 的问题
+          const styleTags = container.querySelectorAll("style");
+          styleTags.forEach(st => {
+            if (st.textContent) {
+              st.textContent = st.textContent.replace(/transform\s*:[^;]+;/gi, "");
+            }
+          });
+
           const locNodes = container.querySelectorAll("[data-name], .map-location-node");
           locNodes.forEach(node => {
             node.style.cursor = "pointer";
@@ -30333,7 +30494,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
 
-          // 连击三下自动收藏生成的HTML
+          // 连击三下弹出确认面板后加入收藏
           let mapHtmlClickCount = 0;
           let mapHtmlClickTimer = null;
           container.onclick = async (e) => {
@@ -30347,6 +30508,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } else if (mapHtmlClickCount >= 3) {
               clearTimeout(mapHtmlClickTimer);
               mapHtmlClickCount = 0;
+              let confirmed = true;
+              if (typeof showCustomConfirm === "function") {
+                confirmed = await showCustomConfirm("提示", "是否要加入收藏？");
+              } else {
+                confirmed = confirm("是否要加入收藏？");
+              }
+              if (!confirmed) return;
+
               const currentChat = state.chats[state.activeChatId] || { name: "地图" };
               const htmlToSave = (chat && chat.settings?.miniMapSvg) ? chat.settings.miniMapSvg : container.innerHTML;
               const favItem = {
@@ -30366,7 +30535,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 await dbInstance.favorites.add(favItem);
                 allFavoriteItems = await dbInstance.favorites.orderBy("timestamp").reverse().toArray();
                 if (typeof showCustomAlert === "function") {
-                  await showCustomAlert("收藏成功", "已保存到我的收藏");
+                  await showCustomAlert("成功", "已加入收藏");
                 }
               }
             }
@@ -30378,226 +30547,205 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const locList = (Array.isArray(locations) && locations.length > 0)
             ? locations
             : [
-                { name: "中央广场", desc: "城镇的核心枢纽与繁华集市" },
-                { name: "旧钟楼", desc: "耸立于云端的古老机械时钟" },
-                { name: "黑鸦书店", desc: "藏匿着禁忌秘术与古籍的角落" },
-                { name: "隐秘工坊", desc: "回荡着锻造声响与魔法微光的工坊" },
-                { name: "圣辉神殿", desc: "沐浴在神圣光芒中的巍峨大殿" }
+                { name: "中央广场", desc: "城镇的核心枢纽与集市" },
+                { name: "旧钟楼", desc: "耸立于高处的古老机械时钟" },
+                { name: "密林书斋", desc: "藏匿于林荫中的安静书斋" },
+                { name: "隐秘工坊", desc: "回荡着锻造声响的手工坊" },
+                { name: "圣辉庭院", desc: "沐浴在微光中的幽静庭院" }
               ];
 
-          const themes = {
-            "自适应": {
-              bgGrad: ["#F9F9FB", "#ECEEF3"],
-              border: "#64748B",
-              accent: "#475569",
-              subAccent: "#94A3B8",
-              text: "#1E293B",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#CBD5E1",
-              zoneBg: "rgba(255, 255, 255, 0.75)",
-              glow: "rgba(71, 85, 105, 0.25)"
-            },
-            "奶油风": {
-              bgGrad: ["#FAF8F5", "#F2EBE1"],
-              border: "#E0D5C3",
-              accent: "#E78B78",
-              subAccent: "#A3C4BC",
-              text: "#3A322D",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#E4D8C8",
-              zoneBg: "rgba(255, 255, 255, 0.65)",
-              glow: "rgba(231, 139, 120, 0.25)"
-            },
-            "莫兰迪": {
-              bgGrad: ["#EBE8E1", "#DCD7CE"],
-              border: "#9E9A8E",
-              accent: "#B48B8A",
-              subAccent: "#7E8D85",
-              text: "#333533",
-              badgeBg: "#F7F5F0",
-              badgeBorder: "#B5AFA2",
-              zoneBg: "rgba(255, 255, 255, 0.5)",
-              glow: "rgba(180, 139, 138, 0.3)"
-            },
-            "极简INS": {
-              bgGrad: ["#FFFFFF", "#F5F5F5"],
-              border: "#262626",
-              accent: "#262626",
-              subAccent: "#737373",
-              text: "#171717",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#262626",
-              zoneBg: "rgba(0, 0, 0, 0.02)",
-              glow: "rgba(0, 0, 0, 0.1)"
-            },
-            "日式奇幻": {
-              bgGrad: ["#FCF8F5", "#F7EFEA"],
-              border: "#C75050",
-              accent: "#D13B3B",
-              subAccent: "#D4AF37",
-              text: "#2B2320",
-              badgeBg: "#FFFDFB",
-              badgeBorder: "#E2A4A4",
-              zoneBg: "rgba(253, 242, 242, 0.7)",
-              glow: "rgba(209, 59, 59, 0.3)"
-            },
-            "魔法风": {
-              bgGrad: ["#0E1326", "#1A203B"],
-              border: "#CBA135",
-              accent: "#E0B74B",
-              subAccent: "#6C5CE7",
-              text: "#F1F2F6",
-              badgeBg: "#171D38",
-              badgeBorder: "#CBA135",
-              zoneBg: "rgba(26, 32, 59, 0.8)",
-              glow: "rgba(224, 183, 75, 0.4)"
-            },
-            "现代风": {
-              bgGrad: ["#F8FAFC", "#EEF2F6"],
-              border: "#0EA5E9",
-              accent: "#0284C7",
-              subAccent: "#64748B",
-              text: "#0F172A",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#38BDF8",
-              zoneBg: "rgba(255, 255, 255, 0.85)",
-              glow: "rgba(14, 165, 233, 0.25)"
-            },
-            "航海风": {
-              bgGrad: ["#F6F2E7", "#EBE3D0"],
-              border: "#205493",
-              accent: "#0071BC",
-              subAccent: "#C05600",
-              text: "#112E51",
-              badgeBg: "#FAF6ED",
-              badgeBorder: "#8BA6CA",
-              zoneBg: "rgba(255, 255, 255, 0.6)",
-              glow: "rgba(0, 113, 188, 0.3)"
-            },
-            "希腊风": {
-              bgGrad: ["#F4F8FC", "#E7F0F8"],
-              border: "#1D70B8",
-              accent: "#005EA5",
-              subAccent: "#D4AF37",
-              text: "#0B2B48",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#78A6DB",
-              zoneBg: "rgba(255, 255, 255, 0.75)",
-              glow: "rgba(29, 112, 184, 0.28)"
-            },
-            "中世纪": {
-              bgGrad: ["#F5EEDB", "#E4D6B8"],
-              border: "#6E4720",
-              accent: "#9C4221",
-              subAccent: "#5C3D1E",
-              text: "#3B2613",
-              badgeBg: "#FBF6E9",
-              badgeBorder: "#9E7B54",
-              zoneBg: "rgba(255, 255, 255, 0.4)",
-              glow: "rgba(156, 66, 33, 0.3)"
-            },
-            "纽约风": {
-              bgGrad: ["#18191A", "#242526"],
-              border: "#E4A11B",
-              accent: "#FBBF24",
-              subAccent: "#9CA3AF",
-              text: "#F3F4F6",
-              badgeBg: "#2A2B2D",
-              badgeBorder: "#E4A11B",
-              zoneBg: "rgba(36, 37, 38, 0.85)",
-              glow: "rgba(251, 191, 36, 0.35)"
-            },
-            "赛博朋克": {
-              bgGrad: ["#0B0F19", "#141C2E"],
-              border: "#00F0FF",
-              accent: "#00F0FF",
-              subAccent: "#FF007F",
-              text: "#00F0FF",
-              badgeBg: "#111927",
-              badgeBorder: "#FF007F",
-              zoneBg: "rgba(0, 240, 255, 0.05)",
-              glow: "rgba(0, 240, 255, 0.45)"
-            },
-            "水彩风": {
-              bgGrad: ["#F0FDF4", "#E0F2FE"],
-              border: "#38BDF8",
-              accent: "#0284C7",
-              subAccent: "#F43F5E",
-              text: "#0C4A6E",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#7DD3FC",
-              zoneBg: "rgba(255, 255, 255, 0.7)",
-              glow: "rgba(2, 132, 199, 0.3)"
-            },
-            "复古胶片": {
-              bgGrad: ["#2C221E", "#3D312A"],
-              border: "#D4AF37",
-              accent: "#E28743",
-              subAccent: "#A08060",
-              text: "#F5EBE1",
-              badgeBg: "#342823",
-              badgeBorder: "#D4AF37",
-              zoneBg: "rgba(61, 49, 42, 0.7)",
-              glow: "rgba(226, 135, 67, 0.35)"
-            }
-          };
-
-          const theme = themes[styleName] || themes["自适应"] || themes["奶油风"];
           const width = 540;
           const height = 400;
           const nodeCount = Math.min(locList.length, 8);
 
-          // 判断场景类型：室内/城市/园区/水族海洋/山水
-          const locNamesStr = locList.map(l => l.name).join(" ");
-          const isIndoor = /室|房|厅|书斋|阁|殿|楼|廊|卧室|地下|舱/i.test(locNamesStr);
-          const isParkOrAqua = /园|游乐|水族|海|洋|鱼|摩天轮|旋转木马|广场|水上|海盗船/i.test(locNamesStr);
+          const themes = {
+            "自适应": {
+              bgGrad: ["#FAF8F5", "#F2EDE4"],
+              border: "#8C7A6B",
+              accent: "#8B5A2B",
+              subAccent: "#5C7658",
+              text: "#3A2E2B",
+              badgeBg: "#FFFDF9",
+              badgeBorder: "#D8CCBC",
+              zoneBg: "rgba(255, 253, 249, 0.95)",
+              river: "#B8D5E5",
+              hills: "#E4DCD0"
+            },
+            "奶油风": {
+              bgGrad: ["#FFFDF8", "#FAF3E8"],
+              border: "#DBC7B0",
+              accent: "#D97757",
+              subAccent: "#7DA668",
+              text: "#423229",
+              badgeBg: "#FFFFFF",
+              badgeBorder: "#EFE2D3",
+              zoneBg: "rgba(255, 255, 255, 0.96)",
+              river: "#C5E1EC",
+              hills: "#EFE6D8"
+            },
+            "莫兰迪": {
+              bgGrad: ["#F7F5F2", "#EBE5DF"],
+              border: "#A69E96",
+              accent: "#A67C7B",
+              subAccent: "#788677",
+              text: "#332F2C",
+              badgeBg: "#FFFFFF",
+              badgeBorder: "#D9D4CE",
+              zoneBg: "rgba(255, 255, 255, 0.95)",
+              river: "#C2D4D8",
+              hills: "#E2DDD7"
+            },
+            "魔法风": {
+              bgGrad: ["#F9F6FE", "#EFE9F8"],
+              border: "#9B84BE",
+              accent: "#6B3FA0",
+              subAccent: "#B8860B",
+              text: "#2E1C4E",
+              badgeBg: "#FFFDFE",
+              badgeBorder: "#D4C7EA",
+              zoneBg: "rgba(255, 255, 255, 0.96)",
+              river: "#B3CDE8",
+              hills: "#E5DBF2"
+            },
+            "纽约风": {
+              bgGrad: ["#FAF3E0", "#EEDCC5"],
+              border: "#8B5A2B",
+              accent: "#8B4513",
+              subAccent: "#556B2F",
+              text: "#3B220C",
+              badgeBg: "#FFFDF8",
+              badgeBorder: "#D4B996",
+              zoneBg: "rgba(255, 253, 248, 0.96)",
+              river: "#A9C9D9",
+              hills: "#DFCCA8"
+            },
+            "中世纪": {
+              bgGrad: ["#F7EFE1", "#EAD8BF"],
+              border: "#7B4B27",
+              accent: "#8B3A1A",
+              subAccent: "#596B3D",
+              text: "#381E09",
+              badgeBg: "#FFFBF2",
+              badgeBorder: "#D3B792",
+              zoneBg: "rgba(255, 252, 244, 0.96)",
+              river: "#9FBECF",
+              hills: "#DAC4A3"
+            },
+            "日式奇幻": {
+              bgGrad: ["#FFFDFD", "#FDEFF2"],
+              border: "#E89AA8",
+              accent: "#D64060",
+              subAccent: "#5A9367",
+              text: "#3B262B",
+              badgeBg: "#FFFFFF",
+              badgeBorder: "#F7D1D8",
+              zoneBg: "rgba(255, 255, 255, 0.95)",
+              river: "#BCE0E8",
+              hills: "#F7E1E5"
+            },
+            "水彩风": {
+              bgGrad: ["#F8FCFB", "#ECF7F5"],
+              border: "#7BBFB5",
+              accent: "#2D8C7F",
+              subAccent: "#5B9E78",
+              text: "#1C3E38",
+              badgeBg: "#FFFFFF",
+              badgeBorder: "#CCEAE5",
+              zoneBg: "rgba(255, 255, 255, 0.95)",
+              river: "#A6D8DF",
+              hills: "#DDEFEA"
+            },
+            "极简INS": {
+              bgGrad: ["#FCFCFC", "#F4F4F5"],
+              border: "#52525B",
+              accent: "#18181B",
+              subAccent: "#71717A",
+              text: "#18181B",
+              badgeBg: "#FFFFFF",
+              badgeBorder: "#D4D4D8",
+              zoneBg: "rgba(255, 255, 255, 0.96)",
+              river: "#CBD5E1",
+              hills: "#E4E4E7"
+            }
+          };
+
+          const theme = themes[styleName] || themes["自适应"] || themes["奶油风"];
 
           const presetLayouts = [
-            { x: 150, y: 140, w: 150, h: 90 },
-            { x: 370, y: 130, w: 160, h: 85 },
-            { x: 140, y: 280, w: 150, h: 85 },
-            { x: 360, y: 270, w: 170, h: 95 },
-            { x: 260, y: 70,  w: 130, h: 60 },
-            { x: 65,  y: 200, w: 100, h: 70 },
-            { x: 455, y: 200, w: 110, h: 70 },
-            { x: 260, y: 340, w: 130, h: 50 }
+            { x: 270, y: 200, w: 140, h: 70 },
+            { x: 135, y: 130, w: 130, h: 65 },
+            { x: 405, y: 125, w: 130, h: 65 },
+            { x: 130, y: 285, w: 130, h: 65 },
+            { x: 410, y: 280, w: 130, h: 65 },
+            { x: 270, y: 80,  w: 120, h: 55 },
+            { x: 60,  y: 210, w: 90,  h: 55 },
+            { x: 480, y: 210, w: 90,  h: 55 }
           ];
 
-          let environmentDecorSvg = "";
-          if (isIndoor) {
-            environmentDecorSvg = `
-              <g opacity="0.35">
-                <path d="M 40 50 L 500 50 L 500 350 L 40 350 Z" fill="none" stroke="${theme.border}" stroke-width="4" />
-                <path d="M 260 50 L 260 350" stroke="${theme.border}" stroke-width="3" stroke-dasharray="8,4" />
-                <path d="M 40 200 L 500 200" stroke="${theme.border}" stroke-width="3" stroke-dasharray="8,4" />
-                <rect x="235" y="175" width="50" height="50" rx="8" fill="${theme.subAccent}" opacity="0.15" />
-                <text x="260" y="204" font-size="9" fill="${theme.text}" text-anchor="middle" font-weight="600" opacity="0.7">主要过道</text>
-              </g>`;
-          } else if (isParkOrAqua) {
-            environmentDecorSvg = `
-              <g opacity="0.4">
-                <path d="M 40 200 Q 150 140 270 200 T 500 200" fill="none" stroke="${theme.badgeBorder}" stroke-width="14" stroke-linecap="round" opacity="0.6" />
-                <path d="M 270 50 Q 270 180 270 350" fill="none" stroke="${theme.badgeBorder}" stroke-width="12" stroke-linecap="round" opacity="0.6" />
-                <circle cx="270" cy="200" r="28" fill="${theme.subAccent}" opacity="0.25" />
-                <circle cx="270" cy="200" r="16" fill="${theme.accent}" opacity="0.2" />
-                <circle cx="90" cy="90" r="14" fill="${theme.subAccent}" opacity="0.35" />
-                <circle cx="110" cy="80" r="10" fill="${theme.accent}" opacity="0.3" />
-                <circle cx="430" cy="90" r="13" fill="${theme.subAccent}" opacity="0.35" />
-                <circle cx="450" cy="105" r="10" fill="${theme.accent}" opacity="0.3" />
-                <circle cx="80" cy="310" r="15" fill="${theme.subAccent}" opacity="0.35" />
-                <circle cx="440" cy="320" r="16" fill="${theme.subAccent}" opacity="0.35" />
-              </g>`;
-          } else {
-            environmentDecorSvg = `
-              <g opacity="0.35">
-                <path d="M 0 120 Q 180 220 320 160 T 540 240" fill="none" stroke="${theme.subAccent}" stroke-width="20" stroke-linecap="round" opacity="0.4" />
-                <path d="M 60 50 L 60 350 M 480 50 L 480 350 M 50 200 L 490 200 M 270 50 L 270 350" stroke="${theme.badgeBorder}" stroke-width="7" stroke-linecap="round" opacity="0.5" />
-                <rect x="75" y="65" width="70" height="45" rx="6" fill="${theme.subAccent}" opacity="0.2" />
-                <rect x="385" y="65" width="75" height="45" rx="6" fill="${theme.subAccent}" opacity="0.2" />
-                <rect x="75" y="285" width="75" height="45" rx="6" fill="${theme.subAccent}" opacity="0.2" />
-                <rect x="385" y="285" width="75" height="45" rx="6" fill="${theme.subAccent}" opacity="0.2" />
-              </g>`;
-          }
+          // 生动富饶的自然场景与建筑配饰环境
+          const environmentDecorSvg = `
+          <g opacity="0.9">
+            <!-- 远景柔和连绵山丘轮廓 -->
+            <path d="M 0 140 Q 60 70 140 110 T 280 85 T 420 100 T 540 70 L 540 400 L 0 400 Z" fill="${theme.hills}" opacity="0.45" />
+            <path d="M 0 170 Q 80 115 180 145 T 360 125 T 540 150 L 540 400 L 0 400 Z" fill="${theme.hills}" opacity="0.3" />
+
+            <!-- 蜿蜒清澈的自然河流与石桥水系 -->
+            <path d="M -10 100 Q 120 180 250 140 T 550 220" fill="none" stroke="${theme.river}" stroke-width="24" stroke-linecap="round" opacity="0.75" />
+            <path d="M -10 100 Q 120 180 250 140 T 550 220" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="16,10" opacity="0.85" />
+
+            <!-- 自然石桥跨越河道 -->
+            <g transform="translate(242, 126)">
+              <rect x="0" y="0" width="30" height="26" rx="4" fill="${theme.badgeBg}" stroke="${theme.border}" stroke-width="1.8" />
+              <line x1="0" y1="9" x2="30" y2="9" stroke="${theme.border}" stroke-width="1.2" stroke-dasharray="3,2" />
+              <line x1="0" y1="17" x2="30" y2="17" stroke="${theme.border}" stroke-width="1.2" stroke-dasharray="3,2" />
+            </g>
+
+            <!-- 自然弯曲的石板小径连接各个区域 -->
+            <path d="M 135 130 Q 200 165 270 200 Q 340 240 410 280 M 405 125 Q 340 160 270 200 Q 200 240 130 285 M 270 80 L 270 200" fill="none" stroke="${theme.border}" stroke-width="3" stroke-dasharray="6,5" opacity="0.45" />
+
+            <!-- 茂密生动的森林林地与树群 -->
+            <g fill="${theme.subAccent}">
+              <!-- 西北部密林 -->
+              <circle cx="55" cy="70" r="14" opacity="0.7" />
+              <circle cx="75" cy="62" r="11" opacity="0.85" />
+              <circle cx="42" cy="85" r="10" opacity="0.75" />
+              <circle cx="68" cy="82" r="13" opacity="0.9" />
+
+              <!-- 东北部树林 -->
+              <circle cx="470" cy="65" r="15" opacity="0.7" />
+              <circle cx="492" cy="58" r="11" opacity="0.85" />
+              <circle cx="455" cy="80" r="12" opacity="0.8" />
+              <circle cx="485" cy="80" r="14" opacity="0.9" />
+
+              <!-- 西南部森林 -->
+              <circle cx="50" cy="325" r="15" opacity="0.75" />
+              <circle cx="72" cy="335" r="12" opacity="0.85" />
+              <circle cx="38" cy="345" r="11" opacity="0.7" />
+
+              <!-- 东南部林地 -->
+              <circle cx="485" cy="335" r="16" opacity="0.75" />
+              <circle cx="505" cy="320" r="12" opacity="0.85" />
+              <circle cx="468" cy="348" r="11" opacity="0.8" />
+
+              <!-- 散落点缀的灌木与花丛 -->
+              <circle cx="210" cy="75" r="7" opacity="0.65" />
+              <circle cx="330" cy="75" r="8" opacity="0.65" />
+              <circle cx="195" cy="320" r="8" opacity="0.65" />
+              <circle cx="345" cy="325" r="7" opacity="0.65" />
+            </g>
+
+            <!-- 中央广场草坪与喷泉水池景观 -->
+            <circle cx="270" cy="200" r="46" fill="${theme.subAccent}" opacity="0.12" />
+            <circle cx="270" cy="200" r="32" fill="${theme.river}" opacity="0.4" stroke="${theme.border}" stroke-width="1.2" />
+            <circle cx="270" cy="200" r="14" fill="${theme.river}" opacity="0.85" />
+            <circle cx="270" cy="200" r="5" fill="#FFFFFF" />
+
+            <!-- 古典路灯与地标微光装饰 -->
+            <circle cx="215" cy="180" r="3.5" fill="#FBBF24" stroke="#D97706" stroke-width="1" />
+            <circle cx="325" cy="180" r="3.5" fill="#FBBF24" stroke="#D97706" stroke-width="1" />
+            <circle cx="215" cy="220" r="3.5" fill="#FBBF24" stroke="#D97706" stroke-width="1" />
+            <circle cx="325" cy="220" r="3.5" fill="#FBBF24" stroke="#D97706" stroke-width="1" />
+          </g>`;
 
           let zonesSvg = "";
           let nodesSvg = "";
@@ -30609,18 +30757,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const safeName = String(loc.name || "地点").replace(/["<>]/g, "");
 
             zonesSvg += `
-              <rect x="${pt.x - pt.w / 2}" y="${pt.y - pt.h / 2}" width="${pt.w}" height="${pt.h}" rx="14" fill="${theme.zoneBg}" stroke="${theme.badgeBorder}" stroke-width="1.2" stroke-dasharray="6,4" opacity="0.85" />
+              <rect x="${pt.x - pt.w / 2}" y="${pt.y - pt.h / 2}" width="${pt.w}" height="${pt.h}" rx="12" fill="${theme.zoneBg}" stroke="${theme.border}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.95" />
             `;
 
-            const r = isCenter ? 20 : 16;
+            const r = isCenter ? 18 : 14;
             nodesSvg += `
             <g class="map-location-node" data-name="${safeName}" style="cursor: pointer;" transform="translate(${pt.x}, ${pt.y})">
-              <circle r="${r + 5}" fill="${theme.accent}" opacity="0.18" filter="url(#miniMapGlow)" />
-              <circle r="${r}" fill="${theme.badgeBg}" stroke="${isCenter ? theme.accent : theme.badgeBorder}" stroke-width="${isCenter ? 2.5 : 1.5}" />
-              <circle r="${r - 4}" fill="${isCenter ? theme.accent : theme.subAccent}" opacity="${isCenter ? 0.95 : 0.45}" />
-              <text y="${isCenter ? 3.5 : 3}" font-size="${isCenter ? 11 : 9}" font-weight="bold" fill="${isCenter ? '#FFFFFF' : theme.text}" text-anchor="middle" font-family="system-ui, sans-serif">★</text>
-              <g transform="translate(0, ${r + 14})">
-                <rect x="-48" y="-9" width="96" height="18" rx="9" fill="${theme.badgeBg}" stroke="${theme.badgeBorder}" stroke-width="1.2" filter="url(#miniMapShadow)" />
+              <circle r="${r + 5}" fill="${theme.accent}" opacity="0.18" />
+              <circle r="${r}" fill="${theme.badgeBg}" stroke="${isCenter ? theme.accent : theme.border}" stroke-width="${isCenter ? 2.2 : 1.5}" />
+              <circle r="${r - 4}" fill="${isCenter ? theme.accent : theme.subAccent}" opacity="${isCenter ? 0.95 : 0.7}" />
+              <text y="${isCenter ? 3.5 : 3}" font-size="${isCenter ? 10 : 8}" font-weight="bold" fill="#FFFFFF" text-anchor="middle" font-family="system-ui, sans-serif">★</text>
+              <g transform="translate(0, ${r + 13})">
+                <rect x="-44" y="-9" width="88" height="18" rx="9" fill="${theme.badgeBg}" stroke="${theme.border}" stroke-width="1.2" />
                 <text y="3.5" font-size="10" font-weight="bold" fill="${theme.text}" text-anchor="middle" font-family="system-ui, sans-serif">${safeName.slice(0, 8)}</text>
               </g>
             </g>`;
@@ -30632,31 +30780,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 <stop offset="0%" stop-color="${theme.bgGrad[0]}" />
                 <stop offset="100%" stop-color="${theme.bgGrad[1]}" />
               </linearGradient>
-              <filter id="miniMapShadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.16)" />
-              </filter>
-              <filter id="miniMapGlow" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
             </defs>
             <rect width="${width}" height="${height}" rx="18" fill="url(#miniMapBg)" />
-            <rect x="10" y="10" width="${width - 20}" height="${height - 20}" rx="14" fill="none" stroke="${theme.border}" stroke-width="1.5" opacity="0.6" />
+            <rect x="8" y="8" width="${width - 16}" height="${height - 16}" rx="14" fill="none" stroke="${theme.border}" stroke-width="1.5" opacity="0.7" />
             ${environmentDecorSvg}
-            <g transform="translate(36, 36)" opacity="0.75">
-              <circle r="12" fill="none" stroke="${theme.accent}" stroke-width="1.2" />
-              <path d="M 0 -12 L 3 -3 L 12 0 L 3 3 L 0 12 L -3 3 L -12 0 L -3 -3 Z" fill="${theme.accent}" />
-              <text y="-14" font-size="7.5" font-weight="bold" fill="${theme.text}" text-anchor="middle">N</text>
+            <g transform="translate(36, 36)" opacity="0.9">
+              <circle r="14" fill="${theme.badgeBg}" stroke="${theme.accent}" stroke-width="1.5" />
+              <path d="M 0 -10 L 3 -2 L 10 0 L 3 2 L 0 10 L -3 2 L -10 0 L -3 -2 Z" fill="${theme.accent}" />
+              <text y="-12" font-size="8" font-weight="bold" fill="${theme.text}" text-anchor="middle">N</text>
             </g>
             <g transform="translate(${width / 2}, 26)">
-              <rect x="-65" y="-10" width="130" height="20" rx="10" fill="${theme.badgeBg}" stroke="${theme.badgeBorder}" stroke-width="1.2" filter="url(#miniMapShadow)" />
-              <text y="3.5" font-size="11" font-weight="bold" fill="${theme.text}" text-anchor="middle" font-family="system-ui, sans-serif">${styleName}地图</text>
+              <rect x="-65" y="-11" width="130" height="22" rx="11" fill="${theme.badgeBg}" stroke="${theme.border}" stroke-width="1.2" />
+              <text y="4" font-size="11" font-weight="bold" fill="${theme.text}" text-anchor="middle" font-family="system-ui, sans-serif">${styleName}地图</text>
             </g>
-            <g transform="translate(${width - 60}, ${height - 18})" opacity="0.65">
-              <line x1="0" y1="0" x2="40" y2="0" stroke="${theme.text}" stroke-width="2" />
-              <line x1="0" y1="-3" x2="0" y2="3" stroke="${theme.text}" stroke-width="1.5" />
-              <line x1="40" y1="-3" x2="40" y2="3" stroke="${theme.text}" stroke-width="1.5" />
-              <text x="20" y="-4" font-size="8" fill="${theme.text}" text-anchor="middle">100m</text>
+            <g transform="translate(${width - 65}, ${height - 18})" opacity="0.8">
+              <line x1="0" y1="0" x2="45" y2="0" stroke="${theme.text}" stroke-width="2.5" stroke-linecap="round" />
+              <line x1="0" y1="-3" x2="0" y2="3" stroke="${theme.text}" stroke-width="1.8" />
+              <line x1="45" y1="-3" x2="45" y2="3" stroke="${theme.text}" stroke-width="1.8" />
+              <text x="22.5" y="-5" font-size="8.5" font-weight="bold" fill="${theme.text}" text-anchor="middle">100m</text>
             </g>
             ${zonesSvg}
             ${nodesSvg}
@@ -30695,20 +30836,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const globalReq = (localStorage.getItem("mini_map_global_requirement") || "").trim();
           const globalReqInstruction = globalReq ? `\n【用户全局要求】：\n${globalReq}\n` : "";
 
-          const prompt = `你是一位顶尖的跑团游戏矢量插画师与建筑制图大师。请根据以下地点清单、模组图库插图、所选风格及环境设定，绘制一张极其精致、高雅且环境丰富的【${styleName}】风格全矢量示意小地图（纯SVG代码）。\n\n` +
+          const prompt = `你拥有全球顶尖、令人叹为观止的资深矢量概念插画与示意地图设计大师造诣。请极尽你的极限，拿出你最深厚的艺术功底，根据以下地点清单、模组图库插图与世界观环境，绘制一张构图极度丰富饱满、充满探索氛围与艺术美感的【${styleName}】风格全矢量示意小地图（纯SVG代码）！\n\n` +
             `地点层级清单：\n${locSummary || '地点：中央广场、旧钟楼、静谧小巷、圣辉神殿'}\n\n` +
-            `模组图库插图与介绍数据：\n${gallerySummary || '暂无额外图库插图'}\n` +
+            `模组图库插图与环境数据：\n${gallerySummary || '暂无额外图库插图'}\n` +
             customStyleInstruction +
             globalReqInstruction + `\n` +
-            `制图、排版与图库深度参考规则：\n` +
-            `1. 精细地图结构与装饰物：让地图具有非常丰富的结构感，自主加入大量细腻的小装饰（如石板路纹理、蜿蜒河流、树木灌木丛、木桥石径、路标石碑、建筑外立面细节、光晕阴影等），呈现极佳的视觉美感与空间层次；\n` +
-            `2. 严格参考图库中已有地图的排版与方位：\n` +
-            `   - 仔细研读图库插图数据中是否存在全景地图、区域地图或佛像/神龛/局部地段地图；\n` +
-            `   - 若图库中有某局部的地图（例如只展示了山脚部分、或特定殿堂部分）：必须精准参考该图中的路线走向、建筑坐落与方位排版来构建该区域；\n` +
-            `   - 未画出的其余大地图区域（例如山腰、山顶、周边林道）：AI必须主动思考并完整发散绘制出来，绝不允许省略或简写！整体产出的依然是一张包含全部区域的完整大地图；\n` +
-            `3. 区域与场所可识别可交互：每个具体地点或区域均在SVG中清晰可点，最外层 <g> 标签必须严格附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单一致；\n` +
-            `4. 纯净内联SVG与防跳出铁律：绝不允许输出任何 <a> 标签、href超链接或外部页面跳转代码，同一个HTML页面只渲染这单个完整的SVG地图；\n` +
-            `5. 只输出纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，不带任何Markdown代码块与解释。`;
+            `殿堂级制图与构图最高准则：\n` +
+            `1. 色彩与美学自由诠释，避免沉闷纯黑底色：\n` +
+            `   - 除了暗黑主题外，全图底色不要采用纯黑或沉闷黑色，底色与配色方案由你根据世界观、地理环境与【${styleName}】风格自行理解发挥与自由搭配（如中世纪/复古纽约/巴黎风格可采用羊皮纸色、棕褐色或复古古典色调；奶油风采用温润柔和暖色调；魔法风自主诠释哈利波特奇幻神秘色彩与魔幻纹理；西双版纳雨林或山庄采用自然生态色调；现代风自由推演协调色彩等）；\n` +
+            `2. 自由生动的场景与地貌构图，严禁画死板的城市道路白色方格网：\n` +
+            `   - 绝不要把画面局限于死板单一的现代城市街道白色方格网！请根据场景是架空小山庄、森林雨林、名胜景区（如巴黎、伦敦）、学院城堡还是奇幻大陆，自主绘制匹配的地貌（如连绵山峦、丘陵轮廓、茂密树林、蜿蜒水系石桥、草坪花圃、广场小径等）与标志性建筑造型；\n` +
+            `3. 极度饱满的环境装饰与智能补全（把地图填满装饰饱满）：\n` +
+            `   - 地图绝不能只画几个孤零零的地点框！即使地点清单中没有写出的周边事物，你也必须根据常识和环境主动发散，绘制大量丰富的环境装饰物：在山丘旁画密林古树、在水系旁画河岸石桥与水波、在建筑旁画庭院花草、石径、露台、路灯、古典围栏、特色图标、等高线山脉地貌纹理、精致刻度的罗盘指南针、古典比例尺与华丽外边框，把空间感、氛围感与细节拉满到极致；\n` +
+            `4. 深度研读并严谨参考模组图库插图：\n` +
+            `   - 若模组图库中提供了地图或场景插图，必须精准参考其中的路线走向、建筑坐落与方位排版来构建该区域；\n` +
+            `5. 交互与坐标防移位铁律：\n` +
+            `   - 每个具体地点最外层 <g> 标签必须附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致；\n` +
+            `   - 【严禁在SVG内部或<style>中编写任何针对 .map-location-node 或任何元素的 :hover / :active 的 transform 缩放或偏移样式】！因为SVG中覆盖 transform 会重置坐标导致节点瞬间飞移到左上角 (0,0)！节点只需保留默认视觉样式即可；\n` +
+            `   - 交互仅为点击地点弹出信息气泡，无需任何额外的 transform 缩放动画；\n` +
+            `6. 纯净内联SVG：\n` +
+            `   - 严禁包含 <a> 标签或外部页面跳转代码；\n` +
+            `   - 只输出纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，不带任何Markdown代码块与多余文字。`;
 
           const apiConfig = (typeof getEffectiveApiConfig === "function")
             ? getEffectiveApiConfig("map")
@@ -30731,19 +30879,41 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? { "Content-Type": "application/json" }
                 : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}` };
 
+              const geminiImageParts = [];
+              const openaiImageParts = [];
+              for (const img of (galleryImages || []).slice(0, 5)) {
+                let dUrl = img.dataUrl || img.url || '';
+                if (dUrl && dUrl.startsWith('data:image/')) {
+                  const mime = dUrl.substring(5, dUrl.indexOf(';')) || 'image/jpeg';
+                  const b64 = dUrl.split(',')[1];
+                  if (b64) {
+                    geminiImageParts.push({
+                      inlineData: {
+                        mimeType: mime,
+                        data: b64
+                      }
+                    });
+                    openaiImageParts.push({
+                      type: "image_url",
+                      image_url: { url: dUrl }
+                    });
+                  }
+                }
+              }
+
               let requestBody = isGemini
                 ? {
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.3 },
-                    systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。只输出纯净合法的SVG代码，不带Markdown代码块。" }] }
+                    contents: [{ role: "user", parts: [...geminiImageParts, { text: prompt }] }],
+                    generationConfig: { temperature: 0.4 },
+                    systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块。" }] }
                   }
                 : {
                     model: model || "gpt-4o",
                     messages: [
-                      { role: "system", content: "你是一个专业的矢量SVG地图生成器。只输出纯净合法的SVG代码，不带Markdown代码块。" },
-                      { role: "user", content: prompt }
+                      { role: "system", content: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块。" },
+                      { role: "user", content: openaiImageParts.length > 0 ? [{ type: "text", text: prompt }, ...openaiImageParts] : prompt }
                     ],
-                    temperature: 0.3,
+                    temperature: 0.4,
                     stream: false
                   };
 
@@ -30793,8 +30963,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           chat.settings.miniMapStyle = styleName;
           if (dbInstance) await dbInstance.chats.put(chat);
 
+          // 若地图浮层已处于打开状态，立即原地刷新渲染
+          const miniModal = document.getElementById("chat-mini-map-modal");
+          if (miniModal && miniModal.classList.contains("visible")) {
+            renderChatMiniMap();
+          }
+
           if (typeof window.showCustomAlert === "function") {
-            window.showCustomAlert("生成成功", "地图已生成并成功覆盖保存");
+            window.showCustomAlert("提示", "地图生成成功");
           }
         }
         window.generateChatMiniMapSvg = generateChatMiniMapSvg;
@@ -58083,6 +58259,230 @@ ${colSpecs.join('\n')}
           }
         }
 
+        async function openStorageBreakdownModal() {
+          const modal = document.getElementById("storage-breakdown-modal");
+          if (!modal) return;
+          modal.style.display = "flex";
+          modal.style.zIndex = "99999";
+          modal.classList.add("visible");
+          await calculateAndRenderStorageBreakdown();
+        }
+        window.openStorageBreakdownModal = openStorageBreakdownModal;
+
+        async function calculateAndRenderStorageBreakdown() {
+          const container = document.getElementById("storage-breakdown-body");
+          if (!container) return;
+          container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 30px 0; font-size: 13px;">正在深度扫描并计算存储占用...</div>`;
+
+          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+
+          const categories = {
+            images: { name: "图片", bytes: 0, count: 0, unit: "张", color: "var(--accent-color, #ff6b8b)" },
+            chat: { name: "聊天", bytes: 0, count: 0, unit: "条", color: "var(--tukey-blue, #4a90e2)" },
+            maps: { name: "地图", bytes: 0, count: 0, unit: "处", color: "var(--tukey-teal, #50e3c2)" },
+            modules: { name: "模组", bytes: 0, count: 0, unit: "个", color: "var(--tukey-orange, #f5a623)" },
+            forum: { name: "论坛", bytes: 0, count: 0, unit: "篇", color: "var(--tukey-purple, #9013fe)" },
+            audio: { name: "音频", bytes: 0, count: 0, unit: "首", color: "var(--tukey-green, #7ed321)" },
+            page: { name: "页面", bytes: 0, count: 0, unit: "项", color: "var(--tukey-indigo, #6366f1)" },
+            other: { name: "其他", bytes: 0, count: 0, unit: "项", color: "var(--text-secondary, #9b9b9b)" }
+          };
+
+          const getStrBytes = (str) => {
+            if (!str) return 0;
+            if (typeof str !== "string") {
+              try { str = JSON.stringify(str); } catch(e) { return 0; }
+            }
+            return new Blob([str]).size;
+          };
+
+          if (dbInstance) {
+            // 1. 图片数据
+            try {
+              if (dbInstance.photos) {
+                const photos = await dbInstance.photos.toArray();
+                categories.images.count += photos.length;
+                photos.forEach(p => { categories.images.bytes += getStrBytes(p.dataUrl || p.url || p); });
+              }
+              if (dbInstance.moduleImages) {
+                const modImgs = await dbInstance.moduleImages.toArray();
+                categories.images.count += modImgs.length;
+                modImgs.forEach(m => { categories.images.bytes += getStrBytes(m.dataUrl || m.url || m); });
+              }
+              if (dbInstance.userStickers) {
+                const stickers = await dbInstance.userStickers.toArray();
+                categories.images.count += stickers.length;
+                stickers.forEach(s => { categories.images.bytes += getStrBytes(s.url || s.dataUrl || s); });
+              }
+            } catch(e) {}
+
+            // 2. 聊天数据
+            try {
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(c => {
+                  const hist = c.history || [];
+                  categories.chat.count += hist.length;
+                  categories.chat.bytes += getStrBytes(hist);
+                  if (c.settings) categories.other.bytes += getStrBytes(c.settings);
+                });
+              }
+              if (dbInstance.chatBackups) {
+                const backups = await dbInstance.chatBackups.toArray();
+                categories.chat.count += backups.length;
+                backups.forEach(b => { categories.chat.bytes += getStrBytes(b); });
+              }
+            } catch(e) {}
+
+            // 3. 地图数据
+            try {
+              if (dbInstance.moduleLocationNav) {
+                const locs = await dbInstance.moduleLocationNav.toArray();
+                categories.maps.count += locs.length;
+                locs.forEach(l => { categories.maps.bytes += getStrBytes(l); });
+              }
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(c => {
+                  if (c.settings?.miniMapSvg) {
+                    categories.maps.bytes += getStrBytes(c.settings.miniMapSvg);
+                    categories.maps.count++;
+                  }
+                  if (c.settings?.contextMapData) {
+                    categories.maps.bytes += getStrBytes(c.settings.contextMapData);
+                  }
+                });
+              }
+            } catch(e) {}
+
+            // 4. 模组数据
+            try {
+              if (dbInstance.modules) {
+                const mods = await dbInstance.modules.toArray();
+                categories.modules.count += mods.length;
+                mods.forEach(m => { categories.modules.bytes += getStrBytes(m); });
+              }
+              if (dbInstance.moduleChapters) {
+                const chaps = await dbInstance.moduleChapters.toArray();
+                categories.modules.count += chaps.length;
+                chaps.forEach(ch => { categories.modules.bytes += getStrBytes(ch.content || ch); });
+              }
+            } catch(e) {}
+
+            // 5. 论坛文章数据
+            try {
+              if (dbInstance.forumPosts) {
+                const posts = await dbInstance.forumPosts.toArray();
+                categories.forum.count += posts.length;
+                posts.forEach(p => { categories.forum.bytes += getStrBytes(p); });
+              }
+              if (dbInstance.forumChapters) {
+                const fChaps = await dbInstance.forumChapters.toArray();
+                categories.forum.count += fChaps.length;
+                fChaps.forEach(ch => { categories.forum.bytes += getStrBytes(ch); });
+              }
+              if (dbInstance.forumComments) {
+                const fComments = await dbInstance.forumComments.toArray();
+                categories.forum.count += fComments.length;
+                fComments.forEach(c => { categories.forum.bytes += getStrBytes(c); });
+              }
+              if (dbInstance.forumSeries) {
+                const fSeries = await dbInstance.forumSeries.toArray();
+                fSeries.forEach(s => { categories.forum.bytes += getStrBytes(s); });
+              }
+            } catch(e) {}
+
+            // 6. 音频数据
+            try {
+              if (dbInstance.music) {
+                const musics = await dbInstance.music.toArray();
+                categories.audio.count += musics.length;
+                musics.forEach(m => { categories.audio.bytes += getStrBytes(m); });
+              }
+              if (dbInstance.audio) {
+                const audios = await dbInstance.audio.toArray();
+                categories.audio.count += audios.length;
+                audios.forEach(a => { categories.audio.bytes += getStrBytes(a); });
+              }
+            } catch(e) {}
+          }
+
+          // 7. 页面 HTML 与 LocalStorage
+          try {
+            const htmlLen = document.documentElement.outerHTML.length;
+            categories.page.bytes += htmlLen;
+            categories.page.count = 1;
+          } catch(e) {}
+
+          try {
+            let lsBytes = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              lsBytes += getStrBytes(localStorage.getItem(k));
+            }
+            categories.other.bytes += lsBytes;
+            categories.other.count += localStorage.length;
+          } catch(e) {}
+
+          const catList = Object.values(categories);
+          const totalBytes = catList.reduce((acc, c) => acc + c.bytes, 0) || 1;
+
+          // 降序排列（由多到少）
+          catList.sort((a, b) => b.bytes - a.bytes);
+
+          const formatSize = (bytes) => {
+            if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
+            return bytes + " B";
+          };
+
+          const totalFormatted = formatSize(totalBytes);
+
+          let html = `
+            <div style="background: var(--secondary-bg); border-radius: 14px; padding: 14px 16px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">总去皮内存占用</span>
+                <span style="font-size: 18px; font-weight: 700; color: var(--accent-color);">${totalFormatted}</span>
+              </div>
+              <div style="height: 10px; border-radius: 5px; background: rgba(128,128,128,0.15); display: flex; overflow: hidden; gap: 1px;">
+                ${catList.filter(c => c.bytes > 0).map(c => `
+                  <div style="width: ${(c.bytes / totalBytes * 100).toFixed(1)}%; background: ${c.color};" title="${c.name}: ${formatSize(c.bytes)}"></div>
+                `).join('')}
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              ${catList.map((c, idx) => {
+                const pct = ((c.bytes / totalBytes) * 100).toFixed(1);
+                const rankLabel = idx === 0 ? "最多" : (idx === catList.length - 1 ? "最少" : `第${idx + 1}`);
+                return `
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: ${c.color};"></span>
+                        <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${c.name}</span>
+                        <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color);">${rankLabel}</span>
+                      </div>
+                      <div style="display: flex; align-items: baseline; gap: 6px;">
+                        <span style="font-size: 13px; font-weight: 700; color: var(--text-primary);">${formatSize(c.bytes)}</span>
+                        <span style="font-size: 11px; color: var(--text-secondary); font-weight: 500;">${pct}%</span>
+                      </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary);">
+                      <span>包含: ${c.count} ${c.unit}</span>
+                      <div style="width: 80px; height: 5px; border-radius: 3px; background: rgba(128,128,128,0.15); overflow: hidden;">
+                        <div style="width: ${pct}%; height: 100%; background: ${c.color}; border-radius: 3px;"></div>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+
+          container.innerHTML = html;
+        }
+        window.calculateAndRenderStorageBreakdown = calculateAndRenderStorageBreakdown;
+
         /**
          * 打开高级导入导出模态框，并动态生成选项列表
          */
@@ -63098,6 +63498,10 @@ ${colSpecs.join('\n')}
           const savedTheme = localStorage.getItem("ephone-theme") || "light"; // 默认为日间模式
           applyTheme(savedTheme);
 
+          if (typeof ensureAllBackButtonsSvg === "function") {
+            ensureAllBackButtonsSvg();
+          }
+
           const customBubbleStyleTag = document.createElement("style");
           customBubbleStyleTag.id = "custom-bubble-style";
           document.head.appendChild(customBubbleStyleTag);
@@ -64914,7 +65318,11 @@ ${colSpecs.join('\n')}
             .addEventListener("click", sendUserTransfer);
           document
             .getElementById("listen-together-btn")
-            .addEventListener("click", handleListenTogetherClick);
+            .addEventListener("click", () => {
+              if (typeof openChatMapModal === "function") {
+                openChatMapModal();
+              }
+            });
           document
             .getElementById("music-exit-btn")
             .addEventListener("click", () => endListenTogetherSession(true));
@@ -73500,6 +73908,33 @@ ${colSpecs.join('\n')}
           document
             .getElementById("advanced-transfer-btn")
             .addEventListener("click", openAdvancedTransferModal);
+
+          const storageBreakdownBtn = document.getElementById("storage-breakdown-btn");
+          if (storageBreakdownBtn) {
+            storageBreakdownBtn.addEventListener("click", openStorageBreakdownModal);
+          }
+
+          const closeStorageBreakdownBtn = document.getElementById("close-storage-breakdown-btn");
+          if (closeStorageBreakdownBtn) {
+            closeStorageBreakdownBtn.addEventListener("click", () => {
+              const modal = document.getElementById("storage-breakdown-modal");
+              if (modal) {
+                modal.classList.remove("visible");
+                modal.style.display = "none";
+              }
+            });
+          }
+
+          const closeStorageBreakdownFooterBtn = document.getElementById("close-storage-breakdown-footer-btn");
+          if (closeStorageBreakdownFooterBtn) {
+            closeStorageBreakdownFooterBtn.addEventListener("click", () => {
+              const modal = document.getElementById("storage-breakdown-modal");
+              if (modal) {
+                modal.classList.remove("visible");
+                modal.style.display = "none";
+              }
+            });
+          }
 
           document
             .getElementById("close-advanced-transfer-btn")

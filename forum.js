@@ -272,10 +272,150 @@ document.addEventListener("DOMContentLoaded", () => {
   // forum.js
 
   /**
-   * 【已修复】渲染小组内的帖子列表及其分类（已支持筛选）
+   * 辅助函数：统一 AI 接口调用与容错
+   */
+  async function callAiForForum(prompt, systemInstruction = "") {
+    const { proxyUrl, apiKey, model } = state.apiConfig;
+    if (!proxyUrl || !apiKey || !model) {
+      throw new Error("请先配置API！");
+    }
+
+    const isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
+    const cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
+    const effectiveKey = typeof getRandomValue === "function" ? getRandomValue(apiKey) : (apiKey.includes(",") ? apiKey.split(",")[0].trim() : apiKey.trim());
+
+    if (isGemini) {
+      const url = `${GEMINI_API_URL}/${model || "gemini-1.5-flash"}:generateContent?key=${effectiveKey}`;
+      const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: parseFloat(state.apiConfig.temperature) || 0.8
+        }
+      };
+      if (systemInstruction) {
+        payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+      }
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        throw new Error(`API请求失败: ${response.status} ${errText}`);
+      }
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      return rawText;
+    } else {
+      const requestUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`;
+      const messages = [];
+      if (systemInstruction) {
+        messages.push({ role: "system", content: systemInstruction });
+      }
+      messages.push({ role: "user", content: prompt });
+
+      const bodyPayload = {
+        model: model,
+        messages: messages,
+        temperature: parseFloat(state.apiConfig.temperature) || 0.8
+      };
+
+      const response = await fetch(requestUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${effectiveKey}`
+        },
+        body: JSON.stringify(bodyPayload)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        throw new Error(`API请求失败: ${response.status} ${errText}`);
+      }
+      const data = await response.json();
+      const rawText = data?.choices?.[0]?.message?.content || "";
+      return rawText;
+    }
+  }
+
+  /**
+   * 辅助函数：强健的 JSON 提取与修复解析
+   */
+  function extractAndParseJson(text) {
+    if (!text) throw new Error("AI返回内容为空");
+    let cleaned = text.trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/g, "").trim();
+
+    try {
+      return JSON.parse(cleaned);
+    } catch (e1) {}
+
+    const firstBrace = cleaned.indexOf("{");
+    const firstBracket = cleaned.indexOf("[");
+    let startIdx = -1;
+    let endIdx = -1;
+
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIdx = firstBrace;
+      endIdx = cleaned.lastIndexOf("}");
+    } else if (firstBracket !== -1) {
+      startIdx = firstBracket;
+      endIdx = cleaned.lastIndexOf("]");
+    }
+
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      const jsonSub = cleaned.slice(startIdx, endIdx + 1);
+      try {
+        return JSON.parse(jsonSub);
+      } catch (e2) {}
+
+      try {
+        let fixed = jsonSub.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match) => {
+          return match.replace(/\r?\n/g, "\\n").replace(/\t/g, "\\t");
+        });
+        fixed = fixed.replace(/,\s*([\}\]])/g, "$1");
+        return JSON.parse(fixed);
+      } catch (e3) {}
+    }
+
+    const result = {};
+    const titleMatch = cleaned.match(/"(?:chapterTitle|title)"\s*:\s*"([^"]+)"/);
+    if (titleMatch) result.chapterTitle = titleMatch[1];
+
+    const seriesTitleMatch = cleaned.match(/"seriesTitle"\s*:\s*"([^"]+)"/);
+    if (seriesTitleMatch) result.seriesTitle = seriesTitleMatch[1];
+
+    const summaryMatch = cleaned.match(/"(?:chapterSummary|summary)"\s*:\s*"([^"]+)"/);
+    if (summaryMatch) result.chapterSummary = summaryMatch[1];
+
+    const contentMatch = cleaned.match(/"(?:chapterContent|story|content)"\s*:\s*"([\s\S]*?)"(?:\s*,\s*"(?:categories|comments|isFinished)")/);
+    if (contentMatch) {
+      result.chapterContent = contentMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    } else {
+      const rawContentMatch = cleaned.match(/"(?:chapterContent|story|content)"\s*:\s*"([\s\S]*)/);
+      if (rawContentMatch) {
+        let body = rawContentMatch[1];
+        body = body.replace(/"\s*,?\s*"(?:categories|comments|isFinished)[\s\S]*$/, "");
+        body = body.replace(/"\s*\}?\s*$/, "");
+        result.chapterContent = body.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+      }
+    }
+
+    if (result.chapterContent || result.chapterTitle || result.seriesTitle) {
+      return result;
+    }
+
+    throw new Error("AI返回了无效的JSON格式");
+  }
+
+  /**
+   * 渲染小组内的帖子列表：长篇小说自动折叠合并，短篇单独显示
    */
   async function renderGroupPosts(groupId) {
     const listEl = document.getElementById("group-post-list");
+    if (!listEl) return;
     const allPosts = await db.forumPosts
       .where("groupId")
       .equals(groupId)
@@ -303,57 +443,131 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    const processedSeriesIds = new Set();
+
     for (const post of postsToRender) {
-      // ★★★★★ 这就是唯一的、核心的修复！ ★★★★★
-      // 在使用 post.id 查询前，先用 parseInt() 确保它一定是数字类型。
-      const commentCount = await db.forumComments
-        .where("postId")
-        .equals(parseInt(post.id))
-        .count();
-      // ★★★★★ 修复结束 ★★★★★
+      if (post.seriesId) {
+        if (processedSeriesIds.has(post.seriesId)) continue;
+        processedSeriesIds.add(post.seriesId);
 
-      const item = document.createElement("div");
-      item.className = "forum-post-item";
-      item.dataset.postId = post.id;
+        const series = await db.forumSeries.get(post.seriesId);
+        const chapters = await db.forumChapters
+          .where("seriesId")
+          .equals(post.seriesId)
+          .sortBy("chapterIndex");
 
-      const categoriesForDisplay = [...(post.categories || [])];
-      if (
-        post.lengthType === "long" &&
-        !categoriesForDisplay.includes("长篇")
-      ) {
-        categoriesForDisplay.unshift("长篇");
-      } else if (
-        post.lengthType === "short" &&
-        !categoriesForDisplay.includes("短篇")
-      ) {
-        categoriesForDisplay.unshift("短篇");
-      }
-      if (post.chapterIndex) {
-        categoriesForDisplay.unshift(`第${post.chapterIndex}章`);
-      }
+        const seriesCard = document.createElement("div");
+        seriesCard.className = "forum-series-accordion-card";
+        seriesCard.style.cssText = "margin-bottom: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;";
 
-      let categoriesHtml = "";
-      if (categoriesForDisplay.length > 0) {
-        categoriesHtml = `
-                <div class="category-tag-container">
-                    ${categoriesForDisplay.map((cat) => `<span class="category-tag">#${cat}</span>`).join("")}
-                </div>
-            `;
-      }
+        const isFinished = !!series?.isFinished;
+        const totalCh = chapters.length || 1;
+        const postsMap = new Map(allPosts.map((p) => [p.id, p]));
 
-      item.innerHTML = `
-            <div class="post-item-title">${post.title}</div>
-            ${categoriesHtml}
-            <div class="post-item-meta">
-                <span>作者: ${post.author}</span>
-                <span>评论: ${commentCount}</span>
+        seriesCard.innerHTML = `
+          <div class="series-accordion-header" style="padding: 12px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--secondary-bg, rgba(128,128,128,0.04));">
+            <div style="min-width: 0; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">${series?.title || post.title}</span>
+                <span style="font-size: 10px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 4px; padding: 0 4px;">连载</span>
+                ${isFinished ? `<span style="font-size: 10px; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 4px;">完结</span>` : ""}
+              </div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">
+                <span>共 ${totalCh} 章</span>
+              </div>
             </div>
-            <button class="forum-post-delete-btn" title="删除帖子">×</button>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button type="button" data-delete-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 500; cursor: pointer; height: 26px;">删除</button>
+              <button type="button" class="mini-btn ${isFinished ? 'disabled' : 'primary'}" data-series-action="continue" data-series-id="${post.seriesId}" ${isFinished ? 'disabled' : ''} style="height: 26px; padding: 0 8px; font-size: 12px; border-radius: 6px;">${isFinished ? '已完结' : '追更'}</button>
+              <svg class="series-accordion-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(0deg); transition: transform 0.2s ease; color: var(--text-secondary); flex-shrink: 0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+          </div>
+          <div class="series-accordion-content" style="display: none; padding: 6px 12px 10px; border-top: 1px solid var(--border-color); flex-direction: column; gap: 8px;">
+            ${chapters.map((ch) => {
+              const chPost = postsMap.get(ch.postId);
+              const chRemark = chPost?.remark || '';
+              return `
+              <div class="series-chapter-card" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); margin-top: 6px;">
+                <div class="series-chapter-row" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                  <div style="font-size: 13px; font-weight: 500; color: var(--text-primary);">第${ch.chapterIndex}章 ${ch.title || ''}</div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <button type="button" class="mini-btn" data-series-action="open-post" data-series-id="${post.seriesId}" data-post-id="${ch.postId || ''}" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px;">阅读</button>
+                    <button type="button" data-delete-chapter-id="${ch.id}" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
+                  </div>
+                </div>
+                <textarea class="chapter-remark-input moe-input" data-post-id="${ch.postId || ''}" rows="1" placeholder="添加备注..." style="width: 100%; height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.04)); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;">${chRemark}</textarea>
+              </div>
+            `;
+            }).join('')}
+          </div>
         `;
-      listEl.appendChild(item);
+
+        const headerEl = seriesCard.querySelector(".series-accordion-header");
+        const contentBox = seriesCard.querySelector(".series-accordion-content");
+        const arrowIcon = seriesCard.querySelector(".series-accordion-arrow");
+
+        headerEl.addEventListener("click", (e) => {
+          if (e.target.closest("button") || e.target.closest(".forum-post-delete-btn")) return;
+          const isHidden = contentBox.style.display === "none";
+          contentBox.style.display = isHidden ? "flex" : "none";
+          arrowIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+        });
+
+        listEl.appendChild(seriesCard);
+      } else {
+        const commentCount = await db.forumComments
+          .where("postId")
+          .equals(parseInt(post.id))
+          .count();
+
+        const item = document.createElement("div");
+        item.className = "forum-post-item";
+        item.dataset.postId = post.id;
+
+        const categoriesForDisplay = [...(post.categories || [])];
+        if (post.lengthType === "short" && !categoriesForDisplay.includes("短篇")) {
+          categoriesForDisplay.unshift("短篇");
+        }
+
+        let categoriesHtml = "";
+        if (categoriesForDisplay.length > 0) {
+          categoriesHtml = `
+            <div class="category-tag-container">
+              ${categoriesForDisplay.map((cat) => `<span class="category-tag">#${cat}</span>`).join("")}
+            </div>
+          `;
+        }
+
+        item.innerHTML = `
+          <div class="post-item-title">${post.title}</div>
+          ${categoriesHtml}
+          <div class="post-item-meta">
+            <span>作者: ${post.author}</span>
+            <span>评论: ${commentCount}</span>
+          </div>
+          <div class="post-item-remark-box" style="margin-top: 6px;">
+            <textarea class="chapter-remark-input moe-input" data-post-id="${post.id}" rows="1" placeholder="添加备注..." style="width: 100%; height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.04)); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;">${post.remark || ''}</textarea>
+          </div>
+          <button class="forum-post-delete-btn" title="删除帖子" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280);">×</button>
+        `;
+        listEl.appendChild(item);
+      }
     }
 
-    // 更新筛选按钮状态
+    listEl.querySelectorAll(".chapter-remark-input").forEach((input) => {
+      input.addEventListener("click", (e) => e.stopPropagation());
+      input.addEventListener("input", async (e) => {
+        const postId = parseInt(e.target.dataset.postId);
+        if (!isNaN(postId)) {
+          const p = await db.forumPosts.get(postId);
+          if (p) {
+            p.remark = e.target.value;
+            await db.forumPosts.put(p);
+          }
+        }
+      });
+    });
+
     const filterBtn = document.getElementById("group-filter-btn");
     if (filterBtn) {
       filterBtn.classList.toggle(
@@ -364,7 +578,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * 【关键修复】打开一个帖子，显示详情和评论
+   * 打开一个帖子，显示详情和评论
    */
   async function openPost(
     postId,
@@ -377,8 +591,9 @@ document.addEventListener("DOMContentLoaded", () => {
     await renderPostDetails(postId);
     showScreen("post-screen");
   }
+
   /**
-   * 【功能增强版】渲染帖子详情和评论 (已修改：接入全局路人头像库)
+   * 渲染帖子详情：包含复制、收藏以及自定义下一章提示词输入框
    */
   async function renderPostDetails(postId) {
     const contentEl = document.getElementById("post-detail-content");
@@ -397,121 +612,58 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // --- 1. 获取作者头像 ---
     let authorAvatarUrl;
     const userNickname = state.qzoneSettings.nickname || "我";
 
-    // 优先级 1: 如果是用户自己
     if (post.author === userNickname) {
       authorAvatarUrl = state.qzoneSettings.avatar;
-    }
-    // 优先级 2: 如果是已存在的角色 (Char)
-    else {
+    } else {
       const authorChar = Object.values(state.chats).find(
         (c) => c.name === post.author,
       );
       if (authorChar) {
         authorAvatarUrl = authorChar.settings.aiAvatar;
       } else {
-        // 优先级 3: 既不是用户也不是角色，那就是路人 -> 调用全局路人库
-        // 这里的 window.getAvatarForName 是你在本体代码里定义的全局函数
         authorAvatarUrl = window.getAvatarForName
           ? window.getAvatarForName(post.author)
-          : "https://i.postimg.cc/PxZrFFFL/o-o-1.jpg"; // 防止函数未定义的兜底
+          : "https://i.postimg.cc/PxZrFFFL/o-o-1.jpg";
       }
     }
 
     let seriesMetaHtml = "";
+    let series = null;
     if (post.lengthType === "long" && post.seriesId) {
-      const series = await db.forumSeries.get(post.seriesId);
+      series = await db.forumSeries.get(post.seriesId);
       const nextChapterIndex =
         (series?.lastChapterIndex || post.chapterIndex || 1) + 1;
-      const isFollowed = !!series?.isFollowed;
-      const followText = isFollowed ? "已追更" : "追更";
       const isFinished = !!series?.isFinished;
       const continueText = isFinished
         ? "已完结"
         : `追更第${nextChapterIndex}章`;
       seriesMetaHtml = `
-        <div class="post-series-bar">
+        <div class="post-series-bar" style="margin-bottom: 14px; padding: 10px 12px; background: var(--secondary-bg, rgba(128,128,128,0.05)); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <div class="series-meta">
-            <div class="series-title">连载：${series?.title || post.title}</div>
-            <div class="series-status">当前章：第${post.chapterIndex || 1}章 · CP：${series?.pairing || "未知"} · ${
+            <div class="series-title" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">${series?.title || post.title}</div>
+            <div class="series-status" style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">当前章：第${post.chapterIndex || 1}章 · ${
               isFinished ? "已完结" : "连载中"
             }</div>
           </div>
-          <div class="series-actions">
-            <button class="mini-btn ${isFollowed ? "disabled" : ""}" data-action="follow-series" data-series-id="${post.seriesId}" ${isFollowed ? "disabled" : ""}>${followText}</button>
-            <button class="mini-btn primary ${isFinished ? "disabled" : ""}" data-action="continue-series" data-series-id="${post.seriesId}" data-target-chapter="${nextChapterIndex}" ${isFinished ? "disabled" : ""}>${continueText}</button>
+          <div class="series-actions" style="display: flex; gap: 8px; align-items: center;">
+            <button type="button" data-action="delete-chapter" data-post-id="${post.id}" data-series-id="${post.seriesId}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; cursor: pointer; height: 28px;">删除</button>
+            <button type="button" class="mini-btn primary ${isFinished ? "disabled" : ""}" data-action="continue-series" data-series-id="${post.seriesId}" data-target-chapter="${nextChapterIndex}" ${isFinished ? "disabled" : ""} style="height: 28px; padding: 0 10px; font-size: 12px; border-radius: 6px;">${continueText}</button>
           </div>
         </div>
       `;
     }
 
-    // --- 2. 拼接评论区HTML ---
-    let commentsHtml = `
-        <div class="post-comments-section">
-            <h3>评论 (${comments.length})</h3>
-    `;
-    if (comments.length > 0) {
-      comments.forEach((comment, index) => {
-        // --- 2a. 获取评论者头像 ---
-        let commenterAvatarUrl;
+    const cleanBody = (post.content || "").replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim();
 
-        // 优先级 1: 如果是用户自己
-        if (comment.author === userNickname) {
-          commenterAvatarUrl = state.qzoneSettings.avatar;
-        }
-        // 优先级 2: 如果是已存在的角色 (Char)
-        else {
-          const commenterChar = Object.values(state.chats).find(
-            (c) => c.name === comment.author,
-          );
-          if (commenterChar) {
-            commenterAvatarUrl = commenterChar.settings.aiAvatar;
-          } else {
-            // 优先级 3: 路人 -> 调用全局路人库
-            commenterAvatarUrl = window.getAvatarForName
-              ? window.getAvatarForName(comment.author)
-              : "https://i.postimg.cc/PxZrFFFL/o-o-1.jpg";
-          }
-        }
-
-        // --- 2b. 处理回复 ---
-        let replyHtml = "";
-        if (comment.replyTo) {
-          replyHtml = `<span class="reply-text">回复</span> <span class="reply-target-name">${comment.replyTo}</span>`;
-        }
-
-        // --- 2c. 拼接单条评论的完整HTML ---
-        commentsHtml += `
-        <div class="post-comment-item" data-commenter-name="${comment.author}">
-            <img src="${commenterAvatarUrl}" class="comment-avatar-small">
-            <div class="comment-details">
-                <div class="comment-header-line">
-                    <span class="comment-author">${comment.author}</span>
-                    <span class="comment-floor">${index + 1}楼</span>
-                </div>
-                <div class="comment-content">
-                    ${replyHtml}
-                    <span class="comment-text">${(comment.content || "").replace(/\n/g, "<br>")}</span>
-                </div>
-            </div>
-            <!-- 删除按钮 -->
-            <span class="forum-comment-delete-btn" data-id="${comment.id}">×</span>
-        </div>
-    `;
-      });
-    } else {
-      commentsHtml +=
-        '<p style="color: var(--text-secondary); font-size: 14px;">还没有评论，快来抢沙发！</p>';
-    }
-    commentsHtml += "</div>";
-
-    // --- 3. 拼接帖子详情页的完整HTML ---
     contentEl.innerHTML = `
         <div class="post-detail-header">
             <h1 class="post-main-title">${post.title}</h1>
+            <div class="post-remark-container" style="margin: 8px 0 10px;">
+              <input type="text" id="post-remark-input" class="moe-input" style="width: 100%; height: 32px; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.05)); color: var(--text-primary); box-sizing: border-box;" placeholder="添加备注..." value="${post.remark || ''}">
+            </div>
             <div class="post-user-info-row">
                 <img src="${authorAvatarUrl}" class="post-author-avatar">
                 <div class="post-detail-meta-group">
@@ -523,15 +675,67 @@ document.addEventListener("DOMContentLoaded", () => {
 
         ${seriesMetaHtml}
 
-        <div class="post-detail-body">${post.content.replace(/\n/g, "<br>")}</div>
+        <div class="post-detail-body">${cleanBody.replace(/\n/g, "<br>")}</div>
         
-        <div class="generate-comments-container">
-            <button id="generate-forum-comments-btn">✨ 生成评论</button>
+        <div class="post-detail-actions-row" style="display: flex; gap: 12px; margin: 18px 0; justify-content: center;">
+          <button type="button" class="mini-btn" id="post-copy-content-btn" style="flex: 1; max-width: 140px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center;">复制</button>
         </div>
-        ${commentsHtml}
+
+        ${post.seriesId || post.lengthType === "long" ? `
+        <div class="series-prompt-edit-card" style="margin: 14px 0; padding: 12px; background: var(--secondary-bg, rgba(128,128,128,0.06)); border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">下一章提示词</div>
+          <textarea id="series-custom-prompt-input" rows="2" style="width: 100%; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); padding: 8px; font-size: 12px; resize: vertical; box-sizing: border-box;" placeholder="输入自定义下一章剧情要求或续写提示...">${series?.customContinuationPrompt || ""}</textarea>
+        </div>
+        ` : ""}
     `;
 
-    // --- 4. 重新绑定评论的点击回复事件 ---
+    const copyBtn = contentEl.querySelector("#post-copy-content-btn");
+    if (copyBtn) {
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(cleanBody);
+          await showCustomAlert("复制成功", "正文已复制到剪贴板。");
+        } catch (e) {
+          await showCustomAlert("复制失败", "未能写入剪贴板。");
+        }
+      };
+    }
+
+    const remarkInput = contentEl.querySelector("#post-remark-input");
+    if (remarkInput) {
+      remarkInput.oninput = async () => {
+        post.remark = remarkInput.value;
+        await db.forumPosts.put(post);
+      };
+    }
+
+    const postFavBottomBtn = document.getElementById("post-fav-btn");
+    const postFavBottomText = document.getElementById("post-fav-text");
+    if (postFavBottomBtn) {
+      postFavBottomBtn.classList.toggle("primary", !!post.isFavorite);
+      if (postFavBottomText) {
+        postFavBottomText.textContent = post.isFavorite ? "已收藏" : "收藏";
+      }
+      postFavBottomBtn.onclick = async () => {
+        post.isFavorite = !post.isFavorite;
+        await db.forumPosts.put(post);
+        postFavBottomBtn.classList.toggle("primary", !!post.isFavorite);
+        if (postFavBottomText) {
+          postFavBottomText.textContent = post.isFavorite ? "已收藏" : "收藏";
+        }
+        await showCustomAlert(post.isFavorite ? "收藏成功" : "已取消", post.isFavorite ? "已加入收藏文章。" : "已从收藏文章中移除。");
+      };
+    }
+
+    const promptInput = contentEl.querySelector("#series-custom-prompt-input");
+    if (promptInput && post.seriesId) {
+      promptInput.oninput = async () => {
+        await db.forumSeries.update(post.seriesId, {
+          customContinuationPrompt: promptInput.value
+        });
+      };
+    }
+
     contentEl.querySelectorAll(".post-comment-item").forEach((item) => {
       item.addEventListener("click", () => {
         const commenterName = item.dataset.commenterName;
@@ -1115,43 +1319,18 @@ ${lengthInstruction}
 ]
 `;
 
-    const messagesForApi = [{ role: "user", content: prompt }];
     try {
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        prompt,
-        messagesForApi,
-        isGemini,
-      );
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: "json_object" },
-            }),
-          });
-      if (!response.ok) throw new Error(`API请求失败: ${response.status}`);
-      const data = await response.json();
-      const rawContent = isGemini
-        ? data.candidates[0].content.parts[0].text
-        : data.choices[0].message.content;
+      const rawContent = await callAiForForum(prompt);
       let stories = [];
       try {
-        const cleanedContent = rawContent
-          .replace(/^```json\s*|```$/g, "")
-          .trim();
-        stories = JSON.parse(cleanedContent);
-        if (!Array.isArray(stories)) throw new Error("AI未返回数组格式。");
+        stories = extractAndParseJson(rawContent);
+        if (!Array.isArray(stories)) {
+          if (stories && (stories.story || stories.content)) {
+            stories = [stories];
+          } else {
+            throw new Error("AI未返回数组格式。");
+          }
+        }
       } catch (e) {
         console.error("JSON解析失败！", e);
         throw new Error("AI返回了无效的JSON格式。");
@@ -1166,7 +1345,7 @@ ${lengthInstruction}
         const newPost = {
           groupId: groupId,
           title: `【${char1Name}x${char2Name}】${storyData.title || `无题`}`,
-          content: storyData.story || "内容生成失败",
+          content: (storyData.story || storyData.content || "内容生成失败").replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim(),
           author: getRandomItem([
             "为爱发电的太太",
             "圈地自萌",
@@ -1273,43 +1452,11 @@ ${contextInstructions || "- 自由发挥，但保持连载节奏，注意人物�
 
 请仅输出纯净的JSON对象，不要添加额外说明。`;
 
-    const messagesForApi = [{ role: "user", content: prompt }];
     try {
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        prompt,
-        messagesForApi,
-        isGemini,
-      );
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: "json_object" },
-            }),
-          });
-      if (!response.ok) throw new Error(`API请求失败: ${response.status}`);
-
-      const data = await response.json();
-      const rawContent = isGemini
-        ? data.candidates[0].content.parts[0].text
-        : data.choices[0].message.content;
+      const rawContent = await callAiForForum(prompt);
       let parsed;
       try {
-        const cleanedContent = rawContent
-          .replace(/^```json\s*|```$/g, "")
-          .trim();
-        parsed = JSON.parse(cleanedContent);
+        parsed = extractAndParseJson(rawContent);
       } catch (e) {
         console.error("解析长篇连载返回数据失败", e);
         throw new Error("AI返回了无效的JSON格式。");
@@ -1323,8 +1470,7 @@ ${contextInstructions || "- 自由发挥，但保持连载节奏，注意人物�
         parsed.story ||
         parsed.content ||
         "这一章的正文生成失败，请重试。";
-      const continuationPrompt = `\n\n【下一章生成指令/提示词】: 请基于第一章《${chapterTitle}》结尾，继续生成《${seriesTitle}》的第二章内容，保持角色性格与剧情走向。`;
-      const chapterContent = rawChapterContent + continuationPrompt;
+      const chapterContent = rawChapterContent.replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim();
       const chapterSummary = parsed.chapterSummary || "";
       const baseCategories = Array.isArray(parsed.categories)
         ? parsed.categories
@@ -1354,6 +1500,7 @@ ${contextInstructions || "- 自由发挥，但保持连载节奏，注意人物�
         lastChapterIndex: 1,
         seriesAuthor,
         isFinished: false,
+        customContinuationPrompt: `请基于第一章《${chapterTitle}》结尾，继续生成《${seriesTitle}》的第二章内容，保持角色性格与剧情走向。`,
       });
 
       const postId = await db.forumPosts.add({
@@ -2601,6 +2748,10 @@ ${JSON.stringify(publicFigures, null, 2)}
       ? `本章的篇幅尽量接近【${series.wordCount}】。`
       : "本章不少于1000字。";
 
+    const customPromptRequirement = series.customContinuationPrompt
+      ? `\n\n# 用户自定义要求 / 下一章指示\n${series.customContinuationPrompt}`
+      : `\n\n# 用户自定义要求 / 下一章指示\n请基于前文剧情自然顺延展开。`;
+
     const prompt = `
 你是连载小说作者，请继续创作《${seriesTitle}》的第${nextIndex}章。
 
@@ -2622,6 +2773,7 @@ ${summaryContext || "暂无摘要"}
 
 # 上一章全文 (供衔接)
 ${lastChapter.content || ""}
+${customPromptRequirement}
 
 # 输出格式 (严格JSON对象，包含 5-8 条评论，并用 isFinished 标记是否完结)
 {
@@ -2637,43 +2789,11 @@ ${lastChapter.content || ""}
 }
 仅输出JSON。`;
 
-    const messagesForApi = [{ role: "user", content: prompt }];
     try {
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        prompt,
-        messagesForApi,
-        isGemini,
-      );
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: "json_object" },
-            }),
-          });
-      if (!response.ok) throw new Error(`API请求失败: ${response.status}`);
-
-      const data = await response.json();
-      const rawContent = isGemini
-        ? data.candidates[0].content.parts[0].text
-        : data.choices[0].message.content;
+      const rawContent = await callAiForForum(prompt);
       let parsed;
       try {
-        const cleanedContent = rawContent
-          .replace(/^```json\s*|```$/g, "")
-          .trim();
-        parsed = JSON.parse(cleanedContent);
+        parsed = extractAndParseJson(rawContent);
       } catch (e) {
         console.error("解析追更返回数据失败", e);
         throw new Error("AI返回了无效的JSON格式。");
@@ -2685,8 +2805,7 @@ ${lastChapter.content || ""}
         parsed.story ||
         parsed.content ||
         "本章生成失败，请重试。";
-      const continuationPrompt = `\n\n【下一章生成指令/提示词】: 请基于第${nextIndex}章《${chapterTitle}》结尾，继续生成《${seriesTitle}》的第${nextIndex + 1}章内容，保持角色性格与剧情走向。`;
-      const chapterContent = rawChapterContent + continuationPrompt;
+      const chapterContent = rawChapterContent.replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim();
       const chapterSummary = parsed.chapterSummary || "";
       const baseCategories = Array.isArray(parsed.categories)
         ? parsed.categories
@@ -2738,6 +2857,7 @@ ${lastChapter.content || ""}
         lastChapterIndex: nextIndex,
         updatedAt: timestamp,
         isFinished,
+        customContinuationPrompt: `请基于第${nextIndex}章《${chapterTitle}》结尾，继续生成《${seriesTitle}》的第${nextIndex + 1}章内容，保持角色性格与剧情走向。`,
       });
 
       if (targetGroupId) {
@@ -2753,6 +2873,115 @@ ${lastChapter.content || ""}
       await showCustomAlert("追更失败", `发生了一个错误：\n${error.message}`);
     } finally {
       ongoingSeriesTasks.delete(seriesId);
+    }
+  }
+
+  async function openForumFavorites() {
+    await renderForumFavorites();
+    showScreen("forum-favorites-screen");
+  }
+
+  async function renderForumFavorites() {
+    const listEl = document.getElementById("forum-favorites-list");
+    if (!listEl) return;
+    const allPosts = await db.forumPosts.toArray();
+    const favPosts = allPosts.filter((p) => p.isFavorite);
+
+    if (favPosts.length === 0) {
+      listEl.innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 40px 0;">暂无收藏文章</p>';
+      return;
+    }
+
+    favPosts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    listEl.innerHTML = "";
+    const processedSeriesIds = new Set();
+    const postsMap = new Map(allPosts.map((p) => [p.id, p]));
+
+    for (const post of favPosts) {
+      if (post.seriesId) {
+        if (processedSeriesIds.has(post.seriesId)) continue;
+        processedSeriesIds.add(post.seriesId);
+
+        const series = await db.forumSeries.get(post.seriesId);
+        const chapters = await db.forumChapters
+          .where("seriesId")
+          .equals(post.seriesId)
+          .sortBy("chapterIndex");
+
+        const seriesCard = document.createElement("div");
+        seriesCard.className = "forum-series-accordion-card";
+        seriesCard.style.cssText = "margin-bottom: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;";
+
+        const totalCh = chapters.length || 1;
+
+        seriesCard.innerHTML = `
+          <div class="series-accordion-header" style="padding: 12px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--secondary-bg, rgba(128,128,128,0.04));">
+            <div style="min-width: 0; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">${series?.title || post.title}</span>
+                <span style="font-size: 10px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 4px; padding: 0 4px;">连载</span>
+              </div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">
+                <span>共 ${totalCh} 章</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button type="button" data-delete-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 500; cursor: pointer; height: 26px;">删除</button>
+              <button type="button" class="mini-btn danger" data-fav-series-unfav="${post.seriesId}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 12px; height: 26px;">取消</button>
+              <svg class="series-accordion-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(0deg); transition: transform 0.2s ease; color: var(--text-secondary); flex-shrink: 0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+          </div>
+          <div class="series-accordion-content" style="display: none; padding: 6px 12px 10px; border-top: 1px solid var(--border-color); flex-direction: column; gap: 8px;">
+            ${chapters.map((ch) => {
+              const chPost = postsMap.get(ch.postId);
+              const chRemark = chPost?.remark || '';
+              return `
+              <div class="series-chapter-card" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); margin-top: 6px;">
+                <div class="series-chapter-row" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                  <div style="font-size: 13px; font-weight: 500; color: var(--text-primary);">第${ch.chapterIndex}章 ${ch.title || ''}</div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <button type="button" class="mini-btn" data-series-action="open-post" data-series-id="${post.seriesId}" data-post-id="${ch.postId || ''}" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px;">阅读</button>
+                    <button type="button" data-delete-chapter-id="${ch.id}" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
+                    <button type="button" class="mini-btn danger" data-fav-action="unfav" data-post-id="${ch.postId || ''}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px;">取消</button>
+                  </div>
+                </div>
+                <textarea class="chapter-remark-input moe-input" data-post-id="${ch.postId || ''}" rows="1" placeholder="添加备注..." style="width: 100%; height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.04)); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;">${chRemark}</textarea>
+              </div>
+            `;
+            }).join('')}
+          </div>
+        `;
+
+        const headerEl = seriesCard.querySelector(".series-accordion-header");
+        const contentBox = seriesCard.querySelector(".series-accordion-content");
+        const arrowIcon = seriesCard.querySelector(".series-accordion-arrow");
+
+        headerEl.addEventListener("click", (e) => {
+          if (e.target.closest("button")) return;
+          const isHidden = contentBox.style.display === "none";
+          contentBox.style.display = isHidden ? "flex" : "none";
+          arrowIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+        });
+
+        listEl.appendChild(seriesCard);
+      } else {
+        const item = document.createElement("div");
+        item.className = "forum-post-item favorite-item-row";
+        item.dataset.postId = post.id;
+        item.style.cssText = "display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; margin-bottom: 10px;";
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <div style="font-weight: 600; font-size: 14px; color: var(--text-primary); flex: 1;">${post.title}</div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button type="button" class="mini-btn" data-series-action="open-post" data-post-id="${post.id}" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px;">阅读</button>
+              <button type="button" data-delete-post-id="${post.id}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
+              <button type="button" class="mini-btn danger" data-fav-action="unfav" data-post-id="${post.id}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px;">取消</button>
+            </div>
+          </div>
+          <textarea class="chapter-remark-input moe-input" data-post-id="${post.id}" rows="1" placeholder="添加备注..." style="width: 100%; height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.04)); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;">${post.remark || ''}</textarea>
+        `;
+        listEl.appendChild(item);
+      }
     }
   }
 
@@ -2925,6 +3154,8 @@ ${lastChapter.content || ""}
     .addEventListener("click", () => {
       if (postReturnContext === "bookshelf") {
         showScreen("forum-bookshelf-screen");
+      } else if (postReturnContext === "favorites") {
+        openForumFavorites();
       } else if (postReturnContext === "series-detail" && activeSeriesId) {
         renderSeriesDetail(activeSeriesId);
         showScreen("forum-series-detail-screen");
@@ -2937,10 +3168,11 @@ ${lastChapter.content || ""}
       postReturnContext = "group";
     });
 
-  // 4. 绑定帖子评论区的发送按钮
-  document
-    .getElementById("send-post-comment-btn")
-    .addEventListener("click", handleAddComment);
+  // 4. 绑定帖子评论区的发送按钮（已安全容错）
+  const sendCommentBtn = document.getElementById("send-post-comment-btn");
+  if (sendCommentBtn) {
+    sendCommentBtn.addEventListener("click", handleAddComment);
+  }
 
   // 绑定所有小组头部通用的“生成”按钮
   document
@@ -2963,10 +3195,9 @@ ${lastChapter.content || ""}
   document
     .getElementById("create-forum-post-btn")
     .addEventListener("click", () => {
-      // 【核心修改】我们不再弹窗提示，而是调用一个新函数来打开真正的发帖窗口
       openCreateForumPostModal();
     });
-  // 使用事件委托，为帖子详情页的“生成评论”按钮 和 “删除评论”按钮 绑定事件
+  // 使用事件委托，为帖子详情页的操作按钮绑定事件
   document
     .getElementById("post-detail-content")
     .addEventListener("click", async (e) => {
@@ -2978,6 +3209,56 @@ ${lastChapter.content || ""}
           actionBtn.hasAttribute("disabled")
         )
           return;
+        if (actionBtn.dataset.action === "delete-chapter") {
+          const postId = parseInt(actionBtn.dataset.postId || activeForumPostId);
+          const currentPost = await db.forumPosts.get(postId);
+          const confirmed = await showCustomConfirm(
+            "删除章节",
+            `确定要删除第${currentPost?.chapterIndex || 1}章《${currentPost?.title || "本章"}》吗？此操作无法恢复。`,
+            { confirmButtonClass: "btn-danger" },
+          );
+          if (confirmed) {
+            try {
+              await db.transaction(
+                "rw",
+                db.forumPosts,
+                db.forumComments,
+                db.forumChapters,
+                db.forumSeries,
+                async () => {
+                  await db.forumComments.where("postId").equals(postId).delete();
+                  await db.forumPosts.delete(postId);
+                  await db.forumChapters.where("postId").equals(postId).delete();
+                  if (!isNaN(seriesId)) {
+                    const remChapters = await db.forumChapters
+                      .where("seriesId")
+                      .equals(seriesId)
+                      .toArray();
+                    const remMaxIndex = remChapters.length > 0
+                      ? Math.max(...remChapters.map((c) => c.chapterIndex || 0))
+                      : 0;
+                    await db.forumSeries.update(seriesId, {
+                      lastChapterIndex: remMaxIndex,
+                      isFinished: false,
+                    });
+                  }
+                },
+              );
+              await showCustomAlert("删除成功", "本章节已删除，再次追更将重新生成此章。");
+              if (postReturnContext === "bookshelf") {
+                showScreen("forum-bookshelf-screen");
+                await renderForumBookshelf();
+              } else {
+                showScreen("group-screen");
+                await renderGroupPosts(currentPost?.groupId || window.activeGroupId);
+              }
+            } catch (err) {
+              console.error("删除章节失败:", err);
+              await showCustomAlert("删除失败", `操作失败: ${err.message}`);
+            }
+          }
+          return;
+        }
         if (actionBtn.dataset.action === "follow-series") {
           if (!isNaN(seriesId)) {
             await followSeries(seriesId);
@@ -2999,14 +3280,12 @@ ${lastChapter.content || ""}
         return;
       }
 
-      // 2. ★ 新增：处理删除评论
+      // 2. 处理删除评论
       if (e.target.classList.contains("forum-comment-delete-btn")) {
-        e.stopPropagation(); // 阻止冒泡，防止触发回复功能
+        e.stopPropagation();
         const commentId = parseInt(e.target.dataset.id);
-
         if (isNaN(commentId)) return;
 
-        // 弹出确认框
         const confirmed = await showCustomConfirm(
           "删除评论",
           "确定要删除这条评论吗？",
@@ -3018,12 +3297,9 @@ ${lastChapter.content || ""}
         if (confirmed) {
           try {
             await db.forumComments.delete(commentId);
-            // 刷新当前帖子详情页
             if (activeForumPostId) {
               await renderPostDetails(activeForumPostId);
             }
-            // (可选) 如果你希望删除评论后列表页的评论数也刷新，可以解开下面这行
-            // if (activeGroupId) await renderGroupPosts(activeGroupId);
           } catch (error) {
             console.error("删除失败", error);
             alert("删除失败: " + error.message);
@@ -3032,16 +3308,16 @@ ${lastChapter.content || ""}
       }
     });
 
-  // 在用户手动输入评论后，如果输入框为空就失去焦点时，自动取消回复状态
-  document
-    .getElementById("post-comment-input")
-    .addEventListener("blur", (e) => {
+  const commentInputEl = document.getElementById("post-comment-input");
+  if (commentInputEl) {
+    commentInputEl.addEventListener("blur", (e) => {
       const input = e.target;
       if (input.value.trim() === "") {
         input.placeholder = "发布你的评论...";
         delete input.dataset.replyTo;
       }
     });
+  }
   // ▲▲▲ 新代码粘贴结束 ▲▲▲
   // ▼▼▼ 在 init() 函数的事件监听器区域末尾，粘贴下面这整块新代码 ▼▼▼
 
@@ -3058,10 +3334,198 @@ ${lastChapter.content || ""}
   });
 
   // ▲▲▲ 新增代码结束 ▲▲▲
+  async function handleDeleteChapter(chapterId, postId, seriesId) {
+    const confirmed = await showCustomConfirm(
+      "删除章节",
+      "确定要删除这一章节吗？此操作无法恢复。",
+      { confirmButtonClass: "btn-danger" }
+    );
+    if (!confirmed) return;
+    try {
+      await db.transaction(
+        "rw",
+        db.forumPosts,
+        db.forumComments,
+        db.forumChapters,
+        db.forumSeries,
+        async () => {
+          if (chapterId) {
+            await db.forumChapters.delete(parseInt(chapterId));
+          }
+          if (postId) {
+            await db.forumChapters.where("postId").equals(parseInt(postId)).delete();
+            await db.forumComments.where("postId").equals(parseInt(postId)).delete();
+            await db.forumPosts.delete(parseInt(postId));
+          }
+          if (seriesId) {
+            const sId = parseInt(seriesId);
+            const remChapters = await db.forumChapters
+              .where("seriesId")
+              .equals(sId)
+              .sortBy("chapterIndex");
+            if (remChapters.length === 0) {
+              await db.forumSeries.delete(sId);
+            } else {
+              const remMaxIndex = Math.max(...remChapters.map((c) => c.chapterIndex || 0));
+              const lastCh = remChapters[remChapters.length - 1];
+              await db.forumSeries.update(sId, {
+                lastChapterIndex: remMaxIndex,
+                lastChapterId: lastCh?.id || null,
+                isFinished: false,
+              });
+            }
+          }
+        }
+      );
+      await showCustomAlert("删除成功", "章节已成功删除。");
+      if (window.activeGroupId) {
+        await renderGroupPosts(window.activeGroupId);
+      }
+      await renderForumFavorites();
+      await renderForumBookshelf();
+    } catch (err) {
+      console.error("删除章节失败:", err);
+      await showCustomAlert("删除失败", `操作失败: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteSeries(seriesId) {
+    const sId = parseInt(seriesId);
+    if (isNaN(sId)) return;
+    const series = await db.forumSeries.get(sId);
+    const confirmed = await showCustomConfirm(
+      "删除连载",
+      `确定要删除连载《${series?.title || "这部连载"}》及其所有章节吗？此操作无法恢复。`,
+      { confirmButtonClass: "btn-danger" }
+    );
+    if (!confirmed) return;
+    try {
+      await db.transaction(
+        "rw",
+        db.forumPosts,
+        db.forumComments,
+        db.forumChapters,
+        db.forumSeries,
+        async () => {
+          const posts = await db.forumPosts.where("seriesId").equals(sId).toArray();
+          for (const p of posts) {
+            await db.forumComments.where("postId").equals(p.id).delete();
+          }
+          await db.forumPosts.where("seriesId").equals(sId).delete();
+          await db.forumChapters.where("seriesId").equals(sId).delete();
+          await db.forumSeries.delete(sId);
+        }
+      );
+      await showCustomAlert("删除成功", "连载及其所有章节已删除。");
+      if (window.activeGroupId) {
+        await renderGroupPosts(window.activeGroupId);
+      }
+      await renderForumFavorites();
+      await renderForumBookshelf();
+    } catch (err) {
+      console.error("删除连载失败:", err);
+      await showCustomAlert("删除失败", `操作失败: ${err.message}`);
+    }
+  }
+
+  async function handleDeletePost(postId) {
+    const pId = parseInt(postId);
+    if (isNaN(pId)) return;
+    const post = await db.forumPosts.get(pId);
+    const confirmed = await showCustomConfirm(
+      "删除帖子",
+      `确定要删除帖子《${post?.title || "这篇帖子"}》吗？此操作将同时删除帖子下的所有评论，且无法恢复。`,
+      { confirmButtonClass: "btn-danger" }
+    );
+    if (!confirmed) return;
+    try {
+      await db.transaction(
+        "rw",
+        db.forumPosts,
+        db.forumComments,
+        async () => {
+          await db.forumComments.where("postId").equals(pId).delete();
+          await db.forumPosts.delete(pId);
+        }
+      );
+      await showCustomAlert("删除成功", "帖子已成功删除。");
+      if (window.activeGroupId) {
+        await renderGroupPosts(window.activeGroupId);
+      }
+      await renderForumFavorites();
+    } catch (err) {
+      console.error("删除帖子失败:", err);
+      await showCustomAlert("删除失败", `操作失败: ${err.message}`);
+    }
+  }
+
+  // 实时备注保存监听
+  document.addEventListener("input", async (e) => {
+    if (e.target.classList.contains("chapter-remark-input") || e.target.id === "post-remark-input") {
+      const postId = parseInt(e.target.dataset.postId);
+      const remark = e.target.value;
+      if (!isNaN(postId) && postId) {
+        await db.forumPosts.update(postId, { remark });
+      }
+    }
+  });
+
   // ▼▼▼ 【全新】论坛帖子列表事件委托 ▼▼▼
   document
     .getElementById("group-post-list")
     .addEventListener("click", async (e) => {
+      // 1. 处理删除整部连载
+      const delSeriesBtn = e.target.closest("[data-delete-series-id]");
+      if (delSeriesBtn) {
+        e.stopPropagation();
+        const seriesId = parseInt(delSeriesBtn.dataset.deleteSeriesId);
+        if (!isNaN(seriesId)) {
+          await handleDeleteSeries(seriesId);
+        }
+        return;
+      }
+
+      // 1.1 处理删除单章
+      const delChapterBtn = e.target.closest("[data-delete-chapter-id]");
+      if (delChapterBtn) {
+        e.stopPropagation();
+        const chId = parseInt(delChapterBtn.dataset.deleteChapterId);
+        const pId = parseInt(delChapterBtn.dataset.postId);
+        const sId = parseInt(delChapterBtn.dataset.seriesId);
+        await handleDeleteChapter(chId, pId, sId);
+        return;
+      }
+
+      // 2. 处理连载操作（追更、阅读单章）
+      const seriesActionBtn = e.target.closest("[data-series-action]");
+      if (seriesActionBtn) {
+        e.stopPropagation();
+        const seriesId = parseInt(seriesActionBtn.dataset.seriesId);
+        const action = seriesActionBtn.dataset.seriesAction;
+        if (action === "continue" && !isNaN(seriesId)) {
+          await generateNextSeriesChapter(seriesId);
+          return;
+        }
+        if (action === "open-post") {
+          const postId = parseInt(seriesActionBtn.dataset.postId);
+          if (!isNaN(postId)) {
+            openPost(postId, "group", seriesId);
+          }
+          return;
+        }
+      }
+
+      // 3. 处理单篇帖子或章节行点击
+      const chapterRow = e.target.closest(".series-chapter-row");
+      if (chapterRow && !e.target.closest("button")) {
+        const postId = parseInt(chapterRow.dataset.postId);
+        const seriesId = parseInt(chapterRow.dataset.seriesId);
+        if (!isNaN(postId)) {
+          openPost(postId, "group", seriesId);
+        }
+        return;
+      }
+
       const postItem = e.target.closest(".forum-post-item");
       if (!postItem) return;
 
@@ -3081,7 +3545,6 @@ ${lastChapter.content || ""}
 
         if (confirmed) {
           try {
-            // 使用数据库事务来确保帖子和评论被同时删除
             await db.transaction(
               "rw",
               db.forumPosts,
@@ -3122,7 +3585,6 @@ ${lastChapter.content || ""}
             );
 
             await showCustomAlert("删除成功", "帖子及其所有评论已被删除。");
-            // 刷新帖子列表
             await renderGroupPosts(activeGroupId);
           } catch (error) {
             console.error("删除帖子失败:", error);
@@ -3130,7 +3592,6 @@ ${lastChapter.content || ""}
           }
         }
       } else {
-        // 如果点击的不是删除按钮，那就是点击了帖子本身，执行跳转逻辑
         const postId = postItem.dataset.postId;
         if (postId) {
           openPost(parseInt(postId));
@@ -3181,14 +3642,140 @@ ${lastChapter.content || ""}
     });
   // ▲▲▲ 新增事件监听结束 ▲▲▲
   // ▼▼▼ 【全新】圈子/小组分类筛选功能事件监听 ▼▼▼
-  // 1. 绑定主页和小组页的筛选按钮
-  document
-    .getElementById("forum-filter-btn")
-    .addEventListener("click", () => openForumFilterModal("global"));
-  // 筛选按钮
-  document.getElementById("group-filter-btn").addEventListener("click", () => {
-    openForumFilterModal("group", window.activeGroupId); // 【修改】
-  });
+  // 1. 绑定主页和小组页的收藏按钮
+  const forumFavBtn = document.getElementById("forum-favorites-btn");
+  if (forumFavBtn) {
+    forumFavBtn.addEventListener("click", openForumFavorites);
+  }
+  const groupFavBtn = document.getElementById("group-favorites-btn");
+  if (groupFavBtn) {
+    groupFavBtn.addEventListener("click", openForumFavorites);
+  }
+  const backFromFavBtn = document.getElementById("back-from-forum-favorites");
+  if (backFromFavBtn) {
+    backFromFavBtn.addEventListener("click", () => {
+      if (window.activeGroupId) {
+        showScreen("group-screen");
+      } else {
+        showScreen("forum-screen");
+      }
+    });
+  }
+
+  const favListEl = document.getElementById("forum-favorites-list");
+  if (favListEl) {
+    favListEl.addEventListener("click", async (e) => {
+      // 1. 删除整部连载
+      const delSeriesBtn = e.target.closest("[data-delete-series-id]");
+      if (delSeriesBtn) {
+        e.stopPropagation();
+        const seriesId = parseInt(delSeriesBtn.dataset.deleteSeriesId);
+        if (!isNaN(seriesId)) {
+          await handleDeleteSeries(seriesId);
+        }
+        return;
+      }
+
+      // 2. 取消整部连载收藏
+      const favSeriesUnfavBtn = e.target.closest("[data-fav-series-unfav]");
+      if (favSeriesUnfavBtn) {
+        e.stopPropagation();
+        const seriesId = parseInt(favSeriesUnfavBtn.dataset.favSeriesUnfav);
+        if (!isNaN(seriesId)) {
+          const posts = await db.forumPosts.where("seriesId").equals(seriesId).toArray();
+          for (const p of posts) {
+            p.isFavorite = false;
+            await db.forumPosts.put(p);
+          }
+          await renderForumFavorites();
+        }
+        return;
+      }
+
+      // 3. 删除单章
+      const delChapterBtn = e.target.closest("[data-delete-chapter-id]");
+      if (delChapterBtn) {
+        e.stopPropagation();
+        const chId = parseInt(delChapterBtn.dataset.deleteChapterId);
+        const pId = parseInt(delChapterBtn.dataset.postId);
+        const sId = parseInt(delChapterBtn.dataset.seriesId);
+        await handleDeleteChapter(chId, pId, sId);
+        return;
+      }
+
+      // 4. 删除单篇帖子
+      const delPostBtn = e.target.closest("[data-delete-post-id]");
+      if (delPostBtn) {
+        e.stopPropagation();
+        const postId = parseInt(delPostBtn.dataset.deletePostId);
+        if (!isNaN(postId)) {
+          await handleDeletePost(postId);
+        }
+        return;
+      }
+
+      // 5. 单篇/单章取消收藏
+      const unfavBtn = e.target.closest('[data-fav-action="unfav"]');
+      if (unfavBtn) {
+        e.stopPropagation();
+        const postId = parseInt(unfavBtn.dataset.postId);
+        if (!isNaN(postId)) {
+          const post = await db.forumPosts.get(postId);
+          if (post) {
+            post.isFavorite = false;
+            await db.forumPosts.put(post);
+            await renderForumFavorites();
+          }
+        }
+        return;
+      }
+
+      // 6. 连载操作（阅读单章）
+      const seriesActionBtn = e.target.closest("[data-series-action]");
+      if (seriesActionBtn) {
+        e.stopPropagation();
+        const action = seriesActionBtn.dataset.seriesAction;
+        if (action === "open-post") {
+          const postId = parseInt(seriesActionBtn.dataset.postId);
+          const seriesId = parseInt(seriesActionBtn.dataset.seriesId);
+          if (!isNaN(postId)) {
+            openPost(postId, "favorites", seriesId);
+          }
+          return;
+        }
+      }
+
+      // 7. 章节行或者单帖卡片整条点击
+      const chapterRow = e.target.closest(".series-chapter-row");
+      if (chapterRow && !e.target.closest("button") && !e.target.closest("textarea")) {
+        const postId = parseInt(chapterRow.dataset.postId);
+        const seriesId = parseInt(chapterRow.dataset.seriesId);
+        if (!isNaN(postId)) {
+          openPost(postId, "favorites", seriesId);
+        }
+        return;
+      }
+
+      const itemRow = e.target.closest(".favorite-item-row[data-post-id]");
+      if (itemRow && !e.target.closest("button") && !e.target.closest("textarea")) {
+        const postId = parseInt(itemRow.dataset.postId);
+        if (!isNaN(postId)) {
+          openPost(postId, "favorites");
+        }
+      }
+    });
+  }
+
+  const forumFilterBtn = document.getElementById("forum-filter-btn");
+  if (forumFilterBtn) {
+    forumFilterBtn.addEventListener("click", () => openForumFilterModal("global"));
+  }
+  const groupFilterBtn = document.getElementById("group-filter-btn");
+  if (groupFilterBtn) {
+    groupFilterBtn.addEventListener("click", () => {
+      openForumFilterModal("group", window.activeGroupId);
+    });
+  }
 
   // 2. 绑定筛选弹窗内的按钮
   document
