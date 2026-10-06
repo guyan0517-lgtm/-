@@ -699,12 +699,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let seriesMetaHtml = "";
     let series = null;
+    let nextChapterIndex = 1;
+    let isFinished = false;
+    let continueText = "追更";
     if (post.lengthType === "long" && post.seriesId) {
       series = await db.forumSeries.get(post.seriesId);
-      const nextChapterIndex =
+      nextChapterIndex =
         (series?.lastChapterIndex || post.chapterIndex || 1) + 1;
-      const isFinished = !!series?.isFinished;
-      const continueText = isFinished
+      isFinished = !!series?.isFinished;
+      continueText = isFinished
         ? "已完结"
         : `追更第${nextChapterIndex}章`;
       seriesMetaHtml = `
@@ -728,9 +731,6 @@ document.addEventListener("DOMContentLoaded", () => {
     contentEl.innerHTML = `
         <div class="post-detail-header">
             <h1 class="post-main-title">${post.title}</h1>
-            <div class="post-remark-container" style="margin: 8px 0 10px;">
-              <input type="text" id="post-remark-input" class="moe-input" style="width: 100%; height: 32px; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.05)); color: var(--text-primary); box-sizing: border-box;" placeholder="添加备注..." value="${post.remark || ''}">
-            </div>
             <div class="post-user-info-row">
                 <img src="${authorAvatarUrl}" class="post-author-avatar">
                 <div class="post-detail-meta-group">
@@ -747,7 +747,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="post-detail-actions-row" style="display: flex; gap: 12px; margin: 18px 0; justify-content: center; align-items: center;">
           <button type="button" class="mini-btn" id="post-copy-content-btn" style="flex: 1; max-width: 140px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">复制</button>
           ${post.seriesId ? `
-          <button type="button" class="mini-btn primary" id="post-continue-next-btn" style="flex: 1; max-width: 140px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color);">追更</button>
+          <button type="button" class="mini-btn primary ${isFinished ? "disabled" : ""}" id="post-continue-next-btn" ${isFinished ? "disabled" : ""} style="flex: 1; max-width: 140px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color);">${continueText}</button>
           ` : ""}
         </div>
 
@@ -779,16 +779,8 @@ document.addEventListener("DOMContentLoaded", () => {
           await showCustomAlert("提示", "这部连载已完结。");
           return;
         }
-        const nextChapterIndex = (curSeries?.lastChapterIndex || post.chapterIndex || 1) + 1;
-        await handleContinueSeries(post.seriesId, nextChapterIndex);
-      };
-    }
-
-    const remarkInput = contentEl.querySelector("#post-remark-input");
-    if (remarkInput) {
-      remarkInput.oninput = async () => {
-        post.remark = remarkInput.value;
-        await db.forumPosts.put(post);
+        await generateNextSeriesChapter(post.seriesId);
+        if (activeForumPostId) await renderPostDetails(activeForumPostId);
       };
     }
 
@@ -2657,11 +2649,10 @@ ${JSON.stringify(publicFigures, null, 2)}
       return;
     }
 
-    const targetGroupId = series.groupId || window.activeGroupId;
+    let targetGroupId = series.groupId || window.activeGroupId;
     if (!targetGroupId) {
-      ongoingSeriesTasks.delete(seriesId);
-      alert("未找到所属小组，无法追更");
-      return;
+      const allGroups = await db.forumGroups.toArray();
+      targetGroupId = allGroups[0]?.id || 1;
     }
     if (series.isFinished) {
       ongoingSeriesTasks.delete(seriesId);
@@ -2671,6 +2662,14 @@ ${JSON.stringify(publicFigures, null, 2)}
       );
       return;
     }
+
+    const { proxyUrl, apiKey, model } = state.apiConfig;
+    if (!proxyUrl || !apiKey || !model) {
+      ongoingSeriesTasks.delete(seriesId);
+      await showCustomAlert("提示", "请先在API设置中配置接口与密钥！");
+      return;
+    }
+
     const seriesAuthor =
       series.seriesAuthor ||
       getRandomItem([
@@ -2696,14 +2695,8 @@ ${JSON.stringify(publicFigures, null, 2)}
     const nextIndex = maxChapterIndex + 1;
 
     ongoingSeriesTasks.add(seriesId);
-    await showCustomAlert("追更中...", `正在写第${nextIndex}章，稍等片刻...`);
-
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) {
-      ongoingSeriesTasks.delete(seriesId);
-      alert("请先配置API！");
-      return;
-    }
+    const loadingOverlay = document.getElementById("generation-overlay");
+    if (loadingOverlay) loadingOverlay.classList.add("visible");
 
     const char1Persona =
       series.char1Persona || getPersonaByName(series.char1Name);
@@ -2837,12 +2830,19 @@ ${customPromptRequirement}
       if (activeSeriesId === seriesId) {
         await renderSeriesDetail(seriesId);
       }
+      if (loadingOverlay) loadingOverlay.classList.remove("visible");
+      if (activeForumPostId) {
+        await renderPostDetails(activeForumPostId);
+      }
       await showCustomAlert("追更完成", `第${nextIndex}章已经写好，去看看吧！`);
     } catch (error) {
       console.error("追更失败:", error);
+      if (loadingOverlay) loadingOverlay.classList.remove("visible");
       await showCustomAlert("追更失败", `发生了一个错误：\n${error.message}`);
     } finally {
+      if (loadingOverlay) loadingOverlay.classList.remove("visible");
       ongoingSeriesTasks.delete(seriesId);
+    }
     }
   }
 
@@ -2903,6 +2903,8 @@ ${customPromptRequirement}
           </div>
           <div class="series-accordion-content" style="display: none; padding: 6px 12px 10px; border-top: 1px solid var(--border-color); flex-direction: column; gap: 8px;">
             ${chapters.map((ch) => {
+              const chPost = postsMap.get(ch.postId);
+              const remarkVal = chPost?.remark || ch.remark || "";
               return `
               <div class="series-chapter-card" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); margin-top: 6px;">
                 <div class="series-chapter-row" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
@@ -2912,6 +2914,9 @@ ${customPromptRequirement}
                     <button type="button" data-delete-chapter-id="${ch.id}" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
                     <button type="button" class="mini-btn danger" data-fav-action="unfav" data-post-id="${ch.postId || ''}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px;">取消</button>
                   </div>
+                </div>
+                <div class="chapter-remark-row" style="width: 100%; margin-top: 2px;">
+                  <input type="text" class="moe-input chapter-remark-input" data-post-id="${ch.postId || ''}" style="width: 100%; height: 28px; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.05)); color: var(--text-primary); box-sizing: border-box;" placeholder="添加备注..." value="${escapeHtml(remarkVal)}">
                 </div>
               </div>
             `;
@@ -2944,6 +2949,9 @@ ${customPromptRequirement}
               <button type="button" data-delete-post-id="${post.id}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
               <button type="button" class="mini-btn danger" data-fav-action="unfav" data-post-id="${post.id}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px;">取消</button>
             </div>
+          </div>
+          <div class="chapter-remark-row" style="width: 100%; margin-top: 2px;">
+            <input type="text" class="moe-input chapter-remark-input" data-post-id="${post.id}" style="width: 100%; height: 28px; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.05)); color: var(--text-primary); box-sizing: border-box;" placeholder="添加备注..." value="${escapeHtml(post.remark || '')}">
           </div>
         `;
         listEl.appendChild(item);

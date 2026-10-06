@@ -1,4 +1,5 @@
 let activeKkCharId = null; // 用于追踪正在查看哪个角色的房屋
+const activeKkBackgroundGenerations = new Set();
 
 /**
  * 【总入口】打开“查岗”功能，显示角色选择列表
@@ -37,19 +38,48 @@ async function openKkHouseView(charId) {
 
   // 检查是否已经生成过房屋数据
   if (!chat.houseData) {
-    // 【修改点】询问用户是否生成电脑
+    if (activeKkBackgroundGenerations.has(charId)) {
+      await showCustomAlert("正在生成中", `${chat.name}的住所正在后台生成中，生成完毕后会自动弹出提示，请稍候！`);
+      return;
+    }
+
     const includeComputer = await showCustomConfirm(
       "生成选项",
-      "是否需要生成电脑内容？\n(包含浏览器历史、私人文件、Steam游戏等)",
+      "是否需要生成电脑内容？\n包含浏览器历史、私人文件、Steam游戏等",
       { confirmText: "必须生成", cancelText: "不需要" },
     );
 
-    // 将用户的选择传给生成函数
-    const generatedData = await generateHouseData(charId, includeComputer);
+    activeKkBackgroundGenerations.add(charId);
+    showNotification(charId, "已开始在后台生成住所，生成完毕后会弹出提示");
+    await showCustomAlert("后台生成中", `已开始在后台为${chat.name}生成住所，您可以继续进行其他操作，生成完成后会自动弹出提示。`);
 
-    if (!generatedData) return; // 如果生成失败，则中止
-    chat.houseData = generatedData;
-    await db.chats.put(chat); // 保存到数据库
+    // 后台异步执行生成
+    (async () => {
+      try {
+        const generatedData = await generateHouseData(charId, includeComputer);
+        if (generatedData) {
+          const freshChat = state.chats[charId] || (await db.chats.get(charId));
+          if (freshChat) {
+            freshChat.houseData = generatedData;
+            await db.chats.put(freshChat);
+            state.chats[charId] = freshChat;
+          }
+          showNotification(charId, `${chat.name}的查岗住所已生成完毕！`);
+          await showCustomAlert("生成完毕", `${chat.name}的查岗住所已在后台生成完毕！`);
+          const houseScreen = document.getElementById("kk-house-view-screen");
+          if (houseScreen && houseScreen.classList.contains("active") && activeKkCharId === charId) {
+            renderKkHouseView(generatedData);
+          }
+        }
+      } catch (err) {
+        console.error("后台生成住所失败:", err);
+        await showCustomAlert("生成失败", `后台生成${chat.name}住所时出错: ${err.message}`);
+      } finally {
+        activeKkBackgroundGenerations.delete(charId);
+      }
+    })();
+
+    return;
   }
 
   // 渲染房屋视图
@@ -66,7 +96,6 @@ async function openKkHouseView(charId) {
 async function generateHouseData(charId, includeComputer = true) {
   // 默认为true兼容旧代码
   const chat = state.chats[charId];
-  showGenerationOverlay("正在努力寻找中...");
 
   try {
     const { proxyUrl, apiKey, model } = state.apiConfig;
@@ -343,10 +372,7 @@ async function generateHouseData(charId, includeComputer = true) {
     return houseData;
   } catch (error) {
     console.error("生成房屋数据失败:", error);
-    await showCustomAlert("生成失败", `发生错误: ${error.message}`);
-    return null;
-  } finally {
-    document.getElementById("generation-overlay")?.classList.remove("visible");
+    throw error;
   }
 }
 
@@ -490,7 +516,7 @@ async function shareKkItemToChat(areaName, itemName, content) {
 
 /**
  * 【核心功能】处理“重新翻找”按钮的点击事件
- * 这会清空旧数据，并调用AI重新生成一个全新的家。
+ * 这会清空旧数据，并在后台调用AI重新生成一个全新的家。
  */
 async function handleResetKkHouse() {
   if (!activeKkCharId) return;
@@ -502,7 +528,6 @@ async function handleResetKkHouse() {
   );
 
   if (confirmed) {
-    // 【修改点】询问用户是否生成电脑
     const includeComputer = await showCustomConfirm(
       "生成选项",
       "这次生成需要包含电脑吗？",
@@ -512,50 +537,80 @@ async function handleResetKkHouse() {
       },
     );
 
-    const chat = state.chats[activeKkCharId];
-    // 将用户的选择传给生成函数
-    const generatedData = await generateHouseData(
-      activeKkCharId,
-      includeComputer,
-    );
+    const charId = activeKkCharId;
+    const chat = state.chats[charId];
+    if (!chat) return;
 
-    if (generatedData) {
-      chat.houseData = generatedData; // 用新数据覆盖旧数据
-      await db.chats.put(chat); // 保存到数据库
-      renderKkHouseView(chat.houseData); // 重新渲染界面
-      alert("一个全新的家已经生成！");
-    }
+    activeKkBackgroundGenerations.add(charId);
+    showNotification(charId, "已开始在后台重新生成住所，生成完毕后会弹出提示");
+    await showCustomAlert("后台生成中", `已开始在后台为${chat.name}重新生成住所，生成完成后会自动弹出提示。`);
+
+    (async () => {
+      try {
+        const generatedData = await generateHouseData(
+          charId,
+          includeComputer,
+        );
+
+        if (generatedData) {
+          const freshChat = state.chats[charId] || (await db.chats.get(charId));
+          if (freshChat) {
+            freshChat.houseData = generatedData;
+            await db.chats.put(freshChat);
+            state.chats[charId] = freshChat;
+          }
+          showNotification(charId, `${chat.name}的全新住所已生成完毕！`);
+          await showCustomAlert("生成完毕", `${chat.name}的全新住所已在后台生成完毕！`);
+          const houseScreen = document.getElementById("kk-house-view-screen");
+          if (
+            houseScreen &&
+            houseScreen.classList.contains("active") &&
+            activeKkCharId === charId
+          ) {
+            renderKkHouseView(generatedData);
+          }
+        }
+      } catch (err) {
+        console.error("后台重新生成住所失败:", err);
+        await showCustomAlert("生成失败", `后台重新生成${chat.name}住所时出错: ${err.message}`);
+      } finally {
+        activeKkBackgroundGenerations.delete(charId);
+      }
+    })();
   }
 }
 
 /**
  * 【核心功能 V2 - 已支持B站】处理“继续翻找”按钮的点击事件
- * 这会保留现有房屋结构，只让AI为每个区域或电脑添加新的可翻找物品/发现。
+ * 这会保留现有房屋结构，在后台让AI为每个区域或电脑添加新的可翻找物品/发现。
  */
 async function handleContinueKkSearch() {
   if (!activeKkCharId) return;
-  const chat = state.chats[activeKkCharId];
+  const charId = activeKkCharId;
+  const chat = state.chats[charId];
   if (!chat || !chat.houseData) {
     alert("还没有为这个角色生成家，请先“重新翻找”一次。");
     return;
   }
 
-  showGenerationOverlay("正在努力寻找中...");
+  showNotification(charId, `已开始在后台为${chat.name}继续翻找物品，完成后会弹出提示`);
+  await showCustomAlert("后台翻找中", `已开始在后台为${chat.name}继续翻找物品，您可以继续进行其他操作，完成后会自动弹出提示。`);
 
-  try {
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) throw new Error("API未配置");
+  (async () => {
+    try {
+      const { proxyUrl, apiKey, model } = state.apiConfig;
+      if (!proxyUrl || !apiKey || !model) throw new Error("API未配置");
 
-    // 准备一个只包含现有物品名的上下文，告诉AI不要重复
-    let existingItemsContext = "# 已有物品 (请生成与之不同的新物品或发现)\n";
-    for (const areaName in chat.houseData.areas) {
-      const area = chat.houseData.areas[areaName];
-      existingItemsContext += `## ${areaName}:\n`;
-      existingItemsContext +=
-        area.items.map((item) => `- ${item.name}`).join("\n") + "\n";
-    }
+      // 准备一个只包含现有物品名的上下文，告诉AI不要重复
+      let existingItemsContext = "# 已有物品 (请生成与之不同的新物品或发现)\n";
+      for (const areaName in chat.houseData.areas) {
+        const area = chat.houseData.areas[areaName];
+        existingItemsContext += `## ${areaName}:\n`;
+        existingItemsContext +=
+          area.items.map((item) => `- ${item.name}`).join("\n") + "\n";
+      }
 
-    const systemPrompt = `
+      const systemPrompt = `
 			# 任务
 			你是一个场景补充设计师。用户正在对角色“${chat.name}”的住所进行【补充翻找】。
 			你的任务是在【不改变现有结构】的基础上，为【指定的区域】或【电脑】添加2-3个全新的、有趣的、符合人设的可翻找物品或新发现。
@@ -588,75 +643,82 @@ async function handleContinueKkSearch() {
 			  }
 			}
 			`;
-    const messagesForApi = [{ role: "user", content: systemPrompt }];
-    let isGemini = proxyUrl === GEMINI_API_URL;
-    let geminiConfig = toGeminiRequestData(
-      model,
-      apiKey,
-      systemPrompt,
-      messagesForApi,
-      isGemini,
-    );
+      const messagesForApi = [{ role: "user", content: systemPrompt }];
+      let isGemini = proxyUrl === GEMINI_API_URL;
+      let geminiConfig = toGeminiRequestData(
+        model,
+        apiKey,
+        systemPrompt,
+        messagesForApi,
+        isGemini,
+      );
 
-    const response = isGemini
-      ? await fetch(geminiConfig.url, geminiConfig.data)
-      : await fetch(`${proxyUrl}/v1/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: messagesForApi,
-            temperature: 0.9,
-          }),
-        });
+      const response = isGemini
+        ? await fetch(geminiConfig.url, geminiConfig.data)
+        : await fetch(`${proxyUrl}/v1/chat/completions`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: model,
+              messages: messagesForApi,
+              temperature: 0.9,
+            }),
+          });
 
-    if (!response.ok) throw new Error(await response.text());
+      if (!response.ok) throw new Error(await response.text());
 
-    const data = await response.json();
-    const rawContent = (
-      isGemini
-        ? data.candidates[0].content.parts[0].text
-        : data.choices[0].message.content
-    ).replace(/^```json\s*|```$/g, "");
-    const newItemsData = JSON.parse(rawContent);
+      const data = await response.json();
+      const rawContent = (
+        isGemini
+          ? data.candidates[0].content.parts[0].text
+          : data.choices[0].message.content
+      ).replace(/^```json\s*|```$/g, "");
+      const newItemsData = JSON.parse(rawContent);
 
-    // 将AI返回的新物品/发现合并到旧数据中
-    for (const key in newItemsData) {
-      // 如果是电脑数据
-      if (key === "computer") {
-        const computerUpdates = newItemsData.computer;
-        for (const subKey in computerUpdates) {
-          // ★★★ 这里是核心合并逻辑 ★★★
-          // 确保原始数据里有这个数组，如果没有就创建一个
-          if (!chat.houseData.computer[subKey]) {
-            chat.houseData.computer[subKey] = [];
-          }
-          // 确保两个都是数组再合并
-          if (
-            Array.isArray(chat.houseData.computer[subKey]) &&
-            Array.isArray(computerUpdates[subKey])
-          ) {
-            chat.houseData.computer[subKey].push(...computerUpdates[subKey]);
+      // 将AI返回的新物品/发现合并到旧数据中
+      for (const key in newItemsData) {
+        // 如果是电脑数据
+        if (key === "computer") {
+          const computerUpdates = newItemsData.computer;
+          for (const subKey in computerUpdates) {
+            // 确保原始数据里有这个数组，如果没有就创建一个
+            if (!chat.houseData.computer[subKey]) {
+              chat.houseData.computer[subKey] = [];
+            }
+            // 确保两个都是数组再合并
+            if (
+              Array.isArray(chat.houseData.computer[subKey]) &&
+              Array.isArray(computerUpdates[subKey])
+            ) {
+              chat.houseData.computer[subKey].push(...computerUpdates[subKey]);
+            }
           }
         }
+        // 如果是区域物品数据
+        else if (chat.houseData.areas[key] && Array.isArray(newItemsData[key])) {
+          chat.houseData.areas[key].items.push(...newItemsData[key]);
+        }
       }
-      // 如果是区域物品数据
-      else if (chat.houseData.areas[key] && Array.isArray(newItemsData[key])) {
-        chat.houseData.areas[key].items.push(...newItemsData[key]);
-      }
-    }
 
-    await db.chats.put(chat);
-    alert("翻找出了更多新东西！现在可以进入区域或电脑查看了。");
-  } catch (error) {
-    console.error("继续翻找失败:", error);
-    await showCustomAlert("操作失败", `发生错误: ${error.message}`);
-  } finally {
-    document.getElementById("generation-overlay").classList.remove("visible");
-  }
+      await db.chats.put(chat);
+      showNotification(charId, `${chat.name}的新物品已翻找完毕！`);
+      await showCustomAlert("翻找完成", `已为${chat.name}翻找出了更多新东西！现在可以进入区域或电脑查看了。`);
+      const houseScreen = document.getElementById("kk-house-view-screen");
+      if (
+        houseScreen &&
+        houseScreen.classList.contains("active") &&
+        activeKkCharId === charId
+      ) {
+        renderKkHouseView(chat.houseData);
+      }
+    } catch (error) {
+      console.error("继续翻找失败:", error);
+      await showCustomAlert("操作失败", `发生错误: ${error.message}`);
+    }
+  })();
 }
 /**
  * 【新增】打开电脑物品的分享确认弹窗

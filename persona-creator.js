@@ -3,12 +3,19 @@
 (function () {
   "use strict";
 
-  let activeMode = "standard"; // standard | deep | kpc
+  let activeMode = "standard"; // standard | kpc
+  let activePreset = "standard"; // standard | deep
   let currentCardData = null;
   let reworkHistory = [];
   let isGenerating = false;
 
+  // 跑团专属模组与子模式状态
+  let kpcSelectedModuleId = null;
+  let kpcSelectedModuleName = "";
+  let kpcSubMode = "investigator"; // investigator | keeper
+
   const STORAGE_KEY = "tukey_persona_creator_state";
+  const PRESETS_STORAGE_KEY = "tukey_persona_prompt_presets";
 
   const DEFAULT_AVATARS = [
     "https://api.iconify.design/lucide:user.svg?color=%23a18cd1",
@@ -19,7 +26,24 @@
     "https://api.iconify.design/lucide:compass.svg?color=%23fccb90"
   ];
 
-  const STANDARD_SYSTEM_PROMPT = `角色卡构建大师
+  const NOISE_REDUCTION_RULES = `
+【人设写作降噪铁律（最高优先级，写人设时强制执行）】
+1. 说人话原则：全篇必须能用日常口语念出来，念不顺口、听起来像小说旁白的句子一律重写。
+2. 禁止抽象名词堆砌：不得使用“精神废墟、认知拉扯、情感风暴眼、战栗、裂隙、幻影、碎片、哀恸、病态、迷惘、撕裂、宿命、宿命感、背负、挣扎、深渊、救赎、守望、执念、禁忌、觉醒、沉溺、崩塌”等一切高浓度文学词；出现即视为违规。
+3. 禁止给角色贴“形容词人格”：禁止写“优雅克制的贵族风范”“沉默寡言却内心炽热”这类定性描述；必须替换为具体行为事实——他会在什么场合做什么事、说什么话、对什么东西反应异常。
+4. 一句话定位必须是人话：用“他是谁 + 他想要什么 + 他最怕什么 + 一个具体怪癖”的句式写，例如：“家族的长子，父亲失踪后由他撑起门面，对外永远得体周到，但抽屉里锁着一张旧照片，谁也不能碰。”
+5. 剧情功能写成功能，不写成修辞：禁止“悬疑推进器”“情感风暴眼”这类名词；写清楚“他负责推动哪件事、在哪个剧情节点做什么动作”。
+6. 每个抽象描述必须附一个具体证据：写完任何性格/心理描述后，紧跟一句“（表现为：……）”说明他实际会做什么；没有证据的描写直接删除。
+7. 自检（交稿前必查）：①把全篇朗读一遍，有没有念出来会尴尬的句子？②删掉所有形容词后，剩下的事实能不能独立成立？③每个“他是什么样的人”是否都有至少一个具体行为支撑？三项任一不过，重写。
+
+【反例（禁用）】
+“背负家族荣耀与秘密哀恸的‘白金幼君’，以优雅克制的贵族风范掩盖精神废墟，在重逢与试探中陷入死者幻影与鲜活同桌的认知拉扯。”
+
+【正例（合格写法）】
+“家族的长子，父亲失踪后由他撑起门面，对外永远得体周到，没人知道他抽屉里锁着一张旧照片。失踪的青梅竹马是他过不去的坎——新来的同桌偶尔让他愣神，因为他会下意识拿对方和记忆中的人比对：侧脸的角度、拿书的姿势。”
+`;
+
+  const DEFAULT_STANDARD_SYSTEM_PROMPT = `角色卡构建大师
 
 核心角色与目标
 你是一个顶级的角色卡构建大师，精通心理学与人物行为逻辑。你笔下的人物极具活人感与多面性，拒绝任何刻板脸谱化。你能根据用户的寥寥数语，深度推演并生成一份血肉丰满、逻辑严密的格式化AI角色卡。
@@ -86,7 +110,7 @@
 六. 核心 AI 提示词 占比 10%
 根据上述所有推演，为该角色提取生成一段直接用于 AI 系统设定的 System Reminder 系统提示词。必须明确规定该角色在互动时的绝对红线、态度基调和核心行为逻辑，以确保 AI 扮演时不 OOC。`;
 
-  const DEEP_SYSTEM_PROMPT = `角色综合档案构建大师
+  const DEFAULT_DEEP_SYSTEM_PROMPT = `角色综合档案构建大师
 
 核心结构：现实锚点 → 人格运行 → 状态切换 → 关键成因 → 行为证据 → 防OOC
 
@@ -182,7 +206,7 @@
 九. 核心 AI 系统提示词
 * 提取用于AI设定的System Reminder系统提示词，确立人设运行与对话界限`;
 
-  const KPC_SYSTEM_PROMPT = `跑团 KPC 构建大师
+  const DEFAULT_KPC_SYSTEM_PROMPT = `跑团 KPC 构建大师
 
 核心角色与目标
 你是一位克苏鲁神话TRPG守密人与角色设计师。你的任务是根据用户的概念描述，构建一位符合CoC第七版规则、充满真实生活痕迹与调查员深度的跑团KPC或重要NPC角色卡。
@@ -250,17 +274,104 @@
 六. 跑团 AI 专属系统提示词 占比 10%
 为该KPC提取一段直接用于AI系统设定的System Reminder系统提示词。明确规定该角色的说话口吻、CoC跑团判定配合度、面对恐怖时的反应边界，确保扮演时不OOC，保持悬疑与沉浸感。`;
 
+  // 模组提取专用超详尽系统提示词
+  const KPC_MODULE_EXTRACTOR_SYSTEM_PROMPT = `你是一个极其严谨的克苏鲁TRPG官方模组角色提取器与角色构建系统。
+
+【最高执行铁律——绝对禁止脑补与臆想】：
+你的唯一任务是根据用户提供的【模组原文完整文档】，精准提取出符合要求的跑团角色卡。
+1. 绝对忠于模组原文：角色的一切姓名、年龄、数值、技能、性格、经历、秘密、动机，必须100%来自模组原文！
+2. 模组没有写的内容绝对禁止自己编写与臆想：如果模组中未提及该角色的某项信息，你必须直接留空或写“模组未提及”，绝对禁止擅自推断、脑补或凭空捏造任何性格特征与喜好！模组中若写了则一五一十、原汁原味地填上去。
+3. 绝对防剧透与隐藏身份铁律：
+- 很多跑团NPC存在惊天秘密或非人本质。
+- 在公开外貌与日常特征描写中，绝对禁止提前暴露其秘密本相或非人特征！如果模组中说明该角色非人或者为妖类，在公开外貌和日常行为中绝对禁止描写兽瞳、兽耳、尖牙异瞳等剧透特征。
+- 若该角色拥有多个姓名、化名、假名、真名或代号：在公开姓名栏中，必须且只能登记模组中最公开、最默认、绝不剧透的假名与公开称呼，绝对禁止将隐藏真名登记在公开姓名中。
+
+【模式分支规则】：
+- 若当前为【调查员模式】：
+输出的角色设定必须完全以调查员公开视角为准，仅包含调查员初见与日常互动所能知晓的信息。隐藏的秘密身份、幕后黑手真相、神话生物本质必须彻底封存并严格遵守上述防剧透铁律！
+- 若当前为【守秘人模式】：
+在包含公开设定的同时，在专属秘密与幕后板块中，一五一十地将模组中记载的角色真实底细、幕后阴谋、不可告人的执念与剧透秘密完整列出，供守秘人掌握。
+
+【输出格式规范】：
+必须按照以下结构完整输出（模组有写的一五一十填入，没写的一律留空或写无）：
+一. 调查员公开档案
+* 姓名：[仅写公开默认姓名，禁止剧透真名]
+* 年龄与职业：[模组原文，若无则留空]
+* 外貌与体貌：[模组原文的客观白描，绝对禁止包含剧透特征]
+* 日常为人与待人处事：[模组原文，若无则留空]
+* 随身物品：[模组原文提及的物品]
+* 爱好与习惯：[模组若未写则留空]
+* 讨厌与禁忌：[模组若未写则留空]
+
+二. 属性与技能面板
+[必须严格提取模组中给出的COC属性与技能数值，若模组未给出具体数值则按照COC7版标准规则填入基础值]
+
+三. 羁绊与互动界限
+* 与调查员/玩家的初始关系：[模组中规定的初始立场]
+* 日常说话语气与口头习惯：[提取模组中该角色的台词风格]
+
+四. 守秘人秘密档案 (仅守秘人可见)
+* 隐藏身份与真实面目：[模组中的秘密真相]
+* 幕后动机与不可泄露的执念：[模组中的动机]
+* 触发真相时的关键反应：[模组中的设定]
+
+五. 跑团 AI 专属系统提示词
+提取一段直接用于AI系统设定的System Reminder提示词，明确角色的扮演边界、说话口吻与保密红线。`;
+
+  function getStoredPresets() {
+    try {
+      const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    } catch (e) {}
+    return {
+      standard: DEFAULT_STANDARD_SYSTEM_PROMPT,
+      deep: DEFAULT_DEEP_SYSTEM_PROMPT,
+      kpc: DEFAULT_KPC_SYSTEM_PROMPT
+    };
+  }
+
+  function saveStoredPresets(presets) {
+    try {
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+    } catch (e) {}
+  }
+
+  function getEffectiveSystemPrompt(mode, presetKey) {
+    const presets = getStoredPresets();
+    let basePrompt = "";
+    if (mode === "kpc") {
+      if (kpcSelectedModuleId) {
+        basePrompt = `${KPC_MODULE_EXTRACTOR_SYSTEM_PROMPT}\n\n【所选预设深度要求】:\n${presetKey === "deep" ? (presets.deep || DEFAULT_DEEP_SYSTEM_PROMPT) : (presets.standard || DEFAULT_STANDARD_SYSTEM_PROMPT)}`;
+      } else {
+        basePrompt = (presetKey === "deep" ? (presets.deep || DEFAULT_DEEP_SYSTEM_PROMPT) : (presets.kpc || presets.standard || DEFAULT_STANDARD_SYSTEM_PROMPT));
+      }
+    } else {
+      basePrompt = (presetKey === "deep" ? (presets.deep || DEFAULT_DEEP_SYSTEM_PROMPT) : (presets.standard || DEFAULT_STANDARD_SYSTEM_PROMPT));
+    }
+
+    return `${NOISE_REDUCTION_RULES}\n\n${basePrompt}`;
+  }
+
   function saveLocalState() {
     try {
       const inputEl = document.getElementById("persona-creator-input");
+      const extraInputEl = document.getElementById("persona-extra-prompt-input");
       const reworkInputEl = document.getElementById("persona-rework-input");
       const nameInput = document.getElementById("persona-edit-name");
       const avatarInput = document.getElementById("persona-edit-avatar-url");
       const reminderInput = document.getElementById("persona-edit-reminder");
+      const presetSelect = document.getElementById("persona-prompt-preset-select");
 
       const stateData = {
         activeMode,
+        activePreset: presetSelect ? presetSelect.value : activePreset,
+        kpcSelectedModuleId,
+        kpcSelectedModuleName,
+        kpcSubMode,
         inputText: inputEl ? inputEl.value : "",
+        extraPromptText: extraInputEl ? extraInputEl.value : "",
         reworkInputText: reworkInputEl ? reworkInputEl.value : "",
         currentCardData: currentCardData ? {
           ...currentCardData,
@@ -284,8 +395,23 @@
       const data = JSON.parse(raw);
       if (!data) return;
 
-      if (data.activeMode && ["standard", "deep", "kpc"].includes(data.activeMode)) {
+      if (data.activeMode && ["standard", "kpc"].includes(data.activeMode)) {
         activeMode = data.activeMode;
+      }
+      if (data.activePreset && ["standard", "deep"].includes(data.activePreset)) {
+        activePreset = data.activePreset;
+      }
+      if (data.kpcSelectedModuleId) {
+        kpcSelectedModuleId = data.kpcSelectedModuleId;
+        kpcSelectedModuleName = data.kpcSelectedModuleName || "";
+      }
+      if (data.kpcSubMode && ["investigator", "keeper"].includes(data.kpcSubMode)) {
+        kpcSubMode = data.kpcSubMode;
+      }
+
+      const presetSelect = document.getElementById("persona-prompt-preset-select");
+      if (presetSelect && activePreset) {
+        presetSelect.value = activePreset;
       }
 
       updateModeTabsUI();
@@ -293,6 +419,11 @@
       const inputEl = document.getElementById("persona-creator-input");
       if (inputEl && typeof data.inputText === "string") {
         inputEl.value = data.inputText;
+      }
+
+      const extraInputEl = document.getElementById("persona-extra-prompt-input");
+      if (extraInputEl && typeof data.extraPromptText === "string") {
+        extraInputEl.value = data.extraPromptText;
       }
 
       const reworkInputEl = document.getElementById("persona-rework-input");
@@ -304,7 +435,7 @@
         reworkHistory = data.reworkHistory;
       }
 
-      if (data.currentCardData && data.currentCardData.fullText) {
+      if (data.currentCardData && (data.currentCardData.fullText || data.currentCardData.hiddenPersona)) {
         currentCardData = data.currentCardData;
         renderPersonaResult();
       }
@@ -314,24 +445,134 @@
   }
 
   function updateModeTabsUI() {
-    const standardTabBtn = document.getElementById("persona-mode-standard-btn");
-    const deepTabBtn = document.getElementById("persona-mode-deep-btn");
+    const charTabBtn = document.getElementById("persona-mode-char-btn");
     const kpcTabBtn = document.getElementById("persona-mode-kpc-btn");
     const placeholder = document.getElementById("persona-creator-input");
+    const kpcModuleSection = document.getElementById("persona-kpc-module-section");
 
-    [standardTabBtn, deepTabBtn, kpcTabBtn].forEach(b => {
-      if (b) b.classList.remove("active");
-    });
+    if (charTabBtn) charTabBtn.classList.toggle("active", activeMode === "standard");
+    if (kpcTabBtn) kpcTabBtn.classList.toggle("active", activeMode === "kpc");
 
     if (activeMode === "standard") {
-      if (standardTabBtn) standardTabBtn.classList.add("active");
       if (placeholder) placeholder.placeholder = "输入简短设定，例如28岁刑警，外冷内热，私下爱做甜品";
-    } else if (activeMode === "deep") {
-      if (deepTabBtn) deepTabBtn.classList.add("active");
-      if (placeholder) placeholder.placeholder = "输入核心背景与职业处境，例如青年外科医生，身处上升期，生活节奏极快";
+      if (kpcModuleSection) kpcModuleSection.style.display = "none";
     } else if (activeMode === "kpc") {
-      if (kpcTabBtn) kpcTabBtn.classList.add("active");
-      if (placeholder) placeholder.placeholder = "输入跑团设定，例如1920年代密大教授，神秘学者，曾经历印斯茅斯事件";
+      if (placeholder) placeholder.placeholder = kpcSelectedModuleId ? "输入提取指令，例如提取模组中的关键NPC卡特探员，严格依据模组原文生成" : "输入跑团设定，例如1920年代密大教授，神秘学者，曾经历印斯茅斯事件";
+      if (kpcModuleSection) kpcModuleSection.style.display = "flex";
+      updateKpcModuleUI();
+    }
+  }
+
+  function updateKpcModuleUI() {
+    const nameEl = document.getElementById("persona-selected-module-name");
+    const clearBtn = document.getElementById("persona-clear-module-btn");
+    const invBtn = document.getElementById("persona-kpc-submode-investigator");
+    const keeperBtn = document.getElementById("persona-kpc-submode-keeper");
+
+    if (nameEl) {
+      nameEl.textContent = kpcSelectedModuleName ? `已选模组：${kpcSelectedModuleName}` : "未选择模组 (可选择已有模组提取人设)";
+      nameEl.style.color = kpcSelectedModuleName ? "var(--text-primary)" : "var(--text-secondary)";
+    }
+    if (clearBtn) {
+      clearBtn.style.display = kpcSelectedModuleId ? "inline-block" : "none";
+    }
+    if (invBtn && keeperBtn) {
+      invBtn.classList.toggle("active", kpcSubMode === "investigator");
+      keeperBtn.classList.toggle("active", kpcSubMode === "keeper");
+    }
+  }
+
+  function openPresetEditModal() {
+    const modal = document.getElementById("persona-prompt-preset-modal");
+    const select = document.getElementById("persona-prompt-preset-select");
+    const nameDisplay = document.getElementById("persona-preset-name-display");
+    const textarea = document.getElementById("persona-preset-content-textarea");
+    if (!modal || !textarea) return;
+
+    const curKey = select ? select.value : "standard";
+    const presets = getStoredPresets();
+    const curContent = curKey === "deep" ? (presets.deep || DEFAULT_DEEP_SYSTEM_PROMPT) : (presets.standard || DEFAULT_STANDARD_SYSTEM_PROMPT);
+
+    if (nameDisplay) {
+      nameDisplay.textContent = curKey === "deep" ? "深度" : "普通";
+    }
+    textarea.value = curContent;
+    modal.classList.add("visible");
+  }
+
+  function resetPresetEditModal() {
+    const select = document.getElementById("persona-prompt-preset-select");
+    const textarea = document.getElementById("persona-preset-content-textarea");
+    if (!textarea) return;
+    const curKey = select ? select.value : "standard";
+    textarea.value = curKey === "deep" ? DEFAULT_DEEP_SYSTEM_PROMPT : DEFAULT_STANDARD_SYSTEM_PROMPT;
+  }
+
+  async function savePresetEditModal() {
+    const modal = document.getElementById("persona-prompt-preset-modal");
+    const select = document.getElementById("persona-prompt-preset-select");
+    const textarea = document.getElementById("persona-preset-content-textarea");
+    if (!modal || !textarea) return;
+
+    const curKey = select ? select.value : "standard";
+    const presets = getStoredPresets();
+    presets[curKey] = textarea.value.trim() || (curKey === "deep" ? DEFAULT_DEEP_SYSTEM_PROMPT : DEFAULT_STANDARD_SYSTEM_PROMPT);
+    saveStoredPresets(presets);
+    modal.classList.remove("visible");
+    if (typeof showCustomAlert === "function") {
+      await showCustomAlert("提示", "提示词预设已保存");
+    }
+  }
+
+  async function openModuleSelectModal() {
+    const modal = document.getElementById("persona-module-select-modal");
+    const listEl = document.getElementById("persona-module-select-list");
+    if (!modal || !listEl) return;
+
+    listEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">正在加载模组列表...</div>';
+    modal.classList.add("visible");
+
+    try {
+      const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+      if (!dbInstance || !dbInstance.modules) {
+        listEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">暂无已导入的模组</div>';
+        return;
+      }
+      const modules = await dbInstance.modules.toArray();
+      if (!modules || modules.length === 0) {
+        listEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">暂无已导入的模组，请先在模组管理中导入。</div>';
+        return;
+      }
+
+      listEl.innerHTML = "";
+      modules.forEach((mod) => {
+        const item = document.createElement("div");
+        item.style.cssText = "background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer;";
+        item.innerHTML = `
+          <div style="min-width: 0; flex: 1;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${mod.name || "未命名模组"}</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">${mod.author ? `作者: ${mod.author}` : "模组文档"}</div>
+          </div>
+          <button type="button" class="moe-btn-mini select-this-mod-btn" style="height: 24px; padding: 0 10px; font-size: 11px; flex-shrink: 0;">选择</button>
+        `;
+
+        const selectAction = () => {
+          kpcSelectedModuleId = mod.id;
+          kpcSelectedModuleName = mod.name || "模组";
+          updateKpcModuleUI();
+          modal.classList.remove("visible");
+          saveLocalState();
+          if (typeof showCustomAlert === "function") {
+            showCustomAlert("模组已选择", `已载入来源模组《${kpcSelectedModuleName}》`);
+          }
+        };
+
+        item.addEventListener("click", selectAction);
+        listEl.appendChild(item);
+      });
+    } catch (e) {
+      console.error("加载模组列表失败:", e);
+      listEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">加载模组失败</div>';
     }
   }
 
@@ -433,7 +674,7 @@
       name = activeMode === "kpc" ? "调查员" : "新角色";
     }
 
-    const reminderMatch = text.match(/(?:六[.\s、]|九[.\s、]|核心\s*AI\s*提示词|跑团\s*AI\s*专属系统提示词|核心\s*AI\s*系统提示词|System\s*Reminder)[\s\S]*?(?:```(?:markdown|text)?\s*)?([\s\S]*?)(?:```|$)/i);
+    const reminderMatch = text.match(/(?:六[.\s、]|九[.\s、]|五[.\s、]|核心\s*AI\s*提示词|跑团\s*AI\s*专属系统提示词|核心\s*AI\s*系统提示词|System\s*Reminder)[\s\S]*?(?:```(?:markdown|text)?\s*)?([\s\S]*?)(?:```|$)/i);
     if (reminderMatch && reminderMatch[1] && reminderMatch[1].trim().length > 30) {
       systemReminder = reminderMatch[1].trim();
     } else {
@@ -492,10 +733,14 @@
       }
     }
 
+    const isLocked = activeMode === "kpc" && kpcSubMode === "investigator";
+
     return {
       name,
       systemReminder,
       fullText: text,
+      hiddenPersona: text,
+      isInvestigatorLocked: isLocked,
       avatarUrl,
       cocStats,
       cocSkills
@@ -520,14 +765,26 @@
     if (nameInput) nameInput.value = currentCardData.name || "";
     if (avatarImg) avatarImg.src = currentCardData.avatarUrl || DEFAULT_AVATARS[0];
     if (avatarInput) avatarInput.value = currentCardData.avatarUrl || "";
-    if (reminderInput) reminderInput.value = currentCardData.systemReminder || "";
 
     const contentDisplay = document.getElementById("persona-card-content-display");
     if (contentDisplay) {
-      if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
-        contentDisplay.innerHTML = DOMPurify.sanitize(marked.parse(currentCardData.fullText || ""));
+      if (currentCardData.isInvestigatorLocked) {
+        contentDisplay.innerHTML = `
+          <div style="padding: 16px; background: var(--secondary-bg); border-radius: 8px; border: 1px dashed var(--border-color); text-align: center; color: var(--text-secondary); line-height: 1.6;">
+            <div style="font-weight: 700; font-size: 14px; color: var(--text-primary); margin-bottom: 6px;">【调查员模式·保密档案】</div>
+            角色公开姓名：<strong style="color: var(--text-primary);">${currentCardData.name}</strong><br>
+            已启用模组防剧透协议，正文人设与幕后设定已锁定隐藏。<br>
+            添加到通讯录后，可在角色设置面板通过守密人认证查看。
+          </div>
+        `;
+        if (reminderInput) reminderInput.value = "【调查员保密状态·人设内容已锁定】";
       } else {
-        contentDisplay.textContent = currentCardData.fullText || "";
+        if (reminderInput) reminderInput.value = currentCardData.systemReminder || "";
+        if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
+          contentDisplay.innerHTML = DOMPurify.sanitize(marked.parse(currentCardData.fullText || ""));
+        } else {
+          contentDisplay.textContent = currentCardData.fullText || "";
+        }
       }
     }
 
@@ -537,11 +794,16 @@
   async function handleGeneratePersona(isRework = false) {
     if (isGenerating) return;
     const inputEl = document.getElementById("persona-creator-input");
+    const extraInputEl = document.getElementById("persona-extra-prompt-input");
     const reworkInputEl = document.getElementById("persona-rework-input");
-    const promptText = (isRework ? reworkInputEl?.value : inputEl?.value) || "";
+    const presetSelect = document.getElementById("persona-prompt-preset-select");
+    const curPresetKey = presetSelect ? presetSelect.value : "standard";
 
-    if (!isRework && !promptText.trim()) {
-      await showCustomAlert("提示", "请先输入角色的核心设定");
+    const promptText = (isRework ? reworkInputEl?.value : inputEl?.value) || "";
+    const extraPrompt = extraInputEl ? extraInputEl.value.trim() : "";
+
+    if (!isRework && !promptText.trim() && !kpcSelectedModuleId) {
+      await showCustomAlert("提示", "请先输入角色的核心设定或选择来源模组");
       return;
     }
 
@@ -581,11 +843,26 @@
     }
 
     try {
-      let systemPrompt = STANDARD_SYSTEM_PROMPT;
-      if (activeMode === "deep") {
-        systemPrompt = DEEP_SYSTEM_PROMPT;
-      } else if (activeMode === "kpc") {
-        systemPrompt = KPC_SYSTEM_PROMPT;
+      let systemPrompt = getEffectiveSystemPrompt(activeMode, curPresetKey);
+      let userPrompt = `用户提供的角色设定简要输入：\n${promptText}`;
+      if (extraPrompt) {
+        userPrompt += `\n\n【附加生成要求】：\n${extraPrompt}`;
+      }
+      userPrompt += `\n\n请按照上述完整格式规范，输出详尽完整的角色卡。`;
+
+      if (activeMode === "kpc" && kpcSelectedModuleId) {
+        const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+        let moduleChaptersText = "";
+        if (dbInstance && dbInstance.moduleChapters) {
+          const chaps = await dbInstance.moduleChapters.where("moduleId").equals(kpcSelectedModuleId).toArray();
+          moduleChaptersText = chaps.map(c => `【章节: ${c.title || ""}】\n${c.content || ""}`).join("\n\n");
+        }
+        const modeTag = kpcSubMode === "investigator" ? "【调查员模式 (防剧透与隐藏身份)】" : "【守秘人模式 (包含幕后真相与秘密)】";
+        userPrompt = `当前选中的来源模组名称：《${kpcSelectedModuleName}》\n当前提取模式：${modeTag}\n\n【模组文档内容如下】：\n${moduleChaptersText || "模组文档暂无章节文字"}\n\n【用户提取要求与角色指令】：\n${promptText || "提取模组中的核心NPC或KPC人设"}`;
+        if (extraPrompt) {
+          userPrompt += `\n\n【附加生成要求】：\n${extraPrompt}`;
+        }
+        userPrompt += `\n\n请严格遵守模组提取铁律与防剧透规则，绝不脑补，输出完整的人设卡。`;
       }
 
       let messages = [];
@@ -593,7 +870,7 @@
       if (!isRework) {
         messages = [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `用户提供的角色设定简要输入：\n${promptText}\n\n请按照上述完整格式规范，输出详尽完整的角色卡。` }
+          { role: "user", content: userPrompt }
         ];
         reworkHistory = [...messages];
       } else {
@@ -648,7 +925,8 @@
 
     const finalName = nameInput?.value.trim() || currentCardData.name || "新角色";
     const finalAvatar = avatarInput?.value.trim() || currentCardData.avatarUrl || DEFAULT_AVATARS[0];
-    const finalPersona = reminderInput?.value.trim() || currentCardData.systemReminder || currentCardData.fullText;
+    const isLocked = !!currentCardData.isInvestigatorLocked;
+    const finalPersona = currentCardData.hiddenPersona || currentCardData.fullText || (reminderInput?.value.trim() || "") || currentCardData.systemReminder || "";
 
     const confirmed = await showCustomConfirm(
       "添加好友",
@@ -692,6 +970,9 @@
         isPinned: false,
         settings: {
           aiPersona: finalPersona,
+          hiddenPersona: isLocked ? finalPersona : undefined,
+          isInvestigatorLocked: isLocked,
+          activePersonaViewMode: isLocked ? "investigator" : "keeper",
           myPersona: state.qzoneSettings?.weiboUserPersona || "一个普通人",
           maxMemory: 10,
           aiAvatar: finalAvatar,
@@ -771,21 +1052,14 @@
       });
     }
 
-    const standardTabBtn = document.getElementById("persona-mode-standard-btn");
-    const deepTabBtn = document.getElementById("persona-mode-deep-btn");
+    const charTabBtn = document.getElementById("persona-mode-char-btn");
     const kpcTabBtn = document.getElementById("persona-mode-kpc-btn");
+    const presetSelect = document.getElementById("persona-prompt-preset-select");
+    const editPresetBtn = document.getElementById("persona-edit-preset-btn");
 
-    if (standardTabBtn) {
-      standardTabBtn.addEventListener("click", () => {
+    if (charTabBtn) {
+      charTabBtn.addEventListener("click", () => {
         activeMode = "standard";
-        updateModeTabsUI();
-        saveLocalState();
-      });
-    }
-
-    if (deepTabBtn) {
-      deepTabBtn.addEventListener("click", () => {
-        activeMode = "deep";
         updateModeTabsUI();
         saveLocalState();
       });
@@ -795,6 +1069,75 @@
       kpcTabBtn.addEventListener("click", () => {
         activeMode = "kpc";
         updateModeTabsUI();
+        saveLocalState();
+      });
+    }
+
+    if (presetSelect) {
+      presetSelect.addEventListener("change", (e) => {
+        activePreset = e.target.value;
+        saveLocalState();
+      });
+    }
+
+    if (editPresetBtn) {
+      editPresetBtn.addEventListener("click", openPresetEditModal);
+    }
+
+    const presetResetBtn = document.getElementById("persona-preset-reset-btn");
+    if (presetResetBtn) {
+      presetResetBtn.addEventListener("click", resetPresetEditModal);
+    }
+
+    const presetCancelBtn = document.getElementById("persona-preset-cancel-btn");
+    if (presetCancelBtn) {
+      presetCancelBtn.addEventListener("click", () => {
+        const modal = document.getElementById("persona-prompt-preset-modal");
+        if (modal) modal.classList.remove("visible");
+      });
+    }
+
+    const presetSaveBtn = document.getElementById("persona-preset-save-btn");
+    if (presetSaveBtn) {
+      presetSaveBtn.addEventListener("click", savePresetEditModal);
+    }
+
+    const selectModBtn = document.getElementById("persona-select-module-btn");
+    if (selectModBtn) {
+      selectModBtn.addEventListener("click", openModuleSelectModal);
+    }
+
+    const cancelModSelectBtn = document.getElementById("persona-module-select-cancel-btn");
+    if (cancelModSelectBtn) {
+      cancelModSelectBtn.addEventListener("click", () => {
+        const modal = document.getElementById("persona-module-select-modal");
+        if (modal) modal.classList.remove("visible");
+      });
+    }
+
+    const clearModBtn = document.getElementById("persona-clear-module-btn");
+    if (clearModBtn) {
+      clearModBtn.addEventListener("click", () => {
+        kpcSelectedModuleId = null;
+        kpcSelectedModuleName = "";
+        updateKpcModuleUI();
+        saveLocalState();
+      });
+    }
+
+    const invSubBtn = document.getElementById("persona-kpc-submode-investigator");
+    const keeperSubBtn = document.getElementById("persona-kpc-submode-keeper");
+    if (invSubBtn) {
+      invSubBtn.addEventListener("click", () => {
+        kpcSubMode = "investigator";
+        updateKpcModuleUI();
+        saveLocalState();
+      });
+    }
+    if (keeperSubBtn) {
+      keeperSubBtn.addEventListener("click", () => {
+        kpcSubMode = "keeper";
+        updateKpcModuleUI();
         saveLocalState();
       });
     }
@@ -812,6 +1155,11 @@
     const inputEl = document.getElementById("persona-creator-input");
     if (inputEl) {
       inputEl.addEventListener("input", saveLocalState);
+    }
+
+    const extraInputEl = document.getElementById("persona-extra-prompt-input");
+    if (extraInputEl) {
+      extraInputEl.addEventListener("input", saveLocalState);
     }
 
     const reworkInputEl = document.getElementById("persona-rework-input");
@@ -833,12 +1181,14 @@
     if (clearBtn) {
       clearBtn.addEventListener("click", () => {
         const input = document.getElementById("persona-creator-input");
+        const extraInput = document.getElementById("persona-extra-prompt-input");
         const reworkInput = document.getElementById("persona-rework-input");
         const resultBox = document.getElementById("persona-creator-result");
         const emptyBox = document.getElementById("persona-creator-empty");
         const actionsBox = document.getElementById("persona-creator-actions");
 
         if (input) input.value = "";
+        if (extraInput) extraInput.value = "";
         if (reworkInput) reworkInput.value = "";
         if (resultBox) resultBox.style.display = "none";
         if (emptyBox) emptyBox.style.display = "block";
@@ -874,8 +1224,46 @@
     const avatarInput = document.getElementById("persona-edit-avatar-url");
     const avatarImg = document.getElementById("persona-edit-avatar");
     if (avatarInput && avatarImg) {
+      avatarImg.style.cursor = "pointer";
+      avatarImg.addEventListener("click", async () => {
+        const choice = typeof showChoiceModal === "function"
+          ? await showChoiceModal("头像", [
+              { text: "本地", value: "local" },
+              { text: "换图", value: "random" },
+              { text: "链接", value: "url" }
+            ])
+          : "local";
+        if (choice === "local") {
+          const b64 = typeof uploadImageLocally === "function" ? await uploadImageLocally() : null;
+          if (b64) {
+            avatarInput.value = b64;
+            avatarImg.src = b64;
+            if (currentCardData) currentCardData.avatarUrl = b64;
+            saveLocalState();
+          }
+        } else if (choice === "random") {
+          const rnd = typeof getRandomItem === "function" ? getRandomItem(DEFAULT_AVATARS) : DEFAULT_AVATARS[0];
+          avatarInput.value = rnd;
+          avatarImg.src = rnd;
+          if (currentCardData) currentCardData.avatarUrl = rnd;
+          saveLocalState();
+        } else if (choice === "url") {
+          const url = typeof showCustomPrompt === "function"
+            ? await showCustomPrompt("头像", "输入图片链接", avatarInput.value)
+            : prompt("输入图片链接", avatarInput.value);
+          if (url && url.trim()) {
+            avatarInput.value = url.trim();
+            avatarImg.src = url.trim();
+            if (currentCardData) currentCardData.avatarUrl = url.trim();
+            saveLocalState();
+          }
+        }
+      });
+
       avatarInput.addEventListener("input", () => {
-        avatarImg.src = avatarInput.value.trim() || DEFAULT_AVATARS[0];
+        const val = avatarInput.value.trim() || DEFAULT_AVATARS[0];
+        avatarImg.src = val;
+        if (currentCardData) currentCardData.avatarUrl = val;
         saveLocalState();
       });
     }
@@ -896,6 +1284,7 @@
         const rnd = typeof getRandomItem === "function" ? getRandomItem(DEFAULT_AVATARS) : DEFAULT_AVATARS[0];
         avatarInput.value = rnd;
         avatarImg.src = rnd;
+        if (currentCardData) currentCardData.avatarUrl = rnd;
         saveLocalState();
       });
     }
