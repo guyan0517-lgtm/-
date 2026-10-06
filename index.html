@@ -2380,20 +2380,23 @@
               <!-- 模组详情内容区 -->
               <div style="flex: 1; overflow-y: auto; padding: 12px 14px 20px 14px; display: flex; flex-direction: column; gap: 10px;">
                 <!-- 顶部封面与大纲信息框 -->
-                <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px;">
-                  <div style="display: flex; flex-direction: row; align-items: center; gap: 12px;">
-                    <div id="module-detail-cover" style="position: relative; width: 52px; height: 52px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color, #4A7A68); cursor: pointer; overflow: hidden; border: 1px solid var(--border-color);" title="点击上传封面头像">
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
-                        <path d="M6 6h10"></path>
-                        <path d="M6 10h10"></path>
-                      </svg>
+                <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px; position: relative;">
+                  <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px;">
+                    <div style="display: flex; flex-direction: row; align-items: center; gap: 12px; min-width: 0; flex: 1;">
+                      <div id="module-detail-cover" style="position: relative; width: 52px; height: 52px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color, #4A7A68); cursor: pointer; overflow: hidden; border: 1px solid var(--border-color);" title="点击上传封面头像">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                          <path d="M6 6h10"></path>
+                          <path d="M6 10h10"></path>
+                        </svg>
+                      </div>
+                      <input type="file" id="module-detail-cover-input" accept="image/*" style="display: none;" />
+                      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="module-detail-cover-title">模组名称</span>
+                        <span style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;" id="module-detail-meta-line">COC · 线性 · 1v1 · 0 字 · 0 章节</span>
+                      </div>
                     </div>
-                    <input type="file" id="module-detail-cover-input" accept="image/*" style="display: none;" />
-                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
-                      <span style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="module-detail-cover-title">模组名称</span>
-                      <span style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;" id="module-detail-meta-line">COC · 线性 · 1v1 · 0 字 · 0 章节</span>
-                    </div>
+                    <button type="button" class="mod-capsule-btn" id="module-detail-edit-chapters-btn" style="flex-shrink: 0; font-size: 11px; padding: 3px 10px;">编辑</button>
                   </div>
                   <div id="module-detail-tags-row" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px;"></div>
                   <div id="module-detail-desc" style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--border-color); white-space: pre-wrap;"></div>
@@ -2529,6 +2532,25 @@
                 <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--card-bg, #FFFFFF);">
                   <button type="button" class="module-btn-secondary" id="module-edit-modal-cancel-btn" style="height: 30px; padding: 0 14px; font-size: 12px; border-radius: 6px;">取消</button>
                   <button type="button" class="module-btn-primary" id="module-edit-modal-save-btn" style="height: 30px; padding: 0 16px; font-size: 12px; border-radius: 6px;">保存</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 模组章节与目录管理弹窗 -->
+            <div class="modal" id="module-chapters-edit-modal" style="display: none;">
+              <div class="modal-content" style="width: calc(100% - 32px); max-width: 380px; max-height: 84vh; padding: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF);">
+                <!-- 固定头部 -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--card-bg, #FFFFFF);">
+                  <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">章节目录管理</span>
+                  <button type="button" class="modal-close" id="module-chapters-edit-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; padding: 2px; width: 24px; height: 24px;">&times;</button>
+                </div>
+                <!-- 滚动章节列表 -->
+                <div id="module-chapters-edit-list" style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+                </div>
+                <!-- 固定底部按钮栏 -->
+                <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--card-bg, #FFFFFF);">
+                  <button type="button" class="module-btn-secondary" id="module-chapters-edit-cancel-btn" style="height: 30px; padding: 0 14px; font-size: 12px; border-radius: 6px;">取消</button>
+                  <button type="button" class="module-btn-primary" id="module-chapters-edit-save-btn" style="height: 30px; padding: 0 16px; font-size: 12px; border-radius: 6px;">保存</button>
                 </div>
               </div>
             </div>
@@ -7795,7 +7817,7 @@
     </div>
 
     <div id="chat-affection-modal" class="modal">
-      <div class="modal-content" style="max-width: 320px; width: calc(100% - 64px); margin: 0 auto; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; max-height: 80vh;">
+      <div class="modal-content" style="max-width: 300px; width: calc(100% - 80px); margin: 0 auto; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; max-height: 80vh;">
         <div class="modal-header" style="font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
@@ -7830,7 +7852,7 @@
 
     <!-- 剧情与跑团地图主弹窗 -->
     <div id="chat-map-modal" class="modal">
-      <div class="modal-content" style="max-width: 320px; width: calc(100% - 64px); margin: 0 auto; max-height: 82vh; padding: 16px 18px; border-radius: 20px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.24);">
+      <div class="modal-content" style="max-width: 300px; width: calc(100% - 80px); margin: 0 auto; max-height: 82vh; padding: 16px 18px; border-radius: 20px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.24);">
         <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><polygon points="1 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
@@ -7874,30 +7896,30 @@
 
     <!-- 小地图风格选择弹窗 -->
     <div id="chat-mini-map-style-modal" class="modal">
-      <div class="modal-content" style="max-width: 350px; width: 90%; padding: 18px; border-radius: 18px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
-          <span style="font-weight: 700; font-size: 14px;">选择地图风格</span>
-          <button type="button" id="close-mini-map-style-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+      <div class="modal-content" style="max-width: 230px; width: calc(100% - 80px); margin: 0 auto; padding: 10px 12px; border-radius: 12px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; box-shadow: 0 16px 40px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 5px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 700; font-size: 12px;">选择地图风格</span>
+          <button type="button" id="close-mini-map-style-btn" style="border: none; background: transparent; font-size: 15px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 2px;">&times;</button>
         </div>
-        <div id="mini-map-style-options-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0; max-height: 260px; overflow-y: auto;">
-          <button type="button" class="moe-btn-secondary mini-map-style-opt active" data-style="自适应" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit; font-weight: 700;">自适应</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="奶油风" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">奶油风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="莫兰迪" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">莫兰迪</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="极简INS" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">极简INS</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="日式奇幻" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">日式奇幻</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="魔法风" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">魔法风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="现代风" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">现代风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="航海风" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">航海风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="希腊风" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">希腊风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="中世纪" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">中世纪</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="纽约风" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">纽约风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="赛博朋克" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">赛博朋克</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="水彩风" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">水彩风</button>
-          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="复古胶片" style="font-size: 11.5px; padding: 8px 2px; text-align: center; border-radius: 8px; font-family: inherit;">复古胶片</button>
+        <div id="mini-map-style-options-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 2px 0; max-height: 170px; overflow-y: auto;">
+          <button type="button" class="moe-btn-secondary mini-map-style-opt active" data-style="自适应" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit; font-weight: 700;">自适应</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="奶油风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">奶油风</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="莫兰迪" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">莫兰迪</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="极简INS" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">极简INS</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="日式奇幻" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">日式奇幻</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="魔法风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">魔法风</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="现代风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">现代风</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="航海风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">航海风</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="希腊风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">希腊风</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="中世纪" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">中世纪</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="纽约风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">纽约风</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="赛博朋克" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">赛博朋克</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="水彩风" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">水彩风</button>
+          <button type="button" class="moe-btn-secondary mini-map-style-opt" data-style="复古胶片" style="font-size: 10.5px; padding: 4px 2px; text-align: center; border-radius: 5px; font-family: inherit;">复古胶片</button>
         </div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
-          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-mini-map-style-btn" style="height: 32px; font-size: 12px; padding: 0 14px; font-family: inherit;">取消</button>
-          <button type="button" class="chat-mod-footer-btn primary" id="confirm-mini-map-style-btn" style="height: 32px; font-size: 12px; padding: 0 16px; font-family: inherit;">生成地图</button>
+        <div style="display: flex; gap: 5px; justify-content: flex-end; margin-top: 2px;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-mini-map-style-btn" style="height: 24px; font-size: 11px; padding: 0 8px; font-family: inherit;">取消</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="confirm-mini-map-style-btn" style="height: 24px; font-size: 11px; padding: 0 10px; font-family: inherit;">生成地图</button>
         </div>
       </div>
     </div>
@@ -8028,14 +8050,18 @@
 
     <!-- 地图重新生图面板 -->
     <div id="module-map-regen-modal" class="modal">
-      <div class="modal-content" style="max-width: 320px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+      <div class="modal-content" style="max-width: 320px; width: calc(100% - 64px); margin: 0 auto; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
         <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
           <span style="font-weight: 700; font-size: 14px;">重新生成</span>
           <button type="button" class="close-btn" id="close-module-map-regen-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
         </div>
-        <div class="modal-body" style="padding: 12px 0; display: flex; flex-direction: column; gap: 8px;">
-          <div style="font-size: 12px; color: var(--text-secondary);" id="module-map-regen-loc-name"></div>
-          <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">点击下方按键将重新调用绘图接口为该地点生成全新图像</div>
+        <div class="modal-body" style="padding: 10px 0; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);" id="module-map-regen-loc-name"></div>
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">生图提示词</label>
+            <textarea id="module-map-regen-prompt-input" class="moe-input" rows="3" placeholder="输入或修改该地点的生图提示词" style="width: 100%; font-size: 12px; resize: none;"></textarea>
+          </div>
+          <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">生图时将实时附带设置中的画师串与正面提示词</div>
         </div>
         <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
           <button type="button" class="chat-mod-footer-btn secondary" id="cancel-module-map-regen-btn">取消</button>
@@ -8053,6 +8079,25 @@
         </div>
         <div style="flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; width: 100%;">
           <img id="module-map-expand-img" src="" alt="" style="max-width: 100%; max-height: 75vh; border-radius: 10px; object-fit: contain;" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 模组章节管理与排序分类弹窗 -->
+    <div id="module-chapters-manage-modal" class="modal">
+      <div class="modal-content" style="max-width: 380px; width: calc(100% - 48px); margin: 0 auto; max-height: 85vh; padding: 16px; border-radius: 18px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.24);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <span style="font-weight: 700; font-size: 14px;">章节管理</span>
+          </div>
+          <button type="button" class="close-btn" id="close-module-chapters-manage-btn" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 2px;">&times;</button>
+        </div>
+        <div style="font-size: 11.5px; color: var(--text-secondary);">调整章节排列顺序、分类归属或删除不需要的章节：</div>
+        <div id="module-chapters-manage-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; max-height: 50vh; padding: 4px 2px;"></div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-module-chapters-manage-btn" style="height: 32px; font-size: 12px; padding: 0 14px; font-family: inherit;">取消</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-module-chapters-manage-btn" style="height: 32px; font-size: 12px; padding: 0 16px; font-family: inherit;">保存</button>
         </div>
       </div>
     </div>
@@ -25354,13 +25399,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const negativePrompt = (options.negativePrompt || domNegative || settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry").trim();
 
           const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
-          const domPositive = document.getElementById("nai-default-positive") ? document.getElementById("nai-default-positive").value.trim() : "";
           const artist = (options.artist || domArtist || settings.artist_prompt || "").trim();
-          const positive = (options.positive || domPositive || settings.default_positive || "").trim();
 
           let promptPieces = [];
           if (artist && !prompt.includes(artist)) promptPieces.push(artist);
-          if (positive && !prompt.includes(positive)) promptPieces.push(positive);
           if (prompt && prompt.trim()) promptPieces.push(prompt.trim());
           const finalPrompt = promptPieces.filter(Boolean).join(", ");
 
@@ -29139,22 +29181,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return `${role}: ${m.content || ""}`;
           }).join("\n");
 
-          const prompt = `你是一位严谨的跑团世界观与场景地图架构师。请仔细阅读以下世界观与最近对话，推断出当前场景精准规范的地点地图。\n` +
+          const prompt = `你是一位严谨的跑团世界观与场景地图架构师。请仔细阅读以下世界观与最近对话，按照【当前范围 + 同级扩展 + 自主发散】核心规则，推断并拓展出当前场景最合理、立体且完善的地点地图。\n` +
             `设定：\n${chat.settings?.aiPersona || chat.settings?.myPersona || chat.name || ""}\n\n` +
             `对话记录：\n${recentMsgs || "暂无聊天记录"}\n\n` +
-            `核心规则（地图层级深度由玩家实际活动范围决定，禁止固定三级无脑下钻）：\n` +
-            `1. 一级（最高级，level=1, parent=""）必须为玩家上下文中实际到达过的最大地理范围：\n` +
-            `   - 玩家从未出房间/宅邸：一级即为家或房间所在建筑；\n` +
-            `   - 玩家只在单城市活动：一级即为该城市（如大阪），严禁写国家；\n` +
-            `   - 玩家跨城/跨国旅行：一级才为当前所处国家或大区域（如日本、法国）。\n` +
-            `2. 二级（level=2, parent=对应一级名称）为一级范围内的街区、大道、河畔或建筑分区（如塞纳河滨步道、心斋桥商业区）。\n` +
-            `3. 三级（level=3, parent=对应二级名称）为二级范围内可作为独立目的地、可互动的具体场所（如咖啡馆、自动贩卖机、旅店、旧书店、车站、公园）。\n` +
-            `4. 层级下限铁律：最细一级只能是“可作为目的地/可互动的场所”。地点内部的陈设、物件、货架、收银台、书架、花窗、家具一律不算地点，严禁作为地图条目出现！\n` +
-            `5. 层级可省略：玩家活动范围小（如只在家），三级不存在就绝不生成；玩家活动范围大（如城市），才生成到三级。\n` +
-            `6. 命名规则：地点名称必须简短（2至6个字，如河畔古书店、中央车站、白鹤旅馆），描述性内容一律放进desc简介中，严禁把长描述当名字。\n` +
-            `7. 地图只覆盖上下文中实际出现过的活动范围，不得凭空脑补玩家从未去过的大洋彼岸。\n` +
-            `8. 严格输出标准JSON数组，不带Markdown代码块，格式示例：\n` +
-            `[{"id":"loc_1","name":"大阪","parent":"","level":1,"desc":"故事发生的繁华现代都市舞台"},{"id":"loc_2","name":"心斋桥街区","parent":"大阪","level":2,"desc":"商业店铺与行人汇集的繁华街区"},{"id":"loc_3","name":"河畔古书店","parent":"心斋桥街区","level":3,"desc":"坐落于运河边的静谧独立旧书铺"}]`;
+            `核心规则（当前范围 + 同级扩展 + 自主发散）：\n` +
+            `1. 地图最高一级（level=1, parent=""）必须为玩家当前所处的核心最大范围。AI应自主判断范围大小：若在旅游/涉及多个城市或国家，以当前旅游范围或具体城市为准；若仅在某一城市生活，则以该城市为顶级；若仅在特定建筑或家中，则以该建筑或家为顶级。\n` +
+            `2. 【同级扩展与发散铁律】：最高一级之下，绝不能只写上下文中明确出现过的单个地点，必须主动发散并思考该区域内【全部合理存在、玩家可能前往】的各大主要地点与设施，将该区域的完整面貌全部构建出来：\n` +
+            `   - 玩家在现实城市（如巴黎/东京）：除当前所在的地点（如塞纳河畔）外，必须按照真实城市地理与景观，发散补全周围著名的标志性景观、地标、广场、街区（如巴黎铁塔、卢浮宫、香榭丽舍、战神广场、凯旋门等）；\n` +
+            `   - 玩家在家/宅邸：除当前所在的卧室外，必须将客厅、厨房、卫浴间、书房、阳台、玄关、庭院等主要房间与区域【全部完整列出】；\n` +
+            `   - 玩家在游乐园/水族馆/商场/学院：除当前游玩的单项设施（如旋转木马/单间教室）外，必须将过山车、摩天轮、美食街、周边广场、园区大门、休息区等全部主要设施与区域【全部完整列出】；\n` +
+            `   - 玩家在架空世界/奇幻区域：依据世界观深度推演周围合理存在的地形、聚落、防卫据点、商贸街道、圣所遗迹等。\n` +
+            `3. 【次级同级扩展与展开小地图】：每个次级地点（中地图）之下，同样按同级扩展发散生成其内部合理存在的具体小地点，形成可展开的精细小地图：\n` +
+            `   - 街道/街区：生成该街道上可能有的店铺、咖啡馆、书店、便利店等；\n` +
+            `   - 景点/景观（如巴黎铁塔/塞纳河畔）：生成该景点周围的步道、观景台、纪念品店、河畔古书摊、绿地公园等；\n` +
+            `   - 建筑内部：生成各功能厅室；房间为叶子节点，无需过度拆分。\n` +
+            `4. 【层级下限铁律】：最细一级必须是“可作为目的地/可互动的场所”。桌椅家具、货架、收银台等摆设严禁作为条目出现！\n` +
+            `5. 【层级深度由范围决定】：小范围（如家）两级即可；城市/大型区域到三级（顶级大地图 -> 区域/街道/景区中地图 -> 具体场所/小地图）。\n` +
+            `6. 【命名规则】：地点名称简短精练（2至6个字），并在desc中写明该地点的生动简述与环境氛围。\n` +
+            `7. 严格输出标准JSON数组，不带Markdown代码块，格式示例：\n` +
+            `[{"id":"loc_1","name":"巴黎","parent":"","level":1,"desc":"法国浪漫艺术之都"},{"id":"loc_2","name":"塞纳河畔","parent":"巴黎","level":2,"desc":"流经市中心的著名河流与两岸步道"},{"id":"loc_3","name":"河畔古书店","parent":"塞纳河畔","level":3,"desc":"坐落于河堤旁的独立旧书屋"},{"id":"loc_4","name":"巴黎铁塔","parent":"巴黎","level":2,"desc":"战神广场上的地标建筑"},{"id":"loc_5","name":"卢浮宫","parent":"巴黎","level":2,"desc":"艺术宝库与世界级博物馆"}]`;
 
           let parsedLocs = null;
 
@@ -29983,6 +30028,45 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             card.style.width = newWidth + "px";
             card.style.left = Math.max(10, rect.left - deltaW / 2) + "px";
           }, { passive: false });
+
+          let initialPinchDistance = null;
+          let initialPinchWidth = null;
+
+          const getDistance = (t1, t2) => {
+            const dx = t1.clientX - t2.clientX;
+            const dy = t1.clientY - t2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+          };
+
+          card.addEventListener("touchstart", (e) => {
+            if (e.touches.length === 2) {
+              initialPinchDistance = getDistance(e.touches[0], e.touches[1]);
+              initialPinchWidth = card.offsetWidth;
+              isDragging = false;
+            }
+          }, { passive: true });
+
+          card.addEventListener("touchmove", (e) => {
+            if (e.touches.length === 2 && initialPinchDistance && initialPinchWidth) {
+              if (e.cancelable) e.preventDefault();
+              const currentDistance = getDistance(e.touches[0], e.touches[1]);
+              const scaleRatio = currentDistance / initialPinchDistance;
+              const newWidth = Math.max(180, Math.min(window.innerWidth - 20, initialPinchWidth * scaleRatio));
+              const currentW = card.offsetWidth;
+              const deltaW = newWidth - currentW;
+              card.style.width = newWidth + "px";
+              const currentLeft = parseFloat(card.style.left) || card.getBoundingClientRect().left;
+              const newLeft = Math.max(10, Math.min(window.innerWidth - newWidth - 10, currentLeft - deltaW / 2));
+              card.style.left = newLeft + "px";
+            }
+          }, { passive: false });
+
+          card.addEventListener("touchend", (e) => {
+            if (e.touches.length < 2) {
+              initialPinchDistance = null;
+              initialPinchWidth = null;
+            }
+          });
         }
 
         function renderChatMiniMap() {
@@ -30336,18 +30420,36 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!chat) return;
 
           const locations = await getAllChatLocations(chat);
-          const locSummary = locations.map(l => `- ${l.name}：${l.desc || '场景区域'}`).join("\n");
+          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
 
-          const prompt = `你是一位顶尖的跑团游戏矢量插画师与建筑制图大师。请根据以下地点清单与场景，绘制一张极其精致、高雅且环境丰富的【${styleName}】风格全矢量示意小地图（纯SVG）。\n` +
-            `地点清单：\n${locSummary || '地点：中央广场、旧钟楼、静谧小巷、圣辉神殿'}\n\n` +
-            `制图与环境深度通用规范：\n` +
-            `1. 风格自主判断（若风格为自适应，请根据世界观与地点氛围自主决定最契合的高级配色与艺术质感，保证美观精致）：\n` +
-            `2. 真实地理与架空地形自主感知：\n` +
-            `   - 若为现实世界真实地点（如巴黎、埃菲尔铁塔、浅草寺、水族馆等）：依据真实地理格局绘制，包含标志性广场空地、蜿蜒水系河道、周边绿地大道与建筑群地貌，并做精致艺术美化；\n` +
-            `   - 若为架空世界或特定场所（如幻想城邦、游乐园、魔法学院、豪宅大厦、水下世界）：自主构想周边自然地形与环境结构（如步道连廊、水系喷泉、林带、地砖纹理、建筑轮廓等）。\n` +
-            `3. 拒绝简陋拼接，丰富环境装饰：地图背景中必须有饱满的环境装饰物（道路步道网络、河流水系、树木植被群、建筑剪影地块、装饰罗盘风向标、比例尺等），使整张地图成为一幅生动完整的场景全貌。\n` +
-            `4. 【关键交互属性】：清单中每一个具体地点的最外层 <g> 分组标签上必须加上属性 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致！\n` +
-            `5. 纯净输出：只输出单个完整的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，不带Markdown代码块，不要多余文字。`;
+          let galleryImages = [];
+          if (chat.settings?.useModuleMap !== false && chat.activeModuleId && dbInstance && dbInstance.moduleImages) {
+            try {
+              galleryImages = await dbInstance.moduleImages.where("moduleId").equals(chat.activeModuleId).toArray();
+            } catch (e) {}
+          }
+
+          const locSummary = locations.map(l => {
+            const imgTag = l.imageUrl ? "有配图参考" : "文字设定";
+            return `- 层级${l.level} ${l.name}${l.parent ? ' 所属：' + l.parent : ' 顶级'}：${l.desc || '场景区域'} 状态：${imgTag}`;
+          }).join("\n");
+
+          const gallerySummary = (galleryImages || []).map((img, idx) => {
+            return `【图库插图${idx + 1}】名称：${img.name || '未命名'}，分类与说明：${img.desc || img.annotation || img.category || '模组插图'}${img.dataUrl ? '，包含图像数据' : ''}`;
+          }).join("\n");
+
+          const prompt = `你是一位顶尖的跑团游戏矢量插画师与建筑制图大师。请根据以下地点清单、模组图库插图与环境设定，绘制一张极其精致、高雅且环境丰富的【${styleName}】风格全矢量示意小地图（纯SVG代码）。\n\n` +
+            `地点层级清单：\n${locSummary || '地点：中央广场、旧钟楼、静谧小巷、圣辉神殿'}\n\n` +
+            `模组图库插图与介绍数据：\n${gallerySummary || '暂无额外图库插图'}\n\n` +
+            `制图与图库深度判断规则：\n` +
+            `1. 风格自主判断：若所选风格为默认或自适应，请根据世界观与地点氛围自主决定最契合的高级配色与艺术质感，保证美观精致；\n` +
+            `2. 图库与地图自动判断分类：\n` +
+            `   - 第一种情况（全域大地图）：若图库或地点中包含整个区域的全景或宏观大地图，你必须参考该图的宏观地理格局、地块分布与主要路线作为整体HTML/SVG布局基准，而具体的艺术风格、增添的细化路段、绿化、河流与装饰物由你自主发挥添加；\n` +
+            `   - 第二种情况（中地图/小地图区域）：若图库或地点中包含的是某个局部中地图或具体小地图地段的图片，你初始生成的地图必须依然是完整的大地图全貌并囊括各大区域，且其中的中地图/小地图地段必须精准参考该图片的格局与特征；\n` +
+            `   - 第三种情况（中地图展开与可下钻探索）：所有中地图区域均需在地图上清晰可辨识，支持点击该中地图区域展开查看其下属小地图与精细场所；\n` +
+            `3. 真实与架空地理融合：若为真实世界地点，依据真实地理风貌美化构建；若为架空世界，依据世界观自主设计周边的地形、水系、植被、步道与建筑剪影；\n` +
+            `4. 【关键交互标记】：清单与图库中每一个具体地点的最外层 <g> 分组标签上必须加上属性 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致！\n` +
+            `5. 纯净输出：只输出单个完整的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，不带Markdown代码块，严禁多余解释。`;
 
           const apiConfig = (typeof getEffectiveApiConfig === "function")
             ? getEffectiveApiConfig("map")
@@ -30430,7 +30532,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           chat.settings.miniMapSvg = svgCode;
           chat.settings.miniMapStyle = styleName;
-          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           if (dbInstance) await dbInstance.chats.put(chat);
 
           if (typeof window.showCustomAlert === "function") {

@@ -3711,7 +3711,17 @@ ${chap.content}
       if (!mod) return;
 
       this.activeDetailModule = mod;
-      const chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
+      let chapters = [];
+      if (database.moduleChapters) {
+        chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
+        if (chapters.length === 0) {
+          if (typeof moduleId === 'string' && !isNaN(Number(moduleId))) {
+            chapters = await database.moduleChapters.where('moduleId').equals(Number(moduleId)).sortBy('sortOrder');
+          } else if (typeof moduleId === 'number') {
+            chapters = await database.moduleChapters.where('moduleId').equals(String(moduleId)).sortBy('sortOrder');
+          }
+        }
+      }
 
       // 动态计算并同步所有章节的真实字数与总字数（含目录字数、地图字数、图片简介字数）
       let chapsTotalWords = 0;
@@ -4467,12 +4477,13 @@ ${chap.content}
       }
 
       const pendingLocs = locations.filter(l => !l.imageUrl);
+      const targetLocs = (pendingLocs.length > 0) ? pendingLocs : locations;
 
-      if (pendingLocs.length === 0) {
+      if (targetLocs.length === 0) {
         if (typeof window.showCustomAlert === 'function') {
-          await window.showCustomAlert('提示', '全部地点已绘制完成');
+          await window.showCustomAlert('提示', '暂无地点可绘制');
         } else {
-          alert('全部地点已绘制完成');
+          alert('暂无地点可绘制');
         }
         return;
       }
@@ -4485,37 +4496,33 @@ ${chap.content}
       const statusTip = document.getElementById('module-map-status-tip');
       if (statusTip) {
         statusTip.style.display = 'block';
-        statusTip.textContent = `准备开始生图 剩余 ${pendingLocs.length} 张`;
+        statusTip.textContent = `准备开始生图 剩余 ${targetLocs.length} 张`;
       }
 
-      for (let i = 0; i < pendingLocs.length; i++) {
-        const loc = pendingLocs[i];
+      for (let i = 0; i < targetLocs.length; i++) {
+        const loc = targetLocs[i];
         const naiSettings = typeof window.getNovelAISettings === 'function' ? window.getNovelAISettings() : {};
         const domArtist = document.getElementById('nai-default-artist') ? document.getElementById('nai-default-artist').value.trim() : '';
-        const domPositive = document.getElementById('nai-default-positive') ? document.getElementById('nai-default-positive').value.trim() : '';
         const domNegative = document.getElementById('nai-default-negative') ? document.getElementById('nai-default-negative').value.trim() : '';
         const artist = (domArtist || naiSettings.artist_prompt || '').trim();
-        const defaultPos = (domPositive || naiSettings.default_positive || '').trim();
         const defaultNeg = (domNegative || naiSettings.default_negative || '').trim();
         const locPromptText = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
 
         try {
           if (statusTip) {
-            statusTip.textContent = `正在绘制 第 ${i + 1} 张 共 ${pendingLocs.length} 张 地点：${loc.name}`;
+            statusTip.textContent = `正在绘制 第 ${i + 1} 张 共 ${targetLocs.length} 张 地点：${loc.name}`;
           }
 
           let imgDataUrl = '';
           if (typeof window.callNovelAiDirect === 'function') {
             imgDataUrl = await window.callNovelAiDirect(locPromptText, {
               artist: artist,
-              positive: defaultPos,
               negativePrompt: defaultNeg,
               resolution: naiSettings.resolution || '1024x1024'
             });
           } else if (typeof generateNovelAIImageForCharacter === 'function') {
             const promptParts = [];
             if (artist) promptParts.push(artist);
-            if (defaultPos) promptParts.push(defaultPos);
             if (locPromptText) promptParts.push(locPromptText);
             imgDataUrl = await generateNovelAIImageForCharacter('', promptParts.join(', '));
           }
@@ -4690,12 +4697,16 @@ ${chap.content}
     openModuleMapRegenModal(loc, moduleId, chapters) {
       const modal = document.getElementById('module-map-regen-modal');
       const nameEl = document.getElementById('module-map-regen-loc-name');
+      const promptInput = document.getElementById('module-map-regen-prompt-input');
       const closeBtn = document.getElementById('close-module-map-regen-btn');
       const cancelBtn = document.getElementById('cancel-module-map-regen-btn');
       const confirmBtn = document.getElementById('confirm-module-map-regen-btn');
       if (!modal) return;
 
       if (nameEl) nameEl.textContent = `地点：${loc.name}`;
+      if (promptInput) {
+        promptInput.value = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
+      }
 
       const closeModal = () => modal.classList.remove('visible');
       if (closeBtn) closeBtn.onclick = closeModal;
@@ -4703,14 +4714,21 @@ ${chap.content}
 
       if (confirmBtn) {
         confirmBtn.onclick = async () => {
+          const customPrompt = promptInput ? promptInput.value.trim() : '';
+          loc.prompt = customPrompt || loc.prompt || loc.name;
+
+          const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+          if (dbInstance && dbInstance.moduleLocationNav && loc.id) {
+            await dbInstance.moduleLocationNav.put(loc);
+          }
+
           closeModal();
           confirmBtn.disabled = true;
+
           const naiSettings = typeof window.getNovelAISettings === 'function' ? window.getNovelAISettings() : {};
           const domArtist = document.getElementById('nai-default-artist') ? document.getElementById('nai-default-artist').value.trim() : '';
-          const domPositive = document.getElementById('nai-default-positive') ? document.getElementById('nai-default-positive').value.trim() : '';
           const domNegative = document.getElementById('nai-default-negative') ? document.getElementById('nai-default-negative').value.trim() : '';
           const artist = (domArtist || naiSettings.artist_prompt || '').trim();
-          const defaultPos = (domPositive || naiSettings.default_positive || '').trim();
           const defaultNeg = (domNegative || naiSettings.default_negative || '').trim();
           const locPromptText = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
 
@@ -4721,7 +4739,6 @@ ${chap.content}
 
             let imgDataUrl = await window.callNovelAiDirect(locPromptText, {
               artist: artist,
-              positive: defaultPos,
               negativePrompt: defaultNeg,
               resolution: naiSettings.resolution || '1024x1024'
             });
@@ -4733,10 +4750,24 @@ ${chap.content}
               imgDataUrl = await compressImage(imgDataUrl, 0.5, 900);
             }
             loc.imageUrl = imgDataUrl;
-            const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+
             if (dbInstance && dbInstance.moduleLocationNav) {
               await dbInstance.moduleLocationNav.put(loc);
             }
+            if (dbInstance && dbInstance.modules) {
+              try {
+                const mod = await dbInstance.modules.get(moduleId);
+                if (mod && Array.isArray(mod.mapNodes)) {
+                  const target = mod.mapNodes.find(m => m.name === loc.name);
+                  if (target) {
+                    target.imageUrl = imgDataUrl;
+                    target.prompt = loc.prompt;
+                    await dbInstance.modules.update(moduleId, { mapNodes: mod.mapNodes });
+                  }
+                }
+              } catch (e) {}
+            }
+
             this.renderModuleDetailMap(chapters);
           } catch (e) {
             console.error('单独生图失败', e);
@@ -5896,6 +5927,219 @@ ${imageList}
 
       if (typeof global.showCustomAlert === 'function') {
         global.showCustomAlert('保存成功', '模组信息与分类标签已更新');
+      }
+    },
+
+    async openModuleChaptersEditModal(moduleId) {
+      const database = this.getDB();
+      if (!database || !database.modules) return;
+
+      const mod = await database.modules.get(moduleId);
+      if (!mod) return;
+
+      let chapters = [];
+      if (database.moduleChapters) {
+        chapters = await database.moduleChapters.where('moduleId').equals(moduleId).sortBy('sortOrder');
+        if (chapters.length === 0) {
+          if (typeof moduleId === 'string' && !isNaN(Number(moduleId))) {
+            chapters = await database.moduleChapters.where('moduleId').equals(Number(moduleId)).sortBy('sortOrder');
+          } else if (typeof moduleId === 'number') {
+            chapters = await database.moduleChapters.where('moduleId').equals(String(moduleId)).sortBy('sortOrder');
+          }
+        }
+      }
+
+      this.activeEditingChapters = JSON.parse(JSON.stringify(chapters));
+      this.deletedChapterIds = [];
+      this.renderChaptersEditList();
+
+      const modal = document.getElementById('module-chapters-edit-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('visible');
+      }
+    },
+
+    hideModuleChaptersEditModal() {
+      const modal = document.getElementById('module-chapters-edit-modal');
+      if (modal) {
+        modal.classList.remove('visible');
+        modal.style.display = 'none';
+      }
+      this.activeEditingChapters = null;
+      this.deletedChapterIds = null;
+    },
+
+    renderChaptersEditList() {
+      const listContainer = document.getElementById('module-chapters-edit-list');
+      if (!listContainer) return;
+      listContainer.innerHTML = '';
+
+      const chapters = this.activeEditingChapters || [];
+      if (chapters.length === 0) {
+        listContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 20px 0;">暂无章节</div>';
+        return;
+      }
+
+      const standardCategories = ['导入', '事前公开', '大纲与真相', 'NPC与猫', '人设', 'HO秘密与设定', '单人线', '正文', '结局', '其他分类'];
+
+      chapters.forEach((chap, idx) => {
+        const itemCard = document.createElement('div');
+        itemCard.className = 'mod-chap-edit-card';
+        itemCard.style.cssText = 'background: var(--secondary-bg, #F9F8F5); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;';
+
+        const cleanTitle = this.cleanChapterTitle(chap.title, this.activeDetailModule?.name);
+        const curCat = chap.category || '正文';
+
+        let categoryOptionsHtml = standardCategories.map(cat => {
+          return `<option value="${cat}" ${curCat === cat ? 'selected' : ''}>${cat}</option>`;
+        }).join('');
+        if (!standardCategories.includes(curCat)) {
+          categoryOptionsHtml += `<option value="${curCat}" selected>${curCat}</option>`;
+        }
+
+        const safeTitle = (cleanTitle || '章节').replace(/["<>]/g, '');
+
+        itemCard.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+              <span style="font-size: 12px; font-weight: 700; color: var(--accent-color, #4A7A68); flex-shrink: 0;">#${idx + 1}</span>
+              <span style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeTitle}</span>
+            </div>
+            <div style="display: flex; gap: 4px; flex-shrink: 0;">
+              <button type="button" class="moe-btn-secondary chap-move-up-btn" data-idx="${idx}" style="height: 24px; padding: 0 6px; font-size: 11px; border-radius: 4px; ${idx === 0 ? 'opacity: 0.35; pointer-events: none;' : ''}">上移</button>
+              <button type="button" class="moe-btn-secondary chap-move-down-btn" data-idx="${idx}" style="height: 24px; padding: 0 6px; font-size: 11px; border-radius: 4px; ${idx === chapters.length - 1 ? 'opacity: 0.35; pointer-events: none;' : ''}">下移</button>
+              <button type="button" class="moe-btn-secondary chap-delete-btn" data-idx="${idx}" style="height: 24px; padding: 0 6px; font-size: 11px; border-radius: 4px; color: var(--tukey-danger, #e05252);">删除</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">分类</span>
+            <select class="chap-category-select" data-idx="${idx}" style="flex: 1; height: 26px; line-height: 26px; font-size: 11.5px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
+              ${categoryOptionsHtml}
+            </select>
+          </div>
+        `;
+
+        // 上移
+        const upBtn = itemCard.querySelector('.chap-move-up-btn');
+        if (upBtn && idx > 0) {
+          upBtn.addEventListener('click', () => {
+            const temp = this.activeEditingChapters[idx - 1];
+            this.activeEditingChapters[idx - 1] = this.activeEditingChapters[idx];
+            this.activeEditingChapters[idx] = temp;
+            this.renderChaptersEditList();
+          });
+        }
+
+        // 下移
+        const downBtn = itemCard.querySelector('.chap-move-down-btn');
+        if (downBtn && idx < chapters.length - 1) {
+          downBtn.addEventListener('click', () => {
+            const temp = this.activeEditingChapters[idx + 1];
+            this.activeEditingChapters[idx + 1] = this.activeEditingChapters[idx];
+            this.activeEditingChapters[idx] = temp;
+            this.renderChaptersEditList();
+          });
+        }
+
+        // 删除
+        const delBtn = itemCard.querySelector('.chap-delete-btn');
+        if (delBtn) {
+          delBtn.addEventListener('click', () => {
+            if (confirm(`确定要删除章节 "${safeTitle}" 吗？`)) {
+              const removed = this.activeEditingChapters.splice(idx, 1)[0];
+              if (removed && removed.id) {
+                if (!this.deletedChapterIds) this.deletedChapterIds = [];
+                this.deletedChapterIds.push(removed.id);
+              }
+              this.renderChaptersEditList();
+            }
+          });
+        }
+
+        // 修改分类
+        const catSelect = itemCard.querySelector('.chap-category-select');
+        if (catSelect) {
+          catSelect.addEventListener('change', (e) => {
+            this.activeEditingChapters[idx].category = e.target.value;
+          });
+        }
+
+        listContainer.appendChild(itemCard);
+      });
+    },
+
+    async saveModuleChaptersEdit() {
+      const database = this.getDB();
+      if (!database || !this.activeDetailModule) return;
+
+      const moduleId = this.activeDetailModule.id;
+      const chapters = this.activeEditingChapters || [];
+
+      // 1. 删除已删除的章节
+      if (this.deletedChapterIds && this.deletedChapterIds.length > 0 && database.moduleChapters) {
+        for (const cid of this.deletedChapterIds) {
+          try {
+            await database.moduleChapters.delete(cid);
+          } catch (e) {}
+        }
+      }
+
+      // 2. 更新保留章节的序号和分类
+      let chapsTotalWords = 0;
+      for (let i = 0; i < chapters.length; i++) {
+        const chap = chapters[i];
+        chap.sortOrder = i;
+        const cWords = this.countWords(chap.content || '');
+        chap.wordCount = cWords;
+        chapsTotalWords += cWords;
+        if (database.moduleChapters && chap.id) {
+          await database.moduleChapters.put(chap);
+        }
+      }
+
+      // 3. 更新模组字数和章节数
+      let images = [];
+      if (database && database.moduleImages) {
+        try {
+          images = await database.moduleImages.where('moduleId').equals(moduleId).toArray();
+        } catch (e) {}
+      }
+      const tocWords = this.getTocWordCount(this.activeDetailModule, chapters);
+      const mapWords = this.getMapWordCount(this.activeDetailModule, chapters);
+      const imgWords = this.getImagesWordCount(this.activeDetailModule, images);
+      const realTotalWords = chapsTotalWords + tocWords + mapWords + imgWords;
+
+      this.activeDetailModule.wordCount = realTotalWords;
+      this.activeDetailModule.chapterCount = chapters.length;
+      if (database.modules) {
+        await database.modules.update(moduleId, { wordCount: realTotalWords, chapterCount: chapters.length });
+      }
+
+      // 4. 刷新界面
+      this.currentReadingChapters = chapters;
+      this.renderModuleDetailGroupedChapters(chapters);
+      this.renderModuleDetailToc(chapters);
+      this.renderModuleDetailMap(chapters);
+
+      // 更新顶部 meta-line
+      const metaLineEl = document.getElementById('module-detail-meta-line');
+      if (metaLineEl) {
+        const ruleSys = (this.activeDetailModule.ruleSystem || 'coc').toUpperCase();
+        const typeStr = this.activeDetailModule.type || '线性';
+        const scaleStr = this.activeDetailModule.scaleType || '1v1';
+        metaLineEl.textContent = `${ruleSys} · ${typeStr} · ${scaleStr} · ${realTotalWords} 字 · ${chapters.length} 章节`;
+      }
+
+      const statsEl = document.getElementById('module-detail-stats');
+      if (statsEl) {
+        statsEl.textContent = `${chapters.length} 章节 · ${realTotalWords} 字`;
+      }
+
+      this.hideModuleChaptersEditModal();
+
+      if (typeof global.showCustomAlert === 'function') {
+        global.showCustomAlert('保存成功', '章节排序与分类已更新');
       }
     },
 
@@ -7318,6 +7562,31 @@ ${imageList}
           if (this.activeDetailModule) {
             this.openModuleEditModal(this.activeDetailModule.id);
           }
+        });
+      }
+
+      // 模组简介框右上角章节与目录编辑按键
+      const detailEditChaptersBtn = document.getElementById('module-detail-edit-chapters-btn');
+      if (detailEditChaptersBtn) {
+        detailEditChaptersBtn.addEventListener('click', () => {
+          if (this.activeDetailModule) {
+            this.openModuleChaptersEditModal(this.activeDetailModule.id);
+          }
+        });
+      }
+
+      // 模组章节管理弹窗
+      const chapModalClose = document.getElementById('module-chapters-edit-close-btn');
+      const chapModalCancel = document.getElementById('module-chapters-edit-cancel-btn');
+      const chapModalSave = document.getElementById('module-chapters-edit-save-btn');
+      if (chapModalClose) chapModalClose.addEventListener('click', () => this.hideModuleChaptersEditModal());
+      if (chapModalCancel) chapModalCancel.addEventListener('click', () => this.hideModuleChaptersEditModal());
+      if (chapModalSave) chapModalSave.addEventListener('click', () => this.saveModuleChaptersEdit());
+
+      const chapModal = document.getElementById('module-chapters-edit-modal');
+      if (chapModal) {
+        chapModal.addEventListener('click', (e) => {
+          if (e.target === chapModal) this.hideModuleChaptersEditModal();
         });
       }
 
