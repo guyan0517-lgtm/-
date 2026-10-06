@@ -21647,6 +21647,10 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 #post-screen {
   /* 使用一个极淡的渐变背景，衬托玻璃效果 */
   background: linear-gradient(135deg, #f6f9fc 0%, #eef2f3 100%) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
 }
 #phone-screen.dark-mode #group-screen,
 #phone-screen.dark-mode #post-screen {
@@ -21657,15 +21661,78 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 /* 列表容器 */
 #group-post-list {
-  padding: 0 15px 20px 15px !important;
-  gap: 15px !important;
+  padding: 10px 15px 120px 15px !important;
+  gap: 14px !important;
   display: flex !important;
   flex-direction: column !important;
   background: transparent !important;
+  flex: 1 1 0% !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box !important;
+}
+
+.forum-series-accordion-card {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  min-height: fit-content !important;
+  height: auto !important;
+  box-sizing: border-box !important;
+  background: var(--card-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+.series-accordion-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+  min-height: 54px !important;
+  height: auto !important;
+  padding: 12px 14px !important;
+  background: var(--secondary-bg, rgba(128,128,128,0.04)) !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+}
+
+.series-accordion-content {
+  flex-shrink: 0 !important;
+  min-height: fit-content !important;
+  height: auto !important;
+  box-sizing: border-box !important;
+}
+
+.series-chapter-card {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-shrink: 0 !important;
+  min-height: 42px !important;
+  height: auto !important;
+  box-sizing: border-box !important;
 }
 
 /* 单个帖子卡片 */
 .forum-post-item {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  min-height: fit-content !important;
+  height: auto !important;
+  box-sizing: border-box !important;
   /* 玻璃背景 */
   background: rgba(255, 255, 255, 0.7) !important;
   backdrop-filter: blur(12px);
@@ -22404,11 +22471,11 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   gap: 8px;
   margin-bottom: 12px;
 }
-/* 参数行 (字数/类型/文风) */
+/* 参数行 (字数/类型) */
 .params-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
   margin-bottom: 12px;
 }
 /* 文风与世界观拉长功能及创作台自适应 */
@@ -22455,15 +22522,14 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   /* 核心修复：宽度自适应，防止溢出屏幕 */
   width: auto !important;
   margin: 10px 15px !important; /* 左右留出间隙 */
-  padding: 15px !important;
+  padding: 16px !important;
   box-sizing: border-box !important; /* 确保padding包含在宽度内 */
 
   /* 样式美化 */
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(20px);
+  background: #ffffff !important;
   border-radius: 16px !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid var(--border-color, #e5e7eb) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
 
   /* 布局属性 */
   flex-shrink: 0 !important; /* 防止被挤压 */
@@ -22477,8 +22543,29 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 #fanfic-preference-bar textarea {
   width: 100% !important;
   max-width: 100% !important;
-  min-width: 0 !important; /* flex布局下防止溢出的关键 */
+  min-width: 0 !important;
   box-sizing: border-box !important;
+}
+
+#fanfic-preference-bar select {
+  background: var(--secondary-bg, #f3f4f6) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color, #e5e7eb) !important;
+  border-radius: 8px !important;
+  height: 34px !important;
+  line-height: 22px !important;
+  padding: 4px 10px !important;
+  font-size: 13px !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+#phone-screen.dark-mode #fanfic-preference-bar select {
+  background: var(--secondary-bg, #2c2c2e) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
 }
 
 /* 调整行布局，防止手机上挤在一起 */
@@ -22491,7 +22578,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   gap: 8px !important;
 }
 .fanfic-row.cp-row select {
-  width: 45% !important; /* 让两个下拉框平分宽度 */
+  width: 45% !important;
 }
 
 /* 预设行按钮防溢出 */
@@ -26068,44 +26155,62 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 /* --- 1. 背景：柔和的高级灰/纸张色 --- */
 #forum-bookshelf-screen {
-  background-color: #f7f9fc !important;
+  background-color: var(--background-color) !important;
   background-image: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
 }
 
 #forum-series-detail-screen {
-  background-color: #ffffff !important;
+  background-color: var(--background-color) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+#forum-series-chapter-list {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  padding-bottom: 80px !important;
 }
 
 /* --- 2. 书架列表容器 --- */
 #forum-bookshelf-list {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 16px !important;
-  padding: 20px 16px !important;
-
-  /* 清除旧样式 */
+  gap: 14px !important;
+  padding: 16px !important;
+  padding-bottom: 90px !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   grid-template-columns: none !important;
 }
 
-/* --- 3. 书籍卡片：左图右文布局 --- */
+/* --- 3. 书籍卡片：独立锁定外框 --- */
 .forum-bookshelf-card {
   position: relative !important;
   display: flex !important;
-  flex-direction: column !important; /* 保持内部垂直排列，但我们用padding腾出位置 */
+  flex-direction: column !important;
+  flex-shrink: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
   justify-content: center !important;
 
-  background: #ffffff !important;
-  border-radius: 16px !important;
-  padding: 16px !important;
-  padding-left: 100px !important; /* ★★★ 核心：左侧留出 100px 给封面 */
-
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
-  border: 1px solid rgba(0, 0, 0, 0.02) !important;
-  min-height: 110px !important; /* 保证高度足够放封面 */
-  overflow: visible !important; /* 允许封面稍微突出一点点立体感 */
+  background: var(--card-bg, #ffffff) !important;
+  border-radius: 14px !important;
+  padding: 14px 14px 14px 96px !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid var(--border-color) !important;
+  min-height: 110px !important;
+  overflow: visible !important;
   transition: transform 0.2s ease !important;
 }
 

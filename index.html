@@ -1835,27 +1835,28 @@
               <div style="margin-top: 10px; padding: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">
                 <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  <span>定时导出</span>
+                  <span>定时</span>
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center;">
-                  <label style="font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0;">间隔时间</label>
-                  <input type="number" id="auto-export-interval-value" class="moe-input" placeholder="留空不开启" min="1" style="flex: 1; height: 30px; font-size: 11.5px; border-radius: 6px;" />
+                  <label style="font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0;">间隔</label>
+                  <input type="number" id="auto-export-interval-value" class="moe-input" placeholder="留空关闭" min="1" style="flex: 1; height: 30px; font-size: 11.5px; border-radius: 6px;" />
                   <select id="auto-export-interval-unit" class="moe-input" style="height: 30px; line-height: 18px; font-size: 11.5px; width: 70px; border-radius: 6px; padding: 2px 4px; background: var(--card-bg); color: var(--text-primary);">
                     <option value="minute">分钟</option>
                     <option value="hour">小时</option>
                   </select>
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center;">
-                  <label style="font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0;">导出方式</label>
+                  <label style="font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0;">方式</label>
                   <select id="auto-export-mode" class="moe-input" style="height: 30px; line-height: 18px; font-size: 11.5px; flex: 1; border-radius: 6px; padding: 2px 6px; background: var(--card-bg); color: var(--text-primary);">
                     <option value="normal">普通导出</option>
                     <option value="stream">流式导出</option>
                   </select>
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center;">
-                  <label style="font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0;">导出路径</label>
-                  <input type="text" id="auto-export-path-display" class="moe-input" placeholder="默认下载目录" readonly style="flex: 1; height: 30px; font-size: 11px; border-radius: 6px; background: var(--card-bg);" />
-                  <button type="button" class="moe-btn-secondary" id="auto-export-pick-path-btn" style="height: 30px; padding: 0 8px; font-size: 11px; border-radius: 6px; flex-shrink: 0;">选择路径</button>
+                  <label style="font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0;">路径</label>
+                  <input type="text" id="auto-export-path-display" class="moe-input" placeholder="默认目录" readonly style="flex: 1; min-width: 0; height: 28px; font-size: 11px; border-radius: 6px; background: var(--card-bg);" />
+                  <input type="file" id="auto-export-folder-input" webkitdirectory directory style="display: none;" />
+                  <button type="button" class="moe-btn-mini" id="auto-export-pick-path-btn" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px; flex-shrink: 0; box-sizing: border-box; width: auto; min-width: auto; line-height: 1; display: inline-flex; align-items: center; justify-content: center;">选择</button>
                 </div>
               </div>
 
@@ -2797,6 +2798,9 @@
           <div class="modal-content" style="width: 310px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
             <!-- 头部：头像、名称、在线状态与关闭按钮 -->
             <div style="position: relative; padding: 14px 14px 10px 14px; display: flex; flex-direction: column; align-items: center; border-bottom: 1px solid var(--border-color); background: var(--secondary-bg);">
+              <button type="button" id="contact-card-special-btn" title="特别关心" style="position: absolute; top: 10px; left: 10px; background: transparent; border: none; cursor: pointer; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0;">
+                <svg id="contact-card-special-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+              </button>
               <button type="button" id="contact-card-close-btn" onclick="closeContactModal('contact-card-modal')" style="position: absolute; top: 10px; right: 10px; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
               <img id="contact-card-avatar" src="" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border-color); margin-bottom: 6px;" />
               <div id="contact-card-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary); text-align: center; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
@@ -6287,7 +6291,13 @@
           <div class="settings-group-card moe-card">
             <div class="settings-section-title" style="display: flex; justify-content: space-between; align-items: center;">
               <span>📝 基础资料</span>
-              <button type="button" id="open-chat-module-btn" class="moe-btn-mini" style="font-size: 11px; width: 40px; min-width: 40px; max-width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; line-height: 1; height: 20px; box-sizing: border-box;">模组</button>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button type="button" id="toggle-special-attention-btn" class="moe-btn-mini" style="font-size: 11px; padding: 0 8px; height: 20px; display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box; color: var(--text-secondary); border: 1px solid var(--border-color); background: var(--secondary-bg); border-radius: 6px; cursor: pointer;">
+                  <svg id="special-attention-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                  <span id="special-attention-text">关心</span>
+                </button>
+                <button type="button" id="open-chat-module-btn" class="moe-btn-mini" style="font-size: 11px; width: 40px; min-width: 40px; max-width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; line-height: 1; height: 20px; box-sizing: border-box;">模组</button>
+              </div>
             </div>
             <div class="form-group" id="chat-name-group">
               <label>角色真名 /群聊名称(AI只认这个，修改会影响记忆)</label>
@@ -10337,13 +10347,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 placeholder="例: 甜文/ABO"
               />
             </div>
-            <div class="input-group">
-              <label>篇幅</label>
-              <select id="fanfic-length-select">
-                <option value="short">短篇</option>
-                <option value="long">长篇连载</option>
-              </select>
-            </div>
           </div>
 
           <!-- 写作规范 -->
@@ -10394,7 +10397,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         id="post-bottom-bar"
         style="padding: 10px 16px; background: var(--background-color); border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: flex-end; gap: 10px;"
       >
-        <button id="post-fav-btn" class="moe-btn" style="min-width: 90px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px;">
+        <button id="post-fav-btn" class="moe-btn" style="min-width: 90px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color);">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
           <span id="post-fav-text">收藏</span>
         </button>
@@ -22457,7 +22460,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             : allChars;
 
           if (contactsCurrentSubTab === "special") {
-            filteredChars = filteredChars.filter(c => c.isPinned || c.settings?.isPinned);
+            filteredChars = filteredChars.filter(c => c.isSpecialAttention || c.settings?.isSpecialAttention || c.isPinned || c.settings?.isPinned);
             if (filteredChars.length === 0) {
               listEl.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 40px 0; font-size: 13px;">暂无特别关心的好友</p>`;
               return;
@@ -22485,11 +22488,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const avatar = char.settings?.aiAvatar || defaultAvatar;
               const displayName = char.settings?.remarkName || char.name;
               const status = char.status?.text || "在线";
+              const isSpec = !!(char.isSpecialAttention || char.settings?.isSpecialAttention);
 
               row.innerHTML = `
                 <img src="${avatar}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
-                  <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
+                    ${isSpec ? '<span style="display: inline-flex; align-items: center; vertical-align: middle;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#e05252" stroke="#e05252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span>' : ''}
+                  </div>
                   <span style="font-size: 11px; color: var(--text-secondary);">${status}</span>
                 </div>
               `;
@@ -22599,10 +22606,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const displayName = char.settings?.remarkName || char.name;
                 const status = char.status?.text || "在线";
 
+                const isSpec = !!(char.isSpecialAttention || char.settings?.isSpecialAttention);
+
                 row.innerHTML = `
                   <img src="${avatar}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
                   <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
-                    <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                      <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
+                      ${isSpec ? '<span style="display: inline-flex; align-items: center; vertical-align: middle;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#e05252" stroke="#e05252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span>' : ''}
+                    </div>
                     <span style="font-size: 11px; color: var(--text-secondary);">${status}</span>
                   </div>
                 `;
@@ -22934,6 +22946,38 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (!skillsContainer) return;
               const isHidden = skillsContainer.style.display === "none";
               skillsContainer.style.display = isHidden ? "flex" : "none";
+            };
+          }
+
+          const specialBtn = document.getElementById("contact-card-special-btn");
+          const specialSvg = document.getElementById("contact-card-special-svg");
+          const isSpecial = !!(chat.isSpecialAttention || chat.settings?.isSpecialAttention);
+          if (specialSvg) {
+            if (isSpecial) {
+              specialSvg.setAttribute("fill", "#e05252");
+              specialSvg.setAttribute("stroke", "#e05252");
+            } else {
+              specialSvg.setAttribute("fill", "none");
+              specialSvg.setAttribute("stroke", "var(--text-secondary)");
+            }
+          }
+          if (specialBtn) {
+            specialBtn.onclick = async () => {
+              const currentVal = !(chat.isSpecialAttention || chat.settings?.isSpecialAttention);
+              chat.isSpecialAttention = currentVal;
+              if (chat.settings) chat.settings.isSpecialAttention = currentVal;
+              await db.chats.put(chat);
+              if (specialSvg) {
+                if (currentVal) {
+                  specialSvg.setAttribute("fill", "#e05252");
+                  specialSvg.setAttribute("stroke", "#e05252");
+                } else {
+                  specialSvg.setAttribute("fill", "none");
+                  specialSvg.setAttribute("stroke", "var(--text-secondary)");
+                }
+              }
+              await renderContactsScreen();
+              if (typeof renderChatList === "function") await renderChatList();
             };
           }
 
@@ -23380,7 +23424,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           textImageModeContent.classList.remove("active");
         }
 
-        async function exportBackup() {
+        async function exportBackup(customFileName = null, customDirHandle = null) {
           try {
             const backupData = {
               version: 1,
@@ -23627,13 +23671,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               lockscreenWallpaper: state.globalSettings.lockscreenWallpaper,
             };
 
-            const blob = new Blob([JSON.stringify(backupData, null, 2)], {
+            const actualFileName = customFileName || `EPhone-Full-Backup-${new Date().toISOString().split("T")[0]}.json`;
+            const jsonText = JSON.stringify(backupData, null, 2);
+            if (customDirHandle && typeof customDirHandle.getFileHandle === "function") {
+              try {
+                const fileHandle = await customDirHandle.getFileHandle(actualFileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(jsonText);
+                await writable.close();
+                await showCustomAlert("导出成功", `已成功导出至文件夹: ${actualFileName}`);
+                return;
+              } catch (fsErr) {
+                console.warn("写入选定目录失败，将使用浏览器下载:", fsErr);
+              }
+            }
+
+            const blob = new Blob([jsonText], {
               type: "application/json",
             });
             const url = URL.createObjectURL(blob);
             const link = Object.assign(document.createElement("a"), {
               href: url,
-              download: `EPhone-Full-Backup-${new Date().toISOString().split("T")[0]}.json`,
+              download: actualFileName,
             });
             document.body.appendChild(link);
             link.click();
@@ -26311,6 +26370,126 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.callNovelAiDirect = callNovelAiDirect;
 
+        let autoExportTimer = null;
+        let lastAutoExportTriggerSlot = "";
+
+        function formatAutoExportDateTime(d = new Date()) {
+          const pad = (n) => String(n).padStart(2, "0");
+          const YYYY = d.getFullYear();
+          const MM = pad(d.getMonth() + 1);
+          const DD = pad(d.getDate());
+          const hh = pad(d.getHours());
+          const mm = pad(d.getMinutes());
+          const ss = pad(d.getSeconds());
+          return `${YYYY}-${MM}-${DD}_${hh}-${mm}-${ss}.json`;
+        }
+
+        async function triggerAutoExportPrompt() {
+          const confirmed = typeof window.showCustomConfirm === "function"
+            ? await window.showCustomConfirm("定时导出", "已到达定时导出时间，是否立即执行备份导出？")
+            : confirm("已到达定时导出时间，是否立即执行备份导出？");
+          if (confirmed) {
+            const fn = formatAutoExportDateTime();
+            const mode = state.apiConfig?.autoExportMode || "normal";
+            if (mode === "stream") {
+              await exportDataStream(fn, window._autoExportDirHandle);
+            } else {
+              await exportBackup(fn, window._autoExportDirHandle);
+            }
+          }
+        }
+
+        function checkAndTriggerAutoExport() {
+          const cfg = state.apiConfig || {};
+          const rawVal = cfg.autoExportIntervalValue;
+          if (rawVal === "" || rawVal === undefined || rawVal === null) return;
+          const val = parseInt(rawVal, 10);
+          if (isNaN(val) || val <= 0) return;
+
+          const unit = cfg.autoExportIntervalUnit || "minute";
+          const now = new Date();
+          let shouldTrigger = false;
+          let currentSlotKey = "";
+
+          if (unit === "hour") {
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            if (currentHour % val === 0 && currentMinute === 0) {
+              currentSlotKey = `H_${now.toDateString()}_${currentHour}`;
+              if (lastAutoExportTriggerSlot !== currentSlotKey) {
+                shouldTrigger = true;
+                lastAutoExportTriggerSlot = currentSlotKey;
+              }
+            }
+          } else {
+            const totalMins = now.getHours() * 60 + now.getMinutes();
+            if (totalMins % val === 0) {
+              currentSlotKey = `M_${now.toDateString()}_${totalMins}`;
+              if (lastAutoExportTriggerSlot !== currentSlotKey) {
+                shouldTrigger = true;
+                lastAutoExportTriggerSlot = currentSlotKey;
+              }
+            }
+          }
+
+          if (shouldTrigger) {
+            triggerAutoExportPrompt();
+          }
+        }
+
+        function setupAutoExportScheduler() {
+          if (autoExportTimer) {
+            clearInterval(autoExportTimer);
+            autoExportTimer = null;
+          }
+          const cfg = state.apiConfig || {};
+          const rawVal = cfg.autoExportIntervalValue;
+          if (rawVal === "" || rawVal === undefined || rawVal === null) return;
+          const val = parseInt(rawVal, 10);
+          if (isNaN(val) || val <= 0) return;
+
+          autoExportTimer = setInterval(() => {
+            checkAndTriggerAutoExport();
+          }, 15000);
+        }
+        window.setupAutoExportScheduler = setupAutoExportScheduler;
+
+        async function handlePickAutoExportPath() {
+          const folderInput = document.getElementById("auto-export-folder-input");
+          if (folderInput) {
+            folderInput.onchange = async (e) => {
+              const files = e.target.files;
+              if (files && files.length > 0) {
+                const file = files[0];
+                const folderName = file.webkitRelativePath ? file.webkitRelativePath.split("/")[0] : (file.name || "本地目录");
+                const pathDisplay = document.getElementById("auto-export-path-display");
+                if (pathDisplay) pathDisplay.value = folderName;
+                state.apiConfig.autoExportPathName = folderName;
+                await db.apiConfig.put(state.apiConfig);
+                if (typeof window.showCustomAlert === "function") {
+                  await window.showCustomAlert("路径", `已选定文件夹: ${folderName}`);
+                }
+              }
+            };
+            folderInput.click();
+            return;
+          }
+          if (window.showDirectoryPicker) {
+            try {
+              const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+              window._autoExportDirHandle = dirHandle;
+              const pathDisplay = document.getElementById("auto-export-path-display");
+              if (pathDisplay) pathDisplay.value = dirHandle.name;
+              state.apiConfig.autoExportPathName = dirHandle.name;
+              await db.apiConfig.put(state.apiConfig);
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("路径", `已选定文件夹: ${dirHandle.name}`);
+              }
+            } catch (e) {}
+          }
+        }
+        window.handlePickAutoExportPath = handlePickAutoExportPath;
+
         function renderApiSettings() {
           // 1. 更新 API 相关的输入框
           document.getElementById("proxy-url").value =
@@ -26592,6 +26771,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             state.apiConfig.githubBackupMode || "full";
           document.getElementById("github-backup-interval").value =
             state.apiConfig.githubBackupInterval || 30;
+
+          // 定时导出设置回显
+          const autoExportValInput = document.getElementById("auto-export-interval-value");
+          if (autoExportValInput) autoExportValInput.value = (state.apiConfig.autoExportIntervalValue !== undefined && state.apiConfig.autoExportIntervalValue !== null) ? state.apiConfig.autoExportIntervalValue : "";
+          const autoExportUnitSelect = document.getElementById("auto-export-interval-unit");
+          if (autoExportUnitSelect) autoExportUnitSelect.value = state.apiConfig.autoExportIntervalUnit || "minute";
+          const autoExportModeSelect = document.getElementById("auto-export-mode");
+          if (autoExportModeSelect) autoExportModeSelect.value = state.apiConfig.autoExportMode || "normal";
+          const autoExportPathDisplay = document.getElementById("auto-export-path-display");
+          if (autoExportPathDisplay) autoExportPathDisplay.value = state.apiConfig.autoExportPathName || "";
+          const pickPathBtn = document.getElementById("auto-export-pick-path-btn");
+          if (pickPathBtn) {
+            pickPathBtn.onclick = handlePickAutoExportPath;
+          }
 
           // 渲染温度滑块的UI
           const tempSlider = document.getElementById("temperature-slider");
@@ -27021,6 +27214,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             selectedBadgeHtml = `<span class="intimacy-badge-display"><img src="${chat.settings.selectedIntimacyBadge}" alt="badge"></span>`;
           }
 
+          const isSpecialAttention = !chat.isGroup && !!(chat.isSpecialAttention || chat.settings?.isSpecialAttention);
+          const specialAttentionBadgeHtml = isSpecialAttention
+            ? `<span class="special-attention-badge" style="display: inline-flex; align-items: center; margin-left: 4px; vertical-align: middle;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#e05252" stroke="#e05252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span>`
+            : "";
+
           content.innerHTML = `
 			        <div class="chat-list-item" data-chat-id="${chat.id}">
 			            <img src="${avatar || defaultAvatar}" class="avatar">
@@ -27032,6 +27230,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                               : chat.name
                           }</span>
 			                    ${chat.isGroup ? '<span class="group-tag">群聊</span>' : ""}
+			                    ${specialAttentionBadgeHtml}
 			                    ${streakHtml}
 			                    ${selectedBadgeHtml} <!-- 把徽章放在火花后面 -->
 			                </div>
@@ -27070,6 +27269,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const itemEl = content.querySelector(".chat-list-item");
           if (itemEl) {
             itemEl.addEventListener("click", (e) => {
+              if (window.chatSwipeIgnoreClick) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+              }
+              if (content.classList.contains("swiped")) {
+                content.classList.remove("swiped");
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+              }
               if (e.target.closest(".avatar, .avatar-with-frame")) {
                 e.stopPropagation();
                 handleUserPat(chat.id, chat.name);
@@ -33710,7 +33920,7 @@ ${luckGuideNote}
 			# 角色
 			你是一个群聊AI，负责扮演【除了用户以外】的所有角色。
 			# 【对话节奏铁律 (至关重要！)】
-			你的回复【必须】模拟真人的打字和思考习惯。不要一次性发送一大段文字，你应该将你想说的话，拆分成${replyCountInstruction}条消息气泡来发送，每条消息最好不要超过30个字。这会让对话看起来更自然、更真实。
+			你的回复【必须】模拟真人的打字和思考习惯。不要一次性发送一大段文字，你应该将你想说的话，拆分成${replyCountInstruction}条消息气泡来发送。这会让对话看起来更自然、更真实。
 			**角色回复顺序不固定，可以交叉回复，例如角色A、角色B、角色B、角色A、角色C这样的交叉顺序。不一定要一个人全部说完了才轮到下一个人。角色之间【必须】有互动对话。**
 			# 【【【身份铁律：这是最高指令，必须严格遵守】】】
 			1.  **核心任务**: 你的唯一任务是扮演且仅能扮演下方“群成员列表”中明确列出的角色。
@@ -40722,11 +40932,9 @@ ${luckStatusDirective}
 			你现在【就是】角色 "${chat.name}"。这是一个秘密的、后台的独立行动。你的所有思考和决策都必须以 "${
         chat.name
       }" 的第一人称视角进行。
-			当前时间是（${currentTime}），你和用户（${userNickname}）已经有${Math.round(
-        timeSinceLastMessage,
-      )}分钟没有互动了。你的任务是回顾你们最近的对话，并根据你的人设，【自然地延续对话】或【开启一个新的、相关的话题】来主动联系用户。
+			${isCognitionEnabled ? `当前时间是 ${currentTime}，` : ""}你和用户（${userNickname}）已经有一段时间没有互动了。你的任务是回顾你们最近的对话，并根据你的人设，【自然地延续对话】或【开启一个新的、相关的话题】来主动联系用户。
 			# 【对话节奏铁律 (至关重要！)】
-			你的回复【必须】模拟真人的打字和思考习惯。你应该将你想说的话，拆分成${replyCountInstruction}条，绝对不要一次性发送一大段文字！** 每条消息最好不要超过30个字，这会让对话看起来更自然、更真实。
+			你的回复【必须】模拟真人的打字和思考习惯。你应该将你想说的话，拆分成${replyCountInstruction}条，绝对不要一次性发送一大段文字！这会让对话看起来更自然、更真实。
 			# 【【【输出铁律：这是最高指令】】】
 			你的回复【必须且只能】是一个严格的JSON数组格式的字符串，必须多发几条，禁止全部杂糅在一条，是在线上，例如 \`[{"type": "text", "content": "你好呀"}]\`。
 			【绝对禁止】返回任何JSON以外的文本、解释、分析或你自己的思考过程。你不是分析师，你就是角色本人。
@@ -40807,7 +41015,7 @@ ${luckStatusDirective}
 			${weiboContextForAction}
 			${countdownContext}
 			${worldBookContext}
-			-   **当前时间**: ${currentTime}
+			${isCognitionEnabled ? `-   **当前时间**: ${currentTime}` : ""}
 			-   **你们最近的对话摘要**:
 			${recentContextSummary}
             ${summaryContext}
@@ -45551,6 +45759,7 @@ ${luckStatusDirective}
             let sharedContext = "";
             // 后台群聊活动中不存在用户分享聊天记录的上下文，因此这里为空。
 
+            const isCognitionEnabled = state.apiConfig?.realTimeCognitionEnabled !== false;
             const now = new Date();
             const currentTime = now.toLocaleTimeString("zh-CN", {
               hour: "numeric",
@@ -45570,12 +45779,10 @@ ${luckStatusDirective}
             // updated by lrq 251027
             const systemPrompt = `
 			# 任务
-			你是一个群聊后台模拟器。当前时间是${currentTime}，群聊 "${chat.name}" 已经沉寂了 ${Math.round(
-        timeSinceLastMessage,
-      )} 分钟，用户(昵称: "${chat.settings.myNickname || "我"}")不在线。
+			你是一个群聊后台模拟器。${isCognitionEnabled ? `当前时间是 ${currentTime}，` : ""}群聊 "${chat.name}" 已经沉寂了一段时间，用户(昵称: "${chat.settings.myNickname || "我"}")不在线。
 			你的任务是根据下方每个角色的人设，在他们之间【自发地】生成一段自然的对话。
 			# 【对话节奏铁律 (至关重要！)】
-			你的回复【必须】模拟真人的打字和思考习惯。你应该将你想说的话，拆分成${replyCountInstruction}条消息气泡来发送，**绝对不要一次性发送一大段文字！** 每条消息最好不要超过30个字，这会让对话看起来更自然、更真实。
+			你的回复【必须】模拟真人的打字和思考习惯。你应该将你想说的话，拆分成${replyCountInstruction}条消息气泡来发送，**绝对不要一次性发送一大段文字！** 这会让对话看起来更自然、更真实。
 			**角色回复顺序不固定，可以交叉回复，例如角色A、角色B、角色B、角色A、角色C这样的交叉顺序。不一定要一个人全部说完了才轮到下一个人。角色之间【必须】有互动对话。**
 			# 核心规则
 			1.  **【【【身份铁律】】】**: 用户【绝对不在场】。你【绝对不能】生成与用户对话的内容。整段对话必须是AI角色之间的互动。你的唯一任务是扮演【且仅能扮演】下方“群成员列表”中明确列出的角色。【绝对禁止】扮演任何未在“群成员列表”中出现的角色。
@@ -48726,6 +48933,7 @@ ${luckStatusDirective}
          * @returns {Promise<string>} 格式化后的约定信息字符串
          */
         async function getCountdownContext(chatId) {
+          const isCognitionEnabled = state.apiConfig?.realTimeCognitionEnabled !== false;
           // 1. 从数据库中找出所有“约定”类型，并且目标日期还没到的记录
           const activeCountdowns = await db.memories
             .where("type")
@@ -48750,6 +48958,10 @@ ${luckStatusDirective}
           const now = Date.now();
 
           activeCountdowns.forEach((item) => {
+            if (!isCognitionEnabled) {
+              context += `- **${item.description}**\n`;
+              return;
+            }
             const diff = item.targetDate - now;
             const diffDays = Math.floor(diff / (1000 * 60 * 60 * 24));
             const diffHours = Math.floor(diff / (1000 * 60 * 60));
@@ -54928,7 +55140,7 @@ ${luckStatusDirective}
                 </div>
                 <details style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
                   <summary style="padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none;">
-                    查看完整字段 (默认折叠)
+                    完整字段
                   </summary>
                   <pre style="margin: 0; padding: 8px 10px; font-size: 11px; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; border-top: 1px dashed var(--border-color);">${escapeDebugHtml(JSON.stringify(cleanedMsg, null, 2))}</pre>
                 </details>
@@ -54945,7 +55157,7 @@ ${luckStatusDirective}
 
               itemEl.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
-                  <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">第 ${idx + 1} 轮记录</span>
+                  <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">第 ${idx + 1} 轮</span>
                   <span style="font-size: 11px; color: var(--text-secondary);">${timeStr}</span>
                 </div>
 
@@ -61929,7 +62141,7 @@ ${luckStatusDirective}
          * 原理：不再一次性读取所有数据库表到内存，而是逐个表读取、写入，
          * 利用 ReadableStream 和 Response 流式传输给用户，从而极大降低内存占用。
          */
-        async function exportDataStream() {
+        async function exportDataStream(customFileName = null, customDirHandle = null) {
           await showCustomAlert(
             "请稍候...",
             "正在准备流式导出，这可能需要一些时间，但不会使浏览器崩溃。",
@@ -62066,11 +62278,28 @@ ${luckStatusDirective}
             headers: { "Content-Type": "application/json" },
           });
 
+          const blobData = await response.blob();
+          const actualFileName = customFileName || `EPhone-Stream-Backup-${new Date().toISOString().split("T")[0]}.json`;
+
+          if (customDirHandle && typeof customDirHandle.getFileHandle === "function") {
+            try {
+              const fileHandle = await customDirHandle.getFileHandle(actualFileName, { create: true });
+              const writable = await fileHandle.createWritable();
+              await writable.write(blobData);
+              await writable.close();
+              hideCustomModal();
+              await showCustomAlert("导出成功", `已成功流式导出至文件夹: ${actualFileName}`);
+              return;
+            } catch (fsErr) {
+              console.warn("写入选定目录失败，将使用浏览器下载:", fsErr);
+            }
+          }
+
           // 7. 创建并触发下载链接
-          const url = URL.createObjectURL(await response.blob());
+          const url = URL.createObjectURL(blobData);
           const link = document.createElement("a");
           link.href = url;
-          link.download = `EPhone-Stream-Backup-${new Date().toISOString().split("T")[0]}.json`;
+          link.download = actualFileName;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -68077,6 +68306,21 @@ ${luckStatusDirective}
                 state.apiConfig.mapLocationCustomGlow = mapCustomGlowEl.checked;
               }
 
+              // 保存定时导出设置
+              const autoExportValEl = document.getElementById("auto-export-interval-value");
+              const autoExportValStr = autoExportValEl ? autoExportValEl.value.trim() : "";
+              state.apiConfig.autoExportIntervalValue = autoExportValStr ? parseInt(autoExportValStr, 10) : "";
+              const autoExportUnitEl = document.getElementById("auto-export-interval-unit");
+              if (autoExportUnitEl) state.apiConfig.autoExportIntervalUnit = autoExportUnitEl.value;
+              const autoExportModeEl = document.getElementById("auto-export-mode");
+              if (autoExportModeEl) state.apiConfig.autoExportMode = autoExportModeEl.value;
+              const autoExportPathEl = document.getElementById("auto-export-path-display");
+              if (autoExportPathEl) state.apiConfig.autoExportPathName = autoExportPathEl.value;
+
+              if (typeof setupAutoExportScheduler === "function") {
+                setupAutoExportScheduler();
+              }
+
               // 如果开启了自动备份，立即重启定时器
               handleAutoBackupTimer();
               await db.apiConfig.put(state.apiConfig);
@@ -69357,6 +69601,50 @@ ${luckStatusDirective}
               document.getElementById("chat-name-input").value = chat.name;
               const remarkGroup = document.getElementById("chat-remark-group");
               const remarkInput = document.getElementById("chat-remark-input");
+              const specialAttentionBtn = document.getElementById("toggle-special-attention-btn");
+              const specialAttentionSvg = document.getElementById("special-attention-svg");
+              const specialAttentionText = document.getElementById("special-attention-text");
+
+              if (specialAttentionBtn) {
+                if (chat.isGroup) {
+                  specialAttentionBtn.style.display = "none";
+                } else {
+                  specialAttentionBtn.style.display = "inline-flex";
+                  const updateSpecialBtnUi = () => {
+                    const isSpec = !!(chat.isSpecialAttention || chat.settings?.isSpecialAttention);
+                    if (isSpec) {
+                      specialAttentionBtn.style.color = "#e05252";
+                      specialAttentionBtn.style.background = "rgba(224, 82, 82, 0.1)";
+                      specialAttentionBtn.style.borderColor = "#e05252";
+                      if (specialAttentionSvg) {
+                        specialAttentionSvg.setAttribute("fill", "#e05252");
+                        specialAttentionSvg.setAttribute("stroke", "#e05252");
+                      }
+                      if (specialAttentionText) specialAttentionText.textContent = "已关心";
+                    } else {
+                      specialAttentionBtn.style.color = "var(--text-secondary)";
+                      specialAttentionBtn.style.background = "var(--secondary-bg)";
+                      specialAttentionBtn.style.borderColor = "var(--border-color)";
+                      if (specialAttentionSvg) {
+                        specialAttentionSvg.setAttribute("fill", "none");
+                        specialAttentionSvg.setAttribute("stroke", "currentColor");
+                      }
+                      if (specialAttentionText) specialAttentionText.textContent = "关心";
+                    }
+                  };
+                  updateSpecialBtnUi();
+                  specialAttentionBtn.onclick = async () => {
+                    const nextVal = !(chat.isSpecialAttention || chat.settings?.isSpecialAttention);
+                    chat.isSpecialAttention = nextVal;
+                    if (!chat.settings) chat.settings = {};
+                    chat.settings.isSpecialAttention = nextVal;
+                    await db.chats.put(chat);
+                    updateSpecialBtnUi();
+                    if (typeof renderChatList === "function") await renderChatList();
+                    if (typeof renderContactsScreen === "function") await renderContactsScreen();
+                  };
+                }
+              }
 
               if (chat.isGroup) {
                 remarkGroup.style.display = "none"; // 群聊不显示备注设置
@@ -71897,32 +72185,33 @@ ${luckStatusDirective}
           };
 
           // --- 绑定所有滑动事件 ---
-          postsList.addEventListener("mousedown", handleSwipeStart);
-          document.addEventListener("mousemove", handleSwipeMove);
-          document.addEventListener("mouseup", handleSwipeEnd);
-          postsList.addEventListener("touchstart", handleSwipeStart, {
-            passive: false,
-          });
-          postsList.addEventListener("touchmove", handleSwipeMove, {
-            passive: false,
-          });
-          postsList.addEventListener("touchend", handleSwipeEnd);
+          if (postsList) {
+            postsList.addEventListener("mousedown", handleSwipeStart);
+            document.addEventListener("mousemove", handleSwipeMove);
+            document.addEventListener("mouseup", handleSwipeEnd);
+            postsList.addEventListener("touchstart", handleSwipeStart, {
+              passive: false,
+            });
+            postsList.addEventListener("touchmove", handleSwipeMove, {
+              passive: false,
+            });
+            postsList.addEventListener("touchend", handleSwipeEnd);
 
-          postsList.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            const target = e.target;
+            postsList.addEventListener("click", async (e) => {
+              e.stopPropagation();
+              const target = e.target;
 
-            const summonBtn = target.closest(".action-icon.summon-npc");
-            if (summonBtn) {
-              const postId = parseInt(summonBtn.dataset.postId);
-              const authorId = summonBtn.dataset.authorId;
-              if (!isNaN(postId) && authorId) {
-                handleNpcSummonClick(postId, authorId);
+              const summonBtn = target.closest(".action-icon.summon-npc");
+              if (summonBtn) {
+                const postId = parseInt(summonBtn.dataset.postId);
+                const authorId = summonBtn.dataset.authorId;
+                if (!isNaN(postId) && authorId) {
+                  handleNpcSummonClick(postId, authorId);
+                }
+                return; // 处理完召唤逻辑后，直接结束，不执行后续的点赞等判断
               }
-              return; // 处理完召唤逻辑后，直接结束，不执行后续的点赞等判断
-            }
 
-            // 处理点击评论本身（用于回复）
+              // 处理点击评论本身（用于回复）
             const commentItem = target.closest(".comment-item");
             // 确保点击的不是删除按钮或评论里的名字链接
             if (
@@ -72078,9 +72367,9 @@ ${luckStatusDirective}
             }
 
             // 处理评论发送逻辑
-            const sendBtn = target.closest(".comment-send-btn");
-            if (sendBtn) {
-              const postContainer = sendBtn.closest(".qzone-post-container");
+            const commentSendBtn = target.closest(".comment-send-btn");
+            if (commentSendBtn) {
+              const postContainer = commentSendBtn.closest(".qzone-post-container");
               if (!postContainer) return;
               const postId = parseInt(postContainer.dataset.postId);
               const commentInput =
@@ -72115,6 +72404,7 @@ ${luckStatusDirective}
               return;
             }
           });
+        }
 
           // 绑定动态页和收藏页的返回按钮返回主菜单
           document
@@ -73633,8 +73923,11 @@ ${luckStatusDirective}
             isDragging: false,
             startX: 0,
             startY: 0,
+            diffX: 0,
+            hasMoved: false,
             activeContent: null,
           };
+          window.chatSwipeIgnoreClick = false;
 
           function resetAllChatSwipes(exceptThisOne = null) {
             document
@@ -73647,12 +73940,15 @@ ${luckStatusDirective}
           }
 
           chatListEl.addEventListener("mousedown", (e) => {
+            if (e.target.closest(".swipe-actions")) return;
             const content = e.target.closest(".chat-list-item-content");
-            if (content && !e.target.closest(".swipe-actions")) {
+            if (content) {
               resetAllChatSwipes(content);
               chatSwipeState.isDragging = true;
+              chatSwipeState.hasMoved = false;
               chatSwipeState.startX = e.pageX;
               chatSwipeState.startY = e.pageY;
+              chatSwipeState.diffX = 0;
               chatSwipeState.activeContent = content;
             }
           });
@@ -73662,13 +73958,16 @@ ${luckStatusDirective}
               return;
             const diffX = e.pageX - chatSwipeState.startX;
             const diffY = e.pageY - chatSwipeState.startY;
+            if (Math.abs(diffX) > 6) {
+              chatSwipeState.hasMoved = true;
+            }
             if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 10) {
-              // 纵向滚动时放弃横滑
               chatSwipeState.isDragging = false;
               chatSwipeState.activeContent.style.transform = "";
               chatSwipeState.activeContent = null;
               return;
             }
+            chatSwipeState.diffX = diffX;
             if (diffX < 0 && diffX > -180) {
               chatSwipeState.activeContent.style.transition = "none";
               chatSwipeState.activeContent.style.transform = `translateX(${diffX}px)`;
@@ -73679,22 +73978,22 @@ ${luckStatusDirective}
             if (!chatSwipeState.isDragging || !chatSwipeState.activeContent)
               return;
 
-            chatSwipeState.activeContent.style.transition =
-              "transform 0.25s ease";
-            const transformStyle = window.getComputedStyle(
-              chatSwipeState.activeContent,
-            ).transform;
-            let currentTranslateX = 0;
-            if (transformStyle && transformStyle !== "none") {
-              currentTranslateX = new DOMMatrix(transformStyle).m41;
+            if (chatSwipeState.hasMoved) {
+              window.chatSwipeIgnoreClick = true;
+              setTimeout(() => {
+                window.chatSwipeIgnoreClick = false;
+              }, 250);
             }
 
-            if (currentTranslateX < -45) {
-              chatSwipeState.activeContent.classList.add("swiped");
+            const targetContent = chatSwipeState.activeContent;
+            targetContent.style.transition = "transform 0.25s ease";
+            targetContent.style.transform = "";
+
+            if (chatSwipeState.diffX < -40) {
+              targetContent.classList.add("swiped");
             } else {
-              chatSwipeState.activeContent.classList.remove("swiped");
+              targetContent.classList.remove("swiped");
             }
-            chatSwipeState.activeContent.style.transform = "";
 
             chatSwipeState.isDragging = false;
             chatSwipeState.activeContent = null;
@@ -73704,12 +74003,15 @@ ${luckStatusDirective}
           chatListEl.addEventListener(
             "touchstart",
             (e) => {
+              if (e.target.closest(".swipe-actions")) return;
               const content = e.target.closest(".chat-list-item-content");
-              if (content && !e.target.closest(".swipe-actions")) {
+              if (content) {
                 resetAllChatSwipes(content);
                 chatSwipeState.isDragging = true;
+                chatSwipeState.hasMoved = false;
                 chatSwipeState.startX = e.touches[0].pageX;
                 chatSwipeState.startY = e.touches[0].pageY;
+                chatSwipeState.diffX = 0;
                 chatSwipeState.activeContent = content;
               }
             },
@@ -73723,12 +74025,16 @@ ${luckStatusDirective}
                 return;
               const diffX = e.touches[0].pageX - chatSwipeState.startX;
               const diffY = e.touches[0].pageY - chatSwipeState.startY;
+              if (Math.abs(diffX) > 6) {
+                chatSwipeState.hasMoved = true;
+              }
               if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 10) {
                 chatSwipeState.isDragging = false;
                 chatSwipeState.activeContent.style.transform = "";
                 chatSwipeState.activeContent = null;
                 return;
               }
+              chatSwipeState.diffX = diffX;
               if (diffX < 0 && diffX > -180) {
                 chatSwipeState.activeContent.style.transition = "none";
                 chatSwipeState.activeContent.style.transform = `translateX(${diffX}px)`;
@@ -73741,22 +74047,22 @@ ${luckStatusDirective}
             if (!chatSwipeState.isDragging || !chatSwipeState.activeContent)
               return;
 
-            chatSwipeState.activeContent.style.transition =
-              "transform 0.25s ease";
-            const transformStyle = window.getComputedStyle(
-              chatSwipeState.activeContent,
-            ).transform;
-            let currentTranslateX = 0;
-            if (transformStyle && transformStyle !== "none") {
-              currentTranslateX = new DOMMatrix(transformStyle).m41;
+            if (chatSwipeState.hasMoved) {
+              window.chatSwipeIgnoreClick = true;
+              setTimeout(() => {
+                window.chatSwipeIgnoreClick = false;
+              }, 250);
             }
 
-            if (currentTranslateX < -45) {
-              chatSwipeState.activeContent.classList.add("swiped");
+            const targetContent = chatSwipeState.activeContent;
+            targetContent.style.transition = "transform 0.25s ease";
+            targetContent.style.transform = "";
+
+            if (chatSwipeState.diffX < -40) {
+              targetContent.classList.add("swiped");
             } else {
-              chatSwipeState.activeContent.classList.remove("swiped");
+              targetContent.classList.remove("swiped");
             }
-            chatSwipeState.activeContent.style.transform = "";
 
             chatSwipeState.isDragging = false;
             chatSwipeState.activeContent = null;
@@ -74730,10 +75036,13 @@ ${luckStatusDirective}
 
           startGroupSimulation(); // 启动群聊专属的后台时钟
           handleAutoBackupTimer();
+          if (typeof setupAutoExportScheduler === "function") {
+            setupAutoExportScheduler();
+          }
           // 使用事件委托，监听整个动态列表的“焦点移出”事件
           document
             .getElementById("qzone-posts-list")
-            .addEventListener("focusout", (e) => {
+            ?.addEventListener("focusout", (e) => {
               // 如果是评论输入框失去了焦点
               if (e.target.classList.contains("comment-input")) {
                 const commentInput = e.target;
@@ -76303,7 +76612,7 @@ ${luckStatusDirective}
           // 使用事件委托，为动态页面的头部按钮绑定事件
           document
             .getElementById("qzone-screen")
-            .addEventListener("click", (e) => {
+            ?.addEventListener("click", (e) => {
               // 检查点击的是否是清空按钮
               const clearBtn = e.target.closest("#clear-qzone-posts-btn");
               if (clearBtn) {

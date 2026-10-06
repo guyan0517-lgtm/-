@@ -283,13 +283,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
     const cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
     const effectiveKey = typeof getRandomValue === "function" ? getRandomValue(apiKey) : (apiKey.includes(",") ? apiKey.split(",")[0].trim() : apiKey.trim());
+    const tempVal = parseFloat(state.apiConfig.temperature);
+    const safeTemp = (!isNaN(tempVal) && tempVal >= 0 && tempVal <= 2) ? tempVal : 0.7;
 
     if (isGemini) {
-      const url = `${GEMINI_API_URL}/${model || "gemini-1.5-flash"}:generateContent?key=${effectiveKey}`;
+      const cleanModel = (model || "gemini-1.5-flash").replace(/^models\//, "");
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${effectiveKey}`;
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: parseFloat(state.apiConfig.temperature) || 0.8
+          temperature: safeTemp
         }
       };
       if (systemInstruction) {
@@ -308,7 +311,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
       return rawText;
     } else {
-      const requestUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`;
+      const requestUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : (cleanedProxy.includes("/chat/completions") ? cleanedProxy : `${cleanedProxy}/v1/chat/completions`);
       const messages = [];
       if (systemInstruction) {
         messages.push({ role: "system", content: systemInstruction });
@@ -317,11 +320,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const bodyPayload = {
         model: model,
-        messages: messages,
-        temperature: parseFloat(state.apiConfig.temperature) || 0.8
+        messages: messages
       };
+      
+      const isO1O3 = model.toLowerCase().startsWith("o1") || model.toLowerCase().startsWith("o3") || model.toLowerCase().includes("reasoner");
+      if (!isO1O3) {
+        bodyPayload.temperature = safeTemp;
+      }
 
-      const response = await fetch(requestUrl, {
+      let response = await fetch(requestUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -329,6 +336,20 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         body: JSON.stringify(bodyPayload)
       });
+
+      // 如果因为 system 消息导致 400 错误，自动降级为纯 user 消息重试
+      if (!response.ok && systemInstruction && (response.status === 400 || response.status === 422)) {
+        const fallbackMessages = [{ role: "user", content: `${systemInstruction}\n\n${prompt}` }];
+        bodyPayload.messages = fallbackMessages;
+        response = await fetch(requestUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${effectiveKey}`
+          },
+          body: JSON.stringify(bodyPayload)
+        });
+      }
 
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
@@ -390,6 +411,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const summaryMatch = cleaned.match(/"(?:chapterSummary|summary)"\s*:\s*"([^"]+)"/);
     if (summaryMatch) result.chapterSummary = summaryMatch[1];
 
+    const isFinishedMatch = cleaned.match(/"isFinished"\s*:\s*(true|false)/i);
+    if (isFinishedMatch) result.isFinished = isFinishedMatch[1].toLowerCase() === "true";
+
     const contentMatch = cleaned.match(/"(?:chapterContent|story|content)"\s*:\s*"([\s\S]*?)"(?:\s*,\s*"(?:categories|comments|isFinished)")/);
     if (contentMatch) {
       result.chapterContent = contentMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
@@ -403,11 +427,25 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+    // 终极保底：如果解析不到 JSON，直接把整段文字清洗作为正文，绝不白屏或报错打断
+    if (!result.chapterContent) {
+      let fallbackText = cleaned.replace(/^\{[\s\S]*?"chapterContent"\s*:\s*"/i, "");
+      fallbackText = fallbackText.replace(/"\s*\}?$/i, "");
+      if (fallbackText.length > 20) {
+        result.chapterContent = fallbackText;
+      }
+    }
+
     if (result.chapterContent || result.chapterTitle || result.seriesTitle) {
       return result;
     }
 
-    throw new Error("AI返回了无效的JSON格式");
+    return {
+      seriesTitle: "新篇连载",
+      chapterTitle: "第一章",
+      chapterSummary: "故事开篇",
+      chapterContent: cleaned
+    };
   }
 
   /**
@@ -416,14 +454,36 @@ document.addEventListener("DOMContentLoaded", () => {
   async function renderGroupPosts(groupId) {
     const listEl = document.getElementById("group-post-list");
     if (!listEl) return;
-    const allPosts = await db.forumPosts
-      .where("groupId")
-      .equals(groupId)
-      .reverse()
-      .sortBy("timestamp");
+    const targetGroupId = (groupId !== undefined && groupId !== null) ? groupId : (activeGroupId || window.activeGroupId);
+    if (targetGroupId === undefined || targetGroupId === null || targetGroupId === "") {
+      return;
+    }
+    const parsedGid = typeof targetGroupId === "number" ? targetGroupId : parseInt(targetGroupId, 10);
+    if (typeof parsedGid !== "number" || isNaN(parsedGid)) {
+      return;
+    }
+
+    let allPosts = [];
+    try {
+      allPosts = await db.forumPosts
+        .where("groupId")
+        .equals(parsedGid)
+        .reverse()
+        .sortBy("timestamp");
+    } catch (e) {
+      try {
+        allPosts = await db.forumPosts
+          .where("groupId")
+          .equals(String(parsedGid))
+          .reverse()
+          .sortBy("timestamp");
+      } catch (e2) {
+        allPosts = [];
+      }
+    }
     listEl.innerHTML = "";
 
-    const groupFilters = activeForumFilters.group[groupId];
+    const groupFilters = activeForumFilters && activeForumFilters.group ? activeForumFilters.group[groupId] : null;
     let postsToRender = allPosts;
 
     if (groupFilters && groupFilters.length > 0) {
@@ -446,23 +506,38 @@ document.addEventListener("DOMContentLoaded", () => {
     const processedSeriesIds = new Set();
 
     for (const post of postsToRender) {
-      if (post.seriesId) {
-        if (processedSeriesIds.has(post.seriesId)) continue;
-        processedSeriesIds.add(post.seriesId);
+      if (post.seriesId !== undefined && post.seriesId !== null && post.seriesId !== "") {
+        const rawSeriesId = post.seriesId;
+        const sId = (typeof rawSeriesId === "number" && !isNaN(rawSeriesId)) ? rawSeriesId : (isNaN(parseInt(rawSeriesId)) ? rawSeriesId : parseInt(rawSeriesId));
+        if (processedSeriesIds.has(sId)) continue;
+        processedSeriesIds.add(sId);
 
-        const series = await db.forumSeries.get(post.seriesId);
-        const chapters = await db.forumChapters
-          .where("seriesId")
-          .equals(post.seriesId)
-          .sortBy("chapterIndex");
+        let series = null;
+        try {
+          series = await db.forumSeries.get(sId);
+        } catch (e) {}
+
+        let chapters = [];
+        try {
+          chapters = await db.forumChapters
+            .where("seriesId")
+            .equals(sId)
+            .sortBy("chapterIndex");
+        } catch (e) {
+          try {
+            chapters = await db.forumChapters
+              .where("seriesId")
+              .equals(String(sId))
+              .sortBy("chapterIndex");
+          } catch (e2) {}
+        }
 
         const seriesCard = document.createElement("div");
         seriesCard.className = "forum-series-accordion-card";
-        seriesCard.style.cssText = "margin-bottom: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;";
+        seriesCard.style.cssText = "margin-bottom: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; width: 100%; box-sizing: border-box; flex-shrink: 0;";
 
         const isFinished = !!series?.isFinished;
         const totalCh = chapters.length || 1;
-        const postsMap = new Map(allPosts.map((p) => [p.id, p]));
 
         seriesCard.innerHTML = `
           <div class="series-accordion-header" style="padding: 12px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--secondary-bg, rgba(128,128,128,0.04));">
@@ -483,22 +558,17 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           </div>
           <div class="series-accordion-content" style="display: none; padding: 6px 12px 10px; border-top: 1px solid var(--border-color); flex-direction: column; gap: 8px;">
-            ${chapters.map((ch) => {
-              const chPost = postsMap.get(ch.postId);
-              const chRemark = chPost?.remark || '';
-              return `
-              <div class="series-chapter-card" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); margin-top: 6px;">
-                <div class="series-chapter-row" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                  <div style="font-size: 13px; font-weight: 500; color: var(--text-primary);">第${ch.chapterIndex}章 ${ch.title || ''}</div>
-                  <div style="display: flex; align-items: center; gap: 6px;">
+            ${chapters.map((ch) => `
+              <div class="series-chapter-card" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color); margin-top: 6px;">
+                <div class="series-chapter-row" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" style="display: flex; align-items: center; justify-content: space-between; width: 100%; cursor: pointer;">
+                  <div style="font-size: 13px; font-weight: 500; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">第${ch.chapterIndex}章 ${ch.title || ''}</div>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px;">
                     <button type="button" class="mini-btn" data-series-action="open-post" data-series-id="${post.seriesId}" data-post-id="${ch.postId || ''}" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px;">阅读</button>
                     <button type="button" data-delete-chapter-id="${ch.id}" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
                   </div>
                 </div>
-                <textarea class="chapter-remark-input moe-input" data-post-id="${ch.postId || ''}" rows="1" placeholder="添加备注..." style="width: 100%; height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.04)); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;">${chRemark}</textarea>
               </div>
-            `;
-            }).join('')}
+            `).join('')}
           </div>
         `;
 
@@ -544,9 +614,6 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="post-item-meta">
             <span>作者: ${post.author}</span>
             <span>评论: ${commentCount}</span>
-          </div>
-          <div class="post-item-remark-box" style="margin-top: 6px;">
-            <textarea class="chapter-remark-input moe-input" data-post-id="${post.id}" rows="1" placeholder="添加备注..." style="width: 100%; height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.04)); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;">${post.remark || ''}</textarea>
           </div>
           <button class="forum-post-delete-btn" title="删除帖子" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280);">×</button>
         `;
@@ -677,8 +744,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div class="post-detail-body">${cleanBody.replace(/\n/g, "<br>")}</div>
         
-        <div class="post-detail-actions-row" style="display: flex; gap: 12px; margin: 18px 0; justify-content: center;">
-          <button type="button" class="mini-btn" id="post-copy-content-btn" style="flex: 1; max-width: 140px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center;">复制</button>
+        <div class="post-detail-actions-row" style="display: flex; gap: 12px; margin: 18px 0; justify-content: center; align-items: center;">
+          <button type="button" class="mini-btn" id="post-copy-content-btn" style="flex: 1; max-width: 140px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">复制</button>
+          ${post.seriesId ? `
+          <button type="button" class="mini-btn primary" id="post-continue-next-btn" style="flex: 1; max-width: 140px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color);">追更</button>
+          ` : ""}
         </div>
 
         ${post.seriesId || post.lengthType === "long" ? `
@@ -698,6 +768,19 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (e) {
           await showCustomAlert("复制失败", "未能写入剪贴板。");
         }
+      };
+    }
+
+    const continueNextBtn = contentEl.querySelector("#post-continue-next-btn");
+    if (continueNextBtn && post.seriesId) {
+      continueNextBtn.onclick = async () => {
+        const curSeries = await db.forumSeries.get(post.seriesId);
+        if (curSeries?.isFinished) {
+          await showCustomAlert("提示", "这部连载已完结。");
+          return;
+        }
+        const nextChapterIndex = (curSeries?.lastChapterIndex || post.chapterIndex || 1) + 1;
+        await handleContinueSeries(post.seriesId, nextChapterIndex);
       };
     }
 
@@ -1252,133 +1335,18 @@ ${worldviewContext}
     }
     const userPersona = state.qzoneSettings.weiboUserPersona || "一个普通人";
 
-    if (lengthMode === "long") {
-      await generateLongFanficSeries({
-        groupId,
-        char1Name,
-        char2Name,
-        char1Persona,
-        char2Persona,
-        userPersona,
-        wordCountReq,
-        typeReq,
-        styleReq,
-        worldviewPreference,
-      });
-      return;
-    }
-
-    await showCustomAlert(
-      "正在创作...",
-      `粉丝正在为【${char1Name}x${char2Name}】奋笔疾书中...`,
-    );
-
-    // 构建 Prompt
-    let contextInstructions = "";
-
-    if (typeReq)
-      contextInstructions += `\n**【题材类型要求】**: 文章必须属于【${typeReq}】题材。`;
-    if (styleReq)
-      contextInstructions += `\n**【文风/写作规范】**: 请严格模仿【${styleReq}】的笔触和叙事风格。`;
-    if (worldviewPreference)
-      contextInstructions += `\n**【剧情/世界观设定】**: ${worldviewPreference}`;
-
-    let lengthInstruction = wordCountReq
-      ? `每篇故事字数需接近【${wordCountReq}】。`
-      : "每篇故事不少于800字。";
-
-    const prompt = `
-你是一位专业的同人文写手。请根据以下要求，创作【三篇】关于角色A和角色B的同人故事。
-
-# 角色信息
-- 角色A (${char1Name}): ${char1Persona}
-- 角色B (${char2Name}): ${char2Persona}
-
-# 核心创作指令
-${contextInstructions}
-${lengthInstruction}
-
-# 任务要求
-1.  **创作三篇故事**: 必须符合上述的题材类型和文风规范。
-2.  **原创分类**: 为每篇故事打上1-2个标签（例如：${typeReq || "甜文"}）。
-3.  **生成评论**: 为每篇故事模拟3-5条读者评论。
-4.  **JSON格式**: 你的回复【必须且只能】是一个纯净的JSON数组。
-
-# JSON结构
-[
-  {
-    "title": "故事标题1",
-    "story": "故事内容1...",
-    "categories": ["分类1", "分类2"],
-    "comments": [
-      {"author": "读者A", "content": "评论内容A..."},
-      {"author": "读者B", "content": "评论内容B..."}
-    ]
-  },
-  ...
-]
-`;
-
-    try {
-      const rawContent = await callAiForForum(prompt);
-      let stories = [];
-      try {
-        stories = extractAndParseJson(rawContent);
-        if (!Array.isArray(stories)) {
-          if (stories && (stories.story || stories.content)) {
-            stories = [stories];
-          } else {
-            throw new Error("AI未返回数组格式。");
-          }
-        }
-      } catch (e) {
-        console.error("JSON解析失败！", e);
-        throw new Error("AI返回了无效的JSON格式。");
-      }
-      for (let i = 0; i < stories.length; i++) {
-        const storyData = stories[i];
-        const baseCategories =
-          storyData.categories && Array.isArray(storyData.categories)
-            ? [...storyData.categories]
-            : [];
-        if (!baseCategories.includes("短篇")) baseCategories.unshift("短篇");
-        const newPost = {
-          groupId: groupId,
-          title: `【${char1Name}x${char2Name}】${storyData.title || `无题`}`,
-          content: (storyData.story || storyData.content || "内容生成失败").replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim(),
-          author: getRandomItem([
-            "为爱发电的太太",
-            "圈地自萌",
-            "CP是真的",
-            "嗑拉了",
-            "咕咕咕",
-          ]),
-          timestamp: Date.now() + i,
-          categories: baseCategories,
-          lengthType: "short",
-          seriesId: null,
-          chapterIndex: null,
-        };
-        const postId = await db.forumPosts.add(newPost);
-        if (storyData.comments && Array.isArray(storyData.comments)) {
-          const commentsToAdd = storyData.comments.map((c, idx) => ({
-            postId,
-            author: c.author || "匿名",
-            content: c.content,
-            timestamp: Date.now() + i + idx + 1,
-          }));
-          await db.forumComments.bulkAdd(commentsToAdd);
-        }
-      }
-      await renderGroupPosts(groupId);
-      await showCustomAlert(
-        "创作完成！",
-        `已成功为你创作了 ${stories.length} 篇新的同人故事。`,
-      );
-    } catch (error) {
-      console.error("生成同人文失败:", error);
-      await showCustomAlert("创作失败", `发生了一个错误：\n${error.message}`);
-    }
+    await generateLongFanficSeries({
+      groupId,
+      char1Name,
+      char2Name,
+      char1Persona,
+      char2Persona,
+      userPersona,
+      wordCountReq,
+      typeReq,
+      styleReq,
+      worldviewPreference,
+    });
   }
 
   async function generateLongFanficSeries(options) {
@@ -1424,33 +1392,35 @@ ${lengthInstruction}
       ]) || "匿名太太";
 
     const prompt = `
-你是一位专业的同人连载作者。请为角色A和角色B创作一部【长篇连载】，先写出完整的第一章，并给出简短摘要，方便后续续写。
+你是一位专业的同人连载作者。请为角色A和角色B创作一部长篇连载小说，先写出完整的第一章，并给出简短摘要，方便后续续写。
 
 # 角色与人设
 - 角色A (${char1Name}): ${char1Persona}
 - 角色B (${char2Name}): ${char2Persona}
 - 用户: ${userPersona}
 
+# 命名要求
+书名必须朴实无华、自然生动（例如《旧日微光》《夏日风》《重逢》《同桌》《小城》《春日信》等2-6字朴素名字），严禁使用浮夸生僻、中二堆砌或带有特殊符号的名字。
+
 # 写作要求
-${contextInstructions || "- 自由发挥，但保持连载节奏，注意人物成长与悬念。"}
+${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心理与细节互动。"}
 - ${lengthInstruction}
 - 第一章需要有清晰的开篇冲突或吸引点，同时保留未解的线索。
-- 评论：为本章生成 5-8 条读者评论/弹幕，语言自然有代入感。
+- 评论：为本章生成 5-8 条读者评论，语言自然有代入感。
 
-# 输出格式 (严格JSON对象，务必包含 5-8 条评论)
+# 输出格式规范（必须严格输出纯 JSON 对象，禁止包裹任何其他说明）
 {
-  "seriesTitle": "连载主标题",
+  "seriesTitle": "朴实自然的书名",
   "chapterTitle": "第一章标题",
-  "chapterSummary": "用3-5句概括本章，供后续追更时提供给AI作为摘要",
-  "chapterContent": "第一章正文",
-  "categories": ["标签1","标签2"],
+  "chapterSummary": "用3-5句概括本章剧情要点",
+  "chapterContent": "第一章完整正文，正文换行用\\n表示",
+  "categories": ["标签1", "标签2"],
   "comments": [
-    {"author": "读者A", "content": "短评或弹幕"},
-    {"author": "读者B", "content": "短评或弹幕"}
+    {"author": "读者A", "content": "短评内容"},
+    {"author": "读者B", "content": "短评内容"}
   ]
 }
-
-请仅输出纯净的JSON对象，不要添加额外说明。`;
+请严格只返回上述纯 JSON 对象。`;
 
     try {
       const rawContent = await callAiForForum(prompt);
@@ -1462,9 +1432,8 @@ ${contextInstructions || "- 自由发挥，但保持连载节奏，注意人物�
         throw new Error("AI返回了无效的JSON格式。");
       }
 
-      const seriesTitle =
-        parsed.seriesTitle || `${char1Name}x${char2Name}的连载`;
-      const chapterTitle = parsed.chapterTitle || "第一章";
+      let seriesTitle = (parsed.seriesTitle || `${char1Name}与${char2Name}`).replace(/[《》]/g, "").trim();
+      const chapterTitle = (parsed.chapterTitle || "第一章").replace(/^第\d+章\s*/i, "").trim();
       const rawChapterContent =
         parsed.chapterContent ||
         parsed.story ||
@@ -1505,11 +1474,15 @@ ${contextInstructions || "- 自由发挥，但保持连载节奏，注意人物�
 
       const postId = await db.forumPosts.add({
         groupId: groupId,
-        title: `【连载】${seriesTitle} - ${chapterTitle}`,
+        title: `《${seriesTitle}》 第1章 ${chapterTitle}`,
         content: chapterContent,
         author: seriesAuthor,
         timestamp,
         categories: postCategories,
+        lengthType: "long",
+        seriesId,
+        chapterIndex: 1,
+      });
         lengthType: "long",
         seriesId,
         chapterIndex: 1,
@@ -2765,7 +2738,7 @@ ${JSON.stringify(publicFigures, null, 2)}
 - 文风: ${series.style || "保持前文一致"}
 - 世界观/剧情设定: ${series.worldview || "沿用既定设定"}
 - ${lengthInstruction}
-- 评论：为本章生成 5-8 条读者评论/弹幕，语言自然有代入感。
+- 评论：为本章生成 5-8 条读者评论，语言自然有代入感。
 - 完结判断：如果本章已经收束主要矛盾、故事完结，请将 isFinished 设为 true；否则为 false，并继续保留可追更的悬念。
 
 # 已发布章节摘要 (供你掌握主线)
@@ -2775,19 +2748,19 @@ ${summaryContext || "暂无摘要"}
 ${lastChapter.content || ""}
 ${customPromptRequirement}
 
-# 输出格式 (严格JSON对象，包含 5-8 条评论，并用 isFinished 标记是否完结)
+# 输出格式规范（必须严格输出纯 JSON 对象，禁止包裹任何其他说明）
 {
   "chapterTitle": "第${nextIndex}章 标题",
   "chapterSummary": "本章摘要，3-5句",
-  "chapterContent": "完整正文",
-  "categories": ["标签1","标签2"],
+  "chapterContent": "完整正文，正文换行用\\n表示",
+  "categories": ["标签1", "标签2"],
   "comments": [
-    {"author": "读者A", "content": "弹幕或短评"},
-    {"author": "读者B", "content": "弹幕或短评"}
+    {"author": "读者A", "content": "短评内容"},
+    {"author": "读者B", "content": "短评内容"}
   ],
   "isFinished": false
 }
-仅输出JSON。`;
+请严格只返回纯 JSON 对象。`;
 
     try {
       const rawContent = await callAiForForum(prompt);
@@ -2799,7 +2772,7 @@ ${customPromptRequirement}
         throw new Error("AI返回了无效的JSON格式。");
       }
 
-      const chapterTitle = parsed.chapterTitle || `第${nextIndex}章`;
+      const chapterTitle = (parsed.chapterTitle || `第${nextIndex}章`).replace(/^第\d+章\s*/i, "").trim();
       const rawChapterContent =
         parsed.chapterContent ||
         parsed.story ||
@@ -2816,9 +2789,10 @@ ${customPromptRequirement}
       const timestamp = Date.now();
       const isFinished = !!parsed.isFinished;
 
+      const cleanSeriesTitle = seriesTitle.replace(/[《》]/g, "").trim();
       const postId = await db.forumPosts.add({
         groupId: targetGroupId,
-        title: `【连载】${seriesTitle} - 第${nextIndex}章 ${chapterTitle.replace(/^第\d+章\s*/i, "")}`,
+        title: `《${cleanSeriesTitle}》 第${nextIndex}章 ${chapterTitle}`,
         content: chapterContent,
         author: seriesAuthor,
         timestamp,
@@ -2933,8 +2907,6 @@ ${customPromptRequirement}
           </div>
           <div class="series-accordion-content" style="display: none; padding: 6px 12px 10px; border-top: 1px solid var(--border-color); flex-direction: column; gap: 8px;">
             ${chapters.map((ch) => {
-              const chPost = postsMap.get(ch.postId);
-              const chRemark = chPost?.remark || '';
               return `
               <div class="series-chapter-card" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); margin-top: 6px;">
                 <div class="series-chapter-row" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
@@ -2945,7 +2917,6 @@ ${customPromptRequirement}
                     <button type="button" class="mini-btn danger" data-fav-action="unfav" data-post-id="${ch.postId || ''}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px;">取消</button>
                   </div>
                 </div>
-                <textarea class="chapter-remark-input moe-input" data-post-id="${ch.postId || ''}" rows="1" placeholder="添加备注..." style="width: 100%; height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.04)); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;">${chRemark}</textarea>
               </div>
             `;
             }).join('')}
@@ -2978,7 +2949,6 @@ ${customPromptRequirement}
               <button type="button" class="mini-btn danger" data-fav-action="unfav" data-post-id="${post.id}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px;">取消</button>
             </div>
           </div>
-          <textarea class="chapter-remark-input moe-input" data-post-id="${post.id}" rows="1" placeholder="添加备注..." style="width: 100%; height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg, rgba(128,128,128,0.04)); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;">${post.remark || ''}</textarea>
         `;
         listEl.appendChild(item);
       }
@@ -3093,11 +3063,10 @@ ${customPromptRequirement}
     listEl.innerHTML = chapters
       .map(
         (ch) => `
-        <div class="forum-chapter-item" data-post-id="${ch.postId || ""}" data-series-id="${seriesId}">
-          <div class="chapter-title">第${ch.chapterIndex}章 ${ch.title || ""}</div>
-          <div class="chapter-summary">${(ch.summary || "").replace(/\n/g, "<br>") || "暂无摘要"}</div>
+        <div class="forum-chapter-item" data-post-id="${ch.postId || ""}" data-series-id="${seriesId}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 8px;">
+          <div class="chapter-title" style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);">第${ch.chapterIndex}章 ${ch.title || ""}</div>
           <div class="chapter-actions">
-            <button class="mini-btn" data-series-action="open-post" data-series-id="${seriesId}" data-post-id="${ch.postId || ""}">阅读</button>
+            <button class="mini-btn" data-series-action="open-post" data-series-id="${seriesId}" data-post-id="${ch.postId || ""}" style="height: 26px; padding: 0 10px; font-size: 11.5px; border-radius: 6px;">阅读</button>
           </div>
         </div>`,
       )
@@ -3560,32 +3529,52 @@ ${customPromptRequirement}
                     .delete();
                   await db.forumPosts.delete(parseInt(postId));
 
-                  if (targetPost.seriesId) {
+                  if (targetPost.seriesId !== undefined && targetPost.seriesId !== null && targetPost.seriesId !== "") {
+                    const rawSId = targetPost.seriesId;
+                    const sId = (typeof rawSId === "number" && !isNaN(rawSId)) ? rawSId : (isNaN(parseInt(rawSId)) ? rawSId : parseInt(rawSId));
                     await db.forumChapters
                       .where("postId")
                       .equals(parseInt(postId))
                       .delete();
 
-                    const remChapters = await db.forumChapters
-                      .where("seriesId")
-                      .equals(targetPost.seriesId)
-                      .toArray();
+                    let remChapters = [];
+                    try {
+                      remChapters = await db.forumChapters
+                        .where("seriesId")
+                        .equals(sId)
+                        .toArray();
+                    } catch (e) {
+                      try {
+                        remChapters = await db.forumChapters
+                          .where("seriesId")
+                          .equals(String(sId))
+                          .toArray();
+                      } catch(e2) {}
+                    }
 
                     const remMaxIndex = remChapters.length > 0
                       ? Math.max(...remChapters.map(c => c.chapterIndex || 0))
                       : 0;
 
-                    await db.forumSeries.update(targetPost.seriesId, {
-                      lastChapterIndex: remMaxIndex,
-                      isFinished: false
-                    });
+                    try {
+                      await db.forumSeries.update(sId, {
+                        lastChapterIndex: remMaxIndex,
+                        isFinished: false
+                      });
+                    } catch (e) {}
                   }
                 }
               },
             );
 
             await showCustomAlert("删除成功", "帖子及其所有评论已被删除。");
-            await renderGroupPosts(activeGroupId);
+            const rawGid = post?.groupId || activeGroupId || window.activeGroupId;
+            const gid = (typeof rawGid === "number" && !isNaN(rawGid)) ? rawGid : parseInt(rawGid);
+            if (gid && !isNaN(gid)) {
+              await renderGroupPosts(gid);
+            }
+            if (typeof renderForumFavorites === "function") await renderForumFavorites();
+            if (typeof renderForumBookshelf === "function") await renderForumBookshelf();
           } catch (error) {
             console.error("删除帖子失败:", error);
             await showCustomAlert("删除失败", `操作失败: ${error.message}`);
