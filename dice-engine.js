@@ -576,293 +576,622 @@ const COC_KEY_MAP = {
   "san": "san", "理智": "san", "心智": "san"
 };
 
-// 核心指令解析函数
+// 核心指令解析函数：支持代骰、角色名绑定、守密人保护、气泡内嵌指令触发
 window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
   if (!rawContent || typeof rawContent !== "string") return null;
 
+  // 从气泡文本中寻找完整的掷骰表达式 (支持气泡中间任意位置内嵌触发)
+  let cmdLine = "";
   const trimmed = rawContent.trim();
-  if (!trimmed.startsWith(".") && !trimmed.startsWith("。")) {
-    return null;
+  if (trimmed.startsWith(".") || trimmed.startsWith("。")) {
+    cmdLine = trimmed.slice(1).trim();
+  } else {
+    const match = rawContent.match(/[.。](r|ra|rh|st|sc|hp|en|ti|li|coc5|coc|set)([\s\S]*?)(?=(?:[\r\n]|[.。](?:r|ra|rh|st|sc|hp|en|ti|li|coc5|coc|set)|$))/i);
+    if (match) {
+      cmdLine = (match[1] + (match[2] || "")).trim();
+    }
   }
 
-  const cmdLine = trimmed.slice(1).trim();
   if (!cmdLine) return null;
 
   const activePreset = getActiveDicePreset();
   const templates = { ...DEFAULT_DICE_TEMPLATES, ...(activePreset.templates || {}) };
 
-  const userName = (senderInfo && senderInfo.name) ? senderInfo.name : (chat.settings?.myNickname || chat.settings?.myName || "我");
-  let userCoc = (senderInfo && senderInfo.cocPanel) ? senderInfo.cocPanel : (chat.settings?.myCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} }));
+  // 1. 查找群聊或单聊中的目标角色（支持代骰）
+  const defaultSenderName = (senderInfo && senderInfo.name) ? senderInfo.name : (chat.settings?.myNickname || chat.settings?.myName || "我");
+  const defaultSenderId = (senderInfo && senderInfo.id) ? senderInfo.id : "user";
 
-  const persistCocData = () => {
-    if (senderInfo && typeof senderInfo.onSaveCoc === "function") {
-      senderInfo.onSaveCoc(userCoc);
-    } else {
-      if (!chat.settings) chat.settings = {};
-      chat.settings.myCocPanel = userCoc;
-      if (window.myCocPanel) {
-        window.myCocPanel.setData(userCoc);
+  // 检查发送者是否为群聊中被选为守密人 (KP) 的角色
+  const keeperTargetId = chat.settings?.keeperTargetId;
+  const isKeeperRole = Boolean(
+    chat.isGroup &&
+    keeperTargetId &&
+    keeperTargetId !== "none" &&
+    (defaultSenderId === keeperTargetId || (senderInfo && senderInfo.name === chat.settings?.keeperName) || (senderInfo && senderInfo.id === keeperTargetId))
+  );
+
+  // 解析目标角色函数
+  const resolveTarget = (explicitTargetName) => {
+    if (explicitTargetName && explicitTargetName.trim()) {
+      const q = explicitTargetName.trim().toLowerCase();
+      // 在群聊成员中精确/模糊匹配
+      if (chat.isGroup && Array.isArray(chat.members)) {
+        const found = chat.members.find(m => {
+          const gn = (m.groupNickname || "").toLowerCase();
+          const on = (m.originalName || "").toLowerCase();
+          const id = (m.id || "").toLowerCase();
+          return gn === q || on === q || id === q || gn.includes(q) || on.includes(q);
+        });
+        if (found) {
+          return {
+            id: found.id,
+            name: found.groupNickname || found.originalName,
+            isUser: false,
+            isProxy: true,
+            cocPanel: found.cocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} }),
+            onSave: (newCoc) => {
+              found.cocPanel = newCoc;
+              if (state.chats && state.chats[found.id]) {
+                if (!state.chats[found.id].settings) state.chats[found.id].settings = {};
+                state.chats[found.id].settings.aiCocPanel = newCoc;
+              }
+            }
+          };
+        }
+      }
+
+      // 检查是否为我/用户
+      const myNick = (chat.settings?.myNickname || "").toLowerCase();
+      const myName = (chat.settings?.myName || "").toLowerCase();
+      if (q === "我" || (myNick && (myNick === q || myNick.includes(q))) || (myName && (myName === q || myName.includes(q)))) {
+        return {
+          id: "user",
+          name: chat.settings?.myNickname || chat.settings?.myName || "我",
+          isUser: true,
+          isProxy: true,
+          cocPanel: chat.settings?.myCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} }),
+          onSave: (newCoc) => {
+            if (!chat.settings) chat.settings = {};
+            chat.settings.myCocPanel = newCoc;
+            if (window.myCocPanel) window.myCocPanel.setData(newCoc);
+          }
+        };
+      }
+
+      // 检查单聊中的AI
+      if (!chat.isGroup) {
+        const aiName = (chat.name || "").toLowerCase();
+        const aiRemark = (chat.settings?.remarkName || "").toLowerCase();
+        if (aiName === q || aiRemark === q || aiName.includes(q) || aiRemark.includes(q)) {
+          return {
+            id: chat.id,
+            name: chat.settings?.remarkName || chat.name,
+            isUser: false,
+            isProxy: true,
+            cocPanel: chat.settings?.aiCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} }),
+            onSave: (newCoc) => {
+              if (!chat.settings) chat.settings = {};
+              chat.settings.aiCocPanel = newCoc;
+              if (window.aiCocPanel) window.aiCocPanel.setData(newCoc);
+            }
+          };
+        }
+      }
+
+      // 检查全局联系人
+      if (state.chats) {
+        const globalChar = Object.values(state.chats).find(c => {
+          if (c.isGroup) return false;
+          const cn = (c.name || "").toLowerCase();
+          const cr = (c.settings?.remarkName || "").toLowerCase();
+          return cn === q || cr === q || cn.includes(q) || cr.includes(q);
+        });
+        if (globalChar) {
+          return {
+            id: globalChar.id,
+            name: globalChar.settings?.remarkName || globalChar.name,
+            isUser: false,
+            isProxy: true,
+            cocPanel: globalChar.settings?.aiCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} }),
+            onSave: (newCoc) => {
+              if (!globalChar.settings) globalChar.settings = {};
+              globalChar.settings.aiCocPanel = newCoc;
+              if (chat.isGroup && Array.isArray(chat.members)) {
+                const m = chat.members.find(mb => mb.id === globalChar.id);
+                if (m) m.cocPanel = newCoc;
+              }
+            }
+          };
+        }
       }
     }
+
+    // 未指定代骰角色，则默认针对指令发送者本人
+    let userCoc = (senderInfo && senderInfo.cocPanel) ? senderInfo.cocPanel : null;
+    let onSave = null;
+
+    if (senderInfo && typeof senderInfo.onSaveCoc === "function") {
+      onSave = senderInfo.onSaveCoc;
+    } else if (chat.isGroup && Array.isArray(chat.members) && defaultSenderId !== "user") {
+      const mem = chat.members.find(m => m.id === defaultSenderId || m.groupNickname === defaultSenderName || m.originalName === defaultSenderName);
+      if (mem) {
+        userCoc = mem.cocPanel;
+        onSave = (newCoc) => {
+          mem.cocPanel = newCoc;
+          if (state.chats && state.chats[mem.id]) {
+            if (!state.chats[mem.id].settings) state.chats[mem.id].settings = {};
+            state.chats[mem.id].settings.aiCocPanel = newCoc;
+          }
+        };
+      }
+    }
+
+    if (!userCoc) {
+      if (defaultSenderId === "user" || defaultSenderName === (chat.settings?.myNickname || chat.settings?.myName || "我")) {
+        userCoc = chat.settings?.myCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} });
+        onSave = (newCoc) => {
+          if (!chat.settings) chat.settings = {};
+          chat.settings.myCocPanel = newCoc;
+          if (window.myCocPanel) window.myCocPanel.setData(newCoc);
+        };
+      } else {
+        userCoc = chat.settings?.aiCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} });
+        onSave = (newCoc) => {
+          if (!chat.settings) chat.settings = {};
+          chat.settings.aiCocPanel = newCoc;
+          if (window.aiCocPanel) window.aiCocPanel.setData(newCoc);
+        };
+      }
+    }
+
+    return {
+      id: defaultSenderId,
+      name: defaultSenderName,
+      isUser: defaultSenderId === "user",
+      isProxy: false,
+      cocPanel: userCoc,
+      onSave: onSave
+    };
   };
 
-  // 1. 普通投掷 .r 或 .r xdy
-  const rMatch = cmdLine.match(/^r(?:\s+(.+))?$/i);
+  // 1. 普通投掷 .r 或 .r 角色名 xdy 或 .r角色名 xdy
+  const rMatch = cmdLine.match(/^r(?:([^\s\d\+\-\*\/]+))?(?:\s+(.+))?$/i);
   if (rMatch) {
-    const expr = rMatch[1] ? rMatch[1].trim() : "1d100";
+    let rawArg1 = rMatch[1] ? rMatch[1].trim() : "";
+    let rawArg2 = rMatch[2] ? rMatch[2].trim() : "";
+    let target = resolveTarget(null);
+    let expr = "1d100";
+
+    if (rawArg1) {
+      target = resolveTarget(rawArg1);
+      expr = rawArg2 || "1d100";
+    } else if (rawArg2) {
+      const parts = rawArg2.split(/\s+/);
+      if (parts.length > 1 && !/^(\d+d\d+|\d+)/i.test(parts[0])) {
+        target = resolveTarget(parts[0]);
+        expr = parts.slice(1).join(" ") || "1d100";
+      } else {
+        expr = rawArg2;
+      }
+    }
+
     const res = rollDiceExpression(expr);
     const text = formatDiceTemplate(templates.roll || DEFAULT_DICE_TEMPLATES.roll, {
-      角色名: userName,
+      角色名: target.name,
       表达式: expr,
       结果: res.total
     });
     return { handled: true, text };
   }
 
-  // 2. 暗骰 .rh
-  const rhMatch = cmdLine.match(/^rh(?:\s+(.+))?$/i);
+  // 2. 暗骰 .rh [角色名] [xdy]
+  const rhMatch = cmdLine.match(/^rh(?:([^\s\d\+\-\*\/]+))?(?:\s+(.+))?$/i);
   if (rhMatch) {
-    const subExpr = rhMatch[1] ? rhMatch[1].trim() : "1d100";
+    const subExpr = (rhMatch[2] || rhMatch[1] || "1d100").trim();
     const res = rollDiceExpression(subExpr);
     const text = `${templates.secret || DEFAULT_DICE_TEMPLATES.secret} 点数已密掷`;
     return { handled: true, text };
   }
 
-  // 3. 技能/属性检定 .ra 技能名/属性名 或 .ra 技能名 b/p
-  const raMatch = cmdLine.match(/^ra\s+([^\s]+)(?:\s+(b\d*|p\d*))?$/i);
+  // 3. 技能/属性检定 .ra [角色名] 技能名 [b/p] 或 .ra角色名 技能名
+  const raMatch = cmdLine.match(/^ra(?:([^\s]+))?(?:\s+(.+))?$/i);
   if (raMatch) {
-    const skillName = raMatch[1].trim();
-    const bpMod = raMatch[2] ? raMatch[2].toLowerCase() : "";
+    let attachedTarget = raMatch[1] ? raMatch[1].trim() : "";
+    let restParams = raMatch[2] ? raMatch[2].trim() : "";
+    let targetName = null;
+    let skillName = "";
+    let bpMod = "";
 
-    const lowerKey = skillName.toLowerCase();
-    const mappedKey = COC_KEY_MAP[lowerKey] || COC_KEY_MAP[skillName];
-
-    let skillVal = 50;
-    if (mappedKey) {
-      if (["hp", "mp", "san"].includes(mappedKey)) {
-        if (userCoc.calculated && typeof userCoc.calculated[mappedKey] !== "undefined") {
-          skillVal = parseInt(userCoc.calculated[mappedKey], 10) || 0;
-        }
-      } else if (userCoc.stats && typeof userCoc.stats[mappedKey] !== "undefined") {
-        skillVal = parseInt(userCoc.stats[mappedKey], 10) || 0;
+    if (attachedTarget && !restParams) {
+      // .ra侦查 -> attachedTarget is 侦查
+      skillName = attachedTarget;
+    } else if (attachedTarget && restParams) {
+      // .ra张三 侦查
+      targetName = attachedTarget;
+      const parts = restParams.split(/\s+/);
+      skillName = parts[0];
+      bpMod = parts[1] || "";
+    } else if (!attachedTarget && restParams) {
+      // .ra 张三 侦查 或 .ra 侦查
+      const parts = restParams.split(/\s+/);
+      if (parts.length >= 2 && !/^(b\d*|p\d*)$/i.test(parts[1])) {
+        targetName = parts[0];
+        skillName = parts[1];
+        bpMod = parts[2] || "";
+      } else {
+        skillName = parts[0];
+        bpMod = parts[1] || "";
       }
-    } else if (userCoc.skills && typeof userCoc.skills[skillName] !== "undefined") {
-      skillVal = parseInt(userCoc.skills[skillName], 10) || 0;
-    } else if (userCoc.stats && typeof userCoc.stats[skillName] !== "undefined") {
-      skillVal = parseInt(userCoc.stats[skillName], 10) || 0;
-    } else if (typeof getSkillBaseValue === "function") {
-      skillVal = getSkillBaseValue(skillName, userCoc.stats);
     }
 
-    let finalRoll = Math.floor(Math.random() * 100) + 1;
-    let rollDetail = `${finalRoll}`;
+    if (skillName) {
+      const target = resolveTarget(targetName);
+      const userCoc = target.cocPanel || { stats: {}, skills: {}, calculated: {} };
 
-    if (bpMod.startsWith("b")) {
-      const bonusCount = parseInt(bpMod.slice(1), 10) || 1;
-      const units = finalRoll % 10;
-      let tens = [Math.floor(finalRoll / 10)];
-      for (let i = 0; i < bonusCount; i++) {
-        tens.push(Math.floor(Math.random() * 10));
-      }
-      const minTen = Math.min(...tens);
-      finalRoll = (minTen === 0 && units === 0) ? 100 : (minTen * 10 + units);
-      rollDetail = `${finalRoll}`;
-    } else if (bpMod.startsWith("p")) {
-      const penaltyCount = parseInt(bpMod.slice(1), 10) || 1;
-      const units = finalRoll % 10;
-      let tens = [Math.floor(finalRoll / 10)];
-      for (let i = 0; i < penaltyCount; i++) {
-        tens.push(Math.floor(Math.random() * 10));
-      }
-      const maxTen = Math.max(...tens);
-      finalRoll = (maxTen === 0 && units === 0) ? 100 : (maxTen * 10 + units);
-      rollDetail = `${finalRoll}`;
-    }
+      const lowerKey = skillName.toLowerCase();
+      const mappedKey = COC_KEY_MAP[lowerKey] || COC_KEY_MAP[skillName];
 
-    let level = "失败";
-    if (finalRoll === 1) {
-      level = "大成功";
-    } else if (finalRoll === 100 || (skillVal >= 50 && finalRoll >= 96)) {
-      level = "大失败";
-    } else if (finalRoll <= Math.floor(skillVal / 5)) {
-      level = "极难成功";
-    } else if (finalRoll <= Math.floor(skillVal / 2)) {
-      level = "困难成功";
-    } else if (finalRoll <= skillVal) {
-      level = "常规成功";
-    }
-
-    const text = formatDiceTemplate(templates.check || DEFAULT_DICE_TEMPLATES.check, {
-      角色名: userName,
-      技能: skillName,
-      结果: rollDetail,
-      技能数值: skillVal,
-      成功等级: level
-    });
-    return { handled: true, text };
-  }
-
-  // 3.5 属性/技能录入与修改 .st 力量60 / .st hp+5 / .st 侦查 80
-  const stMatch = cmdLine.match(/^st\s+(.+)$/i);
-  if (stMatch) {
-    const stContent = stMatch[1].trim();
-    const regex = /([^\s\d\+\-\=]+)\s*([\+\-\=])?\s*(\d+)/g;
-    let match;
-    const changes = [];
-
-    if (!userCoc.stats) userCoc.stats = {};
-    if (!userCoc.calculated) userCoc.calculated = {};
-    if (!userCoc.skills) userCoc.skills = {};
-
-    let statsChanged = false;
-
-    while ((match = regex.exec(stContent)) !== null) {
-      const key = match[1].trim();
-      const op = match[2] || "=";
-      const val = parseInt(match[3], 10) || 0;
-
-      const lowerKey = key.toLowerCase();
-      const mappedKey = COC_KEY_MAP[lowerKey] || COC_KEY_MAP[key];
-
+      let skillVal = 50;
       if (mappedKey) {
         if (["hp", "mp", "san"].includes(mappedKey)) {
-          const cur = parseInt(userCoc.calculated[mappedKey], 10) || (mappedKey === "san" ? (userCoc.stats.pow || 50) : 10);
-          let newVal = cur;
-          if (op === "+") newVal = cur + val;
-          else if (op === "-") newVal = cur - val;
-          else newVal = val;
-          userCoc.calculated[mappedKey] = Math.max(0, newVal);
-          changes.push(`${key.toUpperCase()}: ${userCoc.calculated[mappedKey]}`);
-        } else {
-          const cur = parseInt(userCoc.stats[mappedKey], 10) || 50;
-          let newVal = cur;
-          if (op === "+") newVal = cur + val;
-          else if (op === "-") newVal = cur - val;
-          else newVal = val;
-          userCoc.stats[mappedKey] = Math.max(0, newVal);
-          statsChanged = true;
-          changes.push(`${key}: ${userCoc.stats[mappedKey]}`);
+          if (userCoc.calculated && typeof userCoc.calculated[mappedKey] !== "undefined") {
+            skillVal = parseInt(userCoc.calculated[mappedKey], 10) || 0;
+          }
+        } else if (userCoc.stats && typeof userCoc.stats[mappedKey] !== "undefined") {
+          skillVal = parseInt(userCoc.stats[mappedKey], 10) || 0;
         }
-      } else {
-        const cur = parseInt(userCoc.skills[key], 10) || (typeof getSkillBaseValue === "function" ? getSkillBaseValue(key, userCoc.stats) : 0);
-        let newVal = cur;
-        if (op === "+") newVal = cur + val;
-        else if (op === "-") newVal = cur - val;
-        else newVal = val;
-        userCoc.skills[key] = Math.max(0, newVal);
-        changes.push(`${key}: ${userCoc.skills[key]}`);
+      } else if (userCoc.skills && typeof userCoc.skills[skillName] !== "undefined") {
+        skillVal = parseInt(userCoc.skills[skillName], 10) || 0;
+      } else if (userCoc.stats && typeof userCoc.stats[skillName] !== "undefined") {
+        skillVal = parseInt(userCoc.stats[skillName], 10) || 0;
+      } else if (typeof getSkillBaseValue === "function") {
+        skillVal = getSkillBaseValue(skillName, userCoc.stats);
       }
-    }
 
-    if (statsChanged && typeof calculateCocStats === "function") {
-      userCoc.calculated = calculateCocStats(userCoc.stats, userCoc.calculated);
-    }
+      let finalRoll = Math.floor(Math.random() * 100) + 1;
+      let rollDetail = `${finalRoll}`;
 
-    if (changes.length > 0) {
-      persistCocData();
-      const text = `${userName} 修改属性成功：${changes.join(" | ")}`;
-      return { handled: true, text, persistChat: true };
-    }
-  }
+      const lowBp = bpMod.toLowerCase();
+      if (lowBp.startsWith("b")) {
+        const bonusCount = parseInt(lowBp.slice(1), 10) || 1;
+        const units = finalRoll % 10;
+        let tens = [Math.floor(finalRoll / 10)];
+        for (let i = 0; i < bonusCount; i++) {
+          tens.push(Math.floor(Math.random() * 10));
+        }
+        const minTen = Math.min(...tens);
+        finalRoll = (minTen === 0 && units === 0) ? 100 : (minTen * 10 + units);
+        rollDetail = `${finalRoll}`;
+      } else if (lowBp.startsWith("p")) {
+        const penaltyCount = parseInt(lowBp.slice(1), 10) || 1;
+        const units = finalRoll % 10;
+        let tens = [Math.floor(finalRoll / 10)];
+        for (let i = 0; i < penaltyCount; i++) {
+          tens.push(Math.floor(Math.random() * 10));
+        }
+        const maxTen = Math.max(...tens);
+        finalRoll = (maxTen === 0 && units === 0) ? 100 : (maxTen * 10 + units);
+        rollDetail = `${finalRoll}`;
+      }
 
-  // 4. 理智检定 .sc 成功损失/失败损失
-  const scMatch = cmdLine.match(/^sc\s+([^\/]+)\/([^\s]+)/i);
-  if (scMatch) {
-    const succExpr = scMatch[1].trim();
-    const failExpr = scMatch[2].trim();
+      let level = "失败";
+      if (finalRoll === 1) {
+        level = "大成功";
+      } else if (finalRoll === 100 || (skillVal >= 50 && finalRoll >= 96)) {
+        level = "大失败";
+      } else if (finalRoll <= Math.floor(skillVal / 5)) {
+        level = "极难成功";
+      } else if (finalRoll <= Math.floor(skillVal / 2)) {
+        level = "困难成功";
+      } else if (finalRoll <= skillVal) {
+        level = "常规成功";
+      }
 
-    const currentSan = (userCoc.calculated && typeof userCoc.calculated.san === "number")
-      ? userCoc.calculated.san
-      : (userCoc.stats?.pow || 50);
-
-    const rollVal = Math.floor(Math.random() * 100) + 1;
-    let isSuccess = rollVal <= currentSan;
-    let level = isSuccess ? (rollVal <= Math.floor(currentSan / 5) ? "极难成功" : (rollVal <= Math.floor(currentSan / 2) ? "困难成功" : "常规成功")) : "失败";
-    if (rollVal === 1) level = "大成功";
-    if (rollVal === 100 || (currentSan >= 50 && rollVal >= 96)) level = "大失败";
-
-    const lossExpr = isSuccess ? succExpr : failExpr;
-    const lossResult = rollDiceExpression(lossExpr);
-    const lossNum = Math.max(0, lossResult.total);
-
-    const newSan = Math.max(0, currentSan - lossNum);
-
-    if (!userCoc.calculated) userCoc.calculated = {};
-    userCoc.calculated.san = newSan;
-    persistCocData();
-
-    const text = formatDiceTemplate(templates.sc || DEFAULT_DICE_TEMPLATES.sc, {
-      角色名: userName,
-      结果: rollVal,
-      SAN: currentSan,
-      成功等级: level,
-      旧SAN: currentSan,
-      新SAN: newSan
-    });
-
-    return { handled: true, text, persistChat: true };
-  }
-
-  // 5. HP 调整指令 .hp -3 或 .hp +2
-  const hpMatch = cmdLine.match(/^hp\s*([+-]\d+)/i);
-  if (hpMatch) {
-    const delta = parseInt(hpMatch[1], 10);
-    const currentHp = (userCoc.calculated && typeof userCoc.calculated.hp === "number") ? userCoc.calculated.hp : 10;
-    const maxHp = (userCoc.calculated && typeof userCoc.calculated.maxHp === "number") ? userCoc.calculated.maxHp : 10;
-    const newHp = Math.max(0, Math.min(maxHp, currentHp + delta));
-
-    if (!userCoc.calculated) userCoc.calculated = {};
-    userCoc.calculated.hp = newHp;
-    persistCocData();
-
-    const text = formatDiceTemplate(templates.hp || DEFAULT_DICE_TEMPLATES.hp, {
-      角色名: userName,
-      旧HP: currentHp,
-      新HP: newHp
-    });
-    return { handled: true, text, persistChat: true };
-  }
-
-  // 6. 成长检定 .en 技能名
-  const enMatch = cmdLine.match(/^en\s+([^\s]+)/i);
-  if (enMatch) {
-    const skillName = enMatch[1].trim();
-    let currentVal = (userCoc.skills && typeof userCoc.skills[skillName] !== "undefined")
-      ? parseInt(userCoc.skills[skillName], 10)
-      : (typeof getSkillBaseValue === "function" ? getSkillBaseValue(skillName, userCoc.stats) : 50);
-
-    const rollVal = Math.floor(Math.random() * 100) + 1;
-    let growthNum = 0;
-    if (rollVal > currentVal || rollVal > 95) {
-      growthNum = Math.floor(Math.random() * 10) + 1;
-      const newVal = currentVal + growthNum;
-      if (!userCoc.skills) userCoc.skills = {};
-      userCoc.skills[skillName] = newVal;
-      persistCocData();
-
-      const text = `${userName} 进行 ${skillName} 成长检定：D100=${rollVal}/${currentVal} 成功 技能增加 ${growthNum} 点 当前为 ${newVal}`;
-      return { handled: true, text, persistChat: true };
-    } else {
-      const text = `${userName} 进行 ${skillName} 成长检定：D100=${rollVal}/${currentVal} 失败 未能成长`;
+      const text = formatDiceTemplate(templates.check || DEFAULT_DICE_TEMPLATES.check, {
+        角色名: target.name,
+        技能: skillName,
+        结果: rollDetail,
+        技能数值: skillVal,
+        成功等级: level
+      });
       return { handled: true, text };
     }
   }
 
-  // 7. 短期疯狂发作 .ti
-  if (cmdLine.toLowerCase() === "ti") {
+  // 3.5 属性/技能录入与修改 .st [角色名] 力量60 / .st角色名 hp-5 / .st 角色名 掷骰 50 / .st 角色名 hp -5 / .st hp-5
+  const stMatch = cmdLine.match(/^st(?:([^\s\d\+\-\=]+))?(?:\s+(.+))?$/i);
+  if (stMatch) {
+    let attachedTarget = stMatch[1] ? stMatch[1].trim() : "";
+    let restContent = stMatch[2] ? stMatch[2].trim() : "";
+    let targetName = null;
+    let stBody = "";
+
+    if (attachedTarget && restContent) {
+      targetName = attachedTarget;
+      stBody = restContent;
+    } else if (!attachedTarget && restContent) {
+      // 检查第一段是否为角色名
+      const parts = restContent.split(/\s+/);
+      const possibleName = parts[0];
+      const remainder = parts.slice(1).join(" ");
+      const isKnownTarget = (chat.isGroup && Array.isArray(chat.members) && chat.members.some(m => (m.groupNickname === possibleName || m.originalName === possibleName)))
+        || (state.chats && Object.values(state.chats).some(c => c.name === possibleName || c.settings?.remarkName === possibleName));
+      if (isKnownTarget && remainder) {
+        targetName = possibleName;
+        stBody = remainder;
+      } else if (parts.length > 1 && !/^[a-zA-Z\u4e00-\u9fa5]+[\+\-\=]?\d+/.test(possibleName) && !COC_KEY_MAP[possibleName.toLowerCase()]) {
+        targetName = possibleName;
+        stBody = remainder;
+      } else {
+        stBody = restContent;
+      }
+    } else if (attachedTarget && !restContent) {
+      stBody = attachedTarget;
+    }
+
+    if (stBody) {
+      const target = resolveTarget(targetName);
+      const userCoc = target.cocPanel || { stats: {}, skills: {}, calculated: {} };
+
+      const regex = /([^\s\d\+\-\=]+)\s*([\+\-\=])?\s*(\d+)/g;
+      let match;
+      const changes = [];
+
+      if (!userCoc.stats) userCoc.stats = {};
+      if (!userCoc.calculated) userCoc.calculated = {};
+      if (!userCoc.skills) userCoc.skills = {};
+
+      let statsChanged = false;
+
+      while ((match = regex.exec(stBody)) !== null) {
+        const key = match[1].trim();
+        const op = match[2] || "=";
+        const val = parseInt(match[3], 10) || 0;
+
+        const lowerKey = key.toLowerCase();
+        const mappedKey = COC_KEY_MAP[lowerKey] || COC_KEY_MAP[key];
+
+        if (mappedKey) {
+          if (["hp", "mp", "san"].includes(mappedKey)) {
+            const cur = parseInt(userCoc.calculated[mappedKey], 10) || (mappedKey === "san" ? (userCoc.stats.pow || 50) : 10);
+            let newVal = cur;
+            if (op === "+") newVal = cur + val;
+            else if (op === "-") newVal = cur - val;
+            else newVal = val;
+            userCoc.calculated[mappedKey] = Math.max(0, newVal);
+            changes.push(`${key.toUpperCase()}: ${userCoc.calculated[mappedKey]}`);
+          } else {
+            const cur = parseInt(userCoc.stats[mappedKey], 10) || 50;
+            let newVal = cur;
+            if (op === "+") newVal = cur + val;
+            else if (op === "-") newVal = cur - val;
+            else newVal = val;
+            userCoc.stats[mappedKey] = Math.max(0, newVal);
+            statsChanged = true;
+            changes.push(`${key}: ${userCoc.stats[mappedKey]}`);
+          }
+        } else {
+          const cur = parseInt(userCoc.skills[key], 10) || (typeof getSkillBaseValue === "function" ? getSkillBaseValue(key, userCoc.stats) : 0);
+          let newVal = cur;
+          if (op === "+") newVal = cur + val;
+          else if (op === "-") newVal = cur - val;
+          else newVal = val;
+          userCoc.skills[key] = Math.max(0, newVal);
+          changes.push(`${key}: ${userCoc.skills[key]}`);
+        }
+      }
+
+      if (statsChanged && typeof calculateCocStats === "function") {
+        userCoc.calculated = calculateCocStats(userCoc.stats, userCoc.calculated);
+      }
+
+      if (changes.length > 0) {
+        // 守密人自身发送且未指定代理角色时，不将修改写回守密人自身面板
+        if (!(isKeeperRole && !target.isProxy)) {
+          if (typeof target.onSave === "function") {
+            target.onSave(userCoc);
+          }
+        }
+        const text = `${target.name} 修改属性成功：${changes.join(" | ")}`;
+        return { handled: true, text, persistChat: true };
+      }
+    }
+  }
+
+  // 4. 理智检定 .sc [角色名] 成功/失败 或 .sc角色名 成功/失败
+  const scMatch = cmdLine.match(/^sc(?:([^\s\d\/]+))?(?:\s+(.+))?$/i);
+  if (scMatch) {
+    let attachedTarget = scMatch[1] ? scMatch[1].trim() : "";
+    let restSc = scMatch[2] ? scMatch[2].trim() : "";
+    let targetName = null;
+    let scExpr = "";
+
+    if (attachedTarget && restSc) {
+      targetName = attachedTarget;
+      scExpr = restSc;
+    } else if (!attachedTarget && restSc) {
+      const parts = restSc.split(/\s+/);
+      if (parts.length >= 2 && parts[1].includes("/")) {
+        targetName = parts[0];
+        scExpr = parts[1];
+      } else {
+        scExpr = restSc;
+      }
+    } else if (attachedTarget && !restSc) {
+      scExpr = attachedTarget;
+    }
+
+    const slashMatch = scExpr.match(/^([^\/]+)\/([^\s]+)/);
+    if (slashMatch) {
+      const target = resolveTarget(targetName);
+      const userCoc = target.cocPanel || { stats: {}, skills: {}, calculated: {} };
+
+      const succExpr = slashMatch[1].trim();
+      const failExpr = slashMatch[2].trim();
+
+      const currentSan = (userCoc.calculated && typeof userCoc.calculated.san === "number")
+        ? userCoc.calculated.san
+        : (userCoc.stats?.pow || 50);
+
+      const rollVal = Math.floor(Math.random() * 100) + 1;
+      let isSuccess = rollVal <= currentSan;
+      let level = isSuccess ? (rollVal <= Math.floor(currentSan / 5) ? "极难成功" : (rollVal <= Math.floor(currentSan / 2) ? "困难成功" : "常规成功")) : "失败";
+      if (rollVal === 1) level = "大成功";
+      if (rollVal === 100 || (currentSan >= 50 && rollVal >= 96)) level = "大失败";
+
+      const lossExpr = isSuccess ? succExpr : failExpr;
+      const lossResult = rollDiceExpression(lossExpr);
+      const lossNum = Math.max(0, lossResult.total);
+
+      const newSan = Math.max(0, currentSan - lossNum);
+
+      if (!userCoc.calculated) userCoc.calculated = {};
+      userCoc.calculated.san = newSan;
+
+      if (!(isKeeperRole && !target.isProxy)) {
+        if (typeof target.onSave === "function") {
+          target.onSave(userCoc);
+        }
+      }
+
+      const text = formatDiceTemplate(templates.sc || DEFAULT_DICE_TEMPLATES.sc, {
+        角色名: target.name,
+        结果: rollVal,
+        SAN: currentSan,
+        成功等级: level,
+        旧SAN: currentSan,
+        新SAN: newSan
+      });
+
+      return { handled: true, text, persistChat: true };
+    }
+  }
+
+  // 5. HP 调整指令 .hp [角色名] -3 或 .hp角色名 -3
+  const hpMatch = cmdLine.match(/^hp(?:([^\s\d\+\-]+))?(?:\s+([^\s]+))?$/i);
+  if (hpMatch) {
+    let attachedTarget = hpMatch[1] ? hpMatch[1].trim() : "";
+    let restHp = hpMatch[2] ? hpMatch[2].trim() : "";
+    let targetName = null;
+    let deltaStr = "";
+
+    if (attachedTarget && restHp) {
+      targetName = attachedTarget;
+      deltaStr = restHp;
+    } else if (!attachedTarget && restHp) {
+      const parts = restHp.split(/\s+/);
+      if (parts.length >= 2 && /^[+-]\d+/.test(parts[1])) {
+        targetName = parts[0];
+        deltaStr = parts[1];
+      } else {
+        deltaStr = restHp;
+      }
+    } else if (attachedTarget && !restHp) {
+      deltaStr = attachedTarget;
+    }
+
+    const numMatch = deltaStr.match(/^([+-]\d+)/);
+    if (numMatch) {
+      const target = resolveTarget(targetName);
+      const userCoc = target.cocPanel || { stats: {}, skills: {}, calculated: {} };
+
+      const delta = parseInt(numMatch[1], 10);
+      const currentHp = (userCoc.calculated && typeof userCoc.calculated.hp === "number") ? userCoc.calculated.hp : 10;
+      const maxHp = (userCoc.calculated && typeof userCoc.calculated.maxHp === "number") ? userCoc.calculated.maxHp : 10;
+      const newHp = Math.max(0, Math.min(maxHp, currentHp + delta));
+
+      if (!userCoc.calculated) userCoc.calculated = {};
+      userCoc.calculated.hp = newHp;
+
+      if (!(isKeeperRole && !target.isProxy)) {
+        if (typeof target.onSave === "function") {
+          target.onSave(userCoc);
+        }
+      }
+
+      const text = formatDiceTemplate(templates.hp || DEFAULT_DICE_TEMPLATES.hp, {
+        角色名: target.name,
+        旧HP: currentHp,
+        新HP: newHp
+      });
+      return { handled: true, text, persistChat: true };
+    }
+  }
+
+  // 6. 成长检定 .en [角色名] 技能名 或 .en角色名 技能名
+  const enMatch = cmdLine.match(/^en(?:([^\s]+))?(?:\s+(.+))?$/i);
+  if (enMatch) {
+    let attachedTarget = enMatch[1] ? enMatch[1].trim() : "";
+    let restSkill = enMatch[2] ? enMatch[2].trim() : "";
+    let targetName = null;
+    let skillName = "";
+
+    if (attachedTarget && restSkill) {
+      targetName = attachedTarget;
+      skillName = restSkill;
+    } else if (!attachedTarget && restSkill) {
+      const parts = restSkill.split(/\s+/);
+      if (parts.length >= 2) {
+        targetName = parts[0];
+        skillName = parts[1];
+      } else {
+        skillName = restSkill;
+      }
+    } else if (attachedTarget && !restSkill) {
+      skillName = attachedTarget;
+    }
+
+    if (skillName) {
+      const target = resolveTarget(targetName);
+      const userCoc = target.cocPanel || { stats: {}, skills: {}, calculated: {} };
+
+      let currentVal = (userCoc.skills && typeof userCoc.skills[skillName] !== "undefined")
+        ? parseInt(userCoc.skills[skillName], 10)
+        : (typeof getSkillBaseValue === "function" ? getSkillBaseValue(skillName, userCoc.stats) : 50);
+
+      const rollVal = Math.floor(Math.random() * 100) + 1;
+      let growthNum = 0;
+      if (rollVal > currentVal || rollVal > 95) {
+        growthNum = Math.floor(Math.random() * 10) + 1;
+        const newVal = currentVal + growthNum;
+        if (!userCoc.skills) userCoc.skills = {};
+        userCoc.skills[skillName] = newVal;
+
+        if (!(isKeeperRole && !target.isProxy)) {
+          if (typeof target.onSave === "function") {
+            target.onSave(userCoc);
+          }
+        }
+
+        const text = `${target.name} 进行 ${skillName} 成长检定：D100=${rollVal}/${currentVal} 成功 技能增加 ${growthNum} 点 当前为 ${newVal}`;
+        return { handled: true, text, persistChat: true };
+      } else {
+        const text = `${target.name} 进行 ${skillName} 成长检定：D100=${rollVal}/${currentVal} 失败 未能成长`;
+        return { handled: true, text };
+      }
+    }
+  }
+
+  // 7. 短期疯狂发作 .ti [角色名] 或 .ti角色名
+  const tiMatch = cmdLine.match(/^ti(?:([^\s]+))?(?:\s+(.+))?$/i);
+  if (tiMatch) {
+    const rawT = tiMatch[1] || tiMatch[2] || null;
+    const target = resolveTarget(rawT);
     const randIdx = Math.floor(Math.random() * COC_SHORT_TERM_INSANITY.length);
     const symptom = COC_SHORT_TERM_INSANITY[randIdx];
     const text = formatDiceTemplate(templates.ti || DEFAULT_DICE_TEMPLATES.ti, {
-      角色名: userName,
+      角色名: target.name,
       疯狂症状: symptom
     });
     return { handled: true, text };
   }
 
-  // 8. 属性生成 .coc 与 .coc5
-  const cocMatch = cmdLine.match(/^coc(5)?$/i);
+  // 8. 属性生成 .coc 与 .coc5 (支持指定登记目标)
+  const cocMatch = cmdLine.match(/^coc(5)?(?:([^\s\d]+))?(?:\s+(.+))?$/i);
   if (cocMatch) {
     const isFive = cocMatch[1] === "5";
+    const explicitTarget = cocMatch[2] || cocMatch[3] || null;
+    const target = resolveTarget(explicitTarget);
 
     const getCalcSummary = (str, con, pow, siz) => {
       const hp = Math.floor((con + siz) / 10);
@@ -894,7 +1223,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
 
       const cardHtml = `
         <div class="coc-gen-result-card" style="font-size: 11px; line-height: 1.5; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px; overflow: hidden;">
-          <div class="coc-card-header" style="padding: 6px 10px; font-weight: 600; color: var(--text-primary); font-size: 12px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color);">COC7 七版人物属性</div>
+          <div class="coc-card-header" style="padding: 6px 10px; font-weight: 600; color: var(--text-primary); font-size: 12px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color);">COC7 七版人物属性 (${target.name})</div>
           <div style="padding: 8px 10px;">
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 8px; font-size: 11px; color: var(--text-secondary);">
               ${renderAttrItem("力量", attrs.str)}
@@ -921,12 +1250,12 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
             </div>
             <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px;">
               <div style="font-size: 10px; color: var(--text-secondary);">合计:${attrs.total} 含幸运:${attrs.totalWithLuk}</div>
-              <button type="button" class="moe-btn-compact coc-apply-attrs-btn" data-attrs="${dataStr}" style="padding: 2px 10px; font-size: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); cursor: pointer; color: var(--accent-color); font-weight: 600;">选择</button>
+              <button type="button" class="moe-btn-compact coc-apply-attrs-btn" data-target-id="${target.id || ''}" data-target-name="${target.name || ''}" data-attrs="${dataStr}" style="padding: 2px 10px; font-size: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); cursor: pointer; color: var(--accent-color); font-weight: 600;">选择</button>
             </div>
           </div>
         </div>
       `;
-      const text = `${userName} 生成了一组 COC7 属性`;
+      const text = `${target.name} 生成了一组 COC7 属性`;
       return { handled: true, text, html: cardHtml };
     } else {
       let listHtml = "";
@@ -950,7 +1279,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
                 ${renderAttrItem("智力", a.int)}
                 ${renderAttrItem("幸运", a.luk)}
               </div>
-              <div style="display: flex; align-items: center; gap: 14px; font-size: 11px; margin-top: 5px; color: var(--text-secondary);">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 10px; margin-top: 4px; color: var(--text-secondary);">
                 <div style="display: flex; align-items: center; white-space: nowrap; gap: 1px;">
                   <span style="font-weight: 600; color: var(--text-secondary);">HP</span>
                   <span style="color: var(--text-secondary);">:</span>
@@ -964,7 +1293,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
               </div>
               <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px;">
                 <div style="font-size: 10px; color: var(--text-secondary);">合计:${a.total} 含运:${a.totalWithLuk}</div>
-                <button type="button" class="moe-btn-compact coc-apply-attrs-btn" data-attrs="${dataStr}" style="padding: 1px 10px; font-size: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); cursor: pointer; color: var(--accent-color); font-weight: 600;">选择</button>
+                <button type="button" class="moe-btn-compact coc-apply-attrs-btn" data-target-id="${target.id || ''}" data-target-name="${target.name || ''}" data-attrs="${dataStr}" style="padding: 1px 10px; font-size: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); cursor: pointer; color: var(--accent-color); font-weight: 600;">选择</button>
               </div>
             </div>
           </div>
@@ -973,12 +1302,11 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
 
       const fullHtml = `
         <div class="coc-gen-multi-card" style="font-size: 11px; line-height: 1.5; padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px;">
-          <div class="coc-card-header" style="font-weight: 600; margin-bottom: 6px; color: var(--text-primary); font-size: 12px;">COC7 七版人物属性生成 5组</div>
+          <div class="coc-card-header" style="font-weight: 600; margin-bottom: 6px; color: var(--text-primary); font-size: 12px;">COC7 七版人物属性生成 5组 (${target.name})</div>
           ${listHtml}
         </div>
       `;
-
-      const text = `${userName} 生成了 5 组 COC7 属性`;
+      const text = `${target.name} 生成了 5 组 COC7 属性`;
       return { handled: true, text, html: fullHtml };
     }
   }
@@ -986,12 +1314,15 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
   return null;
 };
 
-// 监听气泡中选择并导入属性卡按钮
+// 监听气泡中选择并导入属性卡按钮（精确写回目标角色面板）
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest(".coc-apply-attrs-btn");
   if (!btn) return;
   const rawStr = btn.dataset.attrs;
   if (!rawStr) return;
+
+  const targetId = btn.dataset.targetId;
+  const targetName = btn.dataset.targetName;
 
   try {
     const a = JSON.parse(decodeURIComponent(rawStr));
@@ -999,38 +1330,67 @@ document.addEventListener("click", async (e) => {
     const chat = state.chats[state.activeChatId];
     if (!chat) return;
 
-    if (!chat.settings) chat.settings = {};
-    if (!chat.settings.myCocPanel) {
-      chat.settings.myCocPanel = (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} });
-    }
+    let appliedTargetName = "我";
 
-    chat.settings.myCocPanel.stats = {
-      str: a.str,
-      dex: a.dex,
-      con: a.con,
-      pow: a.pow,
-      siz: a.siz,
-      edu: a.edu,
-      app: a.app,
-      int: a.int,
-      luk: a.luk
-    };
+    if (chat.isGroup && Array.isArray(chat.members) && targetId && targetId !== "user") {
+      const member = chat.members.find(m => m.id === targetId || m.groupNickname === targetName || m.originalName === targetName);
+      if (member) {
+        if (!member.cocPanel) member.cocPanel = (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} });
+        member.cocPanel.stats = {
+          str: a.str, dex: a.dex, con: a.con, pow: a.pow, siz: a.siz, edu: a.edu, app: a.app, int: a.int, luk: a.luk
+        };
+        if (typeof calculateCocStats === "function") {
+          member.cocPanel.calculated = calculateCocStats(member.cocPanel.stats, member.cocPanel.calculated);
+        }
+        if (!member.cocPanel.skills) member.cocPanel.skills = {};
+        member.cocPanel.skills["闪避"] = Math.floor(a.dex / 2);
 
-    if (typeof calculateCocStats === "function") {
-      chat.settings.myCocPanel.calculated = calculateCocStats(chat.settings.myCocPanel.stats, chat.settings.myCocPanel.calculated);
-    }
+        if (state.chats && state.chats[member.id]) {
+          if (!state.chats[member.id].settings) state.chats[member.id].settings = {};
+          state.chats[member.id].settings.aiCocPanel = member.cocPanel;
+          await db.chats.put(state.chats[member.id]);
+        }
+        appliedTargetName = member.groupNickname || member.originalName;
+      }
+    } else if (!chat.isGroup && targetId && targetId !== "user" && targetId === chat.id) {
+      if (!chat.settings) chat.settings = {};
+      if (!chat.settings.aiCocPanel) chat.settings.aiCocPanel = (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} });
+      chat.settings.aiCocPanel.stats = {
+        str: a.str, dex: a.dex, con: a.con, pow: a.pow, siz: a.siz, edu: a.edu, app: a.app, int: a.int, luk: a.luk
+      };
+      if (typeof calculateCocStats === "function") {
+        chat.settings.aiCocPanel.calculated = calculateCocStats(chat.settings.aiCocPanel.stats, chat.settings.aiCocPanel.calculated);
+      }
+      if (!chat.settings.aiCocPanel.skills) chat.settings.aiCocPanel.skills = {};
+      chat.settings.aiCocPanel.skills["闪避"] = Math.floor(a.dex / 2);
+      if (window.aiCocPanel) window.aiCocPanel.setData(chat.settings.aiCocPanel);
+      appliedTargetName = chat.settings?.remarkName || chat.name;
+    } else {
+      if (!chat.settings) chat.settings = {};
+      if (!chat.settings.myCocPanel) {
+        chat.settings.myCocPanel = (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} });
+      }
 
-    if (!chat.settings.myCocPanel.skills) chat.settings.myCocPanel.skills = {};
-    chat.settings.myCocPanel.skills["闪避"] = Math.floor(a.dex / 2);
+      chat.settings.myCocPanel.stats = {
+        str: a.str, dex: a.dex, con: a.con, pow: a.pow, siz: a.siz, edu: a.edu, app: a.app, int: a.int, luk: a.luk
+      };
 
-    if (window.myCocPanel) {
-      window.myCocPanel.setData(chat.settings.myCocPanel);
+      if (typeof calculateCocStats === "function") {
+        chat.settings.myCocPanel.calculated = calculateCocStats(chat.settings.myCocPanel.stats, chat.settings.myCocPanel.calculated);
+      }
+
+      if (!chat.settings.myCocPanel.skills) chat.settings.myCocPanel.skills = {};
+      chat.settings.myCocPanel.skills["闪避"] = Math.floor(a.dex / 2);
+
+      if (window.myCocPanel) {
+        window.myCocPanel.setData(chat.settings.myCocPanel);
+      }
+      appliedTargetName = chat.settings?.myName || chat.settings?.myNickname || "我";
     }
 
     state.chats[state.activeChatId] = chat;
     await db.chats.put(chat);
-    const targetName = chat.settings?.myName || chat.settings?.myNickname || "我";
-    const msg = `已导入${targetName}的面板`;
+    const msg = `已导入 ${appliedTargetName} 的面板`;
     if (typeof window.showCustomAlert === "function") {
       await window.showCustomAlert("提示", msg);
     } else {

@@ -5876,6 +5876,29 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 .chat-group-container:first-of-type {
   border-top: 1px solid var(--border-color);
 }
+
+/* 联系人分组与列表防挤压防重叠样式 */
+.contact-group-card {
+  flex-shrink: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin-bottom: 8px !important;
+}
+.contact-group-header-row {
+  flex-shrink: 0 !important;
+  min-height: 44px !important;
+  box-sizing: border-box !important;
+}
+.contact-group-body {
+  flex-shrink: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.contact-member-row {
+  flex-shrink: 0 !important;
+  min-height: 52px !important;
+  box-sizing: border-box !important;
+}
 /* ▲▲▲ 新样式粘贴结束 ▲▲▲ */
 
 /* ▼▼▼ 用下面这段【新样式】，替换掉你旧的 .date-stamp 样式 ▼▼▼ */
