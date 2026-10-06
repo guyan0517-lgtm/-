@@ -1483,10 +1483,6 @@ ${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心�
         seriesId,
         chapterIndex: 1,
       });
-        lengthType: "long",
-        seriesId,
-        chapterIndex: 1,
-      });
 
       const chapterId = await db.forumChapters.add({
         seriesId,
