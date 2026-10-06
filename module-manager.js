@@ -4403,6 +4403,73 @@ ${chap.content}
           this.openModuleMapEditModal(null, mod.id, chapters);
         };
         leftActions.appendChild(addBtn);
+
+        const compressBtn = document.createElement('button');
+        compressBtn.type = 'button';
+        compressBtn.className = 'mod-capsule-btn';
+        compressBtn.textContent = '压缩';
+        compressBtn.onclick = async () => {
+          const locsWithImg = dbLocations.filter(l => l.imageUrl);
+          if (locsWithImg.length === 0) {
+            if (typeof global.showCustomAlert === 'function') {
+              await global.showCustomAlert('提示', '当前地图暂无可压缩的图片');
+            }
+            return;
+          }
+          let count = 0;
+          for (const loc of locsWithImg) {
+            if (typeof global.compressImage === 'function') {
+              try {
+                loc.imageUrl = await global.compressImage(loc.imageUrl, 0.1, 800);
+                count++;
+                if (dbInstance.moduleLocationNav && loc.id) {
+                  await dbInstance.moduleLocationNav.put(loc);
+                }
+              } catch (e) {}
+            }
+          }
+          if (dbInstance.modules && mod.id) {
+            try {
+              mod.mapNodes = dbLocations.map(l => ({ name: l.name, parent: l.parent, level: l.level, desc: l.desc, prompt: l.prompt, imageUrl: l.imageUrl }));
+              await dbInstance.modules.update(mod.id, { mapNodes: mod.mapNodes });
+            } catch (e) {}
+          }
+          if (typeof global.showCustomAlert === 'function') {
+            await global.showCustomAlert('成功', `已将当前地图 ${count} 张图片压缩至 0.1`);
+          }
+          this.renderModuleDetailMap(chapters);
+        };
+        leftActions.appendChild(compressBtn);
+
+        const clearImgBtn = document.createElement('button');
+        clearImgBtn.type = 'button';
+        clearImgBtn.className = 'mod-capsule-btn';
+        clearImgBtn.textContent = '清空';
+        clearImgBtn.onclick = async () => {
+          const confirmClear = (typeof global.showCustomConfirm === 'function')
+            ? await global.showCustomConfirm('清空', '提示删除所有已生成的图片，是否确定清除？')
+            : confirm('提示删除所有已生成的图片，是否确定清除？');
+          if (!confirmClear) return;
+
+          for (const loc of dbLocations) {
+            loc.imageUrl = '';
+            loc.imageStatus = 'idle';
+            if (dbInstance.moduleLocationNav && loc.id) {
+              await dbInstance.moduleLocationNav.put(loc);
+            }
+          }
+          if (dbInstance.modules && mod.id) {
+            try {
+              mod.mapNodes = dbLocations.map(l => ({ name: l.name, parent: l.parent, level: l.level, desc: l.desc, prompt: l.prompt, imageUrl: '' }));
+              await dbInstance.modules.update(mod.id, { mapNodes: mod.mapNodes });
+            } catch (e) {}
+          }
+          if (typeof global.showCustomAlert === 'function') {
+            await global.showCustomAlert('成功', '已清空已生成的地图头像');
+          }
+          this.renderModuleDetailMap(chapters);
+        };
+        leftActions.appendChild(clearImgBtn);
       }
 
       const rightActions = document.createElement('div');
@@ -4471,7 +4538,7 @@ ${chap.content}
           nodeEl.innerHTML = `
             <div style="display: flex; gap: 10px; align-items: flex-start;">
               <div class="mod-map-avatar-container" style="position: relative; width: 68px; height: 50px; border-radius: 6px; overflow: hidden; background: var(--secondary-bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--border-color); margin-top: 2px;">
-                ${loc.imageUrl ? `<img src="${loc.imageUrl}" alt="${loc.name}" style="width: 100%; height: 100%; object-fit: cover;" />` : defaultThumbSvg}
+                ${loc.imageUrl ? `<img src="${loc.imageUrl}" alt="${loc.name}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover;" />` : defaultThumbSvg}
               </div>
               <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
                 <div class="module-map-node-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">

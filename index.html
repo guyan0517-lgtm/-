@@ -2842,7 +2842,7 @@
                   />
                 </svg>
               </span>
-              <span class="action-btn" id="listen-together-btn" title="地图" onclick="if(typeof openChatMapModal==='function')openChatMapModal();" style="cursor: pointer;"
+              <span class="action-btn" id="listen-together-btn" title="地图" style="cursor: pointer;"
                 ><svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="22"
@@ -2854,9 +2854,10 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <polygon points="1 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
-                  <line x1="8" y1="2" x2="8" y2="18"></line>
-                  <line x1="16" y1="6" x2="16" y2="22"></line>
+                  <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
+                  <line x1="9" y1="3" x2="9" y2="18"></line>
+                  <line x1="15" y1="6" x2="15" y2="21"></line>
+                  <circle cx="12" cy="12" r="2.2" fill="currentColor" fill-opacity="0.3"></circle>
                 </svg></span>
               <span class="action-btn" id="chat-settings-btn" title="聊天设置"
                 ><img
@@ -3004,18 +3005,17 @@
               onclick="if(typeof openChatMapModal==='function')openChatMapModal();"
             >
               <svg
-                width="22"
-                height="22"
+                width="24"
+                height="24"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="1.8"
+                stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
-                <line x1="9" y1="3" x2="9" y2="18"></line>
-                <line x1="15" y1="6" x2="15" y2="21"></line>
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
               </svg>
             </button>
 
@@ -7837,7 +7837,7 @@
 
     <!-- 内存细分弹窗 -->
     <div id="storage-breakdown-modal" class="modal">
-      <div class="modal-content" style="max-width: 360px; width: calc(100% - 40px); margin: 0 auto; padding: 18px; border-radius: 20px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 14px; max-height: 85vh; box-shadow: 0 16px 40px rgba(0,0,0,0.2);">
+      <div class="modal-content" style="max-width: 320px; width: calc(100% - 64px); margin: 0 auto; padding: 18px 16px; border-radius: 20px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 14px; max-height: 85vh; box-shadow: 0 16px 40px rgba(0,0,0,0.2);">
         <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
@@ -7849,6 +7849,52 @@
         </div>
         <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
           <button type="button" class="chat-mod-footer-btn secondary" id="close-storage-breakdown-footer-btn" style="width: 100%; height: 34px;">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 存储图片细分查看与压缩弹窗 -->
+    <div id="storage-images-modal" class="modal">
+      <div class="modal-content" style="max-width: 320px; width: calc(100% - 64px); margin: 0 auto; padding: 16px 14px; border-radius: 20px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; max-height: 86vh; box-shadow: 0 16px 40px rgba(0,0,0,0.24);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            <span id="storage-images-modal-title" style="font-size: 15px; font-weight: 700; color: var(--text-primary);">图片</span>
+          </div>
+          <button type="button" class="close-btn" id="close-storage-images-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; padding: 2px 0;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" class="chat-mod-footer-btn secondary" id="storage-images-select-all-btn" style="height: 28px; font-size: 11px; padding: 0 8px;">全选</button>
+            <select id="storage-images-quality-select" style="height: 28px; line-height: 28px; font-size: 11px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">
+              <option value="0.1" selected>0.1</option>
+              <option value="0.2">0.2</option>
+              <option value="0.3">0.3</option>
+              <option value="0.4">0.4</option>
+              <option value="0.5">0.5</option>
+              <option value="0.6">0.6</option>
+              <option value="0.7">0.7</option>
+              <option value="0.8">0.8</option>
+              <option value="0.9">0.9</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" class="chat-mod-footer-btn primary" id="storage-images-compress-btn" style="height: 28px; font-size: 11px; padding: 0 10px;">压缩</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="storage-images-cleanup-btn" style="height: 28px; font-size: 11px; padding: 0 10px; color: var(--danger-color, #e53935);">清理</button>
+          </div>
+        </div>
+
+        <div id="storage-images-summary-bar" style="font-size: 11px; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; background: var(--secondary-bg); border-radius: 6px;">
+          <span id="storage-images-count-text">共 0 张</span>
+          <span id="storage-images-size-text">0 MB</span>
+        </div>
+
+        <div class="modal-body" id="storage-images-list" style="overflow-y: auto; flex: 1; min-height: 200px; max-height: 48vh; display: flex; flex-direction: column; gap: 6px; padding: 2px;">
+        </div>
+
+        <div class="modal-footer" style="padding-top: 8px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="close-storage-images-footer-btn" style="width: 100%; height: 32px;">关闭</button>
         </div>
       </div>
     </div>
@@ -7900,14 +7946,10 @@
         </div>
         
         <div style="padding: 2px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-          <button type="button" class="chat-mod-footer-btn primary" id="chat-map-open-mini-btn" style="flex: 2; min-width: 0; height: 34px; font-size: 13px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-            打开小地图
+          <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-top-gen-btn" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;">
+            生成小地图
           </button>
-          <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-top-regen-btn" style="flex: 1; min-width: 0; height: 34px; font-size: 12px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 10px;">
-            重绘
-          </button>
-          <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-top-import-btn" style="flex: 1; min-width: 0; height: 34px; font-size: 12px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 10px;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-top-import-btn" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;">
             导入
           </button>
         </div>
@@ -7915,17 +7957,18 @@
         <div id="chat-map-list-container" style="flex: 1; min-height: 180px; max-height: 380px; overflow-y: auto; padding: 6px 2px; display: flex; flex-direction: column; gap: 8px;"></div>
 
         <div class="modal-footer" id="chat-map-modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; justify-content: flex-start;">
             <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: var(--text-secondary); user-select: none;">
               <input type="checkbox" id="chat-map-use-module-toggle" checked style="width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent-color);" />
               <span>使用模组</span>
             </label>
           </div>
-          <div id="chat-map-footer-btns-row" style="display: flex; align-items: center; gap: 8px; width: 100%;">
-            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-view-toggle-btn" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">图文</button>
-            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-write-btn" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">编写</button>
-            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-draw-btn" title="绘制" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">绘制</button>
-            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-add-temp-btn" title="添加" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-family: inherit; padding: 0; display: inline-flex; align-items: center; justify-content: center;">添加</button>
+          <div id="chat-map-footer-btns-row" style="display: flex; align-items: center; gap: 5px; width: 100%;">
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-view-toggle-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">图文</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-write-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">编写</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-draw-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">绘制</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-compress-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">压缩</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-clear-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">清除</button>
           </div>
         </div>
       </div>
@@ -20425,6 +20468,37 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.getChatModulePromptBlock = getChatModulePromptBlock;
 
+        async function getChatMapPromptBlock(chat) {
+          if (!chat) return { prompt: "", tokenCount: 0 };
+          try {
+            const useModule = (chat.settings?.useModuleMap !== false) && !!chat.activeModuleId;
+            const locations = (typeof getAllChatLocations === "function") ? await getAllChatLocations(chat) : [];
+            if (!locations || locations.length === 0) return { prompt: "", tokenCount: 0 };
+
+            let locListText = "";
+            if (useModule) {
+              locListText = locations.map(l => {
+                const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
+                const descPart = l.desc ? ` - 简介: ${l.desc}` : "";
+                return `- 层级${l.level}【${l.name}】(${hierarchy})${descPart}`;
+              }).join("\n");
+            } else {
+              locListText = locations.map(l => {
+                const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
+                return `- 层级${l.level}【${l.name}】(${hierarchy})`;
+              }).join("\n");
+            }
+
+            const prompt = `\n# 【当前探索地点库与地图信息】\n${locListText}\n- AI带团推进剧情进入新地点时，请自动在系统状态栏更新[地点]为完整层级路径（如：一级地点-二级地点-具体地点），接下来去哪里的指向由AI结合剧情自行判断并填写，无需玩家手动干预。\n\n`;
+            const tokenCount = Math.ceil(prompt.length * 0.7);
+            return { prompt, tokenCount };
+          } catch(err) {
+            console.error("加载地图提示词块错误:", err);
+            return { prompt: "", tokenCount: 0 };
+          }
+        }
+        window.getChatMapPromptBlock = getChatMapPromptBlock;
+
         let currentModulePickerFilter = 'all';
         let currentViewingModuleId = null;
 
@@ -20496,6 +20570,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             let modules = await dbInstance.modules.toArray();
+            modules.sort((a, b) => {
+              const orderA = (a.sortOrder !== undefined && a.sortOrder !== null) ? a.sortOrder : ((a.order !== undefined && a.order !== null) ? a.order : 0);
+              const orderB = (b.sortOrder !== undefined && b.sortOrder !== null) ? b.sortOrder : ((b.order !== undefined && b.order !== null) ? b.order : 0);
+              if (orderA !== orderB) return orderA - orderB;
+              return (b.createdAt || 0) - (a.createdAt || 0);
+            });
             let allChapters = [];
             let allImages = [];
             try {
@@ -20880,39 +20960,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
-            const CATEGORY_ORDER = [
-              '人设',
-              '导入',
-              'HO秘密与设定',
-              '单人线',
-              '正文',
-              '结局',
-              'NPC与猫',
-              '地点',
-              '事件',
-              '其他'
-            ];
-
-            const normalizeCat = (rawCat = '', rawTitle = '') => {
-              const c = String(rawCat).toLowerCase();
-              const t = String(rawTitle).toLowerCase();
-              if (c.includes('人设') || c.includes('调查员') || c.includes('pc') || t.includes('人设')) return '人设';
-              if (c.includes('导入') || c.includes('公开') || c.includes('事前') || c.includes('引导') || c.includes('kp') || t.includes('导入') || t.includes('序幕') || t.includes('开局')) return '导入';
-              if (c.includes('ho') || c.includes('秘密') || c.includes('设定') || t.includes('ho') || t.includes('秘密')) return 'HO秘密与设定';
-              if (c.includes('单人') || c.includes('个人') || t.includes('单人') || t.includes('个人线')) return '单人线';
-              if (c.includes('npc') || c.includes('猫') || t.includes('npc') || t.includes('猫')) return 'NPC与猫';
-              if (c.includes('结局') || c.includes('结末') || c.includes('尾声') || c.includes('真相') || t.includes('结局') || t.includes('尾声')) return '结局';
-              if (c.includes('地点') || c.includes('场所') || c.includes('地图') || t.includes('地点') || t.includes('室') || t.includes('馆')) return '地点';
-              if (c.includes('事件') || c.includes('线索') || c.includes('机制') || t.includes('事件')) return '事件';
-              if (c.includes('正文') || c.includes('主线') || t.includes('第') || t.includes('章')) return '正文';
-              return '其他';
-            };
-
             const groupedMap = new Map();
-            CATEGORY_ORDER.forEach(cat => groupedMap.set(cat, []));
 
             allChaps.forEach(chap => {
-              const cat = normalizeCat(chap.category, chap.title);
+              const cat = (chap.category && String(chap.category).trim()) || '正文';
               if (!groupedMap.has(cat)) groupedMap.set(cat, []);
               groupedMap.get(cat).push(chap);
             });
@@ -28519,10 +28570,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 e.stopPropagation();
                 const locName = span.getAttribute('data-loc-name');
                 if (!locName || locName === '未知') return;
-                const allLocs = await getAllChatLocations(chat);
-                const found = allLocs.find(l => l.name === locName || locName.includes(l.name) || l.name.includes(locName));
-                if (found && found.desc) {
-                  openChatLocationDetailModal(found.name, found.desc);
+                const allLocs = (typeof getAllChatLocations === "function") ? await getAllChatLocations(chat) : [];
+                const exactFound = allLocs.find(l => l.name === locName || (l.name && locName && l.name.trim() === locName.trim()));
+                if (exactFound && exactFound.desc) {
+                  if (typeof showLocationBubble === "function") {
+                    showLocationBubble(span, exactFound.name, exactFound.desc);
+                  } else if (typeof openChatLocationDetailModal === "function") {
+                    openChatLocationDetailModal(exactFound.name, exactFound.desc);
+                  }
+                } else {
+                  if (typeof openChatMapModal === "function") {
+                    openChatMapModal();
+                  }
                 }
               };
             });
@@ -29537,6 +29596,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (dbInstance) await dbInstance.chats.put(chat);
         }
 
+        function toggleChatMapModal() {
+          const modal = document.getElementById("chat-map-modal");
+          const miniModal = document.getElementById("chat-mini-map-modal");
+          const isMapOpen = modal && modal.classList.contains("visible");
+          const isMiniOpen = miniModal && miniModal.classList.contains("visible");
+
+          if (isMapOpen || isMiniOpen) {
+            if (modal) modal.classList.remove("visible");
+            if (miniModal) miniModal.classList.remove("visible");
+            hideLocationBubble();
+            return;
+          }
+          openChatMapModal();
+        }
+        window.toggleChatMapModal = toggleChatMapModal;
+
+        let isMiniMapGenerating = false;
+        let miniMapAbortController = null;
+        let isMapImagesDrawing = false;
+        let mapImagesAbortController = null;
+
         async function openChatMapModal() {
           if (!state.activeChatId) return;
           const chat = state.chats[state.activeChatId];
@@ -29560,26 +29640,32 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (chat.settings.useModuleMap === undefined) chat.settings.useModuleMap = true;
 
           const useModToggle = document.getElementById("chat-map-use-module-toggle");
+          const topGenBtn = document.getElementById("chat-map-top-gen-btn");
+          const topImportBtn = document.getElementById("chat-map-top-import-btn");
           const viewToggleBtn = document.getElementById("chat-map-view-toggle-btn");
           const writeBtn = document.getElementById("chat-map-write-btn");
           const drawBtn = document.getElementById("chat-map-draw-btn");
-          const topRegenBtn = document.getElementById("chat-map-top-regen-btn");
-          const topImportBtn = document.getElementById("chat-map-top-import-btn");
+          const compressBtn = document.getElementById("chat-map-compress-btn");
+          const clearBtn = document.getElementById("chat-map-clear-btn");
           const addTempBtn = document.getElementById("chat-map-add-temp-btn");
 
-          const updateFooterButtons = () => {
-            const useMod = chat.settings.useModuleMap !== false;
-            const hasModule = Boolean(chat.activeModuleId);
-
+          const updateButtonsState = () => {
             if (viewToggleBtn) {
-              viewToggleBtn.style.display = "inline-flex";
               viewToggleBtn.textContent = chat.settings.mapViewMode === "rich" ? "文字" : "图文";
             }
-            if (writeBtn) {
-              writeBtn.style.display = "inline-flex";
+            if (topGenBtn) {
+              if (isMiniMapGenerating) {
+                topGenBtn.textContent = "暂停";
+              } else {
+                topGenBtn.textContent = "生成小地图";
+              }
             }
             if (drawBtn) {
-              drawBtn.style.display = "inline-flex";
+              if (isMapImagesDrawing) {
+                drawBtn.textContent = "暂停";
+              } else {
+                drawBtn.textContent = "绘制";
+              }
             }
           };
 
@@ -29599,25 +29685,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance) await dbInstance.chats.put(chat);
-              updateFooterButtons();
+              updateButtonsState();
               await renderChatMapList();
             };
           }
 
-          updateFooterButtons();
+          updateButtonsState();
 
-          if (topRegenBtn) {
-            topRegenBtn.onclick = async () => {
+          if (topGenBtn) {
+            topGenBtn.onclick = async () => {
+              if (isMiniMapGenerating) {
+                if (miniMapAbortController) {
+                  miniMapAbortController.abort();
+                  miniMapAbortController = null;
+                }
+                isMiniMapGenerating = false;
+                topGenBtn.textContent = "继续";
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "已暂停生成小地图");
+                }
+                return;
+              }
+
               modal.classList.remove("visible");
               hideLocationBubble();
+
               openMiniMapStylePickerModal(async (style) => {
+                isMiniMapGenerating = true;
+                updateButtonsState();
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "正在后台生成小地图，生成完成后会自动通知您");
+                }
                 try {
                   await generateChatMiniMapSvg(style);
-                  openChatMiniMapModal();
-                } catch (e) {
-                  console.error("重绘小地图失败:", e);
+                  isMiniMapGenerating = false;
+                  updateButtonsState();
                   if (typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("生成失败", e.message || String(e));
+                    window.showCustomAlert("提示", "小地图生成完毕");
+                  }
+                } catch (e) {
+                  console.error("生成小地图异常:", e);
+                  isMiniMapGenerating = false;
+                  if (topGenBtn) topGenBtn.textContent = "继续";
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "生成小地图中断，点击可继续生成");
                   }
                 }
               });
@@ -29664,37 +29775,127 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (drawBtn) {
             drawBtn.onclick = async () => {
+              if (isMapImagesDrawing) {
+                if (mapImagesAbortController) {
+                  mapImagesAbortController.abort();
+                  mapImagesAbortController = null;
+                }
+                isMapImagesDrawing = false;
+                drawBtn.textContent = "继续";
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "已暂停地点插图绘制");
+                }
+                return;
+              }
+
               chat.settings.mapViewMode = "rich";
               if (viewToggleBtn) viewToggleBtn.textContent = "文字";
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance) await dbInstance.chats.put(chat);
               await renderChatMapList();
+
+              const locations = await getAllChatLocations(chat);
+              const targetLocs = locations.filter(l => !l.imageUrl);
+              const locsToDraw = targetLocs.length > 0 ? targetLocs : locations;
+
+              if (locsToDraw.length === 0) {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "当前地图暂无可绘制的地点");
+                }
+                return;
+              }
+
+              isMapImagesDrawing = true;
+              updateButtonsState();
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("图文模式", "已切换至图文模式，可逐一查看或编写每个地点的绘图提示词与生成效果。");
+                window.showCustomAlert("绘制中", `开始逐一为 ${locsToDraw.length} 个地点绘制插图，可随时点击暂停`);
+              }
+
+              try {
+                let successCount = 0;
+                for (const loc of locsToDraw) {
+                  if (!isMapImagesDrawing) break;
+                  
+                  const prompt = `${loc.name} ${loc.desc || '精致场景插图'} 高清奇幻场景概念设计`;
+                  let b64 = null;
+                  if (typeof generateNovelAIImageForCharacter === "function") {
+                    try {
+                      b64 = await generateNovelAIImageForCharacter(chat.id, prompt);
+                    } catch (err) {}
+                  }
+
+                  if (b64) {
+                    loc.imageUrl = b64;
+                    await saveLocationImage(chat, loc, b64);
+                    successCount++;
+                    await renderChatMapList();
+                  }
+                }
+
+                isMapImagesDrawing = false;
+                updateButtonsState();
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("绘制完成", `已完成地点插图绘制，成功更新 ${successCount} 个地点`);
+                }
+              } catch (e) {
+                console.error("绘制地点插图失败:", e);
+                isMapImagesDrawing = false;
+                if (drawBtn) drawBtn.textContent = "继续";
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("绘制中断", "绘制过程遇到中断，点击可继续生成");
+                }
               }
             };
           }
 
-          const openMiniBtn = document.getElementById("chat-map-open-mini-btn");
-          if (openMiniBtn) {
-            openMiniBtn.onclick = async () => {
-              modal.classList.remove("visible");
-              hideLocationBubble();
-              if (chat.settings?.miniMapSvg) {
-                openChatMiniMapModal();
-              } else {
-                openMiniMapStylePickerModal(async (style) => {
-                  try {
-                    await generateChatMiniMapSvg(style);
-                    openChatMiniMapModal();
-                  } catch (e) {
-                    console.error("生成小地图失败:", e);
-                    if (typeof window.showCustomAlert === "function") {
-                      window.showCustomAlert("生成失败", e.message || String(e));
-                    }
-                  }
-                });
+          if (compressBtn) {
+            compressBtn.onclick = async () => {
+              const locations = await getAllChatLocations(chat);
+              const locsWithImg = locations.filter((l) => l.imageUrl);
+              if (locsWithImg.length === 0) {
+                if (typeof window.showCustomAlert === "function") {
+                  await window.showCustomAlert("提示", "当前地图暂无可压缩的头像图片");
+                }
+                return;
               }
+              let count = 0;
+              for (const loc of locsWithImg) {
+                if (typeof compressImage === "function") {
+                  try {
+                    const compressed = await compressImage(loc.imageUrl, 0.1, 700);
+                    if (compressed) {
+                      loc.imageUrl = compressed;
+                      await saveLocationImage(chat, loc, compressed);
+                      count++;
+                    }
+                  } catch (e) {}
+                }
+              }
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("成功", `已将当前地图 ${count} 张图片压缩至 0.1`);
+              }
+              await renderChatMapList();
+            };
+          }
+
+          if (clearBtn) {
+            clearBtn.onclick = async () => {
+              const confirmClear = (typeof window.showCustomConfirm === "function")
+                ? await window.showCustomConfirm("清空", "提示删除所有已生成的图片，是否确定清除？")
+                : confirm("提示删除所有已生成的图片，是否确定清除？");
+              if (!confirmClear) return;
+
+              const locations = await getAllChatLocations(chat);
+              for (const loc of locations) {
+                if (loc.imageUrl) {
+                  loc.imageUrl = "";
+                  await saveLocationImage(chat, loc, "");
+                }
+              }
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("成功", "已清除这张地图已经生成的地图头像");
+              }
+              await renderChatMapList();
             };
           }
 
@@ -29726,15 +29927,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.openChatMapModal = openChatMapModal;
 
-        function showLocationBubble(targetEl, title, desc) {
-          if (!desc) return;
+        function showLocationBubble(targetEl, desc) {
+          if (!desc || typeof desc !== "string" || !desc.trim()) return;
           const bubble = document.getElementById("chat-location-bubble");
           const titleEl = document.getElementById("chat-location-bubble-title");
           const descEl = document.getElementById("chat-location-bubble-desc");
-          if (!bubble || !titleEl || !descEl) return;
+          if (!bubble || !descEl || !targetEl) return;
 
-          titleEl.textContent = title;
-          descEl.textContent = desc;
+          if (titleEl) titleEl.style.display = "none";
+          descEl.textContent = desc.trim();
 
           bubble.style.display = "flex";
           bubble.style.visibility = "hidden";
@@ -29743,7 +29944,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const rect = targetEl.getBoundingClientRect();
           const bubbleRect = bubble.getBoundingClientRect();
           const bubbleWidth = bubbleRect.width || 210;
-          const bubbleHeight = bubbleRect.height || 60;
+          const bubbleHeight = bubbleRect.height || 50;
 
           let left = rect.left + rect.width / 2 - bubbleWidth / 2;
           left = Math.max(12, Math.min(window.innerWidth - bubbleWidth - 12, left));
@@ -29851,15 +30052,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   parent: loc.parent || "",
                   level: loc.level || 1,
                   desc: loc.desc || loc.description || "",
-                  imageUrl: "",
+                  imageUrl: loc.imageUrl || "",
                   isTemp: false,
                 });
               });
             } else {
               const defaultLocs = [
-                { id: "ctx_1", name: "中央广场", parent: "", level: 1, desc: "城镇的核心区域与探索出发点" },
-                { id: "ctx_2", name: "旧钟楼", parent: "中央广场", level: 2, desc: "俯瞰全景的古老机械时钟" },
-                { id: "ctx_3", name: "静谧小巷", parent: "中央广场", level: 2, desc: "连接各个场所的安静石板道" }
+                { id: "ctx_1", name: "中央广场", parent: "", level: 1, desc: "城镇的核心区域与探索出发点", imageUrl: "" },
+                { id: "ctx_2", name: "旧钟楼", parent: "中央广场", level: 2, desc: "俯瞰全景的古老机械时钟", imageUrl: "" },
+                { id: "ctx_3", name: "静谧小巷", parent: "中央广场", level: 2, desc: "连接各个场所的安静石板道", imageUrl: "" }
               ];
               locations.push(...defaultLocs);
             }
@@ -29882,6 +30083,63 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return locations;
         }
 
+        async function saveLocationImage(chat, node, b64) {
+          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+          const useModule = (chat?.settings?.useModuleMap !== false);
+
+          if (useModule && chat && chat.activeModuleId && dbInstance) {
+            if (dbInstance.moduleLocationNav && node.id) {
+              try {
+                const found = await dbInstance.moduleLocationNav.get(node.id);
+                if (found) {
+                  found.imageUrl = b64;
+                  await dbInstance.moduleLocationNav.put(found);
+                }
+              } catch (e) {}
+            }
+            if (dbInstance.modules) {
+              try {
+                const mod = await dbInstance.modules.get(chat.activeModuleId);
+                if (mod && Array.isArray(mod.mapNodes)) {
+                  const target = mod.mapNodes.find(m => m.name === node.name);
+                  if (target) target.imageUrl = b64;
+                  await dbInstance.modules.update(chat.activeModuleId, { mapNodes: mod.mapNodes });
+                }
+              } catch (e) {}
+            }
+          }
+
+          if (!chat.settings) chat.settings = {};
+          if (node.isTemp) {
+            if (Array.isArray(chat.settings.temporaryLocations)) {
+              const t = chat.settings.temporaryLocations.find(l => l.id === node.id || l.name === node.name);
+              if (t) t.imageUrl = b64;
+            }
+          } else {
+            if (!Array.isArray(chat.settings.contextMapData) || chat.settings.contextMapData.length === 0) {
+              const locs = await getAllChatLocations(chat);
+              chat.settings.contextMapData = locs.map(l => ({
+                id: l.id,
+                name: l.name,
+                parent: l.parent,
+                level: l.level,
+                desc: l.desc,
+                imageUrl: l.name === node.name ? b64 : (l.imageUrl || "")
+              }));
+            } else {
+              const t = chat.settings.contextMapData.find(l => l.id === node.id || l.name === node.name);
+              if (t) {
+                t.imageUrl = b64;
+              } else {
+                chat.settings.contextMapData.push({ id: node.id, name: node.name, parent: node.parent, level: node.level, desc: node.desc, imageUrl: b64 });
+              }
+            }
+          }
+          if (dbInstance && chat.id) {
+            await dbInstance.chats.put(chat);
+          }
+        }
+
         async function renderChatMapList() {
           const container = document.getElementById("chat-map-list-container");
           if (!container || !state.activeChatId) return;
@@ -29900,7 +30158,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
 
-          const useModule = (chat.settings?.useModuleMap !== false);
+          let currentLocName = "";
+          const history = chat.history || [];
+          for (let i = history.length - 1; i >= 0; i--) {
+            const h = history[i];
+            if (!h || typeof h.content !== "string") continue;
+            const match = h.content.match(/(?:\[?地点\]?)[：:]\s*([^\n\r]+)/);
+            if (match) {
+              const rawLoc = match[1].trim();
+              if (rawLoc && rawLoc !== "未知") {
+                const parts = rawLoc.split("-").map(p => p.trim());
+                currentLocName = parts[parts.length - 1] || parts[0];
+                break;
+              }
+            }
+          }
+
           const isRich = (chat.settings?.mapViewMode === "rich");
           const level1 = locations.filter((l) => !l.parent || l.level === 1);
           const getChildren = (parentName) => locations.filter((l) => l.parent && l.parent === parentName);
@@ -29912,14 +30185,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             const children = getChildren(node.name);
             const hasChildren = (children.length > 0);
+            const isCurrentLoc = Boolean(currentLocName && (node.name === currentLocName || node.name.includes(currentLocName) || currentLocName.includes(node.name)));
 
             const row = document.createElement("div");
             row.className = "chat-map-strip-row";
 
-            const hasImg = Boolean(node.imageUrl && isRich);
-            const imgHtml = hasImg ? `<img src="${node.imageUrl}" class="strip-thumb" style="width: 44px; height: 44px; aspect-ratio: 1 / 1; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color); cursor: pointer;" />` : "";
+            let imgSlotHtml = "";
+            if (isRich) {
+              if (node.imageUrl) {
+                imgSlotHtml = `<img src="${node.imageUrl}" class="strip-thumb" loading="lazy" decoding="async" style="width: 44px; height: 44px; aspect-ratio: 1 / 1; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color); cursor: pointer;" />`;
+              } else {
+                imgSlotHtml = `<div class="strip-thumb-placeholder" title="上传或设置头像" style="width: 44px; height: 44px; aspect-ratio: 1 / 1; border-radius: 6px; flex-shrink: 0; border: 1px dashed var(--border-color); background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
+              }
+            }
 
-            if (isRich && hasImg) {
+            if (isRich) {
               row.style.minHeight = "52px";
               row.style.padding = "6px 10px";
             } else {
@@ -29927,13 +30207,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               row.style.padding = "6px 10px";
             }
 
+            if (isCurrentLoc) {
+              row.style.borderLeft = "3px solid var(--accent-color)";
+              row.style.background = "var(--secondary-bg)";
+            }
+
             row.innerHTML = `
               <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
                 ${hasChildren ? `<svg class="strip-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink: 0; transform: rotate(90deg); transition: transform 0.15s ease; cursor: pointer;"><polyline points="9 18 15 12 9 6"></polyline></svg>` : `<span style="width: 12px; flex-shrink: 0;"></span>`}
-                ${imgHtml}
+                ${imgSlotHtml}
                 <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; flex: 1;">
                   <div style="display: flex; align-items: center; gap: 4px; min-width: 0; width: 100%;">
                     <span class="chat-map-name-label" style="font-weight: 600; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;">${node.name}</span>
+                    ${isCurrentLoc ? `<span style="font-size: 9px; background: var(--accent-color); color: #FFFFFF; border-radius: 3px; padding: 0 4px; flex-shrink: 0; font-weight: 600;">当前</span>` : ""}
                     ${node.isTemp ? `<span style="font-size: 9px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 3px; padding: 0 3px; flex-shrink: 0;">临</span>` : ""}
                   </div>
                   ${node.desc ? `<span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; opacity: 0.85; line-height: 1.3;">${node.desc}</span>` : ""}
@@ -29953,6 +30239,34 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 } else if (typeof viewImage === "function") {
                   viewImage(node.imageUrl);
                 }
+              };
+            }
+
+            const placeholder = row.querySelector(".strip-thumb-placeholder");
+            if (placeholder) {
+              placeholder.onclick = (e) => {
+                e.stopPropagation();
+                const fileInput = document.createElement("input");
+                fileInput.type = "file";
+                fileInput.accept = "image/*";
+                fileInput.onchange = async () => {
+                  const file = fileInput.files && fileInput.files[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = async (evt) => {
+                    let b64 = evt.target.result;
+                    if (typeof compressImage === "function") {
+                      try {
+                        b64 = await compressImage(b64, 0.5, 900);
+                      } catch (err) {}
+                    }
+                    node.imageUrl = b64;
+                    await saveLocationImage(chat, node, b64);
+                    await renderChatMapList();
+                  };
+                  reader.readAsDataURL(file);
+                };
+                fileInput.click();
               };
             }
 
@@ -29981,7 +30295,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               let isExpanded = true;
               const toggleExpand = (e) => {
-                if (e.target.closest(".del-temp-btn") || e.target.closest(".strip-thumb")) return;
+                if (e.target.closest(".del-temp-btn") || e.target.closest(".strip-thumb") || e.target.closest(".strip-thumb-placeholder")) return;
                 e.stopPropagation();
                 isExpanded = !isExpanded;
                 if (isExpanded) {
@@ -30197,6 +30511,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           modal.classList.add("visible");
         }
         window.openChatMiniMapModal = openChatMiniMapModal;
+
+        function toggleChatMiniMapModal() {
+          const modal = document.getElementById("chat-mini-map-modal");
+          if (modal && modal.classList.contains("visible")) {
+            modal.classList.remove("visible");
+            hideLocationBubble();
+          } else {
+            openChatMiniMapModal();
+          }
+        }
+        window.toggleChatMiniMapModal = toggleChatMiniMapModal;
 
         let mapInnerZoom = 1;
         let mapInnerPanX = 0;
@@ -30443,19 +30768,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           });
 
-          const locNodes = container.querySelectorAll("[data-name], .map-location-node");
+          const locNodes = container.querySelectorAll("[data-name], .map-location-node, g, text");
           locNodes.forEach(node => {
-            node.style.cursor = "pointer";
-            node.addEventListener("click", async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const locName = node.getAttribute("data-name") || node.textContent.trim();
-              const locs = await getAllChatLocations(chat);
-              const found = locs.find(l => l.name === locName || locName.includes(l.name) || l.name.includes(locName));
-              if (found && found.desc) {
-                showLocationBubble(node, found.name, found.desc);
-              }
-            });
+            const rawName = node.getAttribute("data-name") || (node.tagName.toLowerCase() === "text" ? node.textContent.trim() : "");
+            if (rawName || node.classList.contains("map-location-node")) {
+              node.style.cursor = "pointer";
+              node.addEventListener("click", async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const locName = node.getAttribute("data-name") || node.textContent.trim();
+                const locs = await getAllChatLocations(chat);
+                let found = locs.find(l => l.name === locName || (locName && (locName.includes(l.name) || l.name.includes(locName))));
+                if (!found) {
+                  const parentWithData = node.closest("[data-name], .map-location-node");
+                  if (parentWithData) {
+                    const pName = parentWithData.getAttribute("data-name") || parentWithData.textContent.trim();
+                    found = locs.find(l => l.name === pName || (pName && (pName.includes(l.name) || l.name.includes(pName))));
+                  }
+                }
+                if (found && found.desc && typeof found.desc === "string" && found.desc.trim() && found.desc.trim() !== found.name) {
+                  showLocationBubble(node, found.desc.trim());
+                }
+              });
+            }
           });
 
           // 拦截内部所有可能的外链与跳转，保持纯净内联
@@ -30471,26 +30806,69 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           for (let i = history.length - 1; i >= 0; i--) {
             const h = history[i];
             if (!h || typeof h.content !== "string") continue;
-            const match = h.content.match(/(?:\[?地点\]?)[：:]\s*([^\n\r]+)/);
+            const match = h.content.match(/(?:\[|【)?地点(?:\]|】)?[：:\s]+([^\n\r\]】]+)/);
             if (match) {
               latestLocation = match[1].trim();
               break;
             }
           }
+          if (!latestLocation && chat.settings?.systemStatus) {
+            const locCol = (chat.settings.systemStatusCols || []).find(c => c.type === 'location' || c.name === '地点' || c.label === '地点');
+            if (locCol && (chat.settings.systemStatus[locCol.name] || chat.settings.systemStatus[locCol.label])) {
+              latestLocation = String(chat.settings.systemStatus[locCol.name] || chat.settings.systemStatus[locCol.label]).trim();
+            }
+          }
 
           if (latestLocation && latestLocation !== "未知") {
-            const parts = latestLocation.split("-").map(p => p.trim());
-            const targetLocName = parts[parts.length - 1] || parts[0];
+            const parts = latestLocation.split(/[-—/／>→，,\s]+/).map(p => p.trim()).filter(Boolean);
             let matchedNode = null;
-            locNodes.forEach(node => {
-              const dName = node.getAttribute("data-name");
-              if (dName === targetLocName || dName === latestLocation || parts.includes(dName)) {
-                matchedNode = node;
+
+            // 优先从最末级地点向最前级大地点倒序精准匹配
+            for (let i = parts.length - 1; i >= 0; i--) {
+              const targetPart = parts[i];
+              if (!targetPart) continue;
+
+              for (const node of locNodes) {
+                const dName = (node.getAttribute("data-name") || "").trim();
+                const nodeText = (node.tagName && node.tagName.toLowerCase() === "text" ? node.textContent.trim() : (node.querySelector ? (node.querySelector("text")?.textContent?.trim() || "") : ""));
+                const nodeId = (node.getAttribute("id") || "").trim();
+
+                if (dName === targetPart || nodeText === targetPart || nodeId === targetPart || dName.includes(targetPart) || targetPart.includes(dName)) {
+                  matchedNode = (node.closest ? node.closest(".map-location-node") : null) || node;
+                  break;
+                }
               }
-            });
+              if (matchedNode) break;
+            }
+
+            if (!matchedNode) {
+              for (const node of locNodes) {
+                const dName = (node.getAttribute("data-name") || "").trim();
+                if (dName === latestLocation) {
+                  matchedNode = (node.closest ? node.closest(".map-location-node") : null) || node;
+                  break;
+                }
+              }
+            }
+
             if (matchedNode) {
               matchedNode.classList.add("map-location-pin");
-              matchedNode.style.filter = "drop-shadow(0 0 6px var(--accent-color))";
+              matchedNode.style.filter = "drop-shadow(0 0 4px rgba(239, 68, 68, 0.45))";
+
+              if (!matchedNode.querySelector(".current-location-beacon")) {
+                const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                beaconG.setAttribute("class", "current-location-beacon");
+                beaconG.setAttribute("transform", "translate(0, -22)");
+                beaconG.setAttribute("style", "pointer-events: none;");
+                beaconG.innerHTML = `
+                  <ellipse cx="2" cy="18" rx="4.5" ry="2" fill="rgba(0,0,0,0.3)" />
+                  <polygon points="-1,8 0,18 1,8" fill="#718096" stroke="#4a5568" stroke-width="0.5" />
+                  <circle cx="0" cy="0" r="9" fill="#E53E3E" stroke="#9B2C2C" stroke-width="1.2" />
+                  <circle cx="-2.5" cy="-2.5" r="4.5" fill="#FC8181" opacity="0.85" />
+                  <circle cx="-3" cy="-3" r="2" fill="#FFFFFF" opacity="0.95" />
+                `;
+                matchedNode.appendChild(beaconG);
+              }
             }
           }
 
@@ -30544,264 +30922,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.renderChatMiniMap = renderChatMiniMap;
 
         function buildProceduralMiniMapSvg(locations, styleName = "奶油风") {
-          const locList = (Array.isArray(locations) && locations.length > 0)
-            ? locations
-            : [
-                { name: "中央广场", desc: "城镇的核心枢纽与集市" },
-                { name: "旧钟楼", desc: "耸立于高处的古老机械时钟" },
-                { name: "密林书斋", desc: "藏匿于林荫中的安静书斋" },
-                { name: "隐秘工坊", desc: "回荡着锻造声响的手工坊" },
-                { name: "圣辉庭院", desc: "沐浴在微光中的幽静庭院" }
-              ];
-
-          const width = 540;
-          const height = 400;
-          const nodeCount = Math.min(locList.length, 8);
-
-          const themes = {
-            "自适应": {
-              bgGrad: ["#FAF8F5", "#F2EDE4"],
-              border: "#8C7A6B",
-              accent: "#8B5A2B",
-              subAccent: "#5C7658",
-              text: "#3A2E2B",
-              badgeBg: "#FFFDF9",
-              badgeBorder: "#D8CCBC",
-              zoneBg: "rgba(255, 253, 249, 0.95)",
-              river: "#B8D5E5",
-              hills: "#E4DCD0"
-            },
-            "奶油风": {
-              bgGrad: ["#FFFDF8", "#FAF3E8"],
-              border: "#DBC7B0",
-              accent: "#D97757",
-              subAccent: "#7DA668",
-              text: "#423229",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#EFE2D3",
-              zoneBg: "rgba(255, 255, 255, 0.96)",
-              river: "#C5E1EC",
-              hills: "#EFE6D8"
-            },
-            "莫兰迪": {
-              bgGrad: ["#F7F5F2", "#EBE5DF"],
-              border: "#A69E96",
-              accent: "#A67C7B",
-              subAccent: "#788677",
-              text: "#332F2C",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#D9D4CE",
-              zoneBg: "rgba(255, 255, 255, 0.95)",
-              river: "#C2D4D8",
-              hills: "#E2DDD7"
-            },
-            "魔法风": {
-              bgGrad: ["#F9F6FE", "#EFE9F8"],
-              border: "#9B84BE",
-              accent: "#6B3FA0",
-              subAccent: "#B8860B",
-              text: "#2E1C4E",
-              badgeBg: "#FFFDFE",
-              badgeBorder: "#D4C7EA",
-              zoneBg: "rgba(255, 255, 255, 0.96)",
-              river: "#B3CDE8",
-              hills: "#E5DBF2"
-            },
-            "纽约风": {
-              bgGrad: ["#FAF3E0", "#EEDCC5"],
-              border: "#8B5A2B",
-              accent: "#8B4513",
-              subAccent: "#556B2F",
-              text: "#3B220C",
-              badgeBg: "#FFFDF8",
-              badgeBorder: "#D4B996",
-              zoneBg: "rgba(255, 253, 248, 0.96)",
-              river: "#A9C9D9",
-              hills: "#DFCCA8"
-            },
-            "中世纪": {
-              bgGrad: ["#F7EFE1", "#EAD8BF"],
-              border: "#7B4B27",
-              accent: "#8B3A1A",
-              subAccent: "#596B3D",
-              text: "#381E09",
-              badgeBg: "#FFFBF2",
-              badgeBorder: "#D3B792",
-              zoneBg: "rgba(255, 252, 244, 0.96)",
-              river: "#9FBECF",
-              hills: "#DAC4A3"
-            },
-            "日式奇幻": {
-              bgGrad: ["#FFFDFD", "#FDEFF2"],
-              border: "#E89AA8",
-              accent: "#D64060",
-              subAccent: "#5A9367",
-              text: "#3B262B",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#F7D1D8",
-              zoneBg: "rgba(255, 255, 255, 0.95)",
-              river: "#BCE0E8",
-              hills: "#F7E1E5"
-            },
-            "水彩风": {
-              bgGrad: ["#F8FCFB", "#ECF7F5"],
-              border: "#7BBFB5",
-              accent: "#2D8C7F",
-              subAccent: "#5B9E78",
-              text: "#1C3E38",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#CCEAE5",
-              zoneBg: "rgba(255, 255, 255, 0.95)",
-              river: "#A6D8DF",
-              hills: "#DDEFEA"
-            },
-            "极简INS": {
-              bgGrad: ["#FCFCFC", "#F4F4F5"],
-              border: "#52525B",
-              accent: "#18181B",
-              subAccent: "#71717A",
-              text: "#18181B",
-              badgeBg: "#FFFFFF",
-              badgeBorder: "#D4D4D8",
-              zoneBg: "rgba(255, 255, 255, 0.96)",
-              river: "#CBD5E1",
-              hills: "#E4E4E7"
-            }
-          };
-
-          const theme = themes[styleName] || themes["自适应"] || themes["奶油风"];
-
-          const presetLayouts = [
-            { x: 270, y: 200, w: 140, h: 70 },
-            { x: 135, y: 130, w: 130, h: 65 },
-            { x: 405, y: 125, w: 130, h: 65 },
-            { x: 130, y: 285, w: 130, h: 65 },
-            { x: 410, y: 280, w: 130, h: 65 },
-            { x: 270, y: 80,  w: 120, h: 55 },
-            { x: 60,  y: 210, w: 90,  h: 55 },
-            { x: 480, y: 210, w: 90,  h: 55 }
-          ];
-
-          // 生动富饶的自然场景与建筑配饰环境
-          const environmentDecorSvg = `
-          <g opacity="0.9">
-            <!-- 远景柔和连绵山丘轮廓 -->
-            <path d="M 0 140 Q 60 70 140 110 T 280 85 T 420 100 T 540 70 L 540 400 L 0 400 Z" fill="${theme.hills}" opacity="0.45" />
-            <path d="M 0 170 Q 80 115 180 145 T 360 125 T 540 150 L 540 400 L 0 400 Z" fill="${theme.hills}" opacity="0.3" />
-
-            <!-- 蜿蜒清澈的自然河流与石桥水系 -->
-            <path d="M -10 100 Q 120 180 250 140 T 550 220" fill="none" stroke="${theme.river}" stroke-width="24" stroke-linecap="round" opacity="0.75" />
-            <path d="M -10 100 Q 120 180 250 140 T 550 220" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="16,10" opacity="0.85" />
-
-            <!-- 自然石桥跨越河道 -->
-            <g transform="translate(242, 126)">
-              <rect x="0" y="0" width="30" height="26" rx="4" fill="${theme.badgeBg}" stroke="${theme.border}" stroke-width="1.8" />
-              <line x1="0" y1="9" x2="30" y2="9" stroke="${theme.border}" stroke-width="1.2" stroke-dasharray="3,2" />
-              <line x1="0" y1="17" x2="30" y2="17" stroke="${theme.border}" stroke-width="1.2" stroke-dasharray="3,2" />
-            </g>
-
-            <!-- 自然弯曲的石板小径连接各个区域 -->
-            <path d="M 135 130 Q 200 165 270 200 Q 340 240 410 280 M 405 125 Q 340 160 270 200 Q 200 240 130 285 M 270 80 L 270 200" fill="none" stroke="${theme.border}" stroke-width="3" stroke-dasharray="6,5" opacity="0.45" />
-
-            <!-- 茂密生动的森林林地与树群 -->
-            <g fill="${theme.subAccent}">
-              <!-- 西北部密林 -->
-              <circle cx="55" cy="70" r="14" opacity="0.7" />
-              <circle cx="75" cy="62" r="11" opacity="0.85" />
-              <circle cx="42" cy="85" r="10" opacity="0.75" />
-              <circle cx="68" cy="82" r="13" opacity="0.9" />
-
-              <!-- 东北部树林 -->
-              <circle cx="470" cy="65" r="15" opacity="0.7" />
-              <circle cx="492" cy="58" r="11" opacity="0.85" />
-              <circle cx="455" cy="80" r="12" opacity="0.8" />
-              <circle cx="485" cy="80" r="14" opacity="0.9" />
-
-              <!-- 西南部森林 -->
-              <circle cx="50" cy="325" r="15" opacity="0.75" />
-              <circle cx="72" cy="335" r="12" opacity="0.85" />
-              <circle cx="38" cy="345" r="11" opacity="0.7" />
-
-              <!-- 东南部林地 -->
-              <circle cx="485" cy="335" r="16" opacity="0.75" />
-              <circle cx="505" cy="320" r="12" opacity="0.85" />
-              <circle cx="468" cy="348" r="11" opacity="0.8" />
-
-              <!-- 散落点缀的灌木与花丛 -->
-              <circle cx="210" cy="75" r="7" opacity="0.65" />
-              <circle cx="330" cy="75" r="8" opacity="0.65" />
-              <circle cx="195" cy="320" r="8" opacity="0.65" />
-              <circle cx="345" cy="325" r="7" opacity="0.65" />
-            </g>
-
-            <!-- 中央广场草坪与喷泉水池景观 -->
-            <circle cx="270" cy="200" r="46" fill="${theme.subAccent}" opacity="0.12" />
-            <circle cx="270" cy="200" r="32" fill="${theme.river}" opacity="0.4" stroke="${theme.border}" stroke-width="1.2" />
-            <circle cx="270" cy="200" r="14" fill="${theme.river}" opacity="0.85" />
-            <circle cx="270" cy="200" r="5" fill="#FFFFFF" />
-
-            <!-- 古典路灯与地标微光装饰 -->
-            <circle cx="215" cy="180" r="3.5" fill="#FBBF24" stroke="#D97706" stroke-width="1" />
-            <circle cx="325" cy="180" r="3.5" fill="#FBBF24" stroke="#D97706" stroke-width="1" />
-            <circle cx="215" cy="220" r="3.5" fill="#FBBF24" stroke="#D97706" stroke-width="1" />
-            <circle cx="325" cy="220" r="3.5" fill="#FBBF24" stroke="#D97706" stroke-width="1" />
-          </g>`;
-
-          let zonesSvg = "";
-          let nodesSvg = "";
-
-          for (let i = 0; i < nodeCount; i++) {
-            const loc = locList[i];
-            const pt = presetLayouts[i];
-            const isCenter = i === 0;
-            const safeName = String(loc.name || "地点").replace(/["<>]/g, "");
-
-            zonesSvg += `
-              <rect x="${pt.x - pt.w / 2}" y="${pt.y - pt.h / 2}" width="${pt.w}" height="${pt.h}" rx="12" fill="${theme.zoneBg}" stroke="${theme.border}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.95" />
-            `;
-
-            const r = isCenter ? 18 : 14;
-            nodesSvg += `
-            <g class="map-location-node" data-name="${safeName}" style="cursor: pointer;" transform="translate(${pt.x}, ${pt.y})">
-              <circle r="${r + 5}" fill="${theme.accent}" opacity="0.18" />
-              <circle r="${r}" fill="${theme.badgeBg}" stroke="${isCenter ? theme.accent : theme.border}" stroke-width="${isCenter ? 2.2 : 1.5}" />
-              <circle r="${r - 4}" fill="${isCenter ? theme.accent : theme.subAccent}" opacity="${isCenter ? 0.95 : 0.7}" />
-              <text y="${isCenter ? 3.5 : 3}" font-size="${isCenter ? 10 : 8}" font-weight="bold" fill="#FFFFFF" text-anchor="middle" font-family="system-ui, sans-serif">★</text>
-              <g transform="translate(0, ${r + 13})">
-                <rect x="-44" y="-9" width="88" height="18" rx="9" fill="${theme.badgeBg}" stroke="${theme.border}" stroke-width="1.2" />
-                <text y="3.5" font-size="10" font-weight="bold" fill="${theme.text}" text-anchor="middle" font-family="system-ui, sans-serif">${safeName.slice(0, 8)}</text>
-              </g>
-            </g>`;
-          }
-
-          return `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; display:block;">
-            <defs>
-              <linearGradient id="miniMapBg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="${theme.bgGrad[0]}" />
-                <stop offset="100%" stop-color="${theme.bgGrad[1]}" />
-              </linearGradient>
-            </defs>
-            <rect width="${width}" height="${height}" rx="18" fill="url(#miniMapBg)" />
-            <rect x="8" y="8" width="${width - 16}" height="${height - 16}" rx="14" fill="none" stroke="${theme.border}" stroke-width="1.5" opacity="0.7" />
-            ${environmentDecorSvg}
-            <g transform="translate(36, 36)" opacity="0.9">
-              <circle r="14" fill="${theme.badgeBg}" stroke="${theme.accent}" stroke-width="1.5" />
-              <path d="M 0 -10 L 3 -2 L 10 0 L 3 2 L 0 10 L -3 2 L -10 0 L -3 -2 Z" fill="${theme.accent}" />
-              <text y="-12" font-size="8" font-weight="bold" fill="${theme.text}" text-anchor="middle">N</text>
-            </g>
-            <g transform="translate(${width / 2}, 26)">
-              <rect x="-65" y="-11" width="130" height="22" rx="11" fill="${theme.badgeBg}" stroke="${theme.border}" stroke-width="1.2" />
-              <text y="4" font-size="11" font-weight="bold" fill="${theme.text}" text-anchor="middle" font-family="system-ui, sans-serif">${styleName}地图</text>
-            </g>
-            <g transform="translate(${width - 65}, ${height - 18})" opacity="0.8">
-              <line x1="0" y1="0" x2="45" y2="0" stroke="${theme.text}" stroke-width="2.5" stroke-linecap="round" />
-              <line x1="0" y1="-3" x2="0" y2="3" stroke="${theme.text}" stroke-width="1.8" />
-              <line x1="45" y1="-3" x2="45" y2="3" stroke="${theme.text}" stroke-width="1.8" />
-              <text x="22.5" y="-5" font-size="8.5" font-weight="bold" fill="${theme.text}" text-anchor="middle">100m</text>
-            </g>
-            ${zonesSvg}
-            ${nodesSvg}
-          </svg>`;
+          return "";
         }
         window.buildProceduralMiniMapSvg = buildProceduralMiniMapSvg;
 
@@ -30820,14 +30941,42 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } catch (e) {}
           }
 
+          // 收集全部可参考的地点图片与模组图库，优先将地图/平面/全景/布局类图片排在最前供AI重点分析
+          const isMapImage = (img) => {
+            const str = `${img.name || ''} ${img.desc || ''} ${img.annotation || ''} ${img.category || ''}`.toLowerCase();
+            return str.includes("地图") || str.includes("map") || str.includes("平面") || str.includes("全景") || str.includes("布局") || str.includes("俯瞰") || str.includes("总览") || str.includes("示意");
+          };
+
+          const referenceImages = [...galleryImages];
+          locations.forEach(loc => {
+            if (loc.imageUrl && !referenceImages.some(img => (img.dataUrl === loc.imageUrl || img.url === loc.imageUrl))) {
+              referenceImages.push({
+                name: loc.name,
+                dataUrl: loc.imageUrl,
+                desc: `${loc.name} 场景参考图`
+              });
+            }
+          });
+
+          referenceImages.sort((a, b) => {
+            const aMap = isMapImage(a) ? 1 : 0;
+            const bMap = isMapImage(b) ? 1 : 0;
+            return bMap - aMap;
+          });
+
           const locSummary = locations.map(l => {
             const imgTag = l.imageUrl ? "有配图参考" : "文字设定";
             return `- 层级${l.level} ${l.name}${l.parent ? ' 所属：' + l.parent : ' 顶级'}：${l.desc || '场景区域'} 状态：${imgTag}`;
           }).join("\n");
 
-          const gallerySummary = (galleryImages || []).map((img, idx) => {
-            return `【图库插图${idx + 1}】名称：${img.name || '未命名'}，分类与说明：${img.desc || img.annotation || img.category || '模组插图'}${img.dataUrl ? '，包含图像数据' : ''}`;
+          const gallerySummary = (referenceImages || []).map((img, idx) => {
+            const mapTag = isMapImage(img) ? "【核心地图与布局图】" : "【场景/角色参考插图】";
+            return `【参考图${idx + 1}】${mapTag} 名称：${img.name || '未命名'}，说明：${img.desc || img.annotation || img.category || '场景插图'}${img.dataUrl || img.url ? '，包含图像数据' : ''}`;
           }).join("\n");
+
+          const adaptiveInstruction = (styleName === "自适应" || !styleName)
+            ? `\n【自适应风格深度智能决策指令】：\n你必须根据以上地点清单中的所有地名、层级以及详细简介设定，自主推演最契合当前世界观题材（例如奇幻森林、末日废土、魔法学院、现代都市、唯美仙侠、赛博朋克、古风武侠等）的殿堂级艺术画风，并自主调配最美观、舒适、赏心悦目的白天专属色彩体系！\n`
+            : "";
 
           const customStyles = getCustomMapStyles();
           const matchedCustom = customStyles.find(s => s.name === styleName);
@@ -30837,23 +30986,30 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const globalReqInstruction = globalReq ? `\n【用户全局要求】：\n${globalReq}\n` : "";
 
           const prompt = `你拥有全球顶尖、令人叹为观止的资深矢量概念插画与示意地图设计大师造诣。请极尽你的极限，拿出你最深厚的艺术功底，根据以下地点清单、模组图库插图与世界观环境，绘制一张构图极度丰富饱满、充满探索氛围与艺术美感的【${styleName}】风格全矢量示意小地图（纯SVG代码）！\n\n` +
-            `地点层级清单：\n${locSummary || '地点：中央广场、旧钟楼、静谧小巷、圣辉神殿'}\n\n` +
+            `地点层级与设定清单：\n${locSummary || '地点：中央广场、旧钟楼、静谧小巷、圣辉神殿'}\n\n` +
             `模组图库插图与环境数据：\n${gallerySummary || '暂无额外图库插图'}\n` +
+            adaptiveInstruction +
             customStyleInstruction +
             globalReqInstruction + `\n` +
-            `殿堂级制图与构图最高准则：\n` +
-            `1. 色彩与美学自由诠释，避免沉闷纯黑底色：\n` +
-            `   - 除了暗黑主题外，全图底色不要采用纯黑或沉闷黑色，底色与配色方案由你根据世界观、地理环境与【${styleName}】风格自行理解发挥与自由搭配（如中世纪/复古纽约/巴黎风格可采用羊皮纸色、棕褐色或复古古典色调；奶油风采用温润柔和暖色调；魔法风自主诠释哈利波特奇幻神秘色彩与魔幻纹理；西双版纳雨林或山庄采用自然生态色调；现代风自由推演协调色彩等）；\n` +
-            `2. 自由生动的场景与地貌构图，严禁画死板的城市道路白色方格网：\n` +
-            `   - 绝不要把画面局限于死板单一的现代城市街道白色方格网！请根据场景是架空小山庄、森林雨林、名胜景区（如巴黎、伦敦）、学院城堡还是奇幻大陆，自主绘制匹配的地貌（如连绵山峦、丘陵轮廓、茂密树林、蜿蜒水系石桥、草坪花圃、广场小径等）与标志性建筑造型；\n` +
-            `3. 极度饱满的环境装饰与智能补全（把地图填满装饰饱满）：\n` +
-            `   - 地图绝不能只画几个孤零零的地点框！即使地点清单中没有写出的周边事物，你也必须根据常识和环境主动发散，绘制大量丰富的环境装饰物：在山丘旁画密林古树、在水系旁画河岸石桥与水波、在建筑旁画庭院花草、石径、露台、路灯、古典围栏、特色图标、等高线山脉地貌纹理、精致刻度的罗盘指南针、古典比例尺与华丽外边框，把空间感、氛围感与细节拉满到极致；\n` +
-            `4. 深度研读并严谨参考模组图库插图：\n` +
-            `   - 若模组图库中提供了地图或场景插图，必须精准参考其中的路线走向、建筑坐落与方位排版来构建该区域；\n` +
-            `5. 交互与坐标防移位铁律：\n` +
+            `殿堂级制图与构图最高准则（无论何种风格均必须深度遵守）：\n` +
+            `1. 深入理解世界观与简介设定，发挥主观能动性主动绘制主题装饰与环境元素（严禁对设定视而不见）：\n` +
+            `   - 必须仔细通读每一个地点的名称与详细简介设定，提取核心意象并将其具象化为地图上的视觉元素；\n` +
+            `   - 例如：若简介涉及菌子/真菌/孢子林，必须在地图对应区域绘制大量各色奇异发光的巨型蘑菇伞盖、菌落丛与微光孢子；若涉及海滩海滨，必须主动绘制海鸥、贝壳、海浪潮水、延伸栈桥凉亭；若涉及悬崖峭壁，必须绘制嶙峋山石、登山铁网与缆绳；若涉及废墟田东，必须绘制坍塌石墙、藤蔓与老旧农具；若涉及医院/派出所/营地，绘制十字标志、警徽标识、炊烟、帐篷与围栏等；\n` +
+            `   - 充分发挥人类设计师级别的主观能动性，根据世界观主动发散联想，严禁只画空荡荡的地名；\n` +
+            `2. 构图极致饱满，大面积填满空白，成片成群绘制自然植被与生态（严禁只画两棵树）：\n` +
+            `   - 树林、树丛必须绘制成片成丛、层层叠叠茂密的森林组团与大面积林冠群落，严禁单调地只画两三棵孤零零的树木；\n` +
+            `   - 充分利用整张地图的留白空间，用丰富的自然地貌（地形等高线、草地斑块地貌、山石地貌、水流波纹、鹅卵石步道、散落的景观小品、围栏、路灯、车辙、探险路线虚线等）填满画面，展现真实丰富、细节精致的手绘俯瞰大地图全貌；\n` +
+            `3. 告别简陋儿童画，绘制精巧有层次的成熟建筑与立体空间（严禁方框加三角）：\n` +
+            `   - 严禁出现方块加三角形的单薄儿童简笔画；\n` +
+            `   - 建筑必须具备多层进深、精致的屋顶瓦面、门窗檐口、台阶底座、庭院回廊、烟囱或特色结构，呈现精致生动的2.5D立体俯瞰造型；\n` +
+            `4. 美观舒适配色与底色限制铁律：\n` +
+            `   - 配色自由挥洒，要求输出美观漂亮、视觉搭配极为舒适协调的色彩体系（如梦幻蓝调、柔和淡粉、优雅淡紫、翡翠林绿、羊皮纸暖金或复古水彩等任意优美色彩均可自由运用）；\n` +
+            `   - 【底色唯一硬性限制】：地图的底色绝对不能是纯黑色，也不能是深蓝、深紫、深褐等压抑暗沉的黑色系底色；除霍格沃兹保持其特有魔法建筑意象之外，其余世界观均生成舒适美观的白天色调；\n` +
+            `5. 纯净名称展示与气泡交互：\n` +
+            `   - 地图节点处只展示地点的名称标签，【严禁在地图节点下方直接平铺大段简介文字】，避免画面臃肿与显示不全；\n` +
             `   - 每个具体地点最外层 <g> 标签必须附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致；\n` +
             `   - 【严禁在SVG内部或<style>中编写任何针对 .map-location-node 或任何元素的 :hover / :active 的 transform 缩放或偏移样式】！因为SVG中覆盖 transform 会重置坐标导致节点瞬间飞移到左上角 (0,0)！节点只需保留默认视觉样式即可；\n` +
-            `   - 交互仅为点击地点弹出信息气泡，无需任何额外的 transform 缩放动画；\n` +
+            `   - 交互仅为点击地点弹出白色悬浮信息气泡；\n` +
             `6. 纯净内联SVG：\n` +
             `   - 严禁包含 <a> 标签或外部页面跳转代码；\n` +
             `   - 只输出纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，不带任何Markdown代码块与多余文字。`;
@@ -30865,6 +31021,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           let svgCode = "";
           let generationSucceeded = false;
+          let generationError = null;
 
           if (apiKey && apiKey.trim() !== "") {
             try {
@@ -30881,18 +31038,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const geminiImageParts = [];
               const openaiImageParts = [];
-              for (const img of (galleryImages || []).slice(0, 5)) {
+              for (const img of (referenceImages || []).slice(0, 6)) {
                 let dUrl = img.dataUrl || img.url || '';
-                if (dUrl && dUrl.startsWith('data:image/')) {
-                  const mime = dUrl.substring(5, dUrl.indexOf(';')) || 'image/jpeg';
-                  const b64 = dUrl.split(',')[1];
-                  if (b64) {
-                    geminiImageParts.push({
-                      inlineData: {
-                        mimeType: mime,
-                        data: b64
-                      }
-                    });
+                if (dUrl) {
+                  if (dUrl.startsWith('data:image/')) {
+                    const mime = dUrl.substring(5, dUrl.indexOf(';')) || 'image/jpeg';
+                    const b64 = dUrl.split(',')[1];
+                    if (b64) {
+                      geminiImageParts.push({
+                        inlineData: {
+                          mimeType: mime,
+                          data: b64
+                        }
+                      });
+                      openaiImageParts.push({
+                        type: "image_url",
+                        image_url: { url: dUrl }
+                      });
+                    }
+                  } else if (dUrl.startsWith('http://') || dUrl.startsWith('https://')) {
                     openaiImageParts.push({
                       type: "image_url",
                       image_url: { url: dUrl }
@@ -30937,14 +31101,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     generationSucceeded = true;
                   }
                 }
+              } else {
+                const errData = await resp.json().catch(() => null);
+                throw new Error(errData?.error?.message || `请求失败 (${resp.status})`);
               }
             } catch (err) {
-              console.warn("AI 生成地图接口请求未完成，使用内置高精矢量引擎渲染:", err);
+              console.error("AI 生成地图异常:", err);
+              generationError = err;
             }
           }
 
           if (!generationSucceeded || !svgCode) {
-            svgCode = buildProceduralMiniMapSvg(locations, styleName);
+            const errorMsg = generationError ? (generationError.message || String(generationError)) : "未能从AI获取到有效的地图SVG代码，请检查API Key或模型配置";
+            if (typeof window.showCustomAlert === "function") {
+              window.showCustomAlert("生成失败", errorMsg);
+            }
+            throw new Error(errorMsg);
           }
 
           // 生成成功后覆盖旧地图
@@ -32415,6 +32587,8 @@ ${columnPrompts}
 
             const thoughtChainPromptBlock = await getThoughtChainPromptBlock(chat);
             const moduleChaptersPromptBlock = await getChatModulePromptBlock(chat);
+            const mapPromptObj = await getChatMapPromptBlock(chat);
+            const mapPromptBlock = typeof mapPromptObj === "object" ? (mapPromptObj.prompt || "") : (mapPromptObj || "");
 
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
@@ -32657,6 +32831,7 @@ ${columnPrompts}
 			${announcementContext}
 			${worldBookContent}
 			${moduleChaptersPromptBlock}
+			${mapPromptBlock}
 			${thoughtChainPromptBlock}
 			${systemStatusContext}
 			${musicContext}
@@ -33304,12 +33479,12 @@ ${colSpecs.join('\n')}
 			- **世界观设定集**:
 			${worldBookContent}
 			${moduleChaptersPromptBlock}
+			${mapPromptBlock}
 			${thoughtChainPromptBlock}
 			${linkedMemoryContext}
 			${elemeContext}
 			- **可用表情包**:
-			${exclusiveStickerContext}
-			${commonStickerContext}
+			${stickerContext || ""}
 			现在，请根据以上所有规则和下方的对话历史，继续进行对话。`;
               // 构建单人聊天的messagesPayload
               messagesPayload = historySlice
@@ -56424,6 +56599,17 @@ ${colSpecs.join('\n')}
             count: calculateTokenCount(cocModuleText),
           });
 
+          // 4.6 地图
+          let mapPromptText = "";
+          if (typeof getChatMapPromptBlock === "function") {
+            const mapRes = await getChatMapPromptBlock(chat);
+            mapPromptText = typeof mapRes === "object" ? (mapRes.prompt || "") : (mapRes || "");
+          }
+          breakdown.push({
+            name: "地图",
+            count: calculateTokenCount(mapPromptText),
+          });
+
           // 5. 短期记忆 (对话) - 【核心修改部分】
           const history = chat.history.filter((msg) => !msg.isHidden && !msg.noAi);
           const memoryDepth = settings.maxMemory || 10;
@@ -58277,14 +58463,14 @@ ${colSpecs.join('\n')}
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
 
           const categories = {
-            images: { name: "图片", bytes: 0, count: 0, unit: "张", color: "var(--accent-color, #ff6b8b)" },
-            chat: { name: "聊天", bytes: 0, count: 0, unit: "条", color: "var(--tukey-blue, #4a90e2)" },
-            maps: { name: "地图", bytes: 0, count: 0, unit: "处", color: "var(--tukey-teal, #50e3c2)" },
-            modules: { name: "模组", bytes: 0, count: 0, unit: "个", color: "var(--tukey-orange, #f5a623)" },
-            forum: { name: "论坛", bytes: 0, count: 0, unit: "篇", color: "var(--tukey-purple, #9013fe)" },
-            audio: { name: "音频", bytes: 0, count: 0, unit: "首", color: "var(--tukey-green, #7ed321)" },
-            page: { name: "页面", bytes: 0, count: 0, unit: "项", color: "var(--tukey-indigo, #6366f1)" },
-            other: { name: "其他", bytes: 0, count: 0, unit: "项", color: "var(--text-secondary, #9b9b9b)" }
+            images: { key: "images", name: "图片", bytes: 0, count: 0, unit: "张", color: "var(--accent-color, #ff6b8b)" },
+            maps: { key: "maps", name: "地图", bytes: 0, count: 0, unit: "处", color: "var(--tukey-teal, #50e3c2)" },
+            chat: { key: "chat", name: "聊天", bytes: 0, count: 0, unit: "条", color: "var(--tukey-blue, #4a90e2)" },
+            modules: { key: "modules", name: "模组", bytes: 0, count: 0, unit: "个", color: "var(--tukey-orange, #f5a623)" },
+            forum: { key: "forum", name: "论坛", bytes: 0, count: 0, unit: "篇", color: "var(--tukey-purple, #9013fe)" },
+            audio: { key: "audio", name: "音频", bytes: 0, count: 0, unit: "首", color: "var(--tukey-green, #7ed321)" },
+            page: { key: "page", name: "页面", bytes: 0, count: 0, unit: "项", color: "var(--tukey-indigo, #6366f1)" },
+            other: { key: "other", name: "其他", bytes: 0, count: 0, unit: "项", color: "var(--text-secondary, #9b9b9b)" }
           };
 
           const getStrBytes = (str) => {
@@ -58315,25 +58501,7 @@ ${colSpecs.join('\n')}
               }
             } catch(e) {}
 
-            // 2. 聊天数据
-            try {
-              if (dbInstance.chats) {
-                const chats = await dbInstance.chats.toArray();
-                chats.forEach(c => {
-                  const hist = c.history || [];
-                  categories.chat.count += hist.length;
-                  categories.chat.bytes += getStrBytes(hist);
-                  if (c.settings) categories.other.bytes += getStrBytes(c.settings);
-                });
-              }
-              if (dbInstance.chatBackups) {
-                const backups = await dbInstance.chatBackups.toArray();
-                categories.chat.count += backups.length;
-                backups.forEach(b => { categories.chat.bytes += getStrBytes(b); });
-              }
-            } catch(e) {}
-
-            // 3. 地图数据
+            // 2. 地图数据
             try {
               if (dbInstance.moduleLocationNav) {
                 const locs = await dbInstance.moduleLocationNav.toArray();
@@ -58350,7 +58518,28 @@ ${colSpecs.join('\n')}
                   if (c.settings?.contextMapData) {
                     categories.maps.bytes += getStrBytes(c.settings.contextMapData);
                   }
+                  if (c.settings?.temporaryLocations) {
+                    categories.maps.bytes += getStrBytes(c.settings.temporaryLocations);
+                  }
                 });
+              }
+            } catch(e) {}
+
+            // 3. 聊天数据
+            try {
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(c => {
+                  const hist = c.history || [];
+                  categories.chat.count += hist.length;
+                  categories.chat.bytes += getStrBytes(hist);
+                  if (c.settings) categories.other.bytes += getStrBytes(c.settings);
+                });
+              }
+              if (dbInstance.chatBackups) {
+                const backups = await dbInstance.chatBackups.toArray();
+                categories.chat.count += backups.length;
+                backups.forEach(b => { categories.chat.bytes += getStrBytes(b); });
               }
             } catch(e) {}
 
@@ -58387,7 +58576,7 @@ ${colSpecs.join('\n')}
               }
               if (dbInstance.forumSeries) {
                 const fSeries = await dbInstance.forumSeries.toArray();
-                fSeries.forEach(s => { categories.forum.bytes += getStrBytes(s); });
+                categories.forum.count += fSeries.forEach ? fSeries.forEach(s => { categories.forum.bytes += getStrBytes(s); }) : 0;
               }
             } catch(e) {}
 
@@ -58426,7 +58615,7 @@ ${colSpecs.join('\n')}
           const catList = Object.values(categories);
           const totalBytes = catList.reduce((acc, c) => acc + c.bytes, 0) || 1;
 
-          // 降序排列（由多到少）
+          // 降序排列
           catList.sort((a, b) => b.bytes - a.bytes);
 
           const formatSize = (bytes) => {
@@ -58454,17 +58643,23 @@ ${colSpecs.join('\n')}
               ${catList.map((c, idx) => {
                 const pct = ((c.bytes / totalBytes) * 100).toFixed(1);
                 const rankLabel = idx === 0 ? "最多" : (idx === catList.length - 1 ? "最少" : `第${idx + 1}`);
+                const canView = (c.key === "images" || c.key === "maps" || c.key === "modules" || c.key === "chat");
                 return `
-                  <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border-color);">
+                  <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border-color); ${canView ? 'cursor: pointer;' : ''}" ${canView ? `onclick="openStorageImagesModal('${c.key}')"` : ''}>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                       <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="width: 8px; height: 8px; border-radius: 50%; background: ${c.color};"></span>
                         <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${c.name}</span>
                         <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color);">${rankLabel}</span>
                       </div>
-                      <div style="display: flex; align-items: baseline; gap: 6px;">
-                        <span style="font-size: 13px; font-weight: 700; color: var(--text-primary);">${formatSize(c.bytes)}</span>
-                        <span style="font-size: 11px; color: var(--text-secondary); font-weight: 500;">${pct}%</span>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="display: flex; align-items: baseline; gap: 4px;">
+                          <span style="font-size: 13px; font-weight: 700; color: var(--text-primary);">${formatSize(c.bytes)}</span>
+                          <span style="font-size: 11px; color: var(--text-secondary); font-weight: 500;">${pct}%</span>
+                        </div>
+                        ${canView ? `
+                          <button type="button" class="chat-mod-footer-btn secondary" onclick="event.stopPropagation(); openStorageImagesModal('${c.key}')" style="height: 24px; font-size: 11px; padding: 0 8px; border-radius: 6px; line-height: 1;">查看</button>
+                        ` : ''}
                       </div>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary);">
@@ -58482,6 +58677,511 @@ ${colSpecs.join('\n')}
           container.innerHTML = html;
         }
         window.calculateAndRenderStorageBreakdown = calculateAndRenderStorageBreakdown;
+
+        let loadedStorageImagesList = [];
+        let currentStorageCategory = "all";
+
+        async function openStorageImagesModal(category = "all") {
+          currentStorageCategory = category;
+          const modal = document.getElementById("storage-images-modal");
+          const titleEl = document.getElementById("storage-images-modal-title");
+          const closeBtn = document.getElementById("close-storage-images-btn");
+          const closeFooterBtn = document.getElementById("close-storage-images-footer-btn");
+          const selectAllBtn = document.getElementById("storage-images-select-all-btn");
+          const compressBtn = document.getElementById("storage-images-compress-btn");
+          const cleanupBtn = document.getElementById("storage-images-cleanup-btn");
+
+          if (!modal) return;
+
+          if (titleEl) {
+            titleEl.textContent = category === "maps" ? "地图" : (category === "images" ? "图片" : (category === "modules" ? "模组" : (category === "chat" ? "聊天" : "明细")));
+          }
+
+          const closeModal = () => {
+            modal.classList.remove("visible");
+            modal.style.display = "none";
+          };
+
+          if (closeBtn) closeBtn.onclick = closeModal;
+          if (closeFooterBtn) closeFooterBtn.onclick = closeModal;
+
+          modal.style.display = "flex";
+          modal.style.zIndex = "100002";
+          modal.classList.add("visible");
+
+          await loadAndRenderStorageImagesList();
+
+          if (selectAllBtn) {
+            selectAllBtn.onclick = () => {
+              const allSelected = loadedStorageImagesList.length > 0 && loadedStorageImagesList.every(item => item.selected);
+              loadedStorageImagesList.forEach(item => { item.selected = !allSelected; });
+              renderLoadedStorageImagesUI();
+            };
+          }
+
+          if (compressBtn) {
+            compressBtn.onclick = async () => {
+              const selectedItems = loadedStorageImagesList.filter(item => item.selected);
+              if (selectedItems.length === 0) {
+                if (typeof window.showCustomAlert === "function") {
+                  await window.showCustomAlert("提示", "请先勾选需要压缩的图片");
+                }
+                return;
+              }
+
+              const qualitySelect = document.getElementById("storage-images-quality-select");
+              const quality = parseFloat(qualitySelect?.value || "0.1");
+
+              const overlay = document.getElementById("generation-overlay");
+              const genText = document.getElementById("generation-text");
+              if (genText) genText.textContent = "正在压缩...";
+              if (overlay) overlay.classList.add("visible");
+
+              try {
+                let successCount = 0;
+                const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+
+                for (const item of selectedItems) {
+                  if (typeof compressImage === "function" && item.dataUrl) {
+                    try {
+                      const compressed = await compressImage(item.dataUrl, quality, 1280);
+                      if (compressed) {
+                        item.dataUrl = compressed;
+                        item.size = new Blob([compressed]).size;
+                        successCount++;
+                        await saveCompressedItemToDB(item, compressed, dbInstance);
+                      }
+                    } catch (e) {
+                      console.warn("单张压缩失败:", e);
+                    }
+                  }
+                }
+
+                if (typeof window.showCustomAlert === "function") {
+                  await window.showCustomAlert("压缩完成", `已成功压缩 ${successCount} 张图片`);
+                }
+                renderLoadedStorageImagesUI();
+                await calculateAndRenderStorageBreakdown();
+              } catch (err) {
+                console.error("批量压缩出错:", err);
+              } finally {
+                if (overlay) overlay.classList.remove("visible");
+                if (genText) genText.textContent = "少女祈祷中...";
+              }
+            };
+          }
+
+          if (cleanupBtn) {
+            cleanupBtn.onclick = async () => {
+              const selectedItems = loadedStorageImagesList.filter(item => item.selected);
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+
+              if (selectedItems.length > 0) {
+                const confirmed = (typeof window.showCustomConfirm === "function")
+                  ? await window.showCustomConfirm("确认清理", `确定要清理选中的 ${selectedItems.length} 张图片数据吗？`)
+                  : confirm(`确定要清理选中的 ${selectedItems.length} 张图片数据吗？`);
+                if (!confirmed) return;
+
+                for (const item of selectedItems) {
+                  await saveCompressedItemToDB(item, "", dbInstance);
+                }
+
+                if (typeof window.showCustomAlert === "function") {
+                  await window.showCustomAlert("清理完成", `已清空选中的 ${selectedItems.length} 张图片`);
+                }
+              } else {
+                // 深度扫描并清理重新生成前的旧图片与多余碎片
+                const confirmed = (typeof window.showCustomConfirm === "function")
+                  ? await window.showCustomConfirm("确认清理", "未勾选具体图片，是否扫描并清理所有已被重新生成覆盖的旧图片与冗余数据？")
+                  : confirm("是否扫描并清理所有已被重新生成覆盖的旧图片与冗余数据？");
+                if (!confirmed) return;
+
+                let cleanedCount = 0;
+                if (dbInstance && dbInstance.chats) {
+                  const allChats = await dbInstance.chats.toArray();
+                  for (const chat of allChats) {
+                    let chatChanged = false;
+                    // 清理临时地点中无用旧图
+                    if (Array.isArray(chat.settings?.temporaryLocations)) {
+                      chat.settings.temporaryLocations.forEach(t => {
+                        if (t.oldImageUrl && t.oldImageUrl !== t.imageUrl) {
+                          delete t.oldImageUrl;
+                          cleanedCount++;
+                          chatChanged = true;
+                        }
+                      });
+                    }
+                    if (chatChanged) {
+                      await dbInstance.chats.put(chat);
+                    }
+                  }
+                }
+
+                if (typeof window.showCustomAlert === "function") {
+                  await window.showCustomAlert("清理完成", cleanedCount > 0 ? `已清理 ${cleanedCount} 处冗余数据` : "暂无多余冗余数据");
+                }
+              }
+
+              await loadAndRenderStorageImagesList();
+              await calculateAndRenderStorageBreakdown();
+            };
+          }
+        }
+        window.openStorageImagesModal = openStorageImagesModal;
+
+        async function saveCompressedItemToDB(item, newUrl, dbInstance) {
+          if (!dbInstance || !item || !item.table) return;
+          try {
+            if (item.table === "moduleLocationNav" && item.recordId) {
+              const rec = await dbInstance.moduleLocationNav.get(item.recordId);
+              if (rec) {
+                rec.imageUrl = newUrl;
+                await dbInstance.moduleLocationNav.put(rec);
+              }
+            } else if (item.table === "modules" && item.recordId && item.nodeName) {
+              const mod = await dbInstance.modules.get(item.recordId);
+              if (mod && Array.isArray(mod.mapNodes)) {
+                const node = mod.mapNodes.find(n => n.name === item.nodeName);
+                if (node) node.imageUrl = newUrl;
+                await dbInstance.modules.update(item.recordId, { mapNodes: mod.mapNodes });
+              }
+            } else if (item.table === "chats" && item.recordId) {
+              const chat = await dbInstance.chats.get(item.recordId);
+              if (chat) {
+                if (item.field === "contextMapData" && chat.settings?.contextMapData) {
+                  const node = chat.settings.contextMapData.find(n => n.id === item.subId || n.name === item.nodeName);
+                  if (node) node.imageUrl = newUrl;
+                } else if (item.field === "temporaryLocations" && chat.settings?.temporaryLocations) {
+                  const node = chat.settings.temporaryLocations.find(n => n.id === item.subId || n.name === item.nodeName);
+                  if (node) node.imageUrl = newUrl;
+                } else if (item.field === "history" && chat.history) {
+                  const msg = chat.history.find(m => m.timestamp === item.timestamp);
+                  if (msg) {
+                    if (msg.imageUrl) msg.imageUrl = newUrl;
+                    if (typeof msg.content === "string" && msg.content.startsWith("data:image/")) msg.content = newUrl;
+                  }
+                }
+                await dbInstance.chats.put(chat);
+              }
+            } else if (item.table === "moduleImages" && item.recordId) {
+              const img = await dbInstance.moduleImages.get(item.recordId);
+              if (img) {
+                img.dataUrl = newUrl;
+                await dbInstance.moduleImages.put(img);
+              }
+            } else if (item.table === "photos" && item.recordId) {
+              const photo = await dbInstance.photos.get(item.recordId);
+              if (photo) {
+                photo.dataUrl = newUrl;
+                await dbInstance.photos.put(photo);
+              }
+            } else if (item.table === "userStickers" && item.recordId) {
+              const s = await dbInstance.userStickers.get(item.recordId);
+              if (s) {
+                s.url = newUrl;
+                await dbInstance.userStickers.put(s);
+              }
+            } else if (item.table === "charStickers" && item.recordId) {
+              const s = await dbInstance.charStickers.get(item.recordId);
+              if (s) {
+                s.url = newUrl;
+                await dbInstance.charStickers.put(s);
+              }
+            } else if (item.table === "taobaoProducts" && item.recordId) {
+              const prod = await dbInstance.taobaoProducts.get(item.recordId);
+              if (prod) {
+                prod.image = newUrl;
+                await dbInstance.taobaoProducts.put(prod);
+              }
+            } else if (item.table === "datingSprites" && item.recordId) {
+              const sp = await dbInstance.datingSprites.get(item.recordId);
+              if (sp) {
+                sp.dataUrl = newUrl;
+                await dbInstance.datingSprites.put(sp);
+              }
+            }
+          } catch (e) {
+            console.warn("保存压缩数据失败:", e);
+          }
+        }
+
+        async function loadAndRenderStorageImagesList() {
+          const listEl = document.getElementById("storage-images-list");
+          if (!listEl) return;
+          listEl.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 30px 0; font-size: 12px;">正在扫描图片资产...</div>`;
+
+          loadedStorageImagesList = [];
+          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+
+          if (!dbInstance) return;
+
+          // 1. 地图地点头像 (moduleLocationNav, modules.mapNodes, chats.contextMapData, chats.temporaryLocations)
+          try {
+            if (dbInstance.moduleLocationNav) {
+              const navLocs = await dbInstance.moduleLocationNav.toArray();
+              navLocs.forEach(loc => {
+                if (loc.imageUrl) {
+                  loadedStorageImagesList.push({
+                    id: "mod_loc_" + (loc.id || loc.name),
+                    type: "map",
+                    table: "moduleLocationNav",
+                    recordId: loc.id,
+                    name: loc.name || "模组地点",
+                    origin: `来源: 模组地点头像 ${loc.name}`,
+                    size: new Blob([loc.imageUrl]).size,
+                    dataUrl: loc.imageUrl,
+                    selected: true
+                  });
+                }
+              });
+            }
+
+            if (dbInstance.modules) {
+              const allMods = await dbInstance.modules.toArray();
+              allMods.forEach(mod => {
+                if (Array.isArray(mod.mapNodes)) {
+                  mod.mapNodes.forEach(node => {
+                    if (node.imageUrl && !loadedStorageImagesList.some(it => it.dataUrl === node.imageUrl)) {
+                      loadedStorageImagesList.push({
+                        id: "mod_node_" + mod.id + "_" + node.name,
+                        type: "map",
+                        table: "modules",
+                        recordId: mod.id,
+                        nodeName: node.name,
+                        name: node.name,
+                        origin: `来源: 模组《${mod.name}》地点头像 ${node.name}`,
+                        size: new Blob([node.imageUrl]).size,
+                        dataUrl: node.imageUrl,
+                        selected: true
+                      });
+                    }
+                  });
+                }
+              });
+            }
+
+            if (dbInstance.chats) {
+              const chats = await dbInstance.chats.toArray();
+              chats.forEach(chat => {
+                if (Array.isArray(chat.settings?.contextMapData)) {
+                  chat.settings.contextMapData.forEach(loc => {
+                    if (loc.imageUrl && !loadedStorageImagesList.some(it => it.dataUrl === loc.imageUrl)) {
+                      loadedStorageImagesList.push({
+                        id: "chat_ctx_loc_" + chat.id + "_" + loc.name,
+                        type: "map",
+                        table: "chats",
+                        recordId: chat.id,
+                        field: "contextMapData",
+                        subId: loc.id,
+                        nodeName: loc.name,
+                        name: loc.name,
+                        origin: `来源: 聊天《${chat.name}》地点头像 ${loc.name}`,
+                        size: new Blob([loc.imageUrl]).size,
+                        dataUrl: loc.imageUrl,
+                        selected: true
+                      });
+                    }
+                  });
+                }
+                if (Array.isArray(chat.settings?.temporaryLocations)) {
+                  chat.settings.temporaryLocations.forEach(loc => {
+                    if (loc.imageUrl && !loadedStorageImagesList.some(it => it.dataUrl === loc.imageUrl)) {
+                      loadedStorageImagesList.push({
+                        id: "chat_tmp_loc_" + chat.id + "_" + loc.name,
+                        type: "map",
+                        table: "chats",
+                        recordId: chat.id,
+                        field: "temporaryLocations",
+                        subId: loc.id,
+                        nodeName: loc.name,
+                        name: loc.name,
+                        origin: `来源: 聊天《${chat.name}》临时地点头像 ${loc.name}`,
+                        size: new Blob([loc.imageUrl]).size,
+                        dataUrl: loc.imageUrl,
+                        selected: true
+                      });
+                    }
+                  });
+                }
+              });
+            }
+          } catch(e) {
+            console.warn("扫描地图头像出错:", e);
+          }
+
+          // 2. 如果不是仅查看地图，扫描其他模块图片资产
+          if (currentStorageCategory !== "maps") {
+            try {
+              if (dbInstance.moduleImages) {
+                const modImgs = await dbInstance.moduleImages.toArray();
+                modImgs.forEach(img => {
+                  const dUrl = img.dataUrl || img.url;
+                  if (dUrl) {
+                    loadedStorageImagesList.push({
+                      id: "mod_img_" + img.id,
+                      type: "image",
+                      table: "moduleImages",
+                      recordId: img.id,
+                      name: img.name || "模组插图",
+                      origin: `来源: 模组图库插图 ${img.name || ''}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: true
+                    });
+                  }
+                });
+              }
+
+              if (dbInstance.photos) {
+                const photos = await dbInstance.photos.toArray();
+                photos.forEach(p => {
+                  const dUrl = p.dataUrl || p.url;
+                  if (dUrl) {
+                    loadedStorageImagesList.push({
+                      id: "photo_" + p.id,
+                      type: "image",
+                      table: "photos",
+                      recordId: p.id,
+                      name: p.title || "空间照片",
+                      origin: `来源: 空间相册照片 ${p.title || ''}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: true
+                    });
+                  }
+                });
+              }
+
+              if (dbInstance.userStickers) {
+                const stickers = await dbInstance.userStickers.toArray();
+                stickers.forEach(s => {
+                  const dUrl = s.url || s.dataUrl;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "sticker_" + s.id,
+                      type: "image",
+                      table: "userStickers",
+                      recordId: s.id,
+                      name: s.name || "表情包",
+                      origin: `来源: 自定义表情 ${s.name || ''}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: true
+                    });
+                  }
+                });
+              }
+
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(chat => {
+                  const history = chat.history || [];
+                  history.forEach(msg => {
+                    if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
+                      loadedStorageImagesList.push({
+                        id: "chat_msg_img_" + chat.id + "_" + msg.timestamp,
+                        type: "image",
+                        table: "chats",
+                        recordId: chat.id,
+                        field: "history",
+                        timestamp: msg.timestamp,
+                        name: "聊天图片",
+                        origin: `来源: 聊天《${chat.name}》消息配图`,
+                        size: new Blob([msg.imageUrl]).size,
+                        dataUrl: msg.imageUrl,
+                        selected: true
+                      });
+                    }
+                  });
+                });
+              }
+            } catch(e) {
+              console.warn("扫描通用图片出错:", e);
+            }
+          }
+
+          // 依据分类筛选
+          if (currentStorageCategory === "maps") {
+            loadedStorageImagesList = loadedStorageImagesList.filter(item => item.type === "map");
+          } else if (currentStorageCategory === "images") {
+            loadedStorageImagesList = loadedStorageImagesList.filter(item => item.type === "image");
+          }
+
+          renderLoadedStorageImagesUI();
+        }
+
+        function renderLoadedStorageImagesUI() {
+          const listEl = document.getElementById("storage-images-list");
+          const countEl = document.getElementById("storage-images-count-text");
+          const sizeEl = document.getElementById("storage-images-size-text");
+          if (!listEl) return;
+
+          const formatSize = (bytes) => {
+            if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
+            return bytes + " B";
+          };
+
+          const totalBytes = loadedStorageImagesList.reduce((acc, it) => acc + (it.size || 0), 0);
+          const selectedItems = loadedStorageImagesList.filter(it => it.selected);
+          const selectedBytes = selectedItems.reduce((acc, it) => acc + (it.size || 0), 0);
+
+          if (countEl) countEl.textContent = `已选 ${selectedItems.length} / 共 ${loadedStorageImagesList.length} 张`;
+          if (sizeEl) sizeEl.textContent = `选中 ${formatSize(selectedBytes)} (总 ${formatSize(totalBytes)})`;
+
+          if (loadedStorageImagesList.length === 0) {
+            listEl.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 30px 0; font-size: 12px;">暂无图片数据</div>`;
+            return;
+          }
+
+          listEl.innerHTML = "";
+          loadedStorageImagesList.forEach((item, idx) => {
+            const row = document.createElement("div");
+            row.style.display = "flex";
+            row.style.alignItems = "center";
+            row.style.gap = "8px";
+            row.style.padding = "6px 8px";
+            row.style.background = "var(--secondary-bg)";
+            row.style.borderRadius = "8px";
+            row.style.border = "1px solid var(--border-color)";
+            row.style.cursor = "pointer";
+
+            row.innerHTML = `
+              <input type="checkbox" class="storage-img-checkbox" style="width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; accent-color: var(--accent-color);" ${item.selected ? "checked" : ""}>
+              <img src="${item.dataUrl}" loading="lazy" decoding="async" style="width: 36px; height: 36px; aspect-ratio: 1 / 1; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color);" />
+              <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
+                <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.origin}</span>
+                <span style="font-size: 10px; color: var(--text-secondary);">${formatSize(item.size)}</span>
+              </div>
+            `;
+
+            const cb = row.querySelector(".storage-img-checkbox");
+            if (cb) {
+              cb.onclick = (e) => {
+                e.stopPropagation();
+                item.selected = cb.checked;
+                renderLoadedStorageImagesUI();
+              };
+            }
+
+            const imgEl = row.querySelector("img");
+            if (imgEl) {
+              imgEl.onclick = (e) => {
+                e.stopPropagation();
+                if (typeof window.showImageModal === "function") {
+                  window.showImageModal(item.dataUrl);
+                }
+              };
+            }
+
+            row.onclick = () => {
+              item.selected = !item.selected;
+              renderLoadedStorageImagesUI();
+            };
+
+            listEl.appendChild(row);
+          });
+        }
 
         /**
          * 打开高级导入导出模态框，并动态生成选项列表
@@ -59822,6 +60522,15 @@ ${colSpecs.join('\n')}
             "datingSpriteGroups",
             "datingSprites",
             "datingHistory",
+            "modules",
+            "moduleChapters",
+            "moduleGroups",
+            "moduleImages",
+            "moduleCluePointers",
+            "moduleLocationNav",
+            "moduleHoRoles",
+            "moduleConfigs",
+            "moduleRawFiles",
           ];
 
           const stream = new ReadableStream({
@@ -65319,8 +66028,10 @@ ${colSpecs.join('\n')}
           document
             .getElementById("listen-together-btn")
             .addEventListener("click", () => {
-              if (typeof openChatMapModal === "function") {
-                openChatMapModal();
+              if (typeof toggleChatMiniMapModal === "function") {
+                toggleChatMiniMapModal();
+              } else if (typeof openChatMiniMapModal === "function") {
+                openChatMiniMapModal();
               }
             });
           document

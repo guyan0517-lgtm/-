@@ -32081,17 +32081,17 @@ select.moe-input option,
   display: none !important;
 }
 
-/* 轻量无遮罩简介小气泡 */
+/* 轻量无遮罩白色简介小气泡 */
 .chat-location-bubble {
   position: fixed !important;
   z-index: 9999999 !important;
   max-width: 220px !important;
-  background-color: var(--card-bg) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
+  background-color: #FFFFFF !important;
+  color: #1f2937 !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22) !important;
   border-radius: 10px !important;
-  padding: 7px 9px !important;
+  padding: 8px 10px !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 3px !important;
@@ -32109,7 +32109,7 @@ select.moe-input option,
 .chat-location-bubble-title {
   font-weight: 600 !important;
   font-size: 11.5px !important;
-  color: var(--text-primary) !important;
+  color: #111827 !important;
   display: flex !important;
   align-items: center !important;
   gap: 4px !important;
@@ -32117,7 +32117,7 @@ select.moe-input option,
 
 .chat-location-bubble-desc {
   font-size: 10.5px !important;
-  color: var(--text-secondary) !important;
+  color: #4b5563 !important;
   white-space: pre-wrap !important;
   max-height: 140px !important;
   overflow-y: auto !important;
@@ -32266,14 +32266,18 @@ select.moe-input {
 }
 
 @keyframes map-pin-pulse {
-  0% { transform: scale(1); opacity: 0.9; }
-  50% { transform: scale(1.25); opacity: 1; }
-  100% { transform: scale(1); opacity: 0.9; }
+  0%, 100% {
+    filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.45));
+    opacity: 0.95;
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 14px rgba(239, 68, 68, 0.4));
+    opacity: 1;
+  }
 }
 
 .map-location-pin {
-  animation: map-pin-pulse 1.8s infinite ease-in-out !important;
-  transform-origin: center !important;
+  animation: map-pin-pulse 2.2s infinite ease-in-out !important;
 }
 
 /* 长按气泡与地图卡片防浏览器默认选中菜单 */
