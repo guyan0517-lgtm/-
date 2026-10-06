@@ -4212,9 +4212,6 @@ ${chap.content}
             <div style="display: flex; gap: 10px; align-items: flex-start;">
               <div class="mod-map-avatar-container" style="position: relative; width: 68px; height: 50px; border-radius: 6px; overflow: hidden; background: var(--secondary-bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--border-color); margin-top: 2px;">
                 ${loc.imageUrl ? `<img src="${loc.imageUrl}" alt="${loc.name}" style="width: 100%; height: 100%; object-fit: cover;" />` : defaultThumbSvg}
-                <button type="button" class="mod-map-expand-btn" style="position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.55); border: none; border-radius: 4px; color: #fff; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-                </button>
               </div>
               <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
                 <div class="module-map-node-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
@@ -4263,19 +4260,9 @@ ${chap.content}
           };
         }
 
-        // 图文版头像交互：三连击下载、左下角展开大图、长按重新生成
+        // 图文版头像交互：三连击下载、点击右下角展开大图、长按重新生成
         if (isRich) {
           const avatarContainer = nodeEl.querySelector('.mod-map-avatar-container');
-          const expandBtn = nodeEl.querySelector('.mod-map-expand-btn');
-
-          if (expandBtn) {
-            expandBtn.onclick = (e) => {
-              e.stopPropagation();
-              if (loc.imageUrl) {
-                this.openModuleMapExpandModal(loc.name, loc.imageUrl);
-              }
-            };
-          }
 
           if (avatarContainer) {
             let clickCount = 0;
@@ -4283,12 +4270,16 @@ ${chap.content}
             let pressTimer = null;
 
             avatarContainer.addEventListener('mousedown', () => {
+              if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (_) {} }
               pressTimer = setTimeout(() => {
+                if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (_) {} }
                 this.openModuleMapRegenModal(loc, mod.id, chapters);
               }, 700);
             });
             avatarContainer.addEventListener('touchstart', () => {
+              if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (_) {} }
               pressTimer = setTimeout(() => {
+                if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (_) {} }
                 this.openModuleMapRegenModal(loc, mod.id, chapters);
               }, 700);
             });
@@ -4298,9 +4289,20 @@ ${chap.content}
             avatarContainer.addEventListener('mouseup', clearPress);
             avatarContainer.addEventListener('mouseleave', clearPress);
             avatarContainer.addEventListener('touchend', clearPress);
+            avatarContainer.addEventListener('contextmenu', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            });
 
             avatarContainer.addEventListener('click', (e) => {
-              if (e.target.closest('.mod-map-expand-btn')) return;
+              const rect = avatarContainer.getBoundingClientRect();
+              const isBottomRight = (e.clientX - rect.left > rect.width * 0.4) && (e.clientY - rect.top > rect.height * 0.4);
+              
+              if (isBottomRight && loc.imageUrl) {
+                this.openModuleMapExpandModal(loc.name, loc.imageUrl);
+                return;
+              }
+
               clickCount++;
               if (clickTimer) clearTimeout(clickTimer);
               clickTimer = setTimeout(() => {
@@ -4311,9 +4313,11 @@ ${chap.content}
                     a.download = `${loc.name}.png`;
                     a.click();
                   }
+                } else if (clickCount === 1 && loc.imageUrl) {
+                  this.openModuleMapExpandModal(loc.name, loc.imageUrl);
                 }
                 clickCount = 0;
-              }, 500);
+              }, 400);
             });
           }
         }
@@ -4322,13 +4326,17 @@ ${chap.content}
         let cardPressTimer = null;
         nodeEl.addEventListener('mousedown', (e) => {
           if (e.target.closest('button') || e.target.closest('.mod-map-avatar-container')) return;
+          if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (_) {} }
           cardPressTimer = setTimeout(() => {
+            if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (_) {} }
             this.openModuleMapPromptModal(loc, mod.id, chapters);
           }, 700);
         });
         nodeEl.addEventListener('touchstart', (e) => {
           if (e.target.closest('button') || e.target.closest('.mod-map-avatar-container')) return;
+          if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (_) {} }
           cardPressTimer = setTimeout(() => {
+            if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (_) {} }
             this.openModuleMapPromptModal(loc, mod.id, chapters);
           }, 700);
         });
@@ -4338,6 +4346,11 @@ ${chap.content}
         nodeEl.addEventListener('mouseup', clearCardPress);
         nodeEl.addEventListener('mouseleave', clearCardPress);
         nodeEl.addEventListener('touchend', clearCardPress);
+        nodeEl.addEventListener('contextmenu', (e) => {
+          if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+          e.preventDefault();
+          e.stopPropagation();
+        });
 
         mapList.appendChild(nodeEl);
       });
@@ -4441,21 +4454,27 @@ ${chap.content}
 
     async startModuleMapImageDrawing(moduleId, chapters, btn) {
       const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
-      if (!dbInstance || !dbInstance.moduleLocationNav) return;
+      if (!dbInstance) return;
 
-      const locations = await this.getLocationsByModuleId(moduleId);
+      let locations = await this.getLocationsByModuleId(moduleId);
+      if (locations.length === 0 && dbInstance.modules) {
+        try {
+          const mod = await dbInstance.modules.get(moduleId);
+          if (mod && Array.isArray(mod.mapNodes) && mod.mapNodes.length > 0) {
+            locations = mod.mapNodes;
+          }
+        } catch (e) {}
+      }
+
       const pendingLocs = locations.filter(l => !l.imageUrl);
 
       if (pendingLocs.length === 0) {
         if (typeof window.showCustomAlert === 'function') {
           await window.showCustomAlert('提示', '全部地点已绘制完成');
+        } else {
+          alert('全部地点已绘制完成');
         }
         return;
-      }
-
-      if (typeof window.showCustomConfirm === 'function') {
-        const confirmed = await window.showCustomConfirm('绘制地图', '将开始为所有未绘制图像的地点逐一绘制唯美场景图 确认开始吗');
-        if (!confirmed) return;
       }
 
       if (btn) {
@@ -4466,56 +4485,93 @@ ${chap.content}
       const statusTip = document.getElementById('module-map-status-tip');
       if (statusTip) {
         statusTip.style.display = 'block';
-        statusTip.textContent = `正在逐一生图 剩余 ${pendingLocs.length} 张`;
+        statusTip.textContent = `准备开始生图 剩余 ${pendingLocs.length} 张`;
       }
 
       for (let i = 0; i < pendingLocs.length; i++) {
         const loc = pendingLocs[i];
-        const prompt = loc.prompt || `masterpiece, scenery, highly detailed, landscape, ${loc.name}`;
+        const naiSettings = typeof window.getNovelAISettings === 'function' ? window.getNovelAISettings() : {};
+        const domArtist = document.getElementById('nai-default-artist') ? document.getElementById('nai-default-artist').value.trim() : '';
+        const domPositive = document.getElementById('nai-default-positive') ? document.getElementById('nai-default-positive').value.trim() : '';
+        const domNegative = document.getElementById('nai-default-negative') ? document.getElementById('nai-default-negative').value.trim() : '';
+        const artist = (domArtist || naiSettings.artist_prompt || '').trim();
+        const defaultPos = (domPositive || naiSettings.default_positive || '').trim();
+        const defaultNeg = (domNegative || naiSettings.default_negative || '').trim();
+        const locPromptText = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
 
         try {
           if (statusTip) {
-            statusTip.textContent = `正在绘制 ${loc.name} 剩余 ${pendingLocs.length - i} 张`;
+            statusTip.textContent = `正在绘制 第 ${i + 1} 张 共 ${pendingLocs.length} 张 地点：${loc.name}`;
           }
 
           let imgDataUrl = '';
           if (typeof window.callNovelAiDirect === 'function') {
-            imgDataUrl = await window.callNovelAiDirect(prompt);
+            imgDataUrl = await window.callNovelAiDirect(locPromptText, {
+              artist: artist,
+              positive: defaultPos,
+              negativePrompt: defaultNeg,
+              resolution: naiSettings.resolution || '1024x1024'
+            });
           } else if (typeof generateNovelAIImageForCharacter === 'function') {
-            imgDataUrl = await generateNovelAIImageForCharacter('', prompt);
+            const promptParts = [];
+            if (artist) promptParts.push(artist);
+            if (defaultPos) promptParts.push(defaultPos);
+            if (locPromptText) promptParts.push(locPromptText);
+            imgDataUrl = await generateNovelAIImageForCharacter('', promptParts.join(', '));
+          }
+
+          if (!imgDataUrl) {
+            throw new Error('未获取到图像数据，请检查NovelAI配置或网络');
           }
 
           if (imgDataUrl) {
-            // 默认压缩50%
             if (typeof compressImage === 'function') {
               imgDataUrl = await compressImage(imgDataUrl, 0.5, 900);
             }
             loc.imageUrl = imgDataUrl;
-            await dbInstance.moduleLocationNav.put(loc);
+
+            if (dbInstance.moduleLocationNav && loc.id) {
+              await dbInstance.moduleLocationNav.put(loc);
+            }
+            if (dbInstance.modules) {
+              try {
+                const mod = await dbInstance.modules.get(moduleId);
+                if (mod) {
+                  mod.mapNodes = locations.map(l => ({ name: l.name, parent: l.parent, level: l.level, desc: l.desc, prompt: l.prompt, imageUrl: l.imageUrl }));
+                  await dbInstance.modules.update(moduleId, { mapNodes: mod.mapNodes });
+                }
+              } catch (e) {}
+            }
+
             this.renderModuleDetailMap(chapters);
           } else {
             throw new Error('未获取到图像数据');
           }
 
-          // 间隔10秒继续生成下一个
           if (i < pendingLocs.length - 1) {
-            if (statusTip) statusTip.textContent = `完成 ${loc.name} 等待 10 秒继续下一张`;
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            for (let sec = 10; sec > 0; sec--) {
+              if (statusTip) {
+                statusTip.textContent = `已完成 ${loc.name} 等待 ${sec} 秒后开始下一张`;
+              }
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
           }
         } catch (e) {
           console.error('生图失败', loc.name, e);
-          if (statusTip) statusTip.textContent = `绘制 ${loc.name} 失败 点击绘制可重试`;
+          if (statusTip) {
+            statusTip.textContent = `绘制 ${loc.name} 失败 点击绘制可继续`;
+          }
           if (btn) {
             btn.disabled = false;
             btn.textContent = '重试';
           }
-          alert(`绘制 ${loc.name} 失败 请点击重试继续`);
+          alert(`绘制 ${loc.name} 失败: ${e.message || e}`);
           return;
         }
       }
 
       if (statusTip) {
-        statusTip.textContent = '全部地图绘制完成';
+        statusTip.textContent = '全部地点绘制完成';
       }
 
       if (btn) {
@@ -4649,26 +4705,42 @@ ${chap.content}
         confirmBtn.onclick = async () => {
           closeModal();
           confirmBtn.disabled = true;
-          const prompt = loc.prompt || `masterpiece, scenery, highly detailed, landscape, ${loc.name}`;
+          const naiSettings = typeof window.getNovelAISettings === 'function' ? window.getNovelAISettings() : {};
+          const domArtist = document.getElementById('nai-default-artist') ? document.getElementById('nai-default-artist').value.trim() : '';
+          const domPositive = document.getElementById('nai-default-positive') ? document.getElementById('nai-default-positive').value.trim() : '';
+          const domNegative = document.getElementById('nai-default-negative') ? document.getElementById('nai-default-negative').value.trim() : '';
+          const artist = (domArtist || naiSettings.artist_prompt || '').trim();
+          const defaultPos = (domPositive || naiSettings.default_positive || '').trim();
+          const defaultNeg = (domNegative || naiSettings.default_negative || '').trim();
+          const locPromptText = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
+
           try {
-            let imgDataUrl = '';
-            if (typeof window.callNovelAiDirect === 'function') {
-              imgDataUrl = await window.callNovelAiDirect(prompt);
+            if (typeof window.callNovelAiDirect !== 'function') {
+              throw new Error('NovelAI 生图模块未就绪');
             }
-            if (imgDataUrl) {
-              if (typeof compressImage === 'function') {
-                imgDataUrl = await compressImage(imgDataUrl, 0.5, 900);
-              }
-              loc.imageUrl = imgDataUrl;
-              const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
-              if (dbInstance && dbInstance.moduleLocationNav) {
-                await dbInstance.moduleLocationNav.put(loc);
-              }
-              this.renderModuleDetailMap(chapters);
+
+            let imgDataUrl = await window.callNovelAiDirect(locPromptText, {
+              artist: artist,
+              positive: defaultPos,
+              negativePrompt: defaultNeg,
+              resolution: naiSettings.resolution || '1024x1024'
+            });
+            if (!imgDataUrl) {
+              throw new Error('未获取到图像数据');
             }
+
+            if (typeof compressImage === 'function') {
+              imgDataUrl = await compressImage(imgDataUrl, 0.5, 900);
+            }
+            loc.imageUrl = imgDataUrl;
+            const dbInstance = typeof db !== 'undefined' ? db : (window.db || null);
+            if (dbInstance && dbInstance.moduleLocationNav) {
+              await dbInstance.moduleLocationNav.put(loc);
+            }
+            this.renderModuleDetailMap(chapters);
           } catch (e) {
             console.error('单独生图失败', e);
-            alert(`生成 ${loc.name} 图像失败`);
+            alert(`生成 ${loc.name} 图像失败: ${e.message || String(e)}`);
           } finally {
             confirmBtn.disabled = false;
           }

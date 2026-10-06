@@ -4089,23 +4089,17 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 /* ▼▼▼ 请将这段新CSS粘贴到 <style> 的末尾 ▼▼▼ */
 
-/* === 修正：让顶部操作栏可以横向滚动 === */
+/* === 修正：取消底部状态栏滑动设定，固定排列 === */
 #chat-input-actions-top {
   display: flex;
-  gap: 8px;
-  padding: 0 5px;
-
-  /* --- 核心代码开始 --- */
-  overflow-x: auto;
+  gap: 6px;
+  padding: 0 4px;
+  overflow: visible;
   flex-wrap: nowrap;
-  -webkit-overflow-scrolling: touch;
-
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-#chat-input-actions-top::-webkit-scrollbar {
-  display: none;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* ▲▲▲ 新CSS粘贴结束 ▲▲▲ */
@@ -32019,102 +32013,256 @@ select.gender-select-box {
   color: var(--accent-color) !important;
 }
 
-/* 地图面板美化样式 */
-#chat-map-modal .modal-content,
-#chat-mini-map-modal .modal-content,
-#chat-location-detail-modal .modal-content,
-#chat-temp-location-modal .modal-content {
-  max-width: 360px !important;
-  border-radius: 16px !important;
-  background-color: var(--card-bg) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
-  padding: 16px !important;
-}
-
-.chat-map-top-btn {
-  height: 32px !important;
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  border-radius: 8px !important;
-  border: 1px solid var(--border-color) !important;
-  background-color: var(--secondary-bg) !important;
-  color: var(--text-primary) !important;
-  cursor: pointer !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 6px !important;
-  transition: all 0.18s ease !important;
+select.moe-input,
+#module-map-edit-parent-select,
+#chat-temp-loc-parent-select {
+  height: 38px !important;
+  line-height: 38px !important;
   padding: 0 10px !important;
-}
-
-.chat-map-top-btn:hover {
+  font-size: 13px !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  vertical-align: middle !important;
+  appearance: auto !important;
+  -webkit-appearance: auto !important;
+  color: var(--text-primary) !important;
   background-color: var(--card-bg) !important;
-  border-color: var(--accent-color) !important;
-  color: var(--accent-color) !important;
 }
 
-.chat-map-top-btn.primary {
-  background-color: var(--accent-color) !important;
-  color: #FFFFFF !important;
-  border-color: var(--accent-color) !important;
+select.moe-input option,
+#module-map-edit-parent-select option,
+#chat-temp-loc-parent-select option {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  padding: 6px 10px !important;
+  font-size: 13px !important;
 }
 
-.chat-map-level-item {
+/* 一条一条的平整平铺条目 */
+.chat-map-strip-row {
   display: flex !important;
-  flex-direction: column !important;
-  background-color: var(--secondary-bg) !important;
-  border-radius: 10px !important;
-  border: 1px solid var(--border-color) !important;
-  padding: 8px 10px !important;
-  gap: 4px !important;
-  transition: all 0.15s ease !important;
-  text-align: left !important;
-}
-
-.chat-map-level-item:hover {
-  border-color: var(--accent-color) !important;
-}
-
-.chat-map-rich-card {
-  display: flex !important;
-  gap: 10px !important;
   align-items: center !important;
+  justify-content: space-between !important;
+  padding: 6px 8px !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  color: var(--text-primary) !important;
+  background-color: var(--secondary-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  transition: all 0.12s ease !important;
+  gap: 6px !important;
 }
 
-.chat-map-thumb-img {
-  width: 64px !important;
-  height: 44px !important;
-  border-radius: 6px !important;
-  object-fit: cover !important;
-  background-color: var(--card-bg) !important;
-  border: 1px solid var(--border-color) !important;
+.chat-map-strip-row:hover {
+  border-color: var(--accent-color) !important;
+  filter: brightness(0.98);
+}
+
+.chat-map-name-label {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+  opacity: 0.9 !important;
   flex-shrink: 0 !important;
 }
 
-.chat-mini-map-viewport {
-  width: 100% !important;
-  max-width: 100% !important;
-  max-height: 320px !important;
-  overflow: auto !important;
-  background-color: var(--secondary-bg) !important;
-  border-radius: 12px !important;
+.chat-map-strip-indent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 1.5px dashed var(--border-color);
+  transition: all 0.15s ease;
+}
+
+.chat-map-strip-indent.collapsed {
+  display: none !important;
+}
+
+/* 轻量无遮罩简介小气泡 */
+.chat-location-bubble {
+  position: fixed !important;
+  z-index: 9999999 !important;
+  max-width: 220px !important;
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
   border: 1px solid var(--border-color) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22) !important;
+  border-radius: 10px !important;
+  padding: 7px 9px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+  animation: fadeInBubble 0.15s ease !important;
+  pointer-events: auto !important;
+}
+
+@keyframes fadeInBubble {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-location-bubble-title {
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+  color: var(--text-primary) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.chat-location-bubble-desc {
+  font-size: 10.5px !important;
+  color: var(--text-secondary) !important;
+  white-space: pre-wrap !important;
+  max-height: 140px !important;
+  overflow-y: auto !important;
+}
+
+.mini-map-style-opt {
+  transition: all 0.15s ease !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.mini-map-style-opt.active {
+  border-color: var(--accent-color) !important;
+  background-color: var(--accent-color) !important;
+  color: #FFFFFF !important;
+}
+
+/* 纯净 HTML/SVG 小地图浮层（无圆角包裹、按住透明顶部拖拽、按住左下角等比缩放） */
+.chat-mini-map-floating-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: transparent !important;
+  pointer-events: none !important;
+  z-index: 150 !important;
+  display: none !important;
+}
+
+.chat-mini-map-floating-overlay.visible {
+  display: block !important;
+}
+
+.chat-mini-map-floating-card {
+  pointer-events: auto !important;
+  position: fixed !important;
+  top: 100px;
+  left: calc(50% - 170px);
+  width: 340px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  touch-action: none !important;
+  user-select: none !important;
+  z-index: 160 !important;
+}
+
+.chat-mini-map-drag-bar {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 48px !important;
+  background: transparent !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  padding: 6px 8px !important;
+  cursor: grab !important;
+  z-index: 30 !important;
+  box-sizing: border-box !important;
+  touch-action: none !important;
+}
+
+.chat-mini-map-drag-bar:active {
+  cursor: grabbing !important;
+}
+
+.chat-mini-map-tiny-close {
+  border: none !important;
+  background: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: #FFFFFF !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6) !important;
+  border-radius: 0 !important;
+  width: 24px !important;
+  height: 24px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  position: relative !important;
-  padding: 10px !important;
-  box-sizing: border-box !important;
+  cursor: pointer !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  opacity: 0.65 !important;
+  transition: opacity 0.15s ease !important;
+  z-index: 31 !important;
 }
 
-.chat-mini-map-viewport svg {
-  max-width: 100% !important;
+.chat-mini-map-tiny-close:hover {
+  opacity: 1 !important;
+}
+
+.chat-mini-map-pure-content {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.chat-mini-map-pure-content svg {
+  width: 100% !important;
   height: auto !important;
   display: block !important;
-  margin: 0 auto !important;
+  filter: drop-shadow(0 8px 25px rgba(0, 0, 0, 0.28)) !important;
+}
+
+/* 右下角等比缩放手柄 */
+.chat-mini-map-resize-handle-br {
+  position: absolute !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 26px !important;
+  height: 26px !important;
+  cursor: nwse-resize !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--text-primary) !important;
+  opacity: 0.85 !important;
+  background: var(--card-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px 0 0 0 !important;
+  z-index: 35 !important;
+  touch-action: none !important;
+}
+
+#module-map-edit-parent-select,
+select.moe-input {
+  box-sizing: border-box !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  line-height: 34px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  font-family: inherit !important;
+  background-color: var(--secondary-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  display: block !important;
 }
 
 @keyframes map-pin-pulse {
@@ -32128,14 +32276,36 @@ select.gender-select-box {
   transform-origin: center !important;
 }
 
-.chat-location-clickable {
-  cursor: pointer !important;
-  text-decoration: underline dotted var(--accent-color) !important;
-  transition: color 0.15s ease !important;
+/* 长按气泡与地图卡片防浏览器默认选中菜单 */
+.message-wrapper,
+.message-wrapper *,
+.message-bubble,
+.message-bubble *,
+.bubble-content,
+.message-content,
+.module-map-node,
+.module-map-node *,
+.mod-map-avatar-container,
+.mod-map-avatar-container *,
+.chat-map-strip-row,
+.chat-map-strip-row * {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
 }
 
-.chat-location-clickable:hover {
-  color: var(--accent-color) !important;
+/* 弹窗面板与编辑输入框允许正常复制粘贴 */
+.modal,
+.modal *,
+.modal-content,
+.modal-content *,
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-touch-callout: default !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
 }
 
 
