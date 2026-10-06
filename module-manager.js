@@ -4416,11 +4416,15 @@ ${chap.content}
             }
             return;
           }
+          const confirmCompress = (typeof global.showCustomConfirm === 'function')
+            ? await global.showCustomConfirm('压缩确认', '是否确认压缩当前地图的所有地点图片？压缩倍率将设定为 0.5')
+            : confirm('是否确认压缩当前地图的所有地点图片？');
+          if (!confirmCompress) return;
           let count = 0;
           for (const loc of locsWithImg) {
             if (typeof global.compressImage === 'function') {
               try {
-                loc.imageUrl = await global.compressImage(loc.imageUrl, 0.1, 800);
+                loc.imageUrl = await global.compressImage(loc.imageUrl, 0.5, 900);
                 count++;
                 if (dbInstance.moduleLocationNav && loc.id) {
                   await dbInstance.moduleLocationNav.put(loc);
@@ -4435,7 +4439,7 @@ ${chap.content}
             } catch (e) {}
           }
           if (typeof global.showCustomAlert === 'function') {
-            await global.showCustomAlert('成功', `已将当前地图 ${count} 张图片压缩至 0.1`);
+            await global.showCustomAlert('成功', `已将当前地图 ${count} 张图片压缩至 0.5`);
           }
           this.renderModuleDetailMap(chapters);
         };

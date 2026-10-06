@@ -32265,19 +32265,19 @@ select.moe-input {
   display: block !important;
 }
 
-@keyframes map-pin-pulse {
+@keyframes map-location-glow-pulse {
   0%, 100% {
-    filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.45));
-    opacity: 0.95;
+    filter: drop-shadow(0 0 3px var(--map-loc-glow-color, rgba(239, 68, 68, 0.45)));
+    opacity: 0.92;
   }
   50% {
-    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 14px rgba(239, 68, 68, 0.4));
+    filter: drop-shadow(0 0 calc(var(--map-loc-glow-spread, 8px) * 1.5) var(--map-loc-glow-color, rgba(239, 68, 68, 0.9)));
     opacity: 1;
   }
 }
 
-.map-location-pin {
-  animation: map-pin-pulse 2.2s infinite ease-in-out !important;
+.map-location-glow {
+  animation: map-location-glow-pulse var(--map-loc-glow-speed, 1.2s) infinite ease-in-out !important;
 }
 
 /* 长按气泡与地图卡片防浏览器默认选中菜单 */
