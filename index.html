@@ -13813,11 +13813,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;">
             <label for="persona-prompt-preset-select" style="font-size: 12px; font-weight: 600; color: var(--text-primary); flex-shrink: 0;">预设</label>
             <select id="persona-prompt-preset-select" class="moe-input" style="flex: 1; height: 28px; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
-              <option value="standard">普通</option>
-              <option value="deep">深度</option>
             </select>
           </div>
-          <button type="button" id="persona-edit-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 0 10px; font-size: 11px; flex-shrink: 0; cursor: pointer;">编辑</button>
+          <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+            <button type="button" id="persona-new-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 0 8px; font-size: 11px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">新建</button>
+            <button type="button" id="persona-edit-preset-btn" class="moe-btn-mini" style="height: 26px; padding: 0 8px; font-size: 11px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">编辑</button>
+          </div>
         </div>
 
         <!-- 灵感标签 -->
@@ -13868,38 +13869,90 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <!-- 结果展示卡片区 -->
         <div id="persona-creator-result" style="display: none; flex-direction: column; gap: 14px;">
           <!-- 快捷编辑条 -->
-          <div style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 12px;">
-            <div style="position: relative; width: 50px; height: 50px; flex-shrink: 0;">
-              <img id="persona-edit-avatar" src="https://api.iconify.design/lucide:user.svg?color=%23a18cd1" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-color);">
-            </div>
-            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
-              <div style="display: flex; gap: 6px; align-items: center;">
-                <input type="text" id="persona-edit-name" class="moe-input" placeholder="角色姓名" style="flex: 1; height: 28px; font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">
-                <button type="button" id="persona-random-avatar-btn" class="moe-btn-mini" style="height: 28px; padding: 0 8px; font-size: 11px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: pointer; white-space: nowrap;">换图</button>
+          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="position: relative; width: 48px; height: 48px; flex-shrink: 0;">
+                <img id="persona-edit-avatar" src="https://api.iconify.design/lucide:user.svg?color=%23a18cd1" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-color);">
               </div>
-              <input type="text" id="persona-edit-avatar-url" class="moe-input" placeholder="头像链接" style="width: 100%; height: 24px; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-secondary);">
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="text" id="persona-edit-name" class="moe-input" placeholder="姓名" style="flex: 1; height: 28px; font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">
+                  <button type="button" id="persona-random-avatar-btn" class="moe-btn-mini" style="height: 28px; padding: 0 8px; font-size: 11px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">换图</button>
+                </div>
+                <input type="text" id="persona-edit-avatar-url" class="moe-input" placeholder="头像链接" style="width: 100%; height: 24px; font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-secondary);">
+              </div>
+            </div>
+
+            <!-- 性别、年龄、生日属性行 -->
+            <div id="persona-basic-attrs-row" style="display: flex; gap: 6px; align-items: center; padding-top: 4px; border-top: 1px dashed var(--border-color);">
+              <div style="display: flex; align-items: center; gap: 3px; flex: 1; min-width: 0;">
+                <label for="persona-edit-gender" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">性别</label>
+                <input type="text" id="persona-edit-gender" class="moe-input" placeholder="性别" style="width: 100%; height: 26px; font-size: 11px; text-align: center; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">
+              </div>
+              <div id="persona-age-container" style="display: flex; align-items: center; gap: 3px; flex: 1; min-width: 0;">
+                <label for="persona-edit-age" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">年龄</label>
+                <input type="text" id="persona-edit-age" class="moe-input" placeholder="年龄" style="width: 100%; height: 26px; font-size: 11px; text-align: center; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">
+              </div>
+              <div id="persona-birthday-container" style="display: flex; align-items: center; gap: 3px; flex: 1.2; min-width: 0;">
+                <label for="persona-edit-birthday" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">生日</label>
+                <input type="text" id="persona-edit-birthday" class="moe-input" placeholder="生日" style="width: 100%; height: 26px; font-size: 11px; text-align: center; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">
+              </div>
+            </div>
+
+            <!-- 性格行 -->
+            <div id="persona-personality-row" style="display: flex; align-items: center; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--border-color);">
+              <label for="persona-edit-personality" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">性格</label>
+              <input type="text" id="persona-edit-personality" class="moe-input" placeholder="性格" style="flex: 1; height: 26px; font-size: 11px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">
+            </div>
+
+            <!-- 说话方式属性行 -->
+            <div id="persona-speech-style-row" style="display: flex; flex-direction: column; gap: 4px; padding-top: 4px; border-top: 1px dashed var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label for="persona-edit-speech-style" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">说话方式</label>
+                <button type="button" id="persona-speech-style-mode-btn" class="moe-btn-mini" style="height: 22px; padding: 0 8px; font-size: 10px; font-weight: 600; border-radius: 4px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">玩家</button>
+              </div>
+              <input type="text" id="persona-edit-speech-style" class="moe-input" placeholder="大白话或古风加中式美式日式语气语调加性格特质" style="width: 100%; height: 26px; font-size: 11px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">
+            </div>
+
+            <!-- 备注方框 -->
+            <div id="persona-remark-row" style="display: flex; flex-direction: column; gap: 4px; padding-top: 4px; border-top: 1px dashed var(--border-color);">
+              <label for="persona-edit-remark" style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">备注</label>
+              <textarea id="persona-edit-remark" rows="2" class="moe-input" placeholder="填写备注" style="width: 100%; font-size: 11px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;"></textarea>
             </div>
           </div>
 
-          <!-- 人设详情渲染区 -->
-          <div style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.03);">
+          <!-- 人设详情渲染与编辑区 -->
+          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">
+              <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">正文</span>
+              <button type="button" id="persona-toggle-edit-mode-btn" class="moe-btn-mini" style="height: 24px; padding: 0 10px; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">编辑</button>
+            </div>
             <div id="persona-card-content-display" style="font-size: 13.5px; line-height: 1.7; color: var(--text-primary); word-break: break-word;"></div>
+            <textarea id="persona-card-content-editor" class="moe-input" style="display: none; width: 100%; min-height: 260px; font-size: 13px; line-height: 1.6; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;"></textarea>
+
+            <!-- 版本回退与前进导航栏 -->
+            <div id="persona-version-nav-bar" style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px dashed var(--border-color);">
+              <button type="button" id="persona-version-prev-btn" class="moe-btn-mini" style="height: 26px; padding: 0 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; line-height: 1;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                <span>上一版</span>
+              </button>
+              <span id="persona-version-indicator" style="font-size: 11px; color: var(--text-secondary); font-weight: 600;">1/1</span>
+              <button type="button" id="persona-version-next-btn" class="moe-btn-mini" style="height: 26px; padding: 0 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; line-height: 1;">
+                <span>下一版</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </div>
           </div>
 
-          <!-- 核心提示词预览与编辑 -->
-          <details style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
-            <summary style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--text-primary); cursor: pointer; background: var(--secondary-bg, rgba(128,128,128,0.04));">提示</summary>
-            <div style="padding: 10px 12px;">
-              <textarea id="persona-edit-reminder" rows="6" class="moe-input" style="width: 100%; font-size: 12px; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;"></textarea>
-            </div>
-          </details>
+          <!-- 跑团COC属性与技能折叠面板容器 -->
+          <div id="persona-coc-panel-container" style="display: none;"></div>
 
           <!-- 多轮返工微调区 -->
-          <div style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
             <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">返工</div>
-            <textarea id="persona-rework-input" rows="2" class="moe-input" style="width: 100%; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;" placeholder="输入修改意见，例如把年龄调小两岁，增加怕黑的弱点"></textarea>
+            <textarea id="persona-rework-input" rows="2" class="moe-input" style="width: 100%; font-size: 12px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: inherit;" placeholder="输入修改意见"></textarea>
             <div style="display: flex; gap: 8px;">
-              <button type="button" id="persona-rework-btn" class="moe-btn" style="flex: 1; height: 34px; font-size: 13px; font-weight: 600; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;">返工</button>
+              <button type="button" id="persona-rework-btn" class="moe-btn" style="flex: 1; height: 34px; font-size: 13px; font-weight: 600; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">返工</button>
             </div>
           </div>
         </div>
@@ -13907,8 +13960,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
       <!-- 底部操作固定栏 -->
       <div id="persona-creator-actions" style="display: none; padding: 10px 16px; background: var(--background-color); border-top: 1px solid var(--border-color); align-items: center; justify-content: flex-end; gap: 10px; position: sticky; bottom: 0; z-index: 20;">
-        <button type="button" id="persona-copy-card-btn" class="mini-btn" style="min-width: 80px; height: 36px; border-radius: 8px; font-size: 13px; font-weight: 500; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer;">复制</button>
-        <button type="button" id="persona-import-friend-btn" class="moe-btn" style="min-width: 100px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 600; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">导入</button>
+        <button type="button" id="persona-copy-card-btn" class="mini-btn" style="min-width: 80px; height: 36px; border-radius: 8px; font-size: 13px; font-weight: 500; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">复制</button>
+        <button type="button" id="persona-import-friend-btn" class="moe-btn" style="min-width: 100px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 600; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; line-height: 1;">导入</button>
+      </div>
     </div>
 
     <!-- 人设来源模组选择模态框 -->
@@ -13921,7 +13975,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <!-- 模组列表由JS动态填充 -->
         </div>
         <div class="modal-footer" style="justify-content: flex-end; padding: 10px 16px;">
-          <button type="button" id="persona-module-select-cancel-btn" class="moe-btn-secondary" style="min-width: 70px; height: 32px; border-radius: 6px; font-size: 12px; cursor: pointer;">取消</button>
+          <button type="button" id="persona-module-select-cancel-btn" class="moe-btn-secondary" style="min-width: 70px; height: 32px; border-radius: 6px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">取消</button>
         </div>
       </div>
     </div>
@@ -13933,17 +13987,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">提示词预设</span>
         </div>
         <div class="modal-body" style="padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">预设名称</span>
-            <span id="persona-preset-name-display" style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">普通</span>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <label for="persona-preset-name-input" style="font-size: 12px; font-weight: 600; color: var(--text-primary); flex-shrink: 0;">预设名称</label>
+            <input type="text" id="persona-preset-name-input" class="moe-input" style="flex: 1; height: 28px; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);" placeholder="预设名称">
           </div>
           <textarea id="persona-preset-content-textarea" class="moe-input" style="flex: 1; min-height: 240px; font-size: 12px; line-height: 1.5; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); resize: vertical; box-sizing: border-box; font-family: monospace;"></textarea>
         </div>
-        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px;">
-          <button type="button" id="persona-preset-reset-btn" class="moe-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px; border-radius: 6px; cursor: pointer;">恢复默认</button>
-          <div style="display: flex; gap: 8px;">
-            <button type="button" id="persona-preset-cancel-btn" class="moe-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px; border-radius: 6px; cursor: pointer;">取消</button>
-            <button type="button" id="persona-preset-save-btn" class="moe-btn" style="height: 32px; padding: 0 16px; font-size: 12px; font-weight: 600; border-radius: 6px; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color); cursor: pointer;">保存</button>
+        <div class="modal-footer" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 16px; gap: 8px; width: 100%; box-sizing: border-box;">
+          <button type="button" id="persona-preset-reset-btn" class="moe-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1; flex-shrink: 0;">恢复默认</button>
+          <div style="display: flex; flex-direction: row; gap: 8px; align-items: center; flex-shrink: 0;">
+            <button type="button" id="persona-preset-delete-btn" class="moe-btn-secondary" style="display: none; height: 32px; padding: 0 12px; font-size: 12px; border-radius: 6px; cursor: pointer; align-items: center; justify-content: center; line-height: 1;">删除</button>
+            <button type="button" id="persona-preset-cancel-btn" class="moe-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">取消</button>
+            <button type="button" id="persona-preset-save-btn" class="moe-btn" style="height: 32px; padding: 0 16px; font-size: 12px; font-weight: 600; border-radius: 6px; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">保存</button>
           </div>
         </div>
       </div>
@@ -17867,6 +17922,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     </div>
 
     <script>
+      function escapeHtml(str) {
+        if (!str && str !== 0) return "";
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+      window.escapeHtml = escapeHtml;
+
       (function () {
         window.errorLogs = [];
 
@@ -22937,8 +23003,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         window.openContactCardModal = async function(chatId) {
           activeCardContactId = chatId;
-          const chat = state.chats[chatId];
+          let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
+          if (!chat && typeof db !== "undefined" && db.chats) {
+            try {
+              chat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              if (chat && state.chats) state.chats[chat.id] = chat;
+            } catch (e) {}
+          }
           if (!chat) return;
+          activeCardContactId = chat.id;
 
           const modal = document.getElementById("contact-card-modal");
           const avatarEl = document.getElementById("contact-card-avatar");
@@ -23100,13 +23173,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         };
 
         window.startChatFromContactCard = async function() {
-          if (activeCardContactId && state.chats[activeCardContactId]) {
-            const chat = state.chats[activeCardContactId];
+          let chat = null;
+          if (activeCardContactId) {
+            chat = (state.chats && state.chats[activeCardContactId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(activeCardContactId)));
+            if (!chat && typeof db !== "undefined" && db.chats) {
+              try {
+                chat = await db.chats.get(typeof activeCardContactId === "number" ? activeCardContactId : parseInt(activeCardContactId)) || await db.chats.get(String(activeCardContactId));
+                if (chat && state.chats) state.chats[chat.id] = chat;
+              } catch (e) {}
+            }
+          }
+          if (chat) {
             chat.inMessageList = true;
             await db.chats.put(chat);
             closeContactModal("contact-card-modal");
             switchToChatListView("messages-view");
-            openChat(activeCardContactId);
+            await openChat(chat.id);
           }
         };
 
@@ -29945,31 +30027,40 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         async function openChat(chatId) {
-          state.activeChatId = chatId;
-          const chat = state.chats[chatId];
+          if (!chatId && chatId !== 0) return;
+          let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
+          if (!chat && typeof db !== "undefined" && db.chats) {
+            try {
+              chat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              if (chat && state.chats) state.chats[chat.id] = chat;
+            } catch (e) {}
+          }
           if (!chat) return; // 安全检查
+          state.activeChatId = chat.id;
 
           // 将未读数清零
           if (chat.unreadCount > 0) {
             chat.unreadCount = 0;
             await db.chats.put(chat); // 别忘了把这个改变同步到数据库
-            // 我们稍后会在渲染列表时重新渲染，所以这里不需要立即重绘列表
           }
           // 把 openChat 函数挂载到全局 window 对象上
           window.openChat = openChat;
 
-          renderChatInterface(chatId);
+          renderChatInterface(chat.id);
           showScreen("chat-interface-screen");
-          window.updateListenTogetherIconProxy(state.activeChatId);
+          if (typeof window.updateListenTogetherIconProxy === "function") {
+            window.updateListenTogetherIconProxy(state.activeChatId);
+          }
           const activeMiniModal = document.getElementById("chat-mini-map-modal");
           if (activeMiniModal && activeMiniModal.classList.contains("visible") && typeof renderChatMiniMap === "function") {
             renderChatMiniMap();
           }
           toggleCallButtons(chat.isGroup || false);
           // 【心声功能】根据是否为单聊，显示或隐藏心形按钮
-          document.getElementById("char-heart-btn").style.display = chat.isGroup
-            ? "none"
-            : "inline-flex";
+          const heartBtn = document.getElementById("char-heart-btn");
+          if (heartBtn) {
+            heartBtn.style.display = chat.isGroup ? "none" : "inline-flex";
+          }
 
           if (
             !chat.isGroup &&
@@ -30087,31 +30178,46 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           const currentDateStr = `${year}年${month}月${day}日`;
 
-          // 2. 检查历史中上一条状态栏的日期与天气
+          // 2. 检查历史中上回合与上上回合状态栏的日期与天气
           let lastStatusDate = null;
+          let lastStatusMonth = null;
           let lastStatusWeather = null;
+          let prevStatusDate = null;
           const history = chat.history || [];
           for (let i = history.length - 1; i >= 0; i--) {
             const hMsg = history[i];
             if (!hMsg || typeof hMsg.content !== "string") continue;
-            const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+年\d+月\d+日)/);
+            const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
             const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
             if (dM && wM) {
-              lastStatusDate = dM[1].trim();
-              lastStatusWeather = wM[1].trim();
-              break;
+              if (!lastStatusDate) {
+                lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                lastStatusMonth = parseInt(dM[2], 10);
+                lastStatusWeather = wM[1].trim();
+              } else if (!prevStatusDate) {
+                prevStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                break;
+              }
             }
           }
 
-          // 3. 抽取天气或沿用同日天气
-          let drawnWeather = "";
-          if (lastStatusDate && lastStatusDate === currentDateStr && lastStatusWeather) {
+          // 3. 抽取天气（判断上回合与上上回合日期是否一致）
+          let needNewWeatherRoll = false;
+          if (prevStatusDate && lastStatusDate) {
+            needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
+          } else {
+            needNewWeatherRoll = !lastStatusWeather;
+          }
+
+          let drawnWeather = "晴天";
+          if (!needNewWeatherRoll && lastStatusWeather) {
             drawnWeather = lastStatusWeather;
           } else {
             const weatherCol = cols.find(c => c.type === "weather");
             const chosenPoolName = weatherCol?.format || "温带气候";
             if (typeof window.drawWeatherFromCurrentPool === "function") {
-              const drawn = window.drawWeatherFromCurrentPool(month, chosenPoolName);
+              const monthToUse = lastStatusMonth || month;
+              const drawn = window.drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
               drawnWeather = drawn ? drawn.name : "晴天";
             } else {
               drawnWeather = "晴天";
@@ -32427,12 +32533,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? {
                     contents: [{ role: "user", parts: [...geminiImageParts, { text: prompt }] }],
                     generationConfig: { temperature: 0.4 },
-                    systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块。" }] }
+                    systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。" }] }
                   }
                 : {
                     model: model || "gpt-4o",
                     messages: [
-                      { role: "system", content: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块。" },
+                      { role: "system", content: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。" },
                       { role: "user", content: openaiImageParts.length > 0 ? [{ type: "text", text: prompt }, ...openaiImageParts] : prompt }
                     ],
                     temperature: 0.4,
@@ -32517,9 +32623,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let dateValues = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
             let timeValues = { hour: String(now.getHours()).padStart(2, '0'), minute: String(now.getMinutes()).padStart(2, '0') };
 
-            // 检查历史提取最新日期与天气
+            // 检查历史提取上回合与上上回合的日期与天气
             let lastStatusDate = null;
+            let lastStatusMonth = null;
             let lastStatusWeather = null;
+            let prevStatusDate = null;
             const history = (chat && chat.history) ? chat.history : [];
             for (let i = history.length - 1; i >= 0; i--) {
               const hMsg = history[i];
@@ -32527,31 +32635,55 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
               const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
               if (dM && wM) {
-                lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                lastStatusWeather = wM[1].trim();
-                dateValues.year = parseInt(dM[1], 10);
-                dateValues.month = parseInt(dM[2], 10);
-                dateValues.day = parseInt(dM[3], 10);
-                break;
+                if (!lastStatusDate) {
+                  lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                  lastStatusMonth = parseInt(dM[2], 10);
+                  lastStatusWeather = wM[1].trim();
+                  dateValues.year = parseInt(dM[1], 10);
+                  dateValues.month = parseInt(dM[2], 10);
+                  dateValues.day = parseInt(dM[3], 10);
+                } else if (!prevStatusDate) {
+                  prevStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                  break;
+                }
               }
             }
             const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
 
-            // 抽取天气
+            // 抽取天气（判断上回合与上上回合日期是否一致）
             const weatherCol = cols.find(c => c.type === "weather");
             const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
+            let needNewWeatherRoll = false;
+            if (prevStatusDate && lastStatusDate) {
+              needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
+            } else {
+              needNewWeatherRoll = !lastStatusWeather;
+            }
+
             let drawnWeatherName = "晴天";
-            if (lastStatusDate && lastStatusDate === currentDateStr && lastStatusWeather) {
+            let drawnWeatherNote = "温和宜人，阳光明媚，视野开阔";
+            if (!needNewWeatherRoll && lastStatusWeather) {
               drawnWeatherName = lastStatusWeather;
+              const weatherPools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [];
+              const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
+              if (targetPool && Array.isArray(targetPool.items)) {
+                const matchedItem = targetPool.items.find(it => it.name === lastStatusWeather);
+                if (matchedItem && (matchedItem.note || matchedItem.desc)) {
+                  drawnWeatherNote = matchedItem.note || matchedItem.desc;
+                }
+              }
             } else if (typeof window.drawWeatherFromCurrentPool === "function") {
-              const drawn = window.drawWeatherFromCurrentPool(dateValues.month, chosenPoolName);
-              if (drawn) drawnWeatherName = drawn.name;
+              const monthToUse = lastStatusMonth || dateValues.month;
+              const drawn = window.drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
+              if (drawn) {
+                drawnWeatherName = drawn.name || "晴天";
+                drawnWeatherNote = drawn.note || drawn.desc || "";
+              }
             }
 
             // 幸运区间抽取（1d100）
-            const luckRoll = Math.floor(Math.random() * 100) + 1;
-            const luckIntervals = settings.luckIntervals || [];
-            const hitLuck = (luckIntervals || []).find(it => luckRoll >= it.min && luckRoll < it.max) || (luckIntervals || [])[0] || { name: "波澜不惊", note: "" };
+            const luckInfo = getOrUpdateLuckForTurn(settings, chat);
+            const hitLuck = luckInfo.hitLuck;
 
             // 如果配置了 API，调用 AI 生成并根据备注填空
             let aiGeneratedContent = null;
@@ -32561,8 +32693,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const persona = targetObj.settings?.aiPersona || targetObj.personality || "你是一个系统状态栏角色，负责记录当前剧情的客观状态。";
                 const columnPrompts = cols.map(c => {
                   let line = `- 栏目: ${c.label || '栏目'}`;
-                  if (c.type === "date") line += ` | 固定值: ${currentDateStr}`;
-                  else if (c.type === "time") line += ` | 固定值: ${timeValues.hour}:${timeValues.minute}`;
+                  if (c.type === "date") line += ` | 格式: [日期]：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入（例如1926年3月16日或2024年5月20日），绝对禁止套用现实生活中的真实日期`;
+                  else if (c.type === "time") line += ` | 格式: [时间]：由AI根据上下文剧情自主推断具体时间填入（例如08:30或12:00或14:00），绝对禁止使用本地现实时间`;
                   else if (c.type === "weather") line += ` | 固定值: ${drawnWeatherName}`;
                   else if (c.type === "luck") line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'})`;
                   else if (c.type === "affection") {
@@ -32788,18 +32920,29 @@ ${recentHistoryText}
 
               const weatherCol = statusColumns.find(c => c.type === "weather");
               const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
+              let needNewWeatherRoll = false;
+              if (prevStatusDate && lastStatusDate) {
+                needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
+              } else {
+                needNewWeatherRoll = !lastStatusWeather;
+              }
+
               let drawnWeatherName = "晴天";
               let drawnWeatherNote = "温和宜人，阳光明媚，视野开阔";
 
-              // 判断是否跨日或跨季节（如进入夏天）重新抽取天气
-              const isDateChanged = lastStatusDate && lastStatusDate !== currentDateStr;
-              const isSeasonChanged = currentSeason !== lastSeason;
-              const needNewWeatherRoll = isDateChanged || isSeasonChanged || !lastStatusWeather;
-
               if (!needNewWeatherRoll && lastStatusWeather) {
                 drawnWeatherName = lastStatusWeather;
+                const weatherPools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [];
+                const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
+                if (targetPool && Array.isArray(targetPool.items)) {
+                  const matchedItem = targetPool.items.find(it => it.name === lastStatusWeather);
+                  if (matchedItem && (matchedItem.note || matchedItem.desc)) {
+                    drawnWeatherNote = matchedItem.note || matchedItem.desc;
+                  }
+                }
               } else if (typeof window.drawWeatherFromCurrentPool === "function") {
-                const drawn = window.drawWeatherFromCurrentPool(dateValues.month, chosenPoolName);
+                const monthToUse = lastStatusMonth || dateValues.month;
+                const drawn = window.drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
                 if (drawn) {
                   drawnWeatherName = drawn.name || "晴天";
                   drawnWeatherNote = drawn.note || drawn.desc || "";
@@ -32811,8 +32954,8 @@ ${recentHistoryText}
 
               const columnPrompts = statusColumns.map(c => {
                 let line = `- 栏目: ${c.label || '栏目'}`;
-                if (c.type === "date") line += ` | 固定值: ${currentDateStr}`;
-                else if (c.type === "time") line += ` | 格式: [时间]：由AI根据上下文剧情自主推断具体时间填入（如08:30或14:00），严禁使用本地现实时间`;
+                if (c.type === "date") line += ` | 格式: [日期]：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入（例如1926年3月16日或2024年5月20日），绝对禁止套用现实生活中的真实日期`;
+                else if (c.type === "time") line += ` | 格式: [时间]：由AI根据上下文剧情自主推断具体时间填入（例如08:30或12:00或14:00），绝对禁止使用本地现实时间`;
                 else if (c.type === "weather") line += ` | 固定值: ${drawnWeatherName} (系统抽取AI不可修改，天气说明: ${drawnWeatherNote})`;
                 else if (c.type === "luck") {
                   if (luckInfo.isNewRoll) {
@@ -34155,11 +34298,11 @@ ${luckGuideNote}
 			# 【【【身份铁律：这是最高指令，必须严格遵守】】】
 			1.  **核心任务**: 你的唯一任务是扮演且仅能扮演下方“群成员列表”中明确列出的角色。
 			2.  **用户识别**: 用户的身份是【${myNickname}】。你【绝对、永远、在任何情况下都不能】生成 \`name\` 字段为 **"${myNickname}"** 的消息。
-			3.  **禁止杜撰**: 【绝对禁止】扮演任何未在“群成员列表”中出现的角色。系统状态栏由系统处理，严禁以系统状态栏名义发送消息，正文严禁自创天气。
+			3.  **禁止杜撰**: 【绝对禁止】扮演任何未在列表中出现的额外角色。正文严禁自创未抽取的随机数值与天气。
 			4.  **【【【格式铁律：这是你的生命线，违者生成失败】】】**:
 			    -   你的回复【必须且只能】是一个严格的JSON数组格式的字符串。
 			    -   数组中的【每一个元素都必须是一个JSON对象】。
-			    -   每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)。
+			    -   每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)或系统状态栏名称。
 			    -   缺少 "name" 字段的回复是无效的，会被系统拒绝。
 			5.  **角色扮演**: 严格遵守下方“群成员列表及人设”中的每一个角色的设定。
 			# 群成员列表及人设 (name字段是你要使用的【本名】)
@@ -34206,13 +34349,14 @@ ${luckGuideNote}
 			${moduleChaptersPromptBlock}
 			${mapPromptBlock}
 			${thoughtChainPromptBlock}
-			${systemStatusContext}
 			${sharedContext}
 			${stickerContext}
 			${linkedMemoryContext}
 
 			# 用户的角色
 			- **${myNickname}**: ${chat.settings.myPersona}${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? " [状态: " + window.getCocPromptStatus(chat.settings.myCocPanel) + "]" : ""}${chat.settings.myName ? ` [姓名:${chat.settings.myName}]` : ""}${chat.settings.myAge ? ` [年龄:${chat.settings.myAge}]` : ""}${chat.settings.myBirthday ? ` [生日:${chat.settings.myBirthday}]` : ""}${chat.settings.myGender ? ` [性别:${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}]` : ""}
+
+			${systemStatusContext}
 
 			现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`;
 
@@ -34533,6 +34677,7 @@ ${libraryList}
                 let lastStatusDate = null;
                 let lastStatusMonth = null;
                 let lastStatusWeather = null;
+                let prevStatusDate = null;
                 const history = chat.history || [];
                 for (let i = history.length - 1; i >= 0; i--) {
                   const hMsg = history[i];
@@ -34540,52 +34685,50 @@ ${libraryList}
                   const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
                   const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
                   if (dM && wM) {
-                    lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                    lastStatusMonth = parseInt(dM[2], 10);
-                    lastStatusWeather = wM[1].trim();
-                    dateValues.year = parseInt(dM[1], 10);
-                    dateValues.month = parseInt(dM[2], 10);
-                    dateValues.day = parseInt(dM[3], 10);
-                    break;
+                    if (!lastStatusDate) {
+                      lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                      lastStatusMonth = parseInt(dM[2], 10);
+                      lastStatusWeather = wM[1].trim();
+                      dateValues.year = parseInt(dM[1], 10);
+                      dateValues.month = parseInt(dM[2], 10);
+                      dateValues.day = parseInt(dM[3], 10);
+                    } else if (!prevStatusDate) {
+                      prevStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                      break;
+                    }
                   }
                 }
                 const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
-                const currentSeason = getSeasonFromMonth(dateValues.month);
-                const lastSeason = lastStatusMonth ? getSeasonFromMonth(lastStatusMonth) : currentSeason;
 
                 const luckInfo = getOrUpdateLuckForTurn(chat.settings, chat);
                 const hitLuck = luckInfo.hitLuck;
 
-                // 抽取天气：从已保存的天气池中按概率抽取
+                // 抽取天气（判断上回合与上上回合日期是否一致）
                 let drawnWeather = null;
                 const weatherCol = (chat.settings.columns || []).find(c => c.type === "weather");
-                const weatherPools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [
-                  { id: "weather_temperate", name: "温带气候", items: [{ name: "晴天", rate: 36, note: "温和宜人，阳光明媚，视野开阔" }] }
-                ];
                 const selectedPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
-                const targetPool = weatherPools.find(p => p.name === selectedPoolName || p.id === selectedPoolName) || weatherPools[0];
 
-                const isDateChanged = lastStatusDate && lastStatusDate !== currentDateStr;
-                const isSeasonChanged = currentSeason !== lastSeason;
-                const needNewWeatherRoll = isDateChanged || isSeasonChanged || !lastStatusWeather;
+                let needNewWeatherRoll = false;
+                if (prevStatusDate && lastStatusDate) {
+                  needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
+                } else {
+                  needNewWeatherRoll = !lastStatusWeather;
+                }
 
                 if (!needNewWeatherRoll && lastStatusWeather) {
-                  drawnWeather = { name: lastStatusWeather, note: "" };
-                } else if (targetPool && Array.isArray(targetPool.items) && targetPool.items.length > 0) {
-                  const totalRate = targetPool.items.reduce((sum, it) => sum + (parseFloat(it.rate) || 0), 0);
-                  if (totalRate > 0) {
-                    let rand = Math.random() * totalRate;
-                    for (const it of targetPool.items) {
-                      const r = parseFloat(it.rate) || 0;
-                      if (rand < r) {
-                        drawnWeather = it;
-                        break;
-                      }
-                      rand -= r;
-                    }
-                    if (!drawnWeather) drawnWeather = targetPool.items[targetPool.items.length - 1];
-                  } else {
-                    drawnWeather = targetPool.items[0];
+                  let note = "";
+                  const weatherPools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [];
+                  const targetPool = weatherPools.find(p => p.name === selectedPoolName || p.id === selectedPoolName) || weatherPools[0];
+                  if (targetPool && Array.isArray(targetPool.items)) {
+                    const matchedItem = targetPool.items.find(it => it.name === lastStatusWeather);
+                    if (matchedItem && (matchedItem.note || matchedItem.desc)) note = matchedItem.note || matchedItem.desc;
+                  }
+                  drawnWeather = { name: lastStatusWeather, note: note };
+                } else if (typeof window.drawWeatherFromCurrentPool === "function") {
+                  const monthToUse = lastStatusMonth || dateValues.month;
+                  const drawn = window.drawWeatherFromCurrentPool(monthToUse, selectedPoolName);
+                  if (drawn) {
+                    drawnWeather = { name: drawn.name || "晴天", note: drawn.note || drawn.desc || "" };
                   }
                 }
                 if (!drawnWeather) {
@@ -34596,9 +34739,9 @@ ${libraryList}
                 (chat.settings.columns || []).forEach(col => {
                   let fmt = col.format || "*";
                   if (col.type === "date") {
-                    colSpecs.push(`${col.label}：${currentDateStr}`);
+                    colSpecs.push(`${col.label}：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入（例如1926年3月16日或2024年5月20日），绝对禁止套用现实生活中的真实日期`);
                   } else if (col.type === "time") {
-                    colSpecs.push(`${col.label}：由AI根据上下文剧情自主推断具体时间填入（如08:30或14:00），严禁使用本地现实时间`);
+                    colSpecs.push(`${col.label}：由AI根据上下文剧情自主推断具体时间填入（例如08:30或12:00或14:00），绝对禁止使用本地现实时间`);
                   } else if (col.type === "weather") {
                     colSpecs.push(`${col.label}：${drawnWeather.name} (系统抽取AI不可修改)`);
                   } else if (col.type === "luck") {
@@ -35293,14 +35436,16 @@ ${luckStatusDirective}
 
             messagesArray = filteredMessages;
 
-            // 系统状态栏存在时，每回合系统固定这个系统状态栏为第一个回复（本地强制逻辑）
-            const hasStatusConfig = (statusColumns && statusColumns.length > 0) || (chat.roleType === "system_status") || (statusMember !== null) || (chat.settings?.columns && chat.settings.columns.length > 0);
+            const statusTriggerMode = statusMember?.settings?.triggerMode || statusMember?.triggerMode || chat.settings?.triggerMode || "always";
+            const hasStatusConfig = ((statusColumns && statusColumns.length > 0) || (chat.roleType === "system_status") || (statusMember !== null) || (chat.settings?.columns && chat.settings.columns.length > 0)) && statusTriggerMode !== "none";
             if (hasStatusConfig) {
               const statusSender = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : (chat.name || "系统状态");
               let statusContents = [];
+              let firstStatusIndex = -1;
               let removeIndices = [];
               for (let i = 0; i < messagesArray.length; i++) {
                 if (isStatusBubble(messagesArray[i])) {
+                  if (firstStatusIndex === -1) firstStatusIndex = i;
                   statusContents.push(String(messagesArray[i].content || messagesArray[i].message || "").trim());
                   removeIndices.push(i);
                 }
@@ -35310,32 +35455,41 @@ ${luckStatusDirective}
               }
 
               let mergedText = "";
+              let shouldAddStatus = false;
               if (statusContents.length > 0) {
                 mergedText = statusContents.join("\n");
-              } else {
+                shouldAddStatus = true;
+              } else if (statusTriggerMode === "always" || chat.roleType === "system_status") {
                 const colsToRender = (statusColumns && statusColumns.length > 0) ? statusColumns : (chat.settings?.columns || []);
                 let fallbackLines = [];
                 colsToRender.forEach(col => {
                   let lbl = col.label || "栏目";
-                  if (col.type === "date") fallbackLines.push(`${lbl}：${currentDateStr || ""}`);
-                  else if (col.type === "time") fallbackLines.push(`${lbl}：08:00`);
+                  if (col.type === "date") fallbackLines.push(`${lbl}：${lastStatusDate || "1926年3月16日"}`);
+                  else if (col.type === "time") fallbackLines.push(`${lbl}：12:00`);
                   else if (col.type === "weather") fallbackLines.push(`${lbl}：${drawnWeatherName || "晴天"}`);
-                  else if (col.type === "luck") fallbackLines.push(`${lbl}：${(hitLuck && hitLuck.name) ? hitLuck.name : "吉"}`);
+                  else if (col.type === "luck") fallbackLines.push(`${lbl}：${(hitLuck && hitLuck.name) ? hitLuck.name : "波澜不惊"}`);
                   else if (col.type !== "affection") fallbackLines.push(`${lbl}：${col.format || ""}`);
                 });
                 mergedText = fallbackLines.join("\n");
+                shouldAddStatus = true;
               }
 
-              mergedText = await postProcessStatusReply(mergedText, chat, statusSettings || chat.settings);
-              const statusMsgObj = {
-                type: "text",
-                name: statusSender,
-                sender: "ai",
-                role: "assistant",
-                content: mergedText,
-                message: mergedText
-              };
-              messagesArray.unshift(statusMsgObj);
+              if (shouldAddStatus && mergedText) {
+                mergedText = await postProcessStatusReply(mergedText, chat, statusSettings || chat.settings);
+                const statusMsgObj = {
+                  type: "text",
+                  name: statusSender,
+                  sender: "ai",
+                  role: "assistant",
+                  content: mergedText,
+                  message: mergedText
+                };
+                if (statusTriggerMode === "always" || chat.roleType === "system_status" || firstStatusIndex <= 0) {
+                  messagesArray.unshift(statusMsgObj);
+                } else {
+                  messagesArray.splice(firstStatusIndex, 0, statusMsgObj);
+                }
+              }
             }
 
             if (collectedThinking && messagesArray.length > 0) {
@@ -42538,8 +42692,111 @@ ${luckStatusDirective}
           showScreen("contact-picker-screen");
         }
 
+        async function renderContactPickerGroups(contacts, listEl) {
+          listEl.innerHTML = "";
+          listEl.style.cssText = "overflow-y: auto !important; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 8px; padding: 10px; max-height: calc(100vh - 65px); box-sizing: border-box;";
+
+          if (!contacts || contacts.length === 0) {
+            listEl.innerHTML = '<p style="text-align:center; color: var(--text-secondary); margin-top:50px; font-size: 13px;">没有可选择的联系人</p>';
+            return;
+          }
+
+          const defaultGroupId = typeof ensureDefaultContactGroup === "function" ? await ensureDefaultContactGroup() : 1;
+          let groups = [];
+          try {
+            if (typeof db !== "undefined" && db.qzoneGroups) {
+              groups = await db.qzoneGroups.toArray();
+            }
+          } catch (e) {}
+          groups.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+          const createGroupCard = (title, memberList, defaultOpen = true) => {
+            if (!memberList || memberList.length === 0) return null;
+            const card = document.createElement("div");
+            card.className = "contact-picker-group-card";
+            card.style.cssText = "background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; margin-bottom: 2px; flex-shrink: 0;";
+
+            const header = document.createElement("div");
+            header.className = "contact-picker-group-header";
+            header.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--secondary-bg); cursor: pointer; user-select: none;";
+            header.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                <span class="contact-group-arrow" style="font-size: 11px; color: var(--text-secondary); transition: transform 0.2s ease; transform: ${defaultOpen ? 'rotate(0deg)' : 'rotate(-90deg)'};">▼</span>
+                <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${title}</span>
+                <span style="font-size: 11.5px; color: var(--text-secondary); flex-shrink: 0;">${memberList.length}人</span>
+              </div>
+            `;
+
+            const body = document.createElement("div");
+            body.className = "contact-picker-group-body";
+            body.style.cssText = `display: ${defaultOpen ? 'flex' : 'none'}; flex-direction: column;`;
+
+            memberList.forEach(contact => {
+              const isSelected = selectedContacts.has(String(contact.id));
+              const item = document.createElement("div");
+              item.className = `contact-picker-item ${isSelected ? "selected" : ""}`;
+              item.dataset.contactId = contact.id;
+              item.style.cssText = "display: flex; align-items: center; padding: 9px 12px; cursor: pointer; border-top: 1px solid var(--border-color); background: var(--card-bg);";
+
+              const isSpec = !!(contact.isSpecialAttention || contact.chat?.isSpecialAttention || contact.chat?.settings?.isSpecialAttention);
+
+              item.innerHTML = `
+                <div class="checkbox"></div>
+                <img src="${contact.avatar || defaultAvatar}" class="avatar">
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="name" style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${contact.name}</span>
+                    ${isSpec ? '<span style="display: inline-flex; align-items: center; vertical-align: middle;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#e05252" stroke="#e05252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span>' : ''}
+                    ${contact.isNpc ? '<span style="font-size: 10px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 3px; padding: 0 4px; line-height: 14px;">NPC</span>' : ''}
+                  </div>
+                </div>
+              `;
+              body.appendChild(item);
+            });
+
+            card.appendChild(header);
+            card.appendChild(body);
+            return card;
+          };
+
+          // 1. 特别关心置顶
+          const specialContacts = contacts.filter(c => !c.isNpc && (c.isSpecialAttention || c.chat?.isSpecialAttention || c.chat?.settings?.isSpecialAttention || c.chat?.isPinned || c.chat?.settings?.isPinned));
+          if (specialContacts.length > 0) {
+            const specCard = createGroupCard("特别关心", specialContacts, true);
+            if (specCard) listEl.appendChild(specCard);
+          }
+
+          // 2. 好友分组
+          const normalContacts = contacts.filter(c => !c.isNpc);
+          if (groups.length > 0) {
+            groups.forEach(group => {
+              const isDef = group.id === defaultGroupId;
+              const gMembers = normalContacts.filter(c => {
+                const cGroupId = c.chat?.groupId || (state.chats[c.id]?.groupId);
+                if (cGroupId) return cGroupId === group.id;
+                return isDef;
+              });
+              if (gMembers.length > 0) {
+                const gCard = createGroupCard(group.name, gMembers, true);
+                if (gCard) listEl.appendChild(gCard);
+              }
+            });
+          } else {
+            const defCard = createGroupCard("我的好友", normalContacts, true);
+            if (defCard) listEl.appendChild(defCard);
+          }
+
+          // 3. NPC 角色分组
+          const npcContacts = contacts.filter(c => c.isNpc);
+          if (npcContacts.length > 0) {
+            const npcCard = createGroupCard("NPC角色", npcContacts, true);
+            if (npcCard) listEl.appendChild(npcCard);
+          }
+        }
+
         async function renderContactPicker() {
           const listEl = document.getElementById("contact-picker-list");
+          if (!listEl) return;
           listEl.innerHTML = "";
           selectedContacts.clear(); // 清空上次的选择
 
@@ -42564,6 +42821,8 @@ ${luckStatusDirective}
                 avatar: c.settings?.aiAvatar || defaultAvatar,
                 isNpc: false, // 标记为非NPC
                 type: "角色",
+                chat: c,
+                isSpecialAttention: !!(c.isSpecialAttention || c.settings?.isSpecialAttention || c.isPinned || c.settings?.isPinned)
               });
             });
 
@@ -42580,6 +42839,8 @@ ${luckStatusDirective}
                     avatar: npc.avatar || defaultGroupMemberAvatar,
                     isNpc: true, // 标记为NPC
                     type: `NPC (${chat.name})`, // 显示该NPC所属的角色
+                    chat: null,
+                    isSpecialAttention: false
                   });
                 }
               });
@@ -42587,30 +42848,7 @@ ${luckStatusDirective}
           });
           allAvailablePeople.push(...Array.from(npcMap.values()));
 
-          if (allAvailablePeople.length === 0) {
-            listEl.innerHTML =
-              '<p style="text-align:center; color:#8a8a8a; margin-top:50px;">还没有可以拉进群的联系人哦~</p>';
-            return;
-          }
-
-          // 3. 渲染整合后的列表
-          allAvailablePeople.forEach((contact) => {
-            const item = document.createElement("div");
-            item.className = "contact-picker-item";
-            item.dataset.contactId = contact.id;
-
-            item.innerHTML = `
-			            <div class="checkbox"></div>
-			            <img src="${contact.avatar}" class="avatar">
-			            <span class="name">${contact.name} ${
-                    contact.isNpc
-                      ? '<span style="color: #888; font-size: 12px;">(NPC)</span>'
-                      : ""
-                  }</span>
-			        `;
-            listEl.appendChild(item);
-          });
-
+          await renderContactPickerGroups(allAvailablePeople, listEl);
           updateContactPickerConfirmButton();
         }
 
@@ -43224,6 +43462,7 @@ ${luckStatusDirective}
           newConfirmBtn.addEventListener("click", handleAddMembersToGroup);
 
           const listEl = document.getElementById("contact-picker-list");
+          if (!listEl) return;
           listEl.innerHTML = "";
 
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
@@ -43240,15 +43479,15 @@ ${luckStatusDirective}
           const existingMemberIds = new Set();
           if (chat && Array.isArray(chat.members)) {
             chat.members.forEach((m) => {
-              if (m.id) existingMemberIds.add(m.id);
-              if (m.originalName) existingMemberIds.add(m.originalName);
-              if (m.groupNickname) existingMemberIds.add(m.groupNickname);
-              if (m.name) existingMemberIds.add(m.name);
+              if (m.id) existingMemberIds.add(String(m.id));
+              if (m.originalName) existingMemberIds.add(String(m.originalName));
+              if (m.groupNickname) existingMemberIds.add(String(m.groupNickname));
+              if (m.name) existingMemberIds.add(String(m.name));
             });
           }
           existingMemberIds.add("user"); // 把用户自己也算作已存在成员
 
-          // 和创建群聊时一样，整合所有角色和NPC
+          // 整合所有角色和NPC
           const allAvailablePeople = [];
           Object.values(state.chats)
             .filter((c) => !c.isGroup)
@@ -43258,6 +43497,8 @@ ${luckStatusDirective}
                 name: c.settings?.remarkName || c.name || "未命名角色",
                 avatar: c.settings?.aiAvatar || defaultAvatar,
                 isNpc: false,
+                chat: c,
+                isSpecialAttention: !!(c.isSpecialAttention || c.settings?.isSpecialAttention || c.isPinned || c.settings?.isPinned)
               });
             });
           const npcMap = new Map();
@@ -43270,6 +43511,8 @@ ${luckStatusDirective}
                     name: npc.name,
                     avatar: npc.avatar || defaultGroupMemberAvatar,
                     isNpc: true,
+                    chat: null,
+                    isSpecialAttention: false
                   });
                 }
               });
@@ -43279,30 +43522,10 @@ ${luckStatusDirective}
 
           // 过滤掉已经是群成员的人
           const contacts = allAvailablePeople.filter(
-            (p) => !existingMemberIds.has(p.id) && !existingMemberIds.has(p.name),
+            (p) => !existingMemberIds.has(String(p.id)) && !existingMemberIds.has(String(p.name)),
           );
 
-          if (contacts.length === 0) {
-            listEl.innerHTML =
-              '<p style="text-align:center; color:#8a8a8a; margin-top:50px;">没有更多可以邀请的联系人了。</p>';
-          } else {
-            contacts.forEach((contact) => {
-              const item = document.createElement("div");
-              item.className = "contact-picker-item";
-              item.dataset.contactId = contact.id;
-              item.innerHTML = `
-			                <div class="checkbox"></div>
-			                <img src="${contact.avatar}" class="avatar">
-			                <span class="name">${contact.name} ${
-                        contact.isNpc
-                          ? '<span style="color: #888; font-size: 12px;">(NPC)</span>'
-                          : ""
-                      }</span>
-			            `;
-              listEl.appendChild(item);
-            });
-          }
-
+          await renderContactPickerGroups(contacts, listEl);
           updateContactPickerConfirmButton();
           showScreen("contact-picker-screen");
         }
@@ -56489,119 +56712,138 @@ ${luckStatusDirective}
         }
 
         async function openSummaryViewer() {
-          const chat = state.chats[state.activeChatId];
-          if (!chat) return;
-
-          document.getElementById("summary-viewer-title").textContent =
-            `“${chat.name}”的对话记忆`;
-
-          exitSummaryMultiSelect();
-
-          const listEl = document.getElementById("summary-list");
-          listEl.innerHTML = "";
-
-          const summaries = (chat.history || []).filter(
-            (msg) => msg.type === "summary",
-          );
-
-          if (summaries.length === 0) {
-            listEl.innerHTML =
-              '<p style="text-align:center; color: var(--text-secondary); padding: 20px 0;">还没有生成过任何总结</p>';
-          } else {
-            [...summaries].reverse().forEach((summary) => {
-              const card = document.createElement("div");
-              card.className = "summary-item-card";
-              card.dataset.timestamp = summary.timestamp;
-
-              let cardHeader = (summary.header || "").trim();
-
-              const formattedTime = new Date(summary.timestamp).toLocaleString("zh-CN", {
-                dateStyle: "short",
-                timeStyle: "short",
-              });
-
-              const safeContent = (summary.content || "")
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/\n/g, "<br>");
-
-              const safeHeader = (cardHeader || "")
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;");
-
-              const rangeInfo = getSummaryRangeInfo(summary, chat);
-              const rangeText = `第${rangeInfo.start}条-第${rangeInfo.end}条`;
-              const hasGap = !!rangeInfo.hasLargeGap;
-
-              const headerHtml = safeHeader ? `
-                <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--secondary-bg); color: var(--accent-color); border: 1px solid var(--border-color); flex-shrink: 0;">卡头</span>
-                <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击修改卡头">${safeHeader}</span>
-              ` : `
-                <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击添加卡头"></span>
-              `;
-
-              const rangePopoverHtml = hasGap ? `
-                <button type="button" class="summary-range-info-btn" data-timestamp="${summary.timestamp}" title="查看条目" style="background: none; border: none; padding: 0; margin: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); opacity: 0.6; line-height: 1;">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                </button>
-                <div class="summary-range-popover" id="summary-popover-${summary.timestamp}" style="display: none; position: absolute; right: 0; bottom: calc(100% + 6px); background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); padding: 4px 8px; z-index: 100; min-width: 105px; max-height: 58px; overflow-y: auto; box-sizing: border-box; font-size: 11px; color: var(--text-primary); text-align: left;">
-                  ${(rangeInfo.ranges || []).map((r) => `<div style="height: 18px; line-height: 18px; white-space: nowrap;">第${r.start}条-第${r.end}条</div>`).join("")}
-                </div>
-              ` : "";
-
-              card.innerHTML = `
-                <div class="summary-card-header">
-                  <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                    <input type="checkbox" class="summary-select-checkbox" data-timestamp="${summary.timestamp}" style="display: none; width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color); margin: 0; flex-shrink: 0;" />
-                    ${headerHtml}
-                  </div>
-                  <div class="summary-actions">
-                    <button type="button" class="edit-summary-header-btn" data-timestamp="${summary.timestamp}" title="卡头">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                      </svg>
-                    </button>
-                    <button type="button" class="edit-summary-btn" data-timestamp="${summary.timestamp}" title="编辑">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 20h9"></path>
-                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                      </svg>
-                    </button>
-                    <button type="button" class="delete-summary-btn" data-timestamp="${summary.timestamp}" title="删除">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div class="summary-content">${safeContent}</div>
-                <div class="summary-meta">
-                  <span>生成于: ${formattedTime}</span>
-                  <div class="summary-range-container" style="display: inline-flex; align-items: center; gap: 4px; position: relative;">
-                    <span class="summary-range-text">${rangeText}</span>
-                    ${rangePopoverHtml}
-                  </div>
-                </div>
-              `;
-              listEl.appendChild(card);
-            });
+          const chatId = state.activeChatId;
+          let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
+          if (!chat && typeof db !== "undefined" && db.chats) {
+            try {
+              chat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              if (chat && state.chats) state.chats[chat.id] = chat;
+            } catch (e) {}
+          }
+          if (!chat) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "未找到当前聊天");
+            return;
           }
 
-          document
-            .getElementById("chat-settings-modal")
-            .classList.remove("visible");
-          document
-            .getElementById("summary-viewer-modal")
-            .classList.add("visible");
+          const titleEl = document.getElementById("summary-viewer-title");
+          if (titleEl) {
+            titleEl.textContent = `“${chat.name}”的对话记忆`;
+          }
+
+          if (typeof exitSummaryMultiSelect === "function") {
+            exitSummaryMultiSelect();
+          }
+
+          const listEl = document.getElementById("summary-list");
+          if (listEl) {
+            listEl.innerHTML = "";
+
+            const summaries = (chat.history || []).filter(
+              (msg) => msg && msg.type === "summary",
+            );
+
+            if (summaries.length === 0) {
+              listEl.innerHTML =
+                '<p style="text-align:center; color: var(--text-secondary); padding: 20px 0;">还没有生成过任何总结</p>';
+            } else {
+              [...summaries].reverse().forEach((summary) => {
+                const card = document.createElement("div");
+                card.className = "summary-item-card";
+                card.dataset.timestamp = summary.timestamp;
+
+                let cardHeader = (summary.header || "").trim();
+
+                const formattedTime = summary.timestamp ? new Date(summary.timestamp).toLocaleString("zh-CN", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                }) : "";
+
+                const safeContent = (summary.content || "")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;")
+                  .replace(/\n/g, "<br>");
+
+                const safeHeader = (cardHeader || "")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;");
+
+                const rangeInfo = typeof getSummaryRangeInfo === "function" ? getSummaryRangeInfo(summary, chat) : { start: 1, end: 1, ranges: [] };
+                const rangeText = `第${rangeInfo.start}条-第${rangeInfo.end}条`;
+                const hasGap = !!rangeInfo.hasLargeGap;
+
+                const headerHtml = safeHeader ? `
+                  <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--secondary-bg); color: var(--accent-color); border: 1px solid var(--border-color); flex-shrink: 0;">卡头</span>
+                  <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击修改卡头">${safeHeader}</span>
+                ` : `
+                  <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击添加卡头"></span>
+                `;
+
+                const rangePopoverHtml = hasGap ? `
+                  <button type="button" class="summary-range-info-btn" data-timestamp="${summary.timestamp}" title="查看条目" style="background: none; border: none; padding: 0; margin: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); opacity: 0.6; line-height: 1;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                  </button>
+                  <div class="summary-range-popover" id="summary-popover-${summary.timestamp}" style="display: none; position: absolute; right: 0; bottom: calc(100% + 6px); background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); padding: 4px 8px; z-index: 100; min-width: 105px; max-height: 58px; overflow-y: auto; box-sizing: border-box; font-size: 11px; color: var(--text-primary); text-align: left;">
+                    ${(rangeInfo.ranges || []).map((r) => `<div style="height: 18px; line-height: 18px; white-space: nowrap;">第${r.start}条-第${r.end}条</div>`).join("")}
+                  </div>
+                ` : "";
+
+                card.innerHTML = `
+                  <div class="summary-card-header">
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                      <input type="checkbox" class="summary-select-checkbox" data-timestamp="${summary.timestamp}" style="display: none; width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color); margin: 0; flex-shrink: 0;" />
+                      ${headerHtml}
+                    </div>
+                    <div class="summary-actions">
+                      <button type="button" class="edit-summary-header-btn" data-timestamp="${summary.timestamp}" title="卡头">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                        </svg>
+                      </button>
+                      <button type="button" class="edit-summary-btn" data-timestamp="${summary.timestamp}" title="编辑">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M12 20h9"></path>
+                          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                        </svg>
+                      </button>
+                      <button type="button" class="delete-summary-btn" data-timestamp="${summary.timestamp}" title="删除">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="summary-content">${safeContent}</div>
+                  <div class="summary-meta">
+                    <span>生成于: ${formattedTime}</span>
+                    <div class="summary-range-container" style="display: inline-flex; align-items: center; gap: 4px; position: relative;">
+                      <span class="summary-range-text">${rangeText}</span>
+                      ${rangePopoverHtml}
+                    </div>
+                  </div>
+                `;
+                listEl.appendChild(card);
+              });
+            }
+          }
+
+          const settingsModal = document.getElementById("chat-settings-modal");
+          if (settingsModal) settingsModal.classList.remove("visible");
+
+          const viewerModal = document.getElementById("summary-viewer-modal");
+          if (viewerModal) {
+            viewerModal.style.display = "";
+            viewerModal.classList.add("visible");
+          }
         }
+        window.openSummaryViewer = openSummaryViewer;
 
         async function editSummary(timestamp) {
           const chat = state.chats[state.activeChatId];
@@ -73128,17 +73370,37 @@ ${luckStatusDirective}
           document
             .getElementById("contact-picker-list")
             .addEventListener("click", (e) => {
+              const groupHeader = e.target.closest(".contact-picker-group-header");
+              if (groupHeader) {
+                const groupCard = groupHeader.closest(".contact-picker-group-card");
+                const bodyEl = groupCard ? groupCard.querySelector(".contact-picker-group-body") : null;
+                const arrow = groupHeader.querySelector(".contact-group-arrow");
+                if (bodyEl) {
+                  const isHidden = bodyEl.style.display === "none";
+                  bodyEl.style.display = isHidden ? "flex" : "none";
+                  if (arrow) arrow.style.transform = isHidden ? "rotate(0deg)" : "rotate(-90deg)";
+                }
+                return;
+              }
+
               const item = e.target.closest(".contact-picker-item");
               if (!item) return;
 
               const contactId = item.dataset.contactId;
-              item.classList.toggle("selected");
+              if (!contactId) return;
 
-              if (selectedContacts.has(contactId)) {
-                selectedContacts.delete(contactId);
+              const willSelect = !selectedContacts.has(String(contactId));
+              if (willSelect) {
+                selectedContacts.add(String(contactId));
               } else {
-                selectedContacts.add(contactId);
+                selectedContacts.delete(String(contactId));
               }
+
+              document.querySelectorAll(`.contact-picker-item[data-contact-id="${contactId}"]`).forEach(el => {
+                if (willSelect) el.classList.add("selected");
+                else el.classList.remove("selected");
+              });
+
               updateContactPickerConfirmButton();
             });
 
@@ -75990,8 +76252,6 @@ ${luckStatusDirective}
               document
                 .getElementById("summary-viewer-modal")
                 .classList.remove("visible");
-              // 关闭后重新打开设置弹窗，回到上一级
-              document.getElementById("chat-settings-btn").click();
             });
 
           const presetSelect = document.getElementById("summary-preset-select");

@@ -3326,32 +3326,46 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   padding: 10px 15px;
   cursor: pointer;
   border-bottom: 1px solid var(--border-color);
+  user-select: none;
+  background: var(--card-bg);
 }
 .contact-picker-item .checkbox {
   width: 20px;
   height: 20px;
-  border: 2px solid #ccc;
+  border: 2px solid var(--border-color, #ccc);
   border-radius: 50%;
   margin-right: 15px;
   transition: all 0.2s ease;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 .contact-picker-item.selected .checkbox {
-  background-color: var(--accent-color);
-  border-color: var(--accent-color);
-  content: "✔";
-  color: white;
-  font-size: 14px;
-  text-align: center;
-  line-height: 20px;
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+  position: relative;
+}
+.contact-picker-item.selected .checkbox::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 .contact-picker-item .avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
   margin-right: 12px;
+  flex-shrink: 0;
+  object-fit: cover;
 }
 .contact-picker-item .name {
   font-weight: 500;
+  color: var(--text-primary);
 }
 /* ▲▲▲ 新CSS粘贴结束 ▲▲▲ */
 
@@ -32491,6 +32505,73 @@ select,
   color: #ffffff !important;
   border-color: var(--accent-color) !important;
 }
+
+#persona-card-content-display,
+#persona-creator-result,
+.persona-card-content {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#persona-card-content-display pre,
+#persona-card-content-display code {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#persona-prompt-preset-modal .modal-footer {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#persona-prompt-preset-modal .modal-footer > div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+}
+
+#persona-prompt-preset-modal .modal-footer button {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 14px !important;
+  margin: 0 !important;
+  vertical-align: middle !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  width: auto !important;
+  min-width: 60px !important;
+  box-sizing: border-box !important;
+}
+
+#persona-creator-screen,
+#persona-creator-screen * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+#persona-card-content-display {
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  white-space: pre-wrap !important;
+}
+
+
 
 
 

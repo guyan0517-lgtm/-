@@ -1,3 +1,14 @@
+function escapeHtml(str) {
+  if (!str && str !== 0) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+window.escapeHtml = escapeHtml;
+
 document.addEventListener("DOMContentLoaded", () => {
   let currentFilterContext = { type: "global", id: null }; // 记录当前打开筛选的是哪个页面
   let activeGroupId = null; // 记录当前打开的小组ID
@@ -13,6 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeSeriesId = null; // 当前查看的连载ID
   let postReturnContext = "group"; // 帖子详情返回去向
   const ongoingSeriesTasks = new Set(); // 防重复追更
+
   /**
    * 【全新】从一个数组中随机获取一个元素
    * @param {Array} arr - 目标数组
@@ -539,6 +551,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const isFinished = !!series?.isFinished;
         const totalCh = chapters.length || 1;
 
+        const bookCreatedTime = series?.createdAt || series?.updatedAt || post.timestamp;
+        const formattedBookTime = bookCreatedTime ? new Date(bookCreatedTime).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+
         seriesCard.innerHTML = `
           <div class="series-accordion-header" style="padding: 12px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--secondary-bg, rgba(128,128,128,0.04));">
             <div style="min-width: 0; flex: 1;">
@@ -547,28 +562,34 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span style="font-size: 10px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 4px; padding: 0 4px;">连载</span>
                 ${isFinished ? `<span style="font-size: 10px; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 4px;">完结</span>` : ""}
               </div>
-              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: flex; gap: 8px; align-items: center;">
                 <span>共 ${totalCh} 章</span>
+                ${formattedBookTime ? `<span style="opacity: 0.8;">${formattedBookTime}</span>` : ""}
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
+              ${formattedBookTime ? `<span style="font-size: 10.5px; color: var(--text-secondary); opacity: 0.8; white-space: nowrap;">${formattedBookTime}</span>` : ""}
               <button type="button" data-delete-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 500; cursor: pointer; height: 26px;">删除</button>
               <button type="button" class="mini-btn ${isFinished ? 'disabled' : 'primary'}" data-series-action="continue" data-series-id="${post.seriesId}" ${isFinished ? 'disabled' : ''} style="height: 26px; padding: 0 8px; font-size: 12px; border-radius: 6px;">${isFinished ? '已完结' : '追更'}</button>
               <svg class="series-accordion-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(0deg); transition: transform 0.2s ease; color: var(--text-secondary); flex-shrink: 0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
           </div>
           <div class="series-accordion-content" style="display: none; padding: 6px 12px 10px; border-top: 1px solid var(--border-color); flex-direction: column; gap: 8px;">
-            ${chapters.map((ch) => `
+            ${chapters.map((ch) => {
+              const chTime = ch.createdAt ? new Date(ch.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+              return `
               <div class="series-chapter-card" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color); margin-top: 6px;">
                 <div class="series-chapter-row" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" style="display: flex; align-items: center; justify-content: space-between; width: 100%; cursor: pointer;">
                   <div style="font-size: 13px; font-weight: 500; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">第${ch.chapterIndex}章 ${ch.title || ''}</div>
                   <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+                    ${chTime ? `<span style="font-size: 10.5px; color: var(--text-secondary); opacity: 0.8; white-space: nowrap;">${chTime}</span>` : ""}
                     <button type="button" class="mini-btn" data-series-action="open-post" data-series-id="${post.seriesId}" data-post-id="${ch.postId || ''}" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px;">阅读</button>
                     <button type="button" data-delete-chapter-id="${ch.id}" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
                   </div>
                 </div>
               </div>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
         `;
 
@@ -710,6 +731,8 @@ document.addEventListener("DOMContentLoaded", () => {
       continueText = isFinished
         ? "已完结"
         : `追更第${nextChapterIndex}章`;
+      const bookCreatedTime = series?.createdAt || series?.updatedAt || post.timestamp;
+      const formattedBookTime = bookCreatedTime ? new Date(bookCreatedTime).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
       seriesMetaHtml = `
         <div class="post-series-bar" style="margin-bottom: 14px; padding: 10px 12px; background: var(--secondary-bg, rgba(128,128,128,0.05)); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <div class="series-meta">
@@ -719,6 +742,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }</div>
           </div>
           <div class="series-actions" style="display: flex; gap: 8px; align-items: center;">
+            ${formattedBookTime ? `<span style="font-size: 11px; color: var(--text-secondary); opacity: 0.8; white-space: nowrap;">生成于 ${formattedBookTime}</span>` : ""}
             <button type="button" data-action="delete-chapter" data-post-id="${post.id}" data-series-id="${post.seriesId}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; cursor: pointer; height: 28px;">删除</button>
             <button type="button" class="mini-btn primary ${isFinished ? "disabled" : ""}" data-action="continue-series" data-series-id="${post.seriesId}" data-target-chapter="${nextChapterIndex}" ${isFinished ? "disabled" : ""} style="height: 28px; padding: 0 10px; font-size: 12px; border-radius: 6px;">${continueText}</button>
           </div>
@@ -2843,7 +2867,6 @@ ${customPromptRequirement}
       if (loadingOverlay) loadingOverlay.classList.remove("visible");
       ongoingSeriesTasks.delete(seriesId);
     }
-    }
   }
 
   async function openForumFavorites() {
@@ -2880,39 +2903,51 @@ ${customPromptRequirement}
 
         const seriesCard = document.createElement("div");
         seriesCard.className = "forum-series-accordion-card";
-        seriesCard.style.cssText = "margin-bottom: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;";
+        seriesCard.style.cssText = "margin-bottom: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; width: 100%; box-sizing: border-box;";
 
+        const isFinished = !!series?.isFinished;
         const totalCh = chapters.length || 1;
+        const bookCreatedTime = series?.createdAt || series?.updatedAt || post.timestamp;
+        const formattedBookTime = bookCreatedTime ? new Date(bookCreatedTime).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
 
         seriesCard.innerHTML = `
-          <div class="series-accordion-header" style="padding: 12px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--secondary-bg, rgba(128,128,128,0.04));">
+          <div class="series-accordion-header" style="padding: 12px 14px 6px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--secondary-bg, rgba(128,128,128,0.04));">
             <div style="min-width: 0; flex: 1;">
               <div style="display: flex; align-items: center; gap: 6px;">
                 <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">${series?.title || post.title}</span>
                 <span style="font-size: 10px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 4px; padding: 0 4px;">连载</span>
+                ${isFinished ? `<span style="font-size: 10px; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; padding: 0 4px;">完结</span>` : ""}
               </div>
-              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: flex; gap: 8px; align-items: center;">
                 <span>共 ${totalCh} 章</span>
+                ${formattedBookTime ? `<span style="opacity: 0.8;">${formattedBookTime}</span>` : ""}
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
+              ${formattedBookTime ? `<span style="font-size: 10.5px; color: var(--text-secondary); opacity: 0.8; white-space: nowrap;">${formattedBookTime}</span>` : ""}
               <button type="button" data-delete-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 500; cursor: pointer; height: 26px;">删除</button>
-              <button type="button" class="mini-btn danger" data-fav-series-unfav="${post.seriesId}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 12px; height: 26px;">取消</button>
+              <button type="button" class="mini-btn ${isFinished ? 'disabled' : 'primary'}" data-series-action="continue" data-series-id="${post.seriesId}" ${isFinished ? 'disabled' : ''} style="height: 26px; padding: 0 8px; font-size: 12px; border-radius: 6px;">${isFinished ? '已完结' : '追更'}</button>
+              <button type="button" class="mini-btn" data-fav-series-unfav="${post.seriesId}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 12px; height: 26px; cursor: pointer;">取消</button>
               <svg class="series-accordion-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(0deg); transition: transform 0.2s ease; color: var(--text-secondary); flex-shrink: 0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
+          </div>
+          <div class="series-remark-row" style="width: 100%; padding: 4px 14px 10px 14px; background: var(--secondary-bg, rgba(128,128,128,0.04)); box-sizing: border-box;">
+            <input type="text" class="moe-input series-remark-input" data-series-id="${post.seriesId}" style="width: 100%; height: 28px; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" placeholder="添加书籍备注..." value="${escapeHtml(series?.remark || '')}">
           </div>
           <div class="series-accordion-content" style="display: none; padding: 6px 12px 10px; border-top: 1px solid var(--border-color); flex-direction: column; gap: 8px;">
             ${chapters.map((ch) => {
               const chPost = postsMap.get(ch.postId);
               const remarkVal = chPost?.remark || ch.remark || "";
+              const chTime = ch.createdAt ? new Date(ch.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
               return `
               <div class="series-chapter-card" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); margin-top: 6px;">
                 <div class="series-chapter-row" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                  <div style="font-size: 13px; font-weight: 500; color: var(--text-primary);">第${ch.chapterIndex}章 ${ch.title || ''}</div>
-                  <div style="display: flex; align-items: center; gap: 6px;">
+                  <div style="font-size: 13px; font-weight: 500; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">第${ch.chapterIndex}章 ${ch.title || ''}</div>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+                    ${chTime ? `<span style="font-size: 10.5px; color: var(--text-secondary); opacity: 0.8; white-space: nowrap;">${chTime}</span>` : ""}
                     <button type="button" class="mini-btn" data-series-action="open-post" data-series-id="${post.seriesId}" data-post-id="${ch.postId || ''}" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px;">阅读</button>
                     <button type="button" data-delete-chapter-id="${ch.id}" data-post-id="${ch.postId || ''}" data-series-id="${post.seriesId}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
-                    <button type="button" class="mini-btn danger" data-fav-action="unfav" data-post-id="${ch.postId || ''}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px;">取消</button>
+                    <button type="button" class="mini-btn" data-fav-action="unfav" data-post-id="${ch.postId || ''}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px; cursor: pointer;">取消</button>
                   </div>
                 </div>
                 <div class="chapter-remark-row" style="width: 100%; margin-top: 2px;">
@@ -2929,7 +2964,7 @@ ${customPromptRequirement}
         const arrowIcon = seriesCard.querySelector(".series-accordion-arrow");
 
         headerEl.addEventListener("click", (e) => {
-          if (e.target.closest("button")) return;
+          if (e.target.closest("button") || e.target.closest("input")) return;
           const isHidden = contentBox.style.display === "none";
           contentBox.style.display = isHidden ? "flex" : "none";
           arrowIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
@@ -2941,13 +2976,17 @@ ${customPromptRequirement}
         item.className = "forum-post-item favorite-item-row";
         item.dataset.postId = post.id;
         item.style.cssText = "display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; margin-bottom: 10px;";
+        const postTime = post.timestamp ? new Date(post.timestamp).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
         item.innerHTML = `
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-            <div style="font-weight: 600; font-size: 14px; color: var(--text-primary); flex: 1;">${post.title}</div>
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 600; font-size: 14px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${post.title}</div>
+              ${postTime ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px; opacity: 0.8;">${postTime}</div>` : ""}
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
               <button type="button" class="mini-btn" data-series-action="open-post" data-post-id="${post.id}" style="height: 24px; padding: 0 8px; font-size: 11px; border-radius: 6px;">阅读</button>
               <button type="button" data-delete-post-id="${post.id}" title="删除" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; cursor: pointer; height: 24px;">删除</button>
-              <button type="button" class="mini-btn danger" data-fav-action="unfav" data-post-id="${post.id}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px;">取消</button>
+              <button type="button" class="mini-btn" data-fav-action="unfav" data-post-id="${post.id}" style="background: #ffffff; border: 1px solid var(--border-color, #d1d5db); color: var(--text-secondary, #6b7280); border-radius: 6px; padding: 2px 8px; font-size: 11px; height: 24px; cursor: pointer;">取消</button>
             </div>
           </div>
           <div class="chapter-remark-row" style="width: 100%; margin-top: 2px;">
@@ -3043,11 +3082,14 @@ ${customPromptRequirement}
       .equals(seriesId)
       .sortBy("chapterIndex");
     const nextIndex = (series.lastChapterIndex || chapters.length) + 1;
+    const bookCreatedTime = series.createdAt || series.updatedAt;
+    const formattedBookTime = bookCreatedTime ? new Date(bookCreatedTime).toLocaleString("zh-CN") : "";
     const metaLines = [
       `<div class="series-meta-line">CP：${series.pairing || `${series.char1Name || ""}x${series.char2Name || ""}`}</div>`,
       `<div class="series-meta-line">状态：${isFinished ? "已完结" : `已更新至第${series.lastChapterIndex || chapters.length || 1}章`}</div>`,
       `<div class="series-meta-line">题材：${series.type || "未设置"} · 文风：${series.style || "未设置"}</div>`,
-    ];
+      formattedBookTime ? `<div class="series-meta-line" style="font-size: 11.5px; opacity: 0.85;">生成时间：${formattedBookTime}</div>` : "",
+    ].filter(Boolean);
     metaEl.innerHTML = `<div class="forum-series-card">${metaLines.join("")}</div>`;
 
     const nextBtn = document.getElementById("series-next-chapter-btn");
@@ -3066,13 +3108,17 @@ ${customPromptRequirement}
 
     listEl.innerHTML = chapters
       .map(
-        (ch) => `
-        <div class="forum-chapter-item" data-post-id="${ch.postId || ""}" data-series-id="${seriesId}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 8px;">
-          <div class="chapter-title" style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);">第${ch.chapterIndex}章 ${ch.title || ""}</div>
-          <div class="chapter-actions">
-            <button class="mini-btn" data-series-action="open-post" data-series-id="${seriesId}" data-post-id="${ch.postId || ""}" style="height: 26px; padding: 0 10px; font-size: 11.5px; border-radius: 6px;">阅读</button>
-          </div>
-        </div>`,
+        (ch) => {
+          const chTime = ch.createdAt ? new Date(ch.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+          return `
+          <div class="forum-chapter-item" data-post-id="${ch.postId || ""}" data-series-id="${seriesId}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 8px;">
+            <div class="chapter-title" style="font-weight: 600; font-size: 13.5px; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">第${ch.chapterIndex}章 ${ch.title || ""}</div>
+            <div class="chapter-actions" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+              ${chTime ? `<span style="font-size: 11px; color: var(--text-secondary); opacity: 0.85; white-space: nowrap;">${chTime}</span>` : ""}
+              <button class="mini-btn" data-series-action="open-post" data-series-id="${seriesId}" data-post-id="${ch.postId || ""}" style="height: 26px; padding: 0 10px; font-size: 11.5px; border-radius: 6px;">阅读</button>
+            </div>
+          </div>`;
+        }
       )
       .join("");
   }

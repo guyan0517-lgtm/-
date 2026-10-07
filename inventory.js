@@ -754,6 +754,7 @@ HTML排版规则：
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
   }
+  window.escapeHtml = escapeHtml;
 
   // Export summary helper for AI context
   window.getInventorySummaryForAi = async function (chatId) {
