@@ -32584,25 +32584,35 @@ select,
    物品栏 (Inventory) 样式体系
    =================================================================== */
 
-/* 物品栏竖条抽屉（侧边小巧精致，无暗色遮罩） */
+.message-bubble.is-html-card .content {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  max-width: 100%;
+}
+
+/* 物品栏竖条抽屉 侧边小巧精致 无暗色遮罩 */
 #chat-inventory-drawer {
   position: absolute;
-  top: 50px;
-  right: 0;
-  bottom: 60px;
-  width: 290px;
+  top: 112px;
+  bottom: 112px;
+  right: 6px;
+  height: auto;
+  max-height: calc(100% - 225px);
+  min-height: 180px;
+  width: 285px;
   max-width: 82%;
   background: var(--card-bg);
-  border-left: 1px solid var(--border-color);
-  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-color);
+  box-shadow: -4px 6px 20px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
   z-index: 45;
-  transform: translateX(100%);
+  transform: translateX(110%);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: auto;
-  border-top-left-radius: 14px;
-  border-bottom-left-radius: 14px;
+  border-radius: 14px;
 }
 
 #chat-inventory-drawer.open {
@@ -32616,7 +32626,8 @@ select,
   align-items: center;
   justify-content: space-between;
   background: var(--background-color);
-  border-top-left-radius: 14px;
+  border-top-left-radius: 13px;
+  border-top-right-radius: 13px;
   flex-shrink: 0;
   gap: 8px;
 }
@@ -32950,19 +32961,20 @@ select,
 .inventory-chat-card {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  min-width: 180px;
-  max-width: 240px;
+  border-radius: 10px;
+  width: 184px;
+  min-width: 120px;
+  max-width: 184px;
   cursor: default;
 }
 
 .inventory-chat-card-avatar {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   overflow: hidden;
   background: var(--secondary-bg);

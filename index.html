@@ -11005,7 +11005,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <input type="text" id="inv-edit-desc" class="moe-input" placeholder="简要说明此物品的用途" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
           </div>
 
-          <div class="form-group" style="margin-bottom: 10px;">
+          <div class="form-group" id="inv-effect-group" style="margin-bottom: 10px;">
             <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">功能</label>
             <input type="text" id="inv-edit-effect" class="moe-input" placeholder="例如 HP+1、HP-2、SAN+5、MP+3" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
           </div>
@@ -11069,17 +11069,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
       </div>
     </div>
 
-    <!-- 线索完整内容阅读页 -->
-    <div id="inventory-clue-reader-modal" class="modal">
-      <div class="modal-content" style="max-width: 360px; width: 92%; max-height: 85vh;">
-        <div class="modal-header">
-          <span id="clue-reader-title">线索阅读</span>
+    <!-- 纯净自适应线索 HTML 浮层 -->
+    <div id="inventory-clue-reader-modal" class="chat-mini-map-floating-overlay">
+      <div id="clue-reader-floating-card" class="chat-mini-map-floating-card" style="width: 330px; max-width: calc(100vw - 20px);">
+        <div class="chat-mini-map-drag-bar" id="clue-reader-drag-handle">
+          <button type="button" class="chat-mini-map-tiny-close" id="clue-reader-close-btn" title="关闭">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
-        <div id="clue-reader-body" class="clue-reader-modal-body">
-          <!-- 动态渲染富文本 HTML -->
+        <div id="clue-reader-view-box" style="display: flex; flex-direction: column; position: relative; width: 100%; overflow: hidden;">
+          <div id="clue-reader-body" class="chat-mini-map-pure-content" style="width: 100%; box-sizing: border-box;"></div>
         </div>
-        <div class="modal-footer" style="padding: 10px 14px;">
-          <button type="button" id="clue-reader-close-btn" class="moe-btn" style="width: 100%; height: 34px; font-size: 13px; border-radius: 8px;">关闭</button>
+        <div class="chat-mini-map-resize-handle-br" id="clue-reader-resize-handle" title="按住右下角缩放">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M22 22H20V20H22V22ZM22 16H20V18H22V16ZM16 22H18V20H16V22ZM22 12H20V14H22V12ZM12 22H14V20H12V22Z"/>
+          </svg>
         </div>
       </div>
     </div>
@@ -30046,7 +30053,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M8 21v-5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v5"/></svg>`;
             
             let headerText = "";
-            if (msg.actionType === "obtain") {
+            if (msg.actionType === "obtain" || msg.actionType === "gift") {
               const targetName = msg.targetName || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
               headerText = `${targetName} 获得道具 ${it.name || ""}`.trim();
             } else if (msg.actionType === "transfer") {
@@ -30061,8 +30068,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             contentHtml = `
               <div class="inventory-chat-card-wrap">
                 <div class="inventory-chat-card-header">${headerText}</div>
-                <div class="inventory-chat-card">
-                  <div class="inventory-chat-card-avatar" onclick="event.stopPropagation(); if('${it.avatar || ''}' && typeof openFullImageModal==='function')openFullImageModal('${it.avatar || ''}');">
+                <div class="inventory-chat-card" data-item-id="${it.id || ''}" data-item-name="${it.name || ''}">
+                  <div class="inventory-chat-card-avatar" data-avatar-id="${it.id || ''}" data-avatar-name="${it.name || ''}" onclick="event.stopPropagation(); if('${it.avatar || ''}' && typeof openFullImageModal==='function')openFullImageModal('${it.avatar || ''}');">
                     ${avatarHtml}
                   </div>
                   <div class="inventory-chat-card-body">
@@ -30215,27 +30222,52 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (e) {}
             }
 
-            if (rawContentText.includes("【图")) {
-              rawContentText = rawContentText.replace(/【图(\d+)】/g, (match, p1) => {
-                const imgNum = parseInt(p1, 10);
-                return `<div class="chat-module-img-slot" data-mod-id="${chat.activeModuleId || ''}" data-img-idx="${imgNum}"></div>`;
-              });
+            // 剥离 Markdown 代码块包裹（如 ```html ... ```）
+            if (/```(?:html)?[\s\S]*?```/i.test(rawContentText)) {
+              const codeBlockMatch = rawContentText.match(/```(?:html)?\s*([\s\S]*?)\s*```/i);
+              if (codeBlockMatch && codeBlockMatch[1]) {
+                const innerCode = codeBlockMatch[1].trim();
+                if (/^<(?:div|section|table|article|main|style|svg)\b[\s\S]*<\/(?:div|section|table|article|main|style|svg)>\s*$/i.test(innerCode)) {
+                  rawContentText = innerCode;
+                }
+              }
             }
 
-            if (/(?:\[?地点\]?)[：:]/i.test(rawContentText)) {
-              rawContentText = rawContentText.replace(/((?:\[?地点\]?)[：:]\s*)([^\n\r<]+)/g, (match, p1, p2) => {
-                const locText = p2.trim();
-                if (!locText || locText === "未知") return match;
-                const parts = locText.split("-");
-                const wrappedParts = parts.map(part => {
-                  const trimmed = part.trim();
-                  return `<span class="chat-location-clickable" data-loc-name="${trimmed}">${trimmed}</span>`;
+            // 判断是否是真正的完整结构化 HTML 卡片（如线索卡、独立卡片），普通文本中的 <...> 或 <> 绝不当作 HTML 卡片
+            const isFullHtmlCard = msg.type === "clue_html" || msg.isHtmlCard === true || (/^<(?:div|section|table|article|main|svg)\b[\s\S]*<\/(?:div|section|table|article|main|svg)>\s*$/i.test(rawContentText.trim()) && (rawContentText.includes("class=") || rawContentText.includes("style=")));
+
+            if (isFullHtmlCard) {
+              bubble.classList.add("is-html-card");
+              contentHtml = rawContentText + (msg.htmlContent ? `${msg.htmlContent}` : "");
+            } else {
+              // 普通文本：先进行 HTML 字符安全转义，防止 <> 或 <标签> 被浏览器当成非法节点吞掉或导致气泡透明
+              let safeText = rawContentText
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+
+              if (safeText.includes("【图")) {
+                safeText = safeText.replace(/【图(\d+)】/g, (match, p1) => {
+                  const imgNum = parseInt(p1, 10);
+                  return `<div class="chat-module-img-slot" data-mod-id="${chat.activeModuleId || ''}" data-img-idx="${imgNum}"></div>`;
                 });
-                return `${p1}${wrappedParts.join("-")}`;
-              });
-            }
+              }
 
-            contentHtml = rawContentText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
+              if (/(?:\[?地点\]?)[：:]/i.test(safeText)) {
+                safeText = safeText.replace(/((?:\[?地点\]?)[：:]\s*)([^\n\r&<]+)/g, (match, p1, p2) => {
+                  const locText = p2.trim();
+                  if (!locText || locText === "未知") return match;
+                  const parts = locText.split("-");
+                  const wrappedParts = parts.map(part => {
+                    const trimmed = part.trim();
+                    return `<span class="chat-location-clickable" data-loc-name="${trimmed}">${trimmed}</span>`;
+                  });
+                  return `${p1}${wrappedParts.join("-")}`;
+                });
+              }
+
+              contentHtml = safeText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
+            }
           }
 
           // 思维链折叠块渲染
@@ -35326,6 +35358,13 @@ ${luckGuideNote}
             const mapPromptObj = await getChatMapPromptBlock(chat);
             const mapPromptBlock = typeof mapPromptObj === "object" ? (mapPromptObj.prompt || "") : (mapPromptObj || "");
             const inventoryPromptBlock = (typeof getChatInventoryPromptBlock === "function") ? getChatInventoryPromptBlock(chat) : "";
+            const dicePromptBlock = `
+# 跑团掷骰与属性修改指令
+在群聊或私聊中，守密人、NPC或角色可以直接发送标准的跑团掷骰或面板修改指令，系统与骰娘会自动识别并执行：
+1. 属性与技能修改：发送 .st 目标角色名 属性名 数值 或 .st 属性名 数值，例如 .st 力量 60、.st 敏捷 70、.st hp-2、.st san-5、.st mp+3、.st 克苏鲁神话 10 等，系统将自动更新角色面板数据。
+2. 掷骰与检定：支持几乎所有标准掷骰表达式，例如发送 .r 1d100、.r 1d6+2、.r 2d4 掷骰，发送 .ra 侦查、.ra 聆听 进行技能检定，发送 .sc 0/1d6 进行理智检定，发送 .en 侦查 进行成长检定，发送 .ti 查询疯狂症状，发送 .rh 侦查 进行暗骰等。
+3. 角色需要检定或调整状态时，可直接发送包含上述指令的文本消息，例如以单独一条文本气泡发送 .ra 侦查 或 .st hp-3。
+`;
 
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
@@ -35466,17 +35505,17 @@ ${luckGuideNote}
               const membersList = roleplayMembers
                 .map((m) => {
                   const muteStatus = m.isMuted
-                    ? " (【状态：已被禁言，禁止让他发言】)"
+                    ? " 【状态：已被禁言，禁止让他发言】"
                     : "";
-                  const cocStatus = window.getCocPromptStatus && window.getCocPromptStatus(m.cocPanel) ? ` [状态: ${window.getCocPromptStatus(m.cocPanel)}]` : "";
-                  let metaParts = [];
-                  if (m.age) metaParts.push(`年龄:${m.age}`);
-                  if (m.birthday) metaParts.push(`生日:${m.birthday}`);
-                  if (m.gender) metaParts.push(`性别:${m.gender}${m.genderNote ? " " + m.genderNote : ""}`);
-                  const metaStr = metaParts.length > 0 ? ` [${metaParts.join(", ")}]` : "";
-                  return `- **${m.originalName}**: ${m.persona}${metaStr}${cocStatus}${muteStatus}`;
+                  const cocStatus = window.getCocPromptStatus && window.getCocPromptStatus(m.cocPanel) ? `\n  - **COC人物面板**（实时当前数值）：${window.getCocPromptStatus(m.cocPanel)}` : "";
+                  let metaLines = [];
+                  if (m.age) metaLines.push(`  - **年龄**：${m.age}`);
+                  if (m.birthday) metaLines.push(`  - **生日**：${m.birthday}`);
+                  if (m.gender) metaLines.push(`  - **性别**：${m.gender}${m.genderNote ? " " + m.genderNote : ""}`);
+                  const metaBlock = metaLines.length > 0 ? "\n" + metaLines.join("\n") : "";
+                  return `- **姓名**：${m.groupNickname || m.originalName || m.name}（本名：${m.originalName || m.name || m.groupNickname}）${cocStatus}${metaBlock}\n  - **角色人设**：${m.persona || "暂无人设"}${muteStatus}`;
                 })
-                .join("\n");
+                .join("\n\n");
 
               const myNickname = chat.settings.myNickname || "我";
               // 1. 获取群公告内容
@@ -35505,8 +35544,8 @@ ${luckGuideNote}
 			    -   ${statusMember ? `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)或系统状态栏名称【${statusMember.groupNickname || statusMember.originalName || "系统状态"}】。` : `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)。`}
 			    -   缺少 "name" 字段的回复是无效的，会被系统拒绝。
 			5.  **角色扮演**: 严格遵守下方“群成员列表及人设”中的每一个角色的设定。
-			# 群成员列表及人设 (name字段是你要使用的【本名】)
-			${roleplayMembers.map((m) => `- **${m.originalName || m.name || m.groupNickname}**: (群昵称为: ${m.groupNickname || m.name || m.originalName}) 人设: ${m.persona || "暂无"}`).join("\n")}
+			# 【群成员列表及COC角色档案】
+			${membersList}
 			6.  **禁止出戏**: 绝不能透露你是AI、模型，或提及“扮演”、“生成”等词语。
 			${isCognitionEnabled ? `7.  **情景感知**: 注意当前时间是 ${currentTime}。` : ""}
 			**标准输出格式示例:**
@@ -35521,6 +35560,7 @@ ${luckGuideNote}
 			## 你可以使用的操作指令:
 			-   **发送文本**: {"type": "text", "name": "角色名", "message": "文本内容"}
 			-   **发送语音**: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
+			-   **赠送或发放道具与线索**: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 			${
         localStorage.getItem("novelai-enabled") === "true"
           ? `-   **【NovelAI图片分享】**: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}`
@@ -35528,20 +35568,23 @@ ${luckGuideNote}
       }
 			-   **发送系统消息**: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
 
+			${dicePromptBlock}
+			${inventoryPromptBlock}
 			${summaryContext}
 			${announcementContext}
 			${worldBookContent}
 			${moduleChaptersPromptBlock}
 			${mapPromptBlock}
 			${thoughtChainPromptBlock}
-			${inventoryPromptBlock}
 			${sharedContext}
 			${stickerContext}
 			${linkedMemoryContext}
 			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度系统】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
 
-			# 用户的角色
-			- **${myNickname}**: ${chat.settings.myPersona || "普通人"}${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? " [状态: " + window.getCocPromptStatus(chat.settings.myCocPanel) + "]" : ""}${chat.settings.myName ? ` [姓名:${chat.settings.myName}]` : ""}${chat.settings.myAge ? ` [年龄:${chat.settings.myAge}]` : ""}${chat.settings.myBirthday ? ` [生日:${chat.settings.myBirthday}]` : ""}${chat.settings.myGender ? ` [性别:${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}]` : ""}
+			# 【用户角色档案与COC人物面板】
+			- **姓名**：${chat.settings.myName || myNickname}
+			${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- **COC人物面板**（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- **年龄**：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- **生日**：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- **性别**：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- **角色人设**：
+			${chat.settings.myPersona || "普通人"}
 
 			${systemStatusContext}
 
@@ -35553,6 +35596,9 @@ ${luckGuideNote}
                   const tsPrefix = isCognitionEnabled ? `(Timestamp: ${msg.timestamp}) ` : "";
 
                   if (msg.isHidden) {
+                    if (typeof effectiveContent === "string" && (effectiveContent.includes("已被用户删除") || effectiveContent.includes("一些之前的消息"))) {
+                      return null;
+                    }
                     return { role: "system", content: effectiveContent };
                   }
 
@@ -35958,12 +36004,14 @@ ${luckStatusDirective}
 `;
               }
 
-              systemPrompt = `### **【第一部分：角色核心设定】**
+              systemPrompt = `### **【第一部分：角色核心设定与COC人物面板】**
 
 			你现在将扮演一个名为“**${chat.name}**”的角色。
 
-			**1. 角色基本设定:**
-			- **核心人设**: ${chat.settings.aiPersona}${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.aiCocPanel) ? " [状态: " + window.getCocPromptStatus(chat.settings.aiCocPanel) + "]" : ""}${chat.settings.age ? `\n\t\t\t- **年龄**: ${chat.settings.age}` : ""}${chat.settings.birthday ? `\n\t\t\t- **生日**: ${chat.settings.birthday}` : ""}${chat.settings.gender ? `\n\t\t\t- **性别**: ${chat.settings.gender}${chat.settings.genderNote ? " " + chat.settings.genderNote : ""}` : ""}
+			# 【角色档案与COC人物面板】
+			- **姓名**: ${chat.name}
+			${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.aiCocPanel) ? `- **COC人物面板**（实时当前数值）: ${window.getCocPromptStatus(chat.settings.aiCocPanel)}\n` : ""}${chat.settings.age ? `\t\t\t- **年龄**: ${chat.settings.age}\n` : ""}${chat.settings.birthday ? `\t\t\t- **生日**: ${chat.settings.birthday}\n` : ""}${chat.settings.gender ? `\t\t\t- **性别**: ${chat.settings.gender}${chat.settings.genderNote ? " " + chat.settings.genderNote : ""}\n` : ""}\t\t\t- **核心人设**:
+			${chat.settings.aiPersona || "暂无设定"}
 			${summaryContext ? `- **总结**:${summaryContext}\n` : ""}${npcContext ? `\t\t\t- **世界观/NPC**: ${npcContext}\n` : ""}${systemStatusPromptBlock}
 
 			### **【第二部分：输出格式铁律】**
@@ -36001,23 +36049,26 @@ ${luckStatusDirective}
 			- **发送文本**: \`{"type": "text", "content": "你好呀！"}\`
 			- **发送语音**: \`{"type": "voice_message", "content": "语音的文字内容..."}\`
 			- **发送表情**: \`{"type": "sticker", "sticker_name": "表情的名字"}\`(表情名必须在表情列表中，禁止杜撰)
+			- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
 			${
         localStorage.getItem("novelai-enabled") === "true"
           ? `- **【NovelAI真实图片分享】**: \`{"type": "naiimag", "prompt": "详细的英文描述词..."}\``
           : ""
       }
-			- **发送后立刻撤回**: \`{"type": "send_and_recall", "content": "说错话或想表达犹豫的内容"}\`
 
 			### **【第四部分：当前上下文信息】**
-			- **对话者(用户)角色设定**:
-			${chat.settings.myPersona}${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? " [状态: " + window.getCocPromptStatus(chat.settings.myCocPanel) + "]" : ""}${chat.settings.myName ? `\n\t\t\t- **姓名**: ${chat.settings.myName}` : ""}${chat.settings.myAge ? `\n\t\t\t- **年龄**: ${chat.settings.myAge}` : ""}${chat.settings.myBirthday ? `\n\t\t\t- **生日**: ${chat.settings.myBirthday}` : ""}${chat.settings.myGender ? `\n\t\t\t- **性别**: ${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}` : ""}
+			${dicePromptBlock}
+			${inventoryPromptBlock}
+			# 【对话者（用户）角色档案与COC人物面板】
+			- **姓名**: ${chat.settings.myName || "我"}
+			${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- **COC人物面板**（实时当前数值）: ${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `\t\t\t- **年龄**: ${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `\t\t\t- **生日**: ${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `\t\t\t- **性别**: ${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}\t\t\t- **角色人设**:
+			${chat.settings.myPersona || "普通人"}
 
 			- **世界观设定集**:
 			${worldBookContent}
 			${moduleChaptersPromptBlock}
 			${mapPromptBlock}
 			${thoughtChainPromptBlock}
-			${inventoryPromptBlock}
 			${linkedMemoryContext}
 			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度设定】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
 			- **可用表情包**:
@@ -36030,8 +36081,9 @@ ${luckStatusDirective}
                   const tsPrefix = isCognitionEnabled ? `(Timestamp: ${msg.timestamp}) ` : "";
 
                   if (msg.isHidden) {
-                    // 如果是隐藏消息，就把它作为一条 system 角色的消息发送给AI
-                    // AI能看到它，但它不会被误解为是用户的发言
+                    if (typeof effectiveContent === "string" && (effectiveContent.includes("已被用户删除") || effectiveContent.includes("一些之前的消息"))) {
+                      return null;
+                    }
                     return { role: "system", content: effectiveContent };
                   }
 
@@ -36899,6 +36951,31 @@ ${luckStatusDirective}
               }
 
               switch (msgData.type) {
+                case "give_item":
+                case "gift_item":
+                case "obtain_item": {
+                  const itemObj = msgData.item || msgData.give_item || msgData;
+                  const targetRecipient = msgData.target || msgData.targetName || msgData.receiver || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
+                  const senderGiver = msgData.name || (chat.isGroup ? "系统" : (chat.settings?.aiName || chat.name || "对方"));
+                  const cardMsg = {
+                    role: "assistant",
+                    type: "inventory_card",
+                    actionType: "gift",
+                    senderName: senderGiver,
+                    targetName: targetRecipient,
+                    item: itemObj,
+                    content: `[获得了物品：${itemObj.name || "道具"}]`,
+                    timestamp: messageTimestamp++
+                  };
+                  chat.history.push(cardMsg);
+                  if (isViewingThisChat) {
+                    appendMessage(cardMsg, chat);
+                  }
+                  continue;
+                }
+                case "apply_item_effect": {
+                  continue;
+                }
                 case "suggest_switch_chapter": {
                   const targetId = msgData.nextChapterId || msgData.chapterId;
                   const targetTitle = msgData.nextChapterTitle || msgData.chapterTitle || "下一章";
@@ -40176,27 +40253,34 @@ ${luckStatusDirective}
 
                 case "give_item":
                 case "gift_item":
-                case "obtain_item": {
+                case "obtain_item":
+                case "item":
+                case "prop":
+                case "weapon":
+                case "clue":
+                case "send_item":
+                case "reward": {
                   const it = msgData.item || msgData.give_item || msgData;
                   const targetName = msgData.target || msgData.targetName || msgData.receiver || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
                   const category = it.category === "clue" ? "clue" : (it.category === "weapon" ? "weapon" : "prop");
                   const newItem = {
-                    id: "inv_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+                    id: it.id || ("inv_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6)),
                     name: String(it.name || "道具").trim(),
                     desc: String(it.desc || it.description || "").trim(),
                     effect: String(it.effect || "").trim(),
                     category: category,
                     avatar: it.avatar || "",
+                    prompt: it.prompt || it.imagePrompt || "",
                     content: category === "clue" ? String(it.content || it.contentHtml || it.desc || "") : "",
                     damageBonus: category === "weapon" ? String(it.damageBonus || it.damage || "") : "",
                     dbBonus: category === "weapon" ? String(it.dbBonus || it.db || "") : "",
                     isPinned: false,
                     source: "获得道具",
-                    createdAt: Date.now(),
+                    createdAt: it.createdAt || Date.now(),
                   };
 
                   if (typeof window.addItemToCharacterOrUser === "function") {
-                    await window.addItemToCharacterOrUser(chat, targetName, newItem, it.prompt || it.imagePrompt);
+                    await window.addItemToCharacterOrUser(chat, targetName, newItem, newItem.prompt);
                   }
 
                   aiMessage = {
@@ -42863,6 +42947,8 @@ ${luckStatusDirective}
           if (isSelectionMode) return;
 
           activeMessageTimestamp = timestamp;
+          window.activeMessageTimestamp = timestamp;
+          window.lastSelectedMessageTimestamp = timestamp;
 
           // --- 新增逻辑开始 ---
           const chat = state.chats[state.activeChatId];
@@ -61529,6 +61615,38 @@ ${luckStatusDirective}
                         categories.images.count++;
                         categories.images.bytes += new Blob([msg.image]).size;
                       }
+                      if (msg.item && msg.item.avatar && typeof msg.item.avatar === "string" && msg.item.avatar.startsWith("data:image")) {
+                        categories.images.count++;
+                        categories.images.bytes += new Blob([msg.item.avatar]).size;
+                      }
+                    });
+                  }
+                  if (Array.isArray(c.inventory)) {
+                    c.inventory.forEach(it => {
+                      if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                        categories.images.count++;
+                        categories.images.bytes += new Blob([it.avatar]).size;
+                      }
+                    });
+                  }
+                  if (Array.isArray(c.aiInventory)) {
+                    c.aiInventory.forEach(it => {
+                      if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                        categories.images.count++;
+                        categories.images.bytes += new Blob([it.avatar]).size;
+                      }
+                    });
+                  }
+                  if (Array.isArray(c.members)) {
+                    c.members.forEach(m => {
+                      if (Array.isArray(m.inventory)) {
+                        m.inventory.forEach(it => {
+                          if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                            categories.images.count++;
+                            categories.images.bytes += new Blob([it.avatar]).size;
+                          }
+                        });
+                      }
                     });
                   }
                 });
@@ -61766,17 +61884,9 @@ ${luckStatusDirective}
                 return;
               }
 
-              const quality = parseFloat(qualitySelect?.value || "0.1");
+              const quality = parseFloat(qualitySelect?.value || "0.3");
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               const includeCompressed = !!document.getElementById("storage-images-include-compressed")?.checked;
-
-              const shouldSkipImage = (url) => {
-                if (includeCompressed) return false;
-                if (!url || typeof url !== "string") return true;
-                if (!url.startsWith("data:image")) return true;
-                if (url.startsWith("data:image/jpeg;base64,") && url.length < 80000) return true;
-                return false;
-              };
 
               if (typeof window.showCustomAlert === "function") {
                 await window.showCustomAlert("开始压缩", "已开始压缩选中的数据项");
@@ -61798,10 +61908,9 @@ ${luckStatusDirective}
                             if (Array.isArray(msg.content)) {
                               for (const part of msg.content) {
                                 if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
-                                  if (shouldSkipImage(part.image_url.url)) { optimalCount++; continue; }
                                   try {
-                                    const comp = await compressImage(part.image_url.url, quality, 1280, includeCompressed);
-                                    if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== part.image_url.url && comp.length < part.image_url.url.length))) {
+                                    const comp = await compressImage(part.image_url.url, quality, 1280, true);
+                                    if (comp && comp.startsWith("data:image") && comp.length <= part.image_url.url.length) {
                                       part.image_url.url = comp;
                                       chatCompCount++;
                                     } else { optimalCount++; }
@@ -61810,101 +61919,133 @@ ${luckStatusDirective}
                               }
                             }
                             if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
-                              if (shouldSkipImage(msg.imageUrl)) { optimalCount++; }
-                              else {
-                                try {
-                                  const comp = await compressImage(msg.imageUrl, quality, 1280, includeCompressed);
-                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.imageUrl && comp.length < msg.imageUrl.length))) {
-                                    msg.imageUrl = comp;
-                                    chatCompCount++;
-                                  } else { optimalCount++; }
-                                } catch(e) { failCount++; }
-                              }
+                              try {
+                                const comp = await compressImage(msg.imageUrl, quality, 1280, true);
+                                if (comp && comp.startsWith("data:image") && comp.length <= msg.imageUrl.length) {
+                                  msg.imageUrl = comp;
+                                  chatCompCount++;
+                                } else { optimalCount++; }
+                              } catch(e) { failCount++; }
                             }
                             if (msg.url && typeof msg.url === "string" && msg.url.startsWith("data:image")) {
-                              if (shouldSkipImage(msg.url)) { optimalCount++; }
-                              else {
-                                try {
-                                  const comp = await compressImage(msg.url, quality, 1280, includeCompressed);
-                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.url && comp.length < msg.url.length))) {
-                                    msg.url = comp;
-                                    if (msg.imageUrl) msg.imageUrl = comp;
-                                    chatCompCount++;
-                                  } else { optimalCount++; }
-                                } catch(e) { failCount++; }
-                              }
+                              try {
+                                const comp = await compressImage(msg.url, quality, 1280, true);
+                                if (comp && comp.startsWith("data:image") && comp.length <= msg.url.length) {
+                                  msg.url = comp;
+                                  if (msg.imageUrl) msg.imageUrl = comp;
+                                  chatCompCount++;
+                                } else { optimalCount++; }
+                              } catch(e) { failCount++; }
                             }
                             if (msg.content && typeof msg.content === "string" && msg.content.startsWith("data:image")) {
-                              if (shouldSkipImage(msg.content)) { optimalCount++; }
-                              else {
-                                try {
-                                  const comp = await compressImage(msg.content, quality, 1280, includeCompressed);
-                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.content && comp.length < msg.content.length))) {
-                                    msg.content = comp;
-                                    chatCompCount++;
-                                  } else { optimalCount++; }
-                                } catch(e) { failCount++; }
-                              }
+                              try {
+                                const comp = await compressImage(msg.content, quality, 1280, true);
+                                if (comp && comp.startsWith("data:image") && comp.length <= msg.content.length) {
+                                  msg.content = comp;
+                                  chatCompCount++;
+                                } else { optimalCount++; }
+                              } catch(e) { failCount++; }
                             }
                             if (msg.image && typeof msg.image === "string" && msg.image.startsWith("data:image")) {
-                              if (shouldSkipImage(msg.image)) { optimalCount++; }
-                              else {
-                                try {
-                                  const comp = await compressImage(msg.image, quality, 1280, includeCompressed);
-                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.image && comp.length < msg.image.length))) {
-                                    msg.image = comp;
-                                    chatCompCount++;
-                                  } else { optimalCount++; }
-                                } catch(e) { failCount++; }
-                              }
+                              try {
+                                const comp = await compressImage(msg.image, quality, 1280, true);
+                                if (comp && comp.startsWith("data:image") && comp.length <= msg.image.length) {
+                                  msg.image = comp;
+                                  chatCompCount++;
+                                } else { optimalCount++; }
+                              } catch(e) { failCount++; }
                             }
                             if (msg.cameraFrame && typeof msg.cameraFrame === "string" && msg.cameraFrame.startsWith("data:image")) {
-                              if (shouldSkipImage(msg.cameraFrame)) { optimalCount++; }
-                              else {
-                                try {
-                                  const comp = await compressImage(msg.cameraFrame, quality, 1280, includeCompressed);
-                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.cameraFrame && comp.length < msg.cameraFrame.length))) {
-                                    msg.cameraFrame = comp;
-                                    chatCompCount++;
-                                  } else { optimalCount++; }
-                                } catch(e) { failCount++; }
+                              try {
+                                const comp = await compressImage(msg.cameraFrame, quality, 1280, true);
+                                if (comp && comp.startsWith("data:image") && comp.length <= msg.cameraFrame.length) {
+                                  msg.cameraFrame = comp;
+                                  chatCompCount++;
+                                } else { optimalCount++; }
+                              } catch(e) { failCount++; }
+                            }
+                            if (msg.item && msg.item.avatar && typeof msg.item.avatar === "string" && msg.item.avatar.startsWith("data:image")) {
+                              try {
+                                const comp = await compressImage(msg.item.avatar, quality, 640, true);
+                                if (comp && comp.startsWith("data:image") && comp.length <= msg.item.avatar.length) {
+                                  msg.item.avatar = comp;
+                                  chatCompCount++;
+                                } else { optimalCount++; }
+                              } catch(e) { failCount++; }
+                            }
+                          }
+                        }
+
+                        if (Array.isArray(chat.inventory)) {
+                          for (const it of chat.inventory) {
+                            if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                              try {
+                                const comp = await compressImage(it.avatar, quality, 640, true);
+                                if (comp && comp.startsWith("data:image") && comp.length <= it.avatar.length) {
+                                  it.avatar = comp;
+                                  chatCompCount++;
+                                }
+                              } catch(e) {}
+                            }
+                          }
+                        }
+                        if (Array.isArray(chat.aiInventory)) {
+                          for (const it of chat.aiInventory) {
+                            if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                              try {
+                                const comp = await compressImage(it.avatar, quality, 640, true);
+                                if (comp && comp.startsWith("data:image") && comp.length <= it.avatar.length) {
+                                  it.avatar = comp;
+                                  chatCompCount++;
+                                }
+                              } catch(e) {}
+                            }
+                          }
+                        }
+                        if (Array.isArray(chat.members)) {
+                          for (const m of chat.members) {
+                            if (Array.isArray(m.inventory)) {
+                              for (const it of m.inventory) {
+                                if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                                  try {
+                                    const comp = await compressImage(it.avatar, quality, 640, true);
+                                    if (comp && comp.startsWith("data:image") && comp.length <= it.avatar.length) {
+                                      it.avatar = comp;
+                                      chatCompCount++;
+                                    }
+                                  } catch(e) {}
+                                }
                               }
                             }
                           }
                         }
 
                         if (chat.settings?.aiAvatar && chat.settings.aiAvatar.startsWith("data:image")) {
-                          if (!shouldSkipImage(chat.settings.aiAvatar)) {
-                            try {
-                              const comp = await compressImage(chat.settings.aiAvatar, quality, 1280, includeCompressed);
-                              if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== chat.settings.aiAvatar && comp.length < chat.settings.aiAvatar.length))) {
-                                chat.settings.aiAvatar = comp;
-                                chatCompCount++;
-                              } else { optimalCount++; }
-                            } catch(e) { failCount++; }
-                          } else { optimalCount++; }
+                          try {
+                            const comp = await compressImage(chat.settings.aiAvatar, quality, 1280, true);
+                            if (comp && comp.startsWith("data:image") && comp.length <= chat.settings.aiAvatar.length) {
+                              chat.settings.aiAvatar = comp;
+                              chatCompCount++;
+                            }
+                          } catch(e) {}
                         }
                         if (chat.settings?.userAvatar && chat.settings.userAvatar.startsWith("data:image")) {
-                          if (!shouldSkipImage(chat.settings.userAvatar)) {
-                            try {
-                              const comp = await compressImage(chat.settings.userAvatar, quality, 1280, includeCompressed);
-                              if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== chat.settings.userAvatar && comp.length < chat.settings.userAvatar.length))) {
-                                chat.settings.userAvatar = comp;
-                                chatCompCount++;
-                              } else { optimalCount++; }
-                            } catch(e) { failCount++; }
-                          } else { optimalCount++; }
+                          try {
+                            const comp = await compressImage(chat.settings.userAvatar, quality, 1280, true);
+                            if (comp && comp.startsWith("data:image") && comp.length <= chat.settings.userAvatar.length) {
+                              chat.settings.userAvatar = comp;
+                              chatCompCount++;
+                            }
+                          } catch(e) {}
                         }
                         if (chat.settings?.background && chat.settings.background.startsWith("data:image")) {
-                          if (!shouldSkipImage(chat.settings.background)) {
-                            try {
-                              const comp = await compressImage(chat.settings.background, quality, 1280, includeCompressed);
-                              if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== chat.settings.background && comp.length < chat.settings.background.length))) {
-                                chat.settings.background = comp;
-                                chatCompCount++;
-                              } else { optimalCount++; }
-                            } catch(e) { failCount++; }
-                          } else { optimalCount++; }
+                          try {
+                            const comp = await compressImage(chat.settings.background, quality, 1280, true);
+                            if (comp && comp.startsWith("data:image") && comp.length <= chat.settings.background.length) {
+                              chat.settings.background = comp;
+                              chatCompCount++;
+                            }
+                          } catch(e) {}
                         }
 
                         await dbInstance.chats.put(chat);
@@ -61919,17 +62060,25 @@ ${luckStatusDirective}
                       failCount++;
                     }
                   } else if (item.dataUrl && item.dataUrl.startsWith("data:image")) {
-                    if (shouldSkipImage(item.dataUrl)) {
-                      optimalCount++;
-                      continue;
-                    }
                     try {
-                      const compressed = await compressImage(item.dataUrl, quality, 1280, includeCompressed);
-                      if (compressed && compressed.startsWith("data:image") && (includeCompressed || (compressed !== item.dataUrl && compressed.length < item.dataUrl.length))) {
+                      const maxDim = item.table === "inventory_items" ? 640 : 1280;
+                      let compressed = await compressImage(item.dataUrl, quality, maxDim, true);
+                      if (compressed && compressed.startsWith("data:image") && (compressed.length < item.dataUrl.length || (compressed.length === item.dataUrl.length && quality < 0.8))) {
                         item.dataUrl = compressed;
                         item.size = new Blob([compressed]).size;
                         await saveCompressedItemToDB(item, compressed, dbInstance);
                         successCount++;
+                      } else if (compressed && compressed.startsWith("data:image")) {
+                        // 强制进一步降维压缩以确保文件体积确切变小
+                        const secondPass = await compressImage(item.dataUrl, Math.min(quality, 0.4), Math.min(maxDim, 640), true);
+                        if (secondPass && secondPass.startsWith("data:image") && secondPass.length <= item.dataUrl.length) {
+                          item.dataUrl = secondPass;
+                          item.size = new Blob([secondPass]).size;
+                          await saveCompressedItemToDB(item, secondPass, dbInstance);
+                          successCount++;
+                        } else {
+                          optimalCount++;
+                        }
                       } else {
                         optimalCount++;
                       }
@@ -62124,6 +62273,34 @@ ${luckStatusDirective}
               if (prod) {
                 prod.image = newUrl;
                 await dbInstance.taobaoProducts.put(prod);
+              }
+            } else if (item.table === "inventory_items" && item.recordId) {
+              const chat = await dbInstance.chats.get(item.recordId);
+              if (chat) {
+                const updateItemInList = (list) => {
+                  if (!Array.isArray(list)) return;
+                  list.forEach(it => {
+                    if (it && it.id === item.itemId) {
+                      it.avatar = newUrl;
+                    }
+                  });
+                };
+                updateItemInList(chat.inventory);
+                updateItemInList(chat.aiInventory);
+                if (Array.isArray(chat.members)) {
+                  chat.members.forEach(m => updateItemInList(m.inventory));
+                }
+                if (Array.isArray(chat.history)) {
+                  chat.history.forEach(m => {
+                    if (m && m.type === "inventory_card" && m.item && m.item.id === item.itemId) {
+                      m.item.avatar = newUrl;
+                    }
+                  });
+                }
+                await dbInstance.chats.put(chat);
+                if (typeof state !== "undefined" && state?.chats && state.chats[item.recordId]) {
+                  state.chats[item.recordId] = chat;
+                }
               }
             } else if (item.table === "datingSprites" && item.recordId) {
               const sp = await dbInstance.datingSprites.get(item.recordId);
@@ -62469,6 +62646,65 @@ ${luckStatusDirective}
                       });
                     }
                   });
+
+                  if (Array.isArray(chat.inventory)) {
+                    chat.inventory.forEach(it => {
+                      if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                        loadedStorageImagesList.push({
+                          id: "inv_item_avatar_" + chat.id + "_" + it.id,
+                          type: "image",
+                          table: "inventory_items",
+                          recordId: chat.id,
+                          itemId: it.id,
+                          name: `物品头像: ${it.name || "未命名"}`,
+                          origin: `《${chat.name}》道具头像: ${it.name}`,
+                          size: new Blob([it.avatar]).size,
+                          dataUrl: it.avatar,
+                          selected: false
+                        });
+                      }
+                    });
+                  }
+                  if (Array.isArray(chat.aiInventory)) {
+                    chat.aiInventory.forEach(it => {
+                      if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                        loadedStorageImagesList.push({
+                          id: "inv_ai_avatar_" + chat.id + "_" + it.id,
+                          type: "image",
+                          table: "inventory_items",
+                          recordId: chat.id,
+                          itemId: it.id,
+                          name: `物品头像: ${it.name || "未命名"}`,
+                          origin: `《${chat.name}》对方道具头像: ${it.name}`,
+                          size: new Blob([it.avatar]).size,
+                          dataUrl: it.avatar,
+                          selected: false
+                        });
+                      }
+                    });
+                  }
+                  if (Array.isArray(chat.members)) {
+                    chat.members.forEach(m => {
+                      if (Array.isArray(m.inventory)) {
+                        m.inventory.forEach(it => {
+                          if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                            loadedStorageImagesList.push({
+                              id: "inv_mem_avatar_" + chat.id + "_" + m.id + "_" + it.id,
+                              type: "image",
+                              table: "inventory_items",
+                              recordId: chat.id,
+                              itemId: it.id,
+                              name: `物品头像: ${it.name || "未命名"}`,
+                              origin: `《${chat.name}》${m.groupNickname || m.name}道具头像: ${it.name}`,
+                              size: new Blob([it.avatar]).size,
+                              dataUrl: it.avatar,
+                              selected: false
+                            });
+                          }
+                        });
+                      }
+                    });
+                  }
                 });
               }
             } catch(e) {
@@ -63998,15 +64234,15 @@ ${luckStatusDirective}
             let skippedCount = 0;
 
             const SKIP_KEYS = new Set([
-              "myAvatar", "aiAvatar", "userAvatar", "memberAvatar", "senderAvatar",
+              "myAvatar", "aiAvatar", "userAvatar", "memberAvatar", "senderAvatar", "avatar",
               "background", "backgroundImage", "chatBackground", "chatBg", "homeBackground",
               "homeBg", "mainBg", "wallpaper", "lockscreenWallpaper", "chatBgImage", "appBackground",
-              "customAvatarFrames", "custom_avatar", "themeCss", "icon", "sticker", "stickers"
+              "customAvatarFrames", "custom_avatar", "themeCss", "icon", "sticker", "stickers", "inventory", "aiInventory"
             ]);
 
             const findAndCompressImagesInObject = async (obj, isModuleScope = false) => {
               if (!obj || typeof obj !== "object") return false;
-              if (obj._imgCompressed === true || obj._compressed === true || obj.imageCompressed === true) {
+              if (obj._imgCompressed === true || obj._compressed === true || obj.imageCompressed === true || obj.category === "clue" || obj.category === "prop" || obj.category === "weapon") {
                 skippedCount++;
                 return false;
               }
@@ -73704,41 +73940,12 @@ ${luckStatusDirective}
               if (confirmed) {
                 const chat = state.chats[state.activeChatId];
 
-                // 1. 在删除前，检查被删除的消息中是否包含投票
-                let deletedPollsInfo = [];
-                for (const timestamp of selectedMessages) {
-                  const msg = (chat.history || []).find(
-                    (m) => m.timestamp === timestamp,
-                  );
-                  if (msg && msg.type === "poll") {
-                    deletedPollsInfo.push(
-                      `关于“${msg.question}”的投票(时间戳: ${msg.timestamp})`,
-                    );
-                  }
-                }
-
-                // 2. 更新后端的历史记录
-                chat.history = chat.history.filter(
-                  (msg) => !selectedMessages.has(msg.timestamp),
+                // 2. 更新后端的历史记录（彻底移除选中消息及过去的删除提示，不留任何字样与token占用）
+                chat.history = (chat.history || []).filter(
+                  (msg) => !selectedMessages.has(msg.timestamp) && !(msg.isHidden && msg.content && msg.content.includes("已被用户删除")),
                 );
 
-                // 3. 构建更具体的“遗忘指令”
-                let forgetReason = "一些之前的消息已被用户删除。";
-                if (deletedPollsInfo.length > 0) {
-                  forgetReason += ` 其中包括以下投票：${deletedPollsInfo.join("；")}。`;
-                }
-                forgetReason +=
-                  " 你应该像它们从未存在过一样继续对话，并相应地调整你的记忆和行为，不要再提及这些被删除的内容。";
-
-                const forgetInstruction = {
-                  role: "system",
-                  content: `[系统提示：${forgetReason}]`,
-                  timestamp: Date.now(),
-                  isHidden: true,
-                };
-                chat.history.push(forgetInstruction);
-
-                // 4. 将包含“遗忘指令”的、更新后的chat对象存回数据库
+                // 3. 将更新后的chat对象存回数据库
                 await db.chats.put(chat);
 
                 // 5. 最后才更新UI
