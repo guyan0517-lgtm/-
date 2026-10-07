@@ -843,6 +843,70 @@
       };
     },
 
+    async extractStructuredTextFromPdfPage(page) {
+      try {
+        const textContent = await page.getTextContent();
+        const items = textContent.items || [];
+        if (items.length === 0) return '';
+
+        const positionedItems = items.map(it => {
+          const transform = it.transform || [1, 0, 0, 1, 0, 0];
+          const x = transform[4];
+          const y = transform[5];
+          const height = it.height || Math.abs(transform[3]) || 12;
+          return {
+            str: it.str || '',
+            x: x,
+            y: y,
+            height: height,
+            hasEOL: it.hasEOL || false
+          };
+        });
+
+        positionedItems.sort((a, b) => {
+          const yDiff = b.y - a.y;
+          if (Math.abs(yDiff) > (Math.min(a.height, b.height) * 0.4 || 4)) {
+            return yDiff;
+          }
+          return a.x - b.x;
+        });
+
+        let result = '';
+        let lastY = null;
+        let lastHeight = 12;
+
+        for (let i = 0; i < positionedItems.length; i++) {
+          const item = positionedItems[i];
+          if (!item.str) continue;
+
+          if (lastY === null) {
+            result += item.str;
+          } else {
+            const yDiff = lastY - item.y;
+            const lineThreshold = (item.height * 0.45) || 5;
+            const paragraphThreshold = (item.height * 1.5) || 16;
+
+            if (yDiff > paragraphThreshold) {
+              result += '\n\n' + item.str;
+            } else if (yDiff > lineThreshold || item.hasEOL) {
+              result += '\n' + item.str;
+            } else {
+              const lastChar = result.slice(-1);
+              const needsSpace = /[a-zA-Z0-9]$/.test(lastChar) && /^[a-zA-Z0-9]/.test(item.str);
+              result += (needsSpace ? ' ' : '') + item.str;
+            }
+          }
+          lastY = item.y;
+          lastHeight = item.height;
+        }
+
+        return result.trim();
+      } catch (err) {
+        console.warn('[模组] 提取PDF页结构化文本失败:', err);
+        return '';
+      }
+    },
+
     async parsePdfFile(file) {
       if (!global.pdfjsLib) {
         throw new Error('PDF.js 解析组件未加载完成，请刷新页面后重试');
@@ -872,8 +936,7 @@
         }
 
         try {
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items.map(item => item.str).join(' ').trim();
+          const pageText = await this.extractStructuredTextFromPdfPage(page);
           if (pageText) {
             textPieces.push(pageText);
             totalTextLength += pageText.length;
@@ -5683,11 +5746,10 @@ ${chap.content}
             let fullText = '';
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
               const page = await pdf.getPage(pageNum);
-              const textContent = await page.getTextContent();
-              const pageText = textContent.items.map(item => item.str).join(' ');
-              if (pageText.trim()) fullText += pageText + '\n';
+              const pageText = await this.extractStructuredTextFromPdfPage(page);
+              if (pageText) fullText += pageText + '\n\n';
             }
-            return fullText;
+            return fullText.trim();
           } catch (e) {
             console.warn('[模组] 提取PDF文字提示', e);
           }
@@ -5959,8 +6021,8 @@ ${chap.content}
         locateBtn.disabled = true;
       }
 
-      const chapterSummary = chapters.map((c, i) => `${i + 1}. 【${c.title}】[${c.category}]: ${c.content.substring(0, 120).replace(/\n+/g, ' ')}...`).join('\n');
-      const imageList = images.map((img, i) => `${i + 1}. 名称: ${img.name || `图片_${i + 1}`} (页码:${img.pageNumber || '未知'}, 尺寸:${img.width}x${img.height})`).join('\n');
+      const chapterSummary = chapters.map((c, i) => `${i + 1}. 【${c.title}】[${c.category}]: ${c.content.substring(0, 150).replace(/\n+/g, ' ')}...`).join('\n');
+      const imageList = images.map((img, i) => `${i + 1}. 名称: ${img.name || `图片_${i + 1}`} 尺寸:${img.width || 800}x${img.height || 600}`).join('\n');
 
       const prompt = `你是专业的跑团模组插图定位与剧透甄别专家。当前模组包含以下章节列表和插图列表：
 
@@ -5972,12 +6034,13 @@ ${imageList}
 
 【任务要求】：
 1. 结合图片名称与各章节的剧情语境，判断每张图片最适宜插入的章节编号。
-2. 甄别剧透属性：后期异化形态立绘、关键伤亡CG、密室停尸房地图标记为剧透(isSensitive: true)；常规初期立绘、公开区域地图标记为非剧透(isSensitive: false)。
-3. 提供一句精炼的中文内容描述(description)。
+2. 识别该图片对应的角色姓名、地点名称或线索触发关键词，例如角色初次登场，写入 targetAnchor 字段。
+3. 甄别剧透属性：后期异化形态立绘、关键伤亡CG、密室停尸房地图等核心剧透标记为 true；常规初期立绘、公开区域地图标记为 false。
+4. 提供一句精炼的中文内容描述。
 
 请直接输出 JSON 数组格式：
 [
-  { "imageIndex": 1, "chapterIndex": 1, "isSensitive": false, "description": "公开村落全景地图" }
+  { "imageIndex": 1, "chapterIndex": 1, "targetAnchor": "角色名", "isSensitive": false, "description": "立绘描述" }
 ]`;
 
       try {
@@ -5994,7 +6057,9 @@ ${imageList}
 
         for (let i = 0; i < images.length; i++) {
           const img = images[i];
-          const matched = parsedMatches.find(m => m.imageIndex === (i + 1));
+          const imgNum = img.imageIndex || (i + 1);
+          img.imageIndex = imgNum;
+          const matched = parsedMatches.find(m => m.imageIndex === (i + 1) || m.imageIndex === imgNum);
           let targetChap = chapters[0];
           if (matched && matched.chapterIndex && chapters[matched.chapterIndex - 1]) {
             targetChap = chapters[matched.chapterIndex - 1];
@@ -6011,15 +6076,34 @@ ${imageList}
 
           if (img.id) {
             await database.moduleImages.update(img.id, {
+              imageIndex: imgNum,
               placement: placementText,
               isSensitive: img.isSensitive,
               description: img.description
             });
           }
 
-          const tag = `【插图·${img.name || '剧情CG'}】`;
-          if (!targetChap.content.includes(tag)) {
-            targetChap.content = `${tag}\n\n${targetChap.content}`;
+          const tag = `【图${imgNum}：${img.name || '插图'}】`;
+          const shortTag = `【图${imgNum}】`;
+          if (!targetChap.content.includes(tag) && !targetChap.content.includes(shortTag)) {
+            const anchor = (matched && matched.targetAnchor) ? matched.targetAnchor.trim() : (img.name ? img.name.trim() : '');
+            let inserted = false;
+            if (anchor && targetChap.content.includes(anchor)) {
+              const anchorIdx = targetChap.content.indexOf(anchor);
+              const nextBreak = targetChap.content.indexOf('\n', anchorIdx);
+              if (nextBreak !== -1) {
+                targetChap.content = targetChap.content.slice(0, nextBreak) + `\n\n${tag}\n` + targetChap.content.slice(nextBreak);
+                inserted = true;
+              }
+            }
+            if (!inserted) {
+              const firstParagraphBreak = targetChap.content.indexOf('\n\n');
+              if (firstParagraphBreak !== -1) {
+                targetChap.content = targetChap.content.slice(0, firstParagraphBreak) + `\n\n${tag}\n` + targetChap.content.slice(firstParagraphBreak);
+              } else {
+                targetChap.content = `${targetChap.content}\n\n${tag}`;
+              }
+            }
             targetChap.wordCount = this.countWords(targetChap.content);
             await database.moduleChapters.put(targetChap);
           }
@@ -6027,7 +6111,7 @@ ${imageList}
 
         await this.renderModuleDetailGallery(chapters, moduleId);
         if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('定位完成', `已成功将 ${images.length} 张插图智能匹配并标注至对应剧情章节！`);
+          global.showCustomAlert('定位完成', `已成功将 ${images.length} 张插图智能匹配并标注至对应剧情章节`);
         }
       } catch (err) {
         console.warn('[模组] 智能定位插图异常:', err);

@@ -21201,7 +21201,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
-            // 模组插图与带团触发规则（仅在勾选图片时注入给AI）
+            // 模组插图原位注入规则（仅在勾选图片时注入给AI）
             if (chat.loadModuleImages) {
               let modImages = [];
               if (dbInstance.moduleImages) {
@@ -21209,13 +21209,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   modImages = await dbInstance.moduleImages.where('moduleId').equals(mod.id).toArray();
                 } catch (e) {}
               }
+              if ((!modImages || modImages.length === 0) && Array.isArray(mod.images) && mod.images.length > 0) {
+                modImages = mod.images;
+              }
+              if ((!modImages || modImages.length === 0) && Array.isArray(mod.gallery) && mod.gallery.length > 0) {
+                modImages = mod.gallery;
+              }
               if (modImages && modImages.length > 0) {
-                block += `## 模组插图触发与呈现规则\n当前模组已启用插图联动。请在带团叙述推进到对应剧情节点、场景地点、NPC出场或线索呈现时，在回复中自然包含对应的【图N】标记，系统将自动将该编号的插图呈现给玩家：\n`;
+                block += `## 模组插图原位注入规则\n` +
+                  `当前模组已启用插图联动功能。模组正文与章节内容在排版与切割时，已经在对应剧情段落中明确标注了插图节点，例如【图1】、【图2】等。\n\n` +
+                  `【核心执行规则】：\n` +
+                  `1. 原位节点原样输出：插图的注入位置由模组正文中的标记节点严格固定，严禁由你自行主观猜测、随意推迟或判断时机。只要你的剧情带团推进到了模组文本中标记有【图N】的位置，你必须在你的回复中对应的句段处原样输出该【图N】标记（例如【图1】、【图2】），绝对不得遗漏、跳过或自行改动位置。\n` +
+                  `2. 自动渲染呈现：你只需在对应叙述位置原样输出【图N】标记，系统前端会自动捕捉并在聊天气泡的原位将其渲染为对应的高清插图卡片呈现给玩家。\n` +
+                  `3. 严格遵循现有编号：只能输出模组中实际存在的插图编号，严禁虚构不存在的图号。\n\n` +
+                  `当前模组插图列表清单：\n`;
                 modImages.forEach((img, idx) => {
                   const num = img.imageIndex || (idx + 1);
                   const name = img.name || `插图 ${num}`;
-                  const desc = img.annotation || img.description || img.placement || '线索插图';
-                  const horrorWarning = (img.isHorror || img.isSensitive) ? '【恐怖内容/剧透】' : '';
+                  const desc = img.annotation || img.description || img.placement || '模组插图';
+                  const horrorWarning = (img.isHorror || img.isSensitive) ? '【剧透】' : '';
                   block += `- 【图${num}】${name}：${desc} ${horrorWarning}\n`;
                 });
                 block += `\n`;
@@ -21817,21 +21829,94 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const groupEl = document.createElement("div");
               groupEl.className = "chat-mod-chaps-group";
 
+              const isAllGroupAiScope = chaps.length > 0 && chaps.every(c => (chat.moduleAiScopeChapterIds || []).includes(c.id));
+              const isAllGroupActive = chaps.length > 0 && isThisModActive && chaps.every(c => (chat.selectedModuleChapterIds || []).includes(c.id));
+
               const header = document.createElement("div");
               header.className = "chat-mod-chaps-group-header";
               header.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <span>${categoryName}</span>
-                  <span style="font-size: 11px; padding: 1px 6px; border-radius: 9999px; background: var(--card-bg); color: var(--text-secondary);">${chaps.length}章</span>
+                <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;">
+                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${categoryName}</span>
+                  <span style="font-size: 11px; padding: 1px 6px; border-radius: 9999px; background: var(--card-bg); color: var(--text-secondary); flex-shrink: 0;">${chaps.length}章</span>
                 </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="group-chevron" style="transition: transform 0.2s ease;">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
+                <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;" class="chat-mod-group-actions">
+                  <label title="本分类全部管辖" style="display: inline-flex; align-items: center; cursor: pointer; margin: 0;">
+                    <input type="checkbox" class="chat-mod-group-ai-scope-checkbox" ${isAllGroupAiScope ? "checked" : ""} style="cursor: pointer; width: 16px; height: 16px; margin: 0; accent-color: #D97706; outline: 1px dashed #D97706; border-radius: 3px;" />
+                  </label>
+                  <label title="本分类全选加载" style="display: inline-flex; align-items: center; cursor: pointer; margin: 0;">
+                    <input type="checkbox" class="chat-mod-group-checkbox" ${isAllGroupActive ? "checked" : ""} style="cursor: pointer; width: 17px; height: 17px; margin: 0; accent-color: var(--accent-color);" />
+                  </label>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="group-chevron" style="transition: transform 0.2s ease; margin-left: 2px;">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
               `;
 
               const body = document.createElement("div");
               body.className = "chat-mod-chaps-group-body";
               body.style.display = "none";
+
+              const groupAiScopeCb = header.querySelector(".chat-mod-group-ai-scope-checkbox");
+              const groupActiveCb = header.querySelector(".chat-mod-group-checkbox");
+
+              const updateGroupCheckboxesState = () => {
+                if (groupAiScopeCb) {
+                  groupAiScopeCb.checked = chaps.length > 0 && chaps.every(c => (chat.moduleAiScopeChapterIds || []).includes(c.id));
+                }
+                if (groupActiveCb) {
+                  const isActiveNow = chat.activeModuleId && String(chat.activeModuleId) === String(mod.id);
+                  groupActiveCb.checked = chaps.length > 0 && isActiveNow && chaps.every(c => (chat.selectedModuleChapterIds || []).includes(c.id));
+                }
+              };
+
+              groupAiScopeCb?.addEventListener("click", (e) => e.stopPropagation());
+              groupAiScopeCb?.addEventListener("change", async (e) => {
+                e.stopPropagation();
+                if (!chat.moduleAiScopeChapterIds) chat.moduleAiScopeChapterIds = [];
+                const shouldCheck = groupAiScopeCb.checked;
+                const chapIdSet = new Set(chaps.map(c => c.id));
+                if (shouldCheck) {
+                  chaps.forEach(c => {
+                    if (!chat.moduleAiScopeChapterIds.includes(c.id)) {
+                      chat.moduleAiScopeChapterIds.push(c.id);
+                    }
+                  });
+                } else {
+                  chat.moduleAiScopeChapterIds = chat.moduleAiScopeChapterIds.filter(id => !chapIdSet.has(id));
+                }
+                body.querySelectorAll(".chat-mod-chap-ai-scope-checkbox").forEach(cb => {
+                  cb.checked = shouldCheck;
+                });
+                await db.chats.put(chat);
+              });
+
+              groupActiveCb?.addEventListener("click", (e) => e.stopPropagation());
+              groupActiveCb?.addEventListener("change", async (e) => {
+                e.stopPropagation();
+                if (chat.activeModuleId !== mod.id) {
+                  chat.activeModuleId = mod.id;
+                  chat.selectedModuleChapterIds = [];
+                }
+                const shouldCheck = groupActiveCb.checked;
+                const chapIdSet = new Set(chaps.map(c => c.id));
+                if (shouldCheck) {
+                  chaps.forEach(c => {
+                    if (!chat.selectedModuleChapterIds.includes(c.id)) {
+                      chat.selectedModuleChapterIds.push(c.id);
+                    }
+                  });
+                } else {
+                  chat.selectedModuleChapterIds = chat.selectedModuleChapterIds.filter(id => !chapIdSet.has(id));
+                }
+                body.querySelectorAll(".chat-mod-chap-checkbox").forEach(cb => {
+                  cb.checked = shouldCheck;
+                });
+                await db.chats.put(chat);
+                updateSelectedCountDisplay();
+                if (typeof updateChatModuleMapBar === 'function') {
+                  updateChatModuleMapBar(chat);
+                }
+              });
 
               chaps.forEach(chap => {
                 const isChecked = isThisModActive && (chat.selectedModuleChapterIds || []).includes(chap.id);
@@ -21865,6 +21950,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       chat.moduleAiScopeChapterIds = chat.moduleAiScopeChapterIds.filter(id => id !== chap.id);
                     }
                     await db.chats.put(chat);
+                    updateGroupCheckboxesState();
                   });
                 }
 
@@ -21883,6 +21969,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   }
                   await db.chats.put(chat);
                   updateSelectedCountDisplay();
+                  updateGroupCheckboxesState();
                   if (typeof updateChatModuleMapBar === 'function') {
                     updateChatModuleMapBar(chat);
                   }
@@ -21891,7 +21978,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 body.appendChild(row);
               });
 
-              header.addEventListener("click", () => {
+              header.addEventListener("click", (e) => {
+                if (e.target.closest("label") || e.target.closest("input")) return;
                 const isOpen = body.style.display === "flex";
                 body.style.display = isOpen ? "none" : "flex";
                 const chevron = header.querySelector(".group-chevron");
@@ -30246,8 +30334,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;");
 
-              if (safeText.includes("【图")) {
-                safeText = safeText.replace(/【图(\d+)】/g, (match, p1) => {
+              if (safeText.includes("【图") || safeText.includes("[图")) {
+                safeText = safeText.replace(/(?:【|\[)图\s*(\d+)(?:[：:][^】\]]*)?(?:】|\])/g, (match, p1) => {
                   const imgNum = parseInt(p1, 10);
                   return `<div class="chat-module-img-slot" data-mod-id="${chat.activeModuleId || ''}" data-img-idx="${imgNum}"></div>`;
                 });
@@ -30740,6 +30828,95 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.formatMessageForContext = formatMessageForContext;
 
+        const DEFAULT_WEATHER_POOLS = [
+          {
+            id: "weather_temperate",
+            name: "温带气候",
+            items: [
+              { name: "晴朗", season: "春", note: "春风送暖，阳光明媚，微风和煦" },
+              { name: "微雨", season: "春", note: "细雨朦朦，草木清新，空气湿润" },
+              { name: "多云", season: "春", note: "云层舒缓，微风轻拂，气温适中" },
+              { name: "晨雾", season: "春", note: "薄雾缭绕，空气微凉，能见度略低" },
+              { name: "烈日", season: "夏", note: "夏日炎炎，阳光炽烈，体感温热" },
+              { name: "雷阵雨", season: "夏", note: "乌云密布，雷声隆隆，暴雨倾盆" },
+              { name: "晴热", season: "夏", note: "晴空无云，蝉鸣阵阵，空气闷热" },
+              { name: "阴天", season: "夏", note: "厚云遮日，稍有凉风，偶有闷雷" },
+              { name: "秋高气爽", season: "秋", note: "天空湛蓝，凉风习习，视野开阔" },
+              { name: "连绵阴雨", season: "秋", note: "细雨连绵，落叶纷飞，气温渐凉" },
+              { name: "多云微风", season: "秋", note: "白云朵朵，清风徐徐，舒适宜人" },
+              { name: "霜降晨凉", season: "秋", note: "晨霜微白，寒气初现，草木结露" },
+              { name: "晴冷", season: "冬", note: "冬阳微温，寒风阵阵，冷意扑面" },
+              { name: "漫天飞雪", season: "冬", note: "白雪皑皑，银装素裹，气温严寒" },
+              { name: "阴冷冬日", season: "冬", note: "铅云低垂，寒风刺骨，哈气成霜" },
+              { name: "初雪", season: "冬", note: "小雪纷扬，地面初白，清冷宁静" }
+            ]
+          },
+          {
+            id: "weather_tropical",
+            name: "热带气候",
+            items: [
+              { name: "热带烈日", season: "旱", note: "阳光炽烈耀眼，紫外线强烈" },
+              { name: "干燥微风", season: "旱", note: "空气干燥，微风温热" },
+              { name: "热带暴雨", season: "雨", note: "倾盆大雨，雷鸣电闪，水汽弥漫" },
+              { name: "闷热潮湿", season: "雨", note: "空气极度潮湿，闷热难耐" }
+            ]
+          },
+          {
+            id: "weather_frigid",
+            name: "寒带气候",
+            items: [
+              { name: "极寒暴雪", season: "冬", note: "暴风雪肆虐，能见度极低，极度严寒" },
+              { name: "极光夜空", season: "冬", note: "极夜幽暗，绚丽极光，寒冷刺骨" },
+              { name: "清冷晴空", season: "夏", note: "阳光微弱，冰雪反射，空气清冷" },
+              { name: "苔原微风", season: "夏", note: "气温微升，苔原初显，寒风犹存" }
+            ]
+          }
+        ];
+
+        function getStoredWeatherPools() {
+          try {
+            const raw = localStorage.getItem("system_weather_pools");
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+          } catch (e) {
+            console.warn("读取天气池异常:", e);
+          }
+          return DEFAULT_WEATHER_POOLS;
+        }
+        window.getStoredWeatherPools = getStoredWeatherPools;
+
+        function drawWeatherFromCurrentPool(month, poolName) {
+          const pools = getStoredWeatherPools();
+          const pool = pools.find(p => p.name === poolName || p.id === poolName) || pools[0];
+          if (!pool || !Array.isArray(pool.items) || pool.items.length === 0) {
+            return { name: "晴朗", note: "温和宜人，阳光明媚，视野开阔" };
+          }
+
+          const m = parseInt(month, 10) || (new Date().getMonth() + 1);
+          let season = "春";
+          if (m >= 3 && m <= 5) season = "春";
+          else if (m >= 6 && m <= 8) season = "夏";
+          else if (m >= 9 && m <= 11) season = "秋";
+          else season = "冬";
+
+          let matched = pool.items.filter(it => it.season === season);
+          if (matched.length === 0) {
+            if (pool.name === "热带气候") {
+              const isRainy = (m >= 5 && m <= 10);
+              matched = pool.items.filter(it => it.season === (isRainy ? "雨" : "旱"));
+            }
+          }
+          if (matched.length === 0) {
+            matched = pool.items;
+          }
+
+          const picked = matched[Math.floor(Math.random() * matched.length)] || pool.items[0];
+          return { name: picked.name, note: picked.note || picked.desc || "" };
+        }
+        window.drawWeatherFromCurrentPool = drawWeatherFromCurrentPool;
+
         function getOrUpdateLuckForTurn(statusSettings, chat) {
           if (!statusSettings) statusSettings = (chat && chat.settings) ? chat.settings : {};
           const cycle = Math.max(1, Math.min(10, parseInt(statusSettings.luckCycle, 10) || 1));
@@ -30775,78 +30952,128 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.getOrUpdateLuckForTurn = getOrUpdateLuckForTurn;
 
-        async function postProcessStatusReply(content, chat, settings) {
-          if (!content || typeof content !== "string") return content;
-          if (!settings || !settings.columns) return content;
-          const cols = settings.columns || [];
+        function resolveTurnWeatherAndLuck(targetSettings, chat) {
+          const settings = targetSettings || {};
+          const columns = Array.isArray(settings.columns) ? settings.columns : [];
+          const weatherCol = columns.find(c => c && c.type === "weather");
+          const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
+          const weatherMode = (weatherCol && weatherCol.weatherMode) ? weatherCol.weatherMode : "date";
+          const weatherInterval = (weatherCol && weatherCol.weatherInterval && parseInt(weatherCol.weatherInterval, 10) > 0) ? parseInt(weatherCol.weatherInterval, 10) : 2;
 
-          // 1. 提取日期
-          const dateMatch = content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
-          let year = new Date().getFullYear();
-          let month = new Date().getMonth() + 1;
-          let day = new Date().getDate();
-          if (dateMatch) {
-            year = parseInt(dateMatch[1], 10);
-            month = parseInt(dateMatch[2], 10);
-            day = parseInt(dateMatch[3], 10);
-          }
-          const currentDateStr = `${year}年${month}月${day}日`;
-
-          // 2. 检查历史中上回合与上上回合状态栏的日期与天气
-          let lastStatusDate = null;
-          let lastStatusMonth = null;
-          let lastStatusWeather = null;
-          let prevStatusDate = null;
-          const history = chat.history || [];
-          for (let i = history.length - 1; i >= 0; i--) {
+          const history = (chat && chat.history) || [];
+          const statusEntries = [];
+          for (let i = 0; i < history.length; i++) {
             const hMsg = history[i];
             if (!hMsg || typeof hMsg.content !== "string") continue;
-            const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
-            const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
-            if (dM && wM) {
-              if (!lastStatusDate) {
-                lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                lastStatusMonth = parseInt(dM[2], 10);
-                lastStatusWeather = wM[1].trim();
-              } else if (!prevStatusDate) {
-                prevStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                break;
-              }
+            const txt = hMsg.content;
+            const dM = txt.match(/(?:\[?日期\]?)[：:]\s*(\d{2,4})[年\-\/.](\d{1,2})[月\-\/.](\d{1,2})日?/);
+            const dShortM = !dM ? txt.match(/(?:\[?日期\]?)[：:]\s*(\d{1,2})[月\-\/.](\d{1,2})日?/) : null;
+            const tM = txt.match(/(?:\[?时间\]?)[：:]\s*(\d{1,2})[:：](\d{1,2})/);
+            const tHourM = !tM ? txt.match(/(?:\[?时间\]?)[：:]\s*(\d{1,2})\s*(?:点|时)/) : null;
+            const wM = txt.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
+
+            if (dM || dShortM || tM || tHourM || wM) {
+              let year = dM ? parseInt(dM[1], 10) : (new Date().getFullYear());
+              let month = dM ? parseInt(dM[2], 10) : (dShortM ? parseInt(dShortM[1], 10) : null);
+              let day = dM ? parseInt(dM[3], 10) : (dShortM ? parseInt(dShortM[2], 10) : null);
+              let dateStr = (month && day) ? `${year}年${month}月${day}日` : null;
+
+              let hour = tM ? parseInt(tM[1], 10) : (tHourM ? parseInt(tHourM[1], 10) : null);
+              let minute = tM ? parseInt(tM[2], 10) : 0;
+
+              let weatherRaw = wM ? wM[1].trim() : null;
+              let weatherClean = weatherRaw ? weatherRaw.replace(/^[\[【]|[\(（\s,，].*$/g, "").trim() : null;
+
+              statusEntries.push({
+                dateStr,
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                weatherName: weatherClean || weatherRaw,
+                weatherFull: weatherRaw
+              });
             }
           }
 
-          // 3. 抽取天气（判断上回合与上上回合日期是否一致）
-          let needNewWeatherRoll = false;
-          if (prevStatusDate && lastStatusDate) {
-            needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
-          } else {
-            needNewWeatherRoll = !lastStatusWeather;
-          }
+          const lastEntry = statusEntries.length >= 1 ? statusEntries[statusEntries.length - 1] : null;
+          const prevEntry = statusEntries.length >= 2 ? statusEntries[statusEntries.length - 2] : null;
 
-          let drawnWeather = "晴天";
-          if (!needNewWeatherRoll && lastStatusWeather) {
-            drawnWeather = lastStatusWeather;
-          } else {
-            const weatherCol = cols.find(c => c.type === "weather");
-            const chosenPoolName = weatherCol?.format || "温带气候";
-            if (typeof window.drawWeatherFromCurrentPool === "function") {
-              const monthToUse = lastStatusMonth || month;
-              const drawn = window.drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
-              drawnWeather = drawn ? drawn.name : "晴天";
+          let needWeatherSwitch = false;
+          if (!lastEntry || !prevEntry) {
+            needWeatherSwitch = true;
+          } else if (weatherMode === "time") {
+            const lastH = lastEntry.hour;
+            const prevH = prevEntry.hour;
+            if (lastH === null || prevH === null) {
+              needWeatherSwitch = true;
             } else {
-              drawnWeather = "晴天";
+              let span = 0;
+              if (lastH >= prevH) {
+                span = lastH - prevH;
+              } else {
+                span = (lastH + 24) - prevH;
+              }
+              needWeatherSwitch = (span >= weatherInterval);
+            }
+          } else {
+            if (lastEntry.dateStr && prevEntry.dateStr) {
+              needWeatherSwitch = (lastEntry.dateStr !== prevEntry.dateStr);
+            } else {
+              needWeatherSwitch = true;
             }
           }
 
-          content = content.replace(/(?:\[?天气\]?)[：:][^\n\r]*/g, `[天气]：${drawnWeather}`);
+          let drawnWeather = null;
+          const lastKnownWeather = lastEntry?.weatherName || null;
+          const weatherPools = getStoredWeatherPools();
+          const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
 
-          // 4. 幸运区间抽取（1d100，只显示区间名称）
-          if (cols.some(c => c.type === "luck")) {
-            const currentLuckName = settings.currentLuck?.name || (settings.luckIntervals?.[0]?.name) || "波澜不惊";
-            content = content.replace(/(?:\[?幸运\]?)[：:][^\n\r]*/g, `[幸运]：${currentLuckName}`);
+          if (!needWeatherSwitch && lastKnownWeather) {
+            let note = "";
+            if (targetPool && Array.isArray(targetPool.items)) {
+              const it = targetPool.items.find(x => x.name === lastKnownWeather);
+              if (it) note = it.note || it.desc || "";
+            }
+            drawnWeather = { name: lastKnownWeather, note: note };
+          } else {
+            const monthToUse = lastEntry?.month || (new Date().getMonth() + 1);
+            const drawn = drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
+            if (drawn) {
+              drawnWeather = { name: drawn.name || "晴朗", note: drawn.note || drawn.desc || "" };
+            }
+            if (!drawnWeather) {
+              drawnWeather = { name: "晴朗", note: "温和宜人，阳光明媚，视野开阔" };
+            }
           }
 
-          // 5. 好感度实时联动更新（支持全局多角色匹配）
+          const luckInfo = getOrUpdateLuckForTurn(settings, chat);
+          const hitLuck = luckInfo.hitLuck || { name: "波澜不惊", note: "" };
+
+          return {
+            drawnWeather,
+            hitLuck,
+            luckInfo,
+            lastEntry,
+            prevEntry,
+            needWeatherSwitch,
+            weatherMode,
+            weatherInterval
+          };
+        }
+        window.resolveTurnWeatherAndLuck = resolveTurnWeatherAndLuck;
+
+        async function postProcessStatusReply(content, chat, settings) {
+          if (!content || typeof content !== "string") return content;
+
+          content = content.replace(/(?:\[?天气\]?)[：:]\s*([^（(\n\r【[]+)[^\n\r]*/g, (m, wName) => {
+            return `天气：${wName.trim()}`;
+          });
+          content = content.replace(/(?:\[?幸运(?:走向)?\]?)[：:]\s*([^（(\n\r【[]+)[^\n\r]*/g, (m, lkName) => {
+            return `幸运走向：${lkName.trim()}`;
+          });
+
           const affRegex = /(?:\[?好感度\]?)[：:]\s*\[?([^\]\s\n\r+=\-]+?)\]?(?:好感度)?\s*([+\-])\s*(\d+)(?:\s*[=＝]\s*(\d+))?/g;
           let affMatch;
           let affUpdated = false;
@@ -30873,7 +31100,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (affUpdated) {
             const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-            if (dbInstance) await dbInstance.chats.put(chat);
+            if (dbInstance && dbInstance.chats) await dbInstance.chats.put(chat);
             if (typeof window.renderChatAffectionList === "function") {
               window.renderChatAffectionList();
             }
@@ -30881,8 +31108,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           return content;
         }
-        window.postProcessStatusReply = postProcessStatusReply;
-
         let isAffectionEditing = false;
 
         async function openChatAffectionModal() {
@@ -34131,107 +34356,34 @@ ${recentHistoryText}
               statusColumns = (statusSettings && Array.isArray(statusSettings.columns)) ? statusSettings.columns : [];
 
               if (statusColumns.length > 0) {
-                const nowTime = new Date();
-                let dateValues = { year: nowTime.getFullYear(), month: nowTime.getMonth() + 1, day: nowTime.getDate() };
-                let timeValues = { hour: String(nowTime.getHours()).padStart(2, '0'), minute: String(nowTime.getMinutes()).padStart(2, '0') };
+                const resolvedStatus = resolveTurnWeatherAndLuck(statusSettings, chat);
+                drawnWeatherName = resolvedStatus.drawnWeather?.name || "晴朗";
+                drawnWeatherNote = resolvedStatus.drawnWeather?.note || "温和宜人，阳光明媚，视野开阔";
+                hitLuck = resolvedStatus.hitLuck || { name: "波澜不惊", note: "" };
+                luckInfo = resolvedStatus.luckInfo || { isNewRoll: false, cycle: 1, currentCount: 1, hitLuck };
+                lastStatusDate = resolvedStatus.lastEntry?.dateStr || null;
 
-                const getSeasonFromMonth = (m) => {
-                  if (m >= 3 && m <= 5) return "春";
-                  if (m >= 6 && m <= 8) return "夏";
-                  if (m >= 9 && m <= 11) return "秋";
-                  return "冬";
-                };
-
-                const history = chat.history || [];
-                for (let i = history.length - 1; i >= 0; i--) {
-                  const hMsg = history[i];
-                  if (!hMsg || typeof hMsg.content !== "string") continue;
-                  const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
-                  const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
-                  if (dM && wM) {
-                    if (!lastStatusDate) {
-                      lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                      lastStatusMonth = parseInt(dM[2], 10);
-                      lastStatusWeather = wM[1].trim();
-                      dateValues.year = parseInt(dM[1], 10);
-                      dateValues.month = parseInt(dM[2], 10);
-                      dateValues.day = parseInt(dM[3], 10);
-                    } else if (!prevStatusDate) {
-                      prevStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                      break;
-                    }
-                  }
-                }
-                const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
-                const currentSeason = getSeasonFromMonth(dateValues.month);
-                const lastSeason = lastStatusMonth ? getSeasonFromMonth(lastStatusMonth) : currentSeason;
-
-                const weatherCol = statusColumns.find(c => c.type === "weather");
-                const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
-                let needNewWeatherRoll = false;
-                if (prevStatusDate && lastStatusDate) {
-                  needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
-                } else {
-                  needNewWeatherRoll = !lastStatusWeather;
-                }
-
-                if (!needNewWeatherRoll && lastStatusWeather) {
-                  drawnWeatherName = lastStatusWeather;
-                  const weatherPools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [];
-                  const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
-                  if (targetPool && Array.isArray(targetPool.items)) {
-                    const matchedItem = targetPool.items.find(it => it.name === lastStatusWeather);
-                    if (matchedItem && (matchedItem.note || matchedItem.desc)) {
-                      drawnWeatherNote = matchedItem.note || matchedItem.desc;
-                    }
-                  }
-                } else if (typeof window.drawWeatherFromCurrentPool === "function") {
-                  const monthToUse = lastStatusMonth || dateValues.month;
-                  const drawn = window.drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
-                  if (drawn) {
-                    drawnWeatherName = drawn.name || "晴天";
-                    drawnWeatherNote = drawn.note || drawn.desc || "";
-                  }
-                }
-
-                luckInfo = getOrUpdateLuckForTurn(statusSettings, chat);
-                hitLuck = luckInfo.hitLuck || { name: "波澜不惊", note: "" };
-
-                const columnPrompts = statusColumns.map(c => {
-                  let line = `- 栏目: ${c.label || '栏目'}`;
-                  if (c.type === "date") line += ` | 格式: [日期]：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入（例如1926年3月16日或2024年5月20日），绝对禁止套用现实生活中的真实日期`;
-                  else if (c.type === "time") line += ` | 格式: [时间]：由AI根据上下文剧情自主推断具体时间填入（例如08:30或12:00或14:00），绝对禁止使用本地现实时间`;
-                  else if (c.type === "weather") line += ` | 固定值: ${drawnWeatherName} (系统抽取AI不可修改，天气说明: ${drawnWeatherNote})`;
-                  else if (c.type === "luck") {
-                    if (luckInfo.isNewRoll) {
-                      line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'}，本周期第 1/${luckInfo.cycle} 次回复，已完成1d100掷骰新判定，系统抽取AI不可修改)`;
-                    } else {
-                      line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'}，本周期第 ${luckInfo.currentCount}/${luckInfo.cycle} 次回复，未重新掷骰，继续当前走向，系统抽取AI不可修改)`;
-                    }
-                  } else if (c.type === "affection") {
-                    const listStr = (chat.settings?.affectionList || []).map(a => `${a.name}:${a.affection}`).join(", ") || "暂无";
-                    line += ` | 格式: [好感度]：[角色全名]好感度[+/-]*=* (当前好感列表: ${listStr}，若无好感变动则整栏不输出)`;
-                  } else {
-                    line += ` | 格式: ${c.format || '*'} | 备注: ${c.note || '根据当前剧情填空'}`;
-                  }
-                  return line;
+                const fillableCols = statusColumns.filter(c => c.type !== "weather" && c.type !== "luck");
+                const fillableSpec = fillableCols.map(c => {
+                  const cleanLabel = (c.label || '栏目').replace(/^[\[【]|[\]】]$/g, '').trim();
+                  if (c.type === "date") return `- "${cleanLabel}": 填入当前故事推断的日期，格式如 "1926年3月16日"`;
+                  if (c.type === "time") return `- "${cleanLabel}": 填入当前故事推断的时间，格式如 "14:30" 或 "08:00"`;
+                  if (c.type === "location") return `- "${cleanLabel}": 填入当前剧情推进的具体地点路径，如 "阿卡姆镇-密斯卡托尼克大学"`;
+                  return `- "${cleanLabel}": ${c.note ? '根据提示填入: ' + c.note : '根据当前剧情填入具体内容'}`;
                 }).join("\n");
 
                 const statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
 
-                const luckGuideNote = luckInfo.isNewRoll
-                  ? `- 【幸运值刷新提醒】：当前轮次已刷新 1d100 掷骰判定，幸运值为【${hitLuck.name}】（设定：${hitLuck.note || '无'}，刷新周期为每 ${luckInfo.cycle} 次回复刷新一次）。请以此幸运值展开本阶段剧情。`
-                  : `- 【幸运值走向说明】：当前处于幸运周期第 ${luckInfo.currentCount}/${luckInfo.cycle} 次回复，未重新掷骰，保持为【${hitLuck.name}】（设定：${hitLuck.note || '无'}），继续当前走向。`;
-
                 systemStatusContext = `
-# 【系统状态栏生成指令（每轮系统固定为第一条回复，AI负责根据剧情填写时间与自定义栏目）】
-在本次单次回复的 JSON 数组中，【第一条消息】必须是系统状态栏消息，用于在对话最顶端渲染当前状态：
-- 第一条消息格式: {"type": "text", "name": "${statusSenderName}", "content": "状态栏所有栏目内容"}
-- 栏目格式要求（每行输出一个栏目，严格按以下格式输出，天气与幸运为系统抽取固定值，时间由你推断填入，自定义栏目根据备注填空）：
-${columnPrompts}
-- 【本轮天气】：${drawnWeatherName}（${drawnWeatherNote}）
-${luckGuideNote}
-- 在第一条状态栏消息之后，再继续生成其他群成员角色的正常互动消息。
+# 【系统状态栏专用指令】
+系统状态栏为独立的指令类型 {"type": "system_status", "name": "${statusSenderName}", "fields": { ... }}。
+在本次回复的 JSON 数组中，【第一条消息（index 0）必须是该系统状态栏指令】：
+- 左侧栏目标题由系统自动锁定固定生成，禁止你更改。
+- 天气（${drawnWeatherName}）与幸运（${hitLuck.name}）由系统自动抽选填入，你无需填写也禁止修改。
+- 你只需在 fields 对象中填写以下允许填写的字段：
+${fillableSpec}
+- 示例：{"type": "system_status", "name": "${statusSenderName}", "fields": {"时间": "14:30", "地点": "图书馆"}}
+- 【铁律】：从第二条消息开始，由其他群成员角色进行正常的剧情对话；严禁在任何后续角色的对话消息中输出状态栏内容！
 `;
               }
             }
@@ -35562,6 +35714,11 @@ ${luckGuideNote}
 			-   **发送语音**: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
 			-   **赠送或发放道具与线索**: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 			${
+        chat.loadModuleImages && chat.activeModuleId
+          ? `-   **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n`
+          : ""
+      }
+			${
         localStorage.getItem("novelai-enabled") === "true"
           ? `-   **【NovelAI图片分享】**: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}`
           : ""
@@ -35897,88 +36054,22 @@ ${libraryList}
               }
               let systemStatusPromptBlock = "";
               if (chat.roleType === "system_status") {
-                const now = new Date();
-                let dateValues = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
-                
-                const getSeasonFromMonth = (m) => {
-                  if (m >= 3 && m <= 5) return "春";
-                  if (m >= 6 && m <= 8) return "夏";
-                  if (m >= 9 && m <= 11) return "秋";
-                  return "冬";
-                };
-
-                let lastStatusDate = null;
-                let lastStatusMonth = null;
-                let lastStatusWeather = null;
-                let prevStatusDate = null;
-                const history = chat.history || [];
-                for (let i = history.length - 1; i >= 0; i--) {
-                  const hMsg = history[i];
-                  if (!hMsg || typeof hMsg.content !== "string") continue;
-                  const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
-                  const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
-                  if (dM && wM) {
-                    if (!lastStatusDate) {
-                      lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                      lastStatusMonth = parseInt(dM[2], 10);
-                      lastStatusWeather = wM[1].trim();
-                      dateValues.year = parseInt(dM[1], 10);
-                      dateValues.month = parseInt(dM[2], 10);
-                      dateValues.day = parseInt(dM[3], 10);
-                    } else if (!prevStatusDate) {
-                      prevStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                      break;
-                    }
-                  }
-                }
-                const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
-
-                const luckInfo = getOrUpdateLuckForTurn(chat.settings, chat);
-                const hitLuck = luckInfo.hitLuck;
-
-                // 抽取天气（判断上回合与上上回合日期是否一致）
-                let drawnWeather = null;
-                const weatherCol = (chat.settings.columns || []).find(c => c.type === "weather");
-                const selectedPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
-
-                let needNewWeatherRoll = false;
-                if (prevStatusDate && lastStatusDate) {
-                  needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
-                } else {
-                  needNewWeatherRoll = !lastStatusWeather;
-                }
-
-                if (!needNewWeatherRoll && lastStatusWeather) {
-                  let note = "";
-                  const weatherPools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [];
-                  const targetPool = weatherPools.find(p => p.name === selectedPoolName || p.id === selectedPoolName) || weatherPools[0];
-                  if (targetPool && Array.isArray(targetPool.items)) {
-                    const matchedItem = targetPool.items.find(it => it.name === lastStatusWeather);
-                    if (matchedItem && (matchedItem.note || matchedItem.desc)) note = matchedItem.note || matchedItem.desc;
-                  }
-                  drawnWeather = { name: lastStatusWeather, note: note };
-                } else if (typeof window.drawWeatherFromCurrentPool === "function") {
-                  const monthToUse = lastStatusMonth || dateValues.month;
-                  const drawn = window.drawWeatherFromCurrentPool(monthToUse, selectedPoolName);
-                  if (drawn) {
-                    drawnWeather = { name: drawn.name || "晴天", note: drawn.note || drawn.desc || "" };
-                  }
-                }
-                if (!drawnWeather) {
-                  drawnWeather = { name: "晴天", note: "温和宜人，阳光明媚，视野开阔" };
-                }
+                const resolvedStatus = resolveTurnWeatherAndLuck(chat.settings, chat);
+                const drawnWeather = resolvedStatus.drawnWeather || { name: "晴朗", note: "温和宜人，阳光明媚，视野开阔" };
+                const hitLuck = resolvedStatus.hitLuck || { name: "波澜不惊", note: "" };
+                const luckInfo = resolvedStatus.luckInfo || { isNewRoll: false, cycle: 1, currentCount: 1, hitLuck };
 
                 let colSpecs = [];
                 (chat.settings.columns || []).forEach(col => {
                   let fmt = col.format || "*";
                   if (col.type === "date") {
-                    colSpecs.push(`${col.label}：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入（例如1926年3月16日或2024年5月20日），绝对禁止套用现实生活中的真实日期`);
+                    colSpecs.push(`${col.label}：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入，例如 1926年3月16日 或 2024年5月20日，绝对禁止套用现实生活中的真实日期`);
                   } else if (col.type === "time") {
-                    colSpecs.push(`${col.label}：由AI根据上下文剧情自主推断具体时间填入（例如08:30或12:00或14:00），绝对禁止使用本地现实时间`);
+                    colSpecs.push(`${col.label}：由AI根据上下文剧情自主推断具体时间填入，例如 08:30 或 12:00 或 14:00，绝对禁止使用本地现实时间`);
                   } else if (col.type === "weather") {
-                    colSpecs.push(`${col.label}：${drawnWeather.name} (系统抽取AI不可修改)`);
+                    colSpecs.push(`${col.label}：必须严格固定填入【${drawnWeather.name}】（只填天气名称，绝对禁止附加任何修饰说明或括号解释）`);
                   } else if (col.type === "luck") {
-                    colSpecs.push(`${col.label}：${hitLuck.name} (系统抽取AI不可修改)`);
+                    colSpecs.push(`${col.label}：必须严格固定填入【${hitLuck.name}】（只填幸运名称，绝对禁止附加掷骰数值、设定说明或括号解释）`);
                   } else if (col.type === "affection") {
                     colSpecs.push(`${col.label}：请根据剧情进展填入好感变动与总量，示例：好感度+2=82`);
                   } else {
@@ -35986,21 +36077,16 @@ ${libraryList}
                   }
                 });
 
-                const luckStatusDirective = luckInfo.isNewRoll
-                  ? `- 当前幸运值状态：已进行 1d100 掷骰判定，当前幸运值为【${hitLuck.name}】（设定：${hitLuck.note || '无'}，刷新周期为每 ${luckInfo.cycle} 次回复刷新一次）。请以此幸运值展开本阶段剧情与对话。`
-                  : `- 当前幸运值状态：处于幸运周期第 ${luckInfo.currentCount}/${luckInfo.cycle} 次回复，未重新掷骰，保持为【${hitLuck.name}】（设定：${hitLuck.note || '无'}），继续当前走向。`;
-
                 systemStatusPromptBlock = `
-# 【系统状态栏单气泡输出铁律（每轮系统固定为第1条回复，绝对禁止拆分成多条气泡）】
-1. 无论有多少个项目，系统状态栏的所有内容【必须且只能】合并在 chatResponse 数组的【第1条消息】中（每项之间用换行符 \\n 分隔），【绝对禁止】将每个项目拆分为独立气泡！
+# 【系统状态栏单气泡输出规则】
+1. 无论有多少个项目，系统状态栏的所有内容【必须且只能】合并在 chatResponse 数组的【第1条消息】中，每项之间用换行符 \\n 分隔，【绝对禁止】将每个项目拆分为独立气泡！
 2. 系统状态栏格式必须参考以下规则（标签名称严禁修改，天气与幸运为系统固定抽取，时间由你推断填入，包含占位符的项目由你替换为具体内容）：
 ${colSpecs.join('\n')}
-3. 你的第2条及后续消息气泡，请根据角色人设与当前剧情展开正常的对话与描写。
+3. 你的第2条及后续消息气泡，请根据角色人设与当前剧情展开正常的对话与描写；【严禁在任何角色的后续对话中重复输出状态栏内容】！
 
-# 【后台环境注入：当前天气与幸运走向】
+# 【客观环境与幸运参考】
 - 当前天气：${drawnWeather.name}（${drawnWeather.note || ''}）
-${luckStatusDirective}
-（注意：上述环境与幸运设定为客观世界背景，后续角色的对话和描写必须始终围绕并呼应这些细节与走向，严禁私自篡改！）
+- 当前幸运：${hitLuck.name}（${hitLuck.note || '无'}）
 `;
               }
 
@@ -36050,6 +36136,11 @@ ${luckStatusDirective}
 			- **发送语音**: \`{"type": "voice_message", "content": "语音的文字内容..."}\`
 			- **发送表情**: \`{"type": "sticker", "sticker_name": "表情的名字"}\`(表情名必须在表情列表中，禁止杜撰)
 			- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
+			${
+        chat.loadModuleImages && chat.activeModuleId
+          ? `- **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n`
+          : ""
+      }
 			${
         localStorage.getItem("novelai-enabled") === "true"
           ? `- **【NovelAI真实图片分享】**: \`{"type": "naiimag", "prompt": "详细的英文描述词..."}\``
@@ -36687,44 +36778,98 @@ ${luckStatusDirective}
             const hasStatusConfig = chat.isGroup
               ? (statusMember !== null && Array.isArray(statusColumns) && statusColumns.length > 0 && statusTriggerMode !== "none")
               : (chat.roleType === "system_status" && statusTriggerMode !== "none");
+
             if (hasStatusConfig) {
               const statusSender = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : (chat.name || "系统状态");
-              let statusContents = [];
-              let firstStatusIndex = -1;
+              let extractedFields = {};
               let removeIndices = [];
+
               for (let i = 0; i < messagesArray.length; i++) {
-                if (isStatusBubble(messagesArray[i])) {
-                  if (firstStatusIndex === -1) firstStatusIndex = i;
-                  statusContents.push(String(messagesArray[i].content || messagesArray[i].message || "").trim());
+                const item = messagesArray[i];
+                if (!item) continue;
+                const isExplicitStatusSender = (item.name === statusSender || item.name === "系统状态" || item.type === "system_status" || item.type === "status_bar");
+                const txt = String(item.content || item.message || "").trim();
+
+                if (item.fields && typeof item.fields === "object") {
+                  Object.assign(extractedFields, item.fields);
                   removeIndices.push(i);
+                } else if (item.values && typeof item.values === "object") {
+                  Object.assign(extractedFields, item.values);
+                  removeIndices.push(i);
+                } else if (isExplicitStatusSender) {
+                  if (txt) {
+                    try {
+                      const parsedJson = JSON.parse(txt);
+                      if (parsedJson && typeof parsedJson === "object") {
+                        if (parsedJson.fields) Object.assign(extractedFields, parsedJson.fields);
+                        else if (parsedJson.values) Object.assign(extractedFields, parsedJson.values);
+                      }
+                    } catch (e) {}
+                    const lines = txt.split(/\r?\n/);
+                    lines.forEach(l => {
+                      const m = l.match(/^(?:\[?([^\]：:\n\r]+)\]?)[：:]\s*(.*)$/);
+                      if (m) extractedFields[m[1].trim()] = m[2].trim();
+                    });
+                  }
+                  removeIndices.push(i);
+                } else if (isStatusBubble(item)) {
+                  const lines = txt.split(/\r?\n/);
+                  const nonStatusLines = [];
+                  lines.forEach(l => {
+                    const m = l.match(/^(?:\[?([^\]：:\n\r]+)\]?)[：:]\s*(.*)$/);
+                    if (m && (statusPrefixes.some(p => p && (m[1].includes(p) || p.includes(m[1]))) || /^(?:日期|时间|天气|幸运|好感度|地点)/.test(m[1]))) {
+                      extractedFields[m[1].trim()] = m[2].trim();
+                    } else if (l.trim()) {
+                      nonStatusLines.push(l);
+                    }
+                  });
+                  if (nonStatusLines.length > 0) {
+                    const remainingText = nonStatusLines.join("\n").trim();
+                    item.content = remainingText;
+                    item.message = remainingText;
+                  } else {
+                    removeIndices.push(i);
+                  }
                 }
               }
+
               for (let i = removeIndices.length - 1; i >= 0; i--) {
                 messagesArray.splice(removeIndices[i], 1);
               }
 
-              let mergedText = "";
-              let shouldAddStatus = false;
-              if (statusContents.length > 0) {
-                mergedText = statusContents.join("\n");
-                shouldAddStatus = true;
-              } else if (statusTriggerMode === "always" || chat.roleType === "system_status") {
-                const colsToRender = (Array.isArray(statusColumns) && statusColumns.length > 0) ? statusColumns : (chat.settings?.columns || []);
-                let fallbackLines = [];
-                (Array.isArray(colsToRender) ? colsToRender : []).forEach(col => {
-                  if (!col) return;
-                  let lbl = col.label || "栏目";
-                  if (col.type === "date") fallbackLines.push(`${lbl}：${lastStatusDate || "1926年3月16日"}`);
-                  else if (col.type === "time") fallbackLines.push(`${lbl}：12:00`);
-                  else if (col.type === "weather") fallbackLines.push(`${lbl}：${drawnWeatherName || "晴天"}`);
-                  else if (col.type === "luck") fallbackLines.push(`${lbl}：${(hitLuck && hitLuck.name) ? hitLuck.name : "波澜不惊"}`);
-                  else if (col.type !== "affection") fallbackLines.push(`${lbl}：${col.format || ""}`);
-                });
-                mergedText = fallbackLines.join("\n");
-                shouldAddStatus = true;
-              }
+              const colsToRender = (Array.isArray(statusColumns) && statusColumns.length > 0) ? statusColumns : (chat.settings?.columns || []);
+              let formattedLines = [];
 
-              if (shouldAddStatus && mergedText) {
+              colsToRender.forEach(col => {
+                if (!col) return;
+                const rawLabel = col.label || "栏目";
+                const cleanLabel = rawLabel.replace(/^[\[【]|[\]】]$/g, "").trim();
+                const bracketLabel = `[${cleanLabel}]`;
+
+                if (col.type === "date") {
+                  const val = extractedFields[cleanLabel] || extractedFields["日期"] || extractedFields["date"] || lastStatusDate || "1926年3月16日";
+                  formattedLines.push(`${bracketLabel}：${val}`);
+                } else if (col.type === "time") {
+                  const val = extractedFields[cleanLabel] || extractedFields["时间"] || extractedFields["time"] || "12:00";
+                  formattedLines.push(`${bracketLabel}：${val}`);
+                } else if (col.type === "weather") {
+                  formattedLines.push(`${bracketLabel}：${drawnWeatherName || '晴朗'}`);
+                } else if (col.type === "luck") {
+                  formattedLines.push(`${bracketLabel}：${(hitLuck && hitLuck.name) ? hitLuck.name : '波澜不惊'}`);
+                } else if (col.type === "location") {
+                  const val = extractedFields[cleanLabel] || extractedFields["地点"] || extractedFields["location"] || col.format || "当前场景";
+                  formattedLines.push(`${bracketLabel}：${val}`);
+                } else if (col.type === "affection") {
+                  const val = extractedFields[cleanLabel] || extractedFields["好感度"];
+                  if (val) formattedLines.push(`${bracketLabel}：${val}`);
+                } else {
+                  const val = extractedFields[cleanLabel] || extractedFields[rawLabel] || col.format || "";
+                  formattedLines.push(`${bracketLabel}：${val}`);
+                }
+              });
+
+              let mergedText = formattedLines.join("\n");
+              if (mergedText) {
                 mergedText = await postProcessStatusReply(mergedText, chat, statusSettings || chat.settings);
                 const statusMsgObj = {
                   type: "text",
@@ -36734,11 +36879,7 @@ ${luckStatusDirective}
                   content: mergedText,
                   message: mergedText
                 };
-                if (statusTriggerMode === "always" || chat.roleType === "system_status" || firstStatusIndex <= 0) {
-                  messagesArray.unshift(statusMsgObj);
-                } else {
-                  messagesArray.splice(firstStatusIndex, 0, statusMsgObj);
-                }
+                messagesArray.unshift(statusMsgObj);
               }
             }
 
@@ -69650,10 +69791,9 @@ ${luckStatusDirective}
               let rightControlHtml = "";
               if (isWeather) {
                 const currentVal = col.format || weatherPoolsList[0].name;
-                const firstChar = (currentVal && currentVal.length > 0) ? currentVal[0] : "";
                 rightControlHtml = `
                   <div class="moe-input col-weather-selector-btn" style="flex: 1; min-width: 0; height: 34px; padding: 0 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; user-select: none;">
-                    <span class="col-weather-pool-name" style="color: var(--text-primary); font-size: 13px; font-weight: 600;">${firstChar}</span>
+                    <span class="col-weather-pool-name" style="color: var(--text-primary); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${currentVal}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); flex-shrink: 0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
                   </div>
                 `;
@@ -69672,6 +69812,26 @@ ${luckStatusDirective}
               }
 
               const circleBtnCss = "width: 24px; height: 24px; min-width: 24px; max-width: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-secondary); cursor: pointer; flex-shrink: 0; box-sizing: border-box;";
+
+              let weatherModeHtml = "";
+              if (isWeather) {
+                const currentMode = col.weatherMode || "date";
+                const currentInterval = col.weatherInterval || 2;
+                weatherModeHtml = `
+                  <div class="col-weather-mode-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-secondary); background: var(--secondary-bg); border-radius: 12px; border: 1px solid var(--border-color); padding: 6px 10px; box-sizing: border-box;">
+                    <span style="flex-shrink: 0; font-weight: 600; color: var(--text-primary);">模式</span>
+                    <select class="moe-input col-weather-mode-select" style="flex: 1; min-width: 0; height: 30px; line-height: 20px; padding: 2px 6px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;">
+                      <option value="date" ${currentMode !== "time" ? "selected" : ""}>默认模式</option>
+                      <option value="time" ${currentMode === "time" ? "selected" : ""}>时间模式</option>
+                    </select>
+                    <div class="col-weather-interval-wrapper" style="display: ${currentMode === "time" ? "flex" : "none"}; align-items: center; gap: 4px; flex-shrink: 0;">
+                      <span>间隔</span>
+                      <input type="number" min="1" max="72" class="moe-input col-weather-interval-input" value="${currentInterval}" style="width: 44px; height: 30px; line-height: 20px; padding: 2px 4px; font-size: 12px; border-radius: 8px; text-align: center; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;">
+                      <span>小时</span>
+                    </div>
+                  </div>
+                `;
+              }
 
               let subConfigHtml = "";
               if (isAffection) {
@@ -69723,6 +69883,7 @@ ${luckStatusDirective}
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
                   </button>
                 </div>
+                ${weatherModeHtml}
                 <div>
                   <textarea class="moe-input col-note-input" placeholder="备注" rows="1" style="font-size: 12px; width: 100%; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); padding: 6px 10px; min-height: 32px; box-sizing: border-box; color: var(--text-primary); resize: vertical;">${col.note || ''}</textarea>
                 </div>
@@ -69781,6 +69942,27 @@ ${luckStatusDirective}
                   openStatusWeatherPoolModal(targetObj, col, () => {
                     renderSystemStatusColumnsList(targetObj, containerId);
                   });
+                });
+
+                const modeSelect = itemDiv.querySelector(".col-weather-mode-select");
+                const intervalWrapper = itemDiv.querySelector(".col-weather-interval-wrapper");
+                const intervalInput = itemDiv.querySelector(".col-weather-interval-input");
+
+                modeSelect?.addEventListener("change", async (e) => {
+                  col.weatherMode = e.target.value;
+                  if (intervalWrapper) {
+                    intervalWrapper.style.display = (col.weatherMode === "time") ? "flex" : "none";
+                  }
+                  if (targetObj.id && state.chats[targetObj.id]) {
+                    await db.chats.put(state.chats[targetObj.id]);
+                  }
+                });
+
+                intervalInput?.addEventListener("input", async (e) => {
+                  col.weatherInterval = parseInt(e.target.value, 10) || 2;
+                  if (targetObj.id && state.chats[targetObj.id]) {
+                    await db.chats.put(state.chats[targetObj.id]);
+                  }
                 });
               }
 
