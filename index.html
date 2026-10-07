@@ -2099,8 +2099,8 @@
 
             <div class="contact-quick-entry" onclick="switchContactsSubTab('special')" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 6px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; text-align: center;">
               <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; color: var(--accent-color); margin-bottom: 4px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent-color)" stroke="var(--accent-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                 </svg>
               </div>
               <span style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); line-height: 1.2;">特别关心</span>
@@ -2829,6 +2829,32 @@
             <div style="display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); background: var(--secondary-bg); flex-shrink: 0;">
               <button type="button" class="moe-btn" id="contact-card-delete-btn" onclick="deleteContactFromCard()" style="flex: 1; height: 32px; font-size: 12px; background: transparent; color: #dc3545; border: 1px solid rgba(220,53,69,0.3); border-radius: 8px;">删除联系人</button>
               <button type="button" class="moe-btn" id="contact-card-start-chat-btn" onclick="startChatFromContactCard()" style="flex: 1; height: 32px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 8px;">开始聊天</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 群聊资料小面板弹窗 -->
+        <div class="modal" id="group-card-modal" style="display: none; z-index: 10000;">
+          <div class="modal-content" style="width: 310px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <!-- 头部：群头像、群名称与关闭按钮 -->
+            <div style="position: relative; padding: 14px 14px 10px 14px; display: flex; flex-direction: column; align-items: center; border-bottom: 1px solid var(--border-color); background: var(--secondary-bg);">
+              <button type="button" id="group-card-close-btn" onclick="closeContactModal('group-card-modal')" style="position: absolute; top: 10px; right: 10px; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
+              <img id="group-card-avatar" src="" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border-color); margin-bottom: 6px;" />
+              <div id="group-card-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary); text-align: center; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+              <div id="group-card-member-count" style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;"></div>
+            </div>
+
+            <!-- 中间区域：群成员列表 -->
+            <div style="flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; min-height: 80px; max-height: 240px;">
+              <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">群成员</div>
+              <div id="group-card-members-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+            </div>
+
+            <!-- 底部操作按钮：取消、解散群聊、开始聊天 -->
+            <div style="display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border-color); background: var(--secondary-bg); flex-shrink: 0;">
+              <button type="button" class="moe-btn" id="group-card-cancel-btn" onclick="closeContactModal('group-card-modal')" style="flex: 1; height: 32px; font-size: 12px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 8px;">取消</button>
+              <button type="button" class="moe-btn" id="group-card-disband-btn" onclick="disbandGroupFromCard()" style="flex: 1; height: 32px; font-size: 12px; background: transparent; color: #dc3545; border: 1px solid rgba(220,53,69,0.3); border-radius: 8px;">解散群聊</button>
+              <button type="button" class="moe-btn" id="group-card-start-chat-btn" onclick="startChatFromGroupCard()" style="flex: 1; height: 32px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 8px;">开始聊天</button>
             </div>
           </div>
         </div>
@@ -8054,10 +8080,10 @@
           <button type="button" class="close-btn" id="close-storage-images-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; padding: 2px 0;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <button type="button" class="chat-mod-footer-btn secondary" id="storage-images-select-all-btn" style="height: 28px; font-size: 11px; padding: 0 8px;">全选</button>
-            <select id="storage-images-quality-select" style="height: 28px; line-height: 28px; font-size: 11px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: nowrap; padding: 2px 0;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <button type="button" id="storage-images-select-all-btn" style="height: 26px; font-size: 11px; font-weight: 500; padding: 0 8px; width: auto; min-width: 44px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; flex-shrink: 0; line-height: 1;">全选</button>
+            <select id="storage-images-quality-select" style="height: 26px; line-height: 26px; font-size: 11px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; vertical-align: middle; box-sizing: border-box; flex-shrink: 0;">
               <option value="0.1" selected>倍率 0.1</option>
               <option value="0.2">倍率 0.2</option>
               <option value="0.3">倍率 0.3</option>
@@ -8068,14 +8094,14 @@
               <option value="0.8">倍率 0.8</option>
               <option value="0.9">倍率 0.9</option>
             </select>
-            <label style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-primary); cursor: pointer; user-select: none; flex-shrink: 0;">
+            <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-primary); cursor: pointer; user-select: none; flex-shrink: 0;">
               <input type="checkbox" id="storage-images-include-compressed" style="width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent-color); margin: 0; flex-shrink: 0;">
               <span>已压缩</span>
             </label>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <button type="button" class="chat-mod-footer-btn primary" id="storage-images-compress-btn" style="height: 28px; font-size: 11px; padding: 0 10px;">压缩</button>
-            <button type="button" class="chat-mod-footer-btn secondary" id="storage-images-cleanup-btn" style="height: 28px; font-size: 11px; padding: 0 10px; color: var(--danger-color, #e53935);">删除</button>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <button type="button" id="storage-images-compress-btn" style="height: 26px; font-size: 11px; font-weight: 600; padding: 0 10px; width: auto; min-width: 44px; border-radius: 6px; border: 1px solid var(--accent-color); background: var(--accent-color); color: #FFFFFF; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; flex-shrink: 0; line-height: 1;">压缩</button>
+            <button type="button" id="storage-images-cleanup-btn" style="height: 26px; font-size: 11px; font-weight: 500; padding: 0 10px; width: auto; min-width: 44px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--danger-color, #e53935); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; flex-shrink: 0; line-height: 1;">删除</button>
           </div>
         </div>
 
@@ -8217,11 +8243,25 @@
       </div>
     </div>
 
-    <!-- 地图节点头像/图片大图展开查看弹窗（无暗色遮罩，1:1 方框展示） -->
-    <div id="chat-map-image-modal" class="modal" style="z-index: 10000000; display: none; align-items: center; justify-content: center; background: transparent !important;">
-      <div class="modal-backdrop" id="chat-map-image-backdrop" style="position: absolute; inset: 0; background: transparent !important; cursor: pointer;"></div>
-      <div style="position: relative; max-width: 90vw; max-height: 90vh; display: flex; align-items: center; justify-content: center; z-index: 1; pointer-events: none;">
-        <img id="chat-map-image-modal-img" src="" alt="地图图片预览" style="width: min(80vw, 320px); height: min(80vw, 320px); aspect-ratio: 1 / 1; border-radius: 12px; object-fit: cover; box-shadow: 0 12px 36px rgba(0,0,0,0.22); border: 2px solid var(--border-color); background: var(--card-bg); pointer-events: auto;" />
+    <!-- 地图节点详情与重绘弹窗 -->
+    <div id="chat-map-image-modal" class="modal" style="z-index: 10000000; display: none; align-items: center; justify-content: center;">
+      <div class="modal-backdrop" id="chat-map-image-backdrop" style="position: absolute; inset: 0; background: rgba(0,0,0,0.4); cursor: pointer;"></div>
+      <div class="modal-content" style="position: relative; max-width: 320px; width: calc(100% - 48px); margin: 0 auto; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; z-index: 1; box-shadow: 0 16px 40px rgba(0,0,0,0.25);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <span id="chat-map-image-modal-title" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">地点详情</span>
+          <button type="button" class="close-btn" id="close-chat-map-image-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div style="display: flex; justify-content: center; align-items: center;">
+          <img id="chat-map-image-modal-img" src="" alt="地点图片" style="width: 140px; height: 140px; aspect-ratio: 1 / 1; border-radius: 10px; object-fit: cover; border: 1px solid var(--border-color); background: var(--secondary-bg); display: block;" />
+        </div>
+        <div class="form-group" style="display: flex; flex-direction: column; gap: 4px; margin: 0;">
+          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary);">生图提示词</label>
+          <textarea id="chat-map-image-modal-prompt" class="moe-input" rows="3" placeholder="填写该地点的 NovelAI 生图提示词..." style="width: 100%; box-sizing: border-box; resize: none; font-size: 12px; line-height: 1.4; padding: 8px; border-radius: 8px;"></textarea>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border-color); justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-image-modal-cancel-btn" style="height: 32px; font-size: 12px; flex: 1;">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="chat-map-image-modal-redraw-btn" style="height: 32px; font-size: 12px; flex: 1;">重绘</button>
+        </div>
       </div>
     </div>
 
@@ -14315,7 +14355,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
       <div class="modal-content" style="height: 80%">
         <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
           <span id="summary-viewer-title">聊天总结</span>
-          <button type="button" id="import-summaries-btn" class="moe-btn-mini" style="padding: 2px 10px; font-size: 12px; height: 26px; line-height: 20px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; flex-shrink: 0;">导入</button>
+          <button type="button" id="import-summaries-btn" class="moe-btn-mini import-summary-act-btn">导入</button>
         </div>
         <div id="summary-multiselect-bar" style="display: none; padding: 8px 14px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color); align-items: center; justify-content: space-between; gap: 8px; box-sizing: border-box;">
           <span id="summary-selected-count-text" style="font-size: 12px; color: var(--text-secondary); white-space: nowrap;">已选 0 项</span>
@@ -22572,7 +22612,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               row.style.borderRadius = "10px";
               row.style.cursor = "pointer";
 
-              const avatar = grp.settings?.aiAvatar || defaultAvatar;
+              const avatar = grp.settings?.groupAvatar || grp.avatar || grp.settings?.aiAvatar || defaultGroupAvatar || defaultAvatar;
               const memberCount = Array.isArray(grp.members) ? grp.members.length : 0;
 
               row.innerHTML = `
@@ -22584,8 +22624,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               `;
 
               row.addEventListener("click", () => {
-                switchToChatListView("messages-view");
-                openChat(grp.id);
+                openGroupCardModal(grp.id);
               });
 
               listEl.appendChild(row);
@@ -22669,14 +22708,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const avatar = char.settings?.aiAvatar || defaultAvatar;
               const displayName = char.settings?.remarkName || char.name;
               const status = char.status?.text || "在线";
-              const isSpec = !!(char.isSpecialAttention || char.settings?.isSpecialAttention);
 
               row.innerHTML = `
                 <img src="${avatar}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
                   <div style="display: flex; align-items: center; gap: 4px;">
                     <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
-                    ${isSpec ? '<span style="display: inline-flex; align-items: center; vertical-align: middle;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#e05252" stroke="#e05252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span>' : ''}
                   </div>
                   <span style="font-size: 11px; color: var(--text-secondary);">${status}</span>
                 </div>
@@ -22787,14 +22824,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const displayName = char.settings?.remarkName || char.name;
                 const status = char.status?.text || "在线";
 
-                const isSpec = !!(char.isSpecialAttention || char.settings?.isSpecialAttention);
-
                 row.innerHTML = `
                   <img src="${avatar}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
                   <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
                     <div style="display: flex; align-items: center; gap: 4px;">
                       <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
-                      ${isSpec ? '<span style="display: inline-flex; align-items: center; vertical-align: middle;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#e05252" stroke="#e05252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span>' : ''}
                     </div>
                     <span style="font-size: 11px; color: var(--text-secondary);">${status}</span>
                   </div>
@@ -23142,8 +23176,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const isSpecial = !!(chat.isSpecialAttention || chat.settings?.isSpecialAttention);
           if (specialSvg) {
             if (isSpecial) {
-              specialSvg.setAttribute("fill", "#e05252");
-              specialSvg.setAttribute("stroke", "#e05252");
+              specialSvg.setAttribute("fill", "var(--accent-color)");
+              specialSvg.setAttribute("stroke", "var(--accent-color)");
             } else {
               specialSvg.setAttribute("fill", "none");
               specialSvg.setAttribute("stroke", "var(--text-secondary)");
@@ -23157,8 +23191,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               await db.chats.put(chat);
               if (specialSvg) {
                 if (currentVal) {
-                  specialSvg.setAttribute("fill", "#e05252");
-                  specialSvg.setAttribute("stroke", "#e05252");
+                  specialSvg.setAttribute("fill", "var(--accent-color)");
+                  specialSvg.setAttribute("stroke", "var(--accent-color)");
                 } else {
                   specialSvg.setAttribute("fill", "none");
                   specialSvg.setAttribute("stroke", "var(--text-secondary)");
@@ -23170,6 +23204,81 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           openContactModal("contact-card-modal");
+        };
+
+        let activeCardGroupId = null;
+
+        window.openGroupCardModal = function(groupId) {
+          activeCardGroupId = groupId;
+          const grp = state.chats[groupId];
+          if (!grp) return;
+
+          const modal = document.getElementById("group-card-modal");
+          if (!modal) return;
+
+          const avatarEl = document.getElementById("group-card-avatar");
+          const nameEl = document.getElementById("group-card-name");
+          const countEl = document.getElementById("group-card-member-count");
+          const membersListEl = document.getElementById("group-card-members-list");
+
+          const avatar = grp.settings?.groupAvatar || grp.avatar || grp.settings?.aiAvatar || defaultGroupAvatar || defaultAvatar;
+          if (avatarEl) avatarEl.src = avatar;
+          if (nameEl) nameEl.textContent = grp.name || "群聊";
+
+          const members = Array.isArray(grp.members) ? grp.members : [];
+          if (countEl) countEl.textContent = `${members.length} 位成员`;
+
+          if (membersListEl) {
+            membersListEl.innerHTML = "";
+            if (members.length === 0) {
+              membersListEl.innerHTML = `<p style="text-align:center; color:var(--text-secondary); font-size:12px; margin:10px 0;">暂无群成员</p>`;
+            } else {
+              members.forEach((m) => {
+                const row = document.createElement("div");
+                row.style.cssText = "display:flex; align-items:center; gap:8px; padding:4px 0;";
+                const mAvatar = m.avatar || m.avatarUrl || defaultAvatar;
+                const mName = m.groupNickname || m.name || m.nickname || "群成员";
+                row.innerHTML = `
+                  <img src="${mAvatar}" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid var(--border-color); flex-shrink:0;">
+                  <span style="font-size:12.5px; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;">${mName}</span>
+                `;
+                membersListEl.appendChild(row);
+              });
+            }
+          }
+
+          openContactModal("group-card-modal");
+        };
+
+        window.startChatFromGroupCard = async function() {
+          if (activeCardGroupId && state.chats[activeCardGroupId]) {
+            const grp = state.chats[activeCardGroupId];
+            grp.inMessageList = true;
+            await db.chats.put(grp);
+            closeContactModal("group-card-modal");
+            switchToChatListView("messages-view");
+            await openChat(grp.id);
+          }
+        };
+
+        window.disbandGroupFromCard = async function() {
+          if (activeCardGroupId && state.chats[activeCardGroupId]) {
+            const grp = state.chats[activeCardGroupId];
+            const confirmed = typeof window.showCustomConfirm === "function"
+              ? await window.showCustomConfirm("解散群聊", `确定要解散群聊 ${grp.name} 吗？`)
+              : confirm(`确定要解散群聊 ${grp.name} 吗？`);
+            if (confirmed) {
+              if (state.musicState && state.musicState.isActive && state.musicState.activeChatId === grp.id) {
+                await endListenTogetherSession(false);
+              }
+              delete state.chats[grp.id];
+              if (state.activeChatId === grp.id) state.activeChatId = null;
+              await db.chats.delete(grp.id);
+              closeContactModal("group-card-modal");
+              await renderContactsScreen();
+              if (typeof renderChatList === "function") await renderChatList();
+            }
+          }
         };
 
         window.startChatFromContactCard = async function() {
@@ -27502,11 +27611,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             selectedBadgeHtml = `<span class="intimacy-badge-display"><img src="${chat.settings.selectedIntimacyBadge}" alt="badge"></span>`;
           }
 
-          const isSpecialAttention = !chat.isGroup && !!(chat.isSpecialAttention || chat.settings?.isSpecialAttention);
-          const specialAttentionBadgeHtml = isSpecialAttention
-            ? `<span class="special-attention-badge" style="display: inline-flex; align-items: center; margin-left: 4px; vertical-align: middle;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#e05252" stroke="#e05252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span>`
-            : "";
-
           content.innerHTML = `
 			        <div class="chat-list-item" data-chat-id="${chat.id}">
 			            <img src="${avatar || defaultAvatar}" class="avatar">
@@ -27518,7 +27622,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                               : chat.name
                           }</span>
 			                    ${chat.isGroup ? '<span class="group-tag">群聊</span>' : ""}
-			                    ${specialAttentionBadgeHtml}
 			                    ${streakHtml}
 			                    ${selectedBadgeHtml} <!-- 把徽章放在火花后面 -->
 			                </div>
@@ -31168,14 +31271,34 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               try {
                 let successCount = 0;
+                const naiSettings = typeof getNovelAISettings === "function" ? getNovelAISettings() : {};
+                const globalDrawPrompt = (localStorage.getItem("coc_module_draw_global_prompt") || "1.2::artist:goguma wagamja  ::, 1.2::artist:sushisushi iiii  ::,").trim();
+                const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
+                const domNegative = document.getElementById("nai-default-negative") ? document.getElementById("nai-default-negative").value.trim() : "";
+                const artist = (domArtist || naiSettings.artist_prompt || "").trim();
+                const defaultNeg = (domNegative || naiSettings.default_negative || "").trim();
+                const fullArtistPrompt = [globalDrawPrompt, artist].filter(Boolean).join(", ");
+
                 for (const loc of locsToDraw) {
                   if (!isMapImagesDrawing) break;
                   
-                  const prompt = `${loc.name} ${loc.desc || '精致场景插图'} 高清奇幻场景概念设计`;
+                  const locPromptText = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
                   let b64 = null;
-                  if (typeof generateNovelAIImageForCharacter === "function") {
+                  if (typeof window.callNovelAiDirect === "function") {
                     try {
-                      b64 = await generateNovelAIImageForCharacter(chat.id, prompt);
+                      b64 = await window.callNovelAiDirect(locPromptText, {
+                        artist: fullArtistPrompt,
+                        negativePrompt: defaultNeg,
+                        resolution: naiSettings.resolution || "1024x1024",
+                        seed: Math.floor(Math.random() * 4294967295),
+                      });
+                    } catch (err) {}
+                  } else if (typeof generateNovelAIImageForCharacter === "function") {
+                    try {
+                      const promptParts = [];
+                      if (fullArtistPrompt) promptParts.push(fullArtistPrompt);
+                      if (locPromptText) promptParts.push(locPromptText);
+                      b64 = await generateNovelAIImageForCharacter(chat.id, promptParts.join(", "));
                     } catch (err) {}
                   }
 
@@ -31343,13 +31466,107 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
           if (backdrop) backdrop.onclick = closeModal;
           modal.onclick = (e) => {
-            if (e.target !== img) {
+            if (e.target !== img && !e.target.closest(".modal-content")) {
               closeModal(e);
             }
           };
         }
         window.showImageModal = showImageModal;
         window.viewImage = showImageModal;
+
+        async function openChatMapNodeDetailModal(node, chat) {
+          if (!node) return;
+          const modal = document.getElementById("chat-map-image-modal");
+          const titleEl = document.getElementById("chat-map-image-modal-title");
+          const img = document.getElementById("chat-map-image-modal-img");
+          const promptInput = document.getElementById("chat-map-image-modal-prompt");
+          const cancelBtn = document.getElementById("chat-map-image-modal-cancel-btn");
+          const closeBtn = document.getElementById("close-chat-map-image-modal-btn");
+          const redrawBtn = document.getElementById("chat-map-image-modal-redraw-btn");
+          const backdrop = document.getElementById("chat-map-image-backdrop");
+
+          if (!modal) return;
+
+          if (titleEl) titleEl.textContent = node.name || "地点详情";
+          if (img) {
+            img.src = node.imageUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='1.5'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpath d='m21 15-5-5L5 21'/%3E%3C/svg%3E";
+          }
+          const defaultPrompt = (node.prompt || `${node.name}${node.desc ? ', ' + node.desc : ''}`).trim();
+          if (promptInput) promptInput.value = defaultPrompt;
+
+          const closeModal = async () => {
+            if (promptInput) {
+              const pVal = promptInput.value.trim();
+              node.prompt = pVal;
+              await saveLocationImage(chat, node, node.imageUrl, pVal);
+            }
+            modal.style.display = "none";
+          };
+
+          if (backdrop) backdrop.onclick = closeModal;
+          if (closeBtn) closeBtn.onclick = closeModal;
+          if (cancelBtn) cancelBtn.onclick = closeModal;
+
+          if (redrawBtn) {
+            redrawBtn.onclick = async () => {
+              const pVal = (promptInput?.value || defaultPrompt).trim();
+              node.prompt = pVal;
+
+              const naiSettings = typeof getNovelAISettings === "function" ? getNovelAISettings() : {};
+              const globalDrawPrompt = (localStorage.getItem("coc_module_draw_global_prompt") || "1.2::artist:goguma wagamja  ::, 1.2::artist:sushisushi iiii  ::,").trim();
+              const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
+              const domNegative = document.getElementById("nai-default-negative") ? document.getElementById("nai-default-negative").value.trim() : "";
+              const artist = (domArtist || naiSettings.artist_prompt || "").trim();
+              const defaultNeg = (domNegative || naiSettings.default_negative || "").trim();
+
+              const fullArtistPrompt = [globalDrawPrompt, artist].filter(Boolean).join(", ");
+              const locPromptText = pVal || `${node.name}${node.desc ? ', ' + node.desc : ''}`;
+
+              redrawBtn.disabled = true;
+              redrawBtn.textContent = "绘制中";
+
+              try {
+                let b64 = "";
+                if (typeof window.callNovelAiDirect === "function") {
+                  b64 = await window.callNovelAiDirect(locPromptText, {
+                    artist: fullArtistPrompt,
+                    negativePrompt: defaultNeg,
+                    resolution: naiSettings.resolution || "1024x1024",
+                    seed: Math.floor(Math.random() * 4294967295),
+                  });
+                } else if (typeof generateNovelAIImageForCharacter === "function") {
+                  const promptParts = [];
+                  if (fullArtistPrompt) promptParts.push(fullArtistPrompt);
+                  if (locPromptText) promptParts.push(locPromptText);
+                  b64 = await generateNovelAIImageForCharacter(chat.id, promptParts.join(", "));
+                }
+
+                if (b64) {
+                  node.imageUrl = b64;
+                  if (img) img.src = b64;
+                  await saveLocationImage(chat, node, b64, pVal);
+                  await renderChatMapList();
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("重绘完成", `地点《${node.name}》已成功重绘`);
+                  }
+                } else {
+                  throw new Error("未能获取图像数据");
+                }
+              } catch (err) {
+                console.error("单地点重绘失败:", err);
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("重绘失败", err.message || String(err));
+                }
+              } finally {
+                redrawBtn.disabled = false;
+                redrawBtn.textContent = "重绘";
+              }
+            };
+          }
+
+          modal.style.display = "flex";
+        }
+        window.openChatMapNodeDetailModal = openChatMapNodeDetailModal;
 
         window.addEventListener("pointerdown", (e) => {
           const bubble = document.getElementById("chat-location-bubble");
@@ -31394,6 +31611,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     parent: loc.parent || "",
                     level: loc.level || 1,
                     desc: loc.desc || loc.description || loc.annotation || "",
+                    prompt: loc.prompt || "",
                     imageUrl: loc.imageUrl || loc.dataUrl || "",
                     isTemp: false,
                   });
@@ -31411,15 +31629,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   parent: loc.parent || "",
                   level: loc.level || 1,
                   desc: loc.desc || loc.description || "",
+                  prompt: loc.prompt || "",
                   imageUrl: loc.imageUrl || "",
                   isTemp: false,
                 });
               });
             } else {
               const defaultLocs = [
-                { id: "ctx_1", name: "中央广场", parent: "", level: 1, desc: "城镇的核心区域与探索出发点", imageUrl: "" },
-                { id: "ctx_2", name: "旧钟楼", parent: "中央广场", level: 2, desc: "俯瞰全景的古老机械时钟", imageUrl: "" },
-                { id: "ctx_3", name: "静谧小巷", parent: "中央广场", level: 2, desc: "连接各个场所的安静石板道", imageUrl: "" }
+                { id: "ctx_1", name: "中央广场", parent: "", level: 1, desc: "城镇的核心区域与探索出发点", prompt: "central square, bustling fantasy town", imageUrl: "" },
+                { id: "ctx_2", name: "旧钟楼", parent: "中央广场", level: 2, desc: "俯瞰全景的古老机械时钟", prompt: "ancient mechanical clocktower, stone architecture", imageUrl: "" },
+                { id: "ctx_3", name: "静谧小巷", parent: "中央广场", level: 2, desc: "连接各个场所的安静石板道", prompt: "quiet cobblestone alleyway, peaceful fantasy street", imageUrl: "" }
               ];
               locations.push(...defaultLocs);
             }
@@ -31433,6 +31652,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 parent: loc.parent || "",
                 level: loc.level || (loc.parent ? 2 : 1),
                 desc: loc.desc || loc.description || "",
+                prompt: loc.prompt || "",
                 imageUrl: loc.imageUrl || "",
                 isTemp: true,
               });
@@ -31442,7 +31662,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return locations;
         }
 
-        async function saveLocationImage(chat, node, b64) {
+        async function saveLocationImage(chat, node, b64, newPrompt) {
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           const useModule = (chat?.settings?.useModuleMap !== false);
 
@@ -31452,6 +31672,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const found = await dbInstance.moduleLocationNav.get(node.id);
                 if (found) {
                   found.imageUrl = b64;
+                  if (newPrompt !== undefined) found.prompt = newPrompt;
                   await dbInstance.moduleLocationNav.put(found);
                 }
               } catch (e) {}
@@ -31461,7 +31682,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const mod = await dbInstance.modules.get(chat.activeModuleId);
                 if (mod && Array.isArray(mod.mapNodes)) {
                   const target = mod.mapNodes.find(m => m.name === node.name);
-                  if (target) target.imageUrl = b64;
+                  if (target) {
+                    target.imageUrl = b64;
+                    if (newPrompt !== undefined) target.prompt = newPrompt;
+                  }
                   await dbInstance.modules.update(chat.activeModuleId, { mapNodes: mod.mapNodes });
                 }
               } catch (e) {}
@@ -31472,7 +31696,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (node.isTemp) {
             if (Array.isArray(chat.settings.temporaryLocations)) {
               const t = chat.settings.temporaryLocations.find(l => l.id === node.id || l.name === node.name);
-              if (t) t.imageUrl = b64;
+              if (t) {
+                t.imageUrl = b64;
+                if (newPrompt !== undefined) t.prompt = newPrompt;
+              }
             }
           } else {
             if (!Array.isArray(chat.settings.contextMapData) || chat.settings.contextMapData.length === 0) {
@@ -31483,14 +31710,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 parent: l.parent,
                 level: l.level,
                 desc: l.desc,
+                prompt: l.name === node.name && newPrompt !== undefined ? newPrompt : (l.prompt || ""),
                 imageUrl: l.name === node.name ? b64 : (l.imageUrl || "")
               }));
             } else {
               const t = chat.settings.contextMapData.find(l => l.id === node.id || l.name === node.name);
               if (t) {
                 t.imageUrl = b64;
+                if (newPrompt !== undefined) t.prompt = newPrompt;
               } else {
-                chat.settings.contextMapData.push({ id: node.id, name: node.name, parent: node.parent, level: node.level, desc: node.desc, imageUrl: b64 });
+                chat.settings.contextMapData.push({ id: node.id, name: node.name, parent: node.parent, level: node.level, desc: node.desc, prompt: newPrompt || "", imageUrl: b64 });
               }
             }
           }
@@ -31618,11 +31847,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (thumbImg) {
               thumbImg.onclick = (e) => {
                 e.stopPropagation();
-                if (typeof window.showImageModal === "function") {
-                  window.showImageModal(node.imageUrl);
-                } else if (typeof viewImage === "function") {
-                  viewImage(node.imageUrl);
-                }
+                openChatMapNodeDetailModal(node, chat);
               };
             }
 
@@ -31630,27 +31855,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (placeholder) {
               placeholder.onclick = (e) => {
                 e.stopPropagation();
-                const fileInput = document.createElement("input");
-                fileInput.type = "file";
-                fileInput.accept = "image/*";
-                fileInput.onchange = async () => {
-                  const file = fileInput.files && fileInput.files[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = async (evt) => {
-                    let b64 = evt.target.result;
-                    if (typeof compressImage === "function") {
-                      try {
-                        b64 = await compressImage(b64, 0.5, 900);
-                      } catch (err) {}
-                    }
-                    node.imageUrl = b64;
-                    await saveLocationImage(chat, node, b64);
-                    await renderChatMapList();
-                  };
-                  reader.readAsDataURL(file);
-                };
-                fileInput.click();
+                openChatMapNodeDetailModal(node, chat);
               };
             }
 
@@ -33446,19 +33651,12 @@ ${luckGuideNote}
                       }
 
                       if (imageDataUrl) {
-                        try {
-                          const q = (state.globalSettings && state.globalSettings.imageCompressionQuality) || 0.75;
-                          imageDataUrl = await compressImage(imageDataUrl, q, 1280);
-                        } catch (e) {
-                          console.warn("自动压缩生图失败，保留原图:", e);
-                        }
                         const imgMsg = {
                           role: "assistant",
                           senderName: chat.name,
                           timestamp: Date.now(),
                           type: "naiimag",
                           imageUrl: imageDataUrl,
-                          _compressed: true,
                           prompt: aiPrompt,
                           fullPrompt: finalPositivePrompt,
                           negativePrompt: finalNegativePrompt,
@@ -37565,18 +37763,9 @@ ${luckStatusDirective}
                         }
 
                         console.log(`✅ NAI图片${i + 1}生成成功！`);
-                        if (imageDataUrl) {
-                          try {
-                            const q = (state.globalSettings && state.globalSettings.imageCompressionQuality) || 0.75;
-                            imageDataUrl = await compressImage(imageDataUrl, q, 1280);
-                          } catch (e) {
-                            console.warn("自动压缩动态生图失败:", e);
-                          }
-                        }
                         generatedImageUrls.push(imageDataUrl);
                       }
 
-                      newPost._compressed = true;
                       // 将生成的图片URL保存到动态中
                       newPost.imageUrls = generatedImageUrls;
 
@@ -37992,21 +38181,12 @@ ${luckStatusDirective}
                     }
 
                     console.log("✅ NAI图片生成成功！");
-                    if (imageDataUrl) {
-                      try {
-                        const q = (state.globalSettings && state.globalSettings.imageCompressionQuality) || 0.75;
-                        imageDataUrl = await compressImage(imageDataUrl, q, 1280);
-                      } catch (e) {
-                        console.warn("自动压缩群聊生图失败:", e);
-                      }
-                    }
 
                     // 创建naiimag消息
                     aiMessage = {
                       ...baseMessage,
                       type: "naiimag",
                       imageUrl: imageDataUrl,
-                      _compressed: true,
                       prompt: aiPrompt,
                       fullPrompt: finalPositivePrompt, // 保存完整提示词供查看
                     };
@@ -42714,11 +42894,11 @@ ${luckStatusDirective}
             if (!memberList || memberList.length === 0) return null;
             const card = document.createElement("div");
             card.className = "contact-picker-group-card";
-            card.style.cssText = "background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; margin-bottom: 2px; flex-shrink: 0;";
+            card.style.cssText = "background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; margin-bottom: 2px; flex-shrink: 0; box-sizing: border-box;";
 
             const header = document.createElement("div");
             header.className = "contact-picker-group-header";
-            header.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--secondary-bg); cursor: pointer; user-select: none;";
+            header.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--secondary-bg); cursor: pointer; user-select: none; flex-shrink: 0;";
             header.innerHTML = `
               <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
                 <span class="contact-group-arrow" style="font-size: 11px; color: var(--text-secondary); transition: transform 0.2s ease; transform: ${defaultOpen ? 'rotate(0deg)' : 'rotate(-90deg)'};">▼</span>
@@ -42729,16 +42909,21 @@ ${luckStatusDirective}
 
             const body = document.createElement("div");
             body.className = "contact-picker-group-body";
-            body.style.cssText = `display: ${defaultOpen ? 'flex' : 'none'}; flex-direction: column;`;
+            body.style.cssText = `display: ${defaultOpen ? 'flex' : 'none'}; flex-direction: column; flex-shrink: 0;`;
 
-            memberList.forEach(contact => {
+            // 分组内部：特别关心联系人置顶
+            const sortedMembers = memberList.slice().sort((a, b) => {
+              const aSpec = !!(a.isSpecialAttention || a.chat?.isSpecialAttention || a.chat?.settings?.isSpecialAttention || a.chat?.isPinned || a.chat?.settings?.isPinned);
+              const bSpec = !!(b.isSpecialAttention || b.chat?.isSpecialAttention || b.chat?.settings?.isSpecialAttention || b.chat?.isPinned || b.chat?.settings?.isPinned);
+              return (bSpec ? 1 : 0) - (aSpec ? 1 : 0);
+            });
+
+            sortedMembers.forEach(contact => {
               const isSelected = selectedContacts.has(String(contact.id));
               const item = document.createElement("div");
               item.className = `contact-picker-item ${isSelected ? "selected" : ""}`;
               item.dataset.contactId = contact.id;
-              item.style.cssText = "display: flex; align-items: center; padding: 9px 12px; cursor: pointer; border-top: 1px solid var(--border-color); background: var(--card-bg);";
-
-              const isSpec = !!(contact.isSpecialAttention || contact.chat?.isSpecialAttention || contact.chat?.settings?.isSpecialAttention);
+              item.style.cssText = "display: flex; align-items: center; padding: 9px 12px; cursor: pointer; border-top: 1px solid var(--border-color); background: var(--card-bg); min-height: 48px; flex-shrink: 0; box-sizing: border-box;";
 
               item.innerHTML = `
                 <div class="checkbox"></div>
@@ -42746,7 +42931,6 @@ ${luckStatusDirective}
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
                   <div style="display: flex; align-items: center; gap: 5px;">
                     <span class="name" style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${contact.name}</span>
-                    ${isSpec ? '<span style="display: inline-flex; align-items: center; vertical-align: middle;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#e05252" stroke="#e05252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></span>' : ''}
                     ${contact.isNpc ? '<span style="font-size: 10px; color: var(--accent-color); border: 1px solid var(--accent-color); border-radius: 3px; padding: 0 4px; line-height: 14px;">NPC</span>' : ''}
                   </div>
                 </div>
@@ -56486,23 +56670,30 @@ ${luckStatusDirective}
               return;
             }
 
-            const isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
-            const geminiConfig = isGemini ? toGeminiRequestData(model, apiKey, keeperSystemPrompt, messagesForApi, isGemini, temperature) : null;
+            let targetUrl = (proxyUrl || "https://api.openai.com").trim().replace(/\/+$/, "");
+            const isGemini = targetUrl === GEMINI_API_URL || targetUrl.includes("generativelanguage.googleapis.com");
+            let response;
 
-            const response = isGemini
-              ? await fetch(geminiConfig.url, geminiConfig.data)
-              : await fetch(`${proxyUrl}/v1/chat/completions`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${apiKey}`,
-                  },
-                  body: JSON.stringify({
-                    model: model,
-                    messages: messagesForApi,
-                    temperature: temperature || 0.7,
-                  }),
-                });
+            if (isGemini) {
+              const geminiConfig = toGeminiRequestData(model, apiKey, keeperSystemPrompt, messagesForApi, isGemini, temperature);
+              response = await fetch(geminiConfig.url, geminiConfig.data);
+            } else {
+              if (!targetUrl.endsWith("/chat/completions") && !targetUrl.endsWith("/completions")) {
+                targetUrl = targetUrl.endsWith("/v1") ? `${targetUrl}/chat/completions` : `${targetUrl}/v1/chat/completions`;
+              }
+              response = await fetch(targetUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: model,
+                  messages: messagesForApi,
+                  temperature: temperature || 0.7,
+                }),
+              });
+            }
 
             if (!response.ok) throw new Error(await response.text());
             const data = await response.json();
@@ -56514,23 +56705,17 @@ ${luckStatusDirective}
 
             let generatedPrompt = "";
             try {
-              const jsonMatch = rawContent.match(/\{[\s\S]*?"type"\s*:\s*"naiimag"[\s\S]*?\}/);
+              const jsonMatch = rawContent.match(/\{[\s\S]*?"(?:type|prompt)"[\s\S]*?\}/);
               if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
-                generatedPrompt = parsed.prompt || "";
-              } else {
-                const anyJson = rawContent.match(/\{[\s\S]*?\}/);
-                if (anyJson) {
-                  const parsed = JSON.parse(anyJson[0]);
-                  generatedPrompt = parsed.prompt || "";
-                }
+                generatedPrompt = parsed.prompt || parsed.content || "";
               }
             } catch (pe) {
               console.warn("解析生图 JSON 异常:", pe);
             }
 
             if (!generatedPrompt) {
-              generatedPrompt = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
+              generatedPrompt = rawContent.replace(/^```[a-z]*\s*/i, "").replace(/```$/i, "").replace(/["'\n\r]/g, " ").trim();
             }
 
             if (!generatedPrompt) return;
@@ -56698,7 +56883,6 @@ ${luckStatusDirective}
             senderAvatar: senderAvatar,
             type: "naiimag",
             imageUrl: imageDataUrl,
-            _compressed: true,
             prompt: aiPrompt,
             fullPrompt: finalPositivePrompt,
             timestamp: Date.now(),
@@ -60015,23 +60199,61 @@ ${luckStatusDirective}
             try {
               if (dbInstance.photos) {
                 const photos = await dbInstance.photos.toArray();
-                categories.images.count += photos.length;
-                photos.forEach(p => { categories.images.bytes += getStrBytes(p.dataUrl || p.url || p); });
+                photos.forEach(p => {
+                  const dUrl = p.dataUrl || p.url;
+                  if (dUrl) {
+                    categories.images.count++;
+                    categories.images.bytes += new Blob([dUrl]).size;
+                  }
+                });
               }
               if (dbInstance.moduleImages) {
                 const modImgs = await dbInstance.moduleImages.toArray();
-                categories.images.count += modImgs.length;
-                modImgs.forEach(m => { categories.images.bytes += getStrBytes(m.dataUrl || m.url || m); });
+                modImgs.forEach(m => {
+                  const dUrl = m.dataUrl || m.url;
+                  if (dUrl) {
+                    categories.images.count++;
+                    categories.images.bytes += new Blob([dUrl]).size;
+                  }
+                });
               }
               if (dbInstance.userStickers) {
                 const stickers = await dbInstance.userStickers.toArray();
-                categories.images.count += stickers.length;
-                stickers.forEach(s => { categories.images.bytes += getStrBytes(s.url || s.dataUrl || s); });
+                stickers.forEach(s => {
+                  const dUrl = s.url || s.dataUrl;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    categories.images.count++;
+                    categories.images.bytes += new Blob([dUrl]).size;
+                  }
+                });
               }
               if (dbInstance.charStickers) {
                 const charStickers = await dbInstance.charStickers.toArray();
-                categories.images.count += charStickers.length;
-                charStickers.forEach(s => { categories.images.bytes += getStrBytes(s.url || s.dataUrl || s); });
+                charStickers.forEach(s => {
+                  const dUrl = s.url || s.dataUrl;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    categories.images.count++;
+                    categories.images.bytes += new Blob([dUrl]).size;
+                  }
+                });
+              }
+              if (dbInstance.taobaoProducts) {
+                const taobaoProducts = await dbInstance.taobaoProducts.toArray();
+                taobaoProducts.forEach(prod => {
+                  if (prod.image && typeof prod.image === "string" && prod.image.startsWith("data:image")) {
+                    categories.images.count++;
+                    categories.images.bytes += new Blob([prod.image]).size;
+                  }
+                });
+              }
+              if (dbInstance.datingSprites) {
+                const datingSprites = await dbInstance.datingSprites.toArray();
+                datingSprites.forEach(sp => {
+                  if (sp.dataUrl && typeof sp.dataUrl === "string" && sp.dataUrl.startsWith("data:image")) {
+                    categories.images.count++;
+                    categories.images.bytes += new Blob([sp.dataUrl]).size;
+                  }
+                });
               }
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
@@ -60042,21 +60264,25 @@ ${luckStatusDirective}
                         msg.content.forEach(part => {
                           if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
                             categories.images.count++;
-                            categories.images.bytes += getStrBytes(part.image_url.url);
+                            categories.images.bytes += new Blob([part.image_url.url]).size;
                           }
                         });
                       }
                       if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
                         categories.images.count++;
-                        categories.images.bytes += getStrBytes(msg.imageUrl);
+                        categories.images.bytes += new Blob([msg.imageUrl]).size;
+                      }
+                      if (msg.url && typeof msg.url === "string" && msg.url.startsWith("data:image")) {
+                        categories.images.count++;
+                        categories.images.bytes += new Blob([msg.url]).size;
                       }
                       if (msg.content && typeof msg.content === "string" && msg.content.startsWith("data:image")) {
                         categories.images.count++;
-                        categories.images.bytes += getStrBytes(msg.content);
+                        categories.images.bytes += new Blob([msg.content]).size;
                       }
                       if (msg.image && typeof msg.image === "string" && msg.image.startsWith("data:image")) {
                         categories.images.count++;
-                        categories.images.bytes += getStrBytes(msg.image);
+                        categories.images.bytes += new Blob([msg.image]).size;
                       }
                     });
                   }
@@ -60071,18 +60297,29 @@ ${luckStatusDirective}
                 categories.maps.count += locs.length;
                 locs.forEach(l => { categories.maps.bytes += getStrBytes(l); });
               }
+              if (dbInstance.modules) {
+                const allMods = await dbInstance.modules.toArray();
+                allMods.forEach(mod => {
+                  if (Array.isArray(mod.mapNodes)) {
+                    categories.maps.count += mod.mapNodes.length;
+                    mod.mapNodes.forEach(node => { categories.maps.bytes += getStrBytes(node); });
+                  }
+                });
+              }
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
                 chats.forEach(c => {
+                  if (Array.isArray(c.settings?.contextMapData)) {
+                    categories.maps.count += c.settings.contextMapData.length;
+                    c.settings.contextMapData.forEach(loc => { categories.maps.bytes += getStrBytes(loc); });
+                  }
+                  if (Array.isArray(c.settings?.temporaryLocations)) {
+                    categories.maps.count += c.settings.temporaryLocations.length;
+                    c.settings.temporaryLocations.forEach(loc => { categories.maps.bytes += getStrBytes(loc); });
+                  }
                   if (c.settings?.miniMapSvg) {
                     categories.maps.bytes += getStrBytes(c.settings.miniMapSvg);
                     categories.maps.count++;
-                  }
-                  if (c.settings?.contextMapData) {
-                    categories.maps.bytes += getStrBytes(c.settings.contextMapData);
-                  }
-                  if (c.settings?.temporaryLocations) {
-                    categories.maps.bytes += getStrBytes(c.settings.temporaryLocations);
                   }
                 });
               }
@@ -60094,9 +60331,8 @@ ${luckStatusDirective}
                 const chats = await dbInstance.chats.toArray();
                 chats.forEach(c => {
                   const hist = c.history || [];
-                  categories.chat.count += hist.length;
-                  categories.chat.bytes += getStrBytes(hist);
-                  if (c.settings) categories.other.bytes += getStrBytes(c.settings);
+                  categories.chat.count += 1;
+                  categories.chat.bytes += getStrBytes(hist) + getStrBytes(c.settings);
                 });
               }
               if (dbInstance.chatBackups) {
@@ -60113,11 +60349,6 @@ ${luckStatusDirective}
                 categories.modules.count += mods.length;
                 mods.forEach(m => { categories.modules.bytes += getStrBytes(m); });
               }
-              if (dbInstance.moduleChapters) {
-                const chaps = await dbInstance.moduleChapters.toArray();
-                categories.modules.count += chaps.length;
-                chaps.forEach(ch => { categories.modules.bytes += getStrBytes(ch.content || ch); });
-              }
             } catch(e) {}
 
             // 5. 论坛文章数据
@@ -60126,20 +60357,6 @@ ${luckStatusDirective}
                 const posts = await dbInstance.forumPosts.toArray();
                 categories.forum.count += posts.length;
                 posts.forEach(p => { categories.forum.bytes += getStrBytes(p); });
-              }
-              if (dbInstance.forumChapters) {
-                const fChaps = await dbInstance.forumChapters.toArray();
-                categories.forum.count += fChaps.length;
-                fChaps.forEach(ch => { categories.forum.bytes += getStrBytes(ch); });
-              }
-              if (dbInstance.forumComments) {
-                const fComments = await dbInstance.forumComments.toArray();
-                categories.forum.count += fComments.length;
-                fComments.forEach(c => { categories.forum.bytes += getStrBytes(c); });
-              }
-              if (dbInstance.forumSeries) {
-                const fSeries = await dbInstance.forumSeries.toArray();
-                categories.forum.count += fSeries.forEach ? fSeries.forEach(s => { categories.forum.bytes += getStrBytes(s); }) : 0;
               }
             } catch(e) {}
 
@@ -60150,29 +60367,24 @@ ${luckStatusDirective}
                 categories.audio.count += musics.length;
                 musics.forEach(m => { categories.audio.bytes += getStrBytes(m); });
               }
-              if (dbInstance.audio) {
-                const audios = await dbInstance.audio.toArray();
-                categories.audio.count += audios.length;
-                audios.forEach(a => { categories.audio.bytes += getStrBytes(a); });
-              }
             } catch(e) {}
           }
 
-          // 7. 页面 HTML 与 LocalStorage
+          // 7. 页面与本地缓存分类（按键名精准划分页面配置与其他缓存）
           try {
-            const htmlLen = document.documentElement.outerHTML.length;
-            categories.page.bytes += htmlLen;
-            categories.page.count = 1;
-          } catch(e) {}
-
-          try {
-            let lsBytes = 0;
+            const pageKeyPattern = /(desktop|theme|custom|profile|widget|app_|wallpaper|darkreader|ephone-|tukey_|layout|ui_)/i;
             for (let i = 0; i < localStorage.length; i++) {
               const k = localStorage.key(i);
-              lsBytes += getStrBytes(localStorage.getItem(k));
+              const val = localStorage.getItem(k);
+              const b = getStrBytes(val);
+              if (pageKeyPattern.test(k)) {
+                categories.page.bytes += b;
+                categories.page.count++;
+              } else {
+                categories.other.bytes += b;
+                categories.other.count++;
+              }
             }
-            categories.other.bytes += lsBytes;
-            categories.other.count += localStorage.length;
           } catch(e) {}
 
           const catList = Object.values(categories);
@@ -60206,7 +60418,6 @@ ${luckStatusDirective}
               ${catList.map((c, idx) => {
                 const pct = ((c.bytes / totalBytes) * 100).toFixed(1);
                 const rankLabel = idx === 0 ? "最多" : (idx === catList.length - 1 ? "最少" : `第${idx + 1}`);
-                const canView = true;
                 return `
                   <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border-color); cursor: pointer;" onclick="openStorageImagesModal('${c.key}')">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -60220,7 +60431,7 @@ ${luckStatusDirective}
                           <span style="font-size: 13px; font-weight: 700; color: var(--text-primary);">${formatSize(c.bytes)}</span>
                           <span style="font-size: 11px; color: var(--text-secondary); font-weight: 500;">${pct}%</span>
                         </div>
-                        <button type="button" class="chat-mod-footer-btn secondary" onclick="event.stopPropagation(); openStorageImagesModal('${c.key}')" style="height: 24px; font-size: 11px; padding: 0 8px; border-radius: 6px; line-height: 1;">查看</button>
+                        <button type="button" onclick="event.stopPropagation(); openStorageImagesModal('${c.key}')" style="height: 24px; font-size: 11px; font-weight: 500; padding: 0 8px; width: auto; min-width: 44px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; flex-shrink: 0; line-height: 1;">查看</button>
                       </div>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary);">
@@ -60305,30 +60516,30 @@ ${luckStatusDirective}
               const selectedItems = loadedStorageImagesList.filter(item => item.selected);
               if (selectedItems.length === 0) {
                 if (typeof window.showCustomAlert === "function") {
-                  await window.showCustomAlert("提示", "请先勾选需要压缩的图片");
+                  await window.showCustomAlert("提示", "请先勾选需要压缩的数据项");
                 }
                 return;
               }
 
-              const count = selectedItems.length;
               const quality = parseFloat(qualitySelect?.value || "0.1");
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-              const includeCompressed = document.getElementById("storage-images-include-compressed")?.checked;
+              const includeCompressed = !!document.getElementById("storage-images-include-compressed")?.checked;
 
               const shouldSkipImage = (url) => {
                 if (includeCompressed) return false;
                 if (!url || typeof url !== "string") return true;
                 if (!url.startsWith("data:image")) return true;
-                if (url.startsWith("data:image/jpeg;base64,") && url.length < 300000) return true;
+                if (url.startsWith("data:image/jpeg;base64,") && url.length < 80000) return true;
                 return false;
               };
 
               if (typeof window.showCustomAlert === "function") {
-                await window.showCustomAlert("开始压缩", "已开始在后台压缩选中的数据项");
+                await window.showCustomAlert("开始压缩", "已开始压缩选中的数据项");
               }
 
               (async () => {
                 let successCount = 0;
+                let optimalCount = 0;
                 let failCount = 0;
 
                 for (const item of selectedItems) {
@@ -60337,133 +60548,118 @@ ${luckStatusDirective}
                       const chat = await dbInstance.chats.get(item.recordId);
                       if (chat) {
                         let chatCompCount = 0;
-                        // 1. 压缩聊天历史中的所有消息配图与图片内容
                         if (Array.isArray(chat.history)) {
                           for (const msg of chat.history) {
                             if (Array.isArray(msg.content)) {
                               for (const part of msg.content) {
                                 if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
-                                  if (shouldSkipImage(part.image_url.url)) continue;
+                                  if (shouldSkipImage(part.image_url.url)) { optimalCount++; continue; }
                                   try {
-                                    const comp = await compressImage(part.image_url.url, quality, 1280);
-                                    if (comp) {
+                                    const comp = await compressImage(part.image_url.url, quality, 1280, includeCompressed);
+                                    if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== part.image_url.url && comp.length < part.image_url.url.length))) {
                                       part.image_url.url = comp;
                                       chatCompCount++;
-                                    }
+                                    } else { optimalCount++; }
                                   } catch(e) { failCount++; }
                                 }
                               }
                             }
                             if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
-                              if (!shouldSkipImage(msg.imageUrl)) {
+                              if (shouldSkipImage(msg.imageUrl)) { optimalCount++; }
+                              else {
                                 try {
-                                  const comp = await compressImage(msg.imageUrl, quality, 1280);
-                                  if (comp) {
+                                  const comp = await compressImage(msg.imageUrl, quality, 1280, includeCompressed);
+                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.imageUrl && comp.length < msg.imageUrl.length))) {
                                     msg.imageUrl = comp;
                                     chatCompCount++;
-                                  }
+                                  } else { optimalCount++; }
+                                } catch(e) { failCount++; }
+                              }
+                            }
+                            if (msg.url && typeof msg.url === "string" && msg.url.startsWith("data:image")) {
+                              if (shouldSkipImage(msg.url)) { optimalCount++; }
+                              else {
+                                try {
+                                  const comp = await compressImage(msg.url, quality, 1280, includeCompressed);
+                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.url && comp.length < msg.url.length))) {
+                                    msg.url = comp;
+                                    if (msg.imageUrl) msg.imageUrl = comp;
+                                    chatCompCount++;
+                                  } else { optimalCount++; }
                                 } catch(e) { failCount++; }
                               }
                             }
                             if (msg.content && typeof msg.content === "string" && msg.content.startsWith("data:image")) {
-                              if (!shouldSkipImage(msg.content)) {
+                              if (shouldSkipImage(msg.content)) { optimalCount++; }
+                              else {
                                 try {
-                                  const comp = await compressImage(msg.content, quality, 1280);
-                                  if (comp) {
+                                  const comp = await compressImage(msg.content, quality, 1280, includeCompressed);
+                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.content && comp.length < msg.content.length))) {
                                     msg.content = comp;
                                     chatCompCount++;
-                                  }
+                                  } else { optimalCount++; }
                                 } catch(e) { failCount++; }
                               }
                             }
                             if (msg.image && typeof msg.image === "string" && msg.image.startsWith("data:image")) {
-                              if (!shouldSkipImage(msg.image)) {
+                              if (shouldSkipImage(msg.image)) { optimalCount++; }
+                              else {
                                 try {
-                                  const comp = await compressImage(msg.image, quality, 1280);
-                                  if (comp) {
+                                  const comp = await compressImage(msg.image, quality, 1280, includeCompressed);
+                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.image && comp.length < msg.image.length))) {
                                     msg.image = comp;
                                     chatCompCount++;
-                                  }
+                                  } else { optimalCount++; }
                                 } catch(e) { failCount++; }
                               }
                             }
                             if (msg.cameraFrame && typeof msg.cameraFrame === "string" && msg.cameraFrame.startsWith("data:image")) {
-                              if (!shouldSkipImage(msg.cameraFrame)) {
+                              if (shouldSkipImage(msg.cameraFrame)) { optimalCount++; }
+                              else {
                                 try {
-                                  const comp = await compressImage(msg.cameraFrame, quality, 1280);
-                                  if (comp) {
+                                  const comp = await compressImage(msg.cameraFrame, quality, 1280, includeCompressed);
+                                  if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== msg.cameraFrame && comp.length < msg.cameraFrame.length))) {
                                     msg.cameraFrame = comp;
                                     chatCompCount++;
-                                  }
+                                  } else { optimalCount++; }
                                 } catch(e) { failCount++; }
                               }
                             }
                           }
                         }
 
-                        // 2. 压缩头像与背景
                         if (chat.settings?.aiAvatar && chat.settings.aiAvatar.startsWith("data:image")) {
                           if (!shouldSkipImage(chat.settings.aiAvatar)) {
                             try {
-                              const comp = await compressImage(chat.settings.aiAvatar, quality, 1280);
-                              if (comp) {
+                              const comp = await compressImage(chat.settings.aiAvatar, quality, 1280, includeCompressed);
+                              if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== chat.settings.aiAvatar && comp.length < chat.settings.aiAvatar.length))) {
                                 chat.settings.aiAvatar = comp;
                                 chatCompCount++;
-                              }
+                              } else { optimalCount++; }
                             } catch(e) { failCount++; }
-                          }
+                          } else { optimalCount++; }
                         }
                         if (chat.settings?.userAvatar && chat.settings.userAvatar.startsWith("data:image")) {
                           if (!shouldSkipImage(chat.settings.userAvatar)) {
                             try {
-                              const comp = await compressImage(chat.settings.userAvatar, quality, 1280);
-                              if (comp) {
+                              const comp = await compressImage(chat.settings.userAvatar, quality, 1280, includeCompressed);
+                              if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== chat.settings.userAvatar && comp.length < chat.settings.userAvatar.length))) {
                                 chat.settings.userAvatar = comp;
                                 chatCompCount++;
-                              }
+                              } else { optimalCount++; }
                             } catch(e) { failCount++; }
-                          }
+                          } else { optimalCount++; }
                         }
                         if (chat.settings?.background && chat.settings.background.startsWith("data:image")) {
                           if (!shouldSkipImage(chat.settings.background)) {
                             try {
-                              const comp = await compressImage(chat.settings.background, quality, 1280);
-                              if (comp) {
+                              const comp = await compressImage(chat.settings.background, quality, 1280, includeCompressed);
+                              if (comp && comp.startsWith("data:image") && (includeCompressed || (comp !== chat.settings.background && comp.length < chat.settings.background.length))) {
                                 chat.settings.background = comp;
                                 chatCompCount++;
-                              }
+                              } else { optimalCount++; }
                             } catch(e) { failCount++; }
-                          }
-                        }
-
-                        // 3. 压缩地图节点配图
-                        if (Array.isArray(chat.settings?.contextMapData)) {
-                          for (const loc of chat.settings.contextMapData) {
-                            if (loc.imageUrl && loc.imageUrl.startsWith("data:image")) {
-                              if (shouldSkipImage(loc.imageUrl)) continue;
-                              try {
-                                const comp = await compressImage(loc.imageUrl, quality, 1280);
-                                if (comp) {
-                                  loc.imageUrl = comp;
-                                  chatCompCount++;
-                                }
-                              } catch(e) { failCount++; }
-                            }
-                          }
-                        }
-                        if (Array.isArray(chat.settings?.temporaryLocations)) {
-                          for (const loc of chat.settings.temporaryLocations) {
-                            if (loc.imageUrl && loc.imageUrl.startsWith("data:image")) {
-                              if (shouldSkipImage(loc.imageUrl)) continue;
-                              try {
-                                const comp = await compressImage(loc.imageUrl, quality, 1280);
-                                if (comp) {
-                                  loc.imageUrl = comp;
-                                  chatCompCount++;
-                                }
-                              } catch(e) { failCount++; }
-                            }
-                          }
+                          } else { optimalCount++; }
                         }
 
                         await dbInstance.chats.put(chat);
@@ -60477,19 +60673,20 @@ ${luckStatusDirective}
                       console.warn("压缩聊天数据失败:", e);
                       failCount++;
                     }
-                  } else if (typeof compressImage === "function" && item.dataUrl && item.dataUrl.startsWith("data:image")) {
+                  } else if (item.dataUrl && item.dataUrl.startsWith("data:image")) {
                     if (shouldSkipImage(item.dataUrl)) {
+                      optimalCount++;
                       continue;
                     }
                     try {
-                      const compressed = await compressImage(item.dataUrl, quality, 1280);
-                      if (compressed) {
+                      const compressed = await compressImage(item.dataUrl, quality, 1280, includeCompressed);
+                      if (compressed && compressed.startsWith("data:image") && (includeCompressed || (compressed !== item.dataUrl && compressed.length < item.dataUrl.length))) {
                         item.dataUrl = compressed;
                         item.size = new Blob([compressed]).size;
                         await saveCompressedItemToDB(item, compressed, dbInstance);
                         successCount++;
                       } else {
-                        failCount++;
+                        optimalCount++;
                       }
                     } catch (e) {
                       console.warn("单张压缩失败:", e);
@@ -60500,14 +60697,12 @@ ${luckStatusDirective}
                   }
                 }
 
-                if (failCount === 0) {
-                  if (typeof window.showCustomAlert === "function") {
-                    await window.showCustomAlert("压缩完成", "已成功压缩 " + successCount + " 张图片");
-                  }
-                } else {
-                  if (typeof window.showCustomAlert === "function") {
-                    await window.showCustomAlert("压缩完成", "已成功压缩 " + successCount + " 张图片，失败 " + failCount + " 张");
-                  }
+                let summaryMsg = `已成功压缩 ${successCount} 张图片`;
+                if (optimalCount > 0) summaryMsg += `，${optimalCount} 张已达最优无需再压`;
+                if (failCount > 0) summaryMsg += `，失败 ${failCount} 张`;
+
+                if (typeof window.showCustomAlert === "function") {
+                  await window.showCustomAlert("压缩完成", summaryMsg);
                 }
 
                 renderLoadedStorageImagesUI();
@@ -60584,6 +60779,10 @@ ${luckStatusDirective}
               await dbInstance.userStickers.delete(item.recordId);
             } else if (item.table === "charStickers" && item.recordId && dbInstance?.charStickers) {
               await dbInstance.charStickers.delete(item.recordId);
+            } else if (item.table === "taobaoProducts" && item.recordId && dbInstance?.taobaoProducts) {
+              await dbInstance.taobaoProducts.delete(item.recordId);
+            } else if (item.table === "datingSprites" && item.recordId && dbInstance?.datingSprites) {
+              await dbInstance.datingSprites.delete(item.recordId);
             } else {
               await saveCompressedItemToDB(item, "", dbInstance);
             }
@@ -60620,11 +60819,22 @@ ${luckStatusDirective}
                 } else if (item.field === "history_content" && Array.isArray(chat.history)) {
                   const msg = chat.history[item.msgIndex] || chat.history.find(m => m.timestamp === item.timestamp);
                   if (msg) msg.content = newUrl;
+                } else if (item.field === "history_url" && Array.isArray(chat.history)) {
+                  const msg = chat.history[item.msgIndex] || chat.history.find(m => m.timestamp === item.timestamp);
+                  if (msg) {
+                    msg.url = newUrl;
+                    if (msg.imageUrl) msg.imageUrl = newUrl;
+                  }
+                } else if (item.field === "history_image" && Array.isArray(chat.history)) {
+                  const msg = chat.history[item.msgIndex] || chat.history.find(m => m.timestamp === item.timestamp);
+                  if (msg) msg.image = newUrl;
                 } else if (item.field === "history" && Array.isArray(chat.history)) {
                   const msg = chat.history[item.msgIndex] || chat.history.find(m => m.timestamp === item.timestamp);
                   if (msg) {
                     if (msg.imageUrl) msg.imageUrl = newUrl;
+                    if (msg.url) msg.url = newUrl;
                     if (typeof msg.content === "string" && msg.content.startsWith("data:image/")) msg.content = newUrl;
+                    if (msg.image) msg.image = newUrl;
                   }
                 } else if (item.field === "contextMapData" && chat.settings?.contextMapData) {
                   const node = chat.settings.contextMapData.find(n => n.id === item.subId || n.name === item.nodeName);
@@ -60802,7 +61012,7 @@ ${luckStatusDirective}
             }
           }
 
-          // 2. 图片分类扫描（仅包含真实图片相册与表情，绝不混入地图头像）
+          // 2. 图片分类扫描（包含相册照片、模组插图、表情包、商品与聊天图片）
           if (currentStorageCategory === "images" || currentStorageCategory === "all") {
             try {
               if (dbInstance.photos) {
@@ -60865,6 +61075,64 @@ ${luckStatusDirective}
                 });
               }
 
+              if (dbInstance.charStickers) {
+                const charStickers = await dbInstance.charStickers.toArray();
+                charStickers.forEach(s => {
+                  const dUrl = s.url || s.dataUrl;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "char_sticker_" + s.id,
+                      type: "image",
+                      table: "charStickers",
+                      recordId: s.id,
+                      name: s.name || "角色表情",
+                      origin: `角色表情: ${s.name || '未命名'}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+
+              if (dbInstance.taobaoProducts) {
+                const taobaoProducts = await dbInstance.taobaoProducts.toArray();
+                taobaoProducts.forEach(prod => {
+                  if (prod.image && typeof prod.image === "string" && prod.image.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "taobao_prod_" + prod.id,
+                      type: "image",
+                      table: "taobaoProducts",
+                      recordId: prod.id,
+                      name: prod.name || "商品图片",
+                      origin: `商品配图: ${prod.name || '未命名'}`,
+                      size: new Blob([prod.image]).size,
+                      dataUrl: prod.image,
+                      selected: false
+                    });
+                  }
+                });
+              }
+
+              if (dbInstance.datingSprites) {
+                const datingSprites = await dbInstance.datingSprites.toArray();
+                datingSprites.forEach(sp => {
+                  if (sp.dataUrl && typeof sp.dataUrl === "string" && sp.dataUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "dating_sprite_" + sp.id,
+                      type: "image",
+                      table: "datingSprites",
+                      recordId: sp.id,
+                      name: sp.name || "立绘切片",
+                      origin: `约会立绘: ${sp.name || '未命名'}`,
+                      size: new Blob([sp.dataUrl]).size,
+                      dataUrl: sp.dataUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
                 chats.forEach(chat => {
@@ -60904,6 +61172,22 @@ ${luckStatusDirective}
                         origin: `聊天《${chat.name}》消息配图`,
                         size: new Blob([msg.imageUrl]).size,
                         dataUrl: msg.imageUrl,
+                        selected: false
+                      });
+                    }
+                    if (msg.url && typeof msg.url === "string" && msg.url.startsWith("data:image")) {
+                      loadedStorageImagesList.push({
+                        id: "chat_msg_url_" + chat.id + "_" + (msg.timestamp || mIdx),
+                        type: "image",
+                        table: "chats",
+                        recordId: chat.id,
+                        field: "history_url",
+                        msgIndex: mIdx,
+                        timestamp: msg.timestamp,
+                        name: "聊天生图",
+                        origin: `聊天《${chat.name}》生成插图`,
+                        size: new Blob([msg.url]).size,
+                        dataUrl: msg.url,
                         selected: false
                       });
                     }
@@ -61056,20 +61340,24 @@ ${luckStatusDirective}
             } catch(e) {}
           }
 
-          // 7. 其他/页面分类扫描
+          // 7. 页面/其他分类扫描
           if (currentStorageCategory === "other" || currentStorageCategory === "page") {
             try {
+              const pageKeyPattern = /(desktop|theme|custom|profile|widget|app_|wallpaper|darkreader|ephone-|tukey_|layout|ui_)/i;
               for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
                 const val = localStorage.getItem(k);
+                const isPageKey = pageKeyPattern.test(k);
+                if (currentStorageCategory === "page" && !isPageKey) continue;
+                if (currentStorageCategory === "other" && isPageKey) continue;
                 loadedStorageImagesList.push({
                   id: "ls_" + k,
-                  type: "other",
+                  type: isPageKey ? "page" : "other",
                   table: "localStorage",
                   recordId: k,
                   action: "deleteLocalStorage",
                   name: k,
-                  origin: `本地缓存: ${k}`,
+                  origin: `${isPageKey ? '页面配置' : '本地缓存'}: ${k}`,
                   size: getStrBytes(val),
                   dataUrl: "",
                   selected: false
@@ -61087,7 +61375,8 @@ ${luckStatusDirective}
               if (currentStorageCategory === "modules") return item.type === "module";
               if (currentStorageCategory === "forum") return item.type === "forum";
               if (currentStorageCategory === "audio") return item.type === "audio";
-              if (currentStorageCategory === "other" || currentStorageCategory === "page") return item.type === "other";
+              if (currentStorageCategory === "page") return item.type === "page";
+              if (currentStorageCategory === "other") return item.type === "other";
               return true;
             });
           }
@@ -62194,21 +62483,21 @@ ${luckStatusDirective}
          * @param {number} maxDimension - 最大边长限制
          * @returns {Promise<string>} - 返回压缩后的JPEG格式Base64字符串或原图
          */
-        function compressImage(base64Str, quality = 0.7, maxDimension = 1280) {
+        function compressImage(base64Str, quality = 0.7, maxDimension = 1280, force = false) {
           return new Promise((resolve) => {
             if (
               !base64Str ||
               typeof base64Str !== "string" ||
               !base64Str.startsWith("data:image") ||
               base64Str.startsWith("data:image/gif") ||
-              quality >= 1.0
+              (!force && quality >= 1.0)
             ) {
               resolve(base64Str);
               return;
             }
 
-            const cacheKey = `${base64Str.length}_${base64Str.slice(0, 32)}_${quality}_${maxDimension}`;
-            if (_compressCache.has(cacheKey)) {
+            const cacheKey = `${base64Str.length}_${base64Str.slice(0, 32)}_${quality}_${maxDimension}_${force}`;
+            if (!force && _compressCache.has(cacheKey)) {
               resolve(_compressCache.get(cacheKey));
               return;
             }
@@ -62230,7 +62519,9 @@ ${luckStatusDirective}
                 img.src = "";
                 img = null;
               }
-              if (result && result.length < base64Str.length) {
+              if (force && result && result.startsWith("data:image")) {
+                resolve(result);
+              } else if (result && result.length < base64Str.length) {
                 if (_compressCache.size > 150) {
                   const firstKey = _compressCache.keys().next().value;
                   _compressCache.delete(firstKey);
@@ -62285,7 +62576,7 @@ ${luckStatusDirective}
                   canvas.width = 0;
                   canvas.height = 0;
 
-                  if (compressedBase64 && compressedBase64.length < base64Str.length) {
+                  if (compressedBase64 && (force || compressedBase64.length < base64Str.length)) {
                     cleanupAndResolve(compressedBase64);
                   } else {
                     cleanupAndResolve(base64Str);
@@ -70917,6 +71208,18 @@ ${luckStatusDirective}
                     if (s.aiCocPanel && window.aiCocPanel) {
                       window.aiCocPanel.setData(s.aiCocPanel);
                     }
+                    // 同步守秘人提示词
+                    const importedKeeperPrompt = s.keeperPrompt || (s.keeperCharPrompts && s.keeperCharPrompts[sourceChat.id]) || (s.keeperCharPrompts && s.keeperCharPrompts["ai"]) || "";
+                    if (importedKeeperPrompt) {
+                      const curChat = state.chats[state.activeChatId];
+                      if (curChat && curChat.settings) {
+                        curChat.settings.keeperPrompt = importedKeeperPrompt;
+                        if (!curChat.settings.keeperCharPrompts) curChat.settings.keeperCharPrompts = {};
+                        curChat.settings.keeperCharPrompts[curChat.id] = importedKeeperPrompt;
+                      }
+                      const keeperPromptInput = document.getElementById("keeper-prompt-input");
+                      if (keeperPromptInput) keeperPromptInput.value = importedKeeperPrompt;
+                    }
                   } else {
                     const importedName = s.myName || s.myNickname || sourceChat.myNickname || "";
                     if (importedName) {
@@ -70954,6 +71257,13 @@ ${luckStatusDirective}
                     }
                     if ((s.myCocPanel || sourceChat.myCocPanel) && window.myCocPanel) {
                       window.myCocPanel.setData(s.myCocPanel || sourceChat.myCocPanel);
+                    }
+                    if (s.keeperCharPrompts && s.keeperCharPrompts["me"]) {
+                      const curChat = state.chats[state.activeChatId];
+                      if (curChat && curChat.settings) {
+                        if (!curChat.settings.keeperCharPrompts) curChat.settings.keeperCharPrompts = {};
+                        curChat.settings.keeperCharPrompts["me"] = s.keeperCharPrompts["me"];
+                      }
                     }
                   }
                   importMyPersonaModal.classList.remove("visible");
@@ -71069,6 +71379,7 @@ ${luckStatusDirective}
                     const mNames = [m.name, m.nickname, m.card, m.originalName, m.groupNickname].map(normalizeNameStr).filter(Boolean);
                     const matched = targetNames.some(tn => mNames.some(mn => checkNameMatched(tn, mn)));
                     if (matched) {
+                      const memberKeeperPrompt = (c.settings && c.settings.keeperCharPrompts && (c.settings.keeperCharPrompts[m.id] || c.settings.keeperCharPrompts[m.name])) || m.keeperPrompt || (c.settings && c.settings.keeperPrompt) || "";
                       matches.push({
                         sourceName: c.name || c.title || "群聊",
                         memberName: m.groupNickname || m.name || m.nickname || friendDisplayName,
@@ -71078,7 +71389,8 @@ ${luckStatusDirective}
                         birthday: m.birthday || "",
                         gender: m.gender || "",
                         genderNote: m.genderNote || "",
-                        cocPanel: m.cocPanel || null
+                        cocPanel: m.cocPanel || null,
+                        keeperPrompt: memberKeeperPrompt
                       });
                     }
                   });
@@ -71122,6 +71434,16 @@ ${luckStatusDirective}
                     if (item.cocPanel && window.aiCocPanel) {
                       window.aiCocPanel.setData(item.cocPanel);
                     }
+                    if (item.keeperPrompt) {
+                      const curChat = state.chats[state.activeChatId];
+                      if (curChat && curChat.settings) {
+                        curChat.settings.keeperPrompt = item.keeperPrompt;
+                        if (!curChat.settings.keeperCharPrompts) curChat.settings.keeperCharPrompts = {};
+                        curChat.settings.keeperCharPrompts[curChat.id] = item.keeperPrompt;
+                      }
+                      const keeperPromptInput = document.getElementById("keeper-prompt-input");
+                      if (keeperPromptInput) keeperPromptInput.value = item.keeperPrompt;
+                    }
                     syncPersonaModal.classList.remove("visible");
                     if (typeof window.showCustomAlert === "function") {
                       window.showCustomAlert("提示", "已成功同步人设");
@@ -71156,6 +71478,7 @@ ${luckStatusDirective}
                 if (!c.isGroup) {
                   const cNames = [c.name, c.title, c.settings?.aiName].map(normalizeNameStr).filter(Boolean);
                   if (cNames.some(cn => checkNameMatched(cn, memberName))) {
+                    const cKeeperPrompt = (c.settings && c.settings.keeperPrompt) || (c.settings && c.settings.keeperCharPrompts && (c.settings.keeperCharPrompts[c.id] || c.settings.keeperCharPrompts["ai"])) || "";
                     matches.push({
                       sourceName: `私聊: ${c.name || c.title || memberName}`,
                       memberName: memberName,
@@ -71165,7 +71488,8 @@ ${luckStatusDirective}
                       birthday: c.settings?.birthday || c.settings?.aiBirthday || "",
                       gender: c.settings?.gender || c.settings?.aiGender || "",
                       genderNote: c.settings?.genderNote || c.settings?.aiGenderNote || "",
-                      cocPanel: c.settings?.aiCocPanel || null
+                      cocPanel: c.settings?.aiCocPanel || null,
+                      keeperPrompt: cKeeperPrompt
                     });
                   }
                 }
@@ -71176,6 +71500,7 @@ ${luckStatusDirective}
                   c.members.forEach((m) => {
                     const mNames = [m.name, m.nickname, m.card, m.originalName, m.groupNickname].map(normalizeNameStr).filter(Boolean);
                     if (mNames.some(mn => checkNameMatched(mn, memberName))) {
+                      const mKeeperPrompt = (c.settings && c.settings.keeperCharPrompts && (c.settings.keeperCharPrompts[m.id] || c.settings.keeperCharPrompts[m.name])) || m.keeperPrompt || (c.settings && c.settings.keeperPrompt) || "";
                       matches.push({
                         sourceName: `群聊: ${c.name || c.title || "群聊"}`,
                         memberName: m.groupNickname || m.name || m.nickname || memberName,
@@ -71185,7 +71510,8 @@ ${luckStatusDirective}
                         birthday: m.birthday || "",
                         gender: m.gender || "",
                         genderNote: m.genderNote || "",
-                        cocPanel: m.cocPanel || null
+                        cocPanel: m.cocPanel || null,
+                        keeperPrompt: mKeeperPrompt
                       });
                     }
                   });
@@ -71228,6 +71554,17 @@ ${luckStatusDirective}
                     }
                     if (item.cocPanel && window.memberCocPanel) {
                       window.memberCocPanel.setData(item.cocPanel);
+                    }
+                    if (item.keeperPrompt && editingMemberId) {
+                      const curChat = state.chats[state.activeChatId];
+                      if (curChat && curChat.settings) {
+                        if (!curChat.settings.keeperCharPrompts) curChat.settings.keeperCharPrompts = {};
+                        curChat.settings.keeperCharPrompts[editingMemberId] = item.keeperPrompt;
+                        curChat.settings.keeperCharPrompts[memberName] = item.keeperPrompt;
+                      }
+                      if (typeof tempKeeperCharPrompts !== "undefined") {
+                        tempKeeperCharPrompts[editingMemberId] = item.keeperPrompt;
+                      }
                     }
                     syncPersonaModal.classList.remove("visible");
                     if (typeof window.showCustomAlert === "function") {
@@ -74706,7 +75043,7 @@ ${luckStatusDirective}
           });
 
           // 弹窗背景遮罩点击自动关闭
-          ["contact-picker-modal", "contact-groups-sort-modal", "contact-card-modal"].forEach((modalId) => {
+          ["contact-picker-modal", "contact-groups-sort-modal", "contact-card-modal", "group-card-modal", "contact-add-friend-modal"].forEach((modalId) => {
             const el = document.getElementById(modalId);
             if (el) {
               el.addEventListener("click", (e) => {

@@ -1451,6 +1451,8 @@
           weiboProfession: "",
           weiboInstruction: "",
           aiCocPanel: aiCocPanelData,
+          keeperPrompt: currentCardData.keeperPrompt || (currentCardData.kpcData && currentCardData.kpcData.keeperPrompt) || "",
+          keeperCharPrompts: (currentCardData.keeperPrompt || (currentCardData.kpcData && currentCardData.kpcData.keeperPrompt)) ? { [newChatId]: currentCardData.keeperPrompt || (currentCardData.kpcData && currentCardData.kpcData.keeperPrompt) } : {},
           summary: typeof getDefaultSummarySettings === "function" ? getDefaultSummarySettings() : { enabled: false }
         },
         characterPhoneData: {

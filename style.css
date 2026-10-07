@@ -31925,19 +31925,21 @@ details[open] .thought-chain-arrow {
 /* 弹窗底部统一按钮 */
 .chat-mod-footer-btn {
   flex: 1 !important;
-  height: 38px !important;
+  height: 34px !important;
   border-radius: 8px !important;
-  font-size: 13px !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
-  display: flex !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
   align-items: center !important;
   justify-content: center !important;
   cursor: pointer !important;
   box-sizing: border-box !important;
   margin: 0 !important;
-  padding: 0 !important;
+  padding: 0 10px !important;
   transition: all 0.15s ease !important;
   line-height: 1 !important;
+  white-space: nowrap !important;
 }
 
 .chat-mod-footer-btn.secondary {
