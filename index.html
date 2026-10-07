@@ -68,6 +68,8 @@
     <script src="coc-panel.js"></script>
     <script src="dice-engine.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script src="module-manager.js" defer></script>
 
     <style></style>
@@ -8478,6 +8480,61 @@
         </div>
         <div style="display: flex; align-items: center; justify-content: center; width: 100%;">
           <img id="module-map-expand-img" src="" alt="" style="width: min(76vw, 290px); height: min(76vw, 290px); aspect-ratio: 1 / 1; border-radius: 10px; object-fit: cover;" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 模组文件合并弹窗 -->
+    <div id="module-merge-modal" class="modal">
+      <div class="modal-content" style="max-width: 340px; width: calc(100% - 40px); margin: 0 auto; max-height: 85vh; padding: 16px; border-radius: 18px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px rgba(0,0,0,0.25);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);">
+              <rect x="2" y="7" width="16" height="14" rx="2" ry="2"></rect>
+              <path d="M16 3H6a2 2 0 0 0-2 2v2"></path>
+              <path d="M12 11v6"></path>
+              <path d="M9 14h6"></path>
+            </svg>
+            <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">合并</span>
+          </div>
+          <button type="button" class="close-btn" id="close-module-merge-modal-btn" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 4px;">&times;</button>
+        </div>
+
+        <div class="modal-body" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px 0;">
+          <input type="file" id="module-merge-files-input" multiple accept=".pdf,.docx,.doc,.txt" style="display: none;" />
+          
+          <button type="button" class="chat-mod-footer-btn secondary" id="module-merge-select-files-btn" style="width: 100%; height: 36px; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span>选择文件</span>
+          </button>
+
+          <div id="module-merge-files-list" style="display: flex; flex-direction: column; gap: 6px; min-height: 60px; max-height: 180px; overflow-y: auto;">
+            <div id="module-merge-empty-tip" style="text-align: center; color: var(--text-secondary); font-size: 11.5px; padding: 20px 0;">
+              请选择要合并的 PDF 或 DOCX 或 TXT 文件
+            </div>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">输出格式</label>
+            <select id="module-merge-format-select" class="moe-input" style="width: 100%; height: 34px; line-height: 24px; padding: 4px 8px; font-size: 12.5px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
+              <option value="txt" selected>TXT 格式</option>
+              <option value="docx">DOCX 格式</option>
+              <option value="pdf">PDF 格式</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">输出文件名</label>
+            <input type="text" id="module-merge-name-input" class="moe-input" placeholder="合并文件" value="合并文件" style="width: 100%; height: 32px; font-size: 12px;" />
+          </div>
+
+          <div id="module-merge-status-box" style="display: none; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; word-break: break-word;"></div>
+        </div>
+
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-module-merge-modal-btn">返回</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="start-module-merge-btn">合并</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="download-module-merged-btn" style="display: none;">下载</button>
         </div>
       </div>
     </div>
@@ -27787,26 +27844,60 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             !chat.isGroup && chat.settings.remarkName
               ? chat.settings.remarkName
               : chat.name;
-          document.getElementById("chat-header-title").textContent =
-            displayName;
+          const chatHeaderTitle = document.getElementById("chat-header-title");
           const statusContainer = document.getElementById("chat-header-status");
           const statusTextEl = statusContainer.querySelector(".status-text");
 
-          if (chat.isGroup) {
-            statusContainer.style.display = "none";
-            document.getElementById(
-              "chat-header-title-wrapper",
-            ).style.justifyContent = "center";
+          window.activeGeneratingChats = window.activeGeneratingChats || {};
+          if (window.activeGeneratingChats[chatId]) {
+            if (chat.isGroup) {
+              chatHeaderTitle.textContent = "群成员正在回复中...";
+              chatHeaderTitle.classList.add("typing-status");
+              statusContainer.style.display = "none";
+              document.getElementById(
+                "chat-header-title-wrapper",
+              ).style.justifyContent = "center";
+            } else {
+              chatHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : (chat.settings?.offlineMode?.enabled ? "对方正在赴约中..." : "对方正在输入...");
+              chatHeaderTitle.classList.add("typing-status");
+              statusContainer.style.display = "none";
+              document.getElementById(
+                "chat-header-title-wrapper",
+              ).style.justifyContent = "flex-start";
+            }
           } else {
-            statusContainer.style.display = "flex";
-            document.getElementById(
-              "chat-header-title-wrapper",
-            ).style.justifyContent = "flex-start";
-            statusTextEl.textContent = chat.status?.text || "在线";
-            statusContainer.classList.toggle(
-              "busy",
-              chat.status?.isBusy || false,
-            );
+            chatHeaderTitle.textContent = displayName;
+            chatHeaderTitle.classList.remove("typing-status");
+            if (chat.isGroup) {
+              statusContainer.style.display = "none";
+              document.getElementById(
+                "chat-header-title-wrapper",
+              ).style.justifyContent = "center";
+            } else {
+              statusContainer.style.display = "flex";
+              document.getElementById(
+                "chat-header-title-wrapper",
+              ).style.justifyContent = "flex-start";
+              statusTextEl.textContent = chat.status?.text || "在线";
+              statusContainer.classList.toggle(
+                "busy",
+                chat.status?.isBusy || false,
+              );
+            }
+          }
+
+          // 恢复当前对话框的独立草稿
+          window.chatDrafts = window.chatDrafts || {};
+          const chatInputEl = document.getElementById("chat-input");
+          if (chatInputEl) {
+            const currentDraft = window.chatDrafts[chatId] || "";
+            chatInputEl.value = currentDraft;
+            chatInputEl.style.height = "auto";
+            if (currentDraft) {
+              setTimeout(() => {
+                chatInputEl.style.height = chatInputEl.scrollHeight + "px";
+              }, 0);
+            }
           }
 
           lockOverlay.style.display = "none";
@@ -27942,7 +28033,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           window.activeGeneratingChats = window.activeGeneratingChats || {};
           if (window.activeGeneratingChats[chatId]) {
             if (chat.isGroup) {
-              typingIndicator.textContent = "成员们正在输入...";
+              typingIndicator.textContent = "群成员正在回复中...";
               typingIndicator.style.display = "block";
             } else {
               typingIndicator.style.display = "none";
@@ -27954,7 +28045,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           } else {
             typingIndicator.style.display = "none";
-            typingIndicator.textContent = chat.isGroup ? "成员们正在输入..." : "对方正在输入...";
+            typingIndicator.textContent = chat.isGroup ? "群成员正在回复中..." : "对方正在输入...";
           }
           messagesContainer.appendChild(typingIndicator);
           setTimeout(
@@ -33613,14 +33704,20 @@ ${recentHistoryText}
 
           const initialHeaderTitle = document.getElementById("chat-header-title");
           const initialTypingInd = document.getElementById("typing-indicator");
-          if (chat.isGroup) {
-            if (initialTypingInd) {
-              initialTypingInd.textContent = "成员们正在输入...";
-              initialTypingInd.style.display = "block";
+          if (state.activeChatId === chatId) {
+            if (chat.isGroup) {
+              if (initialTypingInd) {
+                initialTypingInd.textContent = "群成员正在回复中...";
+                initialTypingInd.style.display = "block";
+              }
+              if (initialHeaderTitle) {
+                initialHeaderTitle.textContent = "群成员正在回复中...";
+                initialHeaderTitle.classList.add("typing-status");
+              }
+            } else if (initialHeaderTitle) {
+              initialHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : (chat.settings?.offlineMode?.enabled ? "对方正在赴约中..." : "对方正在输入...");
+              initialHeaderTitle.classList.add("typing-status");
             }
-          } else if (initialHeaderTitle) {
-            initialHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : (chat.settings?.offlineMode?.enabled ? "对方正在赴约中..." : "对方正在输入...");
-            initialHeaderTitle.classList.add("typing-status");
           }
 
           // 系统状态栏角色（单聊）：合并为同一条消息，同一个气泡内，AI 禁止生成其他任何消息
@@ -34504,32 +34601,39 @@ ${luckGuideNote}
           const typingIndicator = document.getElementById("typing-indicator");
 
           // 根据聊天类型，决定显示哪种“正在输入”
-          if (chat.isGroup) {
-            // 1. 如果是群聊，显示底部的提示条
-            if (typingIndicator) {
-              typingIndicator.textContent = "成员们正在输入...";
-              typingIndicator.style.display = "block";
-              messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-          } else if (chat.settings.offlineMode?.enabled) {
-            // 2. 如果是线下模式的单聊，在顶部标题显示“正在赴约中”
-            if (chatHeaderTitle) {
-              chatHeaderTitle.style.opacity = 0;
-              setTimeout(() => {
-                chatHeaderTitle.textContent = "对方正在赴约中..."; // <-- 你想要的文字在这里！
+          if (state.activeChatId === chatId) {
+            if (chat.isGroup) {
+              if (typingIndicator) {
+                typingIndicator.textContent = "群成员正在回复中...";
+                typingIndicator.style.display = "block";
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+              }
+              if (chatHeaderTitle) {
+                chatHeaderTitle.textContent = "群成员正在回复中...";
                 chatHeaderTitle.classList.add("typing-status");
-                chatHeaderTitle.style.opacity = 1;
-              }, 200);
-            }
-          } else {
-            // 3. 如果是普通的单聊，还是在顶部标题显示“正在输入”
-            if (chatHeaderTitle) {
-              chatHeaderTitle.style.opacity = 0;
-              setTimeout(() => {
-                chatHeaderTitle.textContent = "对方正在输入...";
-                chatHeaderTitle.classList.add("typing-status");
-                chatHeaderTitle.style.opacity = 1;
-              }, 200);
+              }
+            } else if (chat.settings.offlineMode?.enabled) {
+              if (chatHeaderTitle) {
+                chatHeaderTitle.style.opacity = 0;
+                setTimeout(() => {
+                  if (state.activeChatId === chatId && window.activeGeneratingChats?.[chatId]) {
+                    chatHeaderTitle.textContent = "对方正在赴约中...";
+                    chatHeaderTitle.classList.add("typing-status");
+                    chatHeaderTitle.style.opacity = 1;
+                  }
+                }, 200);
+              }
+            } else {
+              if (chatHeaderTitle) {
+                chatHeaderTitle.style.opacity = 0;
+                setTimeout(() => {
+                  if (state.activeChatId === chatId && window.activeGeneratingChats?.[chatId]) {
+                    chatHeaderTitle.textContent = "对方正在输入...";
+                    chatHeaderTitle.classList.add("typing-status");
+                    chatHeaderTitle.style.opacity = 1;
+                  }
+                }, 200);
+              }
             }
           }
 
@@ -35106,18 +35210,11 @@ ${luckGuideNote}
 			      "type": "text",
 			      "name": "角色名",
 			      "content": "你好！"
-			    },
-			    {
-			      "type": "sticker",
-			      "name": "角色名",
-			      "sticker_name": "表情名"
 			    }
 			  ]
 
-			## 你可以使用的操作指令 (JSON数组中的元素):
+			## 你可以使用的操作指令:
 			-   **发送文本**: \`{"type": "text", "name": "角色名", "message": "文本内容"}\`
-			-   **发送后立刻撤回**: \`{"type": "send_and_recall", "name": "角色名", "content": "你想让角色说出后立刻消失的话"}\`
-			-   **发送表情**: \`{"type": "sticker", "name": "角色名", "sticker_name": "表情的名字"}\`
 			-   **发送语音**: \`{"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}\`
 			${
         localStorage.getItem("novelai-enabled") === "true"
@@ -35125,14 +35222,6 @@ ${luckGuideNote}
           : ""
       }
 			-   **发送系统消息**: \`{"type": "system_message", "content": "你想在聊天中显示的系统文本"}\`
-			-   **发起投票**: \`{"type": "poll", "name": "你的角色名", "question": "投票的问题", "options": "选项A\\n选项B\\n选项C"}\` (options为换行分隔字符串)
-			-   **参与投票**: \`{"type": "vote", "name": "你的角色名", "poll_timestamp": (投票消息的时间戳), "choice": "你选择的选项文本"}\`
-			-   **踢出成员**: \`{"type": "kick_member", "name": "你的角色名", "targetName": "要踢出的成员名"}\` (仅群主可用)
-			-   **禁言成员**: \`{"type": "mute_member", "name": "你的角色名", "targetName": "要禁言的成员名"}\` (仅群主或管理员可用)
-			-   **解禁成员**: \`{"type": "unmute_member", "name": "你的角色名", "targetName": "要解禁的成员名"}\` (仅群主或管理员可用)
-			-   **设置/取消管理员**: \`{"type": "set_group_admin", "name": "你的角色名", "targetName": "目标角色名", "isAdmin": true/false}\` (仅群主可用)
-			-   **设置群头衔**: \`{"type": "set_group_title", "name": "你的角色名", "targetName": "目标角色名", "title": "新头衔"}\` (仅群主或管理员可用)
-			-   **修改群公告**: \`{"type": "set_group_announcement", "name": "你的角色名", "content": "新的公告内容..."}\` (仅群主或管理员可用)
 
 			${summaryContext}
 			${announcementContext}
@@ -40021,19 +40110,21 @@ ${luckStatusDirective}
             if (window.activeGeneratingChats) {
               delete window.activeGeneratingChats[chatId];
             }
-            // 在 finally 块中统一隐藏所有类型的提示
-            if (chat.isGroup) {
+            // 在 finally 块中仅当当前处于该聊天窗口时统一更新提示与标题
+            if (state.activeChatId === chatId) {
               if (typingIndicator) {
                 typingIndicator.style.display = "none";
               }
-            } else {
               if (chatHeaderTitle && state.chats[chatId]) {
-                chatHeaderTitle.style.opacity = 0;
-                setTimeout(() => {
-                  chatHeaderTitle.textContent = state.chats[chatId].name;
-                  chatHeaderTitle.classList.remove("typing-status");
-                  chatHeaderTitle.style.opacity = 1;
-                }, 200);
+                const finalDisplayName = (!state.chats[chatId].isGroup && state.chats[chatId].settings?.remarkName)
+                  ? state.chats[chatId].settings.remarkName
+                  : state.chats[chatId].name;
+                chatHeaderTitle.textContent = finalDisplayName;
+                chatHeaderTitle.classList.remove("typing-status");
+              }
+              const statusContainer = document.getElementById("chat-header-status");
+              if (statusContainer) {
+                statusContainer.style.display = state.chats[chatId]?.isGroup ? "none" : "flex";
               }
             }
           }

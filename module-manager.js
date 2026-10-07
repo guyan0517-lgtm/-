@@ -453,9 +453,10 @@
   const ModuleManager = {
     version: '2.9.0',
     currentStep: 1,
-    activeSubPanel: 'wizard',
+    activeSubPanel: 'library',
     activeSubTab: 'chapters',
     cutExecutionMode: 'batch',
+    mergeFileList: [],
 
     sortModuleTags(tagsOrBg, bgOrEnding, endingOrContent, contentOrCustom, maybeCustom) {
       if (Array.isArray(tagsOrBg)) {
@@ -5544,6 +5545,332 @@ ${chap.content}
       });
     },
 
+    openMergeModal() {
+      this.mergeFileList = [];
+      const modal = document.getElementById('module-merge-modal');
+      if (modal) modal.style.display = 'flex';
+      const statusBox = document.getElementById('module-merge-status-box');
+      if (statusBox) {
+        statusBox.style.display = 'none';
+        statusBox.textContent = '';
+      }
+      this.renderMergeFilesList();
+    },
+
+    closeMergeModal() {
+      const modal = document.getElementById('module-merge-modal');
+      if (modal) modal.style.display = 'none';
+      this.mergeFileList = [];
+      const fileInput = document.getElementById('module-merge-files-input');
+      if (fileInput) fileInput.value = '';
+      const statusBox = document.getElementById('module-merge-status-box');
+      if (statusBox) {
+        statusBox.style.display = 'none';
+        statusBox.textContent = '';
+      }
+    },
+
+    renderMergeFilesList() {
+      const listEl = document.getElementById('module-merge-files-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+
+      if (!this.mergeFileList || this.mergeFileList.length === 0) {
+        const emptyTip = document.createElement('div');
+        emptyTip.id = 'module-merge-empty-tip';
+        emptyTip.style.cssText = 'text-align: center; color: var(--text-secondary); font-size: 11.5px; padding: 20px 0;';
+        emptyTip.textContent = '请选择要合并的 PDF 或 DOCX 或 TXT 文件';
+        listEl.appendChild(emptyTip);
+        return;
+      }
+
+      this.mergeFileList.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'module-merge-item-row';
+        row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);';
+
+        const leftBox = document.createElement('div');
+        leftBox.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
+
+        const iconEl = document.createElement('div');
+        iconEl.style.cssText = 'width: 24px; height: 24px; border-radius: 6px; background: var(--card-bg); display: flex; align-items: center; justify-content: center; color: var(--accent-color); flex-shrink: 0; font-size: 10px; font-weight: 700;';
+        iconEl.textContent = item.ext.toUpperCase();
+
+        const textCol = document.createElement('div');
+        textCol.style.cssText = 'display: flex; flex-direction: column; min-width: 0; flex: 1;';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.style.cssText = 'font-size: 12px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+        nameSpan.textContent = item.name;
+
+        const sizeSpan = document.createElement('span');
+        sizeSpan.style.cssText = 'font-size: 10px; color: var(--text-secondary);';
+        const kbSize = (item.size / 1024).toFixed(1);
+        sizeSpan.textContent = `${kbSize} KB`;
+
+        textCol.appendChild(nameSpan);
+        textCol.appendChild(sizeSpan);
+        leftBox.appendChild(iconEl);
+        leftBox.appendChild(textCol);
+
+        const actionsBox = document.createElement('div');
+        actionsBox.style.cssText = 'display: flex; align-items: center; gap: 4px; flex-shrink: 0;';
+
+        if (index > 0) {
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'moe-btn-mini';
+          upBtn.style.cssText = 'width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px;';
+          upBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>';
+          upBtn.onclick = () => {
+            const temp = this.mergeFileList[index - 1];
+            this.mergeFileList[index - 1] = this.mergeFileList[index];
+            this.mergeFileList[index] = temp;
+            this.renderMergeFilesList();
+          };
+          actionsBox.appendChild(upBtn);
+        }
+
+        if (index < this.mergeFileList.length - 1) {
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'moe-btn-mini';
+          downBtn.style.cssText = 'width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px;';
+          downBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+          downBtn.onclick = () => {
+            const temp = this.mergeFileList[index + 1];
+            this.mergeFileList[index + 1] = this.mergeFileList[index];
+            this.mergeFileList[index] = temp;
+            this.renderMergeFilesList();
+          };
+          actionsBox.appendChild(downBtn);
+        }
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'moe-btn-mini btn-danger';
+        delBtn.style.cssText = 'width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px;';
+        delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        delBtn.onclick = () => {
+          this.mergeFileList.splice(index, 1);
+          this.renderMergeFilesList();
+        };
+        actionsBox.appendChild(delBtn);
+
+        row.appendChild(leftBox);
+        row.appendChild(actionsBox);
+        listEl.appendChild(row);
+      });
+    },
+
+    async extractTextFromSingleFile(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (ext === 'txt') {
+        if (typeof file.text === 'function') {
+          return await file.text();
+        }
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result || '');
+          reader.onerror = reject;
+          reader.readAsText(file);
+        });
+      }
+
+      if (ext === 'docx' || ext === 'doc') {
+        const arrayBuffer = await file.arrayBuffer();
+        if (global.mammoth && typeof global.mammoth.extractRawText === 'function') {
+          const res = await global.mammoth.extractRawText({ arrayBuffer });
+          if (res && res.value) return res.value;
+        }
+        if (global.JSZip) {
+          try {
+            const zip = await global.JSZip.loadAsync(arrayBuffer);
+            const docXml = await zip.file('word/document.xml')?.async('text');
+            if (docXml) {
+              const parser = new DOMParser();
+              const xmlDoc = parser.parseFromString(docXml, 'application/xml');
+              const paragraphs = xmlDoc.getElementsByTagName('w:p');
+              const textPieces = [];
+              for (let i = 0; i < paragraphs.length; i++) {
+                const tTags = paragraphs[i].getElementsByTagName('w:t');
+                let pText = '';
+                for (let j = 0; j < tTags.length; j++) {
+                  pText += tTags[j].textContent || '';
+                }
+                if (pText.trim()) textPieces.push(pText.trim());
+              }
+              if (textPieces.length > 0) return textPieces.join('\n');
+            }
+          } catch (e) {
+            console.warn('[模组] docx解构解析提示', e);
+          }
+        }
+        return '';
+      }
+
+      if (ext === 'pdf') {
+        if (global.pdfjsLib) {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await global.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          let fullText = '';
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            if (pageText.trim()) fullText += pageText + '\n';
+          }
+          return fullText;
+        }
+        return '';
+      }
+
+      return '';
+    },
+
+    async executeMergeAndDownload() {
+      if (!this.mergeFileList || this.mergeFileList.length === 0) {
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '请先选择需要合并的文件');
+        }
+        return;
+      }
+
+      const formatSelect = document.getElementById('module-merge-format-select');
+      const targetFormat = formatSelect ? formatSelect.value : 'txt';
+      const nameInput = document.getElementById('module-merge-name-input');
+      const baseName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : '合并文件';
+      const statusBox = document.getElementById('module-merge-status-box');
+
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.textContent = '正在按顺序合并文件，请稍候...';
+      }
+
+      try {
+        let downloadBlob = null;
+        let downloadFileName = `${baseName}.${targetFormat}`;
+
+        if (targetFormat === 'txt') {
+          const textList = [];
+          for (let i = 0; i < this.mergeFileList.length; i++) {
+            const item = this.mergeFileList[i];
+            const text = await this.extractTextFromSingleFile(item.file);
+            textList.push(text.trim());
+          }
+          const combined = textList.filter(Boolean).join('\n\n');
+          downloadBlob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
+        } else if (targetFormat === 'pdf') {
+          const isAllPdf = this.mergeFileList.every(it => it.ext === 'pdf');
+          if (global.PDFLib && isAllPdf) {
+            const mergedPdfDoc = await global.PDFLib.PDFDocument.create();
+            for (let i = 0; i < this.mergeFileList.length; i++) {
+              const item = this.mergeFileList[i];
+              const ab = await item.file.arrayBuffer();
+              const donorPdf = await global.PDFLib.PDFDocument.load(ab, { ignoreEncryption: true });
+              const pageIndices = donorPdf.getPageIndices();
+              const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
+              copiedPages.forEach(p => mergedPdfDoc.addPage(p));
+            }
+            const pdfBytes = await mergedPdfDoc.save();
+            downloadBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+          } else if (global.PDFLib) {
+            const mergedPdfDoc = await global.PDFLib.PDFDocument.create();
+            for (let i = 0; i < this.mergeFileList.length; i++) {
+              const item = this.mergeFileList[i];
+              if (item.ext === 'pdf') {
+                const ab = await item.file.arrayBuffer();
+                const donorPdf = await global.PDFLib.PDFDocument.load(ab, { ignoreEncryption: true });
+                const pageIndices = donorPdf.getPageIndices();
+                const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
+                copiedPages.forEach(p => mergedPdfDoc.addPage(p));
+              } else {
+                const text = await this.extractTextFromSingleFile(item.file);
+                const page = mergedPdfDoc.addPage();
+                const { width, height } = page.getSize();
+                const fontSize = 11;
+                const lines = text.split('\n').slice(0, 45);
+                lines.forEach((line, idx) => {
+                  page.drawText(line.substring(0, 80), {
+                    x: 40,
+                    y: height - 50 - (idx * 14),
+                    size: fontSize
+                  });
+                });
+              }
+            }
+            const pdfBytes = await mergedPdfDoc.save();
+            downloadBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+          } else {
+            const textList = [];
+            for (let i = 0; i < this.mergeFileList.length; i++) {
+              const item = this.mergeFileList[i];
+              const text = await this.extractTextFromSingleFile(item.file);
+              textList.push(text.trim());
+            }
+            const combined = textList.filter(Boolean).join('\n\n');
+            downloadBlob = new Blob([combined], { type: 'application/pdf' });
+          }
+        } else if (targetFormat === 'docx') {
+          if (global.docx && typeof global.docx.Document === 'function') {
+            const allParagraphs = [];
+            for (let i = 0; i < this.mergeFileList.length; i++) {
+              const item = this.mergeFileList[i];
+              const text = await this.extractTextFromSingleFile(item.file);
+              const lines = text.split('\n');
+              lines.forEach(line => {
+                if (line.trim()) {
+                  allParagraphs.push(new global.docx.Paragraph({
+                    children: [new global.docx.TextRun({ text: line })]
+                  }));
+                }
+              });
+            }
+            const doc = new global.docx.Document({
+              sections: [{
+                properties: {},
+                children: allParagraphs
+              }]
+            });
+            downloadBlob = await global.docx.Packer.toBlob(doc);
+          } else {
+            const textList = [];
+            for (let i = 0; i < this.mergeFileList.length; i++) {
+              const item = this.mergeFileList[i];
+              const text = await this.extractTextFromSingleFile(item.file);
+              textList.push(text.trim());
+            }
+            const combined = textList.filter(Boolean).join('\n\n');
+            downloadBlob = new Blob([combined], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          }
+        }
+
+        if (downloadBlob) {
+          const downloadUrl = URL.createObjectURL(downloadBlob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = downloadFileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(downloadUrl), 2000);
+        }
+
+        this.closeMergeModal();
+        this.switchSubPanel('wizard');
+        this.setWizardStep(1);
+
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('成功', '合并完成并已下载');
+        }
+      } catch (err) {
+        console.warn('[模组] 合并文件提示:', err);
+        if (statusBox) {
+          statusBox.textContent = `合并失败: ${err.message || '格式处理异常'}`;
+        }
+      }
+    },
+
     async locateModuleImagesWithAI(moduleId) {
       const database = this.getDB();
       if (!database || !database.moduleImages || !database.moduleChapters) return;
@@ -7406,6 +7733,62 @@ ${imageList}
         });
       }
 
+      const btnOpenMerge = document.getElementById('module-btn-open-merge');
+      if (btnOpenMerge) {
+        btnOpenMerge.addEventListener('click', () => {
+          this.openMergeModal();
+        });
+      }
+
+      const closeMergeBtn = document.getElementById('close-module-merge-modal-btn');
+      const cancelMergeBtn = document.getElementById('cancel-module-merge-modal-btn');
+      if (closeMergeBtn) {
+        closeMergeBtn.addEventListener('click', () => {
+          this.closeMergeModal();
+        });
+      }
+      if (cancelMergeBtn) {
+        cancelMergeBtn.addEventListener('click', () => {
+          this.closeMergeModal();
+        });
+      }
+
+      const selectMergeFilesBtn = document.getElementById('module-merge-select-files-btn');
+      const mergeFilesInput = document.getElementById('module-merge-files-input');
+      if (selectMergeFilesBtn && mergeFilesInput) {
+        selectMergeFilesBtn.addEventListener('click', () => {
+          mergeFilesInput.value = '';
+          mergeFilesInput.click();
+        });
+      }
+
+      if (mergeFilesInput) {
+        mergeFilesInput.addEventListener('change', (e) => {
+          const files = e.target.files;
+          if (!files || files.length === 0) return;
+          if (!this.mergeFileList) this.mergeFileList = [];
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const ext = f.name.split('.').pop().toLowerCase();
+            this.mergeFileList.push({
+              id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+              file: f,
+              name: f.name,
+              size: f.size,
+              ext: ext
+            });
+          }
+          this.renderMergeFilesList();
+        });
+      }
+
+      const startMergeBtn = document.getElementById('start-module-merge-btn');
+      if (startMergeBtn) {
+        startMergeBtn.addEventListener('click', () => {
+          this.executeMergeAndDownload();
+        });
+      }
+
       if (fileInput) {
         fileInput.addEventListener('change', async (e) => {
           const file = e.target.files && e.target.files[0];
@@ -8402,11 +8785,11 @@ ${imageList}
     if (!ModuleManager.currentParsedData) {
       if (!ModuleManager.loadDraft()) {
         ModuleManager.resetImportUI();
-        ModuleManager.switchSubPanel('wizard');
+        ModuleManager.switchSubPanel('library');
         ModuleManager.setWizardStep(1);
       }
     } else {
-      ModuleManager.switchSubPanel(ModuleManager.activeSubPanel || 'wizard');
+      ModuleManager.switchSubPanel(ModuleManager.activeSubPanel || 'library');
       ModuleManager.setWizardStep(ModuleManager.currentStep || 1);
     }
   }
