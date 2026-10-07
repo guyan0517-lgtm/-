@@ -5707,7 +5707,7 @@ ${chap.content}
       }
 
       const formatSelect = document.getElementById('module-merge-format-select');
-      const targetFormat = formatSelect ? formatSelect.value : 'txt';
+      const targetFormat = formatSelect ? formatSelect.value : 'pdf';
       const nameInput = document.getElementById('module-merge-name-input');
       const baseName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : '合并文件';
       const statusBox = document.getElementById('module-merge-status-box');
@@ -5739,14 +5739,13 @@ ${chap.content}
               if (ext === 'pdf') {
                 try {
                   const ab = await item.file.arrayBuffer();
-                  const donorPdf = await global.PDFLib.PDFDocument.load(ab, { ignoreEncryption: true, parseSpeed: Infinity, throwOnInvalidObject: false });
+                  const donorPdf = await global.PDFLib.PDFDocument.load(ab, { ignoreEncryption: true });
                   const pageIndices = donorPdf.getPageIndices();
                   const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
                   copiedPages.forEach(p => mergedPdfDoc.addPage(p));
                 } catch (pdfLoadErr) {
-                  console.warn('[模组] 复制PDF页面异常，转为文字图层嵌入:', pdfLoadErr);
-                  const text = await this.extractTextFromSingleFile(item.file);
-                  await this.embedTextPagesToPdf(mergedPdfDoc, text || item.name);
+                  console.warn('[模组] PDFLib复制页面失败，使用高保真PDF.js渲染页面:', pdfLoadErr);
+                  await this.embedPdfPagesWithPdfJs(mergedPdfDoc, item.file);
                 }
               } else {
                 const text = await this.extractTextFromSingleFile(item.file);
@@ -5754,9 +5753,9 @@ ${chap.content}
               }
             }
             if (mergedPdfDoc.getPageCount() === 0) {
-              const page = mergedPdfDoc.addPage([595, 842]);
+              mergedPdfDoc.addPage([595.28, 841.89]);
             }
-            const pdfBytes = await mergedPdfDoc.save({ useObjectStreams: false });
+            const pdfBytes = await mergedPdfDoc.save();
             downloadBlob = new Blob([pdfBytes], { type: 'application/pdf' });
           } else {
             const textList = [];
@@ -5824,20 +5823,64 @@ ${chap.content}
           link.click();
           document.body.removeChild(link);
           setTimeout(() => URL.revokeObjectURL(downloadUrl), 2000);
-        }
 
-        this.closeMergeModal();
-        this.switchSubPanel('wizard');
-        this.setWizardStep(1);
+          this.closeMergeModal();
+          this.switchSubPanel('wizard');
+          this.setWizardStep(1);
 
-        if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('成功', '合并完成并已下载');
+          try {
+            const mergedFileObj = new File([downloadBlob], downloadFileName, { type: downloadBlob.type });
+            const parsedRes = await this.processModuleFile(mergedFileObj);
+            this.renderParsedResultUI(parsedRes);
+          } catch (loadErr) {
+            console.warn('[模组] 合并结果自动装载提示:', loadErr);
+          }
+
+          if (typeof global.showCustomAlert === 'function') {
+            global.showCustomAlert('成功', '合并完成并已下载');
+          }
         }
       } catch (err) {
         console.warn('[模组] 合并文件提示:', err);
         if (statusBox) {
           statusBox.textContent = `合并失败: ${err.message || '格式处理异常'}`;
         }
+      }
+    },
+
+    async embedPdfPagesWithPdfJs(mergedPdfDoc, file) {
+      if (!global.pdfjsLib || !mergedPdfDoc) return;
+      try {
+        const ab = await file.arrayBuffer();
+        const pdf = await global.pdfjsLib.getDocument({ data: ab }).promise;
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const pngDataUrl = canvas.toDataURL('image/png');
+          const pngBase64 = pngDataUrl.split(',')[1];
+          const binaryStr = atob(pngBase64);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let b = 0; b < binaryStr.length; b++) {
+            bytes[b] = binaryStr.charCodeAt(b);
+          }
+          const pngImage = await mergedPdfDoc.embedPng(bytes);
+          const addedPage = mergedPdfDoc.addPage([viewport.width / 2.0, viewport.height / 2.0]);
+          addedPage.drawImage(pngImage, {
+            x: 0,
+            y: 0,
+            width: viewport.width / 2.0,
+            height: viewport.height / 2.0
+          });
+        }
+      } catch (renderErr) {
+        console.warn('[模组] PDF.js 页面渲染降级:', renderErr);
+        const text = await this.extractTextFromSingleFile(file);
+        await this.embedTextPagesToPdf(mergedPdfDoc, text || file.name);
       }
     },
 
@@ -7786,9 +7829,13 @@ ${imageList}
           const files = e.target.files;
           if (!files || files.length === 0) return;
           if (!this.mergeFileList) this.mergeFileList = [];
+          let hasPdf = false;
+          let hasDocx = false;
           for (let i = 0; i < files.length; i++) {
             const f = files[i];
             const ext = f.name.split('.').pop().toLowerCase();
+            if (ext === 'pdf') hasPdf = true;
+            if (ext === 'docx' || ext === 'doc') hasDocx = true;
             this.mergeFileList.push({
               id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
               file: f,
@@ -7796,6 +7843,16 @@ ${imageList}
               size: f.size,
               ext: ext
             });
+          }
+          const formatSelect = document.getElementById('module-merge-format-select');
+          if (formatSelect) {
+            if (hasPdf) {
+              formatSelect.value = 'pdf';
+            } else if (hasDocx) {
+              formatSelect.value = 'docx';
+            } else {
+              formatSelect.value = 'txt';
+            }
           }
           this.renderMergeFilesList();
         });

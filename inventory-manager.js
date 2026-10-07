@@ -1863,7 +1863,6 @@
     }, 2000);
   }
 
-  let clueCardScale = 1.0;
   let clueInnerZoom = 1.0;
   let clueInnerPanX = 0;
   let clueInnerPanY = 0;
@@ -1879,10 +1878,9 @@
       targetEl.style.transformOrigin = "top center";
       targetEl.style.willChange = "transform";
       targetEl.style.transition = isInstant ? "none" : "transform 0.15s cubic-bezier(0.25, 1, 0.5, 1)";
-      const totalScale = clueCardScale * clueInnerZoom;
-      targetEl.style.transform = `translate3d(${clueInnerPanX}px, ${clueInnerPanY}px, 0px) scale(${totalScale})`;
+      targetEl.style.transform = `translate3d(${clueInnerPanX}px, ${clueInnerPanY}px, 0px) scale(${clueInnerZoom})`;
       if (viewBox && targetEl.offsetHeight > 0) {
-        viewBox.style.height = `${Math.ceil(targetEl.offsetHeight * totalScale)}px`;
+        viewBox.style.height = `${Math.ceil(targetEl.offsetHeight * clueInnerZoom)}px`;
       }
     }
   }
@@ -1965,9 +1963,12 @@
         if (e.cancelable) e.preventDefault();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const dx = clientX - resizeStartX;
-        const newWidth = Math.max(200, Math.min(window.innerWidth - 20, initialWidth + dx));
+        const newWidth = Math.max(160, Math.min(window.innerWidth - 20, initialWidth + dx));
         card.style.width = newWidth + "px";
-        clueCardScale = newWidth / 330;
+        const wrapper = document.getElementById("clue-proportional-wrapper");
+        if (wrapper) {
+          wrapper.style.width = "100%";
+        }
         updateClueInnerTransform(true);
       };
 
@@ -2026,7 +2027,6 @@
 
       const clampPanAndZoom = () => {
         if (clueInnerZoom <= 1.0) {
-          clueInnerZoom = 1.0;
           clueInnerPanX = 0;
           clueInnerPanY = 0;
         } else {
@@ -2060,7 +2060,7 @@
           if (e.cancelable) e.preventDefault();
           const curDist = getTouchDistance(e.touches[0], e.touches[1]);
           const ratio = curDist / initialPinchDistance;
-          clueInnerZoom = Math.max(1.0, Math.min(5.0, initialPinchScale * ratio));
+          clueInnerZoom = Math.max(0.4, Math.min(5.0, initialPinchScale * ratio));
           clampPanAndZoom();
           updateClueInnerTransform(true);
         } else if (e.touches.length === 1 && isPanning && clueInnerZoom > 1.0) {
@@ -2088,7 +2088,7 @@
       viewBox.addEventListener("wheel", (e) => {
         e.preventDefault();
         const delta = e.deltaY < 0 ? 0.15 : -0.15;
-        clueInnerZoom = Math.max(1.0, Math.min(5.0, clueInnerZoom + delta));
+        clueInnerZoom = Math.max(0.4, Math.min(5.0, clueInnerZoom + delta));
         clampPanAndZoom();
         updateClueInnerTransform(true);
       }, { passive: false });
@@ -2157,9 +2157,8 @@
       const m = rawHtml.match(/```(?:html)?\s*([\s\S]*?)\s*```/i);
       if (m && m[1]) rawHtml = m[1].trim();
     }
-    bodyEl.innerHTML = `<div id="clue-proportional-wrapper" style="width: 330px; box-sizing: border-box; display: inline-block;">${rawHtml}</div>`;
+    bodyEl.innerHTML = `<div id="clue-proportional-wrapper" style="width: 100%; box-sizing: border-box; display: block;">${rawHtml}</div>`;
 
-    clueCardScale = 1.0;
     clueInnerZoom = 1.0;
     clueInnerPanX = 0;
     clueInnerPanY = 0;
