@@ -71,6 +71,7 @@
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script src="module-manager.js" defer></script>
+    <script src="inventory-manager.js" defer></script>
 
     <style></style>
 
@@ -3281,30 +3282,6 @@
               </svg>
             </button>
 
-            <button
-              id="chat-inventory-btn"
-              class="chat-action-icon-btn action-button"
-              title="物品"
-              type="button"
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>
-                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
-                <path d="M8 21v-5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v5"/>
-                <path d="M8 10h8"/>
-                <path d="M9 18h6"/>
-              </svg>
-            </button>
 
             <button
               id="send-photo-btn"
@@ -3541,6 +3518,32 @@
               </svg>
             </button>
 
+            <!-- 物品栏按钮 (工具栏最后一个按钮) -->
+            <button
+              id="chat-inventory-btn"
+              class="chat-action-icon-btn action-button"
+              title="物品"
+              type="button"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>
+                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+                <path d="M8 21v-5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v5"/>
+                <path d="M8 10h8"/>
+                <path d="M9 18h6"/>
+              </svg>
+            </button>
+
             <button
               id="open-tarot-btn"
               class="chat-action-icon-btn action-button"
@@ -3697,6 +3700,63 @@
 
         <div id="chat-lock-overlay">
           <div id="chat-lock-content"></div>
+        </div>
+
+        <!-- 物品栏竖条抽屉 (小巧精致，无暗色遮罩) -->
+        <div id="chat-inventory-drawer">
+          <div class="inventory-drawer-header">
+            <div class="inventory-tabs">
+              <div class="inventory-tab active" data-cat="all">全部</div>
+              <div class="inventory-tab" data-cat="clue">线索</div>
+              <div class="inventory-tab" data-cat="prop">道具</div>
+              <div class="inventory-tab" data-cat="weapon">武器</div>
+            </div>
+            <div class="inventory-header-actions">
+              <button
+                type="button"
+                id="inventory-add-item-btn"
+                class="inventory-icon-action-btn"
+                title="添加物品"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+              <button
+                type="button"
+                id="inventory-drawer-close-btn"
+                class="inventory-icon-action-btn"
+                title="收起"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="chat-inventory-list" class="inventory-drawer-body">
+            <!-- 动态渲染物品列表 -->
+          </div>
+          <div class="inventory-drawer-footer" style="display: flex; gap: 8px; padding: 8px 10px;">
+            <button
+              type="button"
+              id="inventory-global-lib-btn"
+              class="module-btn-secondary"
+              style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px;"
+            >
+              道具库
+            </button>
+            <button
+              type="button"
+              id="inventory-manage-btn"
+              class="module-btn-primary"
+              style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px;"
+            >
+              管理
+            </button>
+          </div>
         </div>
 
         <div id="sticker-panel">
@@ -6430,6 +6490,13 @@
                     >
                       生图
                     </button>
+                    <button
+                      type="button"
+                      id="manage-ai-inventory-btn"
+                      class="moe-btn-mini"
+                    >
+                      道具
+                    </button>
                   </div>
                   <input
                     type="file"
@@ -7837,28 +7904,42 @@
 
           <div class="form-group" id="member-avatar-group">
             <label>头像</label>
-            <div class="avatar-upload">
-              <img id="member-avatar-preview" />
-              <button
-                onclick="document.getElementById('member-avatar-input').click()"
-              >
-                上传头像
-              </button>
-              <!-- 更换头像框按钮 -->
-              <button
-                id="member-editor-change-frame-btn"
-                class="change-frame-btn"
-              >
-                更换头像框
-              </button>
-              <button
-                type="button"
-                id="gen-member-avatar-btn"
-                class="change-frame-btn"
-                style="background-color: var(--secondary-bg); color: var(--text-primary);"
-              >
-                生图
-              </button>
+            <div class="avatar-upload" style="display: flex; align-items: center; gap: 12px;">
+              <img id="member-avatar-preview" style="width: 60px; height: 60px; border-radius: 50%; flex-shrink: 0; object-fit: cover; background: var(--secondary-bg);" />
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; flex: 1;">
+                <button
+                  type="button"
+                  onclick="document.getElementById('member-avatar-input').click()"
+                  class="moe-btn-mini"
+                  style="height: 28px; padding: 0 10px; font-size: 12px; white-space: nowrap;"
+                >
+                  上传
+                </button>
+                <button
+                  type="button"
+                  id="member-editor-change-frame-btn"
+                  class="change-frame-btn moe-btn-mini"
+                  style="height: 28px; padding: 0 10px; font-size: 12px; white-space: nowrap;"
+                >
+                  相框
+                </button>
+                <button
+                  type="button"
+                  id="gen-member-avatar-btn"
+                  class="moe-btn-mini"
+                  style="height: 28px; padding: 0 10px; font-size: 12px; white-space: nowrap;"
+                >
+                  生图
+                </button>
+                <button
+                  type="button"
+                  id="member-inventory-btn"
+                  class="moe-btn-mini"
+                  style="height: 28px; padding: 0 10px; font-size: 12px; white-space: nowrap;"
+                >
+                  道具
+                </button>
+              </div>
               <input
                 type="file"
                 id="member-avatar-input"
@@ -9754,7 +9835,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <button id="copy-message-btn"><span>复</span><span>制</span><span>文</span><span>本</span></button>
           <button id="optimize-message-btn"><span>优</span><span>化</span></button>
           <button id="recall-message-btn"><span>隐</span><span>藏</span></button>
-          <button id="quote-message-btn"><span>引</span><span>用</span></button>
+          <button id="quote-message-btn"><span>转</span><span>化</span><span>线</span><span>索</span></button>
           <button id="select-message-btn"><span>进</span><span>入</span><span>多</span><span>选</span></button>
           <!-- 取消按钮 -->
           <button id="cancel-message-action-btn"><span>取</span><span>消</span></button>
@@ -10873,6 +10954,199 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           >
             关闭
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 物品详情 1x1 独立面板 -->
+    <div id="inventory-item-detail-modal" class="modal">
+      <div class="inventory-detail-card">
+        <div id="inv-detail-avatar" class="inventory-detail-avatar">
+          <!-- 头像或占位 -->
+        </div>
+        <div class="inventory-detail-info">
+          <div class="inventory-detail-header-row">
+            <span id="inv-detail-name" class="inventory-detail-name">物品名称</span>
+            <span id="inv-detail-cat" class="inventory-category-badge cat-prop">道具</span>
+          </div>
+          <div id="inv-detail-desc" class="inventory-detail-desc">物品简介内容</div>
+          <div id="inv-detail-extra"></div>
+        </div>
+        <div class="inventory-detail-actions" style="display: flex; gap: 8px; margin-top: 14px;">
+          <button type="button" id="inv-detail-action-btn" class="module-btn-primary" style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px;">使用</button>
+          <button type="button" id="inv-detail-transfer-btn" class="module-btn-secondary" style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px;">移交</button>
+          <button type="button" id="inv-detail-close-btn" class="module-btn-secondary" style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px;">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 添加 / 编辑物品模态框 -->
+    <div id="inventory-item-edit-modal" class="modal">
+      <div class="modal-content" style="max-width: 320px; width: 90%; max-height: 90vh;">
+        <div class="modal-header">
+          <span id="inv-edit-title">添加物品</span>
+        </div>
+        <div class="modal-body" style="padding: 14px; overflow-y: auto;">
+          <!-- 头像区：顶部圆形头像框，点击展开，长按打开生图 -->
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 12px;">
+            <div id="inv-edit-avatar-preview" class="inventory-detail-avatar" style="width: 72px; height: 72px; cursor: pointer;" title="点击展开，长按生图">
+              <!-- 头像预览 -->
+            </div>
+            <span style="font-size: 10px; color: var(--text-secondary);">点击展开大图 · 长按进入生图</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">物品名称 *</label>
+            <input type="text" id="inv-edit-name" class="moe-input" placeholder="输入物品名称" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">作用 / 简介</label>
+            <input type="text" id="inv-edit-desc" class="moe-input" placeholder="简要说明此物品的用途" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">功能</label>
+            <input type="text" id="inv-edit-effect" class="moe-input" placeholder="例如 HP+1、HP-2、SAN+5、MP+3" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">分类选择</label>
+            <select id="inv-edit-cat" class="moe-input" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+              <option value="prop">道具</option>
+              <option value="clue">线索</option>
+              <option value="weapon">武器</option>
+            </select>
+          </div>
+
+          <!-- 武器专属属性 -->
+          <div id="inv-weapon-fields" style="display: none; margin-bottom: 10px;">
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">伤害加值</label>
+              <input type="text" id="inv-edit-damage" class="moe-input" placeholder="例如 1D6+1" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+            </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">DB 数值</label>
+              <input type="text" id="inv-edit-db" class="moe-input" placeholder="例如 +1D4 或 0" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+            </div>
+          </div>
+
+          <!-- 线索专属详细内容 -->
+          <div id="inv-clue-fields" style="display: none; margin-bottom: 10px;">
+            <div class="form-group">
+              <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">详细内容 (支持 HTML)</label>
+              <textarea id="inv-edit-content" class="moe-input" rows="4" placeholder="日记、信件或纸片全文，支持 HTML 排版" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4;"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 10px 14px; display: flex; gap: 8px;">
+          <button type="button" id="inv-edit-save-btn" class="module-btn-primary" style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px;">保存</button>
+          <button type="button" id="inv-edit-delete-btn" class="module-btn-secondary" style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px; display: none; background: #e05d5d; color: #ffffff !important; border-color: #e05d5d !important;">删除</button>
+          <button type="button" id="inv-edit-cancel-btn" class="module-btn-secondary" style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px;">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 物品头像生图面板 -->
+    <div id="inventory-item-gen-modal" class="modal">
+      <div class="modal-content" style="max-width: 320px; width: 90%;">
+        <div class="modal-header">
+          <span>物品生图</span>
+        </div>
+        <div class="modal-body" style="padding: 14px;">
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">生图提示词</label>
+            <textarea id="inv-gen-prompt-input" class="moe-input" rows="3" placeholder="输入英文描述词..." style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4;"></textarea>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <button type="button" id="inv-ai-make-prompt-btn" class="moe-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">生成提示词</button>
+            <button type="button" id="inv-do-draw-btn" class="moe-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">开始生图</button>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 8px 14px;">
+          <button type="button" id="inv-gen-cancel-btn" class="moe-btn" style="width: 100%; height: 32px; font-size: 12px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 线索完整内容阅读页 -->
+    <div id="inventory-clue-reader-modal" class="modal">
+      <div class="modal-content" style="max-width: 360px; width: 92%; max-height: 85vh;">
+        <div class="modal-header">
+          <span id="clue-reader-title">线索阅读</span>
+        </div>
+        <div id="clue-reader-body" class="clue-reader-modal-body">
+          <!-- 动态渲染富文本 HTML -->
+        </div>
+        <div class="modal-footer" style="padding: 10px 14px;">
+          <button type="button" id="clue-reader-close-btn" class="moe-btn" style="width: 100%; height: 34px; font-size: 13px; border-radius: 8px;">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 移交道具弹窗 -->
+    <div id="inventory-transfer-modal" class="modal">
+      <div class="modal-content" style="max-width: 320px; width: 90%;">
+        <div class="modal-header">
+          <span>移交</span>
+        </div>
+        <div class="modal-body" style="padding: 12px 14px;">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">选择接收物品的对象：</div>
+          <div id="inventory-transfer-recipient-list" class="moe-list-box" style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+        <div class="modal-footer" style="padding: 10px 14px; display: flex; gap: 8px;">
+          <button type="button" id="inventory-transfer-confirm-btn" class="moe-btn" style="flex: 1; height: 34px; border-radius: 8px;">确认</button>
+          <button type="button" id="inventory-transfer-cancel-btn" class="moe-btn" style="flex: 1; height: 34px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全局道具库弹窗 -->
+    <div id="inventory-global-library-modal" class="modal">
+      <div class="modal-content" style="max-width: 380px; width: 94%; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>道具库</span>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button type="button" id="global-inv-manage-btn" class="moe-btn-mini" style="font-size: 11px; height: 24px; padding: 0 8px; border-radius: 6px;">管理</button>
+            <button type="button" id="global-inv-close-x-btn" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; line-height: 1;">✕</button>
+          </div>
+        </div>
+        <div class="global-inv-tabs" style="display: flex; gap: 6px; padding: 8px 14px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color);">
+          <button type="button" class="global-inv-tab active" data-tab="all" style="flex: 1; height: 28px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; font-weight: 600;">全部</button>
+          <button type="button" class="global-inv-tab" data-tab="group" style="flex: 1; height: 28px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer; font-weight: 500;">群聊</button>
+          <button type="button" class="global-inv-tab" data-tab="direct" style="flex: 1; height: 28px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer; font-weight: 500;">私聊</button>
+        </div>
+        <div class="modal-body" id="global-inventory-body" style="flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px;">
+          <!-- 动态按群聊/私聊分类折叠渲染 -->
+        </div>
+        <div class="modal-footer" style="padding: 10px 14px; display: flex; gap: 8px;">
+          <button type="button" id="global-inv-deposit-all-btn" class="moe-btn" style="flex: 1; height: 34px; border-radius: 8px;">存入全部</button>
+          <button type="button" id="global-inv-close-btn" class="moe-btn" style="flex: 1; height: 34px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 角色专属道具库弹窗 -->
+    <div id="character-inventory-modal" class="modal">
+      <div class="modal-content" style="max-width: 340px; width: 92%; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <span id="char-inv-modal-title">道具</span>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button type="button" id="char-inv-add-btn" class="moe-btn-mini" style="font-size: 11px; height: 24px; padding: 0 8px; border-radius: 6px;">+ 添加</button>
+            <button type="button" id="char-inv-close-x-btn" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; line-height: 1;">✕</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px; padding: 8px 14px 4px 14px; border-bottom: 1px solid var(--border-color);">
+          <div class="inventory-tab active" id="char-inv-tab-all" data-cat="all" style="font-size: 12px; padding: 4px 10px;">全部</div>
+          <div class="inventory-tab" id="char-inv-tab-clue" data-cat="clue" style="font-size: 12px; padding: 4px 10px;">线索</div>
+          <div class="inventory-tab" id="char-inv-tab-prop" data-cat="prop" style="font-size: 12px; padding: 4px 10px;">道具</div>
+          <div class="inventory-tab" id="char-inv-tab-weapon" data-cat="weapon" style="font-size: 12px; padding: 4px 10px;">武器</div>
+        </div>
+        <div class="modal-body" id="character-inventory-list" style="flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px;">
+          <!-- 动态渲染角色物品 -->
+        </div>
+        <div class="modal-footer" style="padding: 10px 14px;">
+          <button type="button" id="char-inv-close-btn" class="moe-btn" style="width: 100%; height: 34px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">关闭</button>
         </div>
       </div>
     </div>
@@ -27810,6 +28084,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function renderChatInterface(chatId) {
           cleanupWaimaiTimers();
+          if (typeof closeInventoryDrawer === "function") closeInventoryDrawer();
+          if (typeof renderInventoryList === "function") renderInventoryList();
           const chat = state.chats[chatId];
           if (!chat) return;
           // 群公告图标显示/隐藏逻辑
@@ -27851,8 +28127,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           window.activeGeneratingChats = window.activeGeneratingChats || {};
           if (window.activeGeneratingChats[chatId]) {
             if (chat.isGroup) {
-              chatHeaderTitle.textContent = "群成员正在回复中...";
-              chatHeaderTitle.classList.add("typing-status");
+              chatHeaderTitle.textContent = displayName;
+              chatHeaderTitle.classList.remove("typing-status");
               statusContainer.style.display = "none";
               document.getElementById(
                 "chat-header-title-wrapper",
@@ -29762,6 +30038,40 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ${imgDesc}
               </div>
             `;
+          } else if (msg.type === "inventory_card") {
+            bubble.classList.add("is-inventory-card");
+            const it = msg.item || {};
+            const avatarHtml = it.avatar
+              ? `<img src="${it.avatar}" alt="${it.name || "物品"}">`
+              : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M8 21v-5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v5"/></svg>`;
+            
+            let headerText = "";
+            if (msg.actionType === "obtain") {
+              const targetName = msg.targetName || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
+              headerText = `${targetName} 获得道具 ${it.name || ""}`.trim();
+            } else if (msg.actionType === "transfer") {
+              const sender = msg.senderName || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
+              const target = msg.targetName || "对方";
+              headerText = `${sender} 移交道具给 ${target}`;
+            } else {
+              const sender = msg.senderName || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
+              headerText = `${sender} 使用道具`;
+            }
+
+            contentHtml = `
+              <div class="inventory-chat-card-wrap">
+                <div class="inventory-chat-card-header">${headerText}</div>
+                <div class="inventory-chat-card">
+                  <div class="inventory-chat-card-avatar" onclick="event.stopPropagation(); if('${it.avatar || ''}' && typeof openFullImageModal==='function')openFullImageModal('${it.avatar || ''}');">
+                    ${avatarHtml}
+                  </div>
+                  <div class="inventory-chat-card-body">
+                    <div class="inventory-chat-card-title">${it.name || "物品"}</div>
+                    <div class="inventory-chat-card-desc">${(it.desc || (it.category === "weapon" ? "武器装备" : (it.category === "clue" ? "关键线索" : "道具"))) + (it.effect ? ` · 功能 ${it.effect}` : "")}</div>
+                  </div>
+                </div>
+              </div>
+            `;
           } else if (msg.type === "naiimag") {
             // NovelAI图片渲染（复用realimag样式）
             bubble.classList.add("is-realimag", "is-card-like");
@@ -30287,9 +30597,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             currentRenderedCount++;
           }
         }
+        window.appendMessage = appendMessage;
 
         async function openChat(chatId) {
           if (!chatId && chatId !== 0) return;
+          const oldInput = document.getElementById("chat-input");
+          if (oldInput && state.activeChatId !== null && state.activeChatId !== undefined) {
+            window.chatDrafts = window.chatDrafts || {};
+            window.chatDrafts[state.activeChatId] = oldInput.value;
+          }
           let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
           if (typeof db !== "undefined" && db.chats) {
             try {
@@ -33683,13 +33999,17 @@ ${recentHistoryText}
         }
 
         async function triggerAiResponse(targetChatId) {
-          const chatId = targetChatId || state.activeChatId;
-          if (!chatId) return;
+          const chatId = (typeof targetChatId === "string" || typeof targetChatId === "number") ? targetChatId : state.activeChatId;
+          if (!chatId && chatId !== 0) return;
           let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
           if (!chat && typeof db !== "undefined" && db.chats) {
             try {
-              chat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
-              if (chat && state.chats) state.chats[chat.id] = chat;
+              const dbChat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              if (dbChat) {
+                if (!state.chats) state.chats = {};
+                state.chats[dbChat.id] = dbChat;
+                chat = dbChat;
+              }
             } catch (e) {}
           }
           if (!chat) return;
@@ -33704,7 +34024,8 @@ ${recentHistoryText}
 
           const initialHeaderTitle = document.getElementById("chat-header-title");
           const initialTypingInd = document.getElementById("typing-indicator");
-          if (state.activeChatId === chatId) {
+          const chatScreenEl = document.getElementById("chat-interface-screen");
+          if (state.activeChatId === chatId && chatScreenEl && chatScreenEl.classList.contains("active")) {
             if (chat.isGroup) {
               if (initialTypingInd) {
                 initialTypingInd.textContent = "群成员正在回复中...";
@@ -33756,124 +34077,121 @@ ${recentHistoryText}
           let statusColumns = [];
           let statusSettings = null;
           let statusMember = null;
+          let lastStatusDate = null;
+          let lastStatusMonth = null;
+          let lastStatusWeather = null;
+          let prevStatusDate = null;
+          let drawnWeatherName = "晴天";
+          let drawnWeatherNote = "温和宜人，阳光明媚，视野开阔";
+          let hitLuck = { name: "波澜不惊", note: "" };
+          let luckInfo = { isNewRoll: false, cycle: 1, currentCount: 1, hitLuck };
+
           if (chat.isGroup) {
             statusMember = (chat.members || []).find(
               (m) => m.roleType === "system_status" || (state.chats[m.id] && state.chats[m.id].roleType === "system_status")
-            );
+            ) || null;
+
+            // 严格规则：群聊只有当群成员中真正存在系统状态栏角色时，才注入系统状态栏提示词与处理状态栏
             if (statusMember) {
               if (!statusMember.roleType) statusMember.roleType = "system_status";
               const sourceChat = state.chats[statusMember.id];
-              if ((!statusMember.settings || !statusMember.settings.columns) && sourceChat && sourceChat.settings) {
-                statusMember.settings = JSON.parse(JSON.stringify(sourceChat.settings));
-              }
-              statusSettings = statusMember.settings || {};
-              statusColumns = statusSettings.columns || [];
-            } else if (chat.settings && chat.settings.columns && chat.settings.columns.length > 0) {
-              statusSettings = chat.settings;
-              statusColumns = chat.settings.columns;
-            }
+              statusSettings = statusMember.settings || (sourceChat && sourceChat.settings) || {};
+              statusColumns = (statusSettings && Array.isArray(statusSettings.columns)) ? statusSettings.columns : [];
 
-            if (statusColumns.length > 0) {
-              const nowTime = new Date();
-              let dateValues = { year: nowTime.getFullYear(), month: nowTime.getMonth() + 1, day: nowTime.getDate() };
-              let timeValues = { hour: String(nowTime.getHours()).padStart(2, '0'), minute: String(nowTime.getMinutes()).padStart(2, '0') };
+              if (statusColumns.length > 0) {
+                const nowTime = new Date();
+                let dateValues = { year: nowTime.getFullYear(), month: nowTime.getMonth() + 1, day: nowTime.getDate() };
+                let timeValues = { hour: String(nowTime.getHours()).padStart(2, '0'), minute: String(nowTime.getMinutes()).padStart(2, '0') };
 
-              const getSeasonFromMonth = (m) => {
-                if (m >= 3 && m <= 5) return "春";
-                if (m >= 6 && m <= 8) return "夏";
-                if (m >= 9 && m <= 11) return "秋";
-                return "冬";
-              };
+                const getSeasonFromMonth = (m) => {
+                  if (m >= 3 && m <= 5) return "春";
+                  if (m >= 6 && m <= 8) return "夏";
+                  if (m >= 9 && m <= 11) return "秋";
+                  return "冬";
+                };
 
-              let lastStatusDate = null;
-              let lastStatusMonth = null;
-              let lastStatusWeather = null;
-              let prevStatusDate = null;
-              const history = chat.history || [];
-              for (let i = history.length - 1; i >= 0; i--) {
-                const hMsg = history[i];
-                if (!hMsg || typeof hMsg.content !== "string") continue;
-                const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
-                const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
-                if (dM && wM) {
-                  if (!lastStatusDate) {
-                    lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                    lastStatusMonth = parseInt(dM[2], 10);
-                    lastStatusWeather = wM[1].trim();
-                    dateValues.year = parseInt(dM[1], 10);
-                    dateValues.month = parseInt(dM[2], 10);
-                    dateValues.day = parseInt(dM[3], 10);
-                  } else if (!prevStatusDate) {
-                    prevStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
-                    break;
+                const history = chat.history || [];
+                for (let i = history.length - 1; i >= 0; i--) {
+                  const hMsg = history[i];
+                  if (!hMsg || typeof hMsg.content !== "string") continue;
+                  const dM = hMsg.content.match(/(?:\[?日期\]?)[：:]\s*(\d+)年(\d+)月(\d+)日/);
+                  const wM = hMsg.content.match(/(?:\[?天气\]?)[：:]\s*([^\n\r]+)/);
+                  if (dM && wM) {
+                    if (!lastStatusDate) {
+                      lastStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                      lastStatusMonth = parseInt(dM[2], 10);
+                      lastStatusWeather = wM[1].trim();
+                      dateValues.year = parseInt(dM[1], 10);
+                      dateValues.month = parseInt(dM[2], 10);
+                      dateValues.day = parseInt(dM[3], 10);
+                    } else if (!prevStatusDate) {
+                      prevStatusDate = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                      break;
+                    }
                   }
                 }
-              }
-              const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
-              const currentSeason = getSeasonFromMonth(dateValues.month);
-              const lastSeason = lastStatusMonth ? getSeasonFromMonth(lastStatusMonth) : currentSeason;
+                const currentDateStr = `${dateValues.year}年${dateValues.month}月${dateValues.day}日`;
+                const currentSeason = getSeasonFromMonth(dateValues.month);
+                const lastSeason = lastStatusMonth ? getSeasonFromMonth(lastStatusMonth) : currentSeason;
 
-              const weatherCol = statusColumns.find(c => c.type === "weather");
-              const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
-              let needNewWeatherRoll = false;
-              if (prevStatusDate && lastStatusDate) {
-                needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
-              } else {
-                needNewWeatherRoll = !lastStatusWeather;
-              }
-
-              let drawnWeatherName = "晴天";
-              let drawnWeatherNote = "温和宜人，阳光明媚，视野开阔";
-
-              if (!needNewWeatherRoll && lastStatusWeather) {
-                drawnWeatherName = lastStatusWeather;
-                const weatherPools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [];
-                const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
-                if (targetPool && Array.isArray(targetPool.items)) {
-                  const matchedItem = targetPool.items.find(it => it.name === lastStatusWeather);
-                  if (matchedItem && (matchedItem.note || matchedItem.desc)) {
-                    drawnWeatherNote = matchedItem.note || matchedItem.desc;
-                  }
-                }
-              } else if (typeof window.drawWeatherFromCurrentPool === "function") {
-                const monthToUse = lastStatusMonth || dateValues.month;
-                const drawn = window.drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
-                if (drawn) {
-                  drawnWeatherName = drawn.name || "晴天";
-                  drawnWeatherNote = drawn.note || drawn.desc || "";
-                }
-              }
-
-              const luckInfo = getOrUpdateLuckForTurn(statusSettings, chat);
-              const hitLuck = luckInfo.hitLuck;
-
-              const columnPrompts = statusColumns.map(c => {
-                let line = `- 栏目: ${c.label || '栏目'}`;
-                if (c.type === "date") line += ` | 格式: [日期]：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入（例如1926年3月16日或2024年5月20日），绝对禁止套用现实生活中的真实日期`;
-                else if (c.type === "time") line += ` | 格式: [时间]：由AI根据上下文剧情自主推断具体时间填入（例如08:30或12:00或14:00），绝对禁止使用本地现实时间`;
-                else if (c.type === "weather") line += ` | 固定值: ${drawnWeatherName} (系统抽取AI不可修改，天气说明: ${drawnWeatherNote})`;
-                else if (c.type === "luck") {
-                  if (luckInfo.isNewRoll) {
-                    line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'}，本周期第 1/${luckInfo.cycle} 次回复，已完成1d100掷骰新判定，系统抽取AI不可修改)`;
-                  } else {
-                    line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'}，本周期第 ${luckInfo.currentCount}/${luckInfo.cycle} 次回复，未重新掷骰，继续当前走向，系统抽取AI不可修改)`;
-                  }
-                } else if (c.type === "affection") {
-                  const listStr = (chat.settings?.affectionList || []).map(a => `${a.name}:${a.affection}`).join(", ") || "暂无";
-                  line += ` | 格式: [好感度]：[角色全名]好感度[+/-]*=* (当前好感列表: ${listStr}，若无好感变动则整栏不输出)`;
+                const weatherCol = statusColumns.find(c => c.type === "weather");
+                const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
+                let needNewWeatherRoll = false;
+                if (prevStatusDate && lastStatusDate) {
+                  needNewWeatherRoll = (lastStatusDate !== prevStatusDate);
                 } else {
-                  line += ` | 格式: ${c.format || '*'} | 备注: ${c.note || '根据当前剧情填空'}`;
+                  needNewWeatherRoll = !lastStatusWeather;
                 }
-                return line;
-              }).join("\n");
 
-              const statusSenderName = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : "系统状态";
+                if (!needNewWeatherRoll && lastStatusWeather) {
+                  drawnWeatherName = lastStatusWeather;
+                  const weatherPools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [];
+                  const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
+                  if (targetPool && Array.isArray(targetPool.items)) {
+                    const matchedItem = targetPool.items.find(it => it.name === lastStatusWeather);
+                    if (matchedItem && (matchedItem.note || matchedItem.desc)) {
+                      drawnWeatherNote = matchedItem.note || matchedItem.desc;
+                    }
+                  }
+                } else if (typeof window.drawWeatherFromCurrentPool === "function") {
+                  const monthToUse = lastStatusMonth || dateValues.month;
+                  const drawn = window.drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
+                  if (drawn) {
+                    drawnWeatherName = drawn.name || "晴天";
+                    drawnWeatherNote = drawn.note || drawn.desc || "";
+                  }
+                }
 
-              const luckGuideNote = luckInfo.isNewRoll
-                ? `- 【幸运值刷新提醒】：当前轮次已刷新 1d100 掷骰判定，幸运值为【${hitLuck.name}】（设定：${hitLuck.note || '无'}，刷新周期为每 ${luckInfo.cycle} 次回复刷新一次）。请以此幸运值展开本阶段剧情。`
-                : `- 【幸运值走向说明】：当前处于幸运周期第 ${luckInfo.currentCount}/${luckInfo.cycle} 次回复，未重新掷骰，保持为【${hitLuck.name}】（设定：${hitLuck.note || '无'}），继续当前走向。`;
+                luckInfo = getOrUpdateLuckForTurn(statusSettings, chat);
+                hitLuck = luckInfo.hitLuck || { name: "波澜不惊", note: "" };
 
-              systemStatusContext = `
+                const columnPrompts = statusColumns.map(c => {
+                  let line = `- 栏目: ${c.label || '栏目'}`;
+                  if (c.type === "date") line += ` | 格式: [日期]：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入（例如1926年3月16日或2024年5月20日），绝对禁止套用现实生活中的真实日期`;
+                  else if (c.type === "time") line += ` | 格式: [时间]：由AI根据上下文剧情自主推断具体时间填入（例如08:30或12:00或14:00），绝对禁止使用本地现实时间`;
+                  else if (c.type === "weather") line += ` | 固定值: ${drawnWeatherName} (系统抽取AI不可修改，天气说明: ${drawnWeatherNote})`;
+                  else if (c.type === "luck") {
+                    if (luckInfo.isNewRoll) {
+                      line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'}，本周期第 1/${luckInfo.cycle} 次回复，已完成1d100掷骰新判定，系统抽取AI不可修改)`;
+                    } else {
+                      line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'}，本周期第 ${luckInfo.currentCount}/${luckInfo.cycle} 次回复，未重新掷骰，继续当前走向，系统抽取AI不可修改)`;
+                    }
+                  } else if (c.type === "affection") {
+                    const listStr = (chat.settings?.affectionList || []).map(a => `${a.name}:${a.affection}`).join(", ") || "暂无";
+                    line += ` | 格式: [好感度]：[角色全名]好感度[+/-]*=* (当前好感列表: ${listStr}，若无好感变动则整栏不输出)`;
+                  } else {
+                    line += ` | 格式: ${c.format || '*'} | 备注: ${c.note || '根据当前剧情填空'}`;
+                  }
+                  return line;
+                }).join("\n");
+
+                const statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
+
+                const luckGuideNote = luckInfo.isNewRoll
+                  ? `- 【幸运值刷新提醒】：当前轮次已刷新 1d100 掷骰判定，幸运值为【${hitLuck.name}】（设定：${hitLuck.note || '无'}，刷新周期为每 ${luckInfo.cycle} 次回复刷新一次）。请以此幸运值展开本阶段剧情。`
+                  : `- 【幸运值走向说明】：当前处于幸运周期第 ${luckInfo.currentCount}/${luckInfo.cycle} 次回复，未重新掷骰，保持为【${hitLuck.name}】（设定：${hitLuck.note || '无'}），继续当前走向。`;
+
+                systemStatusContext = `
 # 【系统状态栏生成指令（每轮系统固定为第一条回复，AI负责根据剧情填写时间与自定义栏目）】
 在本次单次回复的 JSON 数组中，【第一条消息】必须是系统状态栏消息，用于在对话最顶端渲染当前状态：
 - 第一条消息格式: {"type": "text", "name": "${statusSenderName}", "content": "状态栏所有栏目内容"}
@@ -33883,12 +34201,13 @@ ${columnPrompts}
 ${luckGuideNote}
 - 在第一条状态栏消息之后，再继续生成其他群成员角色的正常互动消息。
 `;
+              }
             }
 
             const roleplayMembers = (chat.members || []).filter(
               (m) => m.roleType !== "system_status" && m.roleType !== "dice" && !m.isMuted
             );
-            if (roleplayMembers.length === 0) {
+            if (roleplayMembers.length === 0 && !statusMember) {
               renderChatList();
               return;
             }
@@ -34601,38 +34920,23 @@ ${luckGuideNote}
           const typingIndicator = document.getElementById("typing-indicator");
 
           // 根据聊天类型，决定显示哪种“正在输入”
-          if (state.activeChatId === chatId) {
+          const chatScreenElForTyping = document.getElementById("chat-interface-screen");
+          if (state.activeChatId === chatId && chatScreenElForTyping && chatScreenElForTyping.classList.contains("active")) {
             if (chat.isGroup) {
               if (typingIndicator) {
                 typingIndicator.textContent = "群成员正在回复中...";
                 typingIndicator.style.display = "block";
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
               }
-              if (chatHeaderTitle) {
-                chatHeaderTitle.textContent = "群成员正在回复中...";
-                chatHeaderTitle.classList.add("typing-status");
-              }
             } else if (chat.settings.offlineMode?.enabled) {
               if (chatHeaderTitle) {
-                chatHeaderTitle.style.opacity = 0;
-                setTimeout(() => {
-                  if (state.activeChatId === chatId && window.activeGeneratingChats?.[chatId]) {
-                    chatHeaderTitle.textContent = "对方正在赴约中...";
-                    chatHeaderTitle.classList.add("typing-status");
-                    chatHeaderTitle.style.opacity = 1;
-                  }
-                }, 200);
+                chatHeaderTitle.textContent = "对方正在赴约中...";
+                chatHeaderTitle.classList.add("typing-status");
               }
             } else {
               if (chatHeaderTitle) {
-                chatHeaderTitle.style.opacity = 0;
-                setTimeout(() => {
-                  if (state.activeChatId === chatId && window.activeGeneratingChats?.[chatId]) {
-                    chatHeaderTitle.textContent = "对方正在输入...";
-                    chatHeaderTitle.classList.add("typing-status");
-                    chatHeaderTitle.style.opacity = 1;
-                  }
-                }, 200);
+                chatHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : "对方正在输入...";
+                chatHeaderTitle.classList.add("typing-status");
               }
             }
           }
@@ -35021,6 +35325,7 @@ ${luckGuideNote}
             const moduleChaptersPromptBlock = await getChatModulePromptBlock(chat);
             const mapPromptObj = await getChatMapPromptBlock(chat);
             const mapPromptBlock = typeof mapPromptObj === "object" ? (mapPromptObj.prompt || "") : (mapPromptObj || "");
+            const inventoryPromptBlock = (typeof getChatInventoryPromptBlock === "function") ? getChatInventoryPromptBlock(chat) : "";
 
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
@@ -35192,16 +35497,16 @@ ${luckGuideNote}
 			你是一个群聊AI，负责扮演【除了用户以外】的所有角色。
 			# 【【【身份铁律：这是最高指令，必须严格遵守】】】
 			1.  **核心任务**: 你的唯一任务是扮演且仅能扮演下方“群成员列表”中明确列出的角色。
-			2.  **用户识别**: 用户的身份是【${myNickname}】。你【绝对、永远、在任何情况下都不能】生成 \`name\` 字段为 **"${myNickname}"** 的消息。
+			2.  **用户识别**: 用户的身份是【${myNickname}】。你【绝对、永远、在任何情况下都不能】生成 "name" 字段为 **"${myNickname}"** 的消息。
 			3.  **禁止杜撰**: 【绝对禁止】扮演任何未在列表中出现的额外角色。正文严禁自创未抽取的随机数值与天气。
 			4.  **【【【格式铁律：这是你的生命线，违者生成失败】】】**:
 			    -   你的回复【必须且只能】是一个严格的JSON数组格式的字符串。
 			    -   数组中的【每一个元素都必须是一个JSON对象】。
-			    -   每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)或系统状态栏名称。
+			    -   ${statusMember ? `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)或系统状态栏名称【${statusMember.groupNickname || statusMember.originalName || "系统状态"}】。` : `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)。`}
 			    -   缺少 "name" 字段的回复是无效的，会被系统拒绝。
 			5.  **角色扮演**: 严格遵守下方“群成员列表及人设”中的每一个角色的设定。
 			# 群成员列表及人设 (name字段是你要使用的【本名】)
-			${roleplayMembers.map((m) => `- **${m.originalName}**: (群昵称为: ${m.groupNickname}) 人设: ${m.persona}`).join("\n")}
+			${roleplayMembers.map((m) => `- **${m.originalName || m.name || m.groupNickname}**: (群昵称为: ${m.groupNickname || m.name || m.originalName}) 人设: ${m.persona || "暂无"}`).join("\n")}
 			6.  **禁止出戏**: 绝不能透露你是AI、模型，或提及“扮演”、“生成”等词语。
 			${isCognitionEnabled ? `7.  **情景感知**: 注意当前时间是 ${currentTime}。` : ""}
 			**标准输出格式示例:**
@@ -35214,14 +35519,14 @@ ${luckGuideNote}
 			  ]
 
 			## 你可以使用的操作指令:
-			-   **发送文本**: \`{"type": "text", "name": "角色名", "message": "文本内容"}\`
-			-   **发送语音**: \`{"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}\`
+			-   **发送文本**: {"type": "text", "name": "角色名", "message": "文本内容"}
+			-   **发送语音**: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
 			${
         localStorage.getItem("novelai-enabled") === "true"
-          ? `-   **【NovelAI图片分享】**: \`{"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\``
+          ? `-   **【NovelAI图片分享】**: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}`
           : ""
       }
-			-   **发送系统消息**: \`{"type": "system_message", "content": "你想在聊天中显示的系统文本"}\`
+			-   **发送系统消息**: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
 
 			${summaryContext}
 			${announcementContext}
@@ -35229,13 +35534,14 @@ ${luckGuideNote}
 			${moduleChaptersPromptBlock}
 			${mapPromptBlock}
 			${thoughtChainPromptBlock}
+			${inventoryPromptBlock}
 			${sharedContext}
 			${stickerContext}
 			${linkedMemoryContext}
 			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度系统】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
 
 			# 用户的角色
-			- **${myNickname}**: ${chat.settings.myPersona}${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? " [状态: " + window.getCocPromptStatus(chat.settings.myCocPanel) + "]" : ""}${chat.settings.myName ? ` [姓名:${chat.settings.myName}]` : ""}${chat.settings.myAge ? ` [年龄:${chat.settings.myAge}]` : ""}${chat.settings.myBirthday ? ` [生日:${chat.settings.myBirthday}]` : ""}${chat.settings.myGender ? ` [性别:${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}]` : ""}
+			- **${myNickname}**: ${chat.settings.myPersona || "普通人"}${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? " [状态: " + window.getCocPromptStatus(chat.settings.myCocPanel) + "]" : ""}${chat.settings.myName ? ` [姓名:${chat.settings.myName}]` : ""}${chat.settings.myAge ? ` [年龄:${chat.settings.myAge}]` : ""}${chat.settings.myBirthday ? ` [生日:${chat.settings.myBirthday}]` : ""}${chat.settings.myGender ? ` [性别:${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}]` : ""}
 
 			${systemStatusContext}
 
@@ -35711,6 +36017,7 @@ ${luckStatusDirective}
 			${moduleChaptersPromptBlock}
 			${mapPromptBlock}
 			${thoughtChainPromptBlock}
+			${inventoryPromptBlock}
 			${linkedMemoryContext}
 			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度设定】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
 			- **可用表情包**:
@@ -36247,13 +36554,13 @@ ${luckStatusDirective}
             let collectedThinking = extractedThinking || "";
             const filteredMessages = [];
 
-            const statusPrefixes = (chat.settings?.columns || []).map(c => c.label).filter(Boolean);
+            const activeStatusCols = chat.isGroup ? statusColumns : (chat.settings?.columns || []);
+            const statusPrefixes = (Array.isArray(activeStatusCols) ? activeStatusCols : []).map(c => c && c.label).filter(Boolean);
             function isStatusBubble(item) {
               if (!item) return false;
               const txt = String(item.content || item.message || "").trim();
               if (!txt) return false;
-              if (/^\[[^\]\n]+\][：:]/.test(txt)) return true;
-              return statusPrefixes.some(p => txt.startsWith(p));
+              return statusPrefixes.some(p => p && txt.startsWith(p));
             }
 
             function isSubstantiveAiMessage(item) {
@@ -36308,8 +36615,9 @@ ${luckStatusDirective}
               }
 
               const isChapterSwitchType = item.type === "suggest_switch_chapter" || item.type === "switch_chapter" || item.type === "suggest_manage_chapters" || item.type === "manage_chapters";
+              const isInventoryType = item.type === "give_item" || item.type === "gift_item" || item.type === "obtain_item" || item.type === "inventory_card" || item.type === "apply_item_effect" || item.type === "transfer_item" || Boolean(item.give_item);
 
-              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType) {
+              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType && !isInventoryType) {
                 continue;
               }
 
@@ -36317,9 +36625,16 @@ ${luckStatusDirective}
             }
 
             messagesArray = filteredMessages;
+            if (typeof parseAndAddAiGiftItems === "function") {
+              await parseAndAddAiGiftItems(chat, messagesArray);
+            }
 
-            const statusTriggerMode = statusMember?.settings?.triggerMode || statusMember?.triggerMode || chat.settings?.triggerMode || "always";
-            const hasStatusConfig = ((statusColumns && statusColumns.length > 0) || (chat.roleType === "system_status") || (statusMember !== null) || (chat.settings?.columns && chat.settings.columns.length > 0)) && statusTriggerMode !== "none";
+            const statusTriggerMode = chat.isGroup
+              ? (statusMember?.settings?.triggerMode || statusMember?.triggerMode || "always")
+              : (chat.settings?.triggerMode || "always");
+            const hasStatusConfig = chat.isGroup
+              ? (statusMember !== null && Array.isArray(statusColumns) && statusColumns.length > 0 && statusTriggerMode !== "none")
+              : (chat.roleType === "system_status" && statusTriggerMode !== "none");
             if (hasStatusConfig) {
               const statusSender = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : (chat.name || "系统状态");
               let statusContents = [];
@@ -36342,9 +36657,10 @@ ${luckStatusDirective}
                 mergedText = statusContents.join("\n");
                 shouldAddStatus = true;
               } else if (statusTriggerMode === "always" || chat.roleType === "system_status") {
-                const colsToRender = (statusColumns && statusColumns.length > 0) ? statusColumns : (chat.settings?.columns || []);
+                const colsToRender = (Array.isArray(statusColumns) && statusColumns.length > 0) ? statusColumns : (chat.settings?.columns || []);
                 let fallbackLines = [];
-                colsToRender.forEach(col => {
+                (Array.isArray(colsToRender) ? colsToRender : []).forEach(col => {
+                  if (!col) return;
                   let lbl = col.label || "栏目";
                   if (col.type === "date") fallbackLines.push(`${lbl}：${lastStatusDate || "1926年3月16日"}`);
                   else if (col.type === "time") fallbackLines.push(`${lbl}：12:00`);
@@ -39858,16 +40174,58 @@ ${luckStatusDirective}
 
                   break;
 
-                case "waimai_request":
+                case "give_item":
+                case "gift_item":
+                case "obtain_item": {
+                  const it = msgData.item || msgData.give_item || msgData;
+                  const targetName = msgData.target || msgData.targetName || msgData.receiver || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
+                  const category = it.category === "clue" ? "clue" : (it.category === "weapon" ? "weapon" : "prop");
+                  const newItem = {
+                    id: "inv_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+                    name: String(it.name || "道具").trim(),
+                    desc: String(it.desc || it.description || "").trim(),
+                    effect: String(it.effect || "").trim(),
+                    category: category,
+                    avatar: it.avatar || "",
+                    content: category === "clue" ? String(it.content || it.contentHtml || it.desc || "") : "",
+                    damageBonus: category === "weapon" ? String(it.damageBonus || it.damage || "") : "",
+                    dbBonus: category === "weapon" ? String(it.dbBonus || it.db || "") : "",
+                    isPinned: false,
+                    source: "获得道具",
+                    createdAt: Date.now(),
+                  };
+
+                  if (typeof window.addItemToCharacterOrUser === "function") {
+                    await window.addItemToCharacterOrUser(chat, targetName, newItem, it.prompt || it.imagePrompt);
+                  }
+
                   aiMessage = {
                     ...baseMessage,
-                    type: "waimai_request",
-                    productInfo: msgData.productInfo,
-                    amount: msgData.amount,
-                    status: "pending",
-                    countdownEndTime: Date.now() + 15 * 60 * 1000,
+                    type: "inventory_card",
+                    actionType: "obtain",
+                    targetName: targetName,
+                    item: newItem,
+                    content: `[获得道具：${newItem.name}]`,
                   };
                   break;
+                }
+
+                case "apply_item_effect": {
+                  const targetName = msgData.target || msgData.targetName || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
+                  const effectStr = msgData.effect || "";
+                  const approved = msgData.approved !== false;
+                  if (approved && effectStr && typeof window.applyItemEffectToCharacterOrUser === "function") {
+                    const report = await window.applyItemEffectToCharacterOrUser(chat, targetName, effectStr);
+                    if (report) {
+                      aiMessage = {
+                        ...baseMessage,
+                        type: "pat_message",
+                        content: `*道具效果已生效：${targetName} ${report}`,
+                      };
+                    }
+                  }
+                  break;
+                }
 
                 default:
                   console.warn("收到了未知的AI指令类型:", msgData.type);
@@ -39929,17 +40287,21 @@ ${luckStatusDirective}
                   );
                 }
 
-                if (!isViewingThisChat) {
+                const isCurrentlyViewingThisChat =
+                  document.getElementById("chat-interface-screen").classList.contains("active") &&
+                  state.activeChatId === chatId;
+
+                if (!isCurrentlyViewingThisChat) {
                   // 如果用户不在当前聊天界面，就把这个聊天的未读数 +1
                   chat.unreadCount = (chat.unreadCount || 0) + 1;
                 }
 
-                // 2. 只有在当前聊天界面时，才执行带动画的添加
-                if (isViewingThisChat) {
+                // 2. 只有在当前正在查看此聊天界面时，才执行追加到 DOM
+                if (isCurrentlyViewingThisChat) {
                   appendMessage(aiMessage, chat);
                   playNotificationSound();
                   await new Promise((resolve) =>
-                    setTimeout(resolve, Math.random() * 1800 + 1000),
+                    setTimeout(resolve, Math.random() * 600 + 300),
                   );
                 }
               }
@@ -39989,10 +40351,6 @@ ${luckStatusDirective}
               }
 
               if (diceRole) {
-                const isViewingThisChat =
-                  document.getElementById("chat-interface-screen").classList.contains("active") &&
-                  state.activeChatId === chatId;
-
                 for (const aiMsg of newAiMsgs) {
                   if (aiMsg.sender === diceRole.name || aiMsg.senderName === diceRole.name) continue;
                   const rawContent = typeof aiMsg.content === "string" ? aiMsg.content : "";
@@ -40051,7 +40409,10 @@ ${luckStatusDirective}
                       };
                       chat.history.push(diceMsg);
                       await incrementMessageCount(chatId);
-                      if (isViewingThisChat) {
+                      const isCurrentlyViewing =
+                        document.getElementById("chat-interface-screen").classList.contains("active") &&
+                        state.activeChatId === chatId;
+                      if (isCurrentlyViewing) {
                         appendMessage(diceMsg, chat);
                       }
                     }
@@ -40111,16 +40472,19 @@ ${luckStatusDirective}
               delete window.activeGeneratingChats[chatId];
             }
             // 在 finally 块中仅当当前处于该聊天窗口时统一更新提示与标题
-            if (state.activeChatId === chatId) {
-              if (typingIndicator) {
-                typingIndicator.style.display = "none";
+            const chatScreenActive = document.getElementById("chat-interface-screen")?.classList.contains("active");
+            if (state.activeChatId === chatId && chatScreenActive) {
+              const curTypingInd = document.getElementById("typing-indicator");
+              if (curTypingInd) {
+                curTypingInd.style.display = "none";
               }
-              if (chatHeaderTitle && state.chats[chatId]) {
+              const curHeaderTitle = document.getElementById("chat-header-title");
+              if (curHeaderTitle && state.chats[chatId]) {
                 const finalDisplayName = (!state.chats[chatId].isGroup && state.chats[chatId].settings?.remarkName)
                   ? state.chats[chatId].settings.remarkName
                   : state.chats[chatId].name;
-                chatHeaderTitle.textContent = finalDisplayName;
-                chatHeaderTitle.classList.remove("typing-status");
+                curHeaderTitle.textContent = finalDisplayName;
+                curHeaderTitle.classList.remove("typing-status");
               }
               const statusContainer = document.getElementById("chat-header-status");
               if (statusContainer) {
@@ -57308,7 +57672,7 @@ ${luckStatusDirective}
             console.log("执行守秘人末尾强制生图...");
             const maxMem = chat.settings.maxMemory || 12;
             const recentMsgs = (chat.history || [])
-              .filter((m) => !m.isHidden && !m.isTemporary && m.type !== "naiimag")
+              .filter((m) => m && !m.isHidden && !m.isTemporary && m.type !== "naiimag")
               .slice(-maxMem);
 
             let historyText = "";
@@ -57320,25 +57684,29 @@ ${luckStatusDirective}
               }
             });
 
-            // 1. 模组信息（包括地图、简介、图片及勾选内容）
+            // 1. 模组信息
             const moduleBlock = (typeof getChatModulePromptBlock === "function") ? await getChatModulePromptBlock(chat) : "";
 
             // 2. 人设信息
             let personaBlock = "";
             if (chat.isGroup) {
-              const memberNames = (chat.members || []).map((m) => `- ${m.groupNickname || m.name}: ${m.persona || "暂无人设"}`).join("\n");
+              const memberNames = (Array.isArray(chat.members) ? chat.members : [])
+                .filter(Boolean)
+                .map((m) => `- ${m.groupNickname || m.originalName || m.name || "群成员"}: ${m.persona || "暂无人设"}`)
+                .join("\n");
               personaBlock = `# 群成员人设:\n${memberNames}\n- 用户人设: ${chat.settings.myPersona || "普通人"}`;
             } else {
-              personaBlock = `# 角色人设:\n- ${chat.name}: ${chat.settings.aiPersona || "暂无人设"}\n- 用户人设: ${chat.settings.myPersona || "普通人"}`;
+              personaBlock = `# 角色人设:\n- ${chat.name}: ${chat.settings?.aiPersona || "暂无人设"}\n- 用户人设: ${chat.settings?.myPersona || "普通人"}`;
             }
 
             // 3. 世界书内容
             let worldBookContent = "";
-            if (chat.settings.linkedWorldBookIds && chat.settings.linkedWorldBookIds.length > 0) {
+            if (Array.isArray(chat.settings?.linkedWorldBookIds) && chat.settings.linkedWorldBookIds.length > 0) {
               const linkedContents = chat.settings.linkedWorldBookIds
                 .map((id) => {
-                  const book = (state.worldBooks || []).find((b) => b.id === id);
-                  return book ? book.entries.map((e) => `[${e.keys}]: ${e.content}`).join("\n") : "";
+                  const book = (state.worldBooks || []).find((b) => b && b.id === id);
+                  if (!book || !Array.isArray(book.entries)) return "";
+                  return book.entries.map((e) => `[${e.keys || '设定'}]: ${e.content || ''}`).join("\n");
                 })
                 .filter(Boolean)
                 .join("\n");
@@ -57347,14 +57715,15 @@ ${luckStatusDirective}
               }
             }
 
-            // 4. 每个人人设后面附带的专属独立 Prompt
+            // 4. 角色专属生图提示词
             let allCharPromptsBlock = "";
             const charPrompts = chat.settings.keeperCharPrompts || {};
             const promptEntries = [];
             if (chat.isGroup) {
-              (chat.members || []).forEach((m) => {
-                const p = charPrompts[m.id] || charPrompts[m.name] || charPrompts[m.groupNickname];
-                if (p) promptEntries.push(`- 角色【${m.groupNickname || m.name}】专属生图Prompt: ${p}`);
+              (Array.isArray(chat.members) ? chat.members : []).forEach((m) => {
+                if (!m) return;
+                const p = charPrompts[m.id] || charPrompts[m.name] || charPrompts[m.groupNickname] || charPrompts[m.originalName];
+                if (p) promptEntries.push(`- 角色【${m.groupNickname || m.originalName || m.name}】专属生图Prompt: ${p}`);
               });
               if (charPrompts["me"]) {
                 promptEntries.push(`- 角色【${chat.settings.myNickname || chat.settings.myName || "我"}】专属生图Prompt: ${charPrompts["me"]}`);
@@ -57368,30 +57737,36 @@ ${luckStatusDirective}
               allCharPromptsBlock = `# 各角色专属生图提示词:\n${promptEntries.join("\n")}`;
             }
 
-            // 5. 确定选中的守秘人身份
+            // 5. 确定选中的生图发言身份
             let keeperCharName = chat.isGroup ? "守秘人" : chat.name;
             const targetCharId = chat.settings.keeperTargetId;
             if (targetCharId && targetCharId !== "none") {
               if (targetCharId === "me") {
                 keeperCharName = chat.settings.myNickname || chat.settings.myName || "我";
               } else if (chat.isGroup) {
-                const mem = (chat.members || []).find((m) => (m.id || m.name) === targetCharId);
-                if (mem) keeperCharName = mem.groupNickname || mem.name;
+                const mem = (Array.isArray(chat.members) ? chat.members : []).find((m) => m && (m.id === targetCharId || m.name === targetCharId || m.originalName === targetCharId));
+                if (mem) keeperCharName = mem.groupNickname || mem.originalName || mem.name;
               } else {
                 keeperCharName = chat.name;
               }
             }
 
-            // 6. 提示词代码与格式指令（由AI自主判断生成几张图片）
+            // 6. 提示词代码与格式指令（只告诉生图指令，由AI自主判断张数）
             const keeperInstructionBlock = `
-# 【守秘人生图指令与格式规范】
-当前指定的生图发言身份为：【${keeperCharName}】。
-你必须基于上下文剧情进展、各角色外貌/动作/环境、模组及世界书内容，自主决定本次需要生成的图片张数（1张或多张）。
-你的回复必须为合法 JSON，支持以下两种格式之一：
-格式一（单张）：
-{"type": "naiimag", "name": "${keeperCharName}", "prompt": "masterpiece, 1girl/1boy, detailed tags..."}
-格式二（多张）：
-{"type": "naiimag", "name": "${keeperCharName}", "images": [{"prompt": "详细英文Prompt1..."}, {"prompt": "详细英文Prompt2..."}]}
+# 【NovelAI 生图指令任务】
+请根据当前最新剧情进展、场景环境描写以及各角色的外貌动作，发送 NovelAI 生图指令。
+你可以根据剧情画面需要，自主判断本次生成 1 张或多张图片。
+【铁律】：除了生图指令外，禁止输出任何其他普通对话气泡或多余文字。
+你的回复必须为合法 JSON，只包含 type 为 "naiimag" 的生图字段，格式示例：
+单张格式：
+{"type": "naiimag", "name": "${keeperCharName}", "prompt": "masterpiece, 1girl, detailed description tags..."}
+多张格式：
+[
+  {"type": "naiimag", "name": "${keeperCharName}", "prompt": "详细英文描述词1..."},
+  {"type": "naiimag", "name": "${keeperCharName}", "prompt": "详细英文描述词2..."}
+]
+或
+{"type": "naiimag", "name": "${keeperCharName}", "images": [{"prompt": "详细英文描述词1..."}, {"prompt": "详细英文描述词2..."}]}
 `;
 
             const keeperSystemPrompt = [
@@ -57405,14 +57780,17 @@ ${luckStatusDirective}
 
             const messagesForApi = [
               { role: "system", content: keeperSystemPrompt },
-              { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON 对象。` }
+              { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON。` }
             ];
 
-            const apiCfg = getEffectiveApiConfig("forcedImage");
+            let apiCfg = getEffectiveApiConfig("forcedImage");
+            if (!apiCfg || !apiCfg.apiKey) {
+              apiCfg = getEffectiveApiConfig("");
+            }
             const { proxyUrl, apiKey, model, temperature } = apiCfg;
 
             if (!apiKey) {
-              console.warn("未配置 API Key，无法执行守密人生图。");
+              console.warn("未配置 API Key，无法执行守秘人生图。");
               return;
             }
 
@@ -57451,11 +57829,15 @@ ${luckStatusDirective}
 
             const promptsToGenerate = [];
             try {
-              const jsonMatches = rawContent.match(/\{[\s\S]*?\}/g) || [];
+              const jsonMatches = rawContent.match(/\[[\s\S]*?\]|\{[\s\S]*?\}/g) || [];
               for (const jm of jsonMatches) {
                 try {
                   const parsed = JSON.parse(jm);
-                  if (Array.isArray(parsed.images)) {
+                  if (Array.isArray(parsed)) {
+                    parsed.forEach(item => {
+                      if (item && (item.prompt || item.content)) promptsToGenerate.push(item.prompt || item.content);
+                    });
+                  } else if (Array.isArray(parsed.images)) {
                     parsed.images.forEach(img => {
                       if (img && (img.prompt || img.content)) promptsToGenerate.push(img.prompt || img.content);
                     });
@@ -57478,6 +57860,21 @@ ${luckStatusDirective}
             }
           } catch (err) {
             console.error("守密人强制生图失败:", err);
+            const errorMsg = {
+              role: "assistant",
+              sender: chat.isGroup ? "系统消息" : chat.name,
+              senderName: chat.isGroup ? "系统消息" : chat.name,
+              name: chat.isGroup ? "系统消息" : chat.name,
+              avatar: chat.isGroup ? defaultGroupAvatar : chat.avatar,
+              senderAvatar: chat.isGroup ? defaultGroupAvatar : chat.avatar,
+              content: `[强制生图调用失败: ${err.message}]`,
+              timestamp: Date.now(),
+            };
+            chat.history.push(errorMsg);
+            await db.chats.put(chat);
+            if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
+              appendMessage(errorMsg, chat);
+            }
           }
         }
 
@@ -57485,134 +57882,6 @@ ${luckStatusDirective}
           const naiPrompts = getCharacterNAIPrompts(chat.id);
           const finalPositivePrompt = naiPrompts.positive ? aiPrompt + ", " + naiPrompts.positive : aiPrompt;
           const finalNegativePrompt = naiPrompts.negative || "";
-
-          const apiKey = localStorage.getItem("novelai-api-key");
-          const model = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
-          const settings = getNovelAISettings();
-
-          if (!apiKey) {
-            console.warn("NovelAI API Key 未配置");
-            return;
-          }
-
-          const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
-          let requestBody;
-          if (model.includes("nai-diffusion-4")) {
-            requestBody = {
-              input: finalPositivePrompt,
-              model: model,
-              action: "generate",
-              parameters: {
-                params_version: 3,
-                width: width || 1024,
-                height: height || 1024,
-                scale: settings.cfg_scale || 5,
-                sampler: settings.sampler || "k_euler_ancestral",
-                steps: settings.steps || 28,
-                seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
-                n_samples: 1,
-                ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
-                qualityToggle: settings.quality_toggle !== false,
-                negative_prompt: finalNegativePrompt,
-                noise_schedule: "karras",
-                deliberate_euler_ancestral_bug: false,
-                prefer_brownian: true,
-                add_original_image: true,
-                cfg_rescale: 0,
-                dynamic_thresholding: false,
-                legacy: false,
-                legacy_uc: false,
-                inpaintImg2ImgStrength: 1,
-                normalize_reference_strength_multiple: true,
-                characterPrompts: [],
-                v4_prompt: { caption: { base_caption: finalPositivePrompt, char_captions: [] }, use_coords: false, use_order: true },
-                v4_negative_prompt: { caption: { base_caption: finalNegativePrompt, char_captions: [] }, legacy_uc: false },
-              },
-            };
-          } else {
-            requestBody = {
-              input: finalPositivePrompt,
-              model: model,
-              action: "generate",
-              parameters: {
-                width: width || 1024,
-                height: height || 1024,
-                scale: settings.cfg_scale || 5,
-                sampler: settings.sampler || "k_euler_ancestral",
-                steps: settings.steps || 28,
-                seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
-                n_samples: 1,
-                ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
-                qualityToggle: settings.quality_toggle !== false,
-                negative_prompt: finalNegativePrompt,
-                sm: settings.smea,
-                sm_dyn: settings.smea_dyn,
-                noise_schedule: "native",
-                add_original_image: false,
-              },
-            };
-          }
-
-          let apiUrl = model.includes("nai-diffusion-4")
-            ? "https://image.novelai.net/ai/generate-image-stream"
-            : "https://image.novelai.net/ai/generate-image";
-          let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
-          if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
-
-          const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
-          let headers = {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + apiKey,
-          };
-          if (isChrome) {
-            const cleanHeaders = {};
-            for (const [k, v] of Object.entries(headers)) cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
-            headers = cleanHeaders;
-          }
-
-          const res = await fetch(apiUrl, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(requestBody),
-          });
-
-          if (!res.ok) throw new Error(await res.text());
-
-          const contentType = res.headers.get("content-type");
-          let imageDataUrl = null;
-
-          if (contentType && contentType.includes("text/event-stream")) {
-            const text = await res.text();
-            const lines = text.trim().split("\n");
-            for (let i = lines.length - 1; i >= 0; i--) {
-              const line = lines[i].trim();
-              if (line.startsWith("data: ") && line !== "data: [DONE]") {
-                const dataContent = line.substring(6);
-                try {
-                  const jsonData = JSON.parse(dataContent);
-                  if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
-                    const base64Data = jsonData.image || jsonData.data;
-                    const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                    imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
-                    break;
-                  }
-                } catch (e) {}
-              }
-            }
-          } else {
-            const arrayBuffer = await res.arrayBuffer();
-            const zip = await JSZip.loadAsync(arrayBuffer);
-            const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg"));
-            if (!imageFileName) throw new Error("ZIP内未找到图片文件");
-            const imageBlob = await zip.files[imageFileName].async("blob");
-            imageDataUrl = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result);
-              reader.readAsDataURL(imageBlob);
-            });
-          }
-
-          if (!imageDataUrl) throw new Error("无法解析生图数据");
 
           let senderName = chat.isGroup ? "系统消息" : chat.name;
           let senderAvatar = chat.isGroup ? defaultGroupAvatar : chat.avatar;
@@ -57623,30 +57892,200 @@ ${luckStatusDirective}
             } else if (chat.isGroup) {
               const mem = (chat.members || []).find((m) => (m.id || m.name) === chat.settings.keeperTargetId);
               if (mem) {
-                senderName = mem.name;
+                senderName = mem.groupNickname || mem.name;
                 senderAvatar = mem.avatar || defaultAvatar;
               }
             }
           }
 
-          const aiMessage = {
-            role: "assistant",
-            sender: senderName,
-            senderName: senderName,
-            name: senderName,
-            avatar: senderAvatar,
-            senderAvatar: senderAvatar,
-            type: "naiimag",
-            imageUrl: imageDataUrl,
-            prompt: aiPrompt,
-            fullPrompt: finalPositivePrompt,
-            timestamp: Date.now(),
-          };
+          const apiKey = localStorage.getItem("novelai-api-key");
+          const model = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const settings = getNovelAISettings();
 
-          chat.history.push(aiMessage);
-          await db.chats.put(chat);
-          if (state.activeChatId === chat.id) {
-            appendMessage(aiMessage, chat);
+          if (!apiKey) {
+            console.warn("NovelAI API Key 未配置，生成提示词卡片消息");
+            const fallbackMessage = {
+              role: "assistant",
+              sender: senderName,
+              senderName: senderName,
+              name: senderName,
+              avatar: senderAvatar,
+              senderAvatar: senderAvatar,
+              type: "naiimag",
+              imageUrl: "https://i.postimg.cc/KYr2qRCK/1.jpg",
+              prompt: aiPrompt,
+              fullPrompt: finalPositivePrompt,
+              content: `[NovelAI生图提示词: ${aiPrompt}]`,
+              timestamp: Date.now(),
+            };
+            chat.history.push(fallbackMessage);
+            await db.chats.put(chat);
+            if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
+              appendMessage(fallbackMessage, chat);
+            }
+            return;
+          }
+
+          try {
+            const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
+            let requestBody;
+            if (model.includes("nai-diffusion-4")) {
+              requestBody = {
+                input: finalPositivePrompt,
+                model: model,
+                action: "generate",
+                parameters: {
+                  params_version: 3,
+                  width: width || 1024,
+                  height: height || 1024,
+                  scale: settings.cfg_scale || 5,
+                  sampler: settings.sampler || "k_euler_ancestral",
+                  steps: settings.steps || 28,
+                  seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
+                  n_samples: 1,
+                  ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+                  qualityToggle: settings.quality_toggle !== false,
+                  negative_prompt: finalNegativePrompt,
+                  noise_schedule: "karras",
+                  deliberate_euler_ancestral_bug: false,
+                  prefer_brownian: true,
+                  add_original_image: true,
+                  cfg_rescale: 0,
+                  dynamic_thresholding: false,
+                  legacy: false,
+                  legacy_uc: false,
+                  inpaintImg2ImgStrength: 1,
+                  normalize_reference_strength_multiple: true,
+                  characterPrompts: [],
+                  v4_prompt: { caption: { base_caption: finalPositivePrompt, char_captions: [] }, use_coords: false, use_order: true },
+                  v4_negative_prompt: { caption: { base_caption: finalNegativePrompt, char_captions: [] }, legacy_uc: false },
+                },
+              };
+            } else {
+              requestBody = {
+                input: finalPositivePrompt,
+                model: model,
+                action: "generate",
+                parameters: {
+                  width: width || 1024,
+                  height: height || 1024,
+                  scale: settings.cfg_scale || 5,
+                  sampler: settings.sampler || "k_euler_ancestral",
+                  steps: settings.steps || 28,
+                  seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
+                  n_samples: 1,
+                  ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+                  qualityToggle: settings.quality_toggle !== false,
+                  negative_prompt: finalNegativePrompt,
+                  sm: settings.smea,
+                  sm_dyn: settings.smea_dyn,
+                  noise_schedule: "native",
+                  add_original_image: false,
+                },
+              };
+            }
+
+            let apiUrl = model.includes("nai-diffusion-4")
+              ? "https://image.novelai.net/ai/generate-image-stream"
+              : "https://image.novelai.net/ai/generate-image";
+            let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
+            if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
+
+            const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
+            let headers = {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + apiKey,
+            };
+            if (isChrome) {
+              const cleanHeaders = {};
+              for (const [k, v] of Object.entries(headers)) cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
+              headers = cleanHeaders;
+            }
+
+            const res = await fetch(apiUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify(requestBody),
+            });
+
+            if (!res.ok) throw new Error(await res.text());
+
+            const contentType = res.headers.get("content-type");
+            let imageDataUrl = null;
+
+            if (contentType && contentType.includes("text/event-stream")) {
+              const text = await res.text();
+              const lines = text.trim().split("\n");
+              for (let i = lines.length - 1; i >= 0; i--) {
+                const line = lines[i].trim();
+                if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                  const dataContent = line.substring(6);
+                  try {
+                    const jsonData = JSON.parse(dataContent);
+                    if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                      const base64Data = jsonData.image || jsonData.data;
+                      const isPNG = base64Data.startsWith("iVBORw0KGgo");
+                      imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                      break;
+                    }
+                  } catch (e) {}
+                }
+              }
+            } else {
+              const arrayBuffer = await res.arrayBuffer();
+              const zip = await JSZip.loadAsync(arrayBuffer);
+              const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg"));
+              if (!imageFileName) throw new Error("ZIP内未找到图片文件");
+              const imageBlob = await zip.files[imageFileName].async("blob");
+              imageDataUrl = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(imageBlob);
+              });
+            }
+
+            if (!imageDataUrl) throw new Error("无法解析生图数据");
+
+            const aiMessage = {
+              role: "assistant",
+              sender: senderName,
+              senderName: senderName,
+              name: senderName,
+              avatar: senderAvatar,
+              senderAvatar: senderAvatar,
+              type: "naiimag",
+              imageUrl: imageDataUrl,
+              prompt: aiPrompt,
+              fullPrompt: finalPositivePrompt,
+              timestamp: Date.now(),
+            };
+
+            chat.history.push(aiMessage);
+            await db.chats.put(chat);
+            if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
+              appendMessage(aiMessage, chat);
+            }
+          } catch (err) {
+            console.warn("NovelAI图片生成失败，降级显示提示词:", err);
+            const fallbackMessage = {
+              role: "assistant",
+              sender: senderName,
+              senderName: senderName,
+              name: senderName,
+              avatar: senderAvatar,
+              senderAvatar: senderAvatar,
+              type: "naiimag",
+              imageUrl: "https://i.postimg.cc/KYr2qRCK/1.jpg",
+              prompt: aiPrompt,
+              fullPrompt: finalPositivePrompt,
+              content: `[图片生成异常: ${err.message || "请求失败"}]`,
+              timestamp: Date.now(),
+            };
+            chat.history.push(fallbackMessage);
+            await db.chats.put(chat);
+            if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
+              appendMessage(fallbackMessage, chat);
+            }
           }
         }
 
@@ -58268,9 +58707,14 @@ ${luckStatusDirective}
          * 调用 Minimax TTS API 生成语音并播放
          * @param {string} text - 要转换为语音的合并后的文本
          * @param {string} voiceId - Minimax 的语音 ID
+        /**
+         * 调用 Minimax TTS API 生成语音并播放
+         * @param {string} text - 要转换为语音的合并后的文本
+         * @param {string} voiceId - Minimax 的语音 ID
          * @param {Array<HTMLElement>} bubblesToAnimate - 需要播放动画的所有语音气泡元素的数组
+         * @param {Object} targetMsg - 当前点击的消息对象，用于本地缓存
          */
-        async function playMinimaxAudio(text, voiceId, bubblesToAnimate) {
+        async function playMinimaxAudio(text, voiceId, bubblesToAnimate, targetMsg = null) {
           stopMinimaxAudio();
           await new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -58293,6 +58737,54 @@ ${luckStatusDirective}
             updatePlayerUI();
           }
 
+          const chat = state.chats[state.activeChatId];
+          if (!chat) {
+            stopMinimaxAudio();
+            return;
+          }
+
+          if (targetMsg && (targetMsg.audioHex || targetMsg.audioData)) {
+            try {
+              const audioUrl = targetMsg.audioHex ? hexToBlobUrl(targetMsg.audioHex) : targetMsg.audioData;
+              if (audioUrl) {
+                bubblesToAnimate.forEach((b) => {
+                  const spinner = b.querySelector(".loading-spinner");
+                  if (spinner) spinner.style.display = "none";
+                  b.classList.add("playing");
+                });
+
+                ttsPlayer.src = audioUrl;
+
+                const cleanupAndReset = () => {
+                  if (isTtsPlaying) {
+                    isTtsPlaying = false;
+                    if (targetMsg.audioHex) URL.revokeObjectURL(audioUrl);
+                    if (window.currentAnimatingBubbles) {
+                      window.currentAnimatingBubbles.forEach((b) =>
+                        b.classList.remove("playing"),
+                      );
+                    }
+                    currentTtsAudioBubble = null;
+                    window.currentAnimatingBubbles = null;
+                  }
+                };
+
+                ttsPlayer.onended = cleanupAndReset;
+                ttsPlayer.onerror = (e) => {
+                  if (!isIntentionalStop) {
+                    console.error("本地音频播放时发生错误:", e);
+                  }
+                  cleanupAndReset();
+                };
+
+                await ttsPlayer.play();
+                return;
+              }
+            } catch (err) {
+              console.warn("本地音频播放异常，降级请求:", err);
+            }
+          }
+
           const groupId = state.apiConfig.minimaxGroupId;
           const apiKey = state.apiConfig.minimaxApiKey;
           if (!groupId || !apiKey) {
@@ -58300,12 +58792,6 @@ ${luckStatusDirective}
               "语音播放失败",
               "尚未配置Minimax的Group ID和API Key。",
             );
-            stopMinimaxAudio();
-            return;
-          }
-
-          const chat = state.chats[state.activeChatId];
-          if (!chat) {
             stopMinimaxAudio();
             return;
           }
@@ -58318,25 +58804,22 @@ ${luckStatusDirective}
               ? "https://api.minimaxi.com"
               : "https://api.minimax.io";
           const requestUrl = `${baseUrl}/v1/t2a_v2`;
-          // 1. 从当前角色的设置中读取语速和语言增强
           const speed = chat.settings.speed ?? 1.0;
-          const langBoost = chat.settings.language_boost; // 如果是null或undefined, 就让它是null/undefined
+          const langBoost = chat.settings.language_boost;
 
           const textForTts = text
             .replace(/\(.*?\)|（.*?）|【.*?】/g, "")
             .trim();
 
-          // 2. 构建包含新参数的请求体
           const requestBody = {
             model: speechModel,
-            text: textForTts, // <--- 核心修改在这里！使用过滤后的文本
+            text: textForTts,
             voice_setting: {
               voice_id: voiceId,
-              speed: speed, // ★ 在这里加入语速
+              speed: speed,
             },
           };
 
-          // 3. 如果 language_boost 有效，才将它添加到请求体中
           if (langBoost) {
             requestBody.language_boost = langBoost;
           }
@@ -58368,6 +58851,13 @@ ${luckStatusDirective}
 
             if (!result.data || !result.data.audio) {
               throw new Error("API响应中未找到有效的音频数据。");
+            }
+
+            if (targetMsg) {
+              targetMsg.audioHex = result.data.audio;
+              if (typeof db !== "undefined" && db.chats) {
+                await db.chats.put(chat);
+              }
             }
 
             const audioUrl = hexToBlobUrl(result.data.audio);
@@ -68465,6 +68955,11 @@ ${luckStatusDirective}
                 "preview-bubble-style",
               ); // 清除预览区的自定义样式
 
+              const exitInput = document.getElementById("chat-input");
+              if (exitInput && state.activeChatId !== null && state.activeChatId !== undefined) {
+                window.chatDrafts = window.chatDrafts || {};
+                window.chatDrafts[state.activeChatId] = exitInput.value;
+              }
               exitSelectionMode();
               state.activeChatId = null;
               // 【心声功能】返回列表时，隐藏心形按钮
@@ -69442,9 +69937,13 @@ ${luckStatusDirective}
                   await db.chats.put(chat);
                   appendMessage(msg, chat);
 
-                  // 清空输入框
+                  // 清空输入框并清除草稿
                   chatInput.value = "";
                   chatInput.style.height = "auto";
+                  if (state.activeChatId !== null && state.activeChatId !== undefined) {
+                    window.chatDrafts = window.chatDrafts || {};
+                    window.chatDrafts[state.activeChatId] = "";
+                  }
                   chatInput.focus();
 
                   return; // 拦截成功，不再执行后续的普通发送逻辑
@@ -69505,6 +70004,10 @@ ${luckStatusDirective}
                   );
 
                   chatInput.value = ""; // 清空输入框
+                  if (state.activeChatId !== null && state.activeChatId !== undefined) {
+                    window.chatDrafts = window.chatDrafts || {};
+                    window.chatDrafts[state.activeChatId] = "";
+                  }
                   return; // 结束函数，不再执行后面的代码
                 }
               } catch (e) {
@@ -69535,6 +70038,10 @@ ${luckStatusDirective}
               renderChatList();
               chatInput.value = "";
               chatInput.style.height = "auto";
+              if (state.activeChatId !== null && state.activeChatId !== undefined) {
+                window.chatDrafts = window.chatDrafts || {};
+                window.chatDrafts[state.activeChatId] = "";
+              }
               chatInput.focus();
 
               cancelReplyMode();
@@ -69601,9 +70108,12 @@ ${luckStatusDirective}
               }
             });
           }
-          document
-            .getElementById("wait-reply-btn")
-            .addEventListener("click", triggerAiResponse);
+          const waitReplyBtnEl = document.getElementById("wait-reply-btn");
+          if (waitReplyBtnEl) {
+            waitReplyBtnEl.addEventListener("click", () => {
+              triggerAiResponse();
+            });
+          }
           chatInput.addEventListener("keypress", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -69613,6 +70123,10 @@ ${luckStatusDirective}
           chatInput.addEventListener("input", () => {
             chatInput.style.height = "auto";
             chatInput.style.height = chatInput.scrollHeight + "px";
+            if (state.activeChatId !== null && state.activeChatId !== undefined) {
+              window.chatDrafts = window.chatDrafts || {};
+              window.chatDrafts[state.activeChatId] = chatInput.value;
+            }
           });
 
           document
@@ -70405,7 +70919,7 @@ ${luckStatusDirective}
                       const combinedText = messagesToPlay
                         .map((m) => m.content.trim())
                         .join("，");
-                      playMinimaxAudio(combinedText, voiceId, bubblesToAnimate);
+                      playMinimaxAudio(combinedText, voiceId, bubblesToAnimate, messagesToPlay[0]);
                     } else {
                       // 【只显示文字分支】
                       // 只展开当前点击的这一个语音条的文字
@@ -70704,6 +71218,12 @@ ${luckStatusDirective}
                 isGroup ? "none" : "block";
               document.getElementById("streak-settings-section").style.display =
                 isGroup ? "none" : "block";
+
+              const isDiceOrStatus = chat.isDiceBot || chat.roleType === "system_status" || chat.roleType === "dice" || chat.isDice;
+              const aiInvBtn = document.getElementById("manage-ai-inventory-btn");
+              if (aiInvBtn) {
+                aiInvBtn.style.display = (isGroup || isDiceOrStatus) ? "none" : "";
+              }
 
               // 计算总消息条数并更新显示
               const totalMessages = chat.history.length;
@@ -71679,6 +72199,7 @@ ${luckStatusDirective}
 
           function openMemberEditor(memberId) {
             editingMemberId = memberId;
+            window.editingMemberId = memberId;
             const chat = state.chats[state.activeChatId];
             const member = (chat.members || []).find((m) => m.id === memberId);
             if (!member) return;
@@ -71728,6 +72249,12 @@ ${luckStatusDirective}
             });
             const syncBtn = document.getElementById("sync-member-persona-btn");
             if (syncBtn) syncBtn.style.display = isStatusRole ? "none" : "";
+
+            const memberInvBtn = document.getElementById("member-inventory-btn");
+            if (memberInvBtn) {
+              const isDiceOrStatus = isStatusRole || member.isDiceBot || member.roleType === "system_status" || member.roleType === "dice" || member.isDice;
+              memberInvBtn.style.display = isDiceOrStatus ? "none" : "";
+            }
 
             const statusContainer = document.getElementById("member-system-status-container");
             if (statusContainer) {
@@ -75110,10 +75637,16 @@ ${luckStatusDirective}
             .getElementById("theme-toggle-switch")
             .addEventListener("change", toggleTheme);
 
-          // 绑定消息操作菜单中的“引用”按钮
+          // 绑定消息操作菜单中的“转化线索”按钮
           document
             .getElementById("quote-message-btn")
-            .addEventListener("click", startReplyToMessage);
+            .addEventListener("click", () => {
+              if (typeof convertMessageBubbleToClue === "function") {
+                convertMessageBubbleToClue();
+              } else if (typeof startReplyToMessage === "function") {
+                startReplyToMessage();
+              }
+            });
 
           // 绑定回复预览栏中的“取消”按钮
           document
@@ -77049,6 +77582,9 @@ ${luckStatusDirective}
 
           // 1. 初始化时创建默认小组
           await initializeDefaultGroups();
+          if (typeof initInventoryManager === "function") {
+            initInventoryManager();
+          }
           /* === 修复后的主屏幕滑动逻辑（支持PC鼠标拖拽） === */
           function initHomeScreenSlider() {
             const slider = document.querySelector(".home-screen-slider");

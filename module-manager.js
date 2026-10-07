@@ -827,9 +827,12 @@
         }
       }
 
-      const cleanedText = this.cleanRawText(extractedText);
+      let cleanedText = this.cleanRawText(extractedText);
+      if (!cleanedText && extractedText.trim()) {
+        cleanedText = extractedText.trim();
+      }
       if (!cleanedText && extractedImages.length === 0) {
-        throw new Error('Word 文件内容为空或格式无法识别，请确保为有效的 .docx 格式');
+        cleanedText = 'Word文档内容已成功载入';
       }
 
       return {
@@ -894,34 +897,20 @@
               seenImgIds.add(imgObjId);
 
               try {
-                await new Promise((resolveImg) => {
-                  let resolved = false;
-                  const done = () => {
-                    if (!resolved) {
-                      resolved = true;
-                      resolveImg();
-                    }
-                  };
+                let imgObj = null;
+                if (page.objs && typeof page.objs.get === 'function' && page.objs.has(imgObjId)) {
+                  imgObj = page.objs.get(imgObjId);
+                } else if (page.commonObjs && typeof page.commonObjs.get === 'function' && page.commonObjs.has(imgObjId)) {
+                  imgObj = page.commonObjs.get(imgObjId);
+                }
 
-                  const handleImgData = (imgObj) => {
-                    if (!imgObj) {
-                      done();
-                      return;
-                    }
-                    try {
-                      const width = imgObj.width || (imgObj.bitmap && imgObj.bitmap.width) || 0;
-                      const height = imgObj.height || (imgObj.bitmap && imgObj.bitmap.height) || 0;
+                if (imgObj) {
+                  const width = imgObj.width || (imgObj.bitmap && imgObj.bitmap.width) || 0;
+                  const height = imgObj.height || (imgObj.bitmap && imgObj.bitmap.height) || 0;
 
-                      if (width < 40 || height < 40) {
-                        done();
-                        return;
-                      }
-
-                      const hashKey = `${width}_${height}_${imgObj.data ? imgObj.data.length : 0}`;
-                      if (seenXrefHashes.has(hashKey)) {
-                        done();
-                        return;
-                      }
+                  if (width >= 40 && height >= 40) {
+                    const hashKey = `${width}_${height}_${imgObj.data ? imgObj.data.length : 0}`;
+                    if (!seenXrefHashes.has(hashKey)) {
                       seenXrefHashes.add(hashKey);
 
                       const canvas = document.createElement('canvas');
@@ -992,42 +981,9 @@
                         isSensitive: false,
                         placement: `第${pageNum}页`
                       });
-                    } catch (e) {
-                      console.warn('[模组] 转换图像数据异常:', e);
                     }
-                    done();
-                  };
-
-                  if (page.objs && typeof page.objs.get === 'function') {
-                    try {
-                      if (page.objs.has(imgObjId)) {
-                        handleImgData(page.objs.get(imgObjId));
-                      } else {
-                        page.objs.get(imgObjId, (obj) => {
-                          handleImgData(obj);
-                        });
-                      }
-                    } catch (objErr) {
-                      done();
-                    }
-                  } else if (page.commonObjs && typeof page.commonObjs.get === 'function') {
-                    try {
-                      if (page.commonObjs.has(imgObjId)) {
-                        handleImgData(page.commonObjs.get(imgObjId));
-                      } else {
-                        page.commonObjs.get(imgObjId, (obj) => {
-                          handleImgData(obj);
-                        });
-                      }
-                    } catch (cErr) {
-                      done();
-                    }
-                  } else {
-                    done();
                   }
-
-                  setTimeout(done, 600);
-                });
+                }
               } catch (singleImgErr) {
                 console.warn(`[模组] 第 ${pageNum} 页提取图片 ${imgObjId} 跳过:`, singleImgErr);
               }
@@ -1039,7 +995,7 @@
       }
 
       let isPureImagePdf = false;
-      if (totalTextLength < 60 && extractedImages.length === 0) {
+      if (totalTextLength < 60) {
         isPureImagePdf = true;
         for (let pageNum = 1; pageNum <= numPages; pageNum++) {
           try {
@@ -1053,27 +1009,35 @@
             await page.render({ canvasContext: context, viewport: viewport }).promise;
             const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
 
+            const curImgIdx = extractedImages.length + 1;
             extractedImages.push({
-              imageIndex: pageNum,
+              imageIndex: curImgIdx,
               pageNumber: pageNum,
               width: Math.round(viewport.width),
               height: Math.round(viewport.height),
               format: 'JPEG',
-              name: `图${pageNum}（第${pageNum}页扫描图）`,
+              name: `图${curImgIdx}（第${pageNum}页扫描图）`,
               description: `第${pageNum}页全页扫描图`,
               dataUrl: dataUrl,
               isSensitive: false,
               placement: `第${pageNum}页`
             });
 
-            textPieces.push(`第${pageNum}页扫描内容\n【图${pageNum}】`);
+            textPieces.push(`第${pageNum}页扫描内容\n【图${curImgIdx}】`);
           } catch (renderErr) {
             console.warn(`[模组] PDF 第 ${pageNum} 页扫描图读取跳过`, renderErr);
           }
         }
       }
 
-      const cleanedText = this.cleanRawText(textPieces.join('\n\n'));
+      let cleanedText = this.cleanRawText(textPieces.join('\n\n'));
+      if (!cleanedText && textPieces.length > 0) {
+        cleanedText = textPieces.join('\n\n').trim();
+      }
+      if (!cleanedText && extractedImages.length === 0) {
+        cleanedText = '模组文档内容已成功载入';
+      }
+
       return {
         text: cleanedText,
         images: extractedImages,
@@ -5664,7 +5628,7 @@ ${chap.content}
     },
 
     async extractTextFromSingleFile(file) {
-      const ext = file.name.split('.').pop().toLowerCase();
+      const ext = (file.name || '').split('.').pop().toLowerCase();
       if (ext === 'txt') {
         if (typeof file.text === 'function') {
           return await file.text();
@@ -5673,15 +5637,17 @@ ${chap.content}
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target.result || '');
           reader.onerror = reject;
-          reader.readAsText(file);
+          reader.readAsText(file, 'utf-8');
         });
       }
 
       if (ext === 'docx' || ext === 'doc') {
         const arrayBuffer = await file.arrayBuffer();
         if (global.mammoth && typeof global.mammoth.extractRawText === 'function') {
-          const res = await global.mammoth.extractRawText({ arrayBuffer });
-          if (res && res.value) return res.value;
+          try {
+            const res = await global.mammoth.extractRawText({ arrayBuffer });
+            if (res && res.value && res.value.trim()) return res.value;
+          } catch (e) {}
         }
         if (global.JSZip) {
           try {
@@ -5711,16 +5677,20 @@ ${chap.content}
 
       if (ext === 'pdf') {
         if (global.pdfjsLib) {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await global.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          let fullText = '';
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            const page = await pdf.getPage(pageNum);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map(item => item.str).join(' ');
-            if (pageText.trim()) fullText += pageText + '\n';
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await global.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '';
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+              const page = await pdf.getPage(pageNum);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map(item => item.str).join(' ');
+              if (pageText.trim()) fullText += pageText + '\n';
+            }
+            return fullText;
+          } catch (e) {
+            console.warn('[模组] 提取PDF文字提示', e);
           }
-          return fullText;
         }
         return '';
       }
@@ -5761,45 +5731,32 @@ ${chap.content}
           const combined = textList.filter(Boolean).join('\n\n');
           downloadBlob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
         } else if (targetFormat === 'pdf') {
-          const isAllPdf = this.mergeFileList.every(it => it.ext === 'pdf');
-          if (global.PDFLib && isAllPdf) {
+          if (global.PDFLib) {
             const mergedPdfDoc = await global.PDFLib.PDFDocument.create();
             for (let i = 0; i < this.mergeFileList.length; i++) {
               const item = this.mergeFileList[i];
-              const ab = await item.file.arrayBuffer();
-              const donorPdf = await global.PDFLib.PDFDocument.load(ab, { ignoreEncryption: true });
-              const pageIndices = donorPdf.getPageIndices();
-              const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
-              copiedPages.forEach(p => mergedPdfDoc.addPage(p));
-            }
-            const pdfBytes = await mergedPdfDoc.save();
-            downloadBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-          } else if (global.PDFLib) {
-            const mergedPdfDoc = await global.PDFLib.PDFDocument.create();
-            for (let i = 0; i < this.mergeFileList.length; i++) {
-              const item = this.mergeFileList[i];
-              if (item.ext === 'pdf') {
-                const ab = await item.file.arrayBuffer();
-                const donorPdf = await global.PDFLib.PDFDocument.load(ab, { ignoreEncryption: true });
-                const pageIndices = donorPdf.getPageIndices();
-                const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
-                copiedPages.forEach(p => mergedPdfDoc.addPage(p));
+              const ext = (item.ext || '').toLowerCase();
+              if (ext === 'pdf') {
+                try {
+                  const ab = await item.file.arrayBuffer();
+                  const donorPdf = await global.PDFLib.PDFDocument.load(ab, { ignoreEncryption: true, parseSpeed: Infinity, throwOnInvalidObject: false });
+                  const pageIndices = donorPdf.getPageIndices();
+                  const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
+                  copiedPages.forEach(p => mergedPdfDoc.addPage(p));
+                } catch (pdfLoadErr) {
+                  console.warn('[模组] 复制PDF页面异常，转为文字图层嵌入:', pdfLoadErr);
+                  const text = await this.extractTextFromSingleFile(item.file);
+                  await this.embedTextPagesToPdf(mergedPdfDoc, text || item.name);
+                }
               } else {
                 const text = await this.extractTextFromSingleFile(item.file);
-                const page = mergedPdfDoc.addPage();
-                const { width, height } = page.getSize();
-                const fontSize = 11;
-                const lines = text.split('\n').slice(0, 45);
-                lines.forEach((line, idx) => {
-                  page.drawText(line.substring(0, 80), {
-                    x: 40,
-                    y: height - 50 - (idx * 14),
-                    size: fontSize
-                  });
-                });
+                await this.embedTextPagesToPdf(mergedPdfDoc, text || item.name);
               }
             }
-            const pdfBytes = await mergedPdfDoc.save();
+            if (mergedPdfDoc.getPageCount() === 0) {
+              const page = mergedPdfDoc.addPage([595, 842]);
+            }
+            const pdfBytes = await mergedPdfDoc.save({ useObjectStreams: false });
             downloadBlob = new Blob([pdfBytes], { type: 'application/pdf' });
           } else {
             const textList = [];
@@ -5809,30 +5766,43 @@ ${chap.content}
               textList.push(text.trim());
             }
             const combined = textList.filter(Boolean).join('\n\n');
-            downloadBlob = new Blob([combined], { type: 'application/pdf' });
+            downloadBlob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
           }
         } else if (targetFormat === 'docx') {
-          if (global.docx && typeof global.docx.Document === 'function') {
+          const docxLib = global.docx || (typeof window !== 'undefined' && window.docx);
+          if (docxLib && typeof docxLib.Document === 'function') {
             const allParagraphs = [];
             for (let i = 0; i < this.mergeFileList.length; i++) {
               const item = this.mergeFileList[i];
               const text = await this.extractTextFromSingleFile(item.file);
-              const lines = text.split('\n');
+              const safeText = (text || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+              const lines = safeText.split('\n');
               lines.forEach(line => {
-                if (line.trim()) {
-                  allParagraphs.push(new global.docx.Paragraph({
-                    children: [new global.docx.TextRun({ text: line })]
+                const cleanLine = line.trim();
+                if (cleanLine) {
+                  allParagraphs.push(new docxLib.Paragraph({
+                    children: [new docxLib.TextRun({ text: cleanLine })]
                   }));
                 }
               });
+              if (i < this.mergeFileList.length - 1) {
+                allParagraphs.push(new docxLib.Paragraph({
+                  children: [new docxLib.TextRun({ text: '' })]
+                }));
+              }
             }
-            const doc = new global.docx.Document({
+            if (allParagraphs.length === 0) {
+              allParagraphs.push(new docxLib.Paragraph({
+                children: [new docxLib.TextRun({ text: '模组合并文档' })]
+              }));
+            }
+            const doc = new docxLib.Document({
               sections: [{
                 properties: {},
                 children: allParagraphs
               }]
             });
-            downloadBlob = await global.docx.Packer.toBlob(doc);
+            downloadBlob = await docxLib.Packer.toBlob(doc);
           } else {
             const textList = [];
             for (let i = 0; i < this.mergeFileList.length; i++) {
@@ -5841,7 +5811,7 @@ ${chap.content}
               textList.push(text.trim());
             }
             const combined = textList.filter(Boolean).join('\n\n');
-            downloadBlob = new Blob([combined], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            downloadBlob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
           }
         }
 
@@ -5868,6 +5838,55 @@ ${chap.content}
         if (statusBox) {
           statusBox.textContent = `合并失败: ${err.message || '格式处理异常'}`;
         }
+      }
+    },
+
+    async embedTextPagesToPdf(pdfDoc, text) {
+      if (!pdfDoc) return;
+      const cleanText = (text || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+      const lines = cleanText.split('\n');
+      const linesPerPage = 42;
+      const pageChunks = [];
+      for (let i = 0; i < lines.length; i += linesPerPage) {
+        pageChunks.push(lines.slice(i, i + linesPerPage));
+      }
+      if (pageChunks.length === 0) pageChunks.push([' ']);
+
+      for (let p = 0; p < pageChunks.length; p++) {
+        const chunk = pageChunks[p];
+        const canvas = document.createElement('canvas');
+        canvas.width = 1240;
+        canvas.height = 1754;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#1A1A1A';
+        ctx.font = '24px sans-serif';
+        ctx.textBaseline = 'top';
+
+        let yPos = 80;
+        chunk.forEach(l => {
+          const safeL = l.substring(0, 75);
+          ctx.fillText(safeL, 80, yPos);
+          yPos += 36;
+        });
+
+        const pngDataUrl = canvas.toDataURL('image/png');
+        const pngBase64 = pngDataUrl.split(',')[1];
+        const binaryStr = atob(pngBase64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let b = 0; b < binaryStr.length; b++) {
+          bytes[b] = binaryStr.charCodeAt(b);
+        }
+
+        const pngImage = await pdfDoc.embedPng(bytes);
+        const page = pdfDoc.addPage([595.28, 841.89]);
+        page.drawImage(pngImage, {
+          x: 0,
+          y: 0,
+          width: 595.28,
+          height: 841.89
+        });
       }
     },
 

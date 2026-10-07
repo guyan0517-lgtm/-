@@ -32579,3 +32579,578 @@ select,
 
 
 
+
+/* ===================================================================
+   物品栏 (Inventory) 样式体系
+   =================================================================== */
+
+/* 物品栏竖条抽屉（侧边小巧精致，无暗色遮罩） */
+#chat-inventory-drawer {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  bottom: 60px;
+  width: 290px;
+  max-width: 82%;
+  background: var(--card-bg);
+  border-left: 1px solid var(--border-color);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  z-index: 45;
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
+}
+
+#chat-inventory-drawer.open {
+  transform: translateX(0);
+}
+
+.inventory-drawer-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--background-color);
+  border-top-left-radius: 14px;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.inventory-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.inventory-tab {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--secondary-bg);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.inventory-tab.active {
+  background: var(--accent-color);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.inventory-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.inventory-icon-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--secondary-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  padding: 0;
+}
+
+.inventory-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inventory-empty-tip {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 30px 10px;
+}
+
+.inventory-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.inventory-item-row:hover {
+  border-color: var(--accent-color);
+}
+
+.inventory-avatar-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.inventory-avatar-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inventory-info-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.inventory-title-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.inventory-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+.inventory-category-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+  font-weight: 500;
+  flex-shrink: 0;
+  background: var(--card-bg, #ffffff) !important;
+}
+
+.inventory-category-badge.cat-clue {
+  background: var(--card-bg, #ffffff) !important;
+  color: #5D7A88 !important;
+  border: 1px solid #7E9AA8 !important;
+}
+
+.inventory-category-badge.cat-prop {
+  background: var(--card-bg, #ffffff) !important;
+  color: #5B7A6E !important;
+  border: 1px solid #8DA399 !important;
+}
+
+.inventory-category-badge.cat-weapon {
+  background: var(--card-bg, #ffffff) !important;
+  color: #9E6B64 !important;
+  border: 1px solid #B88B84 !important;
+}
+
+.inventory-star-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.inventory-star-btn.pinned {
+  color: var(--accent-color);
+}
+
+.inventory-desc-line {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.inventory-action-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.inventory-item-btn {
+  font-size: 11px !important;
+  padding: 3px 8px !important;
+  height: 26px !important;
+  min-width: 42px !important;
+  border-radius: 6px !important;
+  line-height: 1 !important;
+  background: var(--accent-color) !important;
+  color: #ffffff !important;
+  border: none !important;
+  white-space: nowrap !important;
+}
+
+.inventory-weapon-stat-tag {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.inventory-select-checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.inventory-drawer-footer {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-color);
+  background: var(--background-color);
+  flex-shrink: 0;
+  border-bottom-left-radius: 14px;
+}
+
+.inventory-full-btn {
+  width: 100% !important;
+  height: 32px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+}
+
+.inventory-full-btn.danger {
+  background: #e74c3c !important;
+  color: #ffffff !important;
+}
+
+/* 物品详情 1x1 弹窗 */
+.inventory-detail-card {
+  width: 290px;
+  max-width: 90%;
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+.inventory-detail-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--secondary-bg);
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.inventory-detail-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inventory-detail-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.inventory-detail-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-detail-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.inventory-detail-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.inventory-detail-stat-row {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.inventory-detail-source {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.inventory-detail-actions {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* 物品卡片消息样式 (在聊天流中) */
+.inventory-chat-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  min-width: 180px;
+  max-width: 240px;
+  cursor: default;
+}
+
+.inventory-chat-card-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.inventory-chat-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inventory-chat-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inventory-chat-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inventory-chat-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 线索阅读富文本样式 */
+.clue-reader-modal-body {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 16px;
+  line-height: 1.6;
+  font-size: 13px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.clue-reader-modal-body .clue-container {
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+}
+
+/* 物品卡片包裹与卡头 */
+.inventory-chat-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.inventory-chat-card-header {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  text-align: left;
+  padding: 0 2px;
+  word-break: break-word;
+}
+
+/* 移交道具选择条目 */
+.inventory-transfer-item-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.inventory-transfer-item-label:hover {
+  border-color: var(--accent-color);
+}
+
+.inventory-transfer-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+}
+
+/* 全局道具库样式 */
+.global-inv-chat-group {
+  margin-bottom: 10px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.global-inv-chat-header {
+  padding: 10px 12px;
+  background: var(--card-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.global-inv-toggle-icon {
+  transition: transform 0.2s ease;
+}
+
+.global-inv-chat-group.collapsed .global-inv-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.global-inv-chat-group.collapsed .global-inv-chat-content {
+  display: none;
+}
+
+.global-inv-chat-content {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.global-inv-sub-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.global-inv-sub-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.global-inv-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.global-inv-item-empty {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 4px 6px;
+}
+
+.global-inv-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.global-inv-info-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.global-inv-action-box {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
