@@ -15,7 +15,12 @@ const COC_STANDARD_SKILLS = [
   { name: "闪避", base: 25 },
   { name: "撬锁", base: 1 },
   { name: "格斗", base: 25 },
+  { name: "斗殴", base: 25 },
   { name: "射击", base: 20 },
+  { name: "手枪", base: 20 },
+  { name: "步枪", base: 25 },
+  { name: "冲锋枪", base: 15 },
+  { name: "弓箭", base: 15 },
   { name: "医学", base: 1 },
   { name: "神秘学", base: 5 },
   { name: "信用评级", base: 0 },
@@ -55,12 +60,26 @@ COC_STANDARD_SKILLS.forEach(s => {
 window.DEFAULT_COC_SKILLS = DEFAULT_COC_SKILLS;
 
 function getSkillBaseValue(skillName, stats = {}) {
-  if (skillName === "闪避") {
+  const s = (skillName || "").trim();
+  if (s === "闪避" || s === "躲避" || s === "回避") {
     const dex = parseInt(stats.dex, 10);
     return !isNaN(dex) ? Math.floor(dex / 2) : 25;
   }
-  const found = COC_STANDARD_SKILLS.find(s => s.name === skillName);
-  return found ? found.base : 0;
+  if (s === "母语" || s === "语言(母语)" || s === "语言（母语）") {
+    const edu = parseInt(stats.edu, 10);
+    return !isNaN(edu) ? edu : 50;
+  }
+  if (["手枪", "手枪射击", "射击(手枪)", "射击（手枪）", "射击:手枪", "射击：手枪"].includes(s)) return 20;
+  if (["步枪", "霰弹枪", "步枪/霰弹枪", "步枪霰弹枪", "射击(步枪/霰弹枪)", "射击（步枪/霰弹枪）"].includes(s)) return 25;
+  if (["冲锋枪", "微冲", "射击(冲锋枪)", "射击（冲锋枪）"].includes(s)) return 15;
+  if (["弓", "弓箭", "射击(弓)", "射击（弓）"].includes(s)) return 15;
+  if (["重武器", "机枪", "射击(重武器)", "射击（重武器）"].includes(s)) return 10;
+  if (["斗殴", "格斗", "近战(斗殴)", "近战（斗殴）", "格斗(斗殴)", "格斗（斗殴）", "拳击", "肉搏", "拳"].includes(s)) return 25;
+  if (["刀剑", "剑术", "刀", "剑", "格斗(刀剑)", "格斗（刀剑）"].includes(s)) return 20;
+  if (["斧头", "斧", "格斗(斧)", "格斗（斧）"].includes(s)) return 15;
+
+  const found = COC_STANDARD_SKILLS.find(item => item.name === s);
+  return found ? found.base : 20;
 }
 
 function getDefaultCocData() {
@@ -114,6 +133,7 @@ function calculateCocStats(stats, prevCalc = {}) {
   let hp = typeof prevCalc.hp === "number" ? Math.min(prevCalc.hp, maxHp) : maxHp;
   let mp = typeof prevCalc.mp === "number" ? Math.min(prevCalc.mp, maxMp) : maxMp;
   let san = typeof prevCalc.san === "number" ? Math.min(prevCalc.san, maxSan) : Math.min(pow, maxSan);
+  const armor = (prevCalc && typeof prevCalc.armor !== "undefined") ? parseInt(prevCalc.armor, 10) || 0 : 0;
 
   const totalStrSiz = str + siz;
   let db = "0";
@@ -153,6 +173,7 @@ function calculateCocStats(stats, prevCalc = {}) {
     maxMp,
     san,
     maxSan,
+    armor,
     db,
     build
   };
@@ -371,6 +392,12 @@ class CocPanel {
       input.value = this.data.stats[stat] || 50;
     });
 
+    const armorInput = this.container.querySelector(".coc-armor-input");
+    const armorVal = (this.data.calculated && typeof this.data.calculated.armor !== "undefined") ? parseInt(this.data.calculated.armor, 10) || 0 : 0;
+    if (armorInput) {
+      armorInput.value = armorVal;
+    }
+
     const rulebookSelect = this.container.querySelector(".coc-rulebook-select");
     if (rulebookSelect) {
       const getList = window.getStoredRulebooksList || function() {
@@ -388,6 +415,9 @@ class CocPanel {
     }
 
     this.data.calculated = calculateCocStats(this.data.stats, this.data.calculated);
+    if (typeof this.data.calculated.armor === "undefined" || isNaN(this.data.calculated.armor)) {
+      this.data.calculated.armor = armorVal;
+    }
     this.updateCalculatedUI();
     this.updateTotalPoints();
   }
@@ -397,6 +427,7 @@ class CocPanel {
       const stat = input.dataset.stat;
       this.data.stats[stat] = parseInt(input.value, 10) || 0;
     });
+    if (!this.data.calculated) this.data.calculated = {};
     const rulebookSelect = this.container.querySelector(".coc-rulebook-select");
     if (rulebookSelect) {
       this.data.rulebook = rulebookSelect.value;
@@ -610,10 +641,13 @@ function initCocSkillsModalEvents() {
             }
           });
         }
-        // 将草稿提交到真正的数据对象中，不直接操作数据库
+        // 将草稿提交到真正的数据对象中，并自动调用持久化保存
         currentActiveCocPanel.data.skills = { ...currentWorkingSkills };
         currentActiveCocPanel.data.customSkills = [...(currentWorkingCustomSkills || [])];
         currentActiveCocPanel.updateTotalPoints();
+        if (typeof currentActiveCocPanel.save === "function") {
+          currentActiveCocPanel.save();
+        }
 
         const origText = saveBtn.textContent;
         saveBtn.textContent = "已保存";
@@ -1196,9 +1230,10 @@ window.createCocPanel = function(containerId, options = {}) {
   return new CocPanel(containerId, options);
 };
 
-// 提取AI提示词中的HP/MP/SAN状态摘要，不包含技能
+// 提取AI提示词中的HP/MP/SAN状态摘要，包含护甲，不包含技能
 window.getCocPromptStatus = function(cocData) {
   if (!cocData || !cocData.calculated) return "";
   const c = cocData.calculated;
-  return `HP: ${c.hp}/${c.maxHp}, MP: ${c.mp}/${c.maxMp}, SAN: ${c.san}/${c.maxSan}`;
+  const armorTxt = (c.armor && parseInt(c.armor, 10) > 0) ? `，护甲: ${c.armor}` : "";
+  return `HP: ${c.hp}/${c.maxHp}${armorTxt}, MP: ${c.mp}/${c.maxMp}, SAN: ${c.san}/${c.maxSan}`;
 };

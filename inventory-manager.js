@@ -1642,6 +1642,40 @@
     });
   }
 
+  // 获取当前持有角色的 DB 加值
+  function getHolderDbForCurrentInventory() {
+    const chat = state.chats[state.activeChatId];
+    if (!chat) return "0";
+    let targetCoc = null;
+    if (editingTargetChar) {
+      if (editingTargetChar.type === "member" && Array.isArray(chat.members)) {
+        const member = chat.members.find(m => String(m.id) === String(editingTargetChar.id) || m.groupNickname === editingTargetChar.name || m.originalName === editingTargetChar.name);
+        if (member) targetCoc = member.cocPanel;
+      } else if (editingTargetChar.type === "ai") {
+        targetCoc = chat.aiCocPanel || chat.settings?.aiCocPanel;
+      }
+    } else {
+      targetCoc = chat.settings?.myCocPanel;
+    }
+
+    if (targetCoc && targetCoc.calculated && targetCoc.calculated.db !== undefined && targetCoc.calculated.db !== "") {
+      return String(targetCoc.calculated.db);
+    }
+
+    const str = targetCoc?.stats?.str ? (parseInt(targetCoc.stats.str, 10) || 50) : 50;
+    const siz = targetCoc?.stats?.siz ? (parseInt(targetCoc.stats.siz, 10) || 50) : 50;
+    const sum = str + siz;
+    if (sum < 65) return "-2";
+    if (sum <= 84) return "-1";
+    if (sum <= 124) return "0";
+    if (sum <= 164) return "+1D4";
+    if (sum <= 204) return "+1D6";
+    if (sum <= 284) return "+2D6";
+    if (sum <= 364) return "+3D6";
+    if (sum <= 444) return "+4D6";
+    return "0";
+  }
+
   // 打开添加/编辑物品表单
   function openEditInventoryItemModal(itemId = null) {
     editingInventoryItemId = itemId;
@@ -1655,24 +1689,56 @@
     const descInput = document.getElementById("inv-edit-desc");
     const effectInput = document.getElementById("inv-edit-effect");
     const catSelect = document.getElementById("inv-edit-cat");
+    const weaponTypeSelect = document.getElementById("inv-edit-weapon-type");
     const damageInput = document.getElementById("inv-edit-damage");
     const dbInput = document.getElementById("inv-edit-db");
+    const damagePlus = document.getElementById("inv-weapon-damage-plus");
+    const damageLabel = document.getElementById("inv-weapon-damage-label");
     const contentTextarea = document.getElementById("inv-edit-content");
     const avatarPreview = document.getElementById("inv-edit-avatar-preview");
 
     const effectGroup = document.getElementById("inv-effect-group");
-    const weaponGroup = document.getElementById("inv-weapon-fields");
     const clueGroup = document.getElementById("inv-clue-fields");
+    const weaponTypeGroup = document.getElementById("inv-weapon-type-group");
+    const weaponDamageGroup = document.getElementById("inv-weapon-damage-group");
 
     function updateCategoryFields() {
       const cat = catSelect ? catSelect.value : "prop";
+      const wType = weaponTypeSelect ? weaponTypeSelect.value : "melee";
+
       if (effectGroup) effectGroup.style.display = (cat === "prop") ? "block" : "none";
-      if (weaponGroup) weaponGroup.style.display = (cat === "weapon") ? "block" : "none";
       if (clueGroup) clueGroup.style.display = (cat === "clue") ? "block" : "none";
+      if (weaponTypeGroup) weaponTypeGroup.style.display = (cat === "weapon") ? "block" : "none";
+      if (weaponDamageGroup) weaponDamageGroup.style.display = (cat === "weapon") ? "block" : "none";
+
+      if (cat === "weapon") {
+        if (wType === "firearm") {
+          if (damageLabel) damageLabel.textContent = "伤害";
+          if (damagePlus) damagePlus.style.display = "none";
+          if (dbInput) {
+            dbInput.style.display = "none";
+            dbInput.value = "";
+          }
+          if (damageInput) damageInput.placeholder = "几D几，如1D10+2";
+        } else {
+          if (damageLabel) damageLabel.textContent = "伤害加值";
+          if (damagePlus) damagePlus.style.display = "inline-block";
+          if (dbInput) {
+            dbInput.style.display = "block";
+            if (!dbInput.value.trim()) {
+              dbInput.value = getHolderDbForCurrentInventory();
+            }
+          }
+          if (damageInput) damageInput.placeholder = "几D几，如1D6";
+        }
+      }
     }
 
     if (catSelect) {
       catSelect.onchange = updateCategoryFields;
+    }
+    if (weaponTypeSelect) {
+      weaponTypeSelect.onchange = updateCategoryFields;
     }
 
     if (itemId) {
@@ -1692,8 +1758,9 @@
       if (descInput) descInput.value = item.desc || "";
       if (effectInput) effectInput.value = item.effect || "";
       if (catSelect) catSelect.value = item.category || "prop";
+      if (weaponTypeSelect) weaponTypeSelect.value = item.weaponType || "melee";
       if (damageInput) damageInput.value = item.damageBonus || "";
-      if (dbInput) dbInput.value = item.dbBonus || "";
+      if (dbInput) dbInput.value = (item.dbBonus !== undefined && item.dbBonus !== null && item.dbBonus !== "") ? item.dbBonus : getHolderDbForCurrentInventory();
       if (contentTextarea) contentTextarea.value = item.content || "";
       pendingAvatarBase64 = item.avatar || "";
     } else {
@@ -1702,8 +1769,9 @@
       if (descInput) descInput.value = "";
       if (effectInput) effectInput.value = "";
       if (catSelect) catSelect.value = "prop";
+      if (weaponTypeSelect) weaponTypeSelect.value = "melee";
       if (damageInput) damageInput.value = "";
-      if (dbInput) dbInput.value = "";
+      if (dbInput) dbInput.value = getHolderDbForCurrentInventory();
       if (contentTextarea) contentTextarea.value = "";
       pendingAvatarBase64 = "";
     }
@@ -1775,6 +1843,7 @@
     const descInput = document.getElementById("inv-edit-desc");
     const effectInput = document.getElementById("inv-edit-effect");
     const catSelect = document.getElementById("inv-edit-cat");
+    const weaponTypeSelect = document.getElementById("inv-edit-weapon-type");
     const damageInput = document.getElementById("inv-edit-damage");
     const dbInput = document.getElementById("inv-edit-db");
     const contentTextarea = document.getElementById("inv-edit-content");
@@ -1787,9 +1856,10 @@
 
     const desc = descInput ? descInput.value.trim() : "";
     const category = catSelect ? catSelect.value : "prop";
+    const weaponType = (category === "weapon" && weaponTypeSelect) ? weaponTypeSelect.value : "";
     const effect = category === "prop" ? (effectInput ? effectInput.value.trim() : "") : "";
     const damageBonus = category === "weapon" ? (damageInput ? damageInput.value.trim() : "") : "";
-    const dbBonus = category === "weapon" ? (dbInput ? dbInput.value.trim() : "") : "";
+    const dbBonus = (category === "weapon" && weaponType !== "firearm") ? (dbInput ? dbInput.value.trim() : "") : "";
     const content = category === "clue" ? (contentTextarea ? contentTextarea.value.trim() : "") : "";
 
     const chat = state.chats[state.activeChatId];
@@ -1806,6 +1876,7 @@
         item.desc = desc;
         item.effect = effect;
         item.category = category;
+        item.weaponType = weaponType;
         item.avatar = pendingAvatarBase64;
         item.damageBonus = damageBonus;
         item.dbBonus = dbBonus;
@@ -1818,6 +1889,7 @@
         desc: desc,
         effect: effect,
         category: category,
+        weaponType: weaponType,
         avatar: pendingAvatarBase64,
         content: content,
         damageBonus: damageBonus,

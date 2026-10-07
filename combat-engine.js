@@ -144,7 +144,20 @@
       }
     }
 
-    return { str, dex, con, pow, siz, edu, app, int, luk, hp, maxHp, mp, maxMp, san, maxSan, armor, db, avatar, customSkills };
+    const defData = (typeof global.getDefaultCocData === 'function') ? global.getDefaultCocData() : { skills: {} };
+    const skills = { ...(defData.skills || {}), ...(targetCoc?.skills || {}) };
+
+    const dodgeBase = Math.floor(dex / 2);
+    if (!skills["闪避"] || skills["闪避"] === 25) skills["闪避"] = Math.max(dodgeBase, 40);
+    if (!skills["斗殴"] || skills["斗殴"] === 25) skills["斗殴"] = 55;
+    if (!skills["格斗"] || skills["格斗"] === 25) skills["格斗"] = 55;
+    if (!skills["射击"] || skills["射击"] === 20) skills["射击"] = 50;
+    if (!skills["手枪"] || skills["手枪"] === 20) skills["手枪"] = 50;
+    if (!skills["急救"] || skills["急救"] === 30) skills["急救"] = 40;
+    if (!skills["侦查"] || skills["侦查"] === 25) skills["侦查"] = 50;
+    if (!skills["聆听"] || skills["聆听"] === 20) skills["聆听"] = 40;
+
+    return { str, dex, con, pow, siz, edu, app, int, luk, hp, maxHp, mp, maxMp, san, maxSan, armor, db, avatar, customSkills, skills, cocPanel: targetCoc };
   }
 
   function sortCombatantsByDex(combatants) {
@@ -177,6 +190,8 @@
     }
   }
 
+  let activeMiniCardCombatantId = null;
+
   function renderCombatCharacterBar(chatId) {
     const currentChat = global.state?.chats?.[chatId];
     if (!currentChat) return;
@@ -197,7 +212,7 @@
       const badge = document.createElement('div');
       badge.className = 'combat-char-badge';
       const armorText = (c.armor && c.armor > 0) ? ` | 护甲: ${c.armor}` : '';
-      badge.title = `${c.name} (敏捷: ${c.dex} | HP: ${c.hp}/${c.maxHp}${armorText} | MP: ${c.mp}/${c.maxMp})`;
+      badge.title = `${c.name} 敏捷: ${c.dex} | HP: ${c.hp}/${c.maxHp}${armorText} | MP: ${c.mp}/${c.maxMp}`;
 
       const avatarBox = document.createElement('div');
       avatarBox.className = 'combat-char-avatar-box';
@@ -266,216 +281,305 @@
       badge.appendChild(nameEl);
       badge.appendChild(barsContainer);
 
+      let pressTimer = null;
+      let isLongPress = false;
+
+      const startLongPress = () => {
+        isLongPress = false;
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(async () => {
+          isLongPress = true;
+          let ok = false;
+          if (typeof window.showCustomConfirm === 'function') {
+            ok = await window.showCustomConfirm('生成立绘', `确定要为参战角色 ${c.name} 生成立绘头像吗？`);
+          } else {
+            ok = confirm(`确定要为参战角色 ${c.name} 生成立绘头像吗？`);
+          }
+          if (ok) {
+            if (typeof global.showToast === 'function') {
+              global.showToast('正在生成角色立绘...');
+            }
+            try {
+              const prompt = c.prompt || `${c.name} TRPG character portrait, detailed fantasy illustration, masterpiece, anime art style`;
+              const imgUrl = await window.generatePollinationsImage(prompt, {
+                width: 1024,
+                height: 1024,
+                model: 'flux',
+                nologo: true
+              });
+              if (imgUrl) {
+                c.avatar = imgUrl;
+                syncCombatantToRealCard(currentChat, c);
+                const dbInst = typeof global.db !== 'undefined' ? global.db : global.database;
+                if (dbInst) {
+                  await dbInst.chats.put(currentChat);
+                }
+                renderCombatCharacterBar(chatId);
+                if (activeMiniCardCombatantId === c.id) {
+                  renderCombatCharacterMiniCard(chatId, c.id);
+                }
+                if (typeof global.showToast === 'function') {
+                  global.showToast('立绘生成成功');
+                }
+              }
+            } catch (err) {
+              console.error('生图异常', err);
+              if (typeof global.showToast === 'function') {
+                global.showToast('立绘生成失败');
+              }
+            }
+          }
+        }, 500);
+      };
+
+      const cancelLongPress = () => {
+        clearTimeout(pressTimer);
+      };
+
+      avatarBox.addEventListener('mousedown', startLongPress);
+      avatarBox.addEventListener('mouseup', cancelLongPress);
+      avatarBox.addEventListener('mouseleave', cancelLongPress);
+      avatarBox.addEventListener('touchstart', startLongPress, { passive: true });
+      avatarBox.addEventListener('touchend', cancelLongPress);
+      avatarBox.addEventListener('touchmove', cancelLongPress);
+
       badge.addEventListener('click', (e) => {
+        if (isLongPress) {
+          isLongPress = false;
+          return;
+        }
         e.stopPropagation();
-        openCombatCharacterModal(chatId, c.id);
+        openCombatCharacterMiniCard(chatId, c.id);
       });
 
       listContainer.appendChild(badge);
     });
   }
 
-  let activeModalCombatantId = null;
-
-  function openCombatCharacterModal(chatId, combatantId) {
+  function openCombatCharacterMiniCard(chatId, combatantId) {
     const currentChat = global.state?.chats?.[chatId];
     if (!currentChat) return;
 
-    const combatState = getCombatState(currentChat);
-    const c = (combatState.combatants || []).find(item => item.id === combatantId);
-    if (!c) return;
+    const miniCardEl = document.getElementById('combat-character-mini-card');
+    if (!miniCardEl) return;
 
-    activeModalCombatantId = combatantId;
-
-    const avatarBox = document.getElementById('combat-modal-char-avatar');
-    if (avatarBox) {
-      avatarBox.innerHTML = '';
-      if (c.avatar) {
-        const img = document.createElement('img');
-        img.src = c.avatar;
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
-        avatarBox.appendChild(img);
-      } else {
-        avatarBox.textContent = (c.name || '人').substring(0, 1);
-      }
-    }
-
-    const nameEl = document.getElementById('combat-modal-char-name');
-    if (nameEl) nameEl.textContent = `${c.name} 面板`;
-
-    const setInputVal = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.value = val !== undefined ? val : 50;
-    };
-
-    setInputVal('combat-char-str', c.str || 50);
-    setInputVal('combat-char-dex', c.dex || 50);
-    setInputVal('combat-char-con', c.con || 50);
-    setInputVal('combat-char-pow', c.pow || 50);
-    setInputVal('combat-char-siz', c.siz || 50);
-    setInputVal('combat-char-edu', c.edu || 50);
-    setInputVal('combat-char-app', c.app || 50);
-    setInputVal('combat-char-int', c.int || 50);
-    setInputVal('combat-char-luk', c.luk || 50);
-
-    const armorInput = document.getElementById('combat-char-armor-input');
-    if (armorInput) armorInput.value = c.armor || 0;
-
-    const updateCalculatedDisplays = () => {
-      const hpEl = document.getElementById('combat-char-hp-display');
-      const mpEl = document.getElementById('combat-char-mp-display');
-      const sanEl = document.getElementById('combat-char-san-display');
-      const dbEl = document.getElementById('combat-char-db-display');
-
-      const armorVal = parseInt(armorInput ? armorInput.value : c.armor, 10) || 0;
-      const armorBracket = armorVal > 0 ? ` <span style="color: var(--text-secondary); font-size: 10px; font-weight: normal;">(${armorVal})</span>` : '';
-
-      if (hpEl) hpEl.innerHTML = `${c.hp || 10}/${c.maxHp || 10}${armorBracket}`;
-      if (mpEl) mpEl.textContent = `${c.mp || 10}/${c.maxMp || 10}`;
-      if (sanEl) sanEl.textContent = `${c.san || 50}/${c.maxSan || 99}`;
-      if (dbEl) dbEl.textContent = c.db || '0';
-    };
-
-    if (armorInput) {
-      armorInput.oninput = updateCalculatedDisplays;
-    }
-    updateCalculatedDisplays();
-
-    renderCustomSkillsList(c);
-
-    const toggleBtn = document.getElementById('combat-custom-skills-toggle');
-    const skillsBody = document.getElementById('combat-custom-skills-body');
-    const skillsArrow = document.getElementById('combat-custom-skills-arrow');
-    if (toggleBtn && skillsBody && skillsArrow) {
-      skillsBody.style.display = 'none';
-      skillsArrow.style.transform = 'rotate(-90deg)';
-      toggleBtn.onclick = () => {
-        const isClosed = skillsBody.style.display === 'none';
-        skillsBody.style.display = isClosed ? 'flex' : 'none';
-        skillsArrow.style.transform = isClosed ? 'rotate(0deg)' : 'rotate(-90deg)';
-      };
-    }
-
-    const addSkillBtn = document.getElementById('combat-add-skill-btn');
-    if (addSkillBtn) {
-      addSkillBtn.onclick = () => {
-        const nameIn = document.getElementById('combat-new-skill-name');
-        const descIn = document.getElementById('combat-new-skill-desc');
-        const sName = nameIn ? nameIn.value.trim() : '';
-        const sDesc = descIn ? descIn.value.trim() : '';
-        if (!sName) return;
-        if (!Array.isArray(c.customSkills)) c.customSkills = [];
-        c.customSkills.push({ id: 'skill_' + Date.now(), name: sName, desc: sDesc });
-        if (nameIn) nameIn.value = '';
-        if (descIn) descIn.value = '';
-        renderCustomSkillsList(c);
-      };
-    }
-
-    const modal = document.getElementById('combat-character-modal');
-    if (modal) modal.style.display = 'flex';
-  }
-
-  function renderCustomSkillsList(c) {
-    const listEl = document.getElementById('combat-custom-skills-list');
-    if (!listEl) return;
-    listEl.innerHTML = '';
-
-    const skills = Array.isArray(c.customSkills) ? c.customSkills : [];
-    if (skills.length === 0) {
-      listEl.innerHTML = '<div style="font-size: 11px; color: var(--text-secondary); text-align: center; padding: 4px;">暂无专属技能，可在下方添加</div>';
+    if (activeMiniCardCombatantId === combatantId && miniCardEl.style.display === 'flex') {
+      closeCombatCharacterMiniCard();
       return;
     }
 
-    skills.forEach((sk, idx) => {
-      const row = document.createElement('div');
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.justifyContent = 'space-between';
-      row.style.background = 'var(--secondary-bg)';
-      row.style.padding = '4px 6px';
-      row.style.borderRadius = '6px';
-      row.style.fontSize = '11px';
-
-      const left = document.createElement('div');
-      left.style.display = 'flex';
-      left.style.gap = '6px';
-      left.style.alignItems = 'center';
-      left.style.overflow = 'hidden';
-      left.innerHTML = `<span style="font-weight: 600; color: var(--text-primary); white-space: nowrap;">${sk.name}</span><span style="color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sk.desc || ''}</span>`;
-      row.appendChild(left);
-
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'moe-btn-mini';
-      delBtn.textContent = '×';
-      delBtn.style.color = '#ff4d4f';
-      delBtn.style.border = 'none';
-      delBtn.style.background = 'transparent';
-      delBtn.style.cursor = 'pointer';
-      delBtn.style.fontSize = '13px';
-      delBtn.style.padding = '0 4px';
-      delBtn.onclick = (e) => {
-        e.stopPropagation();
-        skills.splice(idx, 1);
-        renderCustomSkillsList(c);
-      };
-      row.appendChild(delBtn);
-
-      listEl.appendChild(row);
-    });
+    activeMiniCardCombatantId = combatantId;
+    renderCombatCharacterMiniCard(chatId, combatantId);
+    miniCardEl.style.display = 'flex';
+    positionMiniCardUnderBar();
   }
 
-  function closeCombatCharacterModal() {
-    const modal = document.getElementById('combat-character-modal');
-    if (modal) modal.style.display = 'none';
-    activeModalCombatantId = null;
+  function positionMiniCardUnderBar() {
+    const miniCardEl = document.getElementById('combat-character-mini-card');
+    const charBar = document.getElementById('combat-character-bar');
+    if (!miniCardEl) return;
+
+    if (charBar && charBar.style.display !== 'none') {
+      const barRect = charBar.getBoundingClientRect();
+      const cardWidth = 250;
+      let targetLeft = barRect.left + (barRect.width - cardWidth) / 2;
+      targetLeft = Math.max(8, Math.min(window.innerWidth - cardWidth - 8, targetLeft));
+      const targetTop = barRect.bottom + 6;
+
+      miniCardEl.style.position = 'fixed';
+      miniCardEl.style.left = `${targetLeft}px`;
+      miniCardEl.style.top = `${targetTop}px`;
+      miniCardEl.style.transform = 'none';
+      miniCardEl.style.margin = '0';
+      miniCardEl.style.zIndex = '110';
+    }
   }
 
-  async function saveCombatCharacterModal() {
-    const activeChatId = global.state?.activeChatId;
-    const currentChat = global.state?.chats?.[activeChatId];
-    if (!currentChat || !activeModalCombatantId) return;
+  function renderCombatCharacterMiniCard(chatId, combatantId) {
+    const currentChat = global.state?.chats?.[chatId];
+    if (!currentChat) return;
+
+    const miniCardEl = document.getElementById('combat-character-mini-card');
+    if (!miniCardEl) return;
 
     const combatState = getCombatState(currentChat);
-    const c = (combatState.combatants || []).find(item => item.id === activeModalCombatantId);
-    if (!c) return;
+    const c = (combatState.combatants || []).find(item => item.id === combatantId);
+    if (!c) {
+      closeCombatCharacterMiniCard();
+      return;
+    }
 
-    const getNum = (id, fallback) => {
-      const el = document.getElementById(id);
-      return el ? (parseInt(el.value, 10) || fallback) : fallback;
+    const armorVal = parseInt(c.armor, 10) || 0;
+    const armorTxt = armorVal > 0 ? ` <span style="font-size: 10px; color: var(--text-secondary);">(${armorVal})</span>` : '';
+
+    let allSkills = [];
+    const pushSkill = (item) => {
+      if (!item) return;
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (trimmed && trimmed !== 'undefined' && trimmed !== 'null' && !/^(斗殴|射击|闪避|侦查|聆听|心理学|急救|医学|潜行|说服|话术|恐吓|魅惑|神秘学|克苏鲁神话|历史|领航|骑术|游泳|跳跃|攀爬|投掷|乔装|手艺|艺术|驾驶|锁匠|机械维修|电气维修|重型机械|爆破|计算机|会计|法律|图书馆使用|人类学|考古学|生物学|化学|物理学|地质学|天文学|医学|精神分析|处方|读唇|伪造|密码学)$/i.test(trimmed)) {
+          allSkills.push({ name: trimmed, cost: '', effect: '', check: '' });
+        }
+      } else if (typeof item === 'object') {
+        const sName = item.name || item.skill || item.title || '';
+        if (!sName || sName === 'undefined' || sName === 'null') return;
+        if (/^(斗殴|射击|闪避|侦查|聆听|心理学|急救|医学|潜行|说服|话术|恐吓|魅惑|神秘学|克苏鲁神话|历史|领航|骑术|游泳|跳跃|攀爬|投掷|乔装|手艺|艺术|驾驶|锁匠|机械维修|电气维修|重型机械|爆破|计算机|会计|法律|图书馆使用|人类学|考古学|生物学|化学|物理学|地质学|天文学|医学|精神分析|处方|读唇|伪造|密码学)$/i.test(sName)) {
+          return;
+        }
+        const sCost = item.cost ? `消耗: ${item.cost}` : (item.mp ? `消耗: ${item.mp} MP` : '');
+        const sEffect = item.effect || item.desc || item.val || item.value || '';
+        const sCheck = item.check || item.checkType || '';
+        allSkills.push({ name: sName, cost: sCost, effect: sEffect, check: sCheck });
+      }
     };
 
-    c.str = getNum('combat-char-str', c.str || 50);
-    c.dex = getNum('combat-char-dex', c.dex || 50);
-    c.con = getNum('combat-char-con', c.con || 50);
-    c.pow = getNum('combat-char-pow', c.pow || 50);
-    c.siz = getNum('combat-char-siz', c.siz || 50);
-    c.edu = getNum('combat-char-edu', c.edu || 50);
-    c.app = getNum('combat-char-app', c.app || 50);
-    c.int = getNum('combat-char-int', c.int || 50);
-    c.luk = getNum('combat-char-luk', c.luk || 50);
-
-    const armorInput = document.getElementById('combat-char-armor-input');
-    c.armor = armorInput ? (parseInt(armorInput.value, 10) || 0) : 0;
-
-    syncCombatantToRealCard(currentChat, c);
-
-    combatState.combatants = sortCombatantsByDex(combatState.combatants);
-    combatState.order = combatState.combatants.map(item => item.id);
-
-    const dbInstance = typeof global.db !== 'undefined' ? global.db : global.database;
-    if (dbInstance) {
-      await dbInstance.chats.put(currentChat);
+    if (Array.isArray(c.specialSkills)) {
+      c.specialSkills.forEach(pushSkill);
+    }
+    if (Array.isArray(c.customSkills)) {
+      c.customSkills.forEach(pushSkill);
     }
 
-    closeCombatCharacterModal();
-    renderCombatCharacterBar(activeChatId);
-    if (typeof global.showToast === 'function') {
-      global.showToast('角色面板已保存');
+    let skillsListHtml = '';
+    if (allSkills.length === 0) {
+      skillsListHtml = '<div style="font-size: 10px; color: var(--text-secondary); text-align: center; padding: 4px 0;">无特殊技能</div>';
+    } else {
+      skillsListHtml = allSkills.map(s => `
+        <div style="display: flex; flex-direction: column; gap: 1px; padding: 3px 6px; background: var(--secondary-bg); border-radius: 4px; font-size: 10.5px; border: 1px solid var(--border-color);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600; color: var(--text-primary); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.name}</span>
+            ${s.cost ? `<span style="font-weight: 600; color: var(--accent-color); font-size: 9.5px; margin-left: 4px; flex-shrink: 0;">${s.cost}</span>` : ''}
+          </div>
+          ${(s.effect || s.check) ? `
+            <div style="font-size: 9.5px; color: var(--text-secondary); line-height: 1.3; overflow: hidden; text-overflow: ellipsis;">
+              ${s.check ? `<span style="color: var(--text-primary); font-weight: 500;">[${s.check}] </span>` : ''}${s.effect}
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
     }
+
+    const avatarHtml = c.avatar
+      ? `<img src="${c.avatar}" alt="${c.name}">`
+      : `<span>${(c.name || '人').substring(0, 1)}</span>`;
+
+    miniCardEl.innerHTML = `
+      <div class="combat-mini-header" id="combat-mini-drag-header" title="拖拽移动，双击复位">
+        <div class="combat-mini-char-info">
+          <div class="combat-mini-avatar">${avatarHtml}</div>
+          <span class="combat-mini-name">${c.name}</span>
+          <button type="button" class="combat-mini-skill-btn" id="combat-mini-open-skills-btn" title="查看并编辑完整技能面板">技能</button>
+        </div>
+        <div class="combat-mini-header-actions">
+          <button type="button" class="combat-mini-close-btn" id="combat-mini-close-btn" title="关闭" aria-label="关闭">&times;</button>
+        </div>
+      </div>
+      <div class="combat-mini-stats-grid">
+        <div class="combat-mini-stat-cell"><span class="label">力量</span><span class="val">${c.str || 50}</span></div>
+        <div class="combat-mini-stat-cell"><span class="label">敏捷</span><span class="val">${c.dex || 50}</span></div>
+        <div class="combat-mini-stat-cell"><span class="label">体质</span><span class="val">${c.con || 50}</span></div>
+        <div class="combat-mini-stat-cell"><span class="label">意志</span><span class="val">${c.pow || 50}</span></div>
+        <div class="combat-mini-stat-cell"><span class="label">体型</span><span class="val">${c.siz || 50}</span></div>
+        <div class="combat-mini-stat-cell"><span class="label">教育</span><span class="val">${c.edu || 50}</span></div>
+        <div class="combat-mini-stat-cell"><span class="label">外貌</span><span class="val">${c.app || 50}</span></div>
+        <div class="combat-mini-stat-cell"><span class="label">智力</span><span class="val">${c.int || 50}</span></div>
+        <div class="combat-mini-stat-cell"><span class="label">幸运</span><span class="val">${c.luk || 50}</span></div>
+      </div>
+      <div class="combat-mini-values-grid">
+        <div class="combat-mini-value-cell">
+          <span class="label">HP</span>
+          <span class="val">${c.hp || 10}/${c.maxHp || 10}${armorTxt}</span>
+        </div>
+        <div class="combat-mini-value-cell">
+          <span class="label">MP</span>
+          <span class="val">${c.mp || 10}/${c.maxMp || 10}</span>
+        </div>
+        <div class="combat-mini-value-cell">
+          <span class="label">SAN</span>
+          <span class="val">${c.san || 50}/${c.maxSan || 99}</span>
+        </div>
+        <div class="combat-mini-value-cell">
+          <span class="label">DB</span>
+          <span class="val">${c.db || '0'}</span>
+        </div>
+      </div>
+      <div class="combat-mini-skills-wrap">
+        <div class="combat-mini-skills-header" id="combat-mini-skills-toggle-btn" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">
+          <span style="font-size: 10.5px; font-weight: 600; color: var(--text-primary);">技能</span>
+          <svg id="combat-mini-skills-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.2s ease;">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+        <div class="combat-mini-skills-list" id="combat-mini-skills-list" style="display: none;">${skillsListHtml}</div>
+      </div>
+    `;
+
+    const openSkillsBtn = miniCardEl.querySelector('#combat-mini-open-skills-btn');
+    if (openSkillsBtn) {
+      openSkillsBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (typeof window.openCocSkillsModal === 'function') {
+          const wrapper = {
+            data: {
+              stats: {
+                str: c.str || 50, dex: c.dex || 50, con: c.con || 50,
+                pow: c.pow || 50, siz: c.siz || 50, edu: c.edu || 50,
+                app: c.app || 50, int: c.int || 50, luk: c.luk || 50
+              },
+              skills: { ...(typeof getDefaultCocData === 'function' ? getDefaultCocData().skills : {}), ...(c.skills || {}) },
+              customSkills: Array.isArray(c.customSkills) ? [...c.customSkills] : [],
+              calculated: {
+                hp: c.hp, maxHp: c.maxHp,
+                mp: c.mp, maxMp: c.maxMp,
+                san: c.san, maxSan: c.maxSan,
+                armor: c.armor || 0,
+                db: c.db || '0'
+              }
+            },
+            updateTotalPoints: function() {},
+            save: function() {
+              c.skills = { ...this.data.skills };
+              c.customSkills = [...(this.data.customSkills || [])];
+              syncCombatantToRealCard(currentChat, c);
+              const dbInst = typeof global.db !== 'undefined' ? global.db : global.database;
+              if (dbInst) dbInst.chats.put(currentChat);
+              renderCombatCharacterBar(chatId);
+            }
+          };
+          window.openCocSkillsModal(wrapper);
+        }
+      };
+    }
+
+    const closeBtn = miniCardEl.querySelector('#combat-mini-close-btn');
+    if (closeBtn) {
+      closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        closeCombatCharacterMiniCard();
+      };
+    }
+
+    const skillsToggleBtn = miniCardEl.querySelector('#combat-mini-skills-toggle-btn');
+    const skillsListEl = miniCardEl.querySelector('#combat-mini-skills-list');
+    const skillsArrowEl = miniCardEl.querySelector('#combat-mini-skills-arrow');
+    if (skillsToggleBtn && skillsListEl) {
+      skillsToggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        const isHidden = skillsListEl.style.display === 'none';
+        skillsListEl.style.display = isHidden ? 'flex' : 'none';
+        if (skillsArrowEl) {
+          skillsArrowEl.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+      };
+    }
+  }
+
+  function closeCombatCharacterMiniCard() {
+    const miniCardEl = document.getElementById('combat-character-mini-card');
+    if (miniCardEl) {
+      miniCardEl.style.display = 'none';
+    }
+    activeMiniCardCombatantId = null;
   }
 
   function syncCombatantToRealCard(chat, c) {
@@ -561,10 +665,15 @@
 
     if (chat.isGroup && Array.isArray(chat.members)) {
       chat.members.forEach(m => {
+        const isDiceOrSystem = m.roleType === 'dice' || m.roleType === 'system_status' || m.isDice ||
+          /dice|骰|kp|守秘人|主持人|旁白|裁判|系统/i.test(m.groupNickname || '') ||
+          /dice|骰|kp|守秘人|主持人|旁白|裁判|系统/i.test(m.originalName || '') ||
+          /dice|骰|kp|守秘人|主持人|旁白|裁判|系统/i.test(m.name || '');
+        if (isDiceOrSystem) return;
         const mName = m.groupNickname || m.originalName;
         const stats = getCharacterStatsForCombat(chat, m.id, mName);
         const armorText = stats.armor > 0 ? ` | 护甲: ${stats.armor}` : '';
-        charactersContext.push(`- 群成员：${mName} (ID: ${m.id}) | 敏捷: ${stats.dex} | HP: ${stats.hp}/${stats.maxHp}${armorText} | MP: ${stats.mp}/${stats.maxMp}`);
+        charactersContext.push(`- 群成员角色：${mName} (ID: ${m.id}) | 敏捷: ${stats.dex} | HP: ${stats.hp}/${stats.maxHp}${armorText} | MP: ${stats.mp}/${stats.maxMp}`);
       });
     } else if (!chat.isGroup) {
       const aiName = chat.settings?.remarkName || chat.name || 'NPC';
@@ -574,7 +683,19 @@
     }
 
     const combatRules = getCombatState(chat).rulebook || DEFAULT_COMBAT_RULES_TEXT;
-    const prompt = `你是一个跑团TRPG战斗裁判与系统。请分析当前模组、剧情对话上下文、已知角色卡与战斗规则，裁定本次战斗的全部参战者名单（包括玩家、参战同伴、敌对怪物或敌对NPC）。
+    const prompt = `你是一个跑团TRPG战斗裁判与系统。请分析当前模组、剧情对话上下文、已知角色卡与战斗规则，裁定本次战斗的全部参战者名单（包括玩家、直接参战的调查员同伴、敌对怪物或敌对NPC）。
+
+【最高规则与禁令】：
+1. 绝对严禁将KP、守秘人、主持人、旁白、裁判、骰娘、骰子机器人列入参战名单！
+2. 必须由你根据当前剧情对话上下文严格判断【当前究竟有谁在战斗】。不在现场或没有直接拔刀参战的普通群成员不得加入。
+3. 如果剧情中出现了敌对怪物、恶魔、敌人、强盗或NPC对手，请在JSON中创建敌对条目（isEnemy: true），并为其生成设定敏捷dex、HP、MP、护甲armor，以及外貌+动作+战斗氛围的英文生图提示词 prompt。
+4. 参战者必须按敏捷从高到低排列。
+
+【战斗系统·技能（主动招式/特殊能力/法术）严正定义】：
+1. 技能【绝对不是】COC基础职业技能（禁止把斗殴、射击、闪避、侦查、聆听等基础检定技能填进技能区）！
+2. 技能是角色在战斗中【主动释放的特殊招式/特殊能力/专属法术】（如“冰霜吐息”、“召唤触手”、“血月斩”、“傀儡操线”等）。
+3. 普通角色没有技能时，specialSkills 数组必须为空 []！只有设定上有特殊能力/招式的角色（如Boss、超自然NPC、或者在模组与剧情上下文中获得专属特殊能力的角色）才有技能。
+4. 技能格式：name（技能名）、cost（消耗MP，如"5 MP"）、effect（效果简述，如"造成 2D6 伤害"）、check（检定方式，如"意志检定"或"无需检定"）。
 
 【战斗规则】：
 ${combatRules}
@@ -600,6 +721,7 @@ ${recentMsgs || '无'}
       "mp": ${userStats.mp},
       "maxMp": ${userStats.maxMp},
       "armor": ${userStats.armor || 0},
+      "specialSkills": [],
       "isEnemy": false,
       "isUser": true,
       "prompt": ""
@@ -613,6 +735,14 @@ ${recentMsgs || '无'}
       "mp": 10,
       "maxMp": 10,
       "armor": 0,
+      "specialSkills": [
+        {
+          "name": "特殊招式名称",
+          "cost": "3 MP",
+          "effect": "造成 1D6 伤害",
+          "check": "意志检定"
+        }
+      ],
       "isEnemy": true,
       "isUser": false,
       "prompt": "1024x1024 detailed fantasy TRPG monster portrait, sharp focus"
@@ -623,7 +753,9 @@ ${recentMsgs || '无'}
 要求：
 1. 参战者必须包含当前直接参与战斗的角色；
 2. 如果是已知玩家或群成员，请保留其原属性；如果是新出现的敌人、怪兽或NPC，请根据其强弱合理设定敏捷dex、HP、MP、护甲armor，并填写一段专业的英文画图提示词 prompt；
-3. 只能返回合法的 JSON。`;
+3. 无特殊能力角色的 specialSkills 必须为空数组 []；
+4. 绝对禁止加入KP、骰娘或无关旁观者；
+5. 只能返回合法的 JSON。`;
 
     try {
       const apiCfg = typeof global.getEffectiveApiConfig === 'function' ? global.getEffectiveApiConfig('chat') : (global.state?.apiConfig || {});
@@ -696,7 +828,7 @@ ${recentMsgs || '无'}
       const mergedList = aiCombatants.map(item => {
         let avatar = '';
         let str = 50, con = 50, pow = 50, siz = 50, edu = 50, app = 50, int = 50, luk = 50;
-        let customSkills = [];
+        let customSkills = item.specialSkills || item.customSkills || [];
         let armor = parseInt(item.armor, 10) || 0;
 
         if (item.isUser || item.id === 'user') {
@@ -704,7 +836,7 @@ ${recentMsgs || '无'}
           avatar = stats.avatar;
           str = stats.str; con = stats.con; pow = stats.pow; siz = stats.siz;
           edu = stats.edu; app = stats.app; int = stats.int; luk = stats.luk;
-          customSkills = stats.customSkills;
+          if (!customSkills || customSkills.length === 0) customSkills = stats.customSkills || [];
           if (stats.armor > 0 && !armor) armor = stats.armor;
         } else if (currentChat.isGroup && Array.isArray(currentChat.members)) {
           const m = currentChat.members.find(mem => mem.id === item.id || mem.groupNickname === item.name || mem.originalName === item.name);
@@ -713,7 +845,7 @@ ${recentMsgs || '无'}
             avatar = m.avatar || '';
             str = stats.str; con = stats.con; pow = stats.pow; siz = stats.siz;
             edu = stats.edu; app = stats.app; int = stats.int; luk = stats.luk;
-            customSkills = stats.customSkills;
+            if (!customSkills || customSkills.length === 0) customSkills = stats.customSkills || [];
             if (stats.armor > 0 && !armor) armor = stats.armor;
           }
         } else if (!currentChat.isGroup && (item.id === currentChat.id || item.name === currentChat.name)) {
@@ -721,7 +853,7 @@ ${recentMsgs || '无'}
           avatar = currentChat.avatar || '';
           str = stats.str; con = stats.con; pow = stats.pow; siz = stats.siz;
           edu = stats.edu; app = stats.app; int = stats.int; luk = stats.luk;
-          customSkills = stats.customSkills;
+          if (!customSkills || customSkills.length === 0) customSkills = stats.customSkills || [];
           if (stats.armor > 0 && !armor) armor = stats.armor;
         }
 
@@ -739,7 +871,8 @@ ${recentMsgs || '无'}
           armor,
           avatar: avatar,
           prompt: item.prompt || '',
-          customSkills,
+          specialSkills: customSkills,
+          customSkills: customSkills,
           isEnemy: !!item.isEnemy,
           isUser: !!item.isUser || item.id === 'user'
         };
@@ -790,26 +923,34 @@ ${recentMsgs || '无'}
           isEnemy: true
         });
       } else if (currentChat.isGroup && Array.isArray(currentChat.members) && currentChat.members.length > 0) {
-        const activeMember = currentChat.members[0];
-        const memStats = getCharacterStatsForCombat(currentChat, activeMember.id, activeMember.groupNickname || activeMember.originalName);
-        list.push({
-          id: activeMember.id,
-          name: activeMember.groupNickname || activeMember.originalName,
-          avatar: memStats.avatar,
-          dex: memStats.dex,
-          str: memStats.str, con: memStats.con, pow: memStats.pow, siz: memStats.siz,
-          edu: memStats.edu, app: memStats.app, int: memStats.int, luk: memStats.luk,
-          hp: memStats.hp,
-          maxHp: memStats.maxHp,
-          mp: memStats.mp,
-          maxMp: memStats.maxMp,
-          san: memStats.san,
-          maxSan: memStats.maxSan,
-          armor: memStats.armor || 0,
-          customSkills: memStats.customSkills || [],
-          isUser: false,
-          isEnemy: false
+        const nonKpMembers = currentChat.members.filter(m => {
+          return !(m.roleType === 'dice' || m.roleType === 'system_status' || m.isDice ||
+            /dice|骰|kp|守秘人|主持人|旁白|裁判|系统/i.test(m.groupNickname || '') ||
+            /dice|骰|kp|守秘人|主持人|旁白|裁判|系统/i.test(m.originalName || '') ||
+            /dice|骰|kp|守秘人|主持人|旁白|裁判|系统/i.test(m.name || ''));
         });
+        if (nonKpMembers.length > 0) {
+          const activeMember = nonKpMembers[0];
+          const memStats = getCharacterStatsForCombat(currentChat, activeMember.id, activeMember.groupNickname || activeMember.originalName);
+          list.push({
+            id: activeMember.id,
+            name: activeMember.groupNickname || activeMember.originalName,
+            avatar: memStats.avatar,
+            dex: memStats.dex,
+            str: memStats.str, con: memStats.con, pow: memStats.pow, siz: memStats.siz,
+            edu: memStats.edu, app: memStats.app, int: memStats.int, luk: memStats.luk,
+            hp: memStats.hp,
+            maxHp: memStats.maxHp,
+            mp: memStats.mp,
+            maxMp: memStats.maxMp,
+            san: memStats.san,
+            maxSan: memStats.maxSan,
+            armor: memStats.armor || 0,
+            customSkills: memStats.customSkills || [],
+            isUser: false,
+            isEnemy: false
+          });
+        }
       }
 
       combatState.combatants = sortCombatantsByDex(list);
@@ -824,17 +965,141 @@ ${recentMsgs || '无'}
       await dbInstance.chats.put(currentChat);
     }
 
-    const orderNames = combatState.combatants.map(c => `${c.name} 敏捷 ${c.dex}`).join(' > ');
-    const announceText = `参战顺序：${orderNames}`;
-    if (typeof global.logSystemMessage === 'function') {
-      await global.logSystemMessage(currentChat.id, announceText);
-    }
-
     hideCombatDropdownPanel();
     updateCombatUI(currentChat.id);
 
+    // 逐一生图
+    generateCombatantPortraitsSequentially(currentChat.id);
+
     if (typeof global.showToast === 'function') {
       global.showToast('已进入战斗状态');
+    }
+  }
+
+  async function generateCombatantPortraitsSequentially(chatId) {
+    const currentChat = global.state?.chats?.[chatId];
+    if (!currentChat) return;
+    const combatState = getCombatState(currentChat);
+    if (!combatState || !Array.isArray(combatState.combatants)) return;
+
+    // 获取用户在设置中配置的 NovelAI 画师串与正面提示词
+    let naiArtist = '';
+    let naiPositive = '';
+    if (typeof global.getCharacterNAIPrompts === 'function') {
+      try {
+        const naiPrompts = global.getCharacterNAIPrompts(chatId);
+        if (naiPrompts) {
+          naiArtist = naiPrompts.artist || '';
+          naiPositive = naiPrompts.positive || '';
+        }
+      } catch (e) {}
+    }
+    if (!naiArtist || !naiPositive) {
+      const domArtist = document.getElementById('nai-default-artist')?.value?.trim();
+      const domPos = document.getElementById('nai-default-positive')?.value?.trim();
+      if (domArtist && !naiArtist) naiArtist = domArtist;
+      if (domPos && !naiPositive) naiPositive = domPos;
+    }
+
+    for (const c of combatState.combatants) {
+      if (!c.avatar || c.isEnemy || c.prompt) {
+        try {
+          const rawPrompt = c.prompt || `${c.name}, TRPG character portrait in battle, action pose, dynamic lighting, masterpiece fantasy anime illustration, sharp focus, high quality`;
+          
+          const promptParts = [];
+          if (naiArtist && !rawPrompt.includes(naiArtist)) promptParts.push(naiArtist);
+          if (naiPositive && !rawPrompt.includes(naiPositive)) promptParts.push(naiPositive);
+          if (rawPrompt) promptParts.push(rawPrompt);
+          const finalPrompt = promptParts.join(', ');
+
+          let imgUrl = null;
+
+          // 优先尝试使用用户配置的 NovelAI 生图
+          const hasNaiKey = !!(localStorage.getItem('novelai-api-key') || document.getElementById('novelai-api-key')?.value?.trim());
+          if (hasNaiKey && typeof window.callNovelAiDirect === 'function') {
+            try {
+              imgUrl = await window.callNovelAiDirect(finalPrompt, { resolution: '1024x1024' });
+            } catch (naiErr) {
+              console.warn('NovelAI 生图失败，切换备用生图:', naiErr);
+            }
+          }
+
+          // 若未配置 NovelAI 或生图失败，调用 Pollinations 备用
+          if (!imgUrl && typeof window.generatePollinationsImage === 'function') {
+            imgUrl = await window.generatePollinationsImage(finalPrompt, {
+              width: 1024,
+              height: 1024,
+              model: 'flux',
+              nologo: true
+            });
+          }
+
+          if (imgUrl) {
+            c.avatar = imgUrl;
+            syncCombatantToRealCard(currentChat, c);
+            const dbInst = typeof global.db !== 'undefined' ? global.db : global.database;
+            if (dbInst) {
+              await dbInst.chats.put(currentChat);
+            }
+            renderCombatCharacterBar(chatId);
+            if (activeMiniCardCombatantId === c.id) {
+              renderCombatCharacterMiniCard(chatId, c.id);
+            }
+          }
+        } catch (e) {
+          console.warn('逐一生图异常:', e);
+        }
+      }
+    }
+  }
+
+  async function triggerCombatConfirmation(chatId) {
+    const activeChatId = chatId || global.state?.activeChatId;
+    const currentChat = global.state?.chats?.[activeChatId];
+    if (!currentChat) return;
+    hideCombatDropdownPanel();
+
+    const confirmMsg = {
+      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+      role: "system",
+      type: "combat_confirm_card",
+      content: "是否进入战斗？",
+      timestamp: Date.now()
+    };
+    currentChat.history = currentChat.history || [];
+    currentChat.history.push(confirmMsg);
+
+    const dbInst = typeof global.db !== 'undefined' ? global.db : global.database;
+    if (dbInst) {
+      await dbInst.chats.put(currentChat);
+    }
+    if (typeof global.appendMessage === 'function') {
+      global.appendMessage(confirmMsg, currentChat);
+    }
+  }
+
+  async function triggerCombatExitConfirmation(chatId) {
+    const activeChatId = chatId || global.state?.activeChatId;
+    const currentChat = global.state?.chats?.[activeChatId];
+    if (!currentChat) return;
+    hideCombatDropdownPanel();
+
+    const exitMsg = {
+      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+      role: "system",
+      type: "combat_exit_confirm_card",
+      content: "是否退出战斗？",
+      timestamp: Date.now()
+    };
+    currentChat.history = currentChat.history || [];
+    currentChat.history.push(exitMsg);
+
+    const dbInst = typeof global.db !== 'undefined' ? global.db : global.database;
+    if (dbInst) {
+      await dbInst.chats.put(currentChat);
+    }
+    if (typeof global.appendMessage === 'function') {
+      global.appendMessage(exitMsg, currentChat);
     }
   }
 
@@ -856,11 +1121,8 @@ ${recentMsgs || '无'}
       await dbInstance.chats.put(currentChat);
     }
 
-    if (typeof global.logSystemMessage === 'function') {
-      await global.logSystemMessage(currentChat.id, '战斗结束');
-    }
-
     hideCombatDropdownPanel();
+    closeCombatCharacterMiniCard();
     updateCombatUI(currentChat.id);
 
     if (typeof global.showToast === 'function') {
@@ -891,14 +1153,17 @@ ${recentMsgs || '无'}
   }
 
   let currentEditingCombatants = [];
+  let expandedEditingIndex = null;
 
   function openCombatEditModal(chatId, targetCombatantId = null) {
     const currentChat = global.state?.chats?.[chatId];
     if (!currentChat) return;
 
     hideCombatDropdownPanel();
+    closeCombatCharacterMiniCard();
     const combatState = getCombatState(currentChat);
     currentEditingCombatants = JSON.parse(JSON.stringify(combatState.combatants || []));
+    expandedEditingIndex = null;
 
     renderEditingCombatantsList();
 
@@ -933,31 +1198,39 @@ ${recentMsgs || '无'}
     }
 
     currentEditingCombatants.forEach((c, idx) => {
-      const item = document.createElement('div');
-      item.style.display = 'flex';
-      item.style.alignItems = 'center';
-      item.style.justifyContent = 'space-between';
-      item.style.padding = '8px';
-      item.style.background = 'var(--secondary-bg)';
-      item.style.borderRadius = '8px';
-      item.style.gap = '8px';
+      const card = document.createElement('div');
+      card.style.display = 'flex';
+      card.style.flexDirection = 'column';
+      card.style.background = 'var(--secondary-bg)';
+      card.style.borderRadius = '8px';
+      card.style.padding = '6px 8px';
+      card.style.gap = '6px';
+      card.style.border = '1px solid var(--border-color)';
+
+      const headerRow = document.createElement('div');
+      headerRow.style.display = 'flex';
+      headerRow.style.alignItems = 'center';
+      headerRow.style.justifyContent = 'space-between';
+      headerRow.style.gap = '6px';
 
       const left = document.createElement('div');
       left.style.display = 'flex';
       left.style.alignItems = 'center';
-      left.style.gap = '8px';
+      left.style.gap = '6px';
       left.style.flex = '1';
+      left.style.overflow = 'hidden';
 
       const avatarBox = document.createElement('div');
-      avatarBox.style.width = '30px';
-      avatarBox.style.height = '30px';
+      avatarBox.style.width = '24px';
+      avatarBox.style.height = '24px';
       avatarBox.style.borderRadius = '50%';
       avatarBox.style.overflow = 'hidden';
       avatarBox.style.flexShrink = '0';
-      avatarBox.style.background = '#e0e0e0';
+      avatarBox.style.background = 'var(--card-bg)';
       avatarBox.style.display = 'flex';
       avatarBox.style.alignItems = 'center';
       avatarBox.style.justifyContent = 'center';
+      avatarBox.style.border = '1px solid var(--border-color)';
 
       if (c.avatar) {
         const img = document.createElement('img');
@@ -968,7 +1241,7 @@ ${recentMsgs || '无'}
         avatarBox.appendChild(img);
       } else {
         avatarBox.textContent = (c.name || '人').substring(0, 1);
-        avatarBox.style.fontSize = '11px';
+        avatarBox.style.fontSize = '10px';
         avatarBox.style.fontWeight = '600';
       }
       left.appendChild(avatarBox);
@@ -976,30 +1249,142 @@ ${recentMsgs || '无'}
       const armorStr = (c.armor && c.armor > 0) ? ` | 护甲: ${c.armor}` : '';
       const info = document.createElement('div');
       info.style.flex = '1';
-      info.innerHTML = `<div style="font-weight: 600; font-size: 12px; color: var(--text-primary);">${c.name}</div>
-        <div style="font-size: 11px; color: var(--text-secondary);">敏捷: ${c.dex} | HP: ${c.hp}/${c.maxHp}${armorStr} | MP: ${c.mp}/${c.maxMp}</div>`;
+      info.style.overflow = 'hidden';
+      info.innerHTML = `<div style="font-weight: 600; font-size: 11px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${c.name}</div>
+        <div style="font-size: 10px; color: var(--text-secondary);">敏捷: ${c.dex} | HP: ${c.hp}/${c.maxHp}${armorStr} | MP: ${c.mp}/${c.maxMp}</div>`;
       left.appendChild(info);
 
       const right = document.createElement('div');
       right.style.display = 'flex';
-      right.style.gap = '4px';
+      right.style.alignItems = 'center';
+      right.style.gap = '3px';
+
+      if (idx > 0) {
+        const upBtn = document.createElement('button');
+        upBtn.type = 'button';
+        upBtn.className = 'moe-btn-mini';
+        upBtn.textContent = '↑';
+        upBtn.title = '前移行动顺序';
+        upBtn.style.padding = '1px 5px';
+        upBtn.onclick = () => {
+          const temp = currentEditingCombatants[idx];
+          currentEditingCombatants[idx] = currentEditingCombatants[idx - 1];
+          currentEditingCombatants[idx - 1] = temp;
+          renderEditingCombatantsList();
+        };
+        right.appendChild(upBtn);
+      }
+
+      if (idx < currentEditingCombatants.length - 1) {
+        const downBtn = document.createElement('button');
+        downBtn.type = 'button';
+        downBtn.className = 'moe-btn-mini';
+        downBtn.textContent = '↓';
+        downBtn.title = '后移行动顺序';
+        downBtn.style.padding = '1px 5px';
+        downBtn.onclick = () => {
+          const temp = currentEditingCombatants[idx];
+          currentEditingCombatants[idx] = currentEditingCombatants[idx + 1];
+          currentEditingCombatants[idx + 1] = temp;
+          renderEditingCombatantsList();
+        };
+        right.appendChild(downBtn);
+      }
+
+      const expandBtn = document.createElement('button');
+      expandBtn.type = 'button';
+      expandBtn.className = 'moe-btn-mini';
+      expandBtn.textContent = expandedEditingIndex === idx ? '收起' : '数值';
+      expandBtn.style.padding = '1px 6px';
+      expandBtn.onclick = () => {
+        expandedEditingIndex = expandedEditingIndex === idx ? null : idx;
+        renderEditingCombatantsList();
+      };
+      right.appendChild(expandBtn);
 
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
-      delBtn.className = 'moe-btn-small';
+      delBtn.className = 'moe-btn-mini';
       delBtn.textContent = '移除';
       delBtn.style.color = '#ff4d4f';
-      delBtn.style.padding = '2px 8px';
-      delBtn.style.fontSize = '11px';
+      delBtn.style.padding = '1px 6px';
       delBtn.onclick = () => {
         currentEditingCombatants.splice(idx, 1);
+        if (expandedEditingIndex === idx) expandedEditingIndex = null;
         renderEditingCombatantsList();
       };
       right.appendChild(delBtn);
 
-      item.appendChild(left);
-      item.appendChild(right);
-      listContainer.appendChild(item);
+      headerRow.appendChild(left);
+      headerRow.appendChild(right);
+      card.appendChild(headerRow);
+
+      if (expandedEditingIndex === idx) {
+        const detailForm = document.createElement('div');
+        detailForm.style.display = 'flex';
+        detailForm.style.flexDirection = 'column';
+        detailForm.style.gap = '6px';
+        detailForm.style.paddingTop = '6px';
+        detailForm.style.borderTop = '1px dashed var(--border-color)';
+
+        detailForm.innerHTML = `
+          <div style="font-size: 10px; font-weight: 600; color: var(--text-primary);">属性设置</div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">力量</label><input type="number" data-stat="str" class="moe-input" value="${c.str || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">敏捷</label><input type="number" data-stat="dex" class="moe-input" value="${c.dex || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">体质</label><input type="number" data-stat="con" class="moe-input" value="${c.con || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">意志</label><input type="number" data-stat="pow" class="moe-input" value="${c.pow || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">体型</label><input type="number" data-stat="siz" class="moe-input" value="${c.siz || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">教育</label><input type="number" data-stat="edu" class="moe-input" value="${c.edu || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">外貌</label><input type="number" data-stat="app" class="moe-input" value="${c.app || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">智力</label><input type="number" data-stat="int" class="moe-input" value="${c.int || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--card-bg); border-radius: 4px; padding: 2px 4px; gap: 2px; border: 1px solid var(--border-color);"><label style="font-size: 9px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">幸运</label><input type="number" data-stat="luk" class="moe-input" value="${c.luk || 50}" style="height: 18px; font-size: 10px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+          </div>
+          <div style="font-size: 10px; font-weight: 600; color: var(--text-primary); margin-top: 2px;">实时生命与护甲</div>
+          <div style="display: flex; gap: 4px;">
+            <div style="flex: 1; display: flex; align-items: center; background: var(--card-bg); padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+              <span style="font-size: 9px; color: var(--text-secondary); width: 22px;">HP</span>
+              <input type="number" data-val="hp" class="moe-input" value="${c.hp || 10}" style="width: 32px; height: 18px; font-size: 10px; text-align: center; padding: 0; border: none;">
+              <span style="font-size: 9px; color: var(--text-secondary);">/</span>
+              <input type="number" data-val="maxHp" class="moe-input" value="${c.maxHp || 10}" style="width: 32px; height: 18px; font-size: 10px; text-align: center; padding: 0; border: none;">
+            </div>
+            <div style="flex: 1; display: flex; align-items: center; background: var(--card-bg); padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+              <span style="font-size: 9px; color: var(--text-secondary); width: 22px;">MP</span>
+              <input type="number" data-val="mp" class="moe-input" value="${c.mp || 10}" style="width: 32px; height: 18px; font-size: 10px; text-align: center; padding: 0; border: none;">
+              <span style="font-size: 9px; color: var(--text-secondary);">/</span>
+              <input type="number" data-val="maxMp" class="moe-input" value="${c.maxMp || 10}" style="width: 32px; height: 18px; font-size: 10px; text-align: center; padding: 0; border: none;">
+            </div>
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <div style="flex: 1; display: flex; align-items: center; background: var(--card-bg); padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+              <span style="font-size: 9px; color: var(--text-secondary); width: 26px;">护甲</span>
+              <input type="number" data-val="armor" class="moe-input" value="${c.armor || 0}" style="flex: 1; height: 18px; font-size: 10px; text-align: center; padding: 0; border: none;">
+            </div>
+            <div style="flex: 1; display: flex; align-items: center; background: var(--card-bg); padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+              <span style="font-size: 9px; color: var(--text-secondary); width: 26px;">SAN</span>
+              <input type="number" data-val="san" class="moe-input" value="${c.san || 50}" style="flex: 1; height: 18px; font-size: 10px; text-align: center; padding: 0; border: none;">
+            </div>
+          </div>
+        `;
+
+        detailForm.querySelectorAll('input[data-stat]').forEach(inp => {
+          inp.oninput = () => {
+            const st = inp.dataset.stat;
+            c[st] = parseInt(inp.value, 10) || 0;
+          };
+        });
+
+        detailForm.querySelectorAll('input[data-val]').forEach(inp => {
+          inp.oninput = () => {
+            const k = inp.dataset.val;
+            c[k] = parseInt(inp.value, 10) || 0;
+          };
+        });
+
+        card.appendChild(detailForm);
+      }
+
+      listContainer.appendChild(card);
     });
   }
 
@@ -1014,8 +1399,12 @@ ${recentMsgs || '无'}
     if (!currentChat) return;
 
     const combatState = getCombatState(currentChat);
-    combatState.combatants = sortCombatantsByDex(currentEditingCombatants);
+    combatState.combatants = currentEditingCombatants;
     combatState.order = combatState.combatants.map(c => c.id);
+
+    combatState.combatants.forEach(c => {
+      syncCombatantToRealCard(currentChat, c);
+    });
 
     const dbInstance = typeof global.db !== 'undefined' ? global.db : global.database;
     if (dbInstance) {
@@ -1024,6 +1413,12 @@ ${recentMsgs || '无'}
 
     closeCombatEditModal();
     updateCombatUI(activeChatId);
+    if (activeMiniCardCombatantId) {
+      renderCombatCharacterMiniCard(activeChatId, activeMiniCardCombatantId);
+    }
+    if (typeof global.showToast === 'function') {
+      global.showToast('战斗设置已保存');
+    }
   }
 
   function openCombatRulesModal(chatId) {
@@ -1096,6 +1491,9 @@ ${recentMsgs || '无'}
       }
 
       renderCombatCharacterBar(chat.id);
+      if (activeMiniCardCombatantId === target.id) {
+        renderCombatCharacterMiniCard(chat.id, target.id);
+      }
     }
   }
 
@@ -1104,7 +1502,7 @@ ${recentMsgs || '无'}
     if (typeof chatOrId === 'string') {
       currentChat = global.state?.chats?.[chatOrId];
     }
-    if (!currentChat) return '';
+    if (!currentChat || !currentChat.isGroup) return '';
 
     const combatState = getCombatState(currentChat);
     if (!combatState || !combatState.active) return '';
@@ -1112,33 +1510,60 @@ ${recentMsgs || '无'}
     const combatants = sortCombatantsByDex(combatState.combatants);
     if (!combatants || combatants.length === 0) return '';
 
-    const combatantLines = combatants.map(c => {
+    const combatantLines = combatants.map((c, idx) => {
       const armorTxt = (c.armor && c.armor > 0) ? `，护甲:${c.armor}` : '';
-      const skillsTxt = (Array.isArray(c.skills) && c.skills.length > 0)
-        ? `，技能列表:[${c.skills.map(s => `${s.name}${s.value ? `(${s.value})` : ''}`).join(', ')}]`
-        : '';
-      return `- 参战者全名【${c.name}】：敏捷 ${c.dex}，当前HP ${c.hp}/${c.maxHp}，当前MP ${c.mp}/${c.maxMp}，当前SAN ${c.san}/${c.maxSan}${armorTxt}${skillsTxt}`;
+      const sList = (Array.isArray(c.specialSkills) && c.specialSkills.length > 0)
+        ? c.specialSkills
+        : ((Array.isArray(c.customSkills) && c.customSkills.length > 0) ? c.customSkills : []);
+      const skillsTxt = (sList.length > 0)
+        ? `，战斗特殊技能:[${sList.map(s => typeof s === 'string' ? s : `${s.name}${s.cost ? `(${s.cost})` : ''}${s.effect ? `[${s.effect}]` : ''}`).join(', ')}]`
+        : '，无特殊技能';
+      return `${idx + 1}. 参战者全名【${c.name}】：敏捷 ${c.dex}，当前HP ${c.hp}/${c.maxHp}，当前MP ${c.mp}/${c.maxMp}，当前SAN ${c.san}/${c.maxSan}${armorTxt}${skillsTxt}`;
     }).join('\n');
 
     const orderNames = combatants.map(c => c.name).join(' -> ');
 
-    return `\n\n# 【当前处于COC标准战斗状态（必须严格执行）】
-1. **行动先后顺序（按敏捷DEX从高到低）**：
-${orderNames}
+    // 2. 战斗对抗与闪避铁律
+    // 远程攻击（手枪、步枪等）：攻击方发起检定后，防守方只要可见并能行动，必须先进行闪避检定（.ra 防守方 闪避），AI绝不可跳过防守方闪避检定直接判定击中。双方通过成功等级比大小判定是否命中。
+    // 近战攻击（斗殴等）：攻击方发起检定后，防守方选择闪避（.ra 防守方 闪避）或反击（.ra 防守方 斗殴）对抗比大小。
+    // 判定命中后由骰子投掷伤害，并发送扣血指令。
 
-2. **当前所有参战人员完整名单与实时数值**：
+    const isCoc6 = /第六版|coc\s*6|coc6|6th/i.test(combatState.rulebook || DEFAULT_COMBAT_RULES_TEXT);
+
+    const defenseRuleText = isCoc6
+      ? `【重要法则：当前为 COC 第六版规则】\nCOC 第六版规则中【绝对没有反击，绝对没有格挡，只有闪避】！\n- 无论是远程射击还是近战斗殴，防守方在受到攻击时【唯一允许的防御检定就是闪避】（.ra 防守方 闪避）！严禁发起反击检定或格挡检定！\n- 流程：攻击方投掷命中检定（.ra 攻击方 斗殴 或 射击），若命中，防守方投掷闪避（.ra 防守方 闪避）。闪避成功则无伤，闪避失败则由骰子投掷伤害。`
+      : `【战斗对抗流程】\n- 远程射击：防守方进行闪避检定（.ra 防守方 闪避）。\n- 近战攻击：防守方可选择闪避（.ra 防守方 闪避）或反击（.ra 防守方 斗殴）。`;
+
+    return `\n\n# 【最高优先级：当前正处于COC跑团战斗模式】
+你处于【战斗模式】。以下战斗强制条款与行动轮流转规则必须无条件严格执行：
+
+一、战斗对抗流程铁律【绝不可跳过检定】
+${defenseRuleText}
+- 严禁在防守方检定出结果前直接口头判定击中或结算扣血！数值与判定全部由骰子完成，严禁 AI 在剧情中私自口头决定命中与扣血数值。
+
+二、参战人员动态增减机制
+- 战斗中若有新角色加入战场，在回复末尾附带：[参战: 角色名, HP: 12, DEX: 60]（若是群成员直接写 [参战: 角色名]，系统会自动提取面板；若是未在群的新NPC/怪物，请写明数值）。
+- 若有角色撤退或逃离，在回复末尾附带：[撤退: 角色名]。
+
+三、当前先攻行动顺序与全部参战人员名单
+- **行动轮次顺序（按敏捷从高到低）**：
+${orderNames}
+- **参战者完整名单与实时数值**：
 ${combatantLines}
 
-3. **【【【重要：角色全名与战斗指令规范】】】**：
-- **必须使用完整全名**：在回复或执行掷骰/扣血时，角色名字【必须与上述参战名单中的全名完全一致】（例如名单为“邪教徒甲”，就必须写“邪教徒甲”，严禁简写为“甲”或打错字）。
-- **指令格式与多项目支持**：
-  * 扣减/增加/修改数值：使用 \`.st 角色全名 属性1±数值 属性2±数值\`（例如：\`.st 邪教徒甲 hp-5\`，或同时修改多个项目：\`.st 邪教徒甲 hp-6 mp-2\`、\`.st 张三 hp-3 san-5\`）。
-  * 技能或命中检定：\`.ra 角色全名 技能名\`（例如：\`.ra 邪教徒甲 斗殴\`，\`.ra 张三 闪避\`）。
-  * 普通投掷：\`.r 角色全名 1d6+2\`。
-- **支持在叙述气泡中自然嵌入指令**：指令可以直接写在正常剧情叙事文本的任何位置，无需单独发气泡（例如：“邪教徒猛扑过来！.ra 邪教徒甲 斗殴\n你侧身一闪并挥拳反击，正中其面门造成6点伤害！.st 邪教徒甲 hp-6”），系统会自动识别并精准扣减对应角色的生命与状态！
+四、角色全名与战斗指令规范
+- **必须使用完整全名**：在回复中发送指令时，目标名字【必须使用上述参战人员名单中的完整全名】（例如：.st 全息投影甲 hp 13 敏捷 50，或 .ra 全息投影甲 斗殴）。
+- **指令格式**：
+  * 修改属性/生命：.st 参战者全名 hp 13 敏捷 50，或 .hp 参战者全名 -5，.mp 参战者全名 -3。
+  * 技能或命中检定：.ra 参战者全名 技能名（例如：.ra 全息投影甲 斗殴，.ra 张三 闪避）。
+  * 投掷伤害：.r 参战者全名 1d6 或 .r 1d100。
 
-4. **战斗规则遵循**：
+五、战斗法则条文
 ${combatState.rulebook || DEFAULT_COMBAT_RULES_TEXT}
+
+六、战斗“技能”（主动招式/特殊能力/法术）执行规范
+1. 技能是角色在战斗中主动释放的特殊能力（如冰霜吐息、血月斩等），不是基础职业技能。
+2. 释放流程：先扣除消耗的 MP（.mp 参战者全名 -5），若需检定则进行对应检定（.ra 参战者全名 意志），成功后投掷效果数值并登记扣血。
 `;
   }
 
@@ -1146,145 +1571,328 @@ ${combatState.rulebook || DEFAULT_COMBAT_RULES_TEXT}
     return getCombatPromptBlock(chatId);
   }
 
-  function initCombatEngine() {
-    const entryBtn = document.getElementById('combat-entry-btn');
-    if (entryBtn) {
-      entryBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleCombatDropdownPanel();
-      });
+  function handleDynamicCombatantsFromAi(chat, rawContent) {
+    if (!chat || !rawContent || typeof rawContent !== 'string') return;
+    const combatState = getCombatState(chat);
+    if (!combatState || !combatState.active) return;
+
+    let changed = false;
+
+    const joinRegex = /\[(?:参战|加入战斗|新增参战)[:：]\s*([^,，\]\n]+)(?:[,，\s]*HP[:：]\s*(\d+))?(?:[,，\s]*DEX[:：]\s*(\d+))?(?:[,，\s]*STR[:：]\s*(\d+))?(?:[,，\s]*CON[:：]\s*(\d+))?(?:[,，\s]*POW[:：]\s*(\d+))?[^\]]*\]/gi;
+    let jm;
+    while ((jm = joinRegex.exec(rawContent)) !== null) {
+      const rawName = jm[1].trim();
+      if (!rawName) continue;
+      const exists = combatState.combatants.find(c => c.name === rawName || c.id === rawName);
+      if (!exists) {
+        let stats = null;
+        if (chat.isGroup && Array.isArray(chat.members)) {
+          const mem = chat.members.find(m => m.groupNickname === rawName || m.originalName === rawName || m.id === rawName);
+          if (mem) {
+            stats = getCharacterStatsForCombat(chat, mem.id, rawName);
+          }
+        }
+        if (!stats) {
+          stats = {
+            dex: parseInt(jm[3], 10) || 50,
+            str: parseInt(jm[4], 10) || 50,
+            con: parseInt(jm[5], 10) || 50,
+            pow: parseInt(jm[6], 10) || 50,
+            siz: 50, edu: 50, app: 50, int: 50, luk: 50,
+            hp: parseInt(jm[2], 10) || 10,
+            maxHp: parseInt(jm[2], 10) || 10,
+            mp: 10, maxMp: 10, san: 50, maxSan: 50, armor: 0, db: '0',
+            avatar: '', customSkills: [], skills: { ...(typeof global.getDefaultCocData === 'function' ? global.getDefaultCocData().skills : {}) },
+            cocPanel: null
+          };
+        }
+        combatState.combatants.push({
+          id: 'combatant_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          name: rawName,
+          isUser: false,
+          ...stats
+        });
+        changed = true;
+      }
     }
 
+    const leaveRegex = /\[(?:撤退|脱离战斗|移除参战)[:：]\s*([^,，\]\n]+)\]/gi;
+    let lm;
+    while ((lm = leaveRegex.exec(rawContent)) !== null) {
+      const rawName = lm[1].trim();
+      if (!rawName) continue;
+      const idx = combatState.combatants.findIndex(c => c.name === rawName || c.id === rawName);
+      if (idx !== -1) {
+        combatState.combatants.splice(idx, 1);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      const dbInst = typeof global.db !== 'undefined' ? global.db : global.database;
+      if (dbInst) dbInst.chats.put(chat);
+      renderCombatCharacterBar(chat.id);
+    }
+  }
+
+  function initCombatEngine() {
     const toggleBtn = document.getElementById('combat-toggle-btn');
     if (toggleBtn) {
-      toggleBtn.classList.add('combat-toggle-accent-btn');
-      toggleBtn.addEventListener('click', (e) => {
+      toggleBtn.onclick = (e) => {
         e.stopPropagation();
         const activeChatId = global.state?.activeChatId;
-        if (!activeChatId) return;
         const currentChat = global.state?.chats?.[activeChatId];
+        if (!currentChat) return;
         const combatState = getCombatState(currentChat);
         if (combatState.active) {
-          exitCombat(activeChatId);
+          triggerCombatExitConfirmation(activeChatId);
         } else {
-          enterCombat(activeChatId, true);
+          triggerCombatConfirmation(activeChatId);
         }
-      });
+      };
     }
 
     const editBtn = document.getElementById('combat-edit-btn');
     if (editBtn) {
-      editBtn.addEventListener('click', (e) => {
+      editBtn.onclick = (e) => {
         e.stopPropagation();
-        const activeChatId = global.state?.activeChatId;
-        if (activeChatId) openCombatEditModal(activeChatId);
-      });
+        openCombatEditModal(global.state?.activeChatId);
+      };
     }
 
     const rulesBtn = document.getElementById('combat-rules-btn');
     if (rulesBtn) {
-      rulesBtn.addEventListener('click', (e) => {
+      rulesBtn.onclick = (e) => {
         e.stopPropagation();
-        const activeChatId = global.state?.activeChatId;
-        if (activeChatId) openCombatRulesModal(activeChatId);
+        openCombatRulesModal(global.state?.activeChatId);
+      };
+    }
+
+    const entryBtn = document.getElementById('combat-entry-btn');
+    if (entryBtn) {
+      entryBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleCombatDropdownPanel();
+      };
+    }
+
+    const rulesCloseBtn = document.getElementById('combat-rules-close-btn');
+    if (rulesCloseBtn) rulesCloseBtn.onclick = closeCombatRulesModal;
+
+    const rulesCancelBtn = document.getElementById('combat-rules-cancel-btn');
+    if (rulesCancelBtn) rulesCancelBtn.onclick = closeCombatRulesModal;
+
+    const rulesSaveBtn = document.getElementById('combat-rules-save-btn');
+    if (rulesSaveBtn) rulesSaveBtn.onclick = saveCombatRules;
+
+    const rulesResetBtn = document.getElementById('combat-rules-reset-btn');
+    if (rulesResetBtn) rulesResetBtn.onclick = resetCombatRules;
+
+    const editCloseBtn = document.getElementById('combat-edit-close-btn');
+    if (editCloseBtn) editCloseBtn.onclick = closeCombatEditModal;
+
+    const editCancelBtn = document.getElementById('combat-edit-cancel-btn');
+    if (editCancelBtn) editCancelBtn.onclick = closeCombatEditModal;
+
+    const editSaveBtn = document.getElementById('combat-edit-save-btn');
+    if (editSaveBtn) editSaveBtn.onclick = saveCombatEditModal;
+
+    const charBar = document.getElementById('combat-character-bar');
+    const dragHandle = document.getElementById('combat-bar-drag-handle');
+    const collapseBtn = document.getElementById('combat-bar-collapse-btn');
+    const arrowIcon = document.getElementById('combat-bar-arrow-icon');
+
+    if (collapseBtn && charBar) {
+      collapseBtn.onclick = (e) => {
+        e.stopPropagation();
+        charBar.classList.toggle('collapsed');
+        const isCollapsed = charBar.classList.contains('collapsed');
+        if (arrowIcon) {
+          arrowIcon.innerHTML = isCollapsed
+            ? '<polyline points="9 18 15 12 9 6"></polyline>'
+            : '<polyline points="15 18 9 12 15 6"></polyline>';
+        }
+      };
+    }
+
+    if (dragHandle && charBar) {
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let initialLeft = 0;
+      let initialTop = 0;
+      let lastTapTime = 0;
+
+      const onStartDrag = (clientX, clientY) => {
+        const rect = charBar.getBoundingClientRect();
+        isDragging = true;
+        startX = clientX;
+        startY = clientY;
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        charBar.style.position = 'fixed';
+        charBar.style.margin = '0';
+        charBar.style.left = `${initialLeft}px`;
+        charBar.style.top = `${initialTop}px`;
+        charBar.style.zIndex = '100';
+      };
+
+      const onMoveDrag = (clientX, clientY) => {
+        if (!isDragging) return;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        charBar.style.left = `${Math.max(0, Math.min(window.innerWidth - 40, initialLeft + dx))}px`;
+        charBar.style.top = `${Math.max(0, Math.min(window.innerHeight - 40, initialTop + dy))}px`;
+      };
+
+      const onEndDrag = () => {
+        isDragging = false;
+      };
+
+      const resetBarPosition = () => {
+        charBar.style.position = '';
+        charBar.style.margin = '2px auto 4px auto';
+        charBar.style.left = '';
+        charBar.style.top = '';
+        charBar.style.zIndex = '';
+      };
+
+      dragHandle.addEventListener('mousedown', (e) => {
+        if (e.target.closest('#combat-bar-collapse-btn')) return;
+        onStartDrag(e.clientX, e.clientY);
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (isDragging) onMoveDrag(e.clientX, e.clientY);
+      });
+
+      document.addEventListener('mouseup', onEndDrag);
+
+      dragHandle.addEventListener('touchstart', (e) => {
+        if (e.target.closest('#combat-bar-collapse-btn')) return;
+        const touch = e.touches[0];
+        if (touch) {
+          const now = Date.now();
+          if (now - lastTapTime < 350) {
+            resetBarPosition();
+            lastTapTime = 0;
+            return;
+          }
+          lastTapTime = now;
+          onStartDrag(touch.clientX, touch.clientY);
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchmove', (e) => {
+        if (isDragging && e.touches[0]) {
+          onMoveDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchend', onEndDrag);
+
+      dragHandle.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        resetBarPosition();
+      });
+    }
+
+    const miniCardEl = document.getElementById('combat-character-mini-card');
+    if (miniCardEl) {
+      let isCardDragging = false;
+      let cardStartX = 0;
+      let cardStartY = 0;
+      let cardInitialLeft = 0;
+      let cardInitialTop = 0;
+      let lastCardTapTime = 0;
+
+      const onStartCardDrag = (clientX, clientY) => {
+        const rect = miniCardEl.getBoundingClientRect();
+        isCardDragging = true;
+        cardStartX = clientX;
+        cardStartY = clientY;
+        cardInitialLeft = rect.left;
+        cardInitialTop = rect.top;
+        miniCardEl.style.position = 'fixed';
+        miniCardEl.style.margin = '0';
+        miniCardEl.style.left = `${cardInitialLeft}px`;
+        miniCardEl.style.top = `${cardInitialTop}px`;
+        miniCardEl.style.transform = 'none';
+        miniCardEl.style.zIndex = '110';
+      };
+
+      const onMoveCardDrag = (clientX, clientY) => {
+        if (!isCardDragging) return;
+        const dx = clientX - cardStartX;
+        const dy = clientY - cardStartY;
+        const cardW = miniCardEl.offsetWidth || 250;
+        const cardH = miniCardEl.offsetHeight || 180;
+        miniCardEl.style.left = `${Math.max(0, Math.min(window.innerWidth - cardW, cardInitialLeft + dx))}px`;
+        miniCardEl.style.top = `${Math.max(0, Math.min(window.innerHeight - cardH, cardInitialTop + dy))}px`;
+      };
+
+      const onEndCardDrag = () => {
+        isCardDragging = false;
+      };
+
+      miniCardEl.addEventListener('mousedown', (e) => {
+        const header = e.target.closest('#combat-mini-drag-header');
+        if (!header) return;
+        if (e.target.closest('#combat-mini-open-skills-btn') || e.target.closest('#combat-mini-close-btn') || e.target.closest('#combat-mini-skills-toggle-btn')) return;
+        onStartCardDrag(e.clientX, e.clientY);
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (isCardDragging) onMoveCardDrag(e.clientX, e.clientY);
+      });
+
+      document.addEventListener('mouseup', onEndCardDrag);
+
+      miniCardEl.addEventListener('touchstart', (e) => {
+        const header = e.target.closest('#combat-mini-drag-header');
+        if (!header) return;
+        if (e.target.closest('#combat-mini-open-skills-btn') || e.target.closest('#combat-mini-close-btn') || e.target.closest('#combat-mini-skills-toggle-btn')) return;
+        const touch = e.touches[0];
+        if (touch) {
+          const now = Date.now();
+          if (now - lastCardTapTime < 350) {
+            positionMiniCardUnderBar();
+            lastCardTapTime = 0;
+            return;
+          }
+          lastCardTapTime = now;
+          onStartCardDrag(touch.clientX, touch.clientY);
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchmove', (e) => {
+        if (isCardDragging && e.touches[0]) {
+          onMoveCardDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchend', onEndCardDrag);
+
+      miniCardEl.addEventListener('dblclick', (e) => {
+        const header = e.target.closest('#combat-mini-drag-header');
+        if (!header) return;
+        if (e.target.closest('#combat-mini-open-skills-btn') || e.target.closest('#combat-mini-close-btn')) return;
+        e.stopPropagation();
+        positionMiniCardUnderBar();
       });
     }
 
     document.addEventListener('click', (e) => {
-      const panel = document.getElementById('combat-dropdown-panel');
+      const dropPanel = document.getElementById('combat-dropdown-panel');
       const entry = document.getElementById('combat-entry-btn');
-      if (panel && panel.style.display === 'flex') {
-        if (!panel.contains(e.target) && (!entry || !entry.contains(e.target))) {
-          panel.style.display = 'none';
+      if (dropPanel && dropPanel.style.display === 'flex') {
+        if (!dropPanel.contains(e.target) && (!entry || !entry.contains(e.target))) {
+          hideCombatDropdownPanel();
         }
       }
     });
-
-    const charClose = document.getElementById('combat-char-modal-close-btn');
-    const charCancel = document.getElementById('combat-char-modal-cancel-btn');
-    const charSave = document.getElementById('combat-char-modal-save-btn');
-    if (charClose) charClose.addEventListener('click', closeCombatCharacterModal);
-    if (charCancel) charCancel.addEventListener('click', closeCombatCharacterModal);
-    if (charSave) charSave.addEventListener('click', saveCombatCharacterModal);
-
-    const editClose = document.getElementById('combat-edit-close-btn');
-    const editCancel = document.getElementById('combat-edit-cancel-btn');
-    const editSave = document.getElementById('combat-edit-save-btn');
-    if (editClose) editClose.addEventListener('click', closeCombatEditModal);
-    if (editCancel) editCancel.addEventListener('click', closeCombatEditModal);
-    if (editSave) editSave.addEventListener('click', saveCombatEditModal);
-
-    const rulesClose = document.getElementById('combat-rules-close-btn');
-    const rulesReset = document.getElementById('combat-rules-reset-btn');
-    const rulesSave = document.getElementById('combat-rules-save-btn');
-    if (rulesClose) rulesClose.addEventListener('click', closeCombatRulesModal);
-    if (rulesReset) rulesReset.addEventListener('click', resetCombatRules);
-    if (rulesSave) rulesSave.addEventListener('click', saveCombatRules);
-
-    const addConfirmBtn = document.getElementById('combat-add-confirm-btn');
-    if (addConfirmBtn) {
-      addConfirmBtn.addEventListener('click', () => {
-        const nameInput = document.getElementById('combat-add-name');
-        const dexInput = document.getElementById('combat-add-dex');
-        const hpInput = document.getElementById('combat-add-hp');
-        const mpInput = document.getElementById('combat-add-mp');
-        const promptInput = document.getElementById('combat-add-prompt');
-
-        const name = nameInput ? nameInput.value.trim() : '';
-        if (!name) return;
-
-        const dex = dexInput ? parseInt(dexInput.value, 10) || 50 : 50;
-        const hp = hpInput ? parseInt(hpInput.value, 10) || 10 : 10;
-        const mp = mpInput ? parseInt(mpInput.value, 10) || 10 : 10;
-        const prompt = promptInput ? promptInput.value.trim() : '';
-
-        currentEditingCombatants.push({
-          id: 'enemy_' + Date.now(),
-          name,
-          dex,
-          str: 50, con: 50, pow: 50, siz: 50, edu: 50, app: 50, int: 50, luk: 50,
-          hp,
-          maxHp: hp,
-          mp,
-          maxMp: mp,
-          san: 50,
-          maxSan: 50,
-          armor: 0,
-          prompt,
-          customSkills: [],
-          avatar: '',
-          isUser: false,
-          isEnemy: true
-        });
-
-        if (nameInput) nameInput.value = '';
-        if (promptInput) promptInput.value = '';
-        renderEditingCombatantsList();
-      });
-    }
-
-    const memberSelect = document.getElementById('combat-add-from-members');
-    if (memberSelect) {
-      memberSelect.addEventListener('change', () => {
-        const memId = memberSelect.value;
-        if (!memId) return;
-        const activeChatId = global.state?.activeChatId;
-        const currentChat = global.state?.chats?.[activeChatId];
-        if (!currentChat || !Array.isArray(currentChat.members)) return;
-        const mem = currentChat.members.find(m => m.id === memId);
-        if (mem) {
-          const stats = getCharacterStatsForCombat(currentChat, mem.id, mem.groupNickname || mem.originalName);
-          const nameInput = document.getElementById('combat-add-name');
-          const dexInput = document.getElementById('combat-add-dex');
-          const hpInput = document.getElementById('combat-add-hp');
-          const mpInput = document.getElementById('combat-add-mp');
-          if (nameInput) nameInput.value = mem.groupNickname || mem.originalName;
-          if (dexInput) dexInput.value = stats.dex;
-          if (hpInput) hpInput.value = stats.hp;
-          if (mpInput) mpInput.value = stats.mp;
-        }
-      });
-    }
   }
 
   if (document.readyState === 'loading') {
@@ -1297,22 +1905,37 @@ ${combatState.rulebook || DEFAULT_COMBAT_RULES_TEXT}
     getCombatState,
     enterCombat,
     exitCombat,
+    triggerCombatConfirmation,
+    triggerCombatExitConfirmation,
     updateCombatUI,
     renderCombatCharacterBar,
     syncCombatantStatsFromCoc,
     getCombatSystemPrompt,
     getCombatPromptBlock,
+    handleDynamicCombatantsFromAi,
     analyzeCombatantsWithAI,
-    openCombatCharacterModal
+    openCombatCharacterMiniCard,
+    closeCombatCharacterMiniCard,
+    openCombatEditModal,
+    closeCombatEditModal,
+    toggleCombatDropdownPanel,
+    hideCombatDropdownPanel
   };
 
   global.getCombatState = getCombatState;
   global.enterCombat = enterCombat;
   global.exitCombat = exitCombat;
+  global.triggerCombatConfirmation = triggerCombatConfirmation;
+  global.triggerCombatExitConfirmation = triggerCombatExitConfirmation;
   global.updateCombatUI = updateCombatUI;
   global.renderCombatCharacterBar = renderCombatCharacterBar;
   global.syncCombatantStatsFromCoc = syncCombatantStatsFromCoc;
   global.getCombatSystemPrompt = getCombatSystemPrompt;
   global.getCombatPromptBlock = getCombatPromptBlock;
+  global.handleDynamicCombatantsFromAi = handleDynamicCombatantsFromAi;
+  global.openCombatCharacterMiniCard = openCombatCharacterMiniCard;
+  global.closeCombatCharacterMiniCard = closeCombatCharacterMiniCard;
+  global.toggleCombatDropdownPanel = toggleCombatDropdownPanel;
+  global.hideCombatDropdownPanel = hideCombatDropdownPanel;
 
 })(window);

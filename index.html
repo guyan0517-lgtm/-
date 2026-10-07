@@ -3025,7 +3025,7 @@
             </div>
 
             <div class="header-actions">
-              <!-- 心声按钮 -->
+              <!-- 心声按钮 (仅单聊显示，群聊隐藏，沿用选中特别关心矢量图与主色调) -->
               <span
                 class="action-btn"
                 id="char-heart-btn"
@@ -3034,38 +3034,18 @@
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="#ff4d6d"
-                  stroke="#ffc3d0"
-                  stroke-width="1.5"
-                >
-                  <path
-                    d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                  />
-                </svg>
-              </span>
-              <!-- 好感度按钮 -->
-              <span
-                class="action-btn"
-                id="chat-affection-top-btn"
-                title="好感度"
-                style="cursor: pointer;"
-                onclick="if(typeof openChatAffectionModal==='function')openChatAffectionModal();"
-              >
-                <svg
                   width="22"
                   height="22"
                   viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  stroke="currentColor"
+                  fill="var(--accent-color)"
+                  stroke="var(--accent-color)"
                   stroke-width="2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                  <path
+                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                  ></path>
                 </svg>
               </span>
               <!-- 地图按钮 -->
@@ -3119,12 +3099,22 @@
           <button type="button" id="combat-rules-btn" class="moe-btn-small combat-dropdown-item">规则</button>
         </div>
 
-        <!-- 顶部仿博德之门式胶囊人物栏 (悬浮圆角矩形，居中展示) -->
+        <!-- 顶部战斗行动栏 (含左侧拖拽卡头与收起展开按钮) -->
         <div id="combat-character-bar" class="combat-character-bar" style="display: none;">
+          <div id="combat-bar-drag-handle" class="combat-bar-drag-handle" title="拖拽移动，双击复位，点击收起">
+            <button type="button" id="combat-bar-collapse-btn" class="combat-bar-collapse-btn" title="收起/展开">
+              <svg id="combat-bar-arrow-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+          </div>
           <div id="combat-characters-list" class="combat-characters-track">
             <!-- 动态渲染圆形头像与双状态条 -->
           </div>
         </div>
+
+        <!-- 迷你精致角色只读卡片 (无任何背景遮罩/不全屏/紧凑展开) -->
+        <div id="combat-character-mini-card" class="combat-mini-card" style="display: none;"></div>
 
         <div
           id="chat-pet-container"
@@ -3238,6 +3228,28 @@
                 <line x1="4" y1="7" x2="20" y2="7"></line>
                 <line x1="4" y1="12" x2="20" y2="12"></line>
                 <line x1="4" y1="17" x2="20" y2="17"></line>
+              </svg>
+            </button>
+
+            <button
+              id="chat-affection-bottom-btn"
+              class="chat-action-icon-btn action-button"
+              title="好感度"
+              type="button"
+              onclick="if(typeof openChatAffectionModal==='function')openChatAffectionModal();"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
               </svg>
             </button>
 
@@ -11012,23 +11024,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <span style="font-size: 10px; color: var(--text-secondary);">点击展开大图 · 长按进入生图</span>
           </div>
 
+          <!-- 第1行：物品名称 -->
           <div class="form-group" style="margin-bottom: 10px;">
-            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">物品名称 *</label>
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">物品名称</label>
             <input type="text" id="inv-edit-name" class="moe-input" placeholder="输入物品名称" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
           </div>
 
+          <!-- 第2行：简介 -->
           <div class="form-group" style="margin-bottom: 10px;">
-            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">作用 / 简介</label>
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">简介</label>
             <input type="text" id="inv-edit-desc" class="moe-input" placeholder="简要说明此物品的用途" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
           </div>
 
-          <div class="form-group" id="inv-effect-group" style="margin-bottom: 10px;">
-            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">功能</label>
-            <input type="text" id="inv-edit-effect" class="moe-input" placeholder="例如 HP+1、HP-2、SAN+5、MP+3" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
-          </div>
-
+          <!-- 第3行：分类 -->
           <div class="form-group" style="margin-bottom: 10px;">
-            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">分类选择</label>
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">分类</label>
             <select id="inv-edit-cat" class="moe-input" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
               <option value="prop">道具</option>
               <option value="clue">线索</option>
@@ -11036,23 +11046,42 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             </select>
           </div>
 
-          <!-- 武器专属属性 -->
-          <div id="inv-weapon-fields" style="display: none; margin-bottom: 10px;">
-            <div class="form-group" style="margin-bottom: 8px;">
-              <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">伤害加值</label>
-              <input type="text" id="inv-edit-damage" class="moe-input" placeholder="例如 1D6+1" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
-            </div>
-            <div class="form-group" style="margin-bottom: 8px;">
-              <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">DB 数值</label>
-              <input type="text" id="inv-edit-db" class="moe-input" placeholder="例如 +1D4 或 0" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+          <!-- 第4行：根据分类动态展示 -->
+          <!-- 道具：功能 -->
+          <div class="form-group" id="inv-effect-group" style="margin-bottom: 10px;">
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">功能</label>
+            <input type="text" id="inv-edit-effect" class="moe-input" placeholder="例如 HP+1、HP-2、SAN+5、MP+3" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+          </div>
+
+          <!-- 线索：文本 -->
+          <div id="inv-clue-fields" style="display: none; margin-bottom: 10px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">文本</label>
+              <textarea id="inv-edit-content" class="moe-input" rows="4" placeholder="日记、信件或纸片全文，支持 HTML 排版" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4;"></textarea>
             </div>
           </div>
 
-          <!-- 线索专属详细内容 -->
-          <div id="inv-clue-fields" style="display: none; margin-bottom: 10px;">
-            <div class="form-group">
-              <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">详细内容 (支持 HTML)</label>
-              <textarea id="inv-edit-content" class="moe-input" rows="4" placeholder="日记、信件或纸片全文，支持 HTML 排版" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4;"></textarea>
+          <!-- 武器：选项 -->
+          <div id="inv-weapon-type-group" style="display: none; margin-bottom: 10px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">选项</label>
+              <select id="inv-edit-weapon-type" class="moe-input" style="width: 100%; box-sizing: border-box; height: 34px; font-size: 13px;">
+                <option value="melee">近战武器</option>
+                <option value="firearm">枪械</option>
+                <option value="special">特殊</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 第5行：伤害加值（近战/特殊有DB双格，枪械无DB单格） -->
+          <div id="inv-weapon-damage-group" style="display: none; margin-bottom: 10px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label id="inv-weapon-damage-label" style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">伤害加值</label>
+              <div id="inv-weapon-damage-row" style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                <input type="text" id="inv-edit-damage" class="moe-input" placeholder="几D几，如1D6" style="flex: 1; min-width: 0; box-sizing: border-box; height: 34px; font-size: 13px;">
+                <span id="inv-weapon-damage-plus" style="font-weight: 700; color: var(--text-secondary); font-size: 13px; flex-shrink: 0;">+</span>
+                <input type="text" id="inv-edit-db" class="moe-input" placeholder="DB" style="flex: 1; min-width: 0; box-sizing: border-box; height: 34px; font-size: 13px;">
+              </div>
             </div>
           </div>
         </div>
@@ -11082,6 +11111,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         </div>
         <div class="modal-footer" style="padding: 8px 14px;">
           <button type="button" id="inv-gen-cancel-btn" class="moe-btn" style="width: 100%; height: 32px; font-size: 12px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 战斗角色立绘生图面板 -->
+    <div id="combat-char-gen-modal" class="modal">
+      <div class="modal-content" style="max-width: 320px; width: 90%;">
+        <div class="modal-header">
+          <span id="combat-gen-modal-title">角色立绘生图</span>
+        </div>
+        <div class="modal-body" style="padding: 14px;">
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">生图提示词</label>
+            <textarea id="combat-gen-prompt-input" class="moe-input" rows="3" placeholder="输入英文描述词..." style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4;"></textarea>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <button type="button" id="combat-ai-make-prompt-btn" class="moe-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">生成提示词</button>
+            <button type="button" id="combat-do-draw-btn" class="moe-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">开始生图</button>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 8px 14px;">
+          <button type="button" id="combat-gen-cancel-btn" class="moe-btn" style="width: 100%; height: 32px; font-size: 12px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">关闭</button>
         </div>
       </div>
     </div>
@@ -15041,34 +15092,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <!-- 战斗管理编辑弹窗 -->
     <div id="combat-edit-modal" class="modal" style="display: none;">
-      <div class="modal-content" style="max-width: 380px; width: 92%; max-height: 85vh; display: flex; flex-direction: column; padding: 16px; border-radius: 14px; background: var(--card-bg); border: 1px solid var(--border-color); box-sizing: border-box;">
+      <div class="modal-content" style="max-width: 420px; width: 92%; max-height: 88vh; display: flex; flex-direction: column; padding: 14px; border-radius: 14px; background: var(--card-bg); border: 1px solid var(--border-color); box-sizing: border-box;">
         <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
-          <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">战斗管理</span>
+          <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">战斗管理与编辑</span>
           <button type="button" class="modal-close" id="combat-edit-close-btn" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer;">&times;</button>
         </div>
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 12px;">
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 10px 0; display: flex; flex-direction: column; gap: 12px;">
           <div>
-            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">参战角色列表</div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">参战成员与行动顺序</div>
             <div id="combat-edit-combatants-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
           </div>
           <div style="border-top: 1px dashed var(--border-color); padding-top: 10px;">
             <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">新增参战角色</div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <select id="combat-add-from-members" class="moe-input" style="height: 30px; font-size: 12px; padding: 0 6px; display: none;"></select>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <select id="combat-add-from-members" class="moe-input" style="height: 28px; font-size: 11px; padding: 0 6px; display: none;"></select>
               <div style="display: flex; gap: 6px;">
-                <input type="text" id="combat-add-name" class="moe-input" placeholder="角色名称" style="flex: 1; height: 30px; font-size: 12px; padding: 0 8px;">
-                <input type="number" id="combat-add-dex" class="moe-input" placeholder="敏捷" value="50" style="width: 54px; height: 30px; font-size: 12px; padding: 0 4px; text-align: center;">
+                <input type="text" id="combat-add-name" class="moe-input" placeholder="角色名称" style="flex: 1; height: 28px; font-size: 11px; padding: 0 6px;">
+                <input type="number" id="combat-add-dex" class="moe-input" placeholder="敏捷" value="50" style="width: 50px; height: 28px; font-size: 11px; padding: 0 4px; text-align: center;">
               </div>
               <div style="display: flex; gap: 6px;">
-                <input type="number" id="combat-add-hp" class="moe-input" placeholder="生命" value="10" style="flex: 1; height: 30px; font-size: 12px; padding: 0 6px; text-align: center;">
-                <input type="number" id="combat-add-mp" class="moe-input" placeholder="魔法" value="10" style="flex: 1; height: 30px; font-size: 12px; padding: 0 6px; text-align: center;">
+                <input type="number" id="combat-add-hp" class="moe-input" placeholder="生命HP" value="10" style="flex: 1; height: 28px; font-size: 11px; padding: 0 4px; text-align: center;">
+                <input type="number" id="combat-add-mp" class="moe-input" placeholder="魔法MP" value="10" style="flex: 1; height: 28px; font-size: 11px; padding: 0 4px; text-align: center;">
+                <input type="number" id="combat-add-armor" class="moe-input" placeholder="护甲" value="0" style="width: 50px; height: 28px; font-size: 11px; padding: 0 4px; text-align: center;">
               </div>
-              <input type="text" id="combat-add-prompt" class="moe-input" placeholder="头像描述提示词" style="width: 100%; height: 30px; font-size: 12px; padding: 0 8px; box-sizing: border-box;">
-              <button type="button" id="combat-add-confirm-btn" class="moe-btn" style="height: 30px; font-size: 12px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">添加参战角色</button>
+              <input type="text" id="combat-add-prompt" class="moe-input" placeholder="立绘/头像生图提示词" style="width: 100%; height: 28px; font-size: 11px; padding: 0 6px; box-sizing: border-box;">
+              <button type="button" id="combat-add-confirm-btn" class="moe-btn" style="height: 28px; font-size: 11px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">添加参战角色</button>
             </div>
           </div>
         </div>
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
           <button type="button" class="cancel moe-btn" id="combat-edit-cancel-btn" style="padding: 4px 14px; font-size: 12px;">取消</button>
           <button type="button" class="save moe-btn" id="combat-edit-save-btn" style="padding: 4px 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none;">保存</button>
         </div>
@@ -15088,80 +15140,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
           <button type="button" class="cancel moe-btn" id="combat-rules-reset-btn" style="padding: 4px 12px; font-size: 12px;">恢复默认</button>
           <button type="button" class="save moe-btn" id="combat-rules-save-btn" style="padding: 4px 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none;">保存</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 战斗角色详情与技能面板弹窗 (小巧精致) -->
-    <div id="combat-character-modal" class="modal" style="display: none;">
-      <div class="modal-content" style="max-width: 290px; width: 88%; max-height: 85vh; display: flex; flex-direction: column; padding: 10px 12px; border-radius: 14px; background: var(--card-bg); border: 1px solid var(--border-color); box-sizing: border-box;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <div id="combat-modal-char-avatar" style="width: 24px; height: 24px; border-radius: 50%; overflow: hidden; background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0;"></div>
-            <span id="combat-modal-char-name" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">角色面板</span>
-          </div>
-          <button type="button" class="modal-close" id="combat-char-modal-close-btn" style="background: transparent; border: none; font-size: 16px; color: var(--text-secondary); cursor: pointer; padding: 0 2px; line-height: 1;">&times;</button>
-        </div>
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 8px 0; display: flex; flex-direction: column; gap: 8px;">
-          <div class="coc-section-label" style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">属性</div>
-          <div class="coc-stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">力量</label><input type="number" id="combat-char-str" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">敏捷</label><input type="number" id="combat-char-dex" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">体质</label><input type="number" id="combat-char-con" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">意志</label><input type="number" id="combat-char-pow" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">体型</label><input type="number" id="combat-char-siz" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">教育</label><input type="number" id="combat-char-edu" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">外貌</label><input type="number" id="combat-char-app" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">智力</label><input type="number" id="combat-char-int" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">幸运</label><input type="number" id="combat-char-luk" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
-          </div>
-
-          <div class="coc-section-label" style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">数值</div>
-          <div class="coc-values-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">
-            <div class="coc-value-item" style="background: var(--secondary-bg); padding: 4px 2px; border-radius: 6px; text-align: center;">
-              <div class="coc-value-label" style="font-size: 9px; color: var(--text-secondary);">HP</div>
-              <div class="coc-value-num" id="combat-char-hp-display" style="font-size: 11px; font-weight: 600; color: var(--text-primary);">10/10</div>
-            </div>
-            <div class="coc-value-item" style="background: var(--secondary-bg); padding: 4px 2px; border-radius: 6px; text-align: center;">
-              <div class="coc-value-label" style="font-size: 9px; color: var(--text-secondary);">MP</div>
-              <div class="coc-value-num" id="combat-char-mp-display" style="font-size: 11px; font-weight: 600; color: var(--text-primary);">10/10</div>
-            </div>
-            <div class="coc-value-item" style="background: var(--secondary-bg); padding: 4px 2px; border-radius: 6px; text-align: center;">
-              <div class="coc-value-label" style="font-size: 9px; color: var(--text-secondary);">SAN</div>
-              <div class="coc-value-num" id="combat-char-san-display" style="font-size: 11px; font-weight: 600; color: var(--text-primary);">50/99</div>
-            </div>
-            <div class="coc-value-item" style="background: var(--secondary-bg); padding: 4px 2px; border-radius: 6px; text-align: center;">
-              <div class="coc-value-label" style="font-size: 9px; color: var(--text-secondary);">DB</div>
-              <div class="coc-value-num" id="combat-char-db-display" style="font-size: 11px; font-weight: 600; color: var(--text-primary);">0</div>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 6px; align-items: center; background: var(--secondary-bg); padding: 4px 8px; border-radius: 6px;">
-            <label style="font-size: 10px; font-weight: 600; color: var(--text-primary); flex-shrink: 0;">护甲</label>
-            <input type="number" id="combat-char-armor-input" class="moe-input" placeholder="0" min="0" value="0" style="width: 50px; height: 22px; font-size: 10px; text-align: center; padding: 0 2px;">
-            <span style="font-size: 9px; color: var(--text-secondary);">大于0在血条后显示</span>
-          </div>
-
-          <div class="combat-skills-section" style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--card-bg);">
-            <div id="combat-custom-skills-toggle" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; cursor: pointer; user-select: none; background: var(--secondary-bg);">
-              <span style="font-size: 10px; font-weight: 600; color: var(--text-primary);">技能</span>
-              <svg id="combat-custom-skills-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); transition: transform 0.2s ease; transform: rotate(-90deg);">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </div>
-            <div id="combat-custom-skills-body" style="display: none; padding: 6px; flex-direction: column; gap: 4px;">
-              <div id="combat-custom-skills-list" style="max-height: 52px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-right: 2px;"></div>
-              <div style="display: flex; gap: 3px; margin-top: 2px;">
-                <input type="text" id="combat-new-skill-name" class="moe-input" placeholder="技能名" style="flex: 1; height: 22px; font-size: 10px; padding: 0 4px;">
-                <input type="text" id="combat-new-skill-desc" class="moe-input" placeholder="效果" style="flex: 1.2; height: 22px; font-size: 10px; padding: 0 4px;">
-                <button type="button" id="combat-add-skill-btn" class="moe-btn-small" style="padding: 0 6px; height: 22px; font-size: 10px; flex-shrink: 0; background: var(--accent-color); color: #fff; border: none; border-radius: 4px;">添加</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 6px; border-top: 1px solid var(--border-color); padding-top: 6px;">
-          <button type="button" class="cancel moe-btn-mini" id="combat-char-modal-cancel-btn" style="padding: 3px 10px; font-size: 11px; border-radius: 6px;">取消</button>
-          <button type="button" class="save moe-btn-mini" id="combat-char-modal-save-btn" style="padding: 3px 12px; font-size: 11px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">保存</button>
         </div>
       </div>
     </div>
@@ -19595,6 +19573,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         // 推入最后一轮
         if (currentTurn) contents.push(currentTurn);
+
+        // Gemini API 要求 contents 最后一轮必须是 user（不能是 model），否则会报错 400 或返回空回复
+        if (contents.length > 0 && contents[contents.length - 1].role === "model") {
+          contents.push({
+            role: "user",
+            parts: [{ text: "继续当前场景" }],
+          });
+        }
 
         // --- 3. 最后的兜底检查 ---
         // Gemini 要求 contents 不能为空。如果经过过滤后为空，必须补救。
@@ -28310,11 +28296,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           cleanupWaimaiTimers();
           if (typeof closeInventoryDrawer === "function") closeInventoryDrawer();
           if (typeof renderInventoryList === "function") renderInventoryList();
-          const chat = state.chats[chatId];
+          const chat = (state.chats && state.chats[chatId]) ||
+                       (state.chats && state.chats[String(chatId)]) ||
+                       (state.chats && state.chats[Number(chatId)]) ||
+                       (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
           if (!chat) return;
+          if (!state.chats) state.chats = {};
+          state.chats[chat.id] = chat;
+          state.chats[String(chat.id)] = chat;
+          state.chats[chatId] = chat;
+          if (!chat.history) chat.history = [];
+          if (!chat.settings) chat.settings = {};
 
           if (typeof updateCombatUI === "function") {
-            updateCombatUI(chatId);
+            updateCombatUI(chat.id);
           }
 
           exitSelectionMode();
@@ -28344,7 +28339,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const statusTextEl = statusContainer.querySelector(".status-text");
 
           window.activeGeneratingChats = window.activeGeneratingChats || {};
-          if (window.activeGeneratingChats[chatId]) {
+          const isThisChatGenerating = !!(window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId]);
+          if (isThisChatGenerating) {
             if (chat.isGroup) {
               chatHeaderTitle.textContent = displayName;
               chatHeaderTitle.classList.remove("typing-status");
@@ -28399,7 +28395,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           chatInputArea.style.visibility = "visible";
           lockContent.innerHTML = "";
 
-          if (!chat.isGroup && chat.relationship.status !== "friend") {
+          if (!chat.isGroup && chat.relationship && chat.relationship.status !== "friend") {
             lockOverlay.style.display = "flex";
             chatInputArea.style.visibility = "hidden";
 
@@ -29323,31 +29319,160 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             bubble.style.borderRadius = "12px";
 
             const isExecuted = !!msg.isExecuted;
-            const summary = msg.content || "遭遇战斗，是否进入战斗？";
+            const isCancelled = !!msg.isCancelled;
 
             bubble.innerHTML = `
-              <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px;">
-                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word; line-height: 1.4; flex: 1;">${summary}</div>
-                <button type="button" class="summary-preset-btn btn-combat-confirm-card" ${isExecuted ? 'disabled style="padding: 3px 10px; font-size: 11px; background: var(--border-color); color: var(--text-secondary); border: none; border-radius: 6px; cursor: default; flex-shrink: 0; white-space: nowrap;"' : 'style="padding: 3px 12px; font-size: 11px; background: var(--accent-color); color: #FFFFFF; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; flex-shrink: 0; white-space: nowrap;"'}>${isExecuted ? '已进入' : '进入战斗'}</button>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word; line-height: 1.4; flex: 1;">是否进入战斗？</div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="btn-combat-cancel" ${isExecuted || isCancelled ? 'disabled style="padding: 3px 8px; font-size: 11px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; cursor: default;"' : 'style="padding: 3px 10px; font-size: 11px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;"'}>${isCancelled ? '已取消' : '取消'}</button>
+                  <button type="button" class="summary-preset-btn btn-combat-confirm-card" ${isExecuted || isCancelled ? 'disabled style="padding: 3px 10px; font-size: 11px; background: var(--border-color); color: var(--text-secondary); border: none; border-radius: 6px; cursor: default; white-space: nowrap;"' : 'style="padding: 3px 12px; font-size: 11px; background: var(--accent-color); color: #FFFFFF; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; white-space: nowrap;"'}>${isExecuted ? (msg.statusText || '战斗中') : '进入战斗'}</button>
+                </div>
               </div>
             `;
 
-            if (!isExecuted) {
+            if (!isExecuted && !isCancelled) {
               const confirmBtn = bubble.querySelector('.btn-combat-confirm-card');
+              const cancelBtn = bubble.querySelector('.btn-combat-cancel');
+
               if (confirmBtn) {
                 confirmBtn.onclick = async (e) => {
                   e.stopPropagation();
-                  msg.isExecuted = true;
-                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
-                  if (dbInstance) await dbInstance.chats.put(chat);
-                  confirmBtn.textContent = '已进入';
+                  confirmBtn.textContent = '进入中…';
                   confirmBtn.disabled = true;
+                  if (cancelBtn) cancelBtn.disabled = true;
                   confirmBtn.style.background = 'var(--border-color)';
                   confirmBtn.style.color = 'var(--text-secondary)';
                   confirmBtn.style.cursor = 'default';
+
                   if (typeof window.enterCombat === 'function') {
                     await window.enterCombat(chat.id);
                   }
+
+                  msg.isExecuted = true;
+                  msg.statusText = '战斗中';
+                  confirmBtn.textContent = '战斗中';
+
+                  const noticeMsg = {
+                    id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                    role: "system",
+                    type: "module_switch_notice",
+                    content: "进入战斗模式",
+                    timestamp: Date.now()
+                  };
+                  chat.history = chat.history || [];
+                  chat.history.push(noticeMsg);
+
+                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
+                  if (typeof appendMessage === 'function') {
+                    appendMessage(noticeMsg, chat);
+                  }
+                };
+              }
+
+              if (cancelBtn) {
+                cancelBtn.onclick = async (e) => {
+                  e.stopPropagation();
+                  msg.isCancelled = true;
+                  cancelBtn.textContent = '已取消';
+                  cancelBtn.disabled = true;
+                  if (confirmBtn) confirmBtn.disabled = true;
+                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
+                };
+              }
+            }
+
+            wrapper.appendChild(bubble);
+            addLongPressListener(wrapper, () =>
+              showMessageActions(msg.timestamp),
+            );
+            wrapper.addEventListener("click", () => {
+              if (isSelectionMode) toggleMessageSelection(msg.timestamp);
+            });
+            return wrapper;
+          }
+
+          if (msg.type === "combat_exit_confirm_card") {
+            const wrapper = document.createElement("div");
+            wrapper.className = "message-wrapper system-pat";
+            wrapper.style.display = "flex";
+            wrapper.style.justifyContent = "center";
+            wrapper.style.margin = "6px auto";
+
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble system-bubble";
+            bubble.dataset.timestamp = msg.timestamp;
+            bubble.style.textAlign = "left";
+            bubble.style.display = "block";
+            bubble.style.width = "100%";
+            bubble.style.maxWidth = "100%";
+            bubble.style.boxSizing = "border-box";
+            bubble.style.padding = "10px 14px";
+            bubble.style.background = "var(--secondary-bg)";
+            bubble.style.border = "1px solid var(--border-color)";
+            bubble.style.borderRadius = "12px";
+
+            const isExecuted = !!msg.isExecuted;
+            const isCancelled = !!msg.isCancelled;
+
+            bubble.innerHTML = `
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word; line-height: 1.4; flex: 1;">是否退出战斗？</div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="btn-combat-cancel" ${isExecuted || isCancelled ? 'disabled style="padding: 3px 8px; font-size: 11px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; cursor: default;"' : 'style="padding: 3px 10px; font-size: 11px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;"'}>${isCancelled ? '已取消' : '取消'}</button>
+                  <button type="button" class="summary-preset-btn btn-combat-exit-card" ${isExecuted || isCancelled ? 'disabled style="padding: 3px 10px; font-size: 11px; background: var(--border-color); color: var(--text-secondary); border: none; border-radius: 6px; cursor: default; white-space: nowrap;"' : 'style="padding: 3px 12px; font-size: 11px; background: var(--accent-color); color: #FFFFFF; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; white-space: nowrap;"'}>${isExecuted ? '已退出' : '退出战斗'}</button>
+                </div>
+              </div>
+            `;
+
+            if (!isExecuted && !isCancelled) {
+              const exitBtn = bubble.querySelector('.btn-combat-exit-card');
+              const cancelBtn = bubble.querySelector('.btn-combat-cancel');
+
+              if (exitBtn) {
+                exitBtn.onclick = async (e) => {
+                  e.stopPropagation();
+                  msg.isExecuted = true;
+                  exitBtn.textContent = '已退出';
+                  exitBtn.disabled = true;
+                  if (cancelBtn) cancelBtn.disabled = true;
+                  exitBtn.style.background = 'var(--border-color)';
+                  exitBtn.style.color = 'var(--text-secondary)';
+                  exitBtn.style.cursor = 'default';
+
+                  const noticeMsg = {
+                    id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                    role: "system",
+                    type: "module_switch_notice",
+                    content: "已退出战斗模式",
+                    timestamp: Date.now()
+                  };
+                  chat.history = chat.history || [];
+                  chat.history.push(noticeMsg);
+
+                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
+                  if (typeof appendMessage === 'function') {
+                    appendMessage(noticeMsg, chat);
+                  }
+
+                  if (typeof window.exitCombat === 'function') {
+                    await window.exitCombat(chat.id);
+                  }
+                };
+              }
+
+              if (cancelBtn) {
+                cancelBtn.onclick = async (e) => {
+                  e.stopPropagation();
+                  msg.isCancelled = true;
+                  cancelBtn.textContent = '已取消';
+                  cancelBtn.disabled = true;
+                  if (exitBtn) exitBtn.disabled = true;
+                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
                 };
               }
             }
@@ -30967,19 +31092,38 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             window.chatDrafts = window.chatDrafts || {};
             window.chatDrafts[state.activeChatId] = oldInput.value;
           }
-          let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
+          let chat = (state.chats && state.chats[chatId]) ||
+                     (state.chats && state.chats[String(chatId)]) ||
+                     (state.chats && state.chats[Number(chatId)]) ||
+                     (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
           if (typeof db !== "undefined" && db.chats) {
             try {
-              const dbChat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              let dbChat = null;
+              try { dbChat = await db.chats.get(chatId); } catch (e) {}
+              if (!dbChat && typeof chatId === "string" && !isNaN(Number(chatId)) && chatId.trim() !== "") {
+                try { dbChat = await db.chats.get(Number(chatId)); } catch (e) {}
+              }
+              if (!dbChat) {
+                try { dbChat = await db.chats.get(String(chatId)); } catch (e) {}
+              }
+              if (!dbChat && chat && chat.id !== undefined) {
+                try { dbChat = await db.chats.get(chat.id); } catch (e) {}
+              }
               if (dbChat) {
                 if (!state.chats) state.chats = {};
                 state.chats[dbChat.id] = dbChat;
+                state.chats[String(dbChat.id)] = dbChat;
+                state.chats[chatId] = dbChat;
                 chat = dbChat;
               }
             } catch (e) {}
           }
           if (!chat) return; // 安全检查
           state.activeChatId = chat.id;
+          if (!state.chats) state.chats = {};
+          state.chats[chat.id] = chat;
+          state.chats[String(chat.id)] = chat;
+          state.chats[chatId] = chat;
 
           // 将未读数清零
           if (chat.unreadCount > 0) {
@@ -31003,6 +31147,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const heartBtn = document.getElementById("char-heart-btn");
           if (heartBtn) {
             heartBtn.style.display = chat.isGroup ? "none" : "inline-flex";
+          }
+
+          // 【战斗入口按钮与顶部栏】单聊隐藏，群聊显示
+          const combatEntryBtn = document.getElementById("combat-entry-btn");
+          if (combatEntryBtn) {
+            combatEntryBtn.style.display = chat.isGroup ? "inline-flex" : "none";
+          }
+          if (!chat.isGroup) {
+            const charBar = document.getElementById("combat-character-bar");
+            if (charBar) charBar.style.display = "none";
+            const dropPanel = document.getElementById("combat-dropdown-panel");
+            if (dropPanel) dropPanel.style.display = "none";
+            const miniCard = document.getElementById("combat-character-mini-card");
+            if (miniCard) miniCard.style.display = "none";
+          } else {
+            if (typeof window.updateCombatUI === "function") {
+              window.updateCombatUI(chat.id);
+            }
           }
 
           if (
@@ -34508,18 +34670,37 @@ ${recentHistoryText}
         async function triggerAiResponse(targetChatId) {
           const chatId = (typeof targetChatId === "string" || typeof targetChatId === "number") ? targetChatId : state.activeChatId;
           if (!chatId && chatId !== 0) return;
-          let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
-          if (!chat && typeof db !== "undefined" && db.chats) {
+          let chat = (state.chats && state.chats[chatId]) ||
+                     (state.chats && state.chats[String(chatId)]) ||
+                     (state.chats && state.chats[Number(chatId)]) ||
+                     (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
+          if (typeof db !== "undefined" && db.chats) {
             try {
-              const dbChat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              let dbChat = null;
+              try { dbChat = await db.chats.get(chatId); } catch (e) {}
+              if (!dbChat && typeof chatId === "string" && !isNaN(Number(chatId)) && chatId.trim() !== "") {
+                try { dbChat = await db.chats.get(Number(chatId)); } catch (e) {}
+              }
+              if (!dbChat) {
+                try { dbChat = await db.chats.get(String(chatId)); } catch (e) {}
+              }
+              if (!dbChat && chat && chat.id !== undefined) {
+                try { dbChat = await db.chats.get(chat.id); } catch (e) {}
+              }
               if (dbChat) {
                 if (!state.chats) state.chats = {};
                 state.chats[dbChat.id] = dbChat;
+                state.chats[String(dbChat.id)] = dbChat;
+                state.chats[chatId] = dbChat;
                 chat = dbChat;
               }
             } catch (e) {}
           }
           if (!chat) return;
+          if (!state.chats) state.chats = {};
+          state.chats[chat.id] = chat;
+          state.chats[String(chat.id)] = chat;
+          state.chats[chatId] = chat;
 
           // 骰子角色的消息由本地规则生成，不调用 AI 接口
           if (!chat.isGroup && chat.roleType === "dice") {
@@ -34527,12 +34708,18 @@ ${recentHistoryText}
           }
 
           window.activeGeneratingChats = window.activeGeneratingChats || {};
+          if (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId]) {
+            console.warn("当前聊天正在生成回复中，忽略重复触发");
+            return;
+          }
+          window.activeGeneratingChats[chat.id] = true;
+          window.activeGeneratingChats[String(chat.id)] = true;
           window.activeGeneratingChats[chatId] = true;
 
           const initialHeaderTitle = document.getElementById("chat-header-title");
           const initialTypingInd = document.getElementById("typing-indicator");
           const chatScreenEl = document.getElementById("chat-interface-screen");
-          if (state.activeChatId === chatId && chatScreenEl && chatScreenEl.classList.contains("active")) {
+          if (String(state.activeChatId) === String(chat.id) && chatScreenEl && chatScreenEl.classList.contains("active")) {
             if (chat.isGroup) {
               if (initialTypingInd) {
                 initialTypingInd.textContent = "群成员正在回复中...";
@@ -35768,9 +35955,9 @@ ${fillableSpec || '- 无需填写额外字段'}
             const dicePromptBlock = `
 # 跑团掷骰与属性修改指令
 在群聊或私聊中，守密人、NPC或角色可以直接发送标准的跑团掷骰或面板修改指令，系统与骰娘会自动识别并执行：
-1. 属性与技能修改：发送 .st 目标角色名 属性名 数值 或 .st 属性名 数值，例如 .st 力量 60、.st 敏捷 70、.st hp-2、.st san-5、.st mp+3、.st 克苏鲁神话 10 等，系统将自动更新角色面板数据。
-2. 掷骰与检定：支持几乎所有标准掷骰表达式，例如发送 .r 1d100、.r 1d6+2、.r 2d4 掷骰，发送 .ra 侦查、.ra 聆听 进行技能检定，发送 .sc 0/1d6 进行理智检定，发送 .en 侦查 进行成长检定，发送 .ti 查询疯狂症状，发送 .rh 侦查 进行暗骰等。
-3. 角色需要检定或调整状态时，可直接发送包含上述指令的文本消息，例如以单独一条文本气泡发送 .ra 侦查 或 .st hp-3。
+1. 属性与技能修改：发送 .st 目标角色全名 属性1 数值1 属性2 数值2 ... 或 .st 属性名 数值，例如 .st 全息投影甲 hp 13 敏捷 50、.st 力量 60 敏捷 70、.st hp-2 mp+3、.st san-5 等，支持同时修改多个属性，系统将自动更新角色面板与战斗数据。
+2. 掷骰与检定：支持几乎所有标准掷骰表达式，例如发送 .r 1d100、.r 1d6+2 掷骰，发送 .ra 角色全名 技能名 或 .ra 侦查、.ra 聆听 进行技能检定，发送 .sc 0/1d6 进行理智检定，发送 .en 侦查 进行成长检定，发送 .ti 查询疯狂症状，发送 .rh 侦查 进行暗骰等。
+3. 支持嵌入与批量指令：指令可直接嵌入在正常剧情叙事或台词文本的下方或任意位置，无需单独发气泡；支持在单次回复中同时包含多条指令（如多行 .st）。
 4. 遭遇战斗：当剧情发生战斗或遭遇敌对生物时，在回复末尾附带指令代码 {"type": "suggest_combat", "summary": "遭遇强敌，是否进入战斗？"}，系统将生成确认卡片，玩家确认后由系统专属裁判AI分析排布先攻并开启战斗面板。
 `;
 
@@ -35954,6 +36141,7 @@ ${fillableSpec || '- 无需填写额外字段'}
 			5.  **角色扮演**: 严格遵守下方“群成员列表及人设”中的每一个角色的设定。
 			# 【群成员列表及COC角色档案】
 			${membersList}
+			${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
 			6.  **禁止出戏**: 绝不能透露你是AI、模型，或提及“扮演”、“生成”等词语。
 			${isCognitionEnabled ? `7.  **情景感知**: 注意当前时间是 ${currentTime}。` : ""}
 			**标准输出格式示例:**
@@ -35969,6 +36157,7 @@ ${fillableSpec || '- 无需填写额外字段'}
 			-   **发送文本**: {"type": "text", "name": "角色名", "message": "文本内容"}
 			-   **发送语音**: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
 			-   **赠送或发放道具与线索**: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
+			-   **发起进入战斗确认卡片**: 当剧情推进到战斗爆发、遭遇敌人或怪兽，或用户提出进入战斗时，发送 {"type": "suggest_combat"} 或在叙述中写 [进入战斗系统]，系统会自动向聊天中发送“是否进入战斗？”确认卡片。玩家确认前不得擅自进入战斗轮。
 			${
         chat.loadModuleImages && chat.activeModuleId
           ? `-   **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n`
@@ -35992,7 +36181,6 @@ ${fillableSpec || '- 无需填写额外字段'}
 			${sharedContext}
 			${stickerContext}
 			${linkedMemoryContext}
-			${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
 			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度系统】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
 
 			# 【用户角色档案与COC人物面板】
@@ -36409,7 +36597,6 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
       }
 
 			### **【第四部分：当前上下文信息】**
-			${dicePromptBlock}
 			${inventoryPromptBlock}
 			# 【对话者（用户）角色档案与COC人物面板】
 			- **姓名**: ${chat.settings.myName || "我"}
@@ -36422,7 +36609,6 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 			${mapPromptBlock}
 			${thoughtChainPromptBlock}
 			${linkedMemoryContext}
-			${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
 			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度设定】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
 			- **可用表情包**:
 			${stickerContext || ""}
@@ -36791,6 +36977,15 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               messagesPayload.push({ role: "system", content: postsContext });
             }
 
+            // 检查末尾是否已有玩家输入，若最后一条是AI/系统/骰子回复，则自动补充“继续当前场景”指令
+            const lastPayloadMsg = messagesPayload.length > 0 ? messagesPayload[messagesPayload.length - 1] : null;
+            if (!lastPayloadMsg || lastPayloadMsg.role !== "user") {
+              messagesPayload.push({
+                role: "user",
+                content: "继续当前场景",
+              });
+            }
+
             let isGemini = proxyUrl === GEMINI_API_URL;
             let geminiConfig = toGeminiRequestData(
               model,
@@ -36799,6 +36994,12 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               messagesPayload,
               isGemini,
             );
+
+            const openAiMessages = [
+              { role: "system", content: systemPrompt },
+              ...messagesPayload,
+            ];
+
             const response = isGemini
               ? await fetch(geminiConfig.url, geminiConfig.data)
               : await fetch(`${proxyUrl}/v1/chat/completions`, {
@@ -36809,10 +37010,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                   },
                   body: JSON.stringify({
                     model: model,
-                    messages: [
-                      { role: "system", content: systemPrompt },
-                      ...messagesPayload,
-                    ],
+                    messages: openAiMessages,
                     temperature: parseFloat(state.apiConfig.temperature) || 0.8,
                     stream: false,
                   }),
@@ -36831,26 +37029,27 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               // 抛出一个包含了详细信息的错误，这样就不会在catch块里再次出错了
               throw new Error(errorMsg);
             }
-            if (!response.ok) {
-              let errorMsg = `API Error: ${response.status}`;
-              try {
-                // 尝试解析错误信息体为JSON
-                const errorData = await response.json();
-                // 安全地获取错误信息，如果结构不符合预期，就将整个错误对象转为字符串
-                errorMsg += ` - ${errorData?.error?.message || JSON.stringify(errorData)}`;
-              } catch (jsonError) {
-                // 如果连JSON都不是，就直接读取文本
-                errorMsg += ` - ${await response.text()}`;
-              }
-              // 抛出一个包含了详细信息的错误，这样就不会在catch块里再次出错了
-              throw new Error(errorMsg);
-            }
             const data = await response.json();
 
             // 添加对 data 结构的安全检查
-            const aiResponseContent = isGemini
-              ? data?.candidates?.[0]?.content?.parts?.[0]?.text
-              : data?.choices?.[0]?.message?.content;
+            let aiResponseContent = "";
+            if (isGemini) {
+              const candidate = data?.candidates?.[0];
+              if (candidate?.content?.parts && Array.isArray(candidate.content.parts)) {
+                aiResponseContent = candidate.content.parts.map(p => (typeof p.text === "string" ? p.text : "")).join("");
+              } else if (candidate?.content?.parts?.[0]?.text) {
+                aiResponseContent = candidate.content.parts[0].text;
+              }
+            } else {
+              const choice = data?.choices?.[0];
+              if (choice?.message?.content) {
+                if (typeof choice.message.content === "string") {
+                  aiResponseContent = choice.message.content;
+                } else if (Array.isArray(choice.message.content)) {
+                  aiResponseContent = choice.message.content.map(c => (typeof c === "string" ? c : (c?.text || JSON.stringify(c)))).join("");
+                }
+              }
+            }
 
             // 记录调试台日志
             if (typeof recordChatDebugLog === "function") {
@@ -36866,14 +37065,12 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             }
 
             // 检查修复后的结果是否真的拿到了内容
-            if (!aiResponseContent) {
+            if (!aiResponseContent || !aiResponseContent.trim()) {
               console.warn(
-                `API返回了空内容或格式不正确（可能因安全设置被拦截）。返回数据:`,
+                `API返回了空内容或格式不正确，尝试容错处理。返回数据:`,
                 data,
               );
-              throw new Error(
-                "API返回了空内容或格式不正确（可能因安全设置被拦截）。",
-              );
+              aiResponseContent = `[{"action": "text", "content": "..."}]`;
             }
 
             console.log(`AI '${chat.name}' 的原始回复:`, aiResponseContent);
@@ -37476,7 +37673,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                       id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
                       role: "system",
                       type: "combat_confirm_card",
-                      content: msgData.summary || "遭遇战斗，是否进入战斗？",
+                      content: "是否进入战斗？",
                       pendingData: {
                         combatants: msgData.combatants || []
                       },
@@ -40437,7 +40634,9 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                       }
                     } else {
                       let cleanMsgText = messageText;
-                      const combatMatch = cleanMsgText.match(/```(?:json)?\s*(\{[\s\S]*?"type"\s*:\s*"suggest_combat"[\s\S]*?\})\s*```/) || cleanMsgText.match(/\{[\s\S]*?"type"\s*:\s*"suggest_combat"[\s\S]*?\}/);
+                      // 过滤思维链内容，避免思维链中的字眼误触判定
+                      const textWithoutThoughts = cleanMsgText.replace(/<(?:think|thought)>[\s\S]*?<\/(?:think|thought)>/gi, '');
+                      const combatMatch = textWithoutThoughts.match(/```(?:json)?\s*(\{[\s\S]*?"type"\s*:\s*"suggest_combat"[\s\S]*?\})\s*```/) || textWithoutThoughts.match(/\{[\s\S]*?"type"\s*:\s*"suggest_combat"[\s\S]*?\}/);
                       if (combatMatch) {
                         try {
                           const combatObj = JSON.parse(combatMatch[1] || combatMatch[0]);
@@ -40446,7 +40645,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                             id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
                             role: "system",
                             type: "combat_confirm_card",
-                            content: combatObj.summary || "遭遇战斗，是否进入战斗？",
+                            content: "是否进入战斗？",
                             pendingData: {
                               combatants: combatObj.combatants || []
                             },
@@ -40458,14 +40657,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                           }
                         } catch (e) {}
                       } else {
-                        const tagMatch = cleanMsgText.match(/(?:\[|【)(?:遭遇战斗|进入战斗|开启战斗)(?:\]|】)/);
+                        const tagMatch = textWithoutThoughts.match(/(?:\[|【)进入战斗系统(?:\]|】)/);
                         if (tagMatch) {
                           cleanMsgText = cleanMsgText.replace(tagMatch[0], "").trim();
                           const cardMsg = {
                             id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
                             role: "system",
                             type: "combat_confirm_card",
-                            content: "遭遇战斗，是否进入战斗？",
+                            content: "是否进入战斗？",
                             pendingData: { combatants: [] },
                             timestamp: messageTimestamp++
                           };
@@ -40846,8 +41045,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 }
 
                 const isCurrentlyViewingThisChat =
-                  document.getElementById("chat-interface-screen").classList.contains("active") &&
-                  state.activeChatId === chatId;
+                  document.getElementById("chat-interface-screen")?.classList.contains("active") &&
+                  String(state.activeChatId) === String(chat.id);
 
                 if (!isCurrentlyViewingThisChat) {
                   // 如果用户不在当前聊天界面，就把这个聊天的未读数 +1
@@ -40891,6 +41090,12 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     name: chat.name || "骰娘",
                     avatar: chat.settings?.aiAvatar || defaultAvatar,
                   };
+                } else {
+                  diceRole = {
+                    id: "system_dice",
+                    name: "骰娘",
+                    avatar: defaultAvatar,
+                  };
                 }
               } else if (Array.isArray(chat.members)) {
                 const dm = (chat.members || []).find(
@@ -40905,17 +41110,31 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     name: dm.groupNickname || dm.originalName || (src && src.name) || "骰娘",
                     avatar: dm.avatar || (src && src.settings?.aiAvatar) || defaultAvatar,
                   };
+                } else {
+                  diceRole = {
+                    id: "system_dice",
+                    name: "骰娘",
+                    avatar: defaultAvatar,
+                  };
                 }
               }
 
               if (diceRole) {
                 for (const aiMsg of newAiMsgs) {
-                  if (aiMsg.sender === diceRole.name || aiMsg.senderName === diceRole.name) continue;
+                  if (aiMsg._diceProcessed) continue;
                   const rawContent = typeof aiMsg.content === "string" ? aiMsg.content : "";
                   if (!rawContent) continue;
 
-                  const aiDiceCmdPattern = /[.。](r|ra|rh|st|sc|hp|en|ti|li|coc5|coc|set)/i;
+                  // 动态参战与撤退解析
+                  if (typeof window.handleDynamicCombatantsFromAi === "function") {
+                    window.handleDynamicCombatantsFromAi(chat, rawContent);
+                  }
+
+                  if (aiMsg.sender === diceRole.name || aiMsg.senderName === diceRole.name) continue;
+
+                  const aiDiceCmdPattern = /[.。]\s*(?:r[ahd]?|rc|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw|w\b|nn|sn|ob|set)/i;
                   if (aiDiceCmdPattern.test(rawContent)) {
+                    aiMsg._diceProcessed = true;
                     let senderName = aiMsg.senderName || aiMsg.name || chat.name || "AI";
                     let senderId = aiMsg.senderId || (chat.isGroup ? (chat.members?.find(m => m.groupNickname === senderName || m.originalName === senderName)?.id) : chat.id);
                     let senderCocPanel = null;
@@ -40968,8 +41187,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                       chat.history.push(diceMsg);
                       await incrementMessageCount(chatId);
                       const isCurrentlyViewing =
-                        document.getElementById("chat-interface-screen").classList.contains("active") &&
-                        state.activeChatId === chatId;
+                        document.getElementById("chat-interface-screen")?.classList.contains("active") &&
+                        String(state.activeChatId) === String(chat.id);
                       if (isCurrentlyViewing) {
                         appendMessage(diceMsg, chat);
                       }
@@ -40980,6 +41199,11 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             }
 
             await db.chats.put(chat);
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
+              state.chats[chatId] = chat;
+            }
             checkAndTriggerSummary(chatId);
 
             // --- 续火花逻辑 ---
@@ -41015,38 +41239,52 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             }
 
             await db.chats.put(chat);
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
+              state.chats[chatId] = chat;
+            }
             videoCallState.isAwaitingResponse = false;
 
             if (
               document
                 .getElementById("chat-interface-screen")
-                .classList.contains("active") &&
-              state.activeChatId === chatId
+                ?.classList.contains("active") &&
+              String(state.activeChatId) === String(chat.id)
             ) {
-              renderChatInterface(chatId);
+              renderChatInterface(chat.id);
             }
           } finally {
             if (window.activeGeneratingChats) {
+              delete window.activeGeneratingChats[chat.id];
+              delete window.activeGeneratingChats[String(chat.id)];
               delete window.activeGeneratingChats[chatId];
+              delete window.activeGeneratingChats[String(chatId)];
+            }
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
+              state.chats[chatId] = chat;
             }
             // 在 finally 块中仅当当前处于该聊天窗口时统一更新提示与标题
             const chatScreenActive = document.getElementById("chat-interface-screen")?.classList.contains("active");
-            if (state.activeChatId === chatId && chatScreenActive) {
+            if (String(state.activeChatId) === String(chat.id) && chatScreenActive) {
               const curTypingInd = document.getElementById("typing-indicator");
               if (curTypingInd) {
                 curTypingInd.style.display = "none";
               }
               const curHeaderTitle = document.getElementById("chat-header-title");
-              if (curHeaderTitle && state.chats[chatId]) {
-                const finalDisplayName = (!state.chats[chatId].isGroup && state.chats[chatId].settings?.remarkName)
-                  ? state.chats[chatId].settings.remarkName
-                  : state.chats[chatId].name;
+              const targetChatObj = state.chats[chat.id] || state.chats[chatId] || chat;
+              if (curHeaderTitle && targetChatObj) {
+                const finalDisplayName = (!targetChatObj.isGroup && targetChatObj.settings?.remarkName)
+                  ? targetChatObj.settings.remarkName
+                  : targetChatObj.name;
                 curHeaderTitle.textContent = finalDisplayName;
                 curHeaderTitle.classList.remove("typing-status");
               }
               const statusContainer = document.getElementById("chat-header-status");
-              if (statusContainer) {
-                statusContainer.style.display = state.chats[chatId]?.isGroup ? "none" : "flex";
+              if (statusContainer && targetChatObj) {
+                statusContainer.style.display = targetChatObj.isGroup ? "none" : "flex";
               }
             }
           }
@@ -70655,6 +70893,29 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
               const chat = state.chats[state.activeChatId];
 
+              // 用户输入进入战斗系统/退出战斗系统指令触发确认卡片
+              if (chat && chat.isGroup) {
+                if (content.includes("进入战斗系统")) {
+                  const cState = (typeof window.getCombatState === 'function') ? window.getCombatState(chat) : chat.combatState;
+                  if (!cState || !cState.active) {
+                    if (typeof window.triggerCombatConfirmation === 'function') {
+                      chatInput.value = "";
+                      await window.triggerCombatConfirmation(chat.id);
+                      return;
+                    }
+                  }
+                } else if (content.includes("退出战斗系统")) {
+                  const cState = (typeof window.getCombatState === 'function') ? window.getCombatState(chat) : chat.combatState;
+                  if (cState && cState.active) {
+                    if (typeof window.triggerCombatExitConfirmation === 'function') {
+                      chatInput.value = "";
+                      await window.triggerCombatExitConfirmation(chat.id);
+                      return;
+                    }
+                  }
+                }
+              }
+
               // 挂起换章触发逻辑（半自动模式）
               if (chat && (content.includes("继续") || content.includes("进入下一章") || content.includes("睡觉") || content.includes("到第二天") || content.includes("下一站") || content.includes("推进"))) {
                 if (chat.pendingChapterManage) {
@@ -70806,6 +71067,12 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     name: chat.name,
                     avatar: chat.settings?.aiAvatar || defaultAvatar,
                   };
+                } else {
+                  diceRole = {
+                    id: "system_dice",
+                    name: "骰娘",
+                    avatar: defaultAvatar,
+                  };
                 }
               } else if (Array.isArray(chat.members)) {
                 const dm = (chat.members || []).find(
@@ -70814,15 +71081,22 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     (state.chats[m.id] && state.chats[m.id].roleType === "dice"),
                 );
                 if (dm) {
+                  const src = state.chats[dm.id];
                   diceRole = {
                     id: dm.id,
-                    name: dm.groupNickname || dm.originalName || "骰娘",
-                    avatar: dm.avatar || defaultAvatar,
+                    name: dm.groupNickname || dm.originalName || (src && src.name) || "骰娘",
+                    avatar: dm.avatar || (src && src.settings?.aiAvatar) || defaultAvatar,
+                  };
+                } else {
+                  diceRole = {
+                    id: "system_dice",
+                    name: "骰娘",
+                    avatar: defaultAvatar,
                   };
                 }
               }
 
-              const diceCmdPattern = /[.。](r|ra|rh|st|sc|hp|en|ti|li|coc5|coc|set)/i;
+              const diceCmdPattern = /[.。]\s*(?:r[ahd]?|rc|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw|w\b|nn|sn|ob|set)/i;
               if (
                 diceRole &&
                 diceCmdPattern.test(content) &&
@@ -70831,7 +71105,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 const userSenderInfo = {
                   id: "user",
                   name: chat.settings?.myNickname || chat.settings?.myName || "我",
-                  cocPanel: chat.settings?.myCocPanel,
+                  cocPanel: chat.settings?.myCocPanel || (window.myCocPanel && typeof window.myCocPanel.getData === "function" ? window.myCocPanel.getData() : null) || (state.chats && Object.values(state.chats).find(c => c.settings?.myCocPanel)?.settings?.myCocPanel),
                   onSaveCoc: (newCoc) => {
                     if (!chat.settings) chat.settings = {};
                     chat.settings.myCocPanel = newCoc;
