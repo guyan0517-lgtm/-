@@ -3048,6 +3048,28 @@
                   ></path>
                 </svg>
               </span>
+              <!-- 群聊好感度按钮 (在右上角地图左边) -->
+              <span
+                class="action-btn"
+                id="group-affection-btn"
+                title="好感度"
+                style="cursor: pointer; display: none;"
+                onclick="if(typeof openChatAffectionModal==='function')openChatAffectionModal();"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                </svg>
+              </span>
               <!-- 地图按钮 -->
               <span class="action-btn" id="listen-together-btn" title="地图" style="cursor: pointer;">
                 <svg
@@ -30676,6 +30698,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (e) {}
             }
 
+            // 过滤 <n> 与 <a> 标签及其包裹的内容，渲染为隐藏样式（不显示内容）
+            rawContentText = rawContentText
+              .replace(/<n\b[\s\S]*?<\/n>/gi, "")
+              .replace(/<n[\s\S]*?>/gi, "")
+              .replace(/<a\b[\s\S]*?<\/a>/gi, "")
+              .replace(/<a[\s\S]*?>/gi, "");
+
             // 剥离 Markdown 代码块包裹（如 ```html ... ```）
             if (/```(?:html)?[\s\S]*?```/i.test(rawContentText)) {
               const codeBlockMatch = rawContentText.match(/```(?:html)?\s*([\s\S]*?)\s*```/i);
@@ -31147,6 +31176,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const heartBtn = document.getElementById("char-heart-btn");
           if (heartBtn) {
             heartBtn.style.display = chat.isGroup ? "none" : "inline-flex";
+          }
+          // 【群聊好感度按钮】群聊显示，单聊隐藏
+          const groupAffectionBtn = document.getElementById("group-affection-btn");
+          if (groupAffectionBtn) {
+            groupAffectionBtn.style.display = chat.isGroup ? "inline-flex" : "none";
           }
 
           // 【战斗入口按钮与顶部栏】单聊隐藏，群聊显示
@@ -69912,6 +69946,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               state.activeChatId = null;
               // 【心声功能】返回列表时，隐藏心形按钮
               document.getElementById("char-heart-btn").style.display = "none";
+              const groupAffectionBtn = document.getElementById("group-affection-btn");
+              if (groupAffectionBtn) groupAffectionBtn.style.display = "none";
               showScreen("chat-list-screen");
             });
 

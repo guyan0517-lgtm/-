@@ -33679,3 +33679,7 @@ select,
   color: var(--accent-color, #ff758c);
   font-weight: 600;
 }
+
+n, a:empty {
+  display: none !important;
+}
