@@ -5787,33 +5787,53 @@ ${chap.content}
           const textList = [];
           for (let i = 0; i < this.mergeFileList.length; i++) {
             const item = this.mergeFileList[i];
+            if (statusBox) statusBox.textContent = `正在提取第 ${i + 1} / ${this.mergeFileList.length} 个文件内容...`;
             const text = await this.extractTextFromSingleFile(item.file);
-            textList.push(text.trim());
+            if (text && text.trim()) {
+              textList.push(`【${item.name}】\n\n${text.trim()}`);
+            }
           }
-          const combined = textList.filter(Boolean).join('\n\n');
+          const combined = textList.join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n');
           downloadBlob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
         } else if (targetFormat === 'pdf') {
-          if (global.PDFLib) {
-            const mergedPdfDoc = await global.PDFLib.PDFDocument.create();
+          const PDFLibInstance = (typeof window !== 'undefined' && window.PDFLib) || global.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
+          if (PDFLibInstance) {
+            const mergedPdfDoc = await PDFLibInstance.PDFDocument.create();
             for (let i = 0; i < this.mergeFileList.length; i++) {
               const item = this.mergeFileList[i];
               const ext = (item.ext || '').toLowerCase();
+              if (statusBox) statusBox.textContent = `正在合并第 ${i + 1} / ${this.mergeFileList.length} 个文件 (${item.name})...`;
               if (ext === 'pdf') {
+                let directCopySuccess = false;
                 try {
                   const ab = await item.file.arrayBuffer();
-                  const donorPdf = await global.PDFLib.PDFDocument.load(ab, { ignoreEncryption: true });
+                  const donorPdf = await PDFLibInstance.PDFDocument.load(ab, {
+                    ignoreEncryption: true,
+                    updateMetadata: false,
+                    throwOnInvalidObject: false
+                  });
                   const pageIndices = donorPdf.getPageIndices();
-                  const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
-                  copiedPages.forEach(p => mergedPdfDoc.addPage(p));
-                } catch (pdfLoadErr) {
-                  console.warn('[模组] PDFLib复制页面失败，使用高保真PDF.js渲染页面:', pdfLoadErr);
-                  await this.embedPdfPagesWithPdfJs(mergedPdfDoc, item.file);
+                  if (pageIndices && pageIndices.length > 0) {
+                    const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
+                    for (const p of copiedPages) {
+                      mergedPdfDoc.addPage(p);
+                    }
+                    directCopySuccess = true;
+                  }
+                } catch (pdfLibErr) {
+                  console.warn('[模组] PDFLib 直接合并遇到格式差异，切换高保真页面全渲染:', pdfLibErr);
+                  directCopySuccess = false;
+                }
+
+                if (!directCopySuccess) {
+                  await this.embedPdfPagesWithPdfJs(mergedPdfDoc, item.file, statusBox, i + 1, this.mergeFileList.length);
                 }
               } else {
                 const text = await this.extractTextFromSingleFile(item.file);
-                await this.embedTextPagesToPdf(mergedPdfDoc, text || item.name);
+                await this.embedTextPagesToPdf(mergedPdfDoc, text || item.name, item.name);
               }
             }
+
             if (mergedPdfDoc.getPageCount() === 0) {
               mergedPdfDoc.addPage([595.28, 841.89]);
             }
@@ -5824,39 +5844,50 @@ ${chap.content}
             for (let i = 0; i < this.mergeFileList.length; i++) {
               const item = this.mergeFileList[i];
               const text = await this.extractTextFromSingleFile(item.file);
-              textList.push(text.trim());
+              if (text && text.trim()) textList.push(text.trim());
             }
-            const combined = textList.filter(Boolean).join('\n\n');
+            const combined = textList.join('\n\n');
             downloadBlob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
+            downloadFileName = `${baseName}.txt`;
           }
         } else if (targetFormat === 'docx') {
-          const docxLib = global.docx || (typeof window !== 'undefined' && window.docx);
+          const docxLib = (typeof window !== 'undefined' && window.docx) || global.docx || (typeof docx !== 'undefined' ? docx : null);
           if (docxLib && typeof docxLib.Document === 'function') {
             const allParagraphs = [];
             for (let i = 0; i < this.mergeFileList.length; i++) {
               const item = this.mergeFileList[i];
+              if (statusBox) statusBox.textContent = `正在合并第 ${i + 1} / ${this.mergeFileList.length} 个文档 (${item.name})...`;
               const text = await this.extractTextFromSingleFile(item.file);
               const safeText = (text || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-              const lines = safeText.split('\n');
+              const lines = safeText.split(/\r?\n/);
+
+              allParagraphs.push(new docxLib.Paragraph({
+                children: [new docxLib.TextRun({ text: `【${item.name}】`, bold: true, size: 28 })],
+                spacing: { before: 200, after: 120 }
+              }));
+
               lines.forEach(line => {
-                const cleanLine = line.trim();
-                if (cleanLine) {
-                  allParagraphs.push(new docxLib.Paragraph({
-                    children: [new docxLib.TextRun({ text: cleanLine })]
-                  }));
-                }
+                const cleanLine = line.replace(/\r/g, '');
+                allParagraphs.push(new docxLib.Paragraph({
+                  children: [new docxLib.TextRun({ text: cleanLine, size: 22 })],
+                  spacing: { after: 60 }
+                }));
               });
+
               if (i < this.mergeFileList.length - 1) {
                 allParagraphs.push(new docxLib.Paragraph({
-                  children: [new docxLib.TextRun({ text: '' })]
+                  children: [new docxLib.TextRun({ text: '' })],
+                  pageBreakBefore: true
                 }));
               }
             }
+
             if (allParagraphs.length === 0) {
               allParagraphs.push(new docxLib.Paragraph({
                 children: [new docxLib.TextRun({ text: '模组合并文档' })]
               }));
             }
+
             const doc = new docxLib.Document({
               sections: [{
                 properties: {},
@@ -5869,9 +5900,9 @@ ${chap.content}
             for (let i = 0; i < this.mergeFileList.length; i++) {
               const item = this.mergeFileList[i];
               const text = await this.extractTextFromSingleFile(item.file);
-              textList.push(text.trim());
+              if (text && text.trim()) textList.push(text.trim());
             }
-            const combined = textList.filter(Boolean).join('\n\n');
+            const combined = textList.join('\n\n');
             downloadBlob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
           }
         }
@@ -5910,83 +5941,163 @@ ${chap.content}
       }
     },
 
-    async embedPdfPagesWithPdfJs(mergedPdfDoc, file) {
-      if (!global.pdfjsLib || !mergedPdfDoc) return;
+    async embedPdfPagesWithPdfJs(mergedPdfDoc, file, statusBox, fileIdx, totalFiles) {
+      const pdfjs = (typeof window !== 'undefined' && window.pdfjsLib) || global.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+      if (!pdfjs || !mergedPdfDoc) return;
       try {
         const ab = await file.arrayBuffer();
-        const pdf = await global.pdfjsLib.getDocument({ data: ab }).promise;
+        const loadingTask = pdfjs.getDocument({
+          data: new Uint8Array(ab),
+          cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+          cMapPacked: true,
+          standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
+        });
+        const pdf = await loadingTask.promise;
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          if (statusBox && fileIdx && totalFiles) {
+            statusBox.textContent = `正在渲染第 ${fileIdx} / ${totalFiles} 个文件页面 (${pageNum} / ${pdf.numPages})...`;
+          }
           const page = await pdf.getPage(pageNum);
           const viewport = page.getViewport({ scale: 2.0 });
           const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext('2d');
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+          const ctx = canvas.getContext('2d', { alpha: false });
+          if (ctx) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
           await page.render({ canvasContext: ctx, viewport }).promise;
-          const pngDataUrl = canvas.toDataURL('image/png');
-          const pngBase64 = pngDataUrl.split(',')[1];
-          const binaryStr = atob(pngBase64);
+
+          const jpgDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const jpgBase64 = jpgDataUrl.split(',')[1];
+          const binaryStr = atob(jpgBase64);
           const bytes = new Uint8Array(binaryStr.length);
           for (let b = 0; b < binaryStr.length; b++) {
             bytes[b] = binaryStr.charCodeAt(b);
           }
-          const pngImage = await mergedPdfDoc.embedPng(bytes);
-          const addedPage = mergedPdfDoc.addPage([viewport.width / 2.0, viewport.height / 2.0]);
-          addedPage.drawImage(pngImage, {
+
+          const embeddedJpg = await mergedPdfDoc.embedJpg(bytes);
+          const baseViewport = page.getViewport({ scale: 1.0 });
+          const addedPage = mergedPdfDoc.addPage([baseViewport.width, baseViewport.height]);
+          addedPage.drawImage(embeddedJpg, {
             x: 0,
             y: 0,
-            width: viewport.width / 2.0,
-            height: viewport.height / 2.0
+            width: baseViewport.width,
+            height: baseViewport.height
           });
         }
       } catch (renderErr) {
         console.warn('[模组] PDF.js 页面渲染降级:', renderErr);
         const text = await this.extractTextFromSingleFile(file);
-        await this.embedTextPagesToPdf(mergedPdfDoc, text || file.name);
+        await this.embedTextPagesToPdf(mergedPdfDoc, text || file.name, file.name);
       }
     },
 
-    async embedTextPagesToPdf(pdfDoc, text) {
+    async embedTextPagesToPdf(pdfDoc, text, docTitle) {
       if (!pdfDoc) return;
       const cleanText = (text || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-      const lines = cleanText.split('\n');
-      const linesPerPage = 42;
-      const pageChunks = [];
-      for (let i = 0; i < lines.length; i += linesPerPage) {
-        pageChunks.push(lines.slice(i, i + linesPerPage));
-      }
-      if (pageChunks.length === 0) pageChunks.push([' ']);
+      const lines = cleanText.split(/\r?\n/);
 
-      for (let p = 0; p < pageChunks.length; p++) {
-        const chunk = pageChunks[p];
-        const canvas = document.createElement('canvas');
-        canvas.width = 1240;
-        canvas.height = 1754;
-        const ctx = canvas.getContext('2d');
+      const canvasWidth = 1240;
+      const canvasHeight = 1754;
+      const marginX = 80;
+      const marginTop = 90;
+      const marginBottom = 90;
+      const contentWidth = canvasWidth - marginX * 2;
+      const maxContentHeight = canvasHeight - marginBottom;
+      const fontSize = 22;
+      const lineHeight = 34;
+
+      const pagesCanvasData = [];
+      let currentCanvas = document.createElement('canvas');
+      currentCanvas.width = canvasWidth;
+      currentCanvas.height = canvasHeight;
+      let currentCtx = currentCanvas.getContext('2d');
+
+      const initPageCanvas = (ctx) => {
         ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#1A1A1A';
-        ctx.font = '24px sans-serif';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.fillStyle = '#1e293b';
+        ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif`;
         ctx.textBaseline = 'top';
+      };
 
-        let yPos = 80;
-        chunk.forEach(l => {
-          const safeL = l.substring(0, 75);
-          ctx.fillText(safeL, 80, yPos);
-          yPos += 36;
-        });
+      initPageCanvas(currentCtx);
+      let currentY = marginTop;
 
-        const pngDataUrl = canvas.toDataURL('image/png');
-        const pngBase64 = pngDataUrl.split(',')[1];
-        const binaryStr = atob(pngBase64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let b = 0; b < binaryStr.length; b++) {
-          bytes[b] = binaryStr.charCodeAt(b);
+      const pushCurrentPage = () => {
+        pagesCanvasData.push(currentCanvas);
+        currentCanvas = document.createElement('canvas');
+        currentCanvas.width = canvasWidth;
+        currentCanvas.height = canvasHeight;
+        currentCtx = currentCanvas.getContext('2d');
+        initPageCanvas(currentCtx);
+        currentY = marginTop;
+      };
+
+      if (docTitle) {
+        currentCtx.font = `bold 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif`;
+        currentCtx.fillText(docTitle, marginX, currentY);
+        currentY += 48;
+        currentCtx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif`;
+      }
+
+      for (let i = 0; i < lines.length; i++) {
+        const rawLine = lines[i];
+        if (!rawLine.trim()) {
+          currentY += Math.floor(lineHeight * 0.7);
+          if (currentY + lineHeight > maxContentHeight) {
+            pushCurrentPage();
+          }
+          continue;
         }
 
-        const pngImage = await pdfDoc.embedPng(bytes);
-        const page = pdfDoc.addPage([595.28, 841.89]);
-        page.drawImage(pngImage, {
+        let currentLineText = '';
+        for (let c = 0; c < rawLine.length; c++) {
+          const char = rawLine[c];
+          const testLine = currentLineText + char;
+          const metrics = currentCtx.measureText(testLine);
+          if (metrics.width > contentWidth && currentLineText.length > 0) {
+            currentCtx.fillText(currentLineText, marginX, currentY);
+            currentY += lineHeight;
+            if (currentY + lineHeight > maxContentHeight) {
+              pushCurrentPage();
+            }
+            currentLineText = char;
+          } else {
+            currentLineText = testLine;
+          }
+        }
+        if (currentLineText.length > 0) {
+          currentCtx.fillText(currentLineText, marginX, currentY);
+          currentY += lineHeight;
+          if (currentY + lineHeight > maxContentHeight) {
+            pushCurrentPage();
+          }
+        }
+      }
+
+      pagesCanvasData.push(currentCanvas);
+
+      for (let p = 0; p < pagesCanvasData.length; p++) {
+        const cvs = pagesCanvasData[p];
+        const ctx = cvs.getContext('2d');
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`- ${p + 1} / ${pagesCanvasData.length} -`, canvasWidth / 2, canvasHeight - 50);
+
+        const jpgDataUrl = cvs.toDataURL('image/jpeg', 0.92);
+        const base64 = jpgDataUrl.split(',')[1];
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let b = 0; b < binary.length; b++) {
+          bytes[b] = binary.charCodeAt(b);
+        }
+        const embeddedImg = await pdfDoc.embedJpg(bytes);
+        const addedPage = pdfDoc.addPage([595.28, 841.89]);
+        addedPage.drawImage(embeddedImg, {
           x: 0,
           y: 0,
           width: 595.28,

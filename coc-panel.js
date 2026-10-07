@@ -325,7 +325,10 @@ class CocPanel {
     const sanEl = this.container.querySelector(".coc-val-san");
     const dbEl = this.container.querySelector(".coc-val-db");
 
-    if (hpEl) hpEl.textContent = `${calc.hp}/${calc.maxHp}`;
+    const armorVal = parseInt(calc.armor, 10) || 0;
+    const armorBracket = armorVal > 0 ? ` <span style="color: var(--text-secondary); font-size: 10px; font-weight: normal;">(${armorVal})</span>` : '';
+
+    if (hpEl) hpEl.innerHTML = `${calc.hp}/${calc.maxHp}${armorBracket}`;
     if (mpEl) mpEl.textContent = `${calc.mp}/${calc.maxMp}`;
     if (sanEl) sanEl.textContent = `${calc.san}/${calc.maxSan}`;
     if (dbEl) dbEl.textContent = `${calc.db}`;

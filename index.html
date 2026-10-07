@@ -72,6 +72,7 @@
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script src="module-manager.js" defer></script>
     <script src="inventory-manager.js" defer></script>
+    <script src="combat-engine.js" defer></script>
 
     <style></style>
 
@@ -3016,30 +3017,6 @@
             <div id="chat-header-title-wrapper">
               <div id="chat-header-main-line">
                 <span id="chat-header-title">聊天对象</span>
-                <!-- 【全新】群公告按钮 -->
-                <span id="group-announcement-btn" title="群公告">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect
-                      x="3"
-                      y="3"
-                      width="18"
-                      height="18"
-                      rx="2"
-                      ry="2"
-                    ></rect>
-                    <line x1="7" y1="15" x2="17" y2="15"></line>
-                  </svg>
-                </span>
               </div>
               <div id="chat-header-status">
                 <span class="status-dot"></span>
@@ -3053,7 +3030,7 @@
                 class="action-btn"
                 id="char-heart-btn"
                 title="心声"
-                style="display: none; cursor: pointer"
+                style="cursor: pointer;"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -3069,8 +3046,31 @@
                   />
                 </svg>
               </span>
-              <span class="action-btn" id="listen-together-btn" title="地图" style="cursor: pointer;"
-                ><svg
+              <!-- 好感度按钮 -->
+              <span
+                class="action-btn"
+                id="chat-affection-top-btn"
+                title="好感度"
+                style="cursor: pointer;"
+                onclick="if(typeof openChatAffectionModal==='function')openChatAffectionModal();"
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                </svg>
+              </span>
+              <!-- 地图按钮 -->
+              <span class="action-btn" id="listen-together-btn" title="地图" style="cursor: pointer;">
+                <svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="22"
                   height="22"
@@ -3085,7 +3085,8 @@
                   <line x1="9" y1="3" x2="9" y2="18"></line>
                   <line x1="15" y1="6" x2="15" y2="21"></line>
                   <circle cx="12" cy="12" r="2.2" fill="currentColor" fill-opacity="0.3"></circle>
-                </svg></span>
+                </svg>
+              </span>
               <span class="action-btn" id="chat-settings-btn" title="聊天设置"
                 ><img
                   src="https://i.postimg.cc/bvPq64cv/CCA834-BA-5-A90-408-D-94-FA-7-EE156-B6-A765.png"
@@ -3108,6 +3109,20 @@
                 >删除</span
               >
             </div>
+          </div>
+        </div>
+
+        <!-- 顶部右侧战斗控制浮动小面板 (无黑幕，可直接操作周边) -->
+        <div id="combat-dropdown-panel" class="combat-dropdown-panel" style="display: none;">
+          <button type="button" id="combat-toggle-btn" class="moe-btn-small combat-dropdown-item">进入战斗</button>
+          <button type="button" id="combat-edit-btn" class="moe-btn-small combat-dropdown-item">编辑</button>
+          <button type="button" id="combat-rules-btn" class="moe-btn-small combat-dropdown-item">规则</button>
+        </div>
+
+        <!-- 顶部仿博德之门式胶囊人物栏 (悬浮圆角矩形，居中展示) -->
+        <div id="combat-character-bar" class="combat-character-bar" style="display: none;">
+          <div id="combat-characters-list" class="combat-characters-track">
+            <!-- 动态渲染圆形头像与双状态条 -->
           </div>
         </div>
 
@@ -3203,24 +3218,26 @@
             </button>
 
             <button
-              id="chat-affection-btn"
+              id="combat-entry-btn"
               class="chat-action-icon-btn action-button"
-              title="好感度"
+              title="战斗"
               type="button"
-              onclick="if(typeof openChatAffectionModal==='function')openChatAffectionModal();"
+              onclick="if(typeof toggleCombatDropdownPanel==='function')toggleCombatDropdownPanel();"
             >
               <svg
-                width="24"
-                height="24"
+                width="22"
+                height="22"
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 stroke="currentColor"
-                stroke-width="2"
+                stroke-width="2.2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                <line x1="4" y1="7" x2="20" y2="7"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="17" x2="20" y2="17"></line>
               </svg>
             </button>
 
@@ -15022,17 +15039,129 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
       </div>
     </div>
 
-    <!-- 群公告模态框 -->
-    <div id="group-announcement-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <span>群公告</span>
+    <!-- 战斗管理编辑弹窗 -->
+    <div id="combat-edit-modal" class="modal" style="display: none;">
+      <div class="modal-content" style="max-width: 380px; width: 92%; max-height: 85vh; display: flex; flex-direction: column; padding: 16px; border-radius: 14px; background: var(--card-bg); border: 1px solid var(--border-color); box-sizing: border-box;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+          <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">战斗管理</span>
+          <button type="button" class="modal-close" id="combat-edit-close-btn" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer;">&times;</button>
         </div>
-        <div class="modal-body" id="announcement-content-area">
-          <!-- 公告内容将显示在这里 -->
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">参战角色列表</div>
+            <div id="combat-edit-combatants-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+          </div>
+          <div style="border-top: 1px dashed var(--border-color); padding-top: 10px;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">新增参战角色</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <select id="combat-add-from-members" class="moe-input" style="height: 30px; font-size: 12px; padding: 0 6px; display: none;"></select>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" id="combat-add-name" class="moe-input" placeholder="角色名称" style="flex: 1; height: 30px; font-size: 12px; padding: 0 8px;">
+                <input type="number" id="combat-add-dex" class="moe-input" placeholder="敏捷" value="50" style="width: 54px; height: 30px; font-size: 12px; padding: 0 4px; text-align: center;">
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <input type="number" id="combat-add-hp" class="moe-input" placeholder="生命" value="10" style="flex: 1; height: 30px; font-size: 12px; padding: 0 6px; text-align: center;">
+                <input type="number" id="combat-add-mp" class="moe-input" placeholder="魔法" value="10" style="flex: 1; height: 30px; font-size: 12px; padding: 0 6px; text-align: center;">
+              </div>
+              <input type="text" id="combat-add-prompt" class="moe-input" placeholder="头像描述提示词" style="width: 100%; height: 30px; font-size: 12px; padding: 0 8px; box-sizing: border-box;">
+              <button type="button" id="combat-add-confirm-btn" class="moe-btn" style="height: 30px; font-size: 12px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);">添加参战角色</button>
+            </div>
+          </div>
         </div>
-        <div class="modal-footer" id="announcement-footer">
-          <!-- 按钮将由JS动态生成 -->
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+          <button type="button" class="cancel moe-btn" id="combat-edit-cancel-btn" style="padding: 4px 14px; font-size: 12px;">取消</button>
+          <button type="button" class="save moe-btn" id="combat-edit-save-btn" style="padding: 4px 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none;">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 战斗规则书弹窗 -->
+    <div id="combat-rules-modal" class="modal" style="display: none;">
+      <div class="modal-content" style="max-width: 440px; width: 92%; max-height: 85vh; display: flex; flex-direction: column; padding: 16px; border-radius: 14px; background: var(--card-bg); border: 1px solid var(--border-color); box-sizing: border-box;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+          <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">战斗规则</span>
+          <button type="button" class="modal-close" id="combat-rules-close-btn" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer;">&times;</button>
+        </div>
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 12px 0;">
+          <textarea id="combat-rules-textarea" class="moe-input" style="width: 100%; height: 280px; font-size: 12px; line-height: 1.6; padding: 8px; box-sizing: border-box; resize: vertical;"></textarea>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
+          <button type="button" class="cancel moe-btn" id="combat-rules-reset-btn" style="padding: 4px 12px; font-size: 12px;">恢复默认</button>
+          <button type="button" class="save moe-btn" id="combat-rules-save-btn" style="padding: 4px 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none;">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 战斗角色详情与技能面板弹窗 (小巧精致) -->
+    <div id="combat-character-modal" class="modal" style="display: none;">
+      <div class="modal-content" style="max-width: 290px; width: 88%; max-height: 85vh; display: flex; flex-direction: column; padding: 10px 12px; border-radius: 14px; background: var(--card-bg); border: 1px solid var(--border-color); box-sizing: border-box;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div id="combat-modal-char-avatar" style="width: 24px; height: 24px; border-radius: 50%; overflow: hidden; background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0;"></div>
+            <span id="combat-modal-char-name" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">角色面板</span>
+          </div>
+          <button type="button" class="modal-close" id="combat-char-modal-close-btn" style="background: transparent; border: none; font-size: 16px; color: var(--text-secondary); cursor: pointer; padding: 0 2px; line-height: 1;">&times;</button>
+        </div>
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 8px 0; display: flex; flex-direction: column; gap: 8px;">
+          <div class="coc-section-label" style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">属性</div>
+          <div class="coc-stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">力量</label><input type="number" id="combat-char-str" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">敏捷</label><input type="number" id="combat-char-dex" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">体质</label><input type="number" id="combat-char-con" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">意志</label><input type="number" id="combat-char-pow" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">体型</label><input type="number" id="combat-char-siz" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">教育</label><input type="number" id="combat-char-edu" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">外貌</label><input type="number" id="combat-char-app" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">智力</label><input type="number" id="combat-char-int" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+            <div class="coc-stat-item" style="display: flex; align-items: center; background: var(--secondary-bg); border-radius: 6px; padding: 2px 4px; gap: 2px;"><label style="font-size: 10px; color: var(--text-secondary); width: 22px; flex-shrink: 0; text-align: center;">幸运</label><input type="number" id="combat-char-luk" class="coc-stat-input moe-input" value="50" style="height: 20px; font-size: 11px; padding: 0; text-align: center; border: none; background: transparent; width: 100%;"></div>
+          </div>
+
+          <div class="coc-section-label" style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">数值</div>
+          <div class="coc-values-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">
+            <div class="coc-value-item" style="background: var(--secondary-bg); padding: 4px 2px; border-radius: 6px; text-align: center;">
+              <div class="coc-value-label" style="font-size: 9px; color: var(--text-secondary);">HP</div>
+              <div class="coc-value-num" id="combat-char-hp-display" style="font-size: 11px; font-weight: 600; color: var(--text-primary);">10/10</div>
+            </div>
+            <div class="coc-value-item" style="background: var(--secondary-bg); padding: 4px 2px; border-radius: 6px; text-align: center;">
+              <div class="coc-value-label" style="font-size: 9px; color: var(--text-secondary);">MP</div>
+              <div class="coc-value-num" id="combat-char-mp-display" style="font-size: 11px; font-weight: 600; color: var(--text-primary);">10/10</div>
+            </div>
+            <div class="coc-value-item" style="background: var(--secondary-bg); padding: 4px 2px; border-radius: 6px; text-align: center;">
+              <div class="coc-value-label" style="font-size: 9px; color: var(--text-secondary);">SAN</div>
+              <div class="coc-value-num" id="combat-char-san-display" style="font-size: 11px; font-weight: 600; color: var(--text-primary);">50/99</div>
+            </div>
+            <div class="coc-value-item" style="background: var(--secondary-bg); padding: 4px 2px; border-radius: 6px; text-align: center;">
+              <div class="coc-value-label" style="font-size: 9px; color: var(--text-secondary);">DB</div>
+              <div class="coc-value-num" id="combat-char-db-display" style="font-size: 11px; font-weight: 600; color: var(--text-primary);">0</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 6px; align-items: center; background: var(--secondary-bg); padding: 4px 8px; border-radius: 6px;">
+            <label style="font-size: 10px; font-weight: 600; color: var(--text-primary); flex-shrink: 0;">护甲</label>
+            <input type="number" id="combat-char-armor-input" class="moe-input" placeholder="0" min="0" value="0" style="width: 50px; height: 22px; font-size: 10px; text-align: center; padding: 0 2px;">
+            <span style="font-size: 9px; color: var(--text-secondary);">大于0在血条后显示</span>
+          </div>
+
+          <div class="combat-skills-section" style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--card-bg);">
+            <div id="combat-custom-skills-toggle" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; cursor: pointer; user-select: none; background: var(--secondary-bg);">
+              <span style="font-size: 10px; font-weight: 600; color: var(--text-primary);">技能</span>
+              <svg id="combat-custom-skills-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); transition: transform 0.2s ease; transform: rotate(-90deg);">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+            <div id="combat-custom-skills-body" style="display: none; padding: 6px; flex-direction: column; gap: 4px;">
+              <div id="combat-custom-skills-list" style="max-height: 52px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-right: 2px;"></div>
+              <div style="display: flex; gap: 3px; margin-top: 2px;">
+                <input type="text" id="combat-new-skill-name" class="moe-input" placeholder="技能名" style="flex: 1; height: 22px; font-size: 10px; padding: 0 4px;">
+                <input type="text" id="combat-new-skill-desc" class="moe-input" placeholder="效果" style="flex: 1.2; height: 22px; font-size: 10px; padding: 0 4px;">
+                <button type="button" id="combat-add-skill-btn" class="moe-btn-small" style="padding: 0 6px; height: 22px; font-size: 10px; flex-shrink: 0; background: var(--accent-color); color: #fff; border: none; border-radius: 4px;">添加</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 6px; border-top: 1px solid var(--border-color); padding-top: 6px;">
+          <button type="button" class="cancel moe-btn-mini" id="combat-char-modal-cancel-btn" style="padding: 3px 10px; font-size: 11px; border-radius: 6px;">取消</button>
+          <button type="button" class="save moe-btn-mini" id="combat-char-modal-save-btn" style="padding: 3px 12px; font-size: 11px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">保存</button>
         </div>
       </div>
     </div>
@@ -28183,14 +28312,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (typeof renderInventoryList === "function") renderInventoryList();
           const chat = state.chats[chatId];
           if (!chat) return;
-          // 群公告图标显示/隐藏逻辑
-          const announcementBtn = document.getElementById(
-            "group-announcement-btn",
-          );
-          if (chat.isGroup) {
-            announcementBtn.style.display = "inline-flex"; // 在群聊中显示
-          } else {
-            announcementBtn.style.display = "none"; // 在单聊中隐藏
+
+          if (typeof updateCombatUI === "function") {
+            updateCombatUI(chatId);
           }
 
           exitSelectionMode();
@@ -29163,6 +29287,66 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (typeof window.executeChapterSwitch === 'function') {
                       await window.executeChapterSwitch(pData.nextChapterId, pData.nextChapterTitle, true);
                     }
+                  }
+                };
+              }
+            }
+
+            wrapper.appendChild(bubble);
+            addLongPressListener(wrapper, () =>
+              showMessageActions(msg.timestamp),
+            );
+            wrapper.addEventListener("click", () => {
+              if (isSelectionMode) toggleMessageSelection(msg.timestamp);
+            });
+            return wrapper;
+          }
+
+          if (msg.type === "combat_confirm_card") {
+            const wrapper = document.createElement("div");
+            wrapper.className = "message-wrapper system-pat";
+            wrapper.style.display = "flex";
+            wrapper.style.justifyContent = "center";
+            wrapper.style.margin = "6px auto";
+
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble system-bubble";
+            bubble.dataset.timestamp = msg.timestamp;
+            bubble.style.textAlign = "left";
+            bubble.style.display = "block";
+            bubble.style.width = "100%";
+            bubble.style.maxWidth = "100%";
+            bubble.style.boxSizing = "border-box";
+            bubble.style.padding = "10px 14px";
+            bubble.style.background = "var(--secondary-bg)";
+            bubble.style.border = "1px solid var(--border-color)";
+            bubble.style.borderRadius = "12px";
+
+            const isExecuted = !!msg.isExecuted;
+            const summary = msg.content || "遭遇战斗，是否进入战斗？";
+
+            bubble.innerHTML = `
+              <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px;">
+                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); word-break: break-word; line-height: 1.4; flex: 1;">${summary}</div>
+                <button type="button" class="summary-preset-btn btn-combat-confirm-card" ${isExecuted ? 'disabled style="padding: 3px 10px; font-size: 11px; background: var(--border-color); color: var(--text-secondary); border: none; border-radius: 6px; cursor: default; flex-shrink: 0; white-space: nowrap;"' : 'style="padding: 3px 12px; font-size: 11px; background: var(--accent-color); color: #FFFFFF; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; flex-shrink: 0; white-space: nowrap;"'}>${isExecuted ? '已进入' : '进入战斗'}</button>
+              </div>
+            `;
+
+            if (!isExecuted) {
+              const confirmBtn = bubble.querySelector('.btn-combat-confirm-card');
+              if (confirmBtn) {
+                confirmBtn.onclick = async (e) => {
+                  e.stopPropagation();
+                  msg.isExecuted = true;
+                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
+                  confirmBtn.textContent = '已进入';
+                  confirmBtn.disabled = true;
+                  confirmBtn.style.background = 'var(--border-color)';
+                  confirmBtn.style.color = 'var(--text-secondary)';
+                  confirmBtn.style.cursor = 'default';
+                  if (typeof window.enterCombat === 'function') {
+                    await window.enterCombat(chat.id);
                   }
                 };
               }
@@ -30308,6 +30492,63 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   }
                 }
               } catch (e) {}
+            } else if (rawContentText.includes('"suggest_combat"') || /(?:\[|【)(?:遭遇战斗|进入战斗|开启战斗)(?:\]|】)/.test(rawContentText)) {
+              try {
+                let combatSummary = "遭遇战斗，是否进入战斗？";
+                let combatantsList = [];
+                const combatMatch = rawContentText.match(/```(?:json)?\s*(\{[\s\S]*?"type"\s*:\s*"suggest_combat"[\s\S]*?\})\s*```/) || rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"suggest_combat"[\s\S]*?\}/);
+                if (combatMatch) {
+                  const combatObj = JSON.parse(combatMatch[1] || combatMatch[0]);
+                  combatSummary = combatObj.summary || combatSummary;
+                  combatantsList = combatObj.combatants || [];
+                  rawContentText = rawContentText.replace(combatMatch[0], "").trim();
+                } else {
+                  const tagMatch = rawContentText.match(/(?:\[|【)(?:遭遇战斗|进入战斗|开启战斗)(?:\]|】)/);
+                  if (tagMatch) {
+                    rawContentText = rawContentText.replace(tagMatch[0], "").trim();
+                  }
+                }
+                if (chat && !msg._combatSuggested) {
+                  msg._combatSuggested = true;
+                  setTimeout(async () => {
+                    const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                    const cardMsg = {
+                      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                      role: "system",
+                      type: "combat_confirm_card",
+                      content: combatSummary,
+                      pendingData: {
+                        combatants: combatantsList
+                      },
+                      timestamp: Date.now()
+                    };
+                    chat.history.push(cardMsg);
+                    if (dbInstance) await dbInstance.chats.put(chat);
+                    appendMessage(cardMsg, chat);
+                  }, 50);
+                }
+              } catch (e) {}
+            } else if (rawContentText.includes('"type": "combat_join"') || rawContentText.includes('"type":"combat_join"')) {
+              try {
+                const joinMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"combat_join"[\s\S]*?\}/);
+                if (joinMatch) {
+                  const joinObj = JSON.parse(joinMatch[0]);
+                  rawContentText = rawContentText.replace(joinMatch[0], "").trim();
+                  if (chat && typeof window.handleCombatJoin === "function") {
+                    setTimeout(() => { window.handleCombatJoin(chat.id, joinObj); }, 50);
+                  }
+                }
+              } catch (e) {}
+            } else if (rawContentText.includes('"type": "combat_end"') || rawContentText.includes('"type":"combat_end"')) {
+              try {
+                const endMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"combat_end"[\s\S]*?\}/);
+                if (endMatch) {
+                  rawContentText = rawContentText.replace(endMatch[0], "").trim();
+                  if (chat && typeof window.exitCombat === "function") {
+                    setTimeout(() => { window.exitCombat(chat.id); }, 50);
+                  }
+                }
+              } catch (e) {}
             }
 
             // 剥离 Markdown 代码块包裹（如 ```html ... ```）
@@ -30956,6 +31197,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const settings = targetSettings || {};
           const columns = Array.isArray(settings.columns) ? settings.columns : [];
           const weatherCol = columns.find(c => c && c.type === "weather");
+          const luckCol = columns.find(c => c && c.type === "luck");
           const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
           const weatherMode = (weatherCol && weatherCol.weatherMode) ? weatherCol.weatherMode : "date";
           const weatherInterval = (weatherCol && weatherCol.weatherInterval && parseInt(weatherCol.weatherInterval, 10) > 0) ? parseInt(weatherCol.weatherInterval, 10) : 2;
@@ -31026,32 +31268,40 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           let drawnWeather = null;
-          const lastKnownWeather = lastEntry?.weatherName || null;
-          const weatherPools = getStoredWeatherPools();
-          const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
+          if (weatherCol) {
+            const lastKnownWeather = lastEntry?.weatherName || null;
+            const weatherPools = getStoredWeatherPools();
+            const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
 
-          if (!needWeatherSwitch && lastKnownWeather) {
-            let note = "";
-            if (targetPool && Array.isArray(targetPool.items)) {
-              const it = targetPool.items.find(x => x.name === lastKnownWeather);
-              if (it) note = it.note || it.desc || "";
-            }
-            drawnWeather = { name: lastKnownWeather, note: note };
-          } else {
-            const monthToUse = lastEntry?.month || (new Date().getMonth() + 1);
-            const drawn = drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
-            if (drawn) {
-              drawnWeather = { name: drawn.name || "晴朗", note: drawn.note || drawn.desc || "" };
-            }
-            if (!drawnWeather) {
-              drawnWeather = { name: "晴朗", note: "温和宜人，阳光明媚，视野开阔" };
+            if (!needWeatherSwitch && lastKnownWeather) {
+              let note = "";
+              if (targetPool && Array.isArray(targetPool.items)) {
+                const it = targetPool.items.find(x => x.name === lastKnownWeather);
+                if (it) note = it.note || it.desc || "";
+              }
+              drawnWeather = { name: lastKnownWeather, note: note };
+            } else {
+              const monthToUse = lastEntry?.month || (new Date().getMonth() + 1);
+              const drawn = drawWeatherFromCurrentPool(monthToUse, chosenPoolName);
+              if (drawn) {
+                drawnWeather = { name: drawn.name || "晴朗", note: drawn.note || drawn.desc || "" };
+              }
+              if (!drawnWeather) {
+                drawnWeather = { name: "晴朗", note: "温和宜人，阳光明媚，视野开阔" };
+              }
             }
           }
 
-          const luckInfo = getOrUpdateLuckForTurn(settings, chat);
-          const hitLuck = luckInfo.hitLuck || { name: "波澜不惊", note: "" };
+          let hitLuck = null;
+          let luckInfo = null;
+          if (luckCol) {
+            luckInfo = getOrUpdateLuckForTurn(settings, chat);
+            hitLuck = luckInfo.hitLuck || { name: "波澜不惊", note: "" };
+          }
 
           return {
+            hasWeatherCol: !!weatherCol,
+            hasLuckCol: !!luckCol,
             drawnWeather,
             hitLuck,
             luckInfo,
@@ -31067,11 +31317,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function postProcessStatusReply(content, chat, settings) {
           if (!content || typeof content !== "string") return content;
 
-          content = content.replace(/(?:\[?天气\]?)[：:]\s*([^（(\n\r【[]+)[^\n\r]*/g, (m, wName) => {
-            return `天气：${wName.trim()}`;
+          content = content.replace(/(?:\[?天气\]?)[：:]\s*([^\s\n\r（(【[]+)[^\n\r]*/g, (m, wName) => {
+            return `[天气]：${wName.trim()}`;
           });
-          content = content.replace(/(?:\[?幸运(?:走向)?\]?)[：:]\s*([^（(\n\r【[]+)[^\n\r]*/g, (m, lkName) => {
-            return `幸运走向：${lkName.trim()}`;
+          content = content.replace(/(?:\[?幸运(?:走向)?\]?)[：:]\s*([^\s\n\r（(【[]+)[^\n\r]*/g, (m, lkName) => {
+            return `[幸运]：${lkName.trim()}`;
           });
 
           const affRegex = /(?:\[?好感度\]?)[：:]\s*\[?([^\]\s\n\r+=\-]+?)\]?(?:好感度)?\s*([+\-])\s*(\d+)(?:\s*[=＝]\s*(\d+))?/g;
@@ -34288,10 +34538,6 @@ ${recentHistoryText}
                 initialTypingInd.textContent = "群成员正在回复中...";
                 initialTypingInd.style.display = "block";
               }
-              if (initialHeaderTitle) {
-                initialHeaderTitle.textContent = "群成员正在回复中...";
-                initialHeaderTitle.classList.add("typing-status");
-              }
             } else if (initialHeaderTitle) {
               initialHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : (chat.settings?.offlineMode?.enabled ? "对方正在赴约中..." : "对方正在输入...");
               initialHeaderTitle.classList.add("typing-status");
@@ -34374,14 +34620,23 @@ ${recentHistoryText}
 
                 const statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
 
+                let autoSystemNotes = [];
+                if (resolvedStatus.hasWeatherCol) {
+                  autoSystemNotes.push(`- 天气由系统底层自动抽选填入，你无需填写也严禁在天气后添加任何描述文字。`);
+                }
+                if (resolvedStatus.hasLuckCol) {
+                  autoSystemNotes.push(`- 幸运由系统底层自动掷骰填入，你无需填写也严禁擅自修改。`);
+                }
+
                 systemStatusContext = `
 # 【系统状态栏专用指令】
 系统状态栏为独立的指令类型 {"type": "system_status", "name": "${statusSenderName}", "fields": { ... }}。
 在本次回复的 JSON 数组中，【第一条消息（index 0）必须是该系统状态栏指令】：
-- 左侧栏目标题由系统自动锁定固定生成，禁止你更改。
-- 天气（${drawnWeatherName}）与幸运（${hitLuck.name}）由系统自动抽选填入，你无需填写也禁止修改。
-- 你只需在 fields 对象中填写以下允许填写的字段：
-${fillableSpec}
+- 状态栏所有栏目标题与顺序由系统严格锁定，绝对禁止你擅自拟定新格式或增加新栏目。
+${autoSystemNotes.join("\n")}
+- 你只需在 fields 字典中填写以下允许填写的纯净字段：
+${fillableSpec || '- 无需填写额外字段'}
+- 严禁在字段值中添加修饰说明、括号或多余描述，仅输出纯净数值或地点时间。
 - 示例：{"type": "system_status", "name": "${statusSenderName}", "fields": {"时间": "14:30", "地点": "图书馆"}}
 - 【铁律】：从第二条消息开始，由其他群成员角色进行正常的剧情对话；严禁在任何后续角色的对话消息中输出状态栏内容！
 `;
@@ -35516,6 +35771,7 @@ ${fillableSpec}
 1. 属性与技能修改：发送 .st 目标角色名 属性名 数值 或 .st 属性名 数值，例如 .st 力量 60、.st 敏捷 70、.st hp-2、.st san-5、.st mp+3、.st 克苏鲁神话 10 等，系统将自动更新角色面板数据。
 2. 掷骰与检定：支持几乎所有标准掷骰表达式，例如发送 .r 1d100、.r 1d6+2、.r 2d4 掷骰，发送 .ra 侦查、.ra 聆听 进行技能检定，发送 .sc 0/1d6 进行理智检定，发送 .en 侦查 进行成长检定，发送 .ti 查询疯狂症状，发送 .rh 侦查 进行暗骰等。
 3. 角色需要检定或调整状态时，可直接发送包含上述指令的文本消息，例如以单独一条文本气泡发送 .ra 侦查 或 .st hp-3。
+4. 遭遇战斗：当剧情发生战斗或遭遇敌对生物时，在回复末尾附带指令代码 {"type": "suggest_combat", "summary": "遭遇强敌，是否进入战斗？"}，系统将生成确认卡片，玩家确认后由系统专属裁判AI分析排布先攻并开启战斗面板。
 `;
 
             let systemPrompt, messagesPayload;
@@ -35736,6 +35992,7 @@ ${fillableSpec}
 			${sharedContext}
 			${stickerContext}
 			${linkedMemoryContext}
+			${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
 			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度系统】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
 
 			# 【用户角色档案与COC人物面板】
@@ -36055,9 +36312,8 @@ ${libraryList}
               let systemStatusPromptBlock = "";
               if (chat.roleType === "system_status") {
                 const resolvedStatus = resolveTurnWeatherAndLuck(chat.settings, chat);
-                const drawnWeather = resolvedStatus.drawnWeather || { name: "晴朗", note: "温和宜人，阳光明媚，视野开阔" };
-                const hitLuck = resolvedStatus.hitLuck || { name: "波澜不惊", note: "" };
-                const luckInfo = resolvedStatus.luckInfo || { isNewRoll: false, cycle: 1, currentCount: 1, hitLuck };
+                const drawnWeather = resolvedStatus.drawnWeather;
+                const hitLuck = resolvedStatus.hitLuck;
 
                 let colSpecs = [];
                 (chat.settings.columns || []).forEach(col => {
@@ -36067,9 +36323,9 @@ ${libraryList}
                   } else if (col.type === "time") {
                     colSpecs.push(`${col.label}：由AI根据上下文剧情自主推断具体时间填入，例如 08:30 或 12:00 或 14:00，绝对禁止使用本地现实时间`);
                   } else if (col.type === "weather") {
-                    colSpecs.push(`${col.label}：必须严格固定填入【${drawnWeather.name}】（只填天气名称，绝对禁止附加任何修饰说明或括号解释）`);
+                    colSpecs.push(`${col.label}：由系统底层自动抽选填入，你无需填写也严禁在天气后添加任何描述文字`);
                   } else if (col.type === "luck") {
-                    colSpecs.push(`${col.label}：必须严格固定填入【${hitLuck.name}】（只填幸运名称，绝对禁止附加掷骰数值、设定说明或括号解释）`);
+                    colSpecs.push(`${col.label}：由系统底层自动掷骰填入，你无需填写也严禁擅自修改`);
                   } else if (col.type === "affection") {
                     colSpecs.push(`${col.label}：请根据剧情进展填入好感变动与总量，示例：好感度+2=82`);
                   } else {
@@ -36077,16 +36333,21 @@ ${libraryList}
                   }
                 });
 
+                let envContext = "";
+                if (resolvedStatus.hasWeatherCol && drawnWeather) {
+                  envContext += `- 当前天气：${drawnWeather.name}\n`;
+                }
+                if (resolvedStatus.hasLuckCol && hitLuck) {
+                  envContext += `- 当前幸运：${hitLuck.name}\n`;
+                }
+
                 systemStatusPromptBlock = `
 # 【系统状态栏单气泡输出规则】
 1. 无论有多少个项目，系统状态栏的所有内容【必须且只能】合并在 chatResponse 数组的【第1条消息】中，每项之间用换行符 \\n 分隔，【绝对禁止】将每个项目拆分为独立气泡！
-2. 系统状态栏格式必须参考以下规则（标签名称严禁修改，天气与幸运为系统固定抽取，时间由你推断填入，包含占位符的项目由你替换为具体内容）：
+2. 系统状态栏格式必须参考以下规则（标签名称严禁修改，天气与幸运为系统固定抽取，时间与地点由你推断填入，禁止擅自增加其他栏目）：
 ${colSpecs.join('\n')}
 3. 你的第2条及后续消息气泡，请根据角色人设与当前剧情展开正常的对话与描写；【严禁在任何角色的后续对话中重复输出状态栏内容】！
-
-# 【客观环境与幸运参考】
-- 当前天气：${drawnWeather.name}（${drawnWeather.note || ''}）
-- 当前幸运：${hitLuck.name}（${hitLuck.note || '无'}）
+${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 `;
               }
 
@@ -36161,6 +36422,7 @@ ${colSpecs.join('\n')}
 			${mapPromptBlock}
 			${thoughtChainPromptBlock}
 			${linkedMemoryContext}
+			${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
 			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度设定】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
 			- **可用表情包**:
 			${stickerContext || ""}
@@ -37205,6 +37467,38 @@ ${colSpecs.join('\n')}
                         await window.executeChapterManage(msgData.openChapterIds || [], msgData.closeChapterIds || [], msgData.summary || '', true);
                       }
                     }, 50);
+                  }
+                  continue;
+                }
+                case "suggest_combat": {
+                  if (chat) {
+                    const cardMsg = {
+                      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                      role: "system",
+                      type: "combat_confirm_card",
+                      content: msgData.summary || "遭遇战斗，是否进入战斗？",
+                      pendingData: {
+                        combatants: msgData.combatants || []
+                      },
+                      timestamp: messageTimestamp++
+                    };
+                    chat.history.push(cardMsg);
+                    await db.chats.put(chat);
+                    if (isViewingThisChat) {
+                      appendMessage(cardMsg, chat);
+                    }
+                  }
+                  continue;
+                }
+                case "combat_join": {
+                  if (chat && typeof window.handleCombatJoin === "function") {
+                    await window.handleCombatJoin(chat.id, msgData);
+                  }
+                  continue;
+                }
+                case "combat_end": {
+                  if (chat && typeof window.exitCombat === "function") {
+                    await window.exitCombat(chat.id);
                   }
                   continue;
                 }
@@ -40142,7 +40436,46 @@ ${colSpecs.join('\n')}
                         );
                       }
                     } else {
-                      aiMessage = { ...baseMessage, content: messageText };
+                      let cleanMsgText = messageText;
+                      const combatMatch = cleanMsgText.match(/```(?:json)?\s*(\{[\s\S]*?"type"\s*:\s*"suggest_combat"[\s\S]*?\})\s*```/) || cleanMsgText.match(/\{[\s\S]*?"type"\s*:\s*"suggest_combat"[\s\S]*?\}/);
+                      if (combatMatch) {
+                        try {
+                          const combatObj = JSON.parse(combatMatch[1] || combatMatch[0]);
+                          cleanMsgText = cleanMsgText.replace(combatMatch[0], "").trim();
+                          const cardMsg = {
+                            id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                            role: "system",
+                            type: "combat_confirm_card",
+                            content: combatObj.summary || "遭遇战斗，是否进入战斗？",
+                            pendingData: {
+                              combatants: combatObj.combatants || []
+                            },
+                            timestamp: messageTimestamp++
+                          };
+                          chat.history.push(cardMsg);
+                          if (isViewingThisChat) {
+                            appendMessage(cardMsg, chat);
+                          }
+                        } catch (e) {}
+                      } else {
+                        const tagMatch = cleanMsgText.match(/(?:\[|【)(?:遭遇战斗|进入战斗|开启战斗)(?:\]|】)/);
+                        if (tagMatch) {
+                          cleanMsgText = cleanMsgText.replace(tagMatch[0], "").trim();
+                          const cardMsg = {
+                            id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                            role: "system",
+                            type: "combat_confirm_card",
+                            content: "遭遇战斗，是否进入战斗？",
+                            pendingData: { combatants: [] },
+                            timestamp: messageTimestamp++
+                          };
+                          chat.history.push(cardMsg);
+                          if (isViewingThisChat) {
+                            appendMessage(cardMsg, chat);
+                          }
+                        }
+                      }
+                      aiMessage = { ...baseMessage, content: cleanMsgText };
                     }
                   }
                   break;
@@ -79039,11 +79372,6 @@ ${colSpecs.join('\n')}
                   break;
               }
             });
-
-          // 群公告功能事件绑定
-          document
-            .getElementById("group-announcement-btn")
-            .addEventListener("click", openGroupAnnouncementModal);
 
           // 绑定用户表情面板的批量删除按钮
           document

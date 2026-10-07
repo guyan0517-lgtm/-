@@ -570,29 +570,15 @@ const COC_KEY_MAP = {
   "edu": "edu", "教育": "edu",
   "app": "app", "外貌": "app",
   "int": "int", "智力": "int", "灵感": "int",
-  "luk": "luk", "幸运": "luk",
   "hp": "hp", "生命": "hp",
   "mp": "mp", "魔法": "mp",
-  "san": "san", "理智": "san", "心智": "san"
+  "san": "san", "理智": "san", "心智": "san",
+  "armor": "armor", "护甲": "armor", "甲": "armor", "护盾": "armor", "盾": "armor"
 };
 
 // 核心指令解析函数：支持代骰、角色名绑定、守密人保护、气泡内嵌指令触发
 window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
   if (!rawContent || typeof rawContent !== "string") return null;
-
-  // 从气泡文本中寻找完整的掷骰表达式 (支持气泡中间任意位置内嵌触发)
-  let cmdLine = "";
-  const trimmed = rawContent.trim();
-  if (trimmed.startsWith(".") || trimmed.startsWith("。")) {
-    cmdLine = trimmed.slice(1).trim();
-  } else {
-    const match = rawContent.match(/[.。](r|ra|rh|st|sc|hp|en|ti|li|coc5|coc|set)([\s\S]*?)(?=(?:[\r\n]|[.。](?:r|ra|rh|st|sc|hp|en|ti|li|coc5|coc|set)|$))/i);
-    if (match) {
-      cmdLine = (match[1] + (match[2] || "")).trim();
-    }
-  }
-
-  if (!cmdLine) return null;
 
   const activePreset = getActiveDicePreset();
   const templates = { ...DEFAULT_DICE_TEMPLATES, ...(activePreset.templates || {}) };
@@ -614,6 +600,88 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
   const resolveTarget = (explicitTargetName) => {
     if (explicitTargetName && explicitTargetName.trim()) {
       const q = explicitTargetName.trim().toLowerCase();
+
+      // 1. 优先在当前战斗参战列表中匹配（支持完整角色名与模糊匹配）
+      const combatState = (typeof window.getCombatState === "function") ? window.getCombatState(chat) : (chat.combatState || null);
+      if (combatState && Array.isArray(combatState.combatants) && combatState.combatants.length > 0) {
+        let foundCombatant = combatState.combatants.find(c => {
+          const cn = (c.name || "").toLowerCase().trim();
+          return cn === q || c.id === q;
+        });
+        if (!foundCombatant) {
+          foundCombatant = combatState.combatants.find(c => {
+            const cn = (c.name || "").toLowerCase().trim();
+            return cn.includes(q) || q.includes(cn);
+          });
+        }
+        if (foundCombatant) {
+          return {
+            id: foundCombatant.id,
+            name: foundCombatant.name,
+            isUser: Boolean(foundCombatant.isUser),
+            isProxy: true,
+            isCombatant: true,
+            combatant: foundCombatant,
+            cocPanel: foundCombatant.cocPanel || {
+              stats: {
+                dex: foundCombatant.dex || 50,
+                str: foundCombatant.str || 50,
+                con: foundCombatant.con || 50,
+                pow: foundCombatant.pow || 50,
+                siz: foundCombatant.siz || 50,
+                edu: foundCombatant.edu || 50,
+                app: foundCombatant.app || 50,
+                int: foundCombatant.int || 50,
+                luk: foundCombatant.luk || 50
+              },
+              skills: foundCombatant.skills || {},
+              calculated: {
+                hp: (foundCombatant.hp !== undefined) ? foundCombatant.hp : 10,
+                maxHp: (foundCombatant.maxHp !== undefined) ? foundCombatant.maxHp : 10,
+                mp: (foundCombatant.mp !== undefined) ? foundCombatant.mp : 10,
+                maxMp: (foundCombatant.maxMp !== undefined) ? foundCombatant.maxMp : 10,
+                san: (foundCombatant.san !== undefined) ? foundCombatant.san : 50,
+                maxSan: (foundCombatant.maxSan !== undefined) ? foundCombatant.maxSan : 50,
+                armor: (foundCombatant.armor !== undefined) ? foundCombatant.armor : 0
+              }
+            },
+            onSave: (newCoc) => {
+              if (newCoc.calculated) {
+                if (newCoc.calculated.hp !== undefined) foundCombatant.hp = newCoc.calculated.hp;
+                if (newCoc.calculated.maxHp !== undefined) foundCombatant.maxHp = newCoc.calculated.maxHp;
+                if (newCoc.calculated.mp !== undefined) foundCombatant.mp = newCoc.calculated.mp;
+                if (newCoc.calculated.maxMp !== undefined) foundCombatant.maxMp = newCoc.calculated.maxMp;
+                if (newCoc.calculated.san !== undefined) foundCombatant.san = newCoc.calculated.san;
+                if (newCoc.calculated.maxSan !== undefined) foundCombatant.maxSan = newCoc.calculated.maxSan;
+                if (newCoc.calculated.armor !== undefined) foundCombatant.armor = newCoc.calculated.armor;
+              }
+              if (newCoc.stats) {
+                if (newCoc.stats.dex !== undefined) foundCombatant.dex = newCoc.stats.dex;
+                if (newCoc.stats.str !== undefined) foundCombatant.str = newCoc.stats.str;
+                if (newCoc.stats.con !== undefined) foundCombatant.con = newCoc.stats.con;
+                if (newCoc.stats.pow !== undefined) foundCombatant.pow = newCoc.stats.pow;
+                if (newCoc.stats.siz !== undefined) foundCombatant.siz = newCoc.stats.siz;
+                if (newCoc.stats.int !== undefined) foundCombatant.int = newCoc.stats.int;
+                if (newCoc.stats.app !== undefined) foundCombatant.app = newCoc.stats.app;
+                if (newCoc.stats.edu !== undefined) foundCombatant.edu = newCoc.stats.edu;
+                if (newCoc.stats.luk !== undefined) foundCombatant.luk = newCoc.stats.luk;
+              }
+              foundCombatant.cocPanel = newCoc;
+              if (typeof window.syncCombatantToRealCard === "function") {
+                window.syncCombatantToRealCard(chat, foundCombatant);
+              }
+              const dbInstance = typeof global.db !== "undefined" ? global.db : global.database;
+              if (dbInstance && chat.id) {
+                dbInstance.chats.put(chat);
+              }
+              if (typeof window.renderCombatCharacterBar === "function") {
+                window.renderCombatCharacterBar(chat.id);
+              }
+            }
+          };
+        }
+      }
+
       // 在群聊成员中精确/模糊匹配
       if (chat.isGroup && Array.isArray(chat.members)) {
         const found = chat.members.find(m => {
@@ -898,8 +966,8 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
     }
   }
 
-  // 3.5 属性/技能录入与修改 .st [角色名] 力量60 / .st角色名 hp-5 / .st 角色名 掷骰 50 / .st 角色名 hp -5 / .st hp-5
-  const stMatch = cmdLine.match(/^st(?:([^\s\d\+\-\=]+))?(?:\s+(.+))?$/i);
+  // 3.5 属性/技能录入与修改 .st [角色名] 力量60 / .st角色名 hp-5 / .st 角色名 掷骰 50 / .st 角色名 hp -5 / .st hp-5 / .st 邪教徒甲 hp-5 mp-2 san-1
+  const stMatch = cmdLine.match(/^st(?:([^\s\d\+\-\=:]+))?(?:\s+([\s\S]+))?$/i);
   if (stMatch) {
     let attachedTarget = stMatch[1] ? stMatch[1].trim() : "";
     let restContent = stMatch[2] ? stMatch[2].trim() : "";
@@ -910,16 +978,18 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
       targetName = attachedTarget;
       stBody = restContent;
     } else if (!attachedTarget && restContent) {
-      // 检查第一段是否为角色名
       const parts = restContent.split(/\s+/);
       const possibleName = parts[0];
       const remainder = parts.slice(1).join(" ");
-      const isKnownTarget = (chat.isGroup && Array.isArray(chat.members) && chat.members.some(m => (m.groupNickname === possibleName || m.originalName === possibleName)))
+      const combatState = (typeof window.getCombatState === "function") ? window.getCombatState(chat) : (chat.combatState || null);
+      const isCombatTarget = combatState && Array.isArray(combatState.combatants) && combatState.combatants.some(c => (c.name || "").toLowerCase() === possibleName.toLowerCase() || (c.name || "").toLowerCase().includes(possibleName.toLowerCase()));
+      const isKnownTarget = isCombatTarget || (chat.isGroup && Array.isArray(chat.members) && chat.members.some(m => (m.groupNickname === possibleName || m.originalName === possibleName)))
         || (state.chats && Object.values(state.chats).some(c => c.name === possibleName || c.settings?.remarkName === possibleName));
+
       if (isKnownTarget && remainder) {
         targetName = possibleName;
         stBody = remainder;
-      } else if (parts.length > 1 && !/^[a-zA-Z\u4e00-\u9fa5]+[\+\-\=]?\d+/.test(possibleName) && !COC_KEY_MAP[possibleName.toLowerCase()]) {
+      } else if (parts.length > 1 && !/^[a-zA-Z\u4e00-\u9fa5]+[\+\-\=:]?\d+/.test(possibleName) && !COC_KEY_MAP[possibleName.toLowerCase()]) {
         targetName = possibleName;
         stBody = remainder;
       } else {
@@ -933,7 +1003,8 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
       const target = resolveTarget(targetName);
       const userCoc = target.cocPanel || { stats: {}, skills: {}, calculated: {} };
 
-      const regex = /([^\s\d\+\-\=]+)\s*([\+\-\=])?\s*(\d+)/g;
+      // 正则匹配所有属性名与运算符数值（支持多个项目连续匹配）
+      const regex = /([a-zA-Z\u4e00-\u9fa5]+)\s*([\+\-\=:])?\s*(\d+)/g;
       let match;
       const changes = [];
 
@@ -952,14 +1023,17 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
         const mappedKey = COC_KEY_MAP[lowerKey] || COC_KEY_MAP[key];
 
         if (mappedKey) {
-          if (["hp", "mp", "san"].includes(mappedKey)) {
-            const cur = parseInt(userCoc.calculated[mappedKey], 10) || (mappedKey === "san" ? (userCoc.stats.pow || 50) : 10);
+          if (["hp", "mp", "san", "armor"].includes(mappedKey)) {
+            const cur = (userCoc.calculated && typeof userCoc.calculated[mappedKey] !== "undefined")
+              ? parseInt(userCoc.calculated[mappedKey], 10)
+              : (mappedKey === "san" ? (userCoc.stats.pow || 50) : (mappedKey === "armor" ? 0 : 10));
             let newVal = cur;
             if (op === "+") newVal = cur + val;
             else if (op === "-") newVal = cur - val;
             else newVal = val;
             userCoc.calculated[mappedKey] = Math.max(0, newVal);
-            changes.push(`${key.toUpperCase()}: ${userCoc.calculated[mappedKey]}`);
+            const label = mappedKey === "armor" ? "护甲" : key.toUpperCase();
+            changes.push(`${label}: ${userCoc.calculated[mappedKey]}`);
           } else {
             const cur = parseInt(userCoc.stats[mappedKey], 10) || 50;
             let newVal = cur;
@@ -986,11 +1060,13 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
       }
 
       if (changes.length > 0) {
-        // 守密人自身发送且未指定代理角色时，不将修改写回守密人自身面板
         if (!(isKeeperRole && !target.isProxy)) {
           if (typeof target.onSave === "function") {
             target.onSave(userCoc);
           }
+        }
+        if (typeof window.syncCombatantStatsFromCoc === "function") {
+          window.syncCombatantStatsFromCoc(chat, target.id, target.name, userCoc);
         }
         const text = `${target.name} 修改属性成功：${changes.join(" | ")}`;
         return { handled: true, text, persistChat: true };
@@ -1107,6 +1183,9 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
         if (typeof target.onSave === "function") {
           target.onSave(userCoc);
         }
+      }
+      if (typeof window.syncCombatantStatsFromCoc === "function") {
+        window.syncCombatantStatsFromCoc(chat, target.id, target.name, userCoc);
       }
 
       const text = formatDiceTemplate(templates.hp || DEFAULT_DICE_TEMPLATES.hp, {
