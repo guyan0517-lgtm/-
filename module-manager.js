@@ -3881,6 +3881,7 @@ ${chap.content}
         'HO秘密与设定',
         '单人线',
         '结局',
+        '道具与线索',
         '附录与规则',
         '其他分类'
       ];
@@ -3896,7 +3897,8 @@ ${chap.content}
         if (c.includes('ho') || c.includes('秘密') || t.includes('ho') || t.includes('秘密')) return 'HO秘密与设定';
         if (c.includes('单人') || t.includes('单人')) return '单人线';
         if (c.includes('结局') || t.includes('结局') || t.includes('结末') || t.includes('尾声')) return '结局';
-        if (c.includes('附录') || c.includes('道具') || c.includes('数值') || c.includes('规则')) return '附录与规则';
+        if (c.includes('道具') || t.includes('道具') || c.includes('线索') || t.includes('线索') || c.includes('物品') || t.includes('物品')) return '道具与线索';
+        if (c.includes('附录') || c.includes('数值') || c.includes('规则')) return '附录与规则';
         if (c.includes('正文') || c.includes('主线') || c.includes('地点') || c.includes('时间') || t.includes('第') || t.includes('章')) return '正文';
         return '其他分类';
       };
@@ -4409,7 +4411,18 @@ ${chap.content}
         compressBtn.className = 'mod-capsule-btn';
         compressBtn.textContent = '压缩';
         compressBtn.onclick = async () => {
-          const locsWithImg = dbLocations.filter(l => l.imageUrl);
+          if (Array.isArray(mod.mapNodes)) {
+            dbLocations.forEach(loc => {
+              if (!loc.imageUrl) {
+                const matchNode = mod.mapNodes.find(m => m.name === loc.name);
+                if (matchNode && matchNode.imageUrl) {
+                  loc.imageUrl = matchNode.imageUrl;
+                }
+              }
+            });
+          }
+
+          const locsWithImg = dbLocations.filter(l => l.imageUrl && typeof l.imageUrl === 'string' && l.imageUrl.trim().length > 0);
           if (locsWithImg.length === 0) {
             if (typeof global.showCustomAlert === 'function') {
               await global.showCustomAlert('提示', '当前地图暂无可压缩的图片');
@@ -4421,15 +4434,54 @@ ${chap.content}
             : confirm('是否确认压缩当前地图的所有地点图片？');
           if (!confirmCompress) return;
           let count = 0;
+
+          const compressFn = async (base64Str, quality = 0.5, maxDim = 900) => {
+            if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith('data:image')) return base64Str;
+            return new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                try {
+                  let w = img.width;
+                  let h = img.height;
+                  if (!w || !h) return resolve(base64Str);
+                  if (w > maxDim || h > maxDim) {
+                    if (w > h) {
+                      h = Math.round((h * maxDim) / w);
+                      w = maxDim;
+                    } else {
+                      w = Math.round((w * maxDim) / h);
+                      h = maxDim;
+                    }
+                  }
+                  const canvas = document.createElement('canvas');
+                  canvas.width = w;
+                  canvas.height = h;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) return resolve(base64Str);
+                  ctx.drawImage(img, 0, 0, w, h);
+                  const res = canvas.toDataURL('image/jpeg', quality);
+                  resolve(res || base64Str);
+                } catch (e) {
+                  resolve(base64Str);
+                }
+              };
+              img.onerror = () => resolve(base64Str);
+              img.src = base64Str;
+            });
+          };
+
           for (const loc of locsWithImg) {
-            if (typeof global.compressImage === 'function') {
-              try {
-                loc.imageUrl = await global.compressImage(loc.imageUrl, 0.5, 900);
+            try {
+              const res = await compressFn(loc.imageUrl, 0.5, 900);
+              if (res && res.startsWith('data:image')) {
+                loc.imageUrl = res;
                 count++;
                 if (dbInstance.moduleLocationNav && loc.id) {
                   await dbInstance.moduleLocationNav.put(loc);
                 }
-              } catch (e) {}
+              }
+            } catch (e) {
+              console.warn('单张地点图片压缩异常:', e);
             }
           }
           if (dbInstance.modules && mod.id) {
@@ -4538,10 +4590,10 @@ ${chap.content}
         ` : '';
 
         if (isRich) {
-          // 图文版：原汁原味左侧加横图
+          // 图文版：左侧1比1头像
           nodeEl.innerHTML = `
             <div style="display: flex; gap: 10px; align-items: flex-start;">
-              <div class="mod-map-avatar-container" style="position: relative; width: 68px; height: 50px; border-radius: 6px; overflow: hidden; background: var(--secondary-bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--border-color); margin-top: 2px;">
+              <div class="mod-map-avatar-container" style="position: relative; width: 50px; height: 50px; aspect-ratio: 1 / 1; border-radius: 6px; overflow: hidden; background: var(--secondary-bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid var(--border-color); margin-top: 2px;">
                 ${loc.imageUrl ? `<img src="${loc.imageUrl}" alt="${loc.name}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover;" />` : defaultThumbSvg}
               </div>
               <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
@@ -5664,10 +5716,19 @@ ${imageList}
       }
 
       let displayContent = currentChap.content || '';
+      const cat = (currentChap.category || '').toLowerCase();
+      const isItemCat = cat.includes('道具') || cat.includes('线索') || cat.includes('物品');
+
       if (viewMode === 'pc') {
-        const lines = displayContent.split('\n');
-        const pcLines = lines.filter(l => !l.startsWith('【KP信息】') && !l.startsWith('【KP带团指引批注') && !l.startsWith('【秘密'));
-        displayContent = pcLines.join('\n');
+        if (isItemCat) {
+          const rawLines = displayContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+          const hiddenLines = (rawLines.length > 0 ? rawLines : ['道具与线索']).map((_, i) => `条目 ${i + 1}：已隐藏`);
+          displayContent = `【道具与线索】（共 ${hiddenLines.length} 项，玩家模式下内容已遮挡防护，切换至守秘人模式即可查看完整道具与获取方式）\n\n` + hiddenLines.join('\n');
+        } else {
+          const lines = displayContent.split('\n');
+          const pcLines = lines.filter(l => !l.startsWith('【KP信息】') && !l.startsWith('【KP带团指引批注') && !l.startsWith('【秘密'));
+          displayContent = pcLines.join('\n');
+        }
       }
 
       if (readonlyBody) {
@@ -6522,7 +6583,7 @@ ${imageList}
         return;
       }
 
-      const standardCategories = ['导入', '事前公开', '大纲与真相', 'NPC与猫', '人设', 'HO秘密与设定', '单人线', '正文', '结局', '其他分类'];
+      const standardCategories = ['导入', '事前公开', '大纲与真相', 'NPC与猫', '人设', 'HO秘密与设定', '单人线', '正文', '结局', '道具与线索', '附录与规则', '其他分类'];
 
       chapters.forEach((chap, idx) => {
         const itemCard = document.createElement('div');

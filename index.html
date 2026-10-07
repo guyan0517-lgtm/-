@@ -2161,8 +2161,8 @@
           <div class="header" id="modules-view-header">
             <span class="back-btn" id="modules-back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
             <div class="module-header-nav" id="module-header-nav">
-              <span class="module-header-tab active" data-tab="wizard">切割</span>
-              <span class="module-header-tab" data-tab="library">模组库</span>
+              <span class="module-header-tab active" data-tab="library">模组库</span>
+              <span class="module-header-tab" data-tab="wizard">切割</span>
             </div>
             <button type="button" id="module-section-settings-btn" title="设置" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; color: var(--text-primary); border-radius: 50%;">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2221,6 +2221,25 @@
                     <div class="module-picker-title">历史文件</div>
                     <div class="module-picker-desc">已上传的原文件列表</div>
                   </div>
+                </div>
+
+                <!-- 合并功能入口卡片 -->
+                <div class="module-merge-entry-card" id="module-btn-open-merge" style="margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s ease;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; color: var(--accent-color); flex-shrink: 0;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="7" width="16" height="14" rx="2" ry="2"></rect>
+                        <path d="M16 3H6a2 2 0 0 0-2 2v2"></path>
+                        <path d="M12 11v6"></path>
+                        <path d="M9 14h6"></path>
+                      </svg>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                      <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">合并</div>
+                      <div style="font-size: 11px; color: var(--text-secondary);">选择多个文件按顺序合并并下载</div>
+                    </div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </div>
 
                 <!-- 文件解析后展示的信息卡 -->
@@ -6991,7 +7010,7 @@
                   type="number"
                   id="summary-count-input"
                   value="20"
-                  min="5"
+                  min="1"
                   class="moe-input"
                 />
               </div>
@@ -8162,10 +8181,14 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><polygon points="1 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
             <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">地图</span>
           </div>
-          <button type="button" class="close-btn" id="close-chat-map-modal-btn" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 4px;">&times;</button>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-header-add-btn" style="display: none; height: 28px; font-size: 11px; padding: 0 10px; align-items: center; justify-content: center; border-radius: 6px;">添加</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-header-edit-btn" style="height: 28px; font-size: 11px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px;">编辑</button>
+            <button type="button" class="close-btn" id="close-chat-map-modal-btn" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 4px;">&times;</button>
+          </div>
         </div>
         
-        <div style="padding: 2px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <div id="chat-map-top-actions-row" style="padding: 2px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
           <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-top-gen-btn" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;">
             生成小地图
           </button>
@@ -8214,9 +8237,34 @@
           <div id="mini-map-style-desc-title" style="font-weight: 600; color: var(--text-primary); font-size: 11px; margin-bottom: 2px;"></div>
           <div id="mini-map-style-desc-text" style="font-size: 10.5px; color: var(--text-secondary); word-break: break-word;"></div>
         </div>
+        <!-- 全局要求输入框（位于简介下方） -->
+        <div style="width: 100%; margin-top: 2px;">
+          <input type="text" id="mini-map-global-req-input" class="moe-input" placeholder="全局要求" style="width: 100%; height: 28px; font-size: 11px; padding: 0 8px; background: #FFFFFF; color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;" />
+        </div>
+        <!-- 底部操作按钮区域 -->
         <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px; width: 100%;">
-          <input type="text" id="mini-map-global-req-input" class="moe-input" placeholder="全局要求" style="flex: 1; min-width: 0; height: 28px; font-size: 11px; padding: 0 8px; background: #FFFFFF; color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px;" />
+          <button type="button" class="chat-mod-footer-btn secondary" id="modify-mini-map-btn" style="flex: 1; min-width: 0; height: 28px; font-size: 11px; padding: 0; font-family: inherit; display: inline-flex; align-items: center; justify-content: center;">修改小地图</button>
           <button type="button" class="chat-mod-footer-btn primary" id="confirm-mini-map-style-btn" style="flex: 1; min-width: 0; height: 28px; font-size: 11px; padding: 0; font-family: inherit; display: inline-flex; align-items: center; justify-content: center;">生成地图</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改小地图提示词弹窗 -->
+    <div id="chat-modify-mini-map-modal" class="modal">
+      <div class="modal-content" style="max-width: 270px; width: calc(100% - 50px); margin: 0 auto; padding: 12px 14px; border-radius: 14px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; box-shadow: 0 16px 40px rgba(0,0,0,0.25);">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 700; font-size: 13px;">修改小地图</span>
+          <button type="button" id="close-modify-mini-map-btn" style="border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 2px;">&times;</button>
+        </div>
+        <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
+          AI将在现有小地图代码基础上，根据最新地点清单与您的修改提示进行增量优化：
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <textarea id="modify-mini-map-prompt-input" class="moe-input" rows="4" placeholder="例如：添加新增的临时地点、调整局部元素布局或细节" style="width: 100%; font-size: 12px; resize: none; background: #FFFFFF;"></textarea>
+        </div>
+        <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 2px;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-modify-mini-map-btn" style="height: 26px; font-size: 11px; padding: 0 10px; font-family: inherit;">取消</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="confirm-modify-mini-map-submit-btn" style="height: 26px; font-size: 11px; padding: 0 12px; font-family: inherit;">确认修改</button>
         </div>
       </div>
     </div>
@@ -8311,32 +8359,41 @@
       </div>
     </div>
 
-    <!-- 添加临时地点弹窗 -->
+    <!-- 聊天地图地点编辑与添加弹窗 -->
     <div id="chat-temp-location-modal" class="modal">
-      <div class="modal-content" style="max-width: 320px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
-          <span style="font-weight: 700; font-size: 14px;">添加临时地点</span>
+      <div class="modal-content" style="max-width: 320px; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-weight: 700; font-size: 14px;" id="chat-temp-loc-modal-title">添加地点</span>
           <button type="button" class="close-btn" id="close-chat-temp-loc-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
         </div>
-        <div class="modal-body" style="padding: 12px 0; display: flex; flex-direction: column; gap: 10px;">
+        <div class="modal-body" style="padding: 6px 0; display: flex; flex-direction: column; gap: 10px;">
           <div class="form-group" style="margin: 0;">
             <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地点名称</label>
-            <input type="text" id="chat-temp-loc-name-input" class="moe-input" placeholder="例如：林间小溪" style="width: 100%; height: 32px; font-size: 12px;" />
+            <input type="text" id="chat-temp-loc-name-input" class="moe-input" placeholder="输入地点名称" style="width: 100%; height: 32px; font-size: 12px;" />
           </div>
           <div class="form-group" style="margin: 0;">
-            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">所属上级地点</label>
-            <select id="chat-temp-loc-parent-select" class="moe-input" style="width: 100%; height: 32px; font-size: 12px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地点分级</label>
+            <select id="chat-temp-loc-level-select" class="moe-input" style="width: 100%; height: 34px; line-height: 24px; padding: 4px 8px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
+              <option value="1">一级大区域</option>
+              <option value="2">二级建筑分区</option>
+              <option value="3">三级具体场所</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin: 0;" id="chat-temp-loc-parent-group">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">所属上级</label>
+            <select id="chat-temp-loc-parent-select" class="moe-input" style="width: 100%; height: 34px; line-height: 24px; padding: 4px 8px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
               <option value="">顶级大地图</option>
             </select>
           </div>
           <div class="form-group" style="margin: 0;">
             <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地点简介</label>
-            <textarea id="chat-temp-loc-desc-input" class="moe-input" rows="3" placeholder="在此输入地点的详细介绍" style="width: 100%; font-size: 12px; resize: none;"></textarea>
+            <textarea id="chat-temp-loc-desc-input" class="moe-input" rows="3" placeholder="输入地点环境与背景介绍" style="width: 100%; font-size: 12px; resize: none;"></textarea>
           </div>
         </div>
         <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
-          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-chat-temp-loc-btn">取消</button>
-          <button type="button" class="chat-mod-footer-btn primary" id="confirm-chat-temp-loc-btn">添加</button>
+          <button type="button" class="chat-mod-footer-btn secondary" id="delete-chat-temp-loc-btn" style="display: none; color: var(--danger-color, #e53935);">删除</button>
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-chat-temp-loc-btn">返回</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="confirm-chat-temp-loc-btn">保存</button>
         </div>
       </div>
     </div>
@@ -20883,16 +20940,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               locListText = locations.map(l => {
                 const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
                 const descPart = l.desc ? ` - 简介: ${l.desc}` : "";
-                return `- 层级${l.level}【${l.name}】(${hierarchy})${descPart}`;
+                const condPart = (l.condition || l.entryCondition) ? ` - 进入条件: ${l.condition || l.entryCondition}` : "";
+                const itemsPart = (l.items || l.clues || l.clue || l.yields) ? ` - 可产出道具与线索: ${l.items || l.clues || l.clue || l.yields}` : "";
+                return `- 层级${l.level}【${l.name}】(${hierarchy})${descPart}${condPart}${itemsPart}`;
               }).join("\n");
             } else {
               locListText = locations.map(l => {
                 const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
-                return `- 层级${l.level}【${l.name}】(${hierarchy})`;
+                const descPart = l.desc ? ` - 简介: ${l.desc}` : "";
+                const condPart = (l.condition || l.entryCondition) ? ` - 进入条件: ${l.condition || l.entryCondition}` : "";
+                const itemsPart = (l.items || l.clues || l.clue || l.yields) ? ` - 可产出道具与线索: ${l.items || l.clues || l.clue || l.yields}` : "";
+                return `- 层级${l.level}【${l.name}】(${hierarchy})${descPart}${condPart}${itemsPart}`;
               }).join("\n");
             }
 
-            const prompt = `\n# 【当前探索地点库与地图信息】\n${locListText}\n- AI带团推进剧情进入新地点时，请自动在系统状态栏更新[地点]为完整层级路径（如：一级地点-二级地点-具体地点），接下来去哪里的指向由AI结合剧情自行判断并填写，无需玩家手动干预。\n\n`;
+            const prompt = `\n# 【当前探索地点库与地图信息】\n${locListText}\n` +
+              `带团与地点探索准则：\n` +
+              `1. 【地点进入条件】：若地点设定了进入条件（如需要特定房间钥匙、特定道具或通过检定），只有当玩家持有对应道具或达成条件时才允许其进入该地点；若未达成条件，应自然描述门锁/阻碍并提示玩家寻找道具。\n` +
+              `2. 【道具与线索探索获得】：当玩家在对应地点展开深入探索调查时，根据该地点的产出设定适时给出对应道具与线索。\n` +
+              `3. AI带团推进剧情进入新地点时，请自动在系统状态栏更新[地点]为完整层级路径（如：一级地点-二级地点-具体地点），接下来去哪里的指向由AI结合剧情自行判断并填写，无需玩家手动干预。\n\n`;
             const tokenCount = Math.ceil(prompt.length * 0.7);
             return { prompt, tokenCount };
           } catch(err) {
@@ -21373,6 +21439,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               'HO秘密与设定',
               '单人线',
               '结局',
+              '道具与线索',
               '附录与规则',
               '其他分类'
             ];
@@ -21388,7 +21455,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (c.includes('ho') || c.includes('秘密') || t.includes('ho') || t.includes('秘密')) return 'HO秘密与设定';
               if (c.includes('单人') || t.includes('单人')) return '单人线';
               if (c.includes('结局') || t.includes('结局') || t.includes('结末') || t.includes('尾声')) return '结局';
-              if (c.includes('附录') || c.includes('道具') || c.includes('数值') || c.includes('规则')) return '附录与规则';
+              if (c.includes('道具') || t.includes('道具') || c.includes('线索') || t.includes('线索') || c.includes('物品') || t.includes('物品')) return '道具与线索';
+              if (c.includes('附录') || c.includes('数值') || c.includes('规则')) return '附录与规则';
               if (c.includes('正文') || c.includes('主线') || c.includes('地点') || c.includes('时间') || t.includes('第') || t.includes('章')) return '正文';
               return '其他分类';
             };
@@ -30132,10 +30200,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function openChat(chatId) {
           if (!chatId && chatId !== 0) return;
           let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
-          if (!chat && typeof db !== "undefined" && db.chats) {
+          if (typeof db !== "undefined" && db.chats) {
             try {
-              chat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
-              if (chat && state.chats) state.chats[chat.id] = chat;
+              const dbChat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              if (dbChat) {
+                if (!state.chats) state.chats = {};
+                state.chats[dbChat.id] = dbChat;
+                chat = dbChat;
+              }
             } catch (e) {}
           }
           if (!chat) return; // 安全检查
@@ -30388,7 +30460,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (!chat.settings) chat.settings = {};
           if (chat.settings.affectionEnabled === undefined) {
-            chat.settings.affectionEnabled = true;
+            chat.settings.affectionEnabled = false;
           }
           if (!Array.isArray(chat.settings.affectionList)) {
             chat.settings.affectionList = [];
@@ -30824,6 +30896,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const closeModal = () => modal.classList.remove("visible");
           if (closeBtn) closeBtn.onclick = closeModal;
 
+          const modifyBtn = document.getElementById("modify-mini-map-btn");
+          if (modifyBtn) {
+            modifyBtn.onclick = () => {
+              const chat = state.chats[state.activeChatId];
+              const curSvg = chat?.settings?.miniMapSvg || (chat?.settings?.useModuleMap !== false && chat?.activeModuleId && chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg) || chat?.settings?.contextMiniMapSvg;
+              if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "当前暂无已生成的小地图，请先点击“生成地图”生成基础小地图");
+                } else {
+                  alert("当前暂无已生成的小地图，请先点击“生成地图”生成基础小地图");
+                }
+                return;
+              }
+              closeModal();
+              openModifyMiniMapModal();
+            };
+          }
+
           if (confirmBtn) {
             confirmBtn.onclick = async () => {
               currentMiniMapStyle = selectedStyle;
@@ -30840,6 +30930,39 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           modal.classList.add("visible");
         }
         window.openMiniMapStylePickerModal = openMiniMapStylePickerModal;
+
+        function openModifyMiniMapModal() {
+          const modal = document.getElementById("chat-modify-mini-map-modal");
+          const closeBtn = document.getElementById("close-modify-mini-map-btn");
+          const cancelBtn = document.getElementById("cancel-modify-mini-map-btn");
+          const submitBtn = document.getElementById("confirm-modify-mini-map-submit-btn");
+          const inputEl = document.getElementById("modify-mini-map-prompt-input");
+          if (!modal) return;
+
+          if (inputEl) inputEl.value = "";
+
+          const closeModal = () => modal.classList.remove("visible");
+          if (closeBtn) closeBtn.onclick = closeModal;
+          if (cancelBtn) cancelBtn.onclick = closeModal;
+
+          if (submitBtn) {
+            submitBtn.onclick = async () => {
+              const userPrompt = inputEl ? inputEl.value.trim() : "";
+              closeModal();
+              try {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "正在修改并优化小地图，请稍候...");
+                }
+                await executeModifyMiniMapSvg(userPrompt);
+              } catch (err) {
+                console.error("修改小地图失败:", err);
+              }
+            };
+          }
+
+          modal.classList.add("visible");
+        }
+        window.openModifyMiniMapModal = openModifyMiniMapModal;
 
         async function openCharMapConfigModal() {
           if (!state.activeChatId) return;
@@ -31074,6 +31197,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         let miniMapAbortController = null;
         let isMapImagesDrawing = false;
         let mapImagesAbortController = null;
+        let isChatMapEditing = false;
 
         async function openChatMapModal() {
           if (!state.activeChatId) return;
@@ -31100,12 +31224,30 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const useModToggle = document.getElementById("chat-map-use-module-toggle");
           const topGenBtn = document.getElementById("chat-map-top-gen-btn");
           const topImportBtn = document.getElementById("chat-map-top-import-btn");
+          const headerAddBtn = document.getElementById("chat-map-header-add-btn");
+          const headerEditBtn = document.getElementById("chat-map-header-edit-btn");
           const viewToggleBtn = document.getElementById("chat-map-view-toggle-btn");
           const writeBtn = document.getElementById("chat-map-write-btn");
           const drawBtn = document.getElementById("chat-map-draw-btn");
           const compressBtn = document.getElementById("chat-map-compress-btn");
           const clearBtn = document.getElementById("chat-map-clear-btn");
           const addTempBtn = document.getElementById("chat-map-add-temp-btn");
+
+          const updateEditState = () => {
+            if (headerEditBtn) {
+              headerEditBtn.textContent = isChatMapEditing ? "完成" : "编辑";
+              if (isChatMapEditing) {
+                headerEditBtn.classList.add("primary");
+                headerEditBtn.classList.remove("secondary");
+              } else {
+                headerEditBtn.classList.add("secondary");
+                headerEditBtn.classList.remove("primary");
+              }
+            }
+            if (headerAddBtn) {
+              headerAddBtn.style.display = isChatMapEditing ? "inline-flex" : "none";
+            }
+          };
 
           const updateButtonsState = () => {
             if (viewToggleBtn) {
@@ -31125,7 +31267,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 drawBtn.textContent = "绘制";
               }
             }
+            updateEditState();
           };
+
+          if (headerEditBtn) {
+            headerEditBtn.onclick = async () => {
+              isChatMapEditing = !isChatMapEditing;
+              updateEditState();
+              await renderChatMapList();
+            };
+          }
+
+          if (headerAddBtn) {
+            headerAddBtn.onclick = () => {
+              openChatLocationEditModal(null);
+            };
+          }
 
           if (useModToggle) {
             useModToggle.checked = chat.settings.useModuleMap !== false;
@@ -31644,8 +31801,46 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
 
+          // 应用本群删除过滤
+          const deletedNames = new Set(chat?.settings?.deletedLocationNames || []);
+          if (deletedNames.size > 0) {
+            locations = locations.filter(l => !deletedNames.has(l.name));
+          }
+
+          // 应用本群自定义地点覆盖与修改
+          if (chat?.settings && Array.isArray(chat.settings.customLocations)) {
+            chat.settings.customLocations.forEach(cLoc => {
+              if (deletedNames.has(cLoc.name)) return;
+              const idx = locations.findIndex(l => (cLoc.originalName && l.name === cLoc.originalName) || l.id === cLoc.id || l.name === cLoc.name);
+              if (idx !== -1) {
+                locations[idx] = {
+                  ...locations[idx],
+                  name: cLoc.name,
+                  parent: cLoc.parent || "",
+                  level: cLoc.level || locations[idx].level || 1,
+                  desc: cLoc.desc !== undefined ? cLoc.desc : locations[idx].desc,
+                  prompt: cLoc.prompt || locations[idx].prompt || "",
+                  imageUrl: cLoc.imageUrl || locations[idx].imageUrl || "",
+                };
+              } else {
+                locations.push({
+                  id: cLoc.id || "custom_" + cLoc.name,
+                  name: cLoc.name,
+                  parent: cLoc.parent || "",
+                  level: cLoc.level || 1,
+                  desc: cLoc.desc || "",
+                  prompt: cLoc.prompt || "",
+                  imageUrl: cLoc.imageUrl || "",
+                  isTemp: false,
+                });
+              }
+            });
+          }
+
+          // 追加本群临时新增地点
           if (chat && chat.settings && Array.isArray(chat.settings.temporaryLocations)) {
             chat.settings.temporaryLocations.forEach((loc) => {
+              if (deletedNames.has(loc.name)) return;
               locations.push({
                 id: loc.id,
                 name: loc.name,
@@ -31811,6 +32006,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               row.style.background = "var(--secondary-bg)";
             }
 
+            const actionBtns = [];
+            if (isChatMapEditing) {
+              actionBtns.push(`<button type="button" class="chat-mod-footer-btn secondary edit-chat-loc-btn" style="height: 24px; font-size: 10.5px; padding: 0 8px; flex-shrink: 0; border-radius: 6px;">编辑</button>`);
+            } else if (node.isTemp) {
+              actionBtns.push(`<button type="button" class="del-temp-btn" style="border: none; background: transparent; color: var(--text-secondary); font-size: 15px; cursor: pointer; padding: 0 4px; line-height: 1;">&times;</button>`);
+            }
+
             row.innerHTML = `
               <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
                 ${hasChildren ? `<svg class="strip-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink: 0; transform: rotate(90deg); transition: transform 0.15s ease; cursor: pointer;"><polyline points="9 18 15 12 9 6"></polyline></svg>` : `<span style="width: 12px; flex-shrink: 0;"></span>`}
@@ -31825,12 +32027,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                ${node.isTemp ? `<button type="button" class="del-temp-btn" style="border: none; background: transparent; color: var(--text-secondary); font-size: 15px; cursor: pointer; padding: 0 4px; line-height: 1;">&times;</button>` : ""}
+                ${actionBtns.join("")}
               </div>
             `;
 
             row.onclick = async (e) => {
-              if (e.target.closest(".strip-arrow") || e.target.closest(".del-temp-btn") || e.target.closest(".strip-thumb") || e.target.closest(".strip-thumb-placeholder")) return;
+              if (e.target.closest(".strip-arrow") || e.target.closest(".del-temp-btn") || e.target.closest(".edit-chat-loc-btn") || e.target.closest(".strip-thumb") || e.target.closest(".strip-thumb-placeholder")) return;
               if (chat.settings.currentLocation === node.name) {
                 delete chat.settings.currentLocation;
               } else {
@@ -31842,6 +32044,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               await renderChatMapList();
             };
+
+            const editLocBtn = row.querySelector(".edit-chat-loc-btn");
+            if (editLocBtn) {
+              editLocBtn.onclick = (e) => {
+                e.stopPropagation();
+                openChatLocationEditModal(node);
+              };
+            }
 
             const thumbImg = row.querySelector(".strip-thumb");
             if (thumbImg) {
@@ -31976,11 +32186,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (!currentChat.settings) currentChat.settings = {};
                   currentChat.settings.miniMapSvg = item.chat.settings.miniMapSvg;
                   currentChat.settings.miniMapStyle = item.chat.settings.miniMapStyle || "奶油风";
+                  if (item.chat.settings.temporaryLocations) {
+                    currentChat.settings.temporaryLocations = JSON.parse(JSON.stringify(item.chat.settings.temporaryLocations));
+                  }
+                  if (item.chat.settings.customLocations) {
+                    currentChat.settings.customLocations = JSON.parse(JSON.stringify(item.chat.settings.customLocations));
+                  }
+                  if (item.chat.settings.deletedLocationNames) {
+                    currentChat.settings.deletedLocationNames = JSON.parse(JSON.stringify(item.chat.settings.deletedLocationNames));
+                  }
+                  if (item.chat.settings.contextMapData) {
+                    currentChat.settings.contextMapData = JSON.parse(JSON.stringify(item.chat.settings.contextMapData));
+                  }
+                  if (item.chat.settings.mapViewMode) {
+                    currentChat.settings.mapViewMode = item.chat.settings.mapViewMode;
+                  }
                   const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
                   if (dbInstance) await dbInstance.chats.put(currentChat);
                   closeModal();
                   if (typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("导入成功", `已成功从【${item.chat.name}】导入小地图`);
+                    window.showCustomAlert("导入成功", `已成功从【${item.chat.name}】导入小地图与全部地点信息`);
                   }
                   openChatMiniMapModal();
                 };
@@ -31994,54 +32219,195 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.openChatMapImportModal = openChatMapImportModal;
 
-        async function openChatTempLocationModal() {
+        async function openChatLocationEditModal(loc = null) {
           if (!state.activeChatId) return;
           const chat = state.chats[state.activeChatId];
           if (!chat) return;
 
           const modal = document.getElementById("chat-temp-location-modal");
+          const modalTitle = document.getElementById("chat-temp-loc-modal-title");
           const nameInput = document.getElementById("chat-temp-loc-name-input");
+          const levelSelect = document.getElementById("chat-temp-loc-level-select");
           const parentSelect = document.getElementById("chat-temp-loc-parent-select");
+          const parentGroup = document.getElementById("chat-temp-loc-parent-group");
           const descInput = document.getElementById("chat-temp-loc-desc-input");
           const closeBtn = document.getElementById("close-chat-temp-loc-btn");
           const cancelBtn = document.getElementById("cancel-chat-temp-loc-btn");
           const confirmBtn = document.getElementById("confirm-chat-temp-loc-btn");
-          if (!modal || !nameInput || !parentSelect || !descInput) return;
+          const deleteBtn = document.getElementById("delete-chat-temp-loc-btn");
 
-          nameInput.value = "";
-          descInput.value = "";
-          parentSelect.innerHTML = `<option value="">无（作为一级大地图）</option>`;
+          if (!modal || !nameInput || !levelSelect || !parentSelect || !descInput) return;
 
-          const locations = await getAllChatLocations(chat);
-          locations.forEach(loc => {
-            const opt = document.createElement("option");
-            opt.value = loc.name;
-            opt.textContent = loc.name;
-            parentSelect.appendChild(opt);
-          });
+          const isEditing = Boolean(loc);
+          if (modalTitle) modalTitle.textContent = isEditing ? "编辑地点" : "添加地点";
+          if (deleteBtn) deleteBtn.style.display = isEditing ? "inline-flex" : "none";
+
+          nameInput.value = loc ? (loc.name || "") : "";
+          levelSelect.value = String(loc ? (loc.level || 1) : 1);
+          descInput.value = loc ? (loc.desc || "") : "";
+
+          const allLocs = await getAllChatLocations(chat);
+
+          const updateParentOptions = () => {
+            const lvl = parseInt(levelSelect.value) || 1;
+            parentSelect.innerHTML = "";
+            if (lvl === 1) {
+              if (parentGroup) parentGroup.style.display = "none";
+              const opt = document.createElement("option");
+              opt.value = "";
+              opt.textContent = "顶级大地图";
+              parentSelect.appendChild(opt);
+            } else {
+              if (parentGroup) parentGroup.style.display = "block";
+              const targetParentLevel = lvl - 1;
+              const validParents = allLocs.filter(l => (l.level === targetParentLevel) && (!loc || l.name !== loc.name));
+              if (validParents.length === 0) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = targetParentLevel === 1 ? "无（请先创建一级大区域）" : "无（请先创建二级建筑分区）";
+                parentSelect.appendChild(opt);
+              } else {
+                validParents.forEach(p => {
+                  const opt = document.createElement("option");
+                  opt.value = p.name;
+                  opt.textContent = p.name;
+                  parentSelect.appendChild(opt);
+                });
+              }
+              if (loc && loc.parent) {
+                parentSelect.value = loc.parent;
+              }
+            }
+          };
+
+          levelSelect.onchange = updateParentOptions;
+          updateParentOptions();
 
           const closeModal = () => modal.classList.remove("visible");
           if (closeBtn) closeBtn.onclick = closeModal;
           if (cancelBtn) cancelBtn.onclick = closeModal;
 
+          if (deleteBtn) {
+            deleteBtn.onclick = async () => {
+              if (!loc) return;
+              if (typeof window.showCustomConfirm === "function") {
+                const ok = await window.showCustomConfirm("删除确认", `确定要删除地点《${loc.name}》吗？其下属子地点也将一并删除。`);
+                if (!ok) return;
+              }
+              if (!chat.settings) chat.settings = {};
+              const deletedNames = new Set(chat.settings.deletedLocationNames || []);
+              deletedNames.add(loc.name);
+
+              // 递归搜集所有子孙地点并级联删除
+              const toDeleteParents = [loc.name];
+              while (toDeleteParents.length > 0) {
+                const pName = toDeleteParents.shift();
+                const children = allLocs.filter(l => l.parent === pName);
+                children.forEach(c => {
+                  deletedNames.add(c.name);
+                  toDeleteParents.push(c.name);
+                });
+              }
+
+              chat.settings.deletedLocationNames = Array.from(deletedNames);
+
+              if (Array.isArray(chat.settings.temporaryLocations)) {
+                chat.settings.temporaryLocations = chat.settings.temporaryLocations.filter(t => !deletedNames.has(t.name));
+              }
+              if (Array.isArray(chat.settings.customLocations)) {
+                chat.settings.customLocations = chat.settings.customLocations.filter(t => !deletedNames.has(t.name));
+              }
+              if (Array.isArray(chat.settings.contextMapData)) {
+                chat.settings.contextMapData = chat.settings.contextMapData.filter(t => !deletedNames.has(t.name));
+              }
+
+              if (chat.settings.currentLocation && deletedNames.has(chat.settings.currentLocation)) {
+                delete chat.settings.currentLocation;
+              }
+
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+              closeModal();
+              await renderChatMapList();
+            };
+          }
+
           if (confirmBtn) {
             confirmBtn.onclick = async () => {
               const name = nameInput.value.trim();
-              if (!name) return;
-              const parent = parentSelect.value;
+              if (!name) {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "请输入地点名称");
+                }
+                return;
+              }
+              const lvl = parseInt(levelSelect.value) || 1;
+              const parent = (lvl === 1) ? "" : parentSelect.value;
               const desc = descInput.value.trim();
 
               if (!chat.settings) chat.settings = {};
               if (!Array.isArray(chat.settings.temporaryLocations)) {
                 chat.settings.temporaryLocations = [];
               }
-              chat.settings.temporaryLocations.push({
-                id: "temp_loc_" + Date.now(),
-                name: name,
-                parent: parent,
-                desc: desc,
-                level: parent ? 2 : 1
-              });
+              if (!Array.isArray(chat.settings.customLocations)) {
+                chat.settings.customLocations = [];
+              }
+
+              if (isEditing) {
+                const oldName = loc.name;
+                // 如果改名，更新依赖其为 parent 的子项
+                if (oldName && oldName !== name) {
+                  if (Array.isArray(chat.settings.temporaryLocations)) {
+                    chat.settings.temporaryLocations.forEach(t => { if (t.parent === oldName) t.parent = name; });
+                  }
+                  if (Array.isArray(chat.settings.customLocations)) {
+                    chat.settings.customLocations.forEach(t => { if (t.parent === oldName) t.parent = name; });
+                  }
+                  if (chat.settings.currentLocation === oldName) {
+                    chat.settings.currentLocation = name;
+                  }
+                }
+
+                let updated = false;
+                const tempItem = chat.settings.temporaryLocations.find(t => t.id === loc.id || t.name === oldName);
+                if (tempItem) {
+                  tempItem.name = name;
+                  tempItem.level = lvl;
+                  tempItem.parent = parent;
+                  tempItem.desc = desc;
+                  updated = true;
+                }
+
+                const customItem = chat.settings.customLocations.find(t => t.id === loc.id || t.name === oldName);
+                if (customItem) {
+                  customItem.name = name;
+                  customItem.level = lvl;
+                  customItem.parent = parent;
+                  customItem.desc = desc;
+                  updated = true;
+                }
+
+                if (!updated) {
+                  chat.settings.customLocations.push({
+                    id: loc.id || "custom_loc_" + Date.now(),
+                    name: name,
+                    level: lvl,
+                    parent: parent,
+                    desc: desc,
+                    prompt: loc.prompt || "",
+                    imageUrl: loc.imageUrl || "",
+                    originalName: oldName
+                  });
+                }
+              } else {
+                chat.settings.temporaryLocations.push({
+                  id: "temp_loc_" + Date.now(),
+                  name: name,
+                  parent: parent,
+                  desc: desc,
+                  level: lvl
+                });
+              }
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance) await dbInstance.chats.put(chat);
@@ -32052,6 +32418,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           modal.classList.add("visible");
         }
+        window.openChatLocationEditModal = openChatLocationEditModal;
+        window.openChatTempLocationModal = openChatLocationEditModal;
         window.openChatTempLocationModal = openChatTempLocationModal;
 
         let miniMapCardInitialized = false;
@@ -32362,10 +32730,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
 
           const locNodes = container.querySelectorAll("[data-name], .map-location-node, g, text");
+          const locationNodeList = [];
+
           locNodes.forEach(node => {
             const rawName = node.getAttribute("data-name") || (node.tagName.toLowerCase() === "text" ? node.textContent.trim() : "");
             if (rawName || node.classList.contains("map-location-node")) {
               node.style.cursor = "pointer";
+              node.style.pointerEvents = "all";
+              locationNodeList.push(node);
+
+              // 为矢量节点自动插入宽裕的隐形判定热区矩形
+              try {
+                if (typeof node.getBBox === "function" && node.tagName.toLowerCase() === "g") {
+                  const bbox = node.getBBox();
+                  if (bbox && bbox.width > 0 && bbox.height > 0) {
+                    const hitRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                    hitRect.setAttribute("x", bbox.x - 24);
+                    hitRect.setAttribute("y", bbox.y - 18);
+                    hitRect.setAttribute("width", bbox.width + 48);
+                    hitRect.setAttribute("height", bbox.height + 36);
+                    hitRect.setAttribute("fill", "transparent");
+                    hitRect.setAttribute("pointer-events", "all");
+                    hitRect.style.cursor = "pointer";
+                    node.insertBefore(hitRect, node.firstChild);
+                  }
+                }
+              } catch (_) {}
+
               node.addEventListener("click", async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -32385,6 +32776,47 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               });
             }
           });
+
+          // 容器级点击热区智能吸附：若点击在节点附近 60px 范围内，自动触发气泡
+          container.onclick = async (e) => {
+            if (e.target.closest("[data-name], .map-location-node")) return;
+            const clickX = e.clientX;
+            const clickY = e.clientY;
+            let closestNode = null;
+            let minDistance = 60; // 60px 宽判定吸附距离
+
+            for (const n of locationNodeList) {
+              try {
+                const rect = n.getBoundingClientRect();
+                if (rect.width === 0 && rect.height === 0) continue;
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const dist = Math.hypot(clickX - centerX, clickY - centerY);
+                if (dist < minDistance) {
+                  minDistance = dist;
+                  closestNode = n;
+                }
+              } catch (_) {}
+            }
+
+            if (closestNode) {
+              e.preventDefault();
+              e.stopPropagation();
+              const locName = closestNode.getAttribute("data-name") || closestNode.textContent.trim();
+              const locs = await getAllChatLocations(chat);
+              let found = locs.find(l => l.name === locName || (locName && (locName.includes(l.name) || l.name.includes(locName))));
+              if (!found) {
+                const parentWithData = closestNode.closest("[data-name], .map-location-node");
+                if (parentWithData) {
+                  const pName = parentWithData.getAttribute("data-name") || parentWithData.textContent.trim();
+                  found = locs.find(l => l.name === pName || (pName && (pName.includes(l.name) || l.name.includes(pName))));
+                }
+              }
+              if (found && found.desc && typeof found.desc === "string" && found.desc.trim() && found.desc.trim() !== found.name) {
+                showLocationBubble(closestNode, found.desc.trim());
+              }
+            }
+          };
 
           // 拦截内部所有可能的外链与跳转，保持纯净内联
           container.querySelectorAll("a").forEach(a => {
@@ -32480,22 +32912,53 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               matchedNode.classList.remove("map-location-pin", "map-location-glow");
               matchedNode.style.removeProperty("filter");
 
-              const oldBeacon = matchedNode.querySelector(".current-location-beacon");
-              if (oldBeacon) oldBeacon.remove();
+              const existingBeacons = container.querySelectorAll(".current-location-beacon");
+              existingBeacons.forEach(b => b.remove());
+
+              const svgRoot = container.querySelector("svg") || matchedNode.ownerSVGElement || matchedNode.closest("svg");
+
+              let posX = 0;
+              let posY = 0;
+              let hasCoords = false;
+
+              if (typeof matchedNode.getBBox === "function") {
+                try {
+                  const bbox = matchedNode.getBBox();
+                  if (bbox && (bbox.width || bbox.height || bbox.x || bbox.y)) {
+                    posX = bbox.x + (bbox.width / 2);
+                    posY = bbox.y;
+                    hasCoords = true;
+                  }
+                } catch (e) {}
+              }
+
+              if (!hasCoords) {
+                if (matchedNode.getAttribute("cx") && matchedNode.getAttribute("cy")) {
+                  posX = parseFloat(matchedNode.getAttribute("cx")) || 0;
+                  posY = parseFloat(matchedNode.getAttribute("cy")) || 0;
+                  hasCoords = true;
+                } else if (matchedNode.getAttribute("x") && matchedNode.getAttribute("y")) {
+                  posX = parseFloat(matchedNode.getAttribute("x")) || 0;
+                  posY = parseFloat(matchedNode.getAttribute("y")) || 0;
+                  hasCoords = true;
+                }
+              }
 
               if (effectType === "pin") {
-                const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
-                beaconG.setAttribute("class", "current-location-beacon");
-                beaconG.setAttribute("transform", "translate(0, -22)");
-                beaconG.setAttribute("style", "pointer-events: none;");
-                beaconG.innerHTML = `
-                  <ellipse cx="2" cy="18" rx="4.5" ry="2" fill="rgba(0,0,0,0.3)" />
-                  <polygon points="-1,8 0,18 1,8" fill="#718096" stroke="#4a5568" stroke-width="0.5" />
-                  <circle cx="0" cy="0" r="9" fill="${pinColor}" stroke="rgba(0,0,0,0.25)" stroke-width="1.2" />
-                  <circle cx="-2.5" cy="-2.5" r="4.5" fill="#FFFFFF" opacity="0.35" />
-                  <circle cx="-3" cy="-3" r="2" fill="#FFFFFF" opacity="0.8" />
-                `;
-                matchedNode.appendChild(beaconG);
+                if (svgRoot) {
+                  const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                  beaconG.setAttribute("class", "current-location-beacon");
+                  beaconG.setAttribute("transform", `translate(${posX}, ${posY - 12})`);
+                  beaconG.setAttribute("style", "pointer-events: none;");
+                  beaconG.innerHTML = `
+                    <ellipse cx="0" cy="12" rx="4.5" ry="2" fill="rgba(0,0,0,0.3)" />
+                    <polygon points="-1,2 0,12 1,2" fill="#718096" stroke="#4a5568" stroke-width="0.5" />
+                    <circle cx="0" cy="-3" r="9" fill="${pinColor}" stroke="rgba(0,0,0,0.25)" stroke-width="1.2" />
+                    <circle cx="-2.5" cy="-5.5" r="4.5" fill="#FFFFFF" opacity="0.35" />
+                    <circle cx="-3" cy="-6" r="2" fill="#FFFFFF" opacity="0.8" />
+                  `;
+                  svgRoot.appendChild(beaconG);
+                }
               } else if (effectType === "glow") {
                 matchedNode.classList.add("map-location-glow");
                 matchedNode.style.setProperty("--map-loc-glow-color", pinColor);
@@ -32503,22 +32966,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 matchedNode.style.setProperty("--map-loc-glow-spread", `${Math.round(8 * glowBright)}px`);
               } else if (effectType === "custom" && customIcon) {
                 const customScale = (state?.apiConfig?.mapLocationCustomScale !== undefined) ? parseFloat(state.apiConfig.mapLocationCustomScale) : 2.0;
-                const iconSize = Math.max(8, Math.round(18 * customScale));
+                const iconSize = Math.max(12, Math.round(20 * customScale));
                 const iconOffset = -Math.round(iconSize / 2);
-                const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
-                beaconG.setAttribute("class", "current-location-beacon");
-                beaconG.setAttribute("transform", "translate(0, -22)");
-                beaconG.setAttribute("style", "pointer-events: none;");
-                beaconG.innerHTML = `
-                  <image href="${customIcon}" x="${iconOffset}" y="${iconOffset}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet" />
-                `;
-                if (customGlow) {
-                  matchedNode.classList.add("map-location-glow");
-                  matchedNode.style.setProperty("--map-loc-glow-color", pinColor);
-                  matchedNode.style.setProperty("--map-loc-glow-speed", `${glowSpeed}s`);
-                  matchedNode.style.setProperty("--map-loc-glow-spread", `${Math.round(8 * glowBright)}px`);
+
+                if (svgRoot) {
+                  const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                  beaconG.setAttribute("class", "current-location-beacon");
+                  beaconG.setAttribute("transform", `translate(${posX}, ${posY - 8})`);
+                  beaconG.setAttribute("style", "pointer-events: none;");
+                  beaconG.innerHTML = `
+                    <image href="${customIcon}" xlink:href="${customIcon}" x="${iconOffset}" y="${iconOffset}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet" />
+                  `;
+                  if (customGlow) {
+                    matchedNode.classList.add("map-location-glow");
+                    matchedNode.style.setProperty("--map-loc-glow-color", pinColor);
+                    matchedNode.style.setProperty("--map-loc-glow-speed", `${glowSpeed}s`);
+                    matchedNode.style.setProperty("--map-loc-glow-spread", `${Math.round(8 * glowBright)}px`);
+                  }
+                  svgRoot.appendChild(beaconG);
                 }
-                matchedNode.appendChild(beaconG);
               }
             }
           }
@@ -32816,6 +33282,127 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.generateChatMiniMapSvg = generateChatMiniMapSvg;
 
+        async function executeModifyMiniMapSvg(userModifyPrompt = "") {
+          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+
+          const curSvg = chat.settings?.miniMapSvg || (chat.settings?.useModuleMap !== false && chat.activeModuleId && chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg) || chat.settings?.contextMiniMapSvg;
+          if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
+            throw new Error("当前暂无已生成的小地图代码");
+          }
+
+          const locations = (typeof getAllChatLocations === "function") ? await getAllChatLocations(chat) : [];
+          const locSummary = locations.map(l => {
+            const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
+            const tempTag = l.isTemp ? "【临时新增地点】" : "";
+            const descPart = l.desc ? ` - 简介: ${l.desc}` : "";
+            return `- 层级${l.level}【${l.name}】(${hierarchy})${tempTag}${descPart}`;
+          }).join("\n");
+
+          const globalReq = (localStorage.getItem("mini_map_global_requirement") || "").trim();
+          const curStyle = chat.settings?.miniMapStyle || "奶油风";
+
+          const prompt = `你拥有全球顶尖的矢量概念插画与示意地图设计大师造诣。用户希望在现有的小地图SVG代码基础上进行精准的增量修改与优化。\n\n` +
+            `【现有的完整小地图SVG代码】：\n${curSvg}\n\n` +
+            `【最新完整地点与设定清单（包含新增与临时地点）】：\n${locSummary || "地点清单保持原样"}\n\n` +
+            `【用户的具体修改要求】：\n${userModifyPrompt || "请根据最新的地点清单与临时地点，在现有地图中增加新地点并优化布局"}\n\n` +
+            (globalReq ? `【全局要求】：\n${globalReq}\n\n` : "") +
+            `【修改与优化准则】：\n` +
+            `1. 必须完全基于现有的SVG代码进行增量修改、补充新增地点、调整视觉元素与布局，保持原有的【${curStyle}】艺术画风、配色与精致度。\n` +
+            `2. 保持构图饱满，每个地点节点最外层 <g> 标签必须附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致。\n` +
+            `3. 纯净内联SVG：只输出修改后的纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，严禁包含任何Markdown代码块或多余文字。`;
+
+          const apiConfig = (typeof getEffectiveApiConfig === "function")
+            ? getEffectiveApiConfig("map")
+            : ((state && state.apiConfig) || (window.state && window.state.apiConfig) || {});
+          const { proxyUrl, apiKey, model } = apiConfig;
+
+          if (!apiKey || apiKey.trim() === "") {
+            throw new Error("请先在API设置中配置有效的 API Key");
+          }
+
+          let isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
+          let cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
+
+          let requestUrl = isGemini
+            ? `${GEMINI_API_URL}/${model || 'gemini-1.5-flash'}:generateContent?key=${getRandomValue(apiKey)}`
+            : (cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`);
+
+          let requestHeaders = isGemini
+            ? { "Content-Type": "application/json" }
+            : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}` };
+
+          let requestBody = isGemini
+            ? {
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.3 },
+                systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图增量修改器。请严格基于用户现有的SVG代码进行修改与优化，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。" }] }
+              }
+            : {
+                model: model || "gpt-4o",
+                messages: [
+                  { role: "system", content: "你是一个专业的矢量SVG地图增量修改器。请严格基于用户现有的SVG代码进行修改与优化，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。" },
+                  { role: "user", content: prompt }
+                ],
+                temperature: 0.3,
+                stream: false
+              };
+
+          const resp = await fetch(requestUrl, {
+            method: "POST",
+            headers: requestHeaders,
+            body: JSON.stringify(requestBody)
+          });
+
+          let newSvgCode = "";
+          if (resp.ok) {
+            const respData = await resp.json();
+            newSvgCode = isGemini
+              ? respData?.candidates?.[0]?.content?.parts?.[0]?.text
+              : respData?.choices?.[0]?.message?.content;
+
+            if (newSvgCode) {
+              newSvgCode = newSvgCode.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
+              const svgMatch = newSvgCode.match(/<svg[\s\S]*?<\/svg>/i);
+              if (svgMatch) {
+                newSvgCode = svgMatch[0];
+              }
+            }
+          } else {
+            const errData = await resp.json().catch(() => null);
+            throw new Error(errData?.error?.message || `请求失败 (${resp.status})`);
+          }
+
+          if (!newSvgCode) {
+            throw new Error("AI未能返回有效的修改后地图SVG代码");
+          }
+
+          if (!chat.settings) chat.settings = {};
+          if (chat.settings.useModuleMap !== false && chat.activeModuleId) {
+            if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
+            chat.settings.moduleMiniMaps[chat.activeModuleId] = {
+              svg: newSvgCode,
+              style: curStyle
+            };
+          } else {
+            chat.settings.contextMiniMapSvg = newSvgCode;
+            chat.settings.contextMiniMapStyle = curStyle;
+          }
+          chat.settings.miniMapSvg = newSvgCode;
+          if (dbInstance) await dbInstance.chats.put(chat);
+
+          const miniModal = document.getElementById("chat-mini-map-modal");
+          if (miniModal && miniModal.classList.contains("visible")) {
+            renderChatMiniMap();
+          }
+
+          if (typeof window.showCustomAlert === "function") {
+            window.showCustomAlert("提示", "小地图修改并更新成功");
+          }
+        }
+        window.executeModifyMiniMapSvg = executeModifyMiniMapSvg;
+
         async function generateSystemStatusContent(targetObj, groupChat = null) {
           try {
             if (!targetObj) return null;
@@ -33004,10 +33591,16 @@ ${recentHistoryText}
           }
         }
 
-        async function triggerAiResponse() {
-          if (!state.activeChatId) return;
-          const chatId = state.activeChatId;
-          const chat = state.chats[state.activeChatId];
+        async function triggerAiResponse(targetChatId) {
+          const chatId = targetChatId || state.activeChatId;
+          if (!chatId) return;
+          let chat = (state.chats && state.chats[chatId]) || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
+          if (!chat && typeof db !== "undefined" && db.chats) {
+            try {
+              chat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              if (chat && state.chats) state.chats[chat.id] = chat;
+            } catch (e) {}
+          }
           if (!chat) return;
 
           // 骰子角色的消息由本地规则生成，不调用 AI 接口
@@ -34550,6 +35143,7 @@ ${luckGuideNote}
 			${sharedContext}
 			${stickerContext}
 			${linkedMemoryContext}
+			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度系统】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
 
 			# 用户的角色
 			- **${myNickname}**: ${chat.settings.myPersona}${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? " [状态: " + window.getCocPromptStatus(chat.settings.myCocPanel) + "]" : ""}${chat.settings.myName ? ` [姓名:${chat.settings.myName}]` : ""}${chat.settings.myAge ? ` [年龄:${chat.settings.myAge}]` : ""}${chat.settings.myBirthday ? ` [生日:${chat.settings.myBirthday}]` : ""}${chat.settings.myGender ? ` [性别:${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}]` : ""}
@@ -35029,6 +35623,7 @@ ${luckStatusDirective}
 			${mapPromptBlock}
 			${thoughtChainPromptBlock}
 			${linkedMemoryContext}
+			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度设定】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
 			- **可用表情包**:
 			${stickerContext || ""}
 			现在，请根据以上所有规则和下方的对话历史，继续进行对话。`;
@@ -42890,6 +43485,8 @@ ${luckStatusDirective}
           } catch (e) {}
           groups.sort((a, b) => (a.order || 0) - (b.order || 0));
 
+          const fragment = document.createDocumentFragment();
+
           const createGroupCard = (title, memberList, defaultOpen = true) => {
             if (!memberList || memberList.length === 0) return null;
             const card = document.createElement("div");
@@ -42947,7 +43544,7 @@ ${luckStatusDirective}
           const specialContacts = contacts.filter(c => !c.isNpc && (c.isSpecialAttention || c.chat?.isSpecialAttention || c.chat?.settings?.isSpecialAttention || c.chat?.isPinned || c.chat?.settings?.isPinned));
           if (specialContacts.length > 0) {
             const specCard = createGroupCard("特别关心", specialContacts, true);
-            if (specCard) listEl.appendChild(specCard);
+            if (specCard) fragment.appendChild(specCard);
           }
 
           // 2. 好友分组
@@ -42962,20 +43559,22 @@ ${luckStatusDirective}
               });
               if (gMembers.length > 0) {
                 const gCard = createGroupCard(group.name, gMembers, true);
-                if (gCard) listEl.appendChild(gCard);
+                if (gCard) fragment.appendChild(gCard);
               }
             });
           } else {
             const defCard = createGroupCard("我的好友", normalContacts, true);
-            if (defCard) listEl.appendChild(defCard);
+            if (defCard) fragment.appendChild(defCard);
           }
 
           // 3. NPC 角色分组
           const npcContacts = contacts.filter(c => c.isNpc);
           if (npcContacts.length > 0) {
             const npcCard = createGroupCard("NPC角色", npcContacts, true);
-            if (npcCard) listEl.appendChild(npcCard);
+            if (npcCard) fragment.appendChild(npcCard);
           }
+
+          listEl.appendChild(fragment);
         }
 
         async function renderContactPicker() {
@@ -43143,6 +43742,8 @@ ${luckStatusDirective}
               // 为用户自己也加上管理员和头衔的初始设置
               isUserAdmin: false,
               myGroupTitle: "",
+              affectionEnabled: false,
+              affectionList: [],
               summary: {
                 enabled: true,
                 mode: "auto",
@@ -49283,7 +49884,8 @@ ${luckStatusDirective}
         // 重新生成功能核心代码
         async function handleRerollClick() {
           if (!state.activeChatId) return;
-          const chat = state.chats[state.activeChatId];
+          const targetId = state.activeChatId;
+          const chat = state.chats[targetId];
           if (!chat || !chat.history || chat.history.length === 0) return;
 
           // 1. 查找玩家最后一条消息的位置
@@ -49307,10 +49909,12 @@ ${luckStatusDirective}
           await db.chats.put(chat);
 
           // 4. 刷新聊天界面，消除被删除的消息
-          renderChatInterface(state.activeChatId);
+          if (state.activeChatId === targetId) {
+            renderChatInterface(targetId);
+          }
 
           // 5. 再次请求 API 生成最新回复
-          triggerAiResponse();
+          triggerAiResponse(targetId);
         }
 
         function initDraggableLyricsBar() {
@@ -55118,21 +55722,26 @@ ${luckStatusDirective}
 
         function getDefaultSummarySettings() {
           let prompt = "请你以第三人称的视角，客观、冷静、不带任何感情色彩地总结以下对话的核心事件和信息。禁止进行任何角色扮演或添加主观评论。";
+          let count = 20;
+          let contextCount = 20;
           try {
             const defId = localStorage.getItem("chat_summary_default_preset_id");
             const raw = localStorage.getItem("chat_summary_presets");
             if (defId && raw) {
               const list = JSON.parse(raw);
               const found = list.find((p) => p.id === defId);
-              if (found && (found.prompt || found.text)) {
-                prompt = found.prompt || found.text;
+              if (found) {
+                if (found.prompt || found.text) prompt = found.prompt || found.text;
+                if (found.count !== undefined) count = parseInt(found.count) || 20;
+                if (found.contextCount !== undefined) contextCount = parseInt(found.contextCount) || 20;
               }
             }
           } catch (e) {}
           return {
             enabled: true,
             mode: "auto",
-            count: 20,
+            count: count,
+            contextCount: contextCount,
             prompt: prompt,
             lastSummaryIndex: -1,
           };
@@ -55150,6 +55759,8 @@ ${luckStatusDirective}
                   id: p.id,
                   name: p.name || "未命名",
                   prompt: p.prompt || p.text || "",
+                  count: p.count !== undefined ? (parseInt(p.count) || 20) : 20,
+                  contextCount: p.contextCount !== undefined ? (parseInt(p.contextCount) || 20) : 20,
                 }));
               }
             }
@@ -56603,30 +57214,34 @@ ${luckStatusDirective}
           if (!chat || !chat.settings || !chat.settings.keeperForcedDraw) return;
 
           try {
-            console.log("执行守密人末尾强制生图...");
-            const maxMem = chat.settings.maxMemory || 10;
+            console.log("执行守秘人末尾强制生图...");
+            const maxMem = chat.settings.maxMemory || 12;
             const recentMsgs = (chat.history || [])
               .filter((m) => !m.isHidden && !m.isTemporary && m.type !== "naiimag")
               .slice(-maxMem);
 
             let historyText = "";
             recentMsgs.forEach((m) => {
-              const name = m.senderName || m.name || (m.role === "user" ? "用户" : "AI");
+              const name = m.senderName || m.name || (m.role === "user" ? (chat.settings?.myName || "用户") : (chat.name || "AI"));
               const content = typeof m.content === "object" ? JSON.stringify(m.content) : String(m.content || "");
               if (content.trim()) {
                 historyText += `${name}: ${content}\n`;
               }
             });
 
+            // 1. 模组信息（包括地图、简介、图片及勾选内容）
             const moduleBlock = (typeof getChatModulePromptBlock === "function") ? await getChatModulePromptBlock(chat) : "";
+
+            // 2. 人设信息
             let personaBlock = "";
             if (chat.isGroup) {
-              const memberNames = (chat.members || []).map((m) => `${m.name}: ${m.persona || ""}`).join("\n");
-              personaBlock = `群成员人设:\n${memberNames}\n我的人设: ${chat.settings.myPersona || ""}`;
+              const memberNames = (chat.members || []).map((m) => `- ${m.groupNickname || m.name}: ${m.persona || "暂无人设"}`).join("\n");
+              personaBlock = `# 群成员人设:\n${memberNames}\n- 用户人设: ${chat.settings.myPersona || "普通人"}`;
             } else {
-              personaBlock = `对方人设: ${chat.settings.aiPersona || ""}\n我的人设: ${chat.settings.myPersona || ""}`;
+              personaBlock = `# 角色人设:\n- ${chat.name}: ${chat.settings.aiPersona || "暂无人设"}\n- 用户人设: ${chat.settings.myPersona || "普通人"}`;
             }
 
+            // 3. 世界书内容
             let worldBookContent = "";
             if (chat.settings.linkedWorldBookIds && chat.settings.linkedWorldBookIds.length > 0) {
               const linkedContents = chat.settings.linkedWorldBookIds
@@ -56641,17 +57256,57 @@ ${luckStatusDirective}
               }
             }
 
-            const targetCharId = chat.settings.keeperTargetId;
-            let charPromptBlock = "";
-            if (targetCharId && targetCharId !== "none") {
-              const cp = chat.settings.keeperCharPrompts?.[targetCharId];
-              if (cp) charPromptBlock = `当前生图角色专属Prompt: ${cp}`;
+            // 4. 每个人人设后面附带的专属独立 Prompt
+            let allCharPromptsBlock = "";
+            const charPrompts = chat.settings.keeperCharPrompts || {};
+            const promptEntries = [];
+            if (chat.isGroup) {
+              (chat.members || []).forEach((m) => {
+                const p = charPrompts[m.id] || charPrompts[m.name] || charPrompts[m.groupNickname];
+                if (p) promptEntries.push(`- 角色【${m.groupNickname || m.name}】专属生图Prompt: ${p}`);
+              });
+              if (charPrompts["me"]) {
+                promptEntries.push(`- 角色【${chat.settings.myNickname || chat.settings.myName || "我"}】专属生图Prompt: ${charPrompts["me"]}`);
+              }
+            } else {
+              const aiP = charPrompts[chat.id] || charPrompts["ai"] || charPrompts[chat.name];
+              if (aiP) promptEntries.push(`- 角色【${chat.name}】专属生图Prompt: ${aiP}`);
+              if (charPrompts["me"]) promptEntries.push(`- 角色【${chat.settings.myName || "我"}】专属生图Prompt: ${charPrompts["me"]}`);
+            }
+            if (promptEntries.length > 0) {
+              allCharPromptsBlock = `# 各角色专属生图提示词:\n${promptEntries.join("\n")}`;
             }
 
+            // 5. 确定选中的守秘人身份
+            let keeperCharName = chat.isGroup ? "守秘人" : chat.name;
+            const targetCharId = chat.settings.keeperTargetId;
+            if (targetCharId && targetCharId !== "none") {
+              if (targetCharId === "me") {
+                keeperCharName = chat.settings.myNickname || chat.settings.myName || "我";
+              } else if (chat.isGroup) {
+                const mem = (chat.members || []).find((m) => (m.id || m.name) === targetCharId);
+                if (mem) keeperCharName = mem.groupNickname || mem.name;
+              } else {
+                keeperCharName = chat.name;
+              }
+            }
+
+            // 6. 提示词代码与格式指令（由AI自主判断生成几张图片）
+            const keeperInstructionBlock = `
+# 【守秘人生图指令与格式规范】
+当前指定的生图发言身份为：【${keeperCharName}】。
+你必须基于上下文剧情进展、各角色外貌/动作/环境、模组及世界书内容，自主决定本次需要生成的图片张数（1张或多张）。
+你的回复必须为合法 JSON，支持以下两种格式之一：
+格式一（单张）：
+{"type": "naiimag", "name": "${keeperCharName}", "prompt": "masterpiece, 1girl/1boy, detailed tags..."}
+格式二（多张）：
+{"type": "naiimag", "name": "${keeperCharName}", "images": [{"prompt": "详细英文Prompt1..."}, {"prompt": "详细英文Prompt2..."}]}
+`;
+
             const keeperSystemPrompt = [
-              "【生图与代码生成指令】",
               chat.settings.keeperPrompt || DEFAULT_KEEPER_PROMPT,
-              charPromptBlock,
+              keeperInstructionBlock,
+              allCharPromptsBlock,
               personaBlock,
               moduleBlock,
               worldBookContent,
@@ -56659,7 +57314,7 @@ ${luckStatusDirective}
 
             const messagesForApi = [
               { role: "system", content: keeperSystemPrompt },
-              { role: "user", content: `以下是近期对话剧情：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON 对象。` }
+              { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON 对象。` }
             ];
 
             const apiCfg = getEffectiveApiConfig("forcedImage");
@@ -56703,24 +57358,33 @@ ${luckStatusDirective}
 
             if (!rawContent || !rawContent.trim()) return;
 
-            let generatedPrompt = "";
+            const promptsToGenerate = [];
             try {
-              const jsonMatch = rawContent.match(/\{[\s\S]*?"(?:type|prompt)"[\s\S]*?\}/);
-              if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                generatedPrompt = parsed.prompt || parsed.content || "";
+              const jsonMatches = rawContent.match(/\{[\s\S]*?\}/g) || [];
+              for (const jm of jsonMatches) {
+                try {
+                  const parsed = JSON.parse(jm);
+                  if (Array.isArray(parsed.images)) {
+                    parsed.images.forEach(img => {
+                      if (img && (img.prompt || img.content)) promptsToGenerate.push(img.prompt || img.content);
+                    });
+                  } else if (parsed.prompt || parsed.content) {
+                    promptsToGenerate.push(parsed.prompt || parsed.content);
+                  }
+                } catch(e) {}
               }
-            } catch (pe) {
-              console.warn("解析生图 JSON 异常:", pe);
+            } catch (pe) {}
+
+            if (promptsToGenerate.length === 0) {
+              const cleanPrompt = rawContent.replace(/^```[a-z]*\s*/i, "").replace(/```$/i, "").replace(/["'\n\r]/g, " ").trim();
+              if (cleanPrompt) promptsToGenerate.push(cleanPrompt);
             }
 
-            if (!generatedPrompt) {
-              generatedPrompt = rawContent.replace(/^```[a-z]*\s*/i, "").replace(/```$/i, "").replace(/["'\n\r]/g, " ").trim();
+            for (const singlePrompt of promptsToGenerate) {
+              if (singlePrompt && singlePrompt.trim()) {
+                await generateAndAppendKeeperNaiImage(chat, singlePrompt.trim());
+              }
             }
-
-            if (!generatedPrompt) return;
-
-            await generateAndAppendKeeperNaiImage(chat, generatedPrompt);
           } catch (err) {
             console.error("守密人强制生图失败:", err);
           }
@@ -62597,6 +63261,7 @@ ${luckStatusDirective}
             }
           });
         }
+        window.compressImage = compressImage;
 
         /**
          * 通用文件上传并压缩处理函数
@@ -76597,11 +77262,14 @@ ${luckStatusDirective}
               const presets = getSummaryPresets();
               const found = presets.find((p) => p.id === presetSelect.value);
               const promptInput = document.getElementById("summary-prompt-input");
-              if (found && promptInput) {
-                promptInput.value = found.prompt;
+              const countInput = document.getElementById("summary-count-input");
+              if (found) {
+                if (promptInput) promptInput.value = found.prompt;
+                if (countInput && found.count !== undefined) countInput.value = found.count;
                 const chat = state.chats[state.activeChatId];
                 if (chat && chat.settings && chat.settings.summary) {
                   chat.settings.summary.prompt = found.prompt;
+                  if (found.count !== undefined) chat.settings.summary.count = found.count;
                 }
               }
             });
@@ -76627,7 +77295,9 @@ ${luckStatusDirective}
           if (presetNewBtn) {
             presetNewBtn.addEventListener("click", async () => {
               const promptInput = document.getElementById("summary-prompt-input");
+              const countInput = document.getElementById("summary-count-input");
               const promptText = promptInput ? promptInput.value.trim() : "";
+              const countVal = countInput ? (parseInt(countInput.value) || 20) : 20;
               let name = null;
               if (typeof showCustomPrompt === "function") {
                 name = await showCustomPrompt("新建预设", "请输入预设名称");
@@ -76642,6 +77312,7 @@ ${luckStatusDirective}
                 id: newId,
                 name: name.trim(),
                 prompt: promptText,
+                count: countVal,
               });
               saveSummaryPresets(presets);
               renderSummaryPresetsUI();
@@ -76664,8 +77335,11 @@ ${luckStatusDirective}
                 return;
               }
               const promptInput = document.getElementById("summary-prompt-input");
+              const countInput = document.getElementById("summary-count-input");
               const promptText = promptInput ? promptInput.value.trim() : "";
+              const countVal = countInput ? (parseInt(countInput.value) || 20) : 20;
               found.prompt = promptText;
+              found.count = countVal;
               saveSummaryPresets(presets);
               renderSummaryPresetsUI();
               if (select) select.value = found.id;
