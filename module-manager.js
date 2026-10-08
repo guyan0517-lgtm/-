@@ -3959,27 +3959,32 @@ ${chap.content}
       // 动态计算并同步所有章节的真实字数与总字数（含目录字数、地图字数、图片简介字数）
       let chapsTotalWords = 0;
       chapters.forEach(c => {
-        const cWords = this.countWords(c.content || '');
+        const cWords = this.countWords(c.content || "");
         c.wordCount = cWords;
         chapsTotalWords += cWords;
       });
       let images = [];
       if (database && database.moduleImages) {
         try {
-          images = await database.moduleImages.where('moduleId').equals(moduleId).toArray();
+          images = await database.moduleImages.where("moduleId").equals(moduleId).toArray();
+          if (images.length === 0 && typeof moduleId === "string" && !isNaN(Number(moduleId))) {
+            images = await database.moduleImages.where("moduleId").equals(Number(moduleId)).toArray();
+          } else if (images.length === 0 && typeof moduleId === "number") {
+            images = await database.moduleImages.where("moduleId").equals(String(moduleId)).toArray();
+          }
         } catch (e) {}
       }
       const tocWords = this.getTocWordCount(mod, chapters);
       const mapWords = this.getMapWordCount(mod, chapters);
       const imgWords = this.getImagesWordCount(mod, images);
       const realTotalWords = chapsTotalWords + tocWords + mapWords + imgWords;
-      mod.wordCount = realTotalWords;
-      mod.chapterCount = chapters.length;
-
-      if (database && database.modules && mod.id) {
-        await database.modules.update(mod.id, { wordCount: realTotalWords, chapterCount: chapters.length });
+      if (chapters.length > 0) {
+        mod.wordCount = realTotalWords;
+        mod.chapterCount = chapters.length;
+        if (database && database.modules && mod.id) {
+          await database.modules.update(mod.id, { wordCount: realTotalWords, chapterCount: chapters.length });
+        }
       }
-
       const mainView = document.getElementById('module-library-main-view');
       const detailView = document.getElementById('module-library-detail-view');
       const readerView = document.getElementById('module-library-reader-view');
@@ -7237,28 +7242,30 @@ ${chaptersDigest}
 
     async saveCutModuleToLibrary() {
       if (!this.cutChapters || this.cutChapters.length === 0) {
-        if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('提示', '暂无已重构好的章节数据');
+        if (typeof global.showCustomAlert === "function") {
+          global.showCustomAlert("提示", "暂无已重构好的章节数据");
         }
         return;
       }
 
-      const moduleId = 'mod_' + Date.now();
-      const bgTag = this.currentPlan?.bgTag || '日模';
-      const endingTag = this.currentPlan?.endingTag || '普通';
+      const moduleId = "mod_" + Date.now();
+      const bgTag = this.currentPlan?.bgTag || "日模";
+      const endingTag = this.currentPlan?.endingTag || "普通";
       const contentTags = this.currentPlan?.contentTags || [];
       const customTags = this.currentPlan?.customTags || [];
       const allTags = this.sortModuleTags(bgTag, endingTag, contentTags, customTags);
 
-      const chaptersToSave = this.cutChapters.map(chap => ({
+      const chaptersToSave = this.cutChapters.map((chap, idx) => ({
         ...chap,
-        wordCount: this.countWords(chap.content || ''),
+        id: "chap_" + Date.now() + "_" + (idx + 1) + "_" + Math.random().toString(36).substr(2, 6),
+        sortOrder: chap.sortOrder || (idx + 1),
+        wordCount: this.countWords(chap.content || ""),
         moduleId: moduleId
       }));
 
-      const imagesToSave = (this.currentParsedData?.images || []).map(img => ({
+      const imagesToSave = (this.currentParsedData?.images || []).map((img, iIdx) => ({
         moduleId: moduleId,
-        imageIndex: img.imageIndex,
+        imageIndex: img.imageIndex || (iIdx + 1),
         name: img.name,
         dataUrl: img.dataUrl,
         isSensitive: !!img.isSensitive,
@@ -7266,17 +7273,40 @@ ${chaptersDigest}
         pageNumber: img.pageNumber || 1,
         width: img.width || 800,
         height: img.height || 600,
-        format: img.format || 'JPEG',
-        description: img.description || '',
-        annotation: img.annotation || '',
-        placement: img.placement || '文档插图'
+        format: img.format || "JPEG",
+        description: img.description || "",
+        annotation: img.annotation || "",
+        placement: img.placement || "文档插图"
       }));
 
+      const locationNavList = [];
+      const sourceNodes = (this.currentPlan?.mapNodes && Array.isArray(this.currentPlan.mapNodes) && this.currentPlan.mapNodes.length > 0)
+        ? this.currentPlan.mapNodes
+        : (this.currentParsedData?.mapNodes && Array.isArray(this.currentParsedData.mapNodes) && this.currentParsedData.mapNodes.length > 0)
+          ? this.currentParsedData.mapNodes
+          : [];
+
+      if (sourceNodes && sourceNodes.length > 0) {
+        sourceNodes.forEach(item => {
+          locationNavList.push({
+            moduleId: moduleId,
+            name: item.name,
+            parent: item.parent || "",
+            level: item.level || 1,
+            desc: item.desc || item.description || "",
+            prompt: item.prompt || "",
+            imageUrl: item.imageUrl || "",
+            imageStatus: "idle"
+          });
+        });
+      }
+
       const tempModForToc = {
-        name: this.currentParsedData?.moduleName || '跑团模组',
+        name: this.currentParsedData?.moduleName || "跑团模组",
         toc: this.currentPlan?.toc || [],
-        mapNodes: this.currentPlan?.mapNodes || []
+        mapNodes: sourceNodes
       };
+
       const tocWords = this.getTocWordCount(tempModForToc, chaptersToSave);
       const mapWords = this.getMapWordCount(tempModForToc, chaptersToSave);
       const imgWords = this.getImagesWordCount(tempModForToc, imagesToSave);
@@ -7284,42 +7314,55 @@ ${chaptersDigest}
 
       const moduleRecord = {
         id: moduleId,
-        name: this.currentParsedData?.moduleName || '跑团模组',
-        type: this.currentPlan?.moduleType || '线性',
-        ruleSystem: this.currentPlan?.ruleSystem || 'coc',
-        scaleType: this.currentPlan?.scaleType || '1v1',
-        summary: this.currentPlan?.summary || '无剧透模组概览',
+        name: this.currentParsedData?.moduleName || "跑团模组",
+        type: this.currentPlan?.moduleType || "线性",
+        ruleSystem: this.currentPlan?.ruleSystem || "coc",
+        scaleType: this.currentPlan?.scaleType || "1v1",
+        summary: this.currentPlan?.summary || "无剧透模组概览",
         bgTag: bgTag,
         endingTag: endingTag,
         contentTags: contentTags,
         customTags: customTags,
         tags: allTags,
-        mapNodes: this.currentPlan?.mapNodes || [],
-        group: '默认分组',
+        mapNodes: sourceNodes,
+        group: "默认分组",
         wordCount: realTotalWords,
         chapterCount: chaptersToSave.length,
-        status: 'ready',
+        status: "ready",
         githubSync: false,
         createdAt: Date.now()
       };
 
-      await this.safeDBOperation('保存模组到数据库', async (db) => {
+      const dbSuccess = await this.safeDBOperation("保存模组到数据库", async (db) => {
         await db.modules.put(moduleRecord);
         await db.moduleChapters.bulkPut(chaptersToSave);
-        if (imagesToSave.length > 0) {
+        if (imagesToSave.length > 0 && db.moduleImages) {
           await db.moduleImages.bulkPut(imagesToSave);
+        }
+        if (locationNavList.length > 0 && db.moduleLocationNav) {
+          await db.moduleLocationNav.bulkPut(locationNavList);
         }
         return true;
       });
 
-      this.clearDraft();
-      this.switchSubPanel('library');
+      if (!dbSuccess) {
+        console.error("模组及章节数据存入数据库失败");
+        if (typeof global.showCustomAlert === "function") {
+          global.showCustomAlert("保存失败", "写入数据库出现异常，请重试保存。");
+        }
+        return;
+      }
 
-      if (typeof global.showCustomAlert === 'function') {
-        global.showCustomAlert('保存成功', `模组【${moduleRecord.name}】及 ${chaptersToSave.length} 个带团章节已存入模组库。`);
+      this.clearDraft();
+      this.switchSubPanel("library");
+      if (typeof this.renderLibraryList === "function") {
+        await this.renderLibraryList();
+      }
+
+      if (typeof global.showCustomAlert === "function") {
+        global.showCustomAlert("保存成功", "模组【" + moduleRecord.name + "】及 " + chaptersToSave.length + " 个带团章节已安全存入模组库。");
       }
     },
-
     async exportModuleZipBundle(specificChapters = null, specificName = null, specificModuleId = null) {
       const chaptersToExport = specificChapters || this.cutChapters;
       if (!chaptersToExport || chaptersToExport.length === 0) return;
