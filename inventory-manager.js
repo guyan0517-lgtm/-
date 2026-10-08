@@ -2622,10 +2622,14 @@ HTML设计与排版核心规范：
   // 构建注入给AI的物品栏记忆提示词块
   function getChatInventoryPromptBlock(chat) {
     if (!chat) return "";
-    const lines = ["\n# 物品栏与道具系统"];
-    lines.push("当前场景中各角色持有以下物品清单，AI已知悉，请在互动和鉴定时准确呼应，无需重复向玩家输出物品简介：");
-
     const playerItems = Array.isArray(chat.inventory) ? chat.inventory : [];
+    const hasMemberItems = chat.isGroup && Array.isArray(chat.members) && chat.members.some(m => Array.isArray(m.inventory) && m.inventory.length > 0);
+    const hasAiItems = !chat.isGroup && Array.isArray(chat.aiInventory) && chat.aiInventory.length > 0;
+    if (playerItems.length === 0 && !hasMemberItems && !hasAiItems && !chat.inventoryEnabled) {
+      return "";
+    }
+    const lines = ["\n# 【第五大类】物品栏与道具系统"];
+    lines.push("当前场景中各角色持有以下物品清单，AI已知悉，请在互动和鉴定时准确呼应，无需重复向玩家输出物品简介：");
     if (playerItems.length > 0) {
       const myNickname = chat.isGroup ? (chat.settings?.myNickname || "我") : "玩家";
       lines.push(`## ${myNickname} 持有物品：`);

@@ -8115,7 +8115,7 @@
           <span>选择栏目类型</span>
         </div>
         <div class="modal-body" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 0;">
-          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="general" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">一般栏目</button>
+          <button type="button" class="moe-btn-secondary status-col-type-option" data-type="general" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">一般</button>
           <button type="button" class="moe-btn-secondary status-col-type-option" data-type="date" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">日期</button>
           <button type="button" class="moe-btn-secondary status-col-type-option" data-type="time" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">时间</button>
           <button type="button" class="moe-btn-secondary status-col-type-option" data-type="weather" style="height: 38px; font-size: 13px; font-weight: 600; font-family: inherit; border-radius: 12px; padding: 0 10px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%;">天气</button>
@@ -21352,7 +21352,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
             allChaps.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
-            let block = `\n# 【跑团模组世界书与带团设定库】\n当前加载模组：《${mod.name}》\n\n`;
+            let block = `\n# 【第四大类】模组信息\n` +
+              `以下为守秘人（KP）限定信息：包含模组真相、幕后真相、事件真正成因、NPC 的真实身份与真实动机、尚未发生的剧情走向。\n` +
+              `【保密规则】\n` +
+              `1. 上述信息【严禁直接告知玩家】，不得在叙述、台词、旁白中泄露；\n` +
+              `2. 只有当剧情推进到【正文中已经写到】该信息时，才允许以玩家可见的方式呈现；\n` +
+              `3. 玩家尚未在正文中接触到真相之前，任何形式的提前透露（直接输出、暗示、铺垫性剧透、以'你注意到'引出真相）一律视为严重剧透，必须避免；\n` +
+              `4. 若不确定某信息是否已在正文中出现，按'未出现'处理，宁可不提；\n` +
+              `5. KP 的引导只能通过场景线索、NPC 言行间接实现，不得输出真相原文。\n\n` +
+              `当前加载模组：《${mod.name}》\n\n`;
 
             // 目录注入最高优先级：若勾选加载目录，置于最顶层
             if (chat.loadModuleToc) {
@@ -31552,6 +31560,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             statusSettings.luckRollCount = 1;
             isNewRoll = true;
           } else {
+            if (typeof currentLuck.roll !== "number") {
+              currentLuck.roll = Math.floor(Math.random() * 100) + 1;
+            }
             statusSettings.luckRollCount = currentCount + 1;
             isNewRoll = false;
           }
@@ -31715,13 +31726,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const finalVal = affMatch[4] ? parseInt(affMatch[4], 10) : null;
             const delta = (sign === "-") ? -deltaVal : deltaVal;
 
-            let matchedChar = chat.settings.affectionList.find(c => c.name === charName);
+            let matchedChar = chat.settings.affectionList.find(c => c.name === charName || (c.name && charName && (c.name.includes(charName) || charName.includes(c.name))));
             if (matchedChar) {
               if (finalVal !== null && !isNaN(finalVal)) {
                 matchedChar.affection = finalVal;
               } else {
                 matchedChar.affection = Math.max(0, (matchedChar.affection || 50) + delta);
               }
+              affUpdated = true;
+            } else {
+              matchedChar = { name: charName, affection: Math.max(0, (finalVal !== null && !isNaN(finalVal)) ? finalVal : (50 + delta)) };
+              chat.settings.affectionList.push(matchedChar);
               affUpdated = true;
             }
           }
@@ -35122,6 +35137,8 @@ ${recentHistoryText}
           let statusSenderName = "系统状态";
           let templateFieldLines = "";
           let textFormatLines = "";
+          let turnActiveWeather = null;
+          let turnActiveLuck = null;
 
           if (chat.isGroup) {
             statusMember = (chat.members || []).find(
@@ -35146,88 +35163,76 @@ ${recentHistoryText}
 
                 const hasWeather = resolvedStatus.hasWeatherCol;
                 const hasLuck = resolvedStatus.hasLuckCol;
-                const weatherCol = statusColumns.find(c => c && c.type === "weather");
-                const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
 
-                let poolInfoSection = "";
-                if (hasWeather) {
-                  const weatherPools = typeof getStoredWeatherPools === "function" ? getStoredWeatherPools() : [];
-                  const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
-                  const poolTitle = targetPool?.name || chosenPoolName || "天气池";
-                  poolInfoSection += `\n【天气池信息】：当前所选天气池为【${poolTitle}】，系统已根据月份和环境自动抽取本回合天气为“${drawnWeatherName}”${drawnWeatherNote ? `（${drawnWeatherNote}）` : ""}。\n`;
+                if (hasWeather && resolvedStatus.drawnWeather) {
+                  turnActiveWeather = {
+                    name: drawnWeatherName,
+                    note: drawnWeatherNote
+                  };
                 }
-                if (hasLuck) {
-                  const hitNote = hitLuck?.note ? `（${hitLuck.note}）` : "";
-                  poolInfoSection += `\n【幸运信息】：本回合系统已完成掷骰，当前掷得的幸运为“${hitLuck.name}”${hitNote}。\n`;
-                }
-
-                let permissionNotice = "";
-                if (hasWeather && hasLuck) {
-                  permissionNotice = "【固定值说明】：天气、幸运均为系统底层注入值，你必须原样填入对应字段，绝对禁止自行篡改数值，禁止在后续对话中重复解释。";
-                } else if (hasWeather) {
-                  permissionNotice = "【固定值说明】：天气为系统底层注入值，你必须原样填入对应字段，绝对禁止自行篡改数值，禁止在后续对话中重复解释。";
-                } else if (hasLuck) {
-                  permissionNotice = "【固定值说明】：幸运为系统底层注入值，你必须原样填入对应字段，绝对禁止自行篡改数值，禁止在后续对话中重复解释。";
+                if (hasLuck && hitLuck) {
+                  const rollVal = (typeof hitLuck.roll === "number") ? hitLuck.roll : (hitLuck.roll = Math.floor(Math.random() * 100) + 1);
+                  turnActiveLuck = {
+                    name: hitLuck.name,
+                    note: hitLuck.note || "",
+                    roll: rollVal
+                  };
                 }
 
-                let columnGuidelineLines = [];
-                let ruleIdx = 1;
-                statusColumns.forEach(c => {
+                const aiFillableColumns = statusColumns.filter(c => c && c.type !== "weather" && c.type !== "luck");
+                templateFieldLines = aiFillableColumns.map(c => {
                   const cleanLabel = (c.label || '栏目').replace(/^[\[【]|[\]】]$/g, '').trim();
-                  if (c.type === "date") {
-                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：必须结合当前模组剧情与背景设定推断故事内的虚拟日期，例如“盛夏八月某日”或“1920年7月15日”，绝对禁止填写本地现实世界的真实年月日，绝对禁止留空！`);
-                  } else if (c.type === "time") {
-                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：必须结合当前剧情发展与环境（白天、黄昏、深夜等）推断故事内的时刻，例如“14:30”或“08:00”或“深夜23:00”，绝对禁止照抄本地现实时间，绝对禁止填 12:00 敷衍！`);
-                  } else if (c.type === "location") {
-                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：必须结合当前角色身处的场景位置推断具体地点名称或路径，例如“千叶市-自由写作者住所”或“战神广场-核心建筑”，绝对禁止输出星号“*”，绝对禁止输出占位符，绝对禁止留空！`);
-                  } else if (c.type === "weather") {
-                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：系统已从【${chosenPoolName}】天气池抽取本轮天气为“${drawnWeatherName}”，请在 fields 字典的 "${cleanLabel}" 中原样填入“${drawnWeatherName}”，严禁擅自篡改。`);
-                  } else if (c.type === "luck") {
-                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：本轮系统固定掷骰值为“${hitLuck.name}”，请在 fields 字典的 "${cleanLabel}" 中原样填入“${hitLuck.name}”，严禁擅自篡改。`);
-                  } else if (c.type === "affection") {
-                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：仅在有好感变动时填写：角色中文全名+数字=当前值 或 -数字=当前值，无变化时不输出。`);
-                  } else {
-                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：必须根据当前剧情填入具体数值或内容：${c.note ? c.note : '不得留空'}`);
-                  }
-                });
-
-                templateFieldLines = statusColumns.map(c => {
-                  const cleanLabel = (c.label || '栏目').replace(/^[\[【]|[\]】]$/g, '').trim();
-                  if (c.type === "date") return `    "${cleanLabel}": "必须结合剧情上下文推断具体故事日期，如盛夏八月某日或1920年7月15日，绝对禁止填现实生活日期，绝对禁止留空"`;
-                  if (c.type === "time") return `    "${cleanLabel}": "必须结合剧情推断具体时刻，如14:30或清晨08:00或深夜，绝对禁止使用现实时间，绝对禁止填12:00敷衍"`;
-                  if (c.type === "weather") return `    "${cleanLabel}": "${drawnWeatherName}"`;
-                  if (c.type === "luck") return `    "${cleanLabel}": "${hitLuck.name}"`;
-                  if (c.type === "location") return `    "${cleanLabel}": "必须结合当前场景推断具体推进地点路径，如千叶市-自由写作者住所，绝对禁止输出星号*，绝对禁止留空"`;
-                  if (c.type === "affection") return `    "${cleanLabel}": "仅在有好感变动时填写：角色中文全名+数字=当前值 或 -数字=当前值，无变化时不输出"`;
-                  return `    "${cleanLabel}": "必须根据当前剧情填入具体数值或内容：${c.note ? c.note : '不得留空'}"`;
+                  const noteSuffix = (c.note && c.note.trim()) ? ` // 备注：${c.note.trim()}` : "";
+                  if (c.type === "date") return `    "${cleanLabel}": "X年X月X日${noteSuffix}"`;
+                  if (c.type === "time") return `    "${cleanLabel}": "时:分${noteSuffix}"`;
+                  if (c.type === "location") return `    "${cleanLabel}": "大层级-中层级-小层级${noteSuffix}"`;
+                  if (c.type === "affection") return `    "${cleanLabel}": "人物全名+数值 或 人物全名-数值${noteSuffix}"`;
+                  return `    "${cleanLabel}": "${(c.note && c.note.trim()) ? c.note.trim() : (c.format && c.format !== '*' ? c.format : '内容')}"`;
                 }).join(",\n");
 
                 statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
-                const omissionWarning = (chat._statusBarOmissionStreak && chat._statusBarOmissionStreak > 0)
-                  ? "\n【严重警告：检测到此前状态栏存在栏目遗漏，本次请务必严格逐项完整输出全部栏目，绝对禁止遗漏任何一行！】\n"
-                  : "";
 
-                systemStatusContext = `
-# 【【【系统状态栏最高优先级绝对指令：违者生成失败】】】
-当前群聊已启用系统状态栏。
-【绝对强制规则一】：你本次回复生成的 JSON 数组中，【第1条消息（index 0）必须且必定是系统状态栏】！其发送者 "name" 字段【必须】为 "${statusSenderName}"，"type" 字段【必须】为 "system_status"！缺少第一条系统状态栏将导致前端系统彻底报错并判定为生成失败！
-【绝对强制规则二】：系统状态栏中的每一个栏目【都必须认真结合故事推断并完整填写，绝对禁止遗漏、绝对禁止留空、绝对禁止输出星号*、绝对禁止用现实生活真实时间代替】：
-${columnGuidelineLines.join("\n")}
-${permissionNotice}
-${poolInfoSection}
-
-【状态栏标准输出示例（第一条消息必须以此格式输出，且仅有这一种标准格式）】：
-{
-  "type": "system_status",
-  "name": "${statusSenderName}",
-  "fields": {
-${templateFieldLines}
-  }
-}
-
-【后续消息规则】：
-从第2条消息（index 1）开始，才由其他正常群成员角色进行剧情对话。严禁在任何其他角色的发言中重复输出状态栏！
-`;
+                let statusRuleLines = [];
+                statusRuleLines.push("1. 填写权限：仅日期、时间、地点、好感度与一般自定义格子由AI在 fields 中填写对应的值；天气与幸运由系统底层自动处理，AI绝对不能填、不能改、严禁写入 fields 中。");
+                statusRuleLines.push("2. 格子顺序：格子的最终排列顺序完全由玩家在配置面板中决定，AI只需在 fields 中填入键值对，严禁修改格子名称、严禁自己新建整段文本或拆分多个气泡。");
+                let rIdx = 3;
+                if (statusColumns.some(c => c && c.type === "date")) {
+                  const dCol = statusColumns.find(c => c && c.type === "date");
+                  const dNote = (dCol?.note && dCol.note.trim()) ? `；备注：${dCol.note.trim()}` : "";
+                  statusRuleLines.push(`${rIdx++}. 日期格式：严格按“X年X月X日”格式填写故事内虚拟日期，不改格式，严禁使用现实生活时间${dNote}。`);
+                }
+                if (statusColumns.some(c => c && c.type === "time")) {
+                  const tCol = statusColumns.find(c => c && c.type === "time");
+                  const tNote = (tCol?.note && tCol.note.trim()) ? `；备注：${tCol.note.trim()}` : "";
+                  statusRuleLines.push(`${rIdx++}. 时间格式：严格按“时:分”格式填写故事内当前时刻，不改格式，严禁使用现实时间${tNote}。`);
+                }
+                if (statusColumns.some(c => c && c.type === "location")) {
+                  const lCol = statusColumns.find(c => c && c.type === "location");
+                  const lNote = (lCol?.note && lCol.note.trim()) ? `；备注：${lCol.note.trim()}` : "";
+                  statusRuleLines.push(`${rIdx++}. 地点填写：结合剧情推断角色身处位置；若加载了模组地图，按地图层级选填“大层级-中层级-小层级”，若地图中未包含当前层级，AI可自行按层级格式补充${lNote}。`);
+                }
+                if (statusColumns.some(c => c && c.type === "affection")) {
+                  const aCol = statusColumns.find(c => c && c.type === "affection");
+                  const aNote = (aCol?.note && aCol.note.trim()) ? `；备注：${aCol.note.trim()}` : "";
+                  statusRuleLines.push(`${rIdx++}. 好感度填写：仅当本轮互动有角色好感度增减时填写“人物全名+数值”或“人物全名-数值”，若本轮无变动则留空不填；必须填写角色全名${aNote}。`);
+                }
+                const generalCols = statusColumns.filter(c => c && c.type === "general");
+                if (generalCols.length > 0) {
+                  generalCols.forEach(gc => {
+                    const cleanLabel = (gc.label || '栏目').replace(/^[\[【]|[\]】]$/g, '').trim();
+                    const gNote = (gc.note && gc.note.trim()) ? `按备注要求填写：${gc.note.trim()}` : '按剧情填写具体内容';
+                    statusRuleLines.push(`${rIdx++}. 一般自定义格子【${cleanLabel}】：左侧名称固定不可改，右侧值${gNote}。`);
+                  });
+                }
+                let envInfoBlock = "";
+                if (hasWeather) {
+                  envInfoBlock += `\n【当前环境天气】：${drawnWeatherName}，代表着：${drawnWeatherNote}。此天气由系统天气池抽取供剧情描写参考，严禁将其填入 fields 中。\n`;
+                }
+                if (hasLuck) {
+                  const rollVal = (typeof hitLuck.roll === "number") ? hitLuck.roll : (hitLuck.roll = Math.floor(Math.random() * 100) + 1);
+                  envInfoBlock += `\n【当前回合幸运】：${hitLuck.name}，1到100抽取数值为${rollVal}${hitLuck.note ? '，代表着：' + hitLuck.note : ''}。此数值由系统骰点抽取供剧情参考，严禁将其填入 fields 中。\n`;
+                }
+                systemStatusContext = `\n# 【第二大类】系统状态栏规则\n回复的第1条消息（index 0）必须且必定是由【${statusSenderName}】发出的系统状态栏（type 为 "system_status"）。AI只在 fields 中填入对应值，系统收到后会按玩家配置顺序渲染显示。\n${statusRuleLines.join("\n")}\n${envInfoBlock}`;
               }
             }
 
@@ -36354,12 +36359,24 @@ ${templateFieldLines}
             const mapPromptBlock = typeof mapPromptObj === "object" ? (mapPromptObj.prompt || "") : (mapPromptObj || "");
             const inventoryPromptBlock = (typeof getChatInventoryPromptBlock === "function") ? getChatInventoryPromptBlock(chat) : "";
             const dicePromptBlock = `
-# 跑团掷骰与属性修改指令
-在群聊或私聊中，守密人、NPC或角色可以直接发送标准的跑团掷骰或面板修改指令，系统与骰娘会自动识别并执行：
-1. 属性与技能修改：发送 .st 目标角色全名 属性1 数值1 属性2 数值2 ... 或 .st 属性名 数值，例如 .st 全息投影甲 hp 13 敏捷 50、.st 力量 60 敏捷 70、.st hp-2 mp+3、.st san-5 等，支持同时修改多个属性，系统将自动更新角色面板与战斗数据。
-2. 掷骰与检定：支持几乎所有标准掷骰表达式，例如发送 .r 1d100、.r 1d6+2 掷骰，发送 .ra 角色全名 技能名 或 .ra 侦查、.ra 聆听 进行技能检定，发送 .sc 0/1d6 进行理智检定，发送 .en 侦查 进行成长检定，发送 .ti 查询疯狂症状，发送 .rh 侦查 进行暗骰等。
-3. 支持嵌入与批量指令：指令可直接嵌入在正常剧情叙事或台词文本的下方或任意位置，无需单独发气泡；支持在单次回复中同时包含多条指令（如多行 .st）。
-4. 遭遇战斗：当剧情发生战斗或遭遇敌对生物时，在回复末尾附带指令代码 {"type": "suggest_combat", "summary": "遭遇强敌，是否进入战斗？"}，系统将生成确认卡片，玩家确认后由系统专属裁判AI分析排布先攻并开启战斗面板。
+# 跑团掷骰与属性指令
+当前对话框内置骰娘系统，你在发言或叙事文本中直接写出以点号开头的指令即可触发，系统会自动执行并给出掷骰反馈与面板更新：
+1. 自身掷骰与检定：
+- .ra 技能名：进行技能检定，例如 .ra 侦查
+- .r 表达式：普通掷骰，例如 .r 1d100、.r 2d6+5
+- .sc 成功损失/失败损失：理智检定，例如 .sc 1/1d6
+2. 代骰与代改属性：
+在英文字母指令后加空格带上目标角色全名，即可替对方检定或记录修改数值，必须是全名：
+- .ra 角色全名 技能名：替指定角色检定技能，例如 .ra 张三 侦查
+- .st 角色全名 属性 数值：替指定角色记录或修改属性，例如 .st 张三 力量 70
+- .r 角色全名 表达式：替指定角色掷骰，例如 .r 张三 1d100
+3. 多项属性记录 .st：
+使用 .st 记录属性时支持多项连续录入，只需打好空格即可自动识别多项属性与数值：
+- 自身录入：.st 力量 60 敏捷 70 体质 80
+- 代对方录入：.st 角色全名 力量 60 敏捷 70 hp 12
+- 增减数值：.st hp-5 或 .st 角色全名 hp-5
+4. 嵌入规则：
+指令可直接自然嵌入在剧情叙事或角色台词中，单次回复支持包含多条指令。
 `;
 
             let systemPrompt, messagesPayload;
@@ -36533,72 +36550,60 @@ ${templateFieldLines}
               }
               // updated by lrq 251027
               systemPrompt = `
-			# 角色
-			你是一个群聊AI，负责扮演【除了用户以外】的所有角色。
-			${statusMember ? systemStatusContext : ""}
-			# 【【【身份铁律：这是最高指令，必须严格遵守】】】
-			1.  **核心任务**: 你的唯一任务是扮演下方“群成员列表”中明确列出的角色${statusMember ? `，并在每轮回复最开头输出【${statusSenderName}】的系统状态栏` : ""}。
-			2.  **用户识别**: 用户的身份是【${myNickname}】。你【绝对、永远、在任何情况下都不能】生成 "name" 字段为 **"${myNickname}"** 的消息。
-			3.  **禁止杜撰**: 【绝对禁止】扮演任何未在列表中出现的额外角色。正文严禁自创未抽取的随机数值与天气。
-			4.  **【【【格式铁律：这是你的生命线，违者生成失败】】】**:
-			    -   你的回复【必须且只能】是一个严格的JSON数组格式的字符串。
-			    -   数组中的【每一个元素都必须是一个JSON对象】。
-			    ${statusMember ? `    -   【首条消息强制规则】：回复数组的第1条消息（index 0）必须且必定是由【${statusSenderName}】发出的系统状态栏消息！缺少直接判定为生成失败！\n` : ""}
-			    -   ${statusMember ? `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)或系统状态栏名称【${statusSenderName}】。` : `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)。`}
-			    -   缺少 "name" 字段的回复是无效的，会被系统拒绝。
-			5.  **角色扮演**: 严格遵守下方“群成员列表及人设”中的每一个角色的设定。
-			# 【群成员列表及COC角色档案】
-			${fullMembersList}
-			${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
-			6.  **禁止出戏**: 绝不能透露你是AI、模型，或提及“扮演”、“生成”等词语。
-			${isCognitionEnabled ? `7.  **情景感知**: 注意当前时间是 ${currentTime}。` : ""}
-			**标准输出格式示例:**
-			[
-			    ${statusMember ? `{\n			      "type": "system_status",\n			      "name": "${statusSenderName}",\n			      "fields": {\n${templateFieldLines || '			        "状态": "正常"'}\n			      }\n			    },\n			    ` : ""}{
-			      "type": "text",
-			      "name": "角色名",
-			      "content": "你好！"
-			    }
-			  ]
+# 【第一大类】你可以使用的操作指令
+你的回复必须且只能是一个严格的JSON数组格式的字符串。数组中的每一个元素都必须是一个JSON对象。每一个JSON对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
 
-			## 你可以使用的操作指令:
-			${statusMember ? `-   **输出系统状态栏**: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}-   **发送文本**: {"type": "text", "name": "角色名", "message": "文本内容"}
-			-   **发送语音**: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
-			-   **赠送或发放道具与线索**: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
-			-   **发起进入战斗确认卡片**: 当剧情推进到战斗爆发、遭遇敌人或怪兽，或用户提出进入战斗时，发送 {"type": "suggest_combat"} 或在叙述中写 [进入战斗系统]，系统会自动向聊天中发送“是否进入战斗？”确认卡片。玩家确认前不得擅自进入战斗轮。
-			${
-        chat.loadModuleImages && chat.activeModuleId
-          ? `-   **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n`
-          : ""
-      }
-			${
-        localStorage.getItem("novelai-enabled") === "true"
-          ? `-   **【NovelAI图片分享】**: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}`
-          : ""
-      }
-			-   **发送系统消息**: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
+## 标准输出格式示例:
+[
+${statusMember ? `  {
+    "type": "system_status",
+    "name": "${statusSenderName}",
+    "fields": {
+${templateFieldLines || '      "状态": "正常"'}
+    }
+  },
+` : ""}  {
+    "type": "text",
+    "name": "角色名",
+    "content": "对话内容"
+  }
+]
 
-			${dicePromptBlock}
-			${inventoryPromptBlock}
-			${summaryContext}
-			${announcementContext}
-			${worldBookContent}
-			${moduleChaptersPromptBlock}
-			${mapPromptBlock}
-			${thoughtChainPromptBlock}
-			${sharedContext}
-			${stickerContext}
-			${linkedMemoryContext}
-			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度系统】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
+## 你可以使用的操作指令列表:
+${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
+- 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
+- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
+- 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
+${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}- 发送系统消息: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
 
-			# 【用户角色档案与COC人物面板】
-			- **姓名**：${chat.settings.myName || myNickname}
-			${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- **COC人物面板**（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- **年龄**：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- **生日**：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- **性别**：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- **角色人设**：
-			${chat.settings.myPersona || "普通人"}
+${statusMember ? systemStatusContext : ""}
 
-			${statusMember ? `\n# 【系统状态栏最后郑重强调】\n再次强调：你本次回复的JSON数组中，第1条消息（index 0）必须且必定是由【${statusSenderName}】发出的系统状态栏，type 必须为 "system_status"，并在 fields 字典中完整推断并填写配置的各个栏目，绝对禁止输出星号*，绝对禁止留空，绝对禁止使用本地现实时间！\n` : ""}
+# 群成员列表及COC角色档案
+${fullMembersList}
 
-			现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`;
+${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
+${dicePromptBlock}
+${inventoryPromptBlock}
+
+${moduleChaptersPromptBlock}
+${worldBookContent}
+${mapPromptBlock}
+${announcementContext}
+
+${summaryContext}
+${thoughtChainPromptBlock}
+${sharedContext}
+${stickerContext}
+${linkedMemoryContext}
+${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度系统】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
+
+# 【第六大类】角色与人设
+- **姓名**：${chat.settings.myName || myNickname}
+${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- **COC人物面板**（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- **年龄**：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- **生日**：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- **性别**：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- **角色人设**：
+${chat.settings.myPersona || "普通人"}
+${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTime}。\n` : ""}
+
+现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`;
 
               messagesPayload = historySlice
                 .map((msg, index) => {
@@ -36911,38 +36916,54 @@ ${libraryList}
                 const drawnWeather = resolvedStatus.drawnWeather;
                 const hitLuck = resolvedStatus.hitLuck;
 
+                if (resolvedStatus.hasWeatherCol && drawnWeather) {
+                  turnActiveWeather = {
+                    name: drawnWeather.name || "晴朗",
+                    note: drawnWeather.note || "温和宜人，阳光明媚，视野开阔"
+                  };
+                }
+                if (resolvedStatus.hasLuckCol && hitLuck) {
+                  const rollVal = (typeof hitLuck.roll === "number") ? hitLuck.roll : (hitLuck.roll = Math.floor(Math.random() * 100) + 1);
+                  turnActiveLuck = {
+                    name: hitLuck.name || "波澜不惊",
+                    note: hitLuck.note || "",
+                    roll: rollVal
+                  };
+                }
+
                 let colSpecs = [];
                 (chat.settings.columns || []).forEach(col => {
                   let fmt = col.format || "*";
                   if (col.type === "date") {
-                    colSpecs.push(`${col.label}：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入，绝对禁止套用现实生活中的真实日期`);
+                    colSpecs.push(`${col.label}：由AI根据上下文剧情推断故事虚拟日期填入，严格按“X年X月X日”格式填写，严禁使用现实生活时间`);
                   } else if (col.type === "time") {
-                    colSpecs.push(`${col.label}：由AI根据上下文剧情自主推断具体时间填入，例如 08:30 或 12:00 或 14:00，绝对禁止使用本地现实时间`);
+                    colSpecs.push(`${col.label}：由AI根据上下文剧情推断当前时刻填入，严格按“时:分”格式填写（例如 08:30），严禁使用现实时间`);
                   } else if (col.type === "weather") {
-                    colSpecs.push(`${col.label}：由系统底层自动抽选填入，你无需填写也严禁在天气后添加任何描述文字`);
+                    colSpecs.push(`${col.label}：由系统底层自动抽选填入，AI严禁填写也严禁写入fields`);
                   } else if (col.type === "luck") {
-                    colSpecs.push(`${col.label}：由系统底层自动掷骰填入，你无需填写也严禁擅自修改`);
+                    colSpecs.push(`${col.label}：由系统底层自动计算填入，AI严禁填写也严禁写入fields`);
                   } else if (col.type === "affection") {
-                    colSpecs.push(`${col.label}：请根据剧情进展填入好感变动与总量，示例：好感度+2=82`);
+                    colSpecs.push(`${col.label}：仅当本轮有角色好感度增减时填入“人物全名+数值”或“人物全名-数值”，必须使用人物全名，无变动则不填此项`);
+                  } else if (col.type === "location") {
+                    colSpecs.push(`${col.label}：由AI结合剧情推断角色所处位置填入，格式为“大层级-中层级-小层级”`);
                   } else {
-                    colSpecs.push(`${col.label}：请根据当前剧情替换填入具体内容，绝对禁止原样输出星号或占位符，示例：${fmt}${col.note ? '，提示：' + col.note : ''}`);
+                    colSpecs.push(`${col.label}：左侧名称固定，由AI根据当前剧情填入具体内容`);
                   }
                 });
 
                 let envContext = "";
-                if (resolvedStatus.hasWeatherCol && drawnWeather) {
-                  envContext += `- 当前天气：${drawnWeather.name}\n`;
+                if (turnActiveWeather) {
+                  envContext += `- 当前天气：${turnActiveWeather.name}，代表着：${turnActiveWeather.note || ""}\n`;
                 }
-                if (resolvedStatus.hasLuckCol && hitLuck) {
-                  envContext += `- 当前幸运：${hitLuck.name}\n`;
+                if (turnActiveLuck) {
+                  envContext += `- 当前幸运：${turnActiveLuck.name}，1到100抽取数值为${turnActiveLuck.roll}，代表着：${turnActiveLuck.note || ""}\n`;
                 }
 
                 systemStatusPromptBlock = `
-# 【系统状态栏单气泡输出规则】
-1. 无论有多少个项目，系统状态栏的所有内容【必须且只能】合并在 chatResponse 数组的【第1条消息】中，每项之间用换行符 \\n 分隔，【绝对禁止】将每个项目拆分为独立气泡！
-2. 系统状态栏格式必须参考以下规则（标签名称严禁修改，天气与幸运为系统固定抽取，时间与地点由你推断填入，禁止擅自增加其他栏目）：
+# 【系统状态栏输出规则】
+系统状态栏在回复中作为系统气泡输出，格式为 {"type": "system_status", "fields": {...}}。
+格子最终顺序由玩家配置面板固定决定，AI在 fields 中仅填入对应字段的值。
 ${colSpecs.join('\n')}
-3. 你的第2条及后续消息气泡，请根据角色人设与当前剧情展开正常的对话与描写；【严禁在任何角色的后续对话中重复输出状态栏内容】！
 ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 `;
               }
@@ -37005,6 +37026,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
       }
 
 			### **【第四部分：当前上下文信息】**
+			${dicePromptBlock}
 			${inventoryPromptBlock}
 			# 【对话者（用户）角色档案与COC人物面板】
 			- **姓名**: ${chat.settings.myName || "我"}
@@ -37394,11 +37416,18 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               });
             }
 
-            if (chat.isGroup && statusMember && Array.isArray(statusColumns) && statusColumns.length > 0) {
-              const statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
+            // 在上下文最后一条消息之后附带本轮天气与幸运系统消息
+            if (turnActiveWeather || turnActiveLuck) {
+              const turnParts = [];
+              if (turnActiveWeather) {
+                turnParts.push(`本轮天气为${turnActiveWeather.name}，代表着：${turnActiveWeather.note || "温和宜人"}`);
+              }
+              if (turnActiveLuck) {
+                turnParts.push(`本轮幸运值为${turnActiveLuck.name}，1到100抽取的数值为${turnActiveLuck.roll}，代表着：${turnActiveLuck.note || "平稳顺遂"}`);
+              }
               messagesPayload.push({
                 role: "system",
-                content: `【绝对最高优先级指令：本轮回复第1条消息必须是系统状态栏】\n你回复的JSON数组中，第1条消息（index 0）必须且必定是由【${statusSenderName}】发出的系统状态栏，type 必须为 "system_status"！\n请务必在 fields 字典中根据当前故事剧情上下文认真推断并填写配置的各个栏目，严禁输出星号*，严禁留空，严禁使用现实生活时间！`
+                content: `[系统消息] ${turnParts.join("；")}。请在当前这轮的描写与互动中，结合本轮的天气与幸运值展开具体的情境与细节描写。`
               });
             }
 
@@ -37746,6 +37775,11 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                   if (!val) {
                     const now = new Date();
                     val = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+                  } else {
+                    const dM = String(val).match(/(\d{2,4})[年\-\/.](\d{1,2})[月\-\/.](\d{1,2})日?/);
+                    if (dM) {
+                      val = `${dM[1]}年${dM[2]}月${dM[3]}日`;
+                    }
                   }
                   chat._lastStatusValues["日期"] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
@@ -37756,39 +37790,43 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                   }
                   if (!val) {
                     val = "12:00";
+                  } else {
+                    const tM = String(val).match(/(\d{1,2})[:：](\d{1,2})/);
+                    if (tM) {
+                      val = `${tM[1].padStart(2, "0")}:${tM[2].padStart(2, "0")}`;
+                    }
                   }
                   chat._lastStatusValues["时间"] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "weather") {
-                  const val = drawnWeatherName || fieldVal || '晴朗';
+                  const val = drawnWeatherName || "晴朗";
                   chat._lastStatusValues["天气"] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "luck") {
-                  const val = (hitLuck && hitLuck.name) ? hitLuck.name : (fieldVal || '波澜不惊');
+                  const val = (hitLuck && hitLuck.name) ? hitLuck.name : "波澜不惊";
                   chat._lastStatusValues["幸运"] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "location") {
                   let val = fieldVal || normalizedFields["地点"] || normalizedFields["location"] || chat._lastStatusValues["地点"] || chat.settings?.currentLocation || "";
-                  if (!fieldVal && !normalizedFields["地点"] && !normalizedFields["location"]) {
-                    omittedFieldsCount++;
-                  }
                   if (!val || val === "*" || val === "星号" || val === "无") {
                     val = chat._lastStatusValues["地点"] || chat.settings?.currentLocation || (col.format && col.format !== "*" ? col.format : "") || "当前场景";
                   }
                   chat._lastStatusValues["地点"] = val;
+                  if (!chat.settings) chat.settings = {};
+                  chat.settings.currentLocation = val;
+                  if (typeof renderChatMapList === "function") {
+                    try { renderChatMapList(); } catch (e) {}
+                  }
                   formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "affection") {
                   const val = fieldVal || normalizedFields["好感度"];
                   if (val && String(val).trim()) {
-                    formattedLines.push(`${bracketLabel}：${val}`);
+                    formattedLines.push(`${bracketLabel}：${String(val).trim()}`);
                   }
                 } else {
                   let val = fieldVal || chat._lastStatusValues[cleanLabel] || col.format || "";
-                  if (!fieldVal) {
-                    omittedFieldsCount++;
-                  }
-                  if (!val) {
-                    val = col.format || "无";
+                  if (!val || val === "*") {
+                    val = (col.format && col.format !== "*") ? col.format : "正常";
                   }
                   chat._lastStatusValues[cleanLabel] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
@@ -70806,8 +70844,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               const isDate = (col.type === "date");
               const isTime = (col.type === "time");
               const isLocation = (col.type === "location");
-              const isFormatFixed = (isDate || isTime || isWeather || isLuck || isAffection);
-              const isLabelFixed = isWeather;
+              const isFormatFixed = (isDate || isTime || isWeather || isLuck || isAffection || isLocation);
+              const isLabelFixed = (isDate || isTime || isWeather || isLuck || isAffection || isLocation);
 
               let rightControlHtml = "";
               if (isWeather) {
@@ -70819,16 +70857,28 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                   </div>
                 `;
               } else if (isLocation) {
-                const locMode = col.mode || "module";
                 rightControlHtml = `
-                  <select class="moe-input col-location-mode-select" style="flex: 1; min-width: 0; height: 34px; padding: 0 8px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); text-align: center;">
-                    <option value="module" ${locMode !== "realtime" ? "selected" : ""}>模组</option>
-                    <option value="realtime" ${locMode === "realtime" ? "selected" : ""}>实时</option>
-                  </select>
+                  <input type="text" class="moe-input col-format-input" value="大层级-中层级-小层级" readonly style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary); cursor: not-allowed; text-align: center;">
+                `;
+              } else if (isDate) {
+                rightControlHtml = `
+                  <input type="text" class="moe-input col-format-input" value="X年X月X日" readonly style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary); cursor: not-allowed; text-align: center;">
+                `;
+              } else if (isTime) {
+                rightControlHtml = `
+                  <input type="text" class="moe-input col-format-input" value="时:分" readonly style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary); cursor: not-allowed; text-align: center;">
+                `;
+              } else if (isAffection) {
+                rightControlHtml = `
+                  <input type="text" class="moe-input col-format-input" value="人物全名±数值" readonly style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary); cursor: not-allowed; text-align: center;">
+                `;
+              } else if (isLuck) {
+                rightControlHtml = `
+                  <input type="text" class="moe-input col-format-input" value="系统自动计算" readonly style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary); cursor: not-allowed; text-align: center;">
                 `;
               } else {
                 rightControlHtml = `
-                  <input type="text" class="moe-input col-format-input" value="${col.format || ''}" placeholder="格式" ${isFormatFixed ? 'readonly' : ''} style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary); ${isFormatFixed ? 'cursor: not-allowed;' : ''}">
+                  <input type="text" class="moe-input col-format-input" value="${col.format && col.format !== '*' ? col.format : ''}" placeholder="AI自由填" style="flex: 1; min-width: 0; height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; color: var(--text-primary);">
                 `;
               }
 
@@ -70841,13 +70891,13 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 weatherModeHtml = `
                   <div class="col-weather-mode-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-secondary); background: var(--secondary-bg); border-radius: 12px; border: 1px solid var(--border-color); padding: 6px 10px; box-sizing: border-box;">
                     <span style="flex-shrink: 0; font-weight: 600; color: var(--text-primary);">模式</span>
-                    <select class="moe-input col-weather-mode-select" style="flex: 1; min-width: 0; height: 30px; line-height: 20px; padding: 2px 6px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;">
-                      <option value="date" ${currentMode !== "time" ? "selected" : ""}>默认模式</option>
-                      <option value="time" ${currentMode === "time" ? "selected" : ""}>时间模式</option>
+                    <select class="moe-input col-weather-mode-select" style="flex: 1; min-width: 0; height: 34px; line-height: 22px; padding: 4px 8px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;">
+                      <option value="date" ${currentMode !== "time" ? "selected" : ""}>日期变更</option>
+                      <option value="time" ${currentMode === "time" ? "selected" : ""}>时间间隔</option>
                     </select>
                     <div class="col-weather-interval-wrapper" style="display: ${currentMode === "time" ? "flex" : "none"}; align-items: center; gap: 4px; flex-shrink: 0;">
                       <span>间隔</span>
-                      <input type="number" min="1" max="72" class="moe-input col-weather-interval-input" value="${currentInterval}" style="width: 44px; height: 30px; line-height: 20px; padding: 2px 4px; font-size: 12px; border-radius: 8px; text-align: center; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;">
+                      <input type="number" min="1" max="72" class="moe-input col-weather-interval-input" value="${currentInterval}" style="width: 44px; height: 34px; line-height: 22px; padding: 4px 4px; font-size: 12px; border-radius: 8px; text-align: center; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;">
                       <span>小时</span>
                     </div>
                   </div>
@@ -70873,7 +70923,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                       <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">幸运区间设置 1d100</span>
-                        <select class="moe-input col-luck-cycle-select" style="height: 28px; line-height: 28px; font-size: 12px; padding: 0 8px; border-radius: 8px; width: 60px; box-sizing: border-box; flex-shrink: 0; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); text-align: center;" title="回复次数">
+                        <select class="moe-input col-luck-cycle-select" style="height: 34px; line-height: 22px; font-size: 12px; padding: 4px 8px; border-radius: 8px; width: 64px; box-sizing: border-box; flex-shrink: 0; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); text-align: center;" title="回复次数">
                           ${[1,2,3,4,5,6,7,8,9,10].map(num => `<option value="${num}" ${currentCycle == num ? 'selected' : ''}>${num}</option>`).join('')}
                         </select>
                       </div>
@@ -70924,39 +70974,60 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 downBtn.style.cursor = "not-allowed";
               }
 
-              upBtn?.addEventListener("click", () => {
+              const persistTarget = async () => {
+                const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                if (dbInstance) {
+                  if (targetObj.id && state.chats[targetObj.id]) {
+                    await dbInstance.chats.put(state.chats[targetObj.id]);
+                  } else if (state.activeChatId && state.chats[state.activeChatId]) {
+                    await dbInstance.chats.put(state.chats[state.activeChatId]);
+                  }
+                }
+              };
+
+              upBtn?.addEventListener("click", async () => {
                 if (index > 0) {
                   const temp = targetObj.settings.columns[index];
                   targetObj.settings.columns[index] = targetObj.settings.columns[index - 1];
                   targetObj.settings.columns[index - 1] = temp;
+                  await persistTarget();
                   renderSystemStatusColumnsList(targetObj, containerId);
                 }
               });
 
-              downBtn?.addEventListener("click", () => {
+              downBtn?.addEventListener("click", async () => {
                 if (index < targetObj.settings.columns.length - 1) {
                   const temp = targetObj.settings.columns[index];
                   targetObj.settings.columns[index] = targetObj.settings.columns[index + 1];
                   targetObj.settings.columns[index + 1] = temp;
+                  await persistTarget();
                   renderSystemStatusColumnsList(targetObj, containerId);
                 }
               });
 
-              delBtn?.addEventListener("click", () => {
+              delBtn?.addEventListener("click", async () => {
                 targetObj.settings.columns.splice(index, 1);
+                await persistTarget();
                 renderSystemStatusColumnsList(targetObj, containerId);
               });
 
               if (!isLabelFixed) {
-                itemDiv.querySelector(".col-label-input")?.addEventListener("input", (e) => {
+                itemDiv.querySelector(".col-label-input")?.addEventListener("input", async (e) => {
                   targetObj.settings.columns[index].label = e.target.value;
+                  await persistTarget();
                 });
               }
               if (!isFormatFixed) {
-                itemDiv.querySelector(".col-format-input")?.addEventListener("input", (e) => {
+                itemDiv.querySelector(".col-format-input")?.addEventListener("input", async (e) => {
                   targetObj.settings.columns[index].format = e.target.value;
+                  await persistTarget();
                 });
               }
+
+              itemDiv.querySelector(".col-note-input")?.addEventListener("input", async (e) => {
+                targetObj.settings.columns[index].note = e.target.value;
+                await persistTarget();
+              });
 
               if (isWeather) {
                 itemDiv.querySelector(".col-weather-selector-btn")?.addEventListener("click", () => {
@@ -71134,14 +71205,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               const type = btn.getAttribute("data-type");
               let newCol = { id: "col_" + Date.now(), type, label: "", format: "*", note: "" };
               if (type === "general") {
-                newCol.label = "[栏目]";
+                newCol.label = "[一般]";
                 newCol.format = "*";
               } else if (type === "date") {
                 newCol.label = "[日期]";
-                newCol.format = "*年*月*日";
+                newCol.format = "X年X月X日";
               } else if (type === "time") {
                 newCol.label = "[时间]";
-                newCol.format = "*：*";
+                newCol.format = "时:分";
               } else if (type === "weather") {
                 const pools = (typeof window.getStoredWeatherPools === "function" ? window.getStoredWeatherPools() : null) || [
                   { id: "weather_temperate", name: "温带气候" }
@@ -71150,16 +71221,24 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 newCol.format = pools[0]?.name || "温带气候";
               } else if (type === "affection") {
                 newCol.label = "[好感度]";
-                newCol.format = "[角色全名]好感度[+/-]*=*";
+                newCol.format = "人物全名±数值";
               } else if (type === "luck") {
                 newCol.label = "[幸运]";
-                newCol.format = "1d100";
+                newCol.format = "系统自动计算";
               } else if (type === "location") {
                 newCol.label = "[地点]";
-                newCol.format = "*";
+                newCol.format = "大层级-中层级-小层级";
               }
 
               target.settings.columns.push(newCol);
+              const persistTarget = async () => {
+                const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                if (dbInstance) {
+                  if (target.id && state.chats[target.id]) await dbInstance.chats.put(state.chats[target.id]);
+                  else if (state.activeChatId && state.chats[state.activeChatId]) await dbInstance.chats.put(state.chats[state.activeChatId]);
+                }
+              };
+              persistTarget();
               if (colTypeModal) colTypeModal.classList.remove("visible");
               renderSystemStatusColumnsList(target, currentStatusContainerId);
             });
