@@ -8529,6 +8529,7 @@
     <div id="chat-mini-map-modal" class="chat-mini-map-floating-overlay">
       <div id="chat-mini-map-floating-card" class="chat-mini-map-floating-card">
         <div class="chat-mini-map-drag-bar" id="chat-mini-map-drag-handle">
+          <button type="button" class="chat-mini-map-tiny-close" id="fav-chat-mini-map-btn" title="收藏" style="margin-right: 6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
           <button type="button" class="chat-mini-map-tiny-close" id="close-chat-mini-map-btn" title="关闭"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
         </div>
         <div id="chat-mini-map-view-box" style="display: flex; flex-direction: column; position: relative;">
@@ -8548,7 +8549,11 @@
           <button type="button" class="close-btn" id="close-chat-map-import-btn" style="border: none; background: transparent; font-size: 18px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
         </div>
         <div class="modal-body" style="padding: 12px 0; display: flex; flex-direction: column; gap: 8px;">
-          <div style="font-size: 11.5px; color: var(--text-secondary);">从加载了相同模组的其他群组导入已生成的小地图：</div>
+          <div style="display: flex; gap: 6px; margin-bottom: 2px;">
+            <button type="button" id="chat-map-import-tab-groups" class="chat-mod-footer-btn primary" style="flex: 1; height: 26px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-family: inherit;">群组</button>
+            <button type="button" id="chat-map-import-tab-favs" class="chat-mod-footer-btn secondary" style="flex: 1; height: 26px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-family: inherit;">收藏</button>
+          </div>
+          <div id="chat-map-import-hint" style="font-size: 11.5px; color: var(--text-secondary);">从加载了相同模组的其他群组导入已生成的小地图：</div>
           <div id="chat-map-import-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto;"></div>
         </div>
         <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
@@ -24358,6 +24363,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   }
                 }
               }
+            } else if (item.type === "map_html") {
+              const mapSvg = item.mapSvg || item.content?.content || item.content || "";
+              const mapTitle = item.title || item.content?.senderName || "地图";
+              const mapStyle = item.mapStyle || "自适应";
+              sourceText = "来自地图收藏";
+              headerHtml = `<div style="width: 36px; height: 36px; border-radius: 8px; background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; color: var(--accent-color); border: 1px solid var(--border-color); flex-shrink: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></div><div class="info"><div class="name">${mapTitle}</div><div style="font-size: 10px; color: var(--text-secondary);">风格: ${mapStyle}</div></div>`;
+              contentHtml = `<div class="favorite-map-preview-box" style="width: 100%; max-height: 240px; overflow: hidden; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); display: flex; align-items: center; justify-content: center; position: relative; pointer-events: none;">${mapSvg}</div>`;
             }
 
             card.innerHTML = `
@@ -32085,7 +32097,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         const MINI_MAP_STYLE_DETAILS = {
           "自适应": {
             desc: "智能推演风格。AI自动通读全部地名、层级与详细简介，根据世界观背景自主推演最契合的艺术画风与舒适配色。",
-            req: "你必须根据以上地点清单中的所有地名、层级以及详细简介设定，自主推演最契合当前世界观题材（例如奇幻森林、末日废土、魔法学院、现代都市、唯美仙侠、赛博朋克、古风武侠等）的殿堂级艺术画风，并自主调配最美观、舒适、赏心悦目的白天专属色彩体系！"
+            req: "你必须根据以上地点清单中的所有地名、层级以及详细简介设定，自主推演最契合当前世界观题材的殿堂级艺术画风，并自主调配最美观、舒适、赏心悦目的色彩体系！不要规定底色为某种固定颜色，由你自主决定；但严禁使用黑色或者是深蓝色、深灰色作为底色！必须采用明朗舒适的浅色调或自然明快色调！"
           },
           "水墨丹青国风": {
             desc: "古风与中式志怪题材。以宣纸留白为底，枯笔水墨勾勒，笔触带飞白晕染，点染青绿或朱砂，山径水脉贯穿，文气疏朗雅致。",
@@ -33530,8 +33542,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           let currentLocName = "";
-          if (chat.settings?.currentLocation && typeof chat.settings.currentLocation === "string" && chat.settings.currentLocation.trim()) {
-            currentLocName = chat.settings.currentLocation.trim();
+          if (chat.settings?.currentLocation !== undefined) {
+            currentLocName = (chat.settings.currentLocation || "").trim();
           } else {
             const history = chat.history || [];
             for (let i = history.length - 1; i >= 0; i--) {
@@ -33566,7 +33578,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             const children = getChildren(node.name);
             const hasChildren = (children.length > 0);
-            const isCurrentLoc = Boolean(currentLocName && (node.name === currentLocName || node.name.includes(currentLocName) || currentLocName.includes(node.name)));
+            const exactMatchedExists = locations.some((l) => l.name && l.name.trim() === currentLocName);
+            const isCurrentLoc = exactMatchedExists
+              ? Boolean(currentLocName && node.name && node.name.trim() === currentLocName)
+              : Boolean(currentLocName && (node.name === currentLocName || node.name.includes(currentLocName) || currentLocName.includes(node.name)));
 
             const row = document.createElement("div");
             row.className = "chat-map-strip-row";
@@ -33621,16 +33636,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             row.onclick = async (e) => {
               if (e.target.closest(".strip-arrow") || e.target.closest(".del-temp-btn") || e.target.closest(".edit-chat-loc-btn") || e.target.closest(".strip-thumb") || e.target.closest(".strip-thumb-placeholder")) return;
-              if (chat.settings.currentLocation === node.name) {
-                delete chat.settings.currentLocation;
+              if (isCurrentLoc) {
+                chat.settings.currentLocation = "";
               } else {
-                chat.settings.currentLocation = node.name;
+                chat.settings.currentLocation = (node.name || "").trim();
               }
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance && chat.id) {
                 await dbInstance.chats.put(chat);
               }
               await renderChatMapList();
+              renderChatMiniMap();
             };
 
             const editLocBtn = row.querySelector(".edit-chat-loc-btn");
@@ -33717,92 +33733,240 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const modal = document.getElementById("chat-map-import-modal");
           const listContainer = document.getElementById("chat-map-import-list");
+          const hintEl = document.getElementById("chat-map-import-hint");
+          const tabGroupsBtn = document.getElementById("chat-map-import-tab-groups");
+          const tabFavsBtn = document.getElementById("chat-map-import-tab-favs");
           const closeBtn = document.getElementById("close-chat-map-import-btn");
           const cancelBtn = document.getElementById("cancel-chat-map-import-btn");
           if (!modal || !listContainer) return;
 
-          listContainer.innerHTML = "";
           const closeModal = () => modal.classList.remove("visible");
           if (closeBtn) closeBtn.onclick = closeModal;
           if (cancelBtn) cancelBtn.onclick = closeModal;
 
-          const currentModId = currentChat.activeModuleId;
-          const otherChatsWithMap = [];
+          let currentTab = "groups";
 
-          Object.keys(state.chats).forEach(cId => {
-            if (cId === state.activeChatId) return;
-            const c = state.chats[cId];
-            if (!c || !c.settings?.miniMapSvg) return;
-            if (currentModId && c.activeModuleId === currentModId) {
-              otherChatsWithMap.push({ id: cId, chat: c });
-            } else if (!currentModId && c.settings?.miniMapSvg) {
-              otherChatsWithMap.push({ id: cId, chat: c });
-            }
-          });
+          const renderList = async () => {
+            listContainer.innerHTML = "";
+            const isModMode = currentChat.settings?.useModuleMap !== false && !!currentChat.activeModuleId;
+            const destModeName = isModMode ? "模组地图" : "上下文地图";
 
-          if (otherChatsWithMap.length === 0) {
-            listContainer.innerHTML = `
-              <div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 20px 0;">
-                暂无其他加载相同模组并生成小地图的群组
-              </div>
-            `;
-          } else {
-            otherChatsWithMap.forEach(item => {
-              const row = document.createElement("div");
-              row.className = "mod-lib-card";
-              row.style.padding = "8px 10px";
-              row.style.display = "flex";
-              row.style.alignItems = "center";
-              row.style.justifyContent = "space-between";
-              row.style.gap = "8px";
-              row.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
-                  <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0; border: 1px solid var(--border-color);">
-                    ${item.chat.avatar ? `<img src="${item.chat.avatar}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />` : (item.chat.name || "群").slice(0, 1)}
-                  </div>
-                  <div style="display: flex; flex-direction: column; min-width: 0;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.chat.name || "群聊"}</span>
-                    <span style="font-size: 10px; color: var(--text-secondary);">风格: ${item.chat.settings?.miniMapStyle || "默认"}</span>
-                  </div>
-                </div>
-                <button type="button" class="mod-capsule-btn primary import-action-btn" style="flex-shrink: 0; font-size: 11px; padding: 3px 10px;">导入</button>
-              `;
-
-              const importActionBtn = row.querySelector(".import-action-btn");
-              if (importActionBtn) {
-                importActionBtn.onclick = async () => {
-                  if (!currentChat.settings) currentChat.settings = {};
-                  currentChat.settings.miniMapSvg = item.chat.settings.miniMapSvg;
-                  currentChat.settings.miniMapStyle = item.chat.settings.miniMapStyle || "奶油风";
-                  if (item.chat.settings.temporaryLocations) {
-                    currentChat.settings.temporaryLocations = JSON.parse(JSON.stringify(item.chat.settings.temporaryLocations));
-                  }
-                  if (item.chat.settings.customLocations) {
-                    currentChat.settings.customLocations = JSON.parse(JSON.stringify(item.chat.settings.customLocations));
-                  }
-                  if (item.chat.settings.deletedLocationNames) {
-                    currentChat.settings.deletedLocationNames = JSON.parse(JSON.stringify(item.chat.settings.deletedLocationNames));
-                  }
-                  if (item.chat.settings.contextMapData) {
-                    currentChat.settings.contextMapData = JSON.parse(JSON.stringify(item.chat.settings.contextMapData));
-                  }
-                  if (item.chat.settings.mapViewMode) {
-                    currentChat.settings.mapViewMode = item.chat.settings.mapViewMode;
-                  }
-                  const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-                  if (dbInstance) await dbInstance.chats.put(currentChat);
-                  closeModal();
-                  if (typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("导入成功", `已成功从【${item.chat.name}】导入小地图与全部地点信息`);
-                  }
-                  openChatMiniMapModal();
-                };
+            if (currentTab === "groups") {
+              if (tabGroupsBtn) {
+                tabGroupsBtn.className = "chat-mod-footer-btn primary";
+              }
+              if (tabFavsBtn) {
+                tabFavsBtn.className = "chat-mod-footer-btn secondary";
+              }
+              if (hintEl) {
+                hintEl.textContent = "从其他群组导入已生成的小地图：";
               }
 
-              listContainer.appendChild(row);
-            });
+              const currentModId = currentChat.activeModuleId;
+              const otherChatsWithMap = [];
+
+              Object.keys(state.chats).forEach(cId => {
+                if (cId === state.activeChatId) return;
+                const c = state.chats[cId];
+                if (!c || !c.settings?.miniMapSvg) return;
+                if (currentModId && c.activeModuleId === currentModId) {
+                  otherChatsWithMap.push({ id: cId, chat: c });
+                } else if (!currentModId && c.settings?.miniMapSvg) {
+                  otherChatsWithMap.push({ id: cId, chat: c });
+                }
+              });
+
+              if (otherChatsWithMap.length === 0) {
+                listContainer.innerHTML = `
+                  <div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 20px 0;">
+                    暂无其他群组已生成的小地图
+                  </div>
+                `;
+                return;
+              }
+
+              otherChatsWithMap.forEach(item => {
+                const row = document.createElement("div");
+                row.className = "mod-lib-card";
+                row.style.padding = "8px 10px";
+                row.style.display = "flex";
+                row.style.alignItems = "center";
+                row.style.justifyContent = "space-between";
+                row.style.gap = "8px";
+                row.innerHTML = `
+                  <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0; border: 1px solid var(--border-color);">
+                      ${item.chat.avatar ? `<img src="${item.chat.avatar}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />` : (item.chat.name || "群").slice(0, 1)}
+                    </div>
+                    <div style="display: flex; flex-direction: column; min-width: 0;">
+                      <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.chat.name || "群聊"}</span>
+                      <span style="font-size: 10px; color: var(--text-secondary);">风格: ${item.chat.settings?.miniMapStyle || "默认"}</span>
+                    </div>
+                  </div>
+                  <button type="button" class="mod-capsule-btn primary import-action-btn" style="flex-shrink: 0; font-size: 11px; padding: 3px 10px;">导入</button>
+                `;
+
+                const importActionBtn = row.querySelector(".import-action-btn");
+                if (importActionBtn) {
+                  importActionBtn.onclick = async () => {
+                    const srcSvg = item.chat.settings.miniMapSvg;
+                    const srcStyle = item.chat.settings.miniMapStyle || "奶油风";
+                    if (!currentChat.settings) currentChat.settings = {};
+                    if (isModMode) {
+                      if (!currentChat.settings.moduleMiniMaps) currentChat.settings.moduleMiniMaps = {};
+                      currentChat.settings.moduleMiniMaps[currentChat.activeModuleId] = {
+                        svg: srcSvg,
+                        style: srcStyle
+                      };
+                    } else {
+                      currentChat.settings.contextMiniMapSvg = srcSvg;
+                      currentChat.settings.contextMiniMapStyle = srcStyle;
+                    }
+                    currentChat.settings.miniMapSvg = srcSvg;
+                    currentChat.settings.miniMapStyle = srcStyle;
+
+                    if (item.chat.settings.temporaryLocations) {
+                      currentChat.settings.temporaryLocations = JSON.parse(JSON.stringify(item.chat.settings.temporaryLocations));
+                    }
+                    if (item.chat.settings.customLocations) {
+                      currentChat.settings.customLocations = JSON.parse(JSON.stringify(item.chat.settings.customLocations));
+                    }
+                    if (item.chat.settings.deletedLocationNames) {
+                      currentChat.settings.deletedLocationNames = JSON.parse(JSON.stringify(item.chat.settings.deletedLocationNames));
+                    }
+                    if (item.chat.settings.contextMapData) {
+                      currentChat.settings.contextMapData = JSON.parse(JSON.stringify(item.chat.settings.contextMapData));
+                    }
+                    if (item.chat.settings.mapViewMode) {
+                      currentChat.settings.mapViewMode = item.chat.settings.mapViewMode;
+                    }
+                    const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                    if (dbInstance) await dbInstance.chats.put(currentChat);
+                    closeModal();
+                    if (typeof window.showCustomAlert === "function") {
+                      window.showCustomAlert("导入成功", `已成功将地图导入到${destModeName}`);
+                    }
+                    await renderChatMapList();
+                    renderChatMiniMap();
+                    openChatMiniMapModal();
+                  };
+                }
+
+                listContainer.appendChild(row);
+              });
+            } else {
+              if (tabFavsBtn) {
+                tabFavsBtn.className = "chat-mod-footer-btn primary";
+              }
+              if (tabGroupsBtn) {
+                tabGroupsBtn.className = "chat-mod-footer-btn secondary";
+              }
+              if (hintEl) {
+                hintEl.textContent = "从收藏夹导入已保存的地图：";
+              }
+
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              let favMaps = [];
+              if (dbInstance && dbInstance.favorites) {
+                try {
+                  const allFavs = await dbInstance.favorites.orderBy("timestamp").reverse().toArray();
+                  favMaps = allFavs.filter(f => f.type === "map_html" || f.mapSvg || (f.content?.content && typeof f.content.content === "string" && f.content.content.includes("<svg")));
+                } catch(e) {}
+              }
+
+              if (favMaps.length === 0) {
+                listContainer.innerHTML = `
+                  <div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 20px 0;">
+                    暂无已收藏的地图
+                  </div>
+                `;
+                return;
+              }
+
+              favMaps.forEach(item => {
+                const mapSvg = item.mapSvg || item.content?.content || item.content || "";
+                const mapTitle = item.title || item.content?.senderName || "地图";
+                const mapStyle = item.mapStyle || "自适应";
+                const row = document.createElement("div");
+                row.className = "mod-lib-card";
+                row.style.padding = "8px 10px";
+                row.style.display = "flex";
+                row.style.alignItems = "center";
+                row.style.justifyContent = "space-between";
+                row.style.gap = "8px";
+                row.innerHTML = `
+                  <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                    <div style="width: 28px; height: 28px; border-radius: 6px; background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0; border: 1px solid var(--border-color);">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                    </div>
+                    <div style="display: flex; flex-direction: column; min-width: 0;">
+                      <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${mapTitle}</span>
+                      <span style="font-size: 10px; color: var(--text-secondary);">风格: ${mapStyle}</span>
+                    </div>
+                  </div>
+                  <button type="button" class="mod-capsule-btn primary import-fav-action-btn" style="flex-shrink: 0; font-size: 11px; padding: 3px 10px;">导入</button>
+                `;
+
+                const importBtn = row.querySelector(".import-fav-action-btn");
+                if (importBtn) {
+                  importBtn.onclick = async () => {
+                    if (!currentChat.settings) currentChat.settings = {};
+                    if (isModMode) {
+                      if (!currentChat.settings.moduleMiniMaps) currentChat.settings.moduleMiniMaps = {};
+                      currentChat.settings.moduleMiniMaps[currentChat.activeModuleId] = {
+                        svg: mapSvg,
+                        style: mapStyle
+                      };
+                    } else {
+                      currentChat.settings.contextMiniMapSvg = mapSvg;
+                      currentChat.settings.contextMiniMapStyle = mapStyle;
+                    }
+                    currentChat.settings.miniMapSvg = mapSvg;
+                    currentChat.settings.miniMapStyle = mapStyle;
+
+                    if (item.temporaryLocations && Array.isArray(item.temporaryLocations)) {
+                      currentChat.settings.temporaryLocations = JSON.parse(JSON.stringify(item.temporaryLocations));
+                    }
+                    if (item.customLocations && Array.isArray(item.customLocations)) {
+                      currentChat.settings.customLocations = JSON.parse(JSON.stringify(item.customLocations));
+                    }
+                    if (item.contextMapData && Array.isArray(item.contextMapData)) {
+                      currentChat.settings.contextMapData = JSON.parse(JSON.stringify(item.contextMapData));
+                    }
+                    if (item.mapViewMode) {
+                      currentChat.settings.mapViewMode = item.mapViewMode;
+                    }
+                    const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                    if (dbInstance) await dbInstance.chats.put(currentChat);
+                    closeModal();
+                    if (typeof window.showCustomAlert === "function") {
+                      window.showCustomAlert("导入成功", `已成功将地图导入到${destModeName}`);
+                    }
+                    await renderChatMapList();
+                    renderChatMiniMap();
+                    openChatMiniMapModal();
+                  };
+                }
+
+                listContainer.appendChild(row);
+              });
+            }
+          };
+
+          if (tabGroupsBtn) {
+            tabGroupsBtn.onclick = () => {
+              currentTab = "groups";
+              renderList();
+            };
+          }
+          if (tabFavsBtn) {
+            tabFavsBtn.onclick = () => {
+              currentTab = "favs";
+              renderList();
+            };
           }
 
+          await renderList();
           modal.classList.add("visible");
         }
         window.openChatMapImportModal = openChatMapImportModal;
@@ -34010,6 +34174,44 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.openChatTempLocationModal = openChatLocationEditModal;
         window.openChatTempLocationModal = openChatTempLocationModal;
 
+        async function saveCurrentMiniMapToFavorites(chat, container) {
+          if (!chat) chat = state.chats[state.activeChatId] || { name: "地图" };
+          const htmlToSave = (chat && chat.settings?.miniMapSvg) ? chat.settings.miniMapSvg : (container ? container.innerHTML : "");
+          if (!htmlToSave || !htmlToSave.trim()) {
+            if (typeof showCustomAlert === "function") {
+              await showCustomAlert("提示", "当前暂无地图数据可收藏");
+            }
+            return;
+          }
+          const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
+          const currentChat = chat;
+          const favItem = {
+            type: "map_html",
+            title: currentChat.name ? currentChat.name + "地图" : "地图",
+            mapSvg: htmlToSave,
+            mapStyle: chat.settings?.miniMapStyle || "自适应",
+            sourceMode: isModMode ? "module" : "context",
+            moduleId: chat.activeModuleId || null,
+            moduleName: (chat.activeModuleId && state.modules?.[chat.activeModuleId]?.title) || "",
+            chatId: state.activeChatId || "global",
+            timestamp: Date.now(),
+            originalTimestamp: Date.now(),
+            temporaryLocations: chat.settings?.temporaryLocations ? JSON.parse(JSON.stringify(chat.settings.temporaryLocations)) : [],
+            customLocations: chat.settings?.customLocations ? JSON.parse(JSON.stringify(chat.settings.customLocations)) : [],
+            contextMapData: chat.settings?.contextMapData ? JSON.parse(JSON.stringify(chat.settings.contextMapData)) : [],
+            mapViewMode: chat.settings?.mapViewMode || "text"
+          };
+          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+          if (dbInstance && dbInstance.favorites) {
+            await dbInstance.favorites.add(favItem);
+            allFavoriteItems = await dbInstance.favorites.orderBy("timestamp").reverse().toArray();
+            if (typeof showCustomAlert === "function") {
+              await showCustomAlert("成功", "已加入收藏");
+            }
+          }
+        }
+        window.saveCurrentMiniMapToFavorites = saveCurrentMiniMapToFavorites;
+
         let miniMapCardInitialized = false;
 
         async function openChatMiniMapModal() {
@@ -34033,6 +34235,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             closeBtn.onclick = (e) => {
               e.stopPropagation();
               modal.classList.remove("visible");
+            };
+          }
+
+          const favBtn = document.getElementById("fav-chat-mini-map-btn");
+          if (favBtn) {
+            favBtn.onclick = async (e) => {
+              e.stopPropagation();
+              const chat = state.chats[state.activeChatId];
+              const container = document.getElementById("chat-mini-map-container");
+              await saveCurrentMiniMapToFavorites(chat, container);
             };
           }
 
@@ -34456,8 +34668,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
 
           let latestLocation = "";
-          if (chat.settings?.currentLocation && typeof chat.settings.currentLocation === "string" && chat.settings.currentLocation.trim()) {
-            latestLocation = chat.settings.currentLocation.trim();
+          if (chat.settings?.currentLocation !== undefined) {
+            latestLocation = (chat.settings.currentLocation || "").trim();
           } else {
             const history = chat.history || [];
             for (let i = history.length - 1; i >= 0; i--) {
@@ -34477,27 +34689,70 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
 
+          const existingBeacons = container.querySelectorAll(".current-location-beacon");
+          existingBeacons.forEach(b => b.remove());
+          const glowingNodes = container.querySelectorAll(".map-location-glow");
+          glowingNodes.forEach(g => {
+            g.classList.remove("map-location-glow");
+            g.style.removeProperty("--map-loc-glow-color");
+            g.style.removeProperty("--map-loc-glow-speed");
+            g.style.removeProperty("--map-loc-glow-spread");
+          });
+
           if (latestLocation && latestLocation !== "未知") {
             const allLocs = await getAllChatLocations(chat);
             const findNodeForName = (nameStr) => {
               if (!nameStr) return null;
               const clean = String(nameStr).trim();
               if (!clean) return null;
+
+              // 优先按 data-name 或 id 精确匹配
               for (const node of locNodes) {
                 const dName = (node.getAttribute("data-name") || "").trim();
-                const nodeText = (node.tagName && node.tagName.toLowerCase() === "text" ? node.textContent.trim() : (node.querySelector ? (node.querySelector("text")?.textContent?.trim() || "") : ""));
                 const nodeId = (node.getAttribute("id") || "").trim();
-                if (dName === clean || nodeText === clean || nodeId === clean) {
+                if (dName === clean || nodeId === clean) {
                   return (node.closest ? node.closest(".map-location-node") : null) || node;
                 }
               }
+
+              // 按独立 text 节点文本精确匹配
+              for (const node of locNodes) {
+                if (node.tagName && node.tagName.toLowerCase() === "text") {
+                  const nodeText = node.textContent.trim();
+                  if (nodeText === clean) {
+                    return (node.closest ? node.closest(".map-location-node") : null) || node;
+                  }
+                }
+              }
+
+              // 按 .map-location-node 内部文本精确匹配
+              for (const node of locNodes) {
+                if (node.classList && node.classList.contains("map-location-node")) {
+                  const txt = (node.querySelector ? node.querySelector("text")?.textContent?.trim() : "") || node.textContent.trim();
+                  if (txt === clean) {
+                    return node;
+                  }
+                }
+              }
+
+              // 次级按 data-name 包含匹配
               for (const node of locNodes) {
                 const dName = (node.getAttribute("data-name") || "").trim();
-                const nodeText = (node.tagName && node.tagName.toLowerCase() === "text" ? node.textContent.trim() : (node.querySelector ? (node.querySelector("text")?.textContent?.trim() || "") : ""));
-                if ((dName && (dName.includes(clean) || clean.includes(dName))) || (nodeText && (nodeText.includes(clean) || clean.includes(nodeText)))) {
+                if (dName && (dName.includes(clean) || clean.includes(dName))) {
                   return (node.closest ? node.closest(".map-location-node") : null) || node;
                 }
               }
+
+              // 仅对叶子 text 节点进行文本包含匹配，杜绝整张图的大外层 g 标签误匹配
+              for (const node of locNodes) {
+                if (node.tagName && node.tagName.toLowerCase() === "text") {
+                  const nodeText = node.textContent.trim();
+                  if (nodeText && (nodeText.includes(clean) || clean.includes(nodeText))) {
+                    return (node.closest ? node.closest(".map-location-node") : null) || node;
+                  }
+                }
+              }
+
               return null;
             };
 
@@ -34541,21 +34796,60 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               matchedNode.classList.remove("map-location-pin", "map-location-glow");
               matchedNode.style.removeProperty("filter");
 
-              const existingBeacons = container.querySelectorAll(".current-location-beacon");
-              existingBeacons.forEach(b => b.remove());
-
               const svgRoot = container.querySelector("svg") || matchedNode.ownerSVGElement || matchedNode.closest("svg");
 
               let posX = 0;
               let posY = 0;
               let hasCoords = false;
 
-              if (typeof matchedNode.getBBox === "function") {
+              // 精准全局矩阵坐标映射：将节点本地坐标映射至 svgRoot 用户坐标空间，彻底消除任何位移与乱飞
+              if (svgRoot && typeof matchedNode.getBBox === "function") {
                 try {
                   const bbox = matchedNode.getBBox();
                   if (bbox && (bbox.width || bbox.height || bbox.x || bbox.y)) {
-                    posX = bbox.x + (bbox.width / 2);
-                    posY = bbox.y;
+                    const localX = bbox.x + (bbox.width / 2);
+                    const localY = bbox.y;
+
+                    if (typeof matchedNode.getScreenCTM === "function" && typeof svgRoot.getScreenCTM === "function" && typeof svgRoot.createSVGPoint === "function") {
+                      const pt = svgRoot.createSVGPoint();
+                      pt.x = localX;
+                      pt.y = localY;
+                      const nodeCtm = matchedNode.getScreenCTM();
+                      const rootCtm = svgRoot.getScreenCTM();
+                      if (nodeCtm && rootCtm) {
+                        const screenPt = pt.matrixTransform(nodeCtm);
+                        const rootPt = screenPt.matrixTransform(rootCtm.inverse());
+                        if (!isNaN(rootPt.x) && !isNaN(rootPt.y) && isFinite(rootPt.x) && isFinite(rootPt.y)) {
+                          posX = rootPt.x;
+                          posY = rootPt.y;
+                          hasCoords = true;
+                        }
+                      }
+                    }
+
+                    if (!hasCoords) {
+                      posX = localX;
+                      posY = localY;
+                      hasCoords = true;
+                    }
+                  }
+                } catch (e) {}
+              }
+
+              if (!hasCoords && svgRoot) {
+                try {
+                  const nodeRect = matchedNode.getBoundingClientRect();
+                  const rootRect = svgRoot.getBoundingClientRect();
+                  const vb = svgRoot.viewBox ? svgRoot.viewBox.baseVal : null;
+                  if (nodeRect && rootRect && rootRect.width > 0 && rootRect.height > 0) {
+                    const vbW = (vb && vb.width > 0) ? vb.width : rootRect.width;
+                    const vbH = (vb && vb.height > 0) ? vb.height : rootRect.height;
+                    const vbX = vb ? vb.x : 0;
+                    const vbY = vb ? vb.y : 0;
+                    const scaleX = vbW / rootRect.width;
+                    const scaleY = vbH / rootRect.height;
+                    posX = vbX + ((nodeRect.left + nodeRect.width / 2) - rootRect.left) * scaleX;
+                    posY = vbY + (nodeRect.top - rootRect.top) * scaleY;
                     hasCoords = true;
                   }
                 } catch (e) {}
@@ -34573,22 +34867,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               }
 
-              if (effectType === "pin") {
-                if (svgRoot) {
-                  const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
-                  beaconG.setAttribute("class", "current-location-beacon");
-                  beaconG.setAttribute("transform", `translate(${posX}, ${posY - 12})`);
-                  beaconG.setAttribute("style", "pointer-events: none;");
-                  beaconG.innerHTML = `
-                    <ellipse cx="0" cy="12" rx="4.5" ry="2" fill="rgba(0,0,0,0.3)" />
-                    <polygon points="-1,2 0,12 1,2" fill="#718096" stroke="#4a5568" stroke-width="0.5" />
-                    <circle cx="0" cy="-3" r="9" fill="${pinColor}" stroke="rgba(0,0,0,0.25)" stroke-width="1.2" />
-                    <circle cx="-2.5" cy="-5.5" r="4.5" fill="#FFFFFF" opacity="0.35" />
-                    <circle cx="-3" cy="-6" r="2" fill="#FFFFFF" opacity="0.8" />
-                  `;
-                  svgRoot.appendChild(beaconG);
-                }
-              } else if (effectType === "glow") {
+              if (effectType === "glow") {
                 matchedNode.classList.add("map-location-glow");
                 matchedNode.style.setProperty("--map-loc-glow-color", pinColor);
                 matchedNode.style.setProperty("--map-loc-glow-speed", `${glowSpeed}s`);
@@ -34603,15 +34882,39 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   beaconG.setAttribute("class", "current-location-beacon");
                   beaconG.setAttribute("transform", `translate(${posX}, ${posY - 8})`);
                   beaconG.setAttribute("style", "pointer-events: none;");
-                  beaconG.innerHTML = `
-                    <image href="${customIcon}" xlink:href="${customIcon}" x="${iconOffset}" y="${iconOffset}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet" />
-                  `;
+
+                  const imgEl = document.createElementNS("http://www.w3.org/2000/svg", "image");
+                  imgEl.setAttribute("href", customIcon);
+                  imgEl.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", customIcon);
+                  imgEl.setAttribute("x", iconOffset);
+                  imgEl.setAttribute("y", iconOffset);
+                  imgEl.setAttribute("width", iconSize);
+                  imgEl.setAttribute("height", iconSize);
+                  imgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
+                  beaconG.appendChild(imgEl);
+
                   if (customGlow) {
                     matchedNode.classList.add("map-location-glow");
                     matchedNode.style.setProperty("--map-loc-glow-color", pinColor);
                     matchedNode.style.setProperty("--map-loc-glow-speed", `${glowSpeed}s`);
                     matchedNode.style.setProperty("--map-loc-glow-spread", `${Math.round(8 * glowBright)}px`);
                   }
+                  svgRoot.appendChild(beaconG);
+                }
+              } else {
+                // 默认图钉显示（包含自定义图标为空时的智能回退保障）
+                if (svgRoot) {
+                  const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                  beaconG.setAttribute("class", "current-location-beacon");
+                  beaconG.setAttribute("transform", `translate(${posX}, ${posY - 12})`);
+                  beaconG.setAttribute("style", "pointer-events: none;");
+                  beaconG.innerHTML = `
+                    <ellipse cx="0" cy="12" rx="4.5" ry="2" fill="rgba(0,0,0,0.3)" />
+                    <polygon points="-1,2 0,12 1,2" fill="#718096" stroke="#4a5568" stroke-width="0.5" />
+                    <circle cx="0" cy="-3" r="9" fill="${pinColor}" stroke="rgba(0,0,0,0.25)" stroke-width="1.2" />
+                    <circle cx="-2.5" cy="-5.5" r="4.5" fill="#FFFFFF" opacity="0.35" />
+                    <circle cx="-3" cy="-6" r="2" fill="#FFFFFF" opacity="0.8" />
+                  `;
                   svgRoot.appendChild(beaconG);
                 }
               }
@@ -34640,28 +34943,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               if (!confirmed) return;
 
-              const currentChat = state.chats[state.activeChatId] || { name: "地图" };
-              const htmlToSave = (chat && chat.settings?.miniMapSvg) ? chat.settings.miniMapSvg : container.innerHTML;
-              const favItem = {
-                type: "chat_message",
-                content: {
-                  role: "assistant",
-                  content: htmlToSave,
-                  senderName: currentChat.name || "地图生成",
-                  timestamp: Date.now()
-                },
-                chatId: state.activeChatId || "global",
-                timestamp: Date.now(),
-                originalTimestamp: Date.now()
-              };
-              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-              if (dbInstance && dbInstance.favorites) {
-                await dbInstance.favorites.add(favItem);
-                allFavoriteItems = await dbInstance.favorites.orderBy("timestamp").reverse().toArray();
-                if (typeof showCustomAlert === "function") {
-                  await showCustomAlert("成功", "已加入收藏");
-                }
-              }
+              await saveCurrentMiniMapToFavorites(chat, container);
             }
           };
         }
@@ -34721,7 +35003,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }).join("\n");
 
           const adaptiveInstruction = (styleName === "自适应" || !styleName)
-            ? `\n【自适应风格深度智能决策指令】：\n你必须根据以上地点清单中的所有地名、层级以及详细简介设定，自主推演最契合当前世界观题材（例如奇幻森林、末日废土、魔法学院、现代都市、唯美仙侠、赛博朋克、古风武侠等）的殿堂级艺术画风，并自主调配最美观、舒适、赏心悦目的白天专属色彩体系！\n`
+            ? `\n【自适应风格深度智能决策指令】：\n你必须根据以上地点清单中的所有地名、层级以及详细简介设定，自主推演最契合当前世界观题材的殿堂级艺术画风，并自主调配最美观、舒适、赏心悦目的色彩体系！\n【底色要求】：不要规定底色必须是某种固定颜色，由你自主决定；但严禁使用黑色或者是深蓝色、深灰色作为底色！整张地图必须采用舒适明亮的浅色调或自然明快色调，严禁任何压抑暗黑风格！\n`
             : "";
 
           const defaultDetail = (typeof MINI_MAP_STYLE_DETAILS !== "undefined") ? MINI_MAP_STYLE_DETAILS[styleName] : null;
@@ -34766,9 +35048,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             `3. 告别简陋儿童画，绘制精巧有层次的成熟建筑与立体空间（严禁方框加三角）：\n` +
             `   - 严禁出现方块加三角形的单薄儿童简笔画；\n` +
             `   - 建筑必须具备多层进深、精致的屋顶瓦面、门窗檐口、台阶底座、庭院回廊、烟囱或特色结构，呈现精致生动的2.5D立体俯瞰造型；\n` +
-            `4. 美观舒适配色与底色限制铁律：\n` +
-            `   - 配色自由挥洒，要求输出美观漂亮、视觉搭配极为舒适协调的色彩体系（如梦幻蓝调、柔和淡粉、优雅淡紫、翡翠林绿、羊皮纸暖金或复古水彩等任意优美色彩均可自由运用）；\n` +
-            `   - 【底色唯一硬性限制】：地图的底色绝对不能是纯黑色，也不能是深蓝、深紫、深褐等压抑暗沉的黑色系底色；除霍格沃兹保持其特有魔法建筑意象之外，其余世界观均生成舒适美观的白天色调；\n` +
+            `4. 美观舒适配色与底色限制：\n` +
+            `   - 配色自由挥洒，要求输出美观漂亮、视觉搭配极为舒适协调的色彩体系（如柔和淡粉、优雅淡紫、翡翠林绿、羊皮纸暖金、自然草木色、复古淡彩等任意优美色彩均可自由运用）；\n` +
+            `   - 【底色要求】：不要规定底色必须是某种固定颜色；但严禁使用黑色或者是深蓝色、深灰色作为底色！整张地图必须采用舒适明亮的浅色调或自然明快色调，严禁任何压抑暗黑风格！\n` +
             `5. 纯净名称展示与气泡交互：\n` +
             `   - 地图节点处只展示地点的名称标签，【严禁在地图节点下方直接平铺大段简介文字】，避免画面臃肿与显示不全；\n` +
             `   - 每个具体地点最外层 <g> 标签必须附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致；\n` +
@@ -34833,12 +35115,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? {
                     contents: [{ role: "user", parts: [...geminiImageParts, { text: prompt }] }],
                     generationConfig: { temperature: 0.4 },
-                    systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。" }] }
+                    systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。特别注意：不要规定底色必须是某种固定颜色，但严禁使用黑色、深蓝色或深灰色作为底色，必须采用舒适明朗的浅色调或自然明快色调。" }] }
                   }
                 : {
                     model: model || "gpt-4o",
                     messages: [
-                      { role: "system", content: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。" },
+                      { role: "system", content: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。特别注意：不要规定底色必须是某种固定颜色，但严禁使用黑色、深蓝色或深灰色作为底色，必须采用舒适明朗的浅色调或自然明快色调。" },
                       { role: "user", content: openaiImageParts.length > 0 ? [{ type: "text", text: prompt }, ...openaiImageParts] : prompt }
                     ],
                     temperature: 0.4,
@@ -34945,7 +35227,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             `【修改与优化准则】：\n` +
             `1. 必须完全基于现有的SVG代码进行增量修改、补充新增地点、调整视觉元素与布局，保持原有的【${curStyle}】艺术画风、配色与精致度。\n` +
             `2. 保持构图饱满，每个地点节点最外层 <g> 标签必须附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致。\n` +
-            `3. 纯净内联SVG：只输出修改后的纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，严禁包含任何Markdown代码块或多余文字。`;
+            `3. 纯净内联SVG：只输出修改后的纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，严禁包含任何Markdown代码块或多余文字。\n` +
+            `4. 底色规范：不要规定底色必须是某种固定颜色，但严禁使用黑色或者是深蓝色、深灰色作为底色，必须采用明朗舒适的浅色调或自然明快色调。`;
 
           const apiConfig = (typeof getEffectiveApiConfig === "function")
             ? getEffectiveApiConfig("map")
@@ -76895,6 +77178,9 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     authorToSearch = chat.isGroup ? msg.senderName : chat.name;
                   }
                 }
+              } else if (item.type === "map_html") {
+                contentToSearch = (item.title || "") + " " + (item.mapStyle || "") + " 地图";
+                authorToSearch = item.title || item.moduleName || "地图";
               }
 
               // 同时搜索内容和作者，并且不区分大小写
