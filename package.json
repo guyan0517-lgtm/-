@@ -10,6 +10,7 @@
     "lint": "echo 'No lint script defined'"
   },
   "dependencies": {
+    "@pdfsmaller/pdf-decrypt": "^1.0.1",
     "dexie": "^4.4.6",
     "express": "^4.19.2",
     "pdf-lib": "^1.17.1",

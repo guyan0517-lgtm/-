@@ -5774,6 +5774,10 @@ ${chap.content}
         statusBox.style.display = 'none';
         statusBox.textContent = '';
       }
+      const downloadBtn = document.getElementById('download-module-merged-btn');
+      if (downloadBtn) {
+        downloadBtn.style.display = 'none';
+      }
       this.renderMergeFilesList();
     },
 
@@ -5787,6 +5791,10 @@ ${chap.content}
       if (statusBox) {
         statusBox.style.display = 'none';
         statusBox.textContent = '';
+      }
+      const downloadBtn = document.getElementById('download-module-merged-btn');
+      if (downloadBtn) {
+        downloadBtn.style.display = 'none';
       }
     },
 
@@ -6029,113 +6037,177 @@ ${chap.content}
           const combined = textList.join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n');
           downloadBlob = new Blob([combined], { type: 'text/plain;charset=utf-8' });
         } else if (targetFormat === 'pdf') {
-          const PDFLibInstance = await this.ensurePDFLib();
-          if (!PDFLibInstance || !PDFLibInstance.PDFDocument) {
-            throw new Error('PDF处理组件加载失败，请检查网络或刷新重试');
-          }
-
-          const mergedPdfDoc = await PDFLibInstance.PDFDocument.create();
-
-          for (let i = 0; i < this.mergeFileList.length; i++) {
-            const item = this.mergeFileList[i];
+          let mergedSuccessfully = false;
+          const allPdf = this.mergeFileList.every(item => {
             const ext = (item.ext || (item.name || '').split('.').pop() || '').toLowerCase();
-            if (statusBox) statusBox.textContent = `正在按顺序合并第 ${i + 1} / ${this.mergeFileList.length} 个文件: ${item.name}`;
+            return ext === 'pdf';
+          });
 
-            if (ext === 'pdf') {
-              const rawBuf = await item.file.arrayBuffer();
-              const bytes = new Uint8Array(rawBuf);
-              let donorPdf = null;
-              try {
-                donorPdf = await PDFLibInstance.PDFDocument.load(bytes, {
-                  ignoreEncryption: true,
-                  throwOnInvalidObject: false,
-                  updateMetadata: false,
-                  capNumbers: true
-                });
-              } catch (loadErr1) {
-                let trimmedBytes = bytes;
-                for (let b = 0; b < Math.min(bytes.length - 4, 2048); b++) {
-                  if (bytes[b] === 0x25 && bytes[b + 1] === 0x50 && bytes[b + 2] === 0x44 && bytes[b + 3] === 0x46 && bytes[b + 4] === 0x2D) {
-                    trimmedBytes = bytes.subarray(b);
-                    break;
-                  }
-                }
-                donorPdf = await PDFLibInstance.PDFDocument.load(trimmedBytes, {
-                  ignoreEncryption: true,
-                  throwOnInvalidObject: false,
-                  updateMetadata: false,
-                  capNumbers: true
-                });
-              }
-
-              if (donorPdf) {
-                const pageIndices = donorPdf.getPageIndices();
-                let copiedAll = false;
-                try {
-                  const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
-                  for (const page of copiedPages) {
-                    mergedPdfDoc.addPage(page);
-                  }
-                  copiedAll = true;
-                } catch (batchErr) {
-                  console.warn('[模组] 批量页面拼接提示，改为逐页原样追加:', batchErr);
-                }
-
-                if (!copiedAll) {
-                  for (let pIdx = 0; pIdx < pageIndices.length; pIdx++) {
-                    try {
-                      const [singlePage] = await mergedPdfDoc.copyPages(donorPdf, [pageIndices[pIdx]]);
-                      mergedPdfDoc.addPage(singlePage);
-                    } catch (singleErr) {
-                      try {
-                        const pageObj = donorPdf.getPage(pageIndices[pIdx]);
-                        if (pageObj && pageObj.node) {
-                          pageObj.node.delete(PDFLibInstance.PDFName.of('Annots'));
-                          pageObj.node.delete(PDFLibInstance.PDFName.of('StructParents'));
-                        }
-                        const [singlePage] = await mergedPdfDoc.copyPages(donorPdf, [pageIndices[pIdx]]);
-                        mergedPdfDoc.addPage(singlePage);
-                      } catch (finalErr) {
-                        console.warn(`[模组] 第 ${pIdx + 1} 页拼接异常:`, finalErr);
-                      }
-                    }
-                  }
-                }
-              } else {
-                throw new Error(`文件 ${item.name} 无法作为有效 PDF 解析`);
-              }
-            } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
-              try {
+          if (allPdf) {
+            try {
+              if (statusBox) statusBox.textContent = '正在读取文件并进行无损合并...';
+              const filePayloads = [];
+              for (let i = 0; i < this.mergeFileList.length; i++) {
+                const item = this.mergeFileList[i];
+                if (statusBox) statusBox.textContent = `正在读取第 ${i + 1} / ${this.mergeFileList.length} 个文件...`;
                 const ab = await item.file.arrayBuffer();
                 const bytes = new Uint8Array(ab);
-                let embeddedImg = null;
-                if (ext === 'png') {
-                  embeddedImg = await mergedPdfDoc.embedPng(bytes);
-                } else {
-                  embeddedImg = await mergedPdfDoc.embedJpg(bytes);
+                let binary = '';
+                const len = bytes.byteLength;
+                for (let b = 0; b < len; b += 8192) {
+                  binary += String.fromCharCode.apply(null, bytes.subarray(b, Math.min(b + 8192, len)));
                 }
-                const imgPage = mergedPdfDoc.addPage([embeddedImg.width, embeddedImg.height]);
-                imgPage.drawImage(embeddedImg, {
-                  x: 0,
-                  y: 0,
-                  width: embeddedImg.width,
-                  height: embeddedImg.height
-                });
-              } catch (imgErr) {
-                console.warn('[模组] 图片嵌入PDF异常:', imgErr);
+                filePayloads.push({ name: item.name, data: btoa(binary) });
               }
-            } else {
-              const text = await this.extractTextFromSingleFile(item.file);
-              await this.embedTextPagesToPdf(mergedPdfDoc, text || item.name, item.name);
+
+              if (statusBox) statusBox.textContent = '正在合并各页原始版面与图文内容...';
+              const resp = await fetch('/api/merge-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: filePayloads })
+              });
+
+              if (resp.ok) {
+                const resJson = await resp.json();
+                if (resJson && resJson.success && resJson.pdfBase64) {
+                  const bin = atob(resJson.pdfBase64);
+                  const outBytes = new Uint8Array(bin.length);
+                  for (let j = 0; j < bin.length; j++) {
+                    outBytes[j] = bin.charCodeAt(j);
+                  }
+                  downloadBlob = new Blob([outBytes], { type: 'application/pdf' });
+                  downloadFileName = `${baseName}.pdf`;
+                  mergedSuccessfully = true;
+                }
+              }
+            } catch (apiErr) {
+              console.warn('[模组] 服务端合并接口异常，切换至本地核心合并:', apiErr);
             }
           }
 
-          if (mergedPdfDoc.getPageCount() === 0) {
-            throw new Error('未成功提取到任何有效PDF页面，请检查原始PDF文件');
+          if (!mergedSuccessfully) {
+            const PDFLibInstance = await this.ensurePDFLib();
+            if (!PDFLibInstance || !PDFLibInstance.PDFDocument) {
+              throw new Error('PDF处理组件加载失败，请检查网络或刷新重试');
+            }
+
+            const mergedPdfDoc = await PDFLibInstance.PDFDocument.create();
+
+            for (let i = 0; i < this.mergeFileList.length; i++) {
+              const item = this.mergeFileList[i];
+              const ext = (item.ext || (item.name || '').split('.').pop() || '').toLowerCase();
+              if (statusBox) statusBox.textContent = `正在按顺序合并第 ${i + 1} / ${this.mergeFileList.length} 个文件: ${item.name}`;
+
+              if (ext === 'pdf') {
+                const rawBuf = await item.file.arrayBuffer();
+                let bytes = new Uint8Array(rawBuf);
+
+                const decryptLib = (typeof window !== 'undefined' && window.PDFDecrypt) || global.PDFDecrypt || null;
+                if (decryptLib && typeof decryptLib.isEncrypted === 'function') {
+                  try {
+                    const encInfo = await decryptLib.isEncrypted(bytes);
+                    if (encInfo && encInfo.encrypted) {
+                      try {
+                        bytes = await decryptLib.decryptPDF(bytes, '');
+                      } catch (decErr) {
+                        console.warn('[模组] 客户端解密提示:', decErr);
+                      }
+                    }
+                  } catch (checkErr) {
+                    console.warn('[模组] 客户端加密检测提示:', checkErr);
+                  }
+                }
+
+                let donorPdf = null;
+                try {
+                  donorPdf = await PDFLibInstance.PDFDocument.load(bytes, {
+                    ignoreEncryption: true,
+                    throwOnInvalidObject: false,
+                    updateMetadata: false,
+                    capNumbers: true
+                  });
+                } catch (loadErr1) {
+                  let trimmedBytes = bytes;
+                  for (let b = 0; b < Math.min(bytes.length - 4, 2048); b++) {
+                    if (bytes[b] === 0x25 && bytes[b + 1] === 0x50 && bytes[b + 2] === 0x44 && bytes[b + 3] === 0x46 && bytes[b + 4] === 0x2D) {
+                      trimmedBytes = bytes.subarray(b);
+                      break;
+                    }
+                  }
+                  donorPdf = await PDFLibInstance.PDFDocument.load(trimmedBytes, {
+                    ignoreEncryption: true,
+                    throwOnInvalidObject: false,
+                    updateMetadata: false,
+                    capNumbers: true
+                  });
+                }
+
+                if (donorPdf) {
+                  const pageIndices = donorPdf.getPageIndices();
+                  let copiedAll = false;
+                  try {
+                    const copiedPages = await mergedPdfDoc.copyPages(donorPdf, pageIndices);
+                    for (const page of copiedPages) {
+                      mergedPdfDoc.addPage(page);
+                    }
+                    copiedAll = true;
+                  } catch (batchErr) {
+                    console.warn('[模组] 批量页面拼接提示，改为逐页原样追加:', batchErr);
+                  }
+
+                  if (!copiedAll) {
+                    for (let pIdx = 0; pIdx < pageIndices.length; pIdx++) {
+                      try {
+                        const [singlePage] = await mergedPdfDoc.copyPages(donorPdf, [pageIndices[pIdx]]);
+                        mergedPdfDoc.addPage(singlePage);
+                      } catch (singleErr) {
+                        try {
+                          const donorPage = donorPdf.getPage(pageIndices[pIdx]);
+                          const [embedded] = await mergedPdfDoc.embedPages([donorPage]);
+                          const newPage = mergedPdfDoc.addPage([embedded.width, embedded.height]);
+                          newPage.drawPage(embedded);
+                        } catch (embedErr) {
+                          console.warn(`[模组] 第 ${i + 1} 个文件第 ${pIdx + 1} 页复制异常:`, embedErr);
+                        }
+                      }
+                    }
+                  }
+                } else {
+                  throw new Error(`文件 ${item.name} 无法作为有效 PDF 解析`);
+                }
+              } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                try {
+                  const ab = await item.file.arrayBuffer();
+                  const bytes = new Uint8Array(ab);
+                  let embeddedImg = null;
+                  if (ext === 'png') {
+                    embeddedImg = await mergedPdfDoc.embedPng(bytes);
+                  } else {
+                    embeddedImg = await mergedPdfDoc.embedJpg(bytes);
+                  }
+                  const imgPage = mergedPdfDoc.addPage([embeddedImg.width, embeddedImg.height]);
+                  imgPage.drawImage(embeddedImg, {
+                    x: 0,
+                    y: 0,
+                    width: embeddedImg.width,
+                    height: embeddedImg.height
+                  });
+                } catch (imgErr) {
+                  console.warn('[模组] 图片嵌入PDF异常:', imgErr);
+                }
+              } else {
+                const text = await this.extractTextFromSingleFile(item.file);
+                await this.embedTextPagesToPdf(mergedPdfDoc, text || item.name, item.name);
+              }
+            }
+
+            if (mergedPdfDoc.getPageCount() === 0) {
+              throw new Error('未成功提取到任何有效PDF页面，请检查原始PDF文件');
+            }
+            const pdfBytes = await mergedPdfDoc.save({ useObjectStreams: false });
+            downloadBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+            downloadFileName = `${baseName}.pdf`;
           }
-          const pdfBytes = await mergedPdfDoc.save();
-          downloadBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-          downloadFileName = `${baseName}.pdf`;
         } else if (targetFormat === 'docx') {
           const docxLib = (typeof window !== 'undefined' && window.docx) || global.docx || (typeof docx !== 'undefined' ? docx : null);
           if (docxLib && typeof docxLib.Document === 'function') {
@@ -6203,18 +6275,27 @@ ${chap.content}
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(downloadUrl), 2000);
+          setTimeout(() => URL.revokeObjectURL(downloadUrl), 30000);
 
-          this.closeMergeModal();
-          this.switchSubPanel('wizard');
-          this.setWizardStep(1);
+          if (statusBox) {
+            statusBox.style.display = 'block';
+            statusBox.style.color = 'var(--accent-color)';
+            statusBox.textContent = `合并完成，已自动下载：${downloadFileName}`;
+          }
 
-          try {
-            const mergedFileObj = new File([downloadBlob], downloadFileName, { type: downloadBlob.type });
-            const parsedRes = await this.processModuleFile(mergedFileObj);
-            this.renderParsedResultUI(parsedRes);
-          } catch (loadErr) {
-            console.warn('[模组] 合并结果自动装载提示:', loadErr);
+          const downloadBtn = document.getElementById('download-module-merged-btn');
+          if (downloadBtn) {
+            downloadBtn.style.display = 'inline-flex';
+            downloadBtn.onclick = () => {
+              const url = URL.createObjectURL(downloadBlob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = downloadFileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 30000);
+            };
           }
 
           if (typeof global.showCustomAlert === 'function') {
