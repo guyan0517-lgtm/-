@@ -2248,6 +2248,24 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </div>
 
+                <!-- 多选分析入口卡片 -->
+                <div class="module-merge-entry-card" id="module-btn-open-multi" style="margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s ease;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--secondary-bg); display: flex; align-items: center; justify-content: center; color: var(--accent-color); flex-shrink: 0;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                        <polyline points="9 14 12 17 18 11"></polyline>
+                      </svg>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                      <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">多选</div>
+                      <div style="font-size: 11px; color: var(--text-secondary);">选择多个文件按序分析切割</div>
+                    </div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+
                 <!-- 文件解析后展示的信息卡 -->
                 <div class="module-file-info-card" id="module-file-info-card" style="display: none;">
                   <div class="module-file-header">
@@ -8206,6 +8224,56 @@
       </div>
     </div>
 
+    <!-- 清图选择弹窗 -->
+    <div id="clear-images-modal" class="modal" style="display: none;">
+      <div class="modal-content" style="max-width: 320px; width: calc(100% - 64px); margin: 0 auto; padding: 18px 16px; border-radius: 20px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; max-height: 85vh; box-shadow: 0 16px 40px rgba(0,0,0,0.2);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <span style="font-size: 15px; font-weight: 700; color: var(--text-primary);">清图</span>
+          <button type="button" class="close-btn" id="close-clear-images-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1;">&times;</button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 4px 0;">
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="clear-img-mode-all" class="moe-btn" style="flex: 1; height: 32px; font-size: 12px; font-weight: 600; border-radius: 8px; border: 1px solid var(--accent-color); background: var(--accent-color); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">全部</button>
+            <button type="button" id="clear-img-mode-partial" class="moe-btn" style="flex: 1; height: 32px; font-size: 12px; font-weight: 500; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">局部</button>
+          </div>
+
+          <div id="clear-img-all-panel" style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; padding: 8px 10px; background: var(--secondary-bg); border-radius: 8px;">
+            清理当前对话中的所有图片与生图。
+          </div>
+
+          <div id="clear-img-partial-panel" style="display: none; flex-direction: column; gap: 10px;">
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="clear-img-submode-range" class="moe-btn" style="flex: 1; height: 28px; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid var(--accent-color); background: var(--accent-color); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">条数</button>
+              <button type="button" id="clear-img-submode-memory" class="moe-btn" style="flex: 1; height: 28px; font-size: 11px; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">记忆</button>
+            </div>
+
+            <div id="clear-img-range-box" style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-size: 11px; color: var(--text-secondary);" id="clear-img-total-msg-text">共 0 条消息</div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 12px; color: var(--text-primary); flex-shrink: 0;">第</span>
+                <input type="number" id="clear-img-start-input" class="moe-input" min="1" value="1" style="flex: 1; height: 32px; font-size: 12px; text-align: center; border-radius: 6px; box-sizing: border-box;">
+                <span style="font-size: 12px; color: var(--text-primary); flex-shrink: 0;">至</span>
+                <input type="number" id="clear-img-end-input" class="moe-input" min="1" value="1" style="flex: 1; height: 32px; font-size: 12px; text-align: center; border-radius: 6px; box-sizing: border-box;">
+                <span style="font-size: 12px; color: var(--text-primary); flex-shrink: 0;">条</span>
+              </div>
+            </div>
+
+            <div id="clear-img-memory-box" style="display: none; flex-direction: column; gap: 6px;">
+              <div style="font-size: 11px; color: var(--text-secondary);">已总结记忆</div>
+              <select id="clear-img-memory-select" class="moe-input" style="width: 100%; min-height: 38px; height: 38px; line-height: 24px; padding: 6px 10px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
+                <option value="">暂无记忆</option>
+              </select>
+              <div id="clear-img-memory-desc" style="font-size: 11px; color: var(--accent-color); line-height: 1.4;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
+          <button type="button" id="cancel-clear-images-btn" class="moe-btn" style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">取消</button>
+          <button type="button" id="confirm-clear-images-btn" class="moe-btn-danger" style="flex: 1; height: 34px; font-size: 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">清理</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 内存细分弹窗 -->
     <div id="storage-breakdown-modal" class="modal">
       <div class="modal-content" style="max-width: 320px; width: calc(100% - 64px); margin: 0 auto; padding: 18px 16px; border-radius: 20px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 14px; max-height: 85vh; box-shadow: 0 16px 40px rgba(0,0,0,0.2);">
@@ -8677,6 +8745,45 @@
           <button type="button" class="chat-mod-footer-btn secondary" id="cancel-module-merge-modal-btn">返回</button>
           <button type="button" class="chat-mod-footer-btn primary" id="start-module-merge-btn">合并</button>
           <button type="button" class="chat-mod-footer-btn primary" id="download-module-merged-btn" style="display: none;">下载</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模组多选分析弹窗 -->
+    <div id="module-multi-modal" class="modal">
+      <div class="modal-content" style="max-width: 340px; width: calc(100% - 40px); margin: 0 auto; max-height: 85vh; padding: 16px; border-radius: 18px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px rgba(0,0,0,0.25);">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              <polyline points="9 14 12 17 18 11"></polyline>
+            </svg>
+            <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">多选</span>
+          </div>
+          <button type="button" class="close-btn" id="close-module-multi-modal-btn" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1; padding: 4px;">&times;</button>
+        </div>
+
+        <div class="modal-body" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px 0;">
+          <input type="file" id="module-multi-files-input" multiple accept=".pdf,.docx,.doc,.txt" style="display: none;" />
+          
+          <button type="button" class="chat-mod-footer-btn secondary" id="module-multi-select-files-btn" style="width: 100%; height: 36px; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span>选择文件</span>
+          </button>
+
+          <div id="module-multi-files-list" style="display: flex; flex-direction: column; gap: 6px; min-height: 60px; max-height: 220px; overflow-y: auto;">
+            <div id="module-multi-empty-tip" style="text-align: center; color: var(--text-secondary); font-size: 11.5px; padding: 20px 0;">
+              请选择要按序阅读分析的多个文件
+            </div>
+          </div>
+
+          <div id="module-multi-status-box" style="display: none; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; word-break: break-word;"></div>
+        </div>
+
+        <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-module-multi-modal-btn">返回</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="start-module-multi-btn">分析</button>
         </div>
       </div>
     </div>
@@ -62912,8 +63019,11 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           const categories = {
             images: { key: "images", name: "图片", bytes: 0, count: 0, unit: "张", color: "var(--accent-color, #ff6b8b)" },
             maps: { key: "maps", name: "地图", bytes: 0, count: 0, unit: "处", color: "var(--tukey-teal, #50e3c2)" },
-            chat: { key: "chat", name: "聊天", bytes: 0, count: 0, unit: "条", color: "var(--tukey-blue, #4a90e2)" },
             modules: { key: "modules", name: "模组", bytes: 0, count: 0, unit: "个", color: "var(--tukey-orange, #f5a623)" },
+            inventory: { key: "inventory", name: "道具", bytes: 0, count: 0, unit: "件", color: "var(--tukey-gold, #ffb300)" },
+            combat: { key: "combat", name: "战斗", bytes: 0, count: 0, unit: "项", color: "var(--danger-color, #e53935)" },
+            avatars: { key: "avatars", name: "头像", bytes: 0, count: 0, unit: "张", color: "var(--tukey-pink, #f78da7)" },
+            chat: { key: "chat", name: "聊天", bytes: 0, count: 0, unit: "条", color: "var(--tukey-blue, #4a90e2)" },
             forum: { key: "forum", name: "论坛", bytes: 0, count: 0, unit: "篇", color: "var(--tukey-purple, #9013fe)" },
             audio: { key: "audio", name: "音频", bytes: 0, count: 0, unit: "首", color: "var(--tukey-green, #7ed321)" },
             page: { key: "page", name: "页面", bytes: 0, count: 0, unit: "项", color: "var(--tukey-indigo, #6366f1)" },
@@ -62929,126 +63039,31 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           };
 
           if (dbInstance) {
-            // 1. 图片数据
+            // 1. 聊天对话中的图片（严格仅统计对话消息图片，排除头像、道具与战斗配图）
             try {
-              if (dbInstance.photos) {
-                const photos = await dbInstance.photos.toArray();
-                photos.forEach(p => {
-                  const dUrl = p.dataUrl || p.url;
-                  if (dUrl) {
-                    categories.images.count++;
-                    categories.images.bytes += new Blob([dUrl]).size;
-                  }
-                });
-              }
-              if (dbInstance.moduleImages) {
-                const modImgs = await dbInstance.moduleImages.toArray();
-                modImgs.forEach(m => {
-                  const dUrl = m.dataUrl || m.url;
-                  if (dUrl) {
-                    categories.images.count++;
-                    categories.images.bytes += new Blob([dUrl]).size;
-                  }
-                });
-              }
-              if (dbInstance.userStickers) {
-                const stickers = await dbInstance.userStickers.toArray();
-                stickers.forEach(s => {
-                  const dUrl = s.url || s.dataUrl;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
-                    categories.images.count++;
-                    categories.images.bytes += new Blob([dUrl]).size;
-                  }
-                });
-              }
-              if (dbInstance.charStickers) {
-                const charStickers = await dbInstance.charStickers.toArray();
-                charStickers.forEach(s => {
-                  const dUrl = s.url || s.dataUrl;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
-                    categories.images.count++;
-                    categories.images.bytes += new Blob([dUrl]).size;
-                  }
-                });
-              }
-              if (dbInstance.taobaoProducts) {
-                const taobaoProducts = await dbInstance.taobaoProducts.toArray();
-                taobaoProducts.forEach(prod => {
-                  if (prod.image && typeof prod.image === "string" && prod.image.startsWith("data:image")) {
-                    categories.images.count++;
-                    categories.images.bytes += new Blob([prod.image]).size;
-                  }
-                });
-              }
-              if (dbInstance.datingSprites) {
-                const datingSprites = await dbInstance.datingSprites.toArray();
-                datingSprites.forEach(sp => {
-                  if (sp.dataUrl && typeof sp.dataUrl === "string" && sp.dataUrl.startsWith("data:image")) {
-                    categories.images.count++;
-                    categories.images.bytes += new Blob([sp.dataUrl]).size;
-                  }
-                });
-              }
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
                 chats.forEach(c => {
                   if (Array.isArray(c.history)) {
                     c.history.forEach(msg => {
+                      if (!msg) return;
+                      if (msg.type && (msg.type.startsWith("combat") || msg.type === "combat_card" || msg.type === "inventory_card")) return;
+                      let hasPart = false;
                       if (Array.isArray(msg.content)) {
                         msg.content.forEach(part => {
                           if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
                             categories.images.count++;
                             categories.images.bytes += new Blob([part.image_url.url]).size;
+                            hasPart = true;
                           }
                         });
                       }
-                      if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
-                        categories.images.count++;
-                        categories.images.bytes += new Blob([msg.imageUrl]).size;
-                      }
-                      if (msg.url && typeof msg.url === "string" && msg.url.startsWith("data:image")) {
-                        categories.images.count++;
-                        categories.images.bytes += new Blob([msg.url]).size;
-                      }
-                      if (msg.content && typeof msg.content === "string" && msg.content.startsWith("data:image")) {
-                        categories.images.count++;
-                        categories.images.bytes += new Blob([msg.content]).size;
-                      }
-                      if (msg.image && typeof msg.image === "string" && msg.image.startsWith("data:image")) {
-                        categories.images.count++;
-                        categories.images.bytes += new Blob([msg.image]).size;
-                      }
-                      if (msg.item && msg.item.avatar && typeof msg.item.avatar === "string" && msg.item.avatar.startsWith("data:image")) {
-                        categories.images.count++;
-                        categories.images.bytes += new Blob([msg.item.avatar]).size;
-                      }
-                    });
-                  }
-                  if (Array.isArray(c.inventory)) {
-                    c.inventory.forEach(it => {
-                      if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                        categories.images.count++;
-                        categories.images.bytes += new Blob([it.avatar]).size;
-                      }
-                    });
-                  }
-                  if (Array.isArray(c.aiInventory)) {
-                    c.aiInventory.forEach(it => {
-                      if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                        categories.images.count++;
-                        categories.images.bytes += new Blob([it.avatar]).size;
-                      }
-                    });
-                  }
-                  if (Array.isArray(c.members)) {
-                    c.members.forEach(m => {
-                      if (Array.isArray(m.inventory)) {
-                        m.inventory.forEach(it => {
-                          if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                            categories.images.count++;
-                            categories.images.bytes += new Blob([it.avatar]).size;
-                          }
-                        });
+                      if (!hasPart) {
+                        const mImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && msg.content.startsWith("data:image") ? msg.content : "") || msg.image;
+                        if (mImg && typeof mImg === "string" && mImg.startsWith("data:image")) {
+                          categories.images.count++;
+                          categories.images.bytes += new Blob([mImg]).size;
+                        }
                       }
                     });
                   }
@@ -63056,7 +63071,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               }
             } catch(e) {}
 
-            // 2. 地图数据
+            // 2. 地图数据（包含地图节点图片与导航数据）
             try {
               if (dbInstance.moduleLocationNav) {
                 const locs = await dbInstance.moduleLocationNav.toArray();
@@ -63091,14 +63106,184 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               }
             } catch(e) {}
 
-            // 3. 聊天数据
+            // 3. 模组数据（包含模组插图、章节与文本）
+            try {
+              if (dbInstance.moduleImages) {
+                const modImgs = await dbInstance.moduleImages.toArray();
+                modImgs.forEach(m => {
+                  categories.modules.count++;
+                  categories.modules.bytes += getStrBytes(m);
+                });
+              }
+              if (dbInstance.modules) {
+                const mods = await dbInstance.modules.toArray();
+                mods.forEach(m => {
+                  const copyM = { ...m };
+                  delete copyM.mapNodes;
+                  categories.modules.count++;
+                  categories.modules.bytes += getStrBytes(copyM);
+                });
+              }
+              if (dbInstance.moduleChapters) {
+                const chaps = await dbInstance.moduleChapters.toArray();
+                chaps.forEach(ch => {
+                  categories.modules.count++;
+                  categories.modules.bytes += getStrBytes(ch);
+                });
+              }
+            } catch(e) {}
+
+            // 4. 道具分类（包含道具配图与物品数据）
+            try {
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(c => {
+                  const checkInv = (list) => {
+                    if (Array.isArray(list)) {
+                      list.forEach(it => {
+                        if (it) {
+                          categories.inventory.count++;
+                          categories.inventory.bytes += getStrBytes(it);
+                        }
+                      });
+                    }
+                  };
+                  checkInv(c.inventory);
+                  checkInv(c.aiInventory);
+                  if (Array.isArray(c.members)) {
+                    c.members.forEach(m => checkInv(m.inventory));
+                  }
+                  if (Array.isArray(c.history)) {
+                    c.history.forEach(m => {
+                      if (m && m.type === "inventory_card") {
+                        categories.inventory.count++;
+                        categories.inventory.bytes += getStrBytes(m);
+                      }
+                    });
+                  }
+                });
+              }
+              if (dbInstance.taobaoProducts) {
+                const prods = await dbInstance.taobaoProducts.toArray();
+                prods.forEach(p => {
+                  categories.inventory.count++;
+                  categories.inventory.bytes += getStrBytes(p);
+                });
+              }
+            } catch(e) {}
+
+            // 5. 战斗分类（包含战斗参战角色立绘、规则与战斗卡片）
+            try {
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(c => {
+                  if (c.combatState) {
+                    categories.combat.count++;
+                    categories.combat.bytes += getStrBytes(c.combatState);
+                  }
+                  if (Array.isArray(c.history)) {
+                    c.history.forEach(m => {
+                      if (m && m.type && (m.type.startsWith("combat") || m.type === "combat_card")) {
+                        categories.combat.count++;
+                        categories.combat.bytes += getStrBytes(m);
+                      }
+                    });
+                  }
+                });
+              }
+            } catch(e) {}
+
+            // 6. 头像分类（包含聊天头像、成员头像、相册与立绘）
+            try {
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(c => {
+                  if (c.settings?.aiAvatar && typeof c.settings.aiAvatar === "string" && c.settings.aiAvatar.startsWith("data:image")) {
+                    categories.avatars.count++;
+                    categories.avatars.bytes += new Blob([c.settings.aiAvatar]).size;
+                  }
+                  if (c.settings?.userAvatar && typeof c.settings.userAvatar === "string" && c.settings.userAvatar.startsWith("data:image")) {
+                    categories.avatars.count++;
+                    categories.avatars.bytes += new Blob([c.settings.userAvatar]).size;
+                  }
+                  if (c.avatar && typeof c.avatar === "string" && c.avatar.startsWith("data:image")) {
+                    categories.avatars.count++;
+                    categories.avatars.bytes += new Blob([c.avatar]).size;
+                  }
+                  if (Array.isArray(c.members)) {
+                    c.members.forEach(m => {
+                      if (m.avatar && typeof m.avatar === "string" && m.avatar.startsWith("data:image")) {
+                        categories.avatars.count++;
+                        categories.avatars.bytes += new Blob([m.avatar]).size;
+                      }
+                    });
+                  }
+                });
+              }
+              if (dbInstance.passerbyAvatars) {
+                const pAvs = await dbInstance.passerbyAvatars.toArray();
+                pAvs.forEach(p => {
+                  categories.avatars.count++;
+                  categories.avatars.bytes += getStrBytes(p);
+                });
+              }
+              if (dbInstance.customAvatarFrames) {
+                const frames = await dbInstance.customAvatarFrames.toArray();
+                frames.forEach(f => {
+                  categories.avatars.count++;
+                  categories.avatars.bytes += getStrBytes(f);
+                });
+              }
+              if (dbInstance.photos) {
+                const photos = await dbInstance.photos.toArray();
+                photos.forEach(p => {
+                  const dUrl = p.dataUrl || p.url;
+                  if (dUrl) {
+                    categories.avatars.count++;
+                    categories.avatars.bytes += new Blob([dUrl]).size;
+                  }
+                });
+              }
+              if (dbInstance.userStickers) {
+                const stickers = await dbInstance.userStickers.toArray();
+                stickers.forEach(s => {
+                  const dUrl = s.url || s.dataUrl;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    categories.avatars.count++;
+                    categories.avatars.bytes += new Blob([dUrl]).size;
+                  }
+                });
+              }
+              if (dbInstance.charStickers) {
+                const charStickers = await dbInstance.charStickers.toArray();
+                charStickers.forEach(s => {
+                  const dUrl = s.url || s.dataUrl;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    categories.avatars.count++;
+                    categories.avatars.bytes += new Blob([dUrl]).size;
+                  }
+                });
+              }
+              if (dbInstance.datingSprites) {
+                const datingSprites = await dbInstance.datingSprites.toArray();
+                datingSprites.forEach(sp => {
+                  if (sp.dataUrl && typeof sp.dataUrl === "string" && sp.dataUrl.startsWith("data:image")) {
+                    categories.avatars.count++;
+                    categories.avatars.bytes += new Blob([sp.dataUrl]).size;
+                  }
+                });
+              }
+            } catch(e) {}
+
+            // 7. 聊天数据（纯文本会话与备份）
             try {
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
                 chats.forEach(c => {
                   const hist = c.history || [];
+                  const textHist = hist.map(m => (m?.content && typeof m.content === "string" && !m.content.startsWith("data:image") ? m.content : "")).join("");
                   categories.chat.count += 1;
-                  categories.chat.bytes += getStrBytes(hist) + getStrBytes(c.settings);
+                  categories.chat.bytes += getStrBytes(textHist) + getStrBytes(c.settings);
                 });
               }
               if (dbInstance.chatBackups) {
@@ -63108,16 +63293,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               }
             } catch(e) {}
 
-            // 4. 模组数据
-            try {
-              if (dbInstance.modules) {
-                const mods = await dbInstance.modules.toArray();
-                categories.modules.count += mods.length;
-                mods.forEach(m => { categories.modules.bytes += getStrBytes(m); });
-              }
-            } catch(e) {}
-
-            // 5. 论坛文章数据
+            // 8. 论坛文章数据
             try {
               if (dbInstance.forumPosts) {
                 const posts = await dbInstance.forumPosts.toArray();
@@ -63126,7 +63302,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               }
             } catch(e) {}
 
-            // 6. 音频数据
+            // 9. 音频数据
             try {
               if (dbInstance.music) {
                 const musics = await dbInstance.music.toArray();
@@ -63233,10 +63409,13 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           if (!modal) return;
 
           const catNameMap = {
-            maps: "地图",
             images: "图片",
-            chat: "聊天",
+            maps: "地图",
             modules: "模组",
+            inventory: "道具",
+            combat: "战斗",
+            avatars: "头像",
+            chat: "聊天",
             forum: "论坛",
             audio: "音频",
             page: "页面",
@@ -63247,8 +63426,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             titleEl.textContent = catNameMap[category] || "明细";
           }
 
-          // 允许压缩的类目包含图片、地图、全部分类以及聊天会话
-          const isImageCategory = (category === "images" || category === "maps" || category === "all" || category === "chat");
+          // 允许压缩的类目包含图片、地图、模组、道具、战斗、头像、全部分类以及聊天会话
+          const isImageCategory = ["images", "maps", "modules", "inventory", "combat", "avatars", "all", "chat"].includes(category);
           if (compressBtn) compressBtn.style.display = isImageCategory ? "inline-flex" : "none";
           if (qualitySelect) qualitySelect.style.display = isImageCategory ? "inline-block" : "none";
 
@@ -63328,8 +63507,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     for (const item of items) {
                       try {
                         const targetDim = includeCompressed ? 960 : 1280;
-                        let compressed = await compressImage(item.dataUrl, quality, targetDim, true);
-                        if (compressed && compressed.startsWith("data:image") && (includeCompressed || compressed.length <= item.dataUrl.length)) {
+                        let compressed = await compressImage(item.dataUrl, quality, targetDim, true, includeCompressed);
+                        if (compressed && compressed.startsWith("data:image")) {
                           item.dataUrl = compressed;
                           item.size = new Blob([compressed]).size;
                           item.isCompressed = true;
@@ -63408,8 +63587,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                             if (msg._compressed && !includeCompressed) continue;
                             if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
                               try {
-                                const comp = await compressImage(msg.imageUrl, quality, 1280, true);
-                                if (comp && comp.startsWith("data:image") && (includeCompressed || comp.length <= msg.imageUrl.length)) {
+                                const comp = await compressImage(msg.imageUrl, quality, 1280, true, includeCompressed);
+                                if (comp && comp.startsWith("data:image")) {
                                   msg.imageUrl = comp;
                                   msg._compressed = true;
                                   chatCompCount++;
@@ -63430,8 +63609,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                   } else if (item.dataUrl && item.dataUrl.startsWith("data:image")) {
                     try {
                       const maxDim = item.table === "inventory_items" ? 640 : (includeCompressed ? 960 : 1280);
-                      let compressed = await compressImage(item.dataUrl, quality, maxDim, true);
-                      if (compressed && compressed.startsWith("data:image") && (includeCompressed || compressed.length <= item.dataUrl.length)) {
+                      let compressed = await compressImage(item.dataUrl, quality, maxDim, true, includeCompressed);
+                      if (compressed && compressed.startsWith("data:image")) {
                         item.dataUrl = compressed;
                         item.size = new Blob([compressed]).size;
                         item.isCompressed = true;
@@ -63793,132 +63972,16 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             }
           }
 
-          // 2. 图片分类扫描（包含相册照片、模组插图、表情包、商品与聊天图片）
+          // 2. 图片分类扫描（严格仅统计聊天对话中的图片，排除头像、道具、战斗与地图）
           if (currentStorageCategory === "images" || currentStorageCategory === "all") {
             try {
-              if (dbInstance.photos) {
-                const photos = await dbInstance.photos.toArray();
-                photos.forEach(p => {
-                  const dUrl = p.dataUrl || p.url;
-                  if (dUrl) {
-                    loadedStorageImagesList.push({
-                      id: "photo_" + p.id,
-                      type: "image",
-                      table: "photos",
-                      recordId: p.id,
-                      name: p.title || "空间照片",
-                      origin: `相册照片: ${p.title || '无标题'}`,
-                      size: new Blob([dUrl]).size,
-                      dataUrl: dUrl,
-                      selected: false
-                    });
-                  }
-                });
-              }
-
-              if (dbInstance.moduleImages) {
-                const modImgs = await dbInstance.moduleImages.toArray();
-                modImgs.forEach(img => {
-                  const dUrl = img.dataUrl || img.url;
-                  if (dUrl) {
-                    loadedStorageImagesList.push({
-                      id: "mod_img_" + img.id,
-                      type: "image",
-                      table: "moduleImages",
-                      recordId: img.id,
-                      name: img.name || "模组插图",
-                      origin: `模组插图: ${img.name || '未命名'}`,
-                      size: new Blob([dUrl]).size,
-                      dataUrl: dUrl,
-                      selected: false
-                    });
-                  }
-                });
-              }
-
-              if (dbInstance.userStickers) {
-                const stickers = await dbInstance.userStickers.toArray();
-                stickers.forEach(s => {
-                  const dUrl = s.url || s.dataUrl;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
-                    loadedStorageImagesList.push({
-                      id: "sticker_" + s.id,
-                      type: "image",
-                      table: "userStickers",
-                      recordId: s.id,
-                      name: s.name || "表情包",
-                      origin: `用户表情: ${s.name || '未命名'}`,
-                      size: new Blob([dUrl]).size,
-                      dataUrl: dUrl,
-                      selected: false
-                    });
-                  }
-                });
-              }
-
-              if (dbInstance.charStickers) {
-                const charStickers = await dbInstance.charStickers.toArray();
-                charStickers.forEach(s => {
-                  const dUrl = s.url || s.dataUrl;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
-                    loadedStorageImagesList.push({
-                      id: "char_sticker_" + s.id,
-                      type: "image",
-                      table: "charStickers",
-                      recordId: s.id,
-                      name: s.name || "角色表情",
-                      origin: `角色表情: ${s.name || '未命名'}`,
-                      size: new Blob([dUrl]).size,
-                      dataUrl: dUrl,
-                      selected: false
-                    });
-                  }
-                });
-              }
-
-              if (dbInstance.taobaoProducts) {
-                const taobaoProducts = await dbInstance.taobaoProducts.toArray();
-                taobaoProducts.forEach(prod => {
-                  if (prod.image && typeof prod.image === "string" && prod.image.startsWith("data:image")) {
-                    loadedStorageImagesList.push({
-                      id: "taobao_prod_" + prod.id,
-                      type: "image",
-                      table: "taobaoProducts",
-                      recordId: prod.id,
-                      name: prod.name || "商品图片",
-                      origin: `商品配图: ${prod.name || '未命名'}`,
-                      size: new Blob([prod.image]).size,
-                      dataUrl: prod.image,
-                      selected: false
-                    });
-                  }
-                });
-              }
-
-              if (dbInstance.datingSprites) {
-                const datingSprites = await dbInstance.datingSprites.toArray();
-                datingSprites.forEach(sp => {
-                  if (sp.dataUrl && typeof sp.dataUrl === "string" && sp.dataUrl.startsWith("data:image")) {
-                    loadedStorageImagesList.push({
-                      id: "dating_sprite_" + sp.id,
-                      type: "image",
-                      table: "datingSprites",
-                      recordId: sp.id,
-                      name: sp.name || "立绘切片",
-                      origin: `约会立绘: ${sp.name || '未命名'}`,
-                      size: new Blob([sp.dataUrl]).size,
-                      dataUrl: sp.dataUrl,
-                      selected: false
-                    });
-                  }
-                });
-              }
-
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
                 chats.forEach(chat => {
                   const history = chat.history || [];
                   history.forEach((msg, mIdx) => {
+                    if (!msg) return;
+                    if (msg.type && (msg.type.startsWith("combat") || msg.type === "combat_card" || msg.type === "inventory_card")) return;
                     let hasPartImage = false;
                     if (Array.isArray(msg.content)) {
                       msg.content.forEach((part, pIdx) => {
@@ -63964,65 +64027,6 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                       }
                     }
                   });
-
-                  if (Array.isArray(chat.inventory)) {
-                    chat.inventory.forEach(it => {
-                      if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                        loadedStorageImagesList.push({
-                          id: "inv_item_avatar_" + chat.id + "_" + it.id,
-                          type: "image",
-                          table: "inventory_items",
-                          recordId: chat.id,
-                          itemId: it.id,
-                          name: `物品头像: ${it.name || "未命名"}`,
-                          origin: `《${chat.name}》道具头像: ${it.name}`,
-                          size: new Blob([it.avatar]).size,
-                          dataUrl: it.avatar,
-                          selected: false
-                        });
-                      }
-                    });
-                  }
-                  if (Array.isArray(chat.aiInventory)) {
-                    chat.aiInventory.forEach(it => {
-                      if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                        loadedStorageImagesList.push({
-                          id: "inv_ai_avatar_" + chat.id + "_" + it.id,
-                          type: "image",
-                          table: "inventory_items",
-                          recordId: chat.id,
-                          itemId: it.id,
-                          name: `物品头像: ${it.name || "未命名"}`,
-                          origin: `《${chat.name}》对方道具头像: ${it.name}`,
-                          size: new Blob([it.avatar]).size,
-                          dataUrl: it.avatar,
-                          selected: false
-                        });
-                      }
-                    });
-                  }
-                  if (Array.isArray(chat.members)) {
-                    chat.members.forEach(m => {
-                      if (Array.isArray(m.inventory)) {
-                        m.inventory.forEach(it => {
-                          if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                            loadedStorageImagesList.push({
-                              id: "inv_mem_avatar_" + chat.id + "_" + m.id + "_" + it.id,
-                              type: "image",
-                              table: "inventory_items",
-                              recordId: chat.id,
-                              itemId: it.id,
-                              name: `物品头像: ${it.name || "未命名"}`,
-                              origin: `《${chat.name}》${m.groupNickname || m.name}道具头像: ${it.name}`,
-                              size: new Blob([it.avatar]).size,
-                              dataUrl: it.avatar,
-                              selected: false
-                            });
-                          }
-                        });
-                      }
-                    });
-                  }
                 });
               }
             } catch(e) {
@@ -64030,7 +64034,343 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             }
           }
 
-          // 3. 聊天分类扫描
+          // 3. 道具分类扫描（道具配图与物品数据）
+          if (currentStorageCategory === "inventory" || currentStorageCategory === "all") {
+            try {
+              if (dbInstance.taobaoProducts) {
+                const taobaoProducts = await dbInstance.taobaoProducts.toArray();
+                taobaoProducts.forEach(prod => {
+                  if (prod.image && typeof prod.image === "string" && prod.image.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "taobao_prod_" + prod.id,
+                      type: "inventory",
+                      table: "taobaoProducts",
+                      recordId: prod.id,
+                      name: prod.name || "商品配图",
+                      origin: `商品配图: ${prod.name || '未命名'}`,
+                      size: new Blob([prod.image]).size,
+                      dataUrl: prod.image,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(chat => {
+                  const checkInv = (list, tag) => {
+                    if (Array.isArray(list)) {
+                      list.forEach(it => {
+                        if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                          loadedStorageImagesList.push({
+                            id: "inv_item_" + chat.id + "_" + it.id,
+                            type: "inventory",
+                            table: "inventory_items",
+                            recordId: chat.id,
+                            itemId: it.id,
+                            name: `道具配图: ${it.name || "未命名"}`,
+                            origin: `《${chat.name}》${tag}: ${it.name}`,
+                            size: new Blob([it.avatar]).size,
+                            dataUrl: it.avatar,
+                            selected: false
+                          });
+                        }
+                      });
+                    }
+                  };
+                  checkInv(chat.inventory, "道具配图");
+                  checkInv(chat.aiInventory, "对方道具配图");
+                  if (Array.isArray(chat.members)) {
+                    chat.members.forEach(m => checkInv(m.inventory, `${m.groupNickname || m.name}道具配图`));
+                  }
+                  if (Array.isArray(chat.history)) {
+                    chat.history.forEach(m => {
+                      if (m && m.type === "inventory_card") {
+                        loadedStorageImagesList.push({
+                          id: "inv_card_" + chat.id + "_" + (m.timestamp || Math.random()),
+                          type: "inventory",
+                          table: "chats",
+                          recordId: chat.id,
+                          name: m.item?.name ? `道具卡片: ${m.item.name}` : "道具卡片",
+                          origin: `聊天《${chat.name}》道具卡片`,
+                          size: getStrBytes(m),
+                          dataUrl: m.item?.avatar || "",
+                          selected: false
+                        });
+                      }
+                    });
+                  }
+                });
+              }
+            } catch(e) {}
+          }
+
+          // 4. 战斗分类扫描（战斗配图、规则与状态）
+          if (currentStorageCategory === "combat" || currentStorageCategory === "all") {
+            try {
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(chat => {
+                  if (chat.combatState) {
+                    loadedStorageImagesList.push({
+                      id: "combat_state_" + chat.id,
+                      type: "combat",
+                      table: "chats",
+                      recordId: chat.id,
+                      name: "战斗状态与参战角色",
+                      origin: `聊天《${chat.name}》战斗状态`,
+                      size: getStrBytes(chat.combatState),
+                      dataUrl: chat.combatState.combatSceneImage || "",
+                      selected: false
+                    });
+                  }
+                  if (Array.isArray(chat.history)) {
+                    chat.history.forEach(m => {
+                      if (m && m.type && (m.type.startsWith("combat") || m.type === "combat_card")) {
+                        loadedStorageImagesList.push({
+                          id: "combat_msg_" + chat.id + "_" + (m.timestamp || Math.random()),
+                          type: "combat",
+                          table: "chats",
+                          recordId: chat.id,
+                          name: "战斗交互记录",
+                          origin: `聊天《${chat.name}》战斗记录`,
+                          size: getStrBytes(m),
+                          dataUrl: m.imageUrl || "",
+                          selected: false
+                        });
+                      }
+                    });
+                  }
+                });
+              }
+            } catch(e) {}
+          }
+
+          // 5. 头像分类扫描（聊天头像、成员头像、相册照片与立绘切片）
+          if (currentStorageCategory === "avatars" || currentStorageCategory === "all") {
+            try {
+              if (dbInstance.photos) {
+                const photos = await dbInstance.photos.toArray();
+                photos.forEach(p => {
+                  const dUrl = p.dataUrl || p.url;
+                  if (dUrl) {
+                    loadedStorageImagesList.push({
+                      id: "photo_" + p.id,
+                      type: "avatar",
+                      table: "photos",
+                      recordId: p.id,
+                      name: p.title || "空间相册照片",
+                      origin: `相册照片: ${p.title || '未命名'}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.userStickers) {
+                const stickers = await dbInstance.userStickers.toArray();
+                stickers.forEach(s => {
+                  const dUrl = s.url || s.dataUrl;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "sticker_" + s.id,
+                      type: "avatar",
+                      table: "userStickers",
+                      recordId: s.id,
+                      name: s.name || "用户表情",
+                      origin: `用户表情: ${s.name || '未命名'}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.charStickers) {
+                const charStickers = await dbInstance.charStickers.toArray();
+                charStickers.forEach(s => {
+                  const dUrl = s.url || s.dataUrl;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "char_sticker_" + s.id,
+                      type: "avatar",
+                      table: "charStickers",
+                      recordId: s.id,
+                      name: s.name || "角色表情",
+                      origin: `角色表情: ${s.name || '未命名'}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.datingSprites) {
+                const datingSprites = await dbInstance.datingSprites.toArray();
+                datingSprites.forEach(sp => {
+                  if (sp.dataUrl && typeof sp.dataUrl === "string" && sp.dataUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "dating_sprite_" + sp.id,
+                      type: "avatar",
+                      table: "datingSprites",
+                      recordId: sp.id,
+                      name: "约会立绘",
+                      origin: `约会立绘: ${sp.name || '未命名'}`,
+                      size: new Blob([sp.dataUrl]).size,
+                      dataUrl: sp.dataUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.passerbyAvatars) {
+                const pAvs = await dbInstance.passerbyAvatars.toArray();
+                pAvs.forEach(p => {
+                  if (p.avatar && typeof p.avatar === "string" && p.avatar.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "passerby_avatar_" + p.id,
+                      type: "avatar",
+                      table: "passerbyAvatars",
+                      recordId: p.id,
+                      name: p.name || "路人头像",
+                      origin: `路人头像: ${p.name || '未命名'}`,
+                      size: new Blob([p.avatar]).size,
+                      dataUrl: p.avatar,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.customAvatarFrames) {
+                const frames = await dbInstance.customAvatarFrames.toArray();
+                frames.forEach(f => {
+                  if (f.dataUrl && typeof f.dataUrl === "string" && f.dataUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "avatar_frame_" + f.id,
+                      type: "avatar",
+                      table: "customAvatarFrames",
+                      recordId: f.id,
+                      name: f.name || "头像挂件",
+                      origin: `头像框: ${f.name || '未命名'}`,
+                      size: new Blob([f.dataUrl]).size,
+                      dataUrl: f.dataUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(c => {
+                  if (c.settings?.aiAvatar && typeof c.settings.aiAvatar === "string" && c.settings.aiAvatar.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "chat_ai_avatar_" + c.id,
+                      type: "avatar",
+                      table: "chats",
+                      recordId: c.id,
+                      field: "aiAvatar",
+                      name: `AI头像: ${c.name}`,
+                      origin: `聊天《${c.name}》对方头像`,
+                      size: new Blob([c.settings.aiAvatar]).size,
+                      dataUrl: c.settings.aiAvatar,
+                      selected: false
+                    });
+                  }
+                  if (c.settings?.userAvatar && typeof c.settings.userAvatar === "string" && c.settings.userAvatar.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "chat_user_avatar_" + c.id,
+                      type: "avatar",
+                      table: "chats",
+                      recordId: c.id,
+                      field: "userAvatar",
+                      name: `用户头像: ${c.name}`,
+                      origin: `聊天《${c.name}》用户头像`,
+                      size: new Blob([c.settings.userAvatar]).size,
+                      dataUrl: c.settings.userAvatar,
+                      selected: false
+                    });
+                  }
+                  if (c.avatar && typeof c.avatar === "string" && c.avatar.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "chat_avatar_" + c.id,
+                      type: "avatar",
+                      table: "chats",
+                      recordId: c.id,
+                      field: "avatar",
+                      name: `群组头像: ${c.name}`,
+                      origin: `聊天《${c.name}》群头像`,
+                      size: new Blob([c.avatar]).size,
+                      dataUrl: c.avatar,
+                      selected: false
+                    });
+                  }
+                  if (Array.isArray(c.members)) {
+                    c.members.forEach(m => {
+                      if (m.avatar && typeof m.avatar === "string" && m.avatar.startsWith("data:image")) {
+                        loadedStorageImagesList.push({
+                          id: "chat_member_avatar_" + c.id + "_" + m.id,
+                          type: "avatar",
+                          table: "chats",
+                          recordId: c.id,
+                          memberId: m.id,
+                          name: `成员头像: ${m.groupNickname || m.name}`,
+                          origin: `《${c.name}》群成员头像: ${m.groupNickname || m.name}`,
+                          size: new Blob([m.avatar]).size,
+                          dataUrl: m.avatar,
+                          selected: false
+                        });
+                      }
+                    });
+                  }
+                });
+              }
+            } catch(e) {}
+          }
+
+          // 6. 模组分类扫描（模组配图与档案文本）
+          if (currentStorageCategory === "modules" || currentStorageCategory === "all") {
+            try {
+              if (dbInstance.moduleImages) {
+                const modImgs = await dbInstance.moduleImages.toArray();
+                modImgs.forEach(img => {
+                  const dUrl = img.dataUrl || img.url;
+                  if (dUrl) {
+                    loadedStorageImagesList.push({
+                      id: "mod_img_" + img.id,
+                      type: "module",
+                      table: "moduleImages",
+                      recordId: img.id,
+                      name: img.name || "模组配图",
+                      origin: `模组配图: ${img.name || '未命名'}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.modules) {
+                const mods = await dbInstance.modules.toArray();
+                mods.forEach(m => {
+                  loadedStorageImagesList.push({
+                    id: "mod_" + m.id,
+                    type: "module",
+                    table: "modules",
+                    recordId: m.id,
+                    action: "deleteModule",
+                    name: m.name || "模组",
+                    origin: `模组档案: 《${m.name}》`,
+                    size: getStrBytes(m),
+                    dataUrl: m.coverImage || "",
+                    selected: false
+                  });
+                });
+              }
+            } catch(e) {}
+          }
+
+          // 7. 聊天分类扫描
           if (currentStorageCategory === "chat") {
             try {
               if (dbInstance.chats) {
@@ -64043,7 +64383,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     recordId: c.id,
                     action: "deleteChat",
                     name: c.name || "聊天",
-                    origin: `聊天会话: ${c.name} (${c.history?.length || 0}条消息)`,
+                    origin: `聊天会话: ${c.name} ${c.history?.length || 0}条消息`,
                     size: getStrBytes(c.history) + getStrBytes(c.settings),
                     dataUrl: c.settings?.aiAvatar || "",
                     selected: false
@@ -64070,30 +64410,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             } catch(e) {}
           }
 
-          // 4. 模组分类扫描
-          if (currentStorageCategory === "modules") {
-            try {
-              if (dbInstance.modules) {
-                const mods = await dbInstance.modules.toArray();
-                mods.forEach(m => {
-                  loadedStorageImagesList.push({
-                    id: "mod_" + m.id,
-                    type: "module",
-                    table: "modules",
-                    recordId: m.id,
-                    action: "deleteModule",
-                    name: m.name || "模组",
-                    origin: `模组档案: 《${m.name}》`,
-                    size: getStrBytes(m),
-                    dataUrl: m.coverImage || "",
-                    selected: false
-                  });
-                });
-              }
-            } catch(e) {}
-          }
-
-          // 5. 论坛分类扫描
+          // 8. 论坛分类扫描
           if (currentStorageCategory === "forum") {
             try {
               if (dbInstance.forumPosts) {
@@ -64116,7 +64433,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             } catch(e) {}
           }
 
-          // 6. 音频分类扫描
+          // 9. 音频分类扫描
           if (currentStorageCategory === "audio") {
             try {
               if (dbInstance.music) {
@@ -64139,7 +64456,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             } catch(e) {}
           }
 
-          // 7. 页面/其他分类扫描
+          // 10. 页面/其他分类扫描
           if (currentStorageCategory === "other" || currentStorageCategory === "page") {
             try {
               const pageKeyPattern = /(desktop|theme|custom|profile|widget|app_|wallpaper|darkreader|ephone-|tukey_|layout|ui_)/i;
@@ -64170,8 +64487,11 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             loadedStorageImagesList = loadedStorageImagesList.filter(item => {
               if (currentStorageCategory === "maps") return item.type === "map";
               if (currentStorageCategory === "images") return item.type === "image";
-              if (currentStorageCategory === "chat") return item.type === "chat";
+              if (currentStorageCategory === "inventory") return item.type === "inventory";
+              if (currentStorageCategory === "combat") return item.type === "combat";
+              if (currentStorageCategory === "avatars") return item.type === "avatar";
               if (currentStorageCategory === "modules") return item.type === "module";
+              if (currentStorageCategory === "chat") return item.type === "chat";
               if (currentStorageCategory === "forum") return item.type === "forum";
               if (currentStorageCategory === "audio") return item.type === "audio";
               if (currentStorageCategory === "page") return item.type === "page";
@@ -65284,21 +65604,21 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
          * @param {number} maxDimension - 最大边长限制
          * @returns {Promise<string>} - 返回压缩后的JPEG格式Base64字符串或原图
          */
-        function compressImage(base64Str, quality = 0.7, maxDimension = 1280, force = false) {
+        function compressImage(base64Str, quality = 0.7, maxDimension = 1280, force = false, isRecompress = false) {
           return new Promise((resolve) => {
             if (
               !base64Str ||
               typeof base64Str !== "string" ||
               !base64Str.startsWith("data:image") ||
               base64Str.startsWith("data:image/gif") ||
-              (!force && quality >= 1.0)
+              (!force && !isRecompress && quality >= 1.0)
             ) {
               resolve(base64Str);
               return;
             }
 
-            const cacheKey = `${base64Str.length}_${base64Str.slice(0, 32)}_${quality}_${maxDimension}_${force}`;
-            if (!force && _compressCache.has(cacheKey)) {
+            const cacheKey = `${base64Str.length}_${base64Str.slice(0, 32)}_${quality}_${maxDimension}_${force}_${isRecompress}`;
+            if (!force && !isRecompress && _compressCache.has(cacheKey)) {
               resolve(_compressCache.get(cacheKey));
               return;
             }
@@ -65320,7 +65640,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 img.src = "";
                 img = null;
               }
-              if (force && result && result.startsWith("data:image")) {
+              if ((force || isRecompress) && result && result.startsWith("data:image")) {
                 resolve(result);
               } else if (result && result.length < base64Str.length) {
                 if (_compressCache.size > 150) {
@@ -65337,7 +65657,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
             timer = setTimeout(() => {
               cleanupAndResolve(base64Str);
-            }, 3500);
+            }, 4500);
 
             try {
               img = new Image();
@@ -65351,7 +65671,44 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     return;
                   }
 
-                  if (width > maxDimension || height > maxDimension) {
+                  if (isRecompress) {
+                    let curW = Math.max(16, Math.round(width * 0.75));
+                    let curH = Math.max(16, Math.round(height * 0.75));
+                    let curQ = quality;
+                    let canvas = document.createElement("canvas");
+                    canvas.width = curW;
+                    canvas.height = curH;
+                    let ctx = canvas.getContext("2d");
+                    if (!ctx) {
+                      cleanupAndResolve(base64Str);
+                      return;
+                    }
+                    ctx.drawImage(img, 0, 0, curW, curH);
+                    let compressedBase64 = canvas.toDataURL("image/jpeg", curQ);
+
+                    if (compressedBase64 && compressedBase64.length >= base64Str.length) {
+                      for (let retry = 0; retry < 6; retry++) {
+                        curW = Math.max(16, Math.round(curW * 0.75));
+                        curH = Math.max(16, Math.round(curH * 0.75));
+                        curQ = Math.max(0.05, curQ * 0.85);
+                        canvas.width = curW;
+                        canvas.height = curH;
+                        ctx = canvas.getContext("2d");
+                        if (!ctx) break;
+                        ctx.drawImage(img, 0, 0, curW, curH);
+                        const retryBase64 = canvas.toDataURL("image/jpeg", curQ);
+                        if (retryBase64 && retryBase64.length < base64Str.length) {
+                          compressedBase64 = retryBase64;
+                          break;
+                        }
+                      }
+                    }
+
+                    canvas.width = 0;
+                    canvas.height = 0;
+                    cleanupAndResolve(compressedBase64);
+                    return;
+                  } else if (width > maxDimension || height > maxDimension) {
                     if (width > height) {
                       height = Math.round((height * maxDimension) / width);
                       width = maxDimension;
@@ -65361,19 +65718,18 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     }
                   }
 
-                  const canvas = document.createElement("canvas");
+                  let canvas = document.createElement("canvas");
                   canvas.width = width;
                   canvas.height = height;
-                  const ctx = canvas.getContext("2d");
+                  let ctx = canvas.getContext("2d");
                   if (!ctx) {
-                    canvas.width = 0;
-                    canvas.height = 0;
                     cleanupAndResolve(base64Str);
                     return;
                   }
 
                   ctx.drawImage(img, 0, 0, width, height);
-                  const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+                  let compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+
                   canvas.width = 0;
                   canvas.height = 0;
 
@@ -74960,55 +75316,271 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             });
 
           const clearImagesBtn = document.getElementById("clear-images-btn");
-          if (clearImagesBtn) {
-            clearImagesBtn.addEventListener("click", async () => {
+          const clearImagesModal = document.getElementById("clear-images-modal");
+          let clearImgCurrentMode = "all";
+          let clearImgCurrentSubmode = "range";
+
+          if (clearImagesBtn && clearImagesModal) {
+            const btnModeAll = document.getElementById("clear-img-mode-all");
+            const btnModePartial = document.getElementById("clear-img-mode-partial");
+            const allPanel = document.getElementById("clear-img-all-panel");
+            const partialPanel = document.getElementById("clear-img-partial-panel");
+            const btnSubRange = document.getElementById("clear-img-submode-range");
+            const btnSubMemory = document.getElementById("clear-img-submode-memory");
+            const rangeBox = document.getElementById("clear-img-range-box");
+            const memoryBox = document.getElementById("clear-img-memory-box");
+            const startInput = document.getElementById("clear-img-start-input");
+            const endInput = document.getElementById("clear-img-end-input");
+            const totalMsgText = document.getElementById("clear-img-total-msg-text");
+            const memorySelect = document.getElementById("clear-img-memory-select");
+            const memoryDesc = document.getElementById("clear-img-memory-desc");
+            const closeBtn = document.getElementById("close-clear-images-modal-btn");
+            const cancelBtn = document.getElementById("cancel-clear-images-btn");
+            const confirmBtn = document.getElementById("confirm-clear-images-btn");
+
+            const closeClearModal = () => {
+              clearImagesModal.style.display = "none";
+              clearImagesModal.classList.remove("visible");
+            };
+
+            if (closeBtn) closeBtn.onclick = closeClearModal;
+            if (cancelBtn) cancelBtn.onclick = closeClearModal;
+
+            const setClearMode = (mode) => {
+              clearImgCurrentMode = mode;
+              if (mode === "all") {
+                if (btnModeAll) {
+                  btnModeAll.style.background = "var(--accent-color)";
+                  btnModeAll.style.color = "#fff";
+                  btnModeAll.style.borderColor = "var(--accent-color)";
+                  btnModeAll.style.fontWeight = "600";
+                }
+                if (btnModePartial) {
+                  btnModePartial.style.background = "var(--secondary-bg)";
+                  btnModePartial.style.color = "var(--text-primary)";
+                  btnModePartial.style.borderColor = "var(--border-color)";
+                  btnModePartial.style.fontWeight = "500";
+                }
+                if (allPanel) allPanel.style.display = "block";
+                if (partialPanel) partialPanel.style.display = "none";
+              } else {
+                if (btnModeAll) {
+                  btnModeAll.style.background = "var(--secondary-bg)";
+                  btnModeAll.style.color = "var(--text-primary)";
+                  btnModeAll.style.borderColor = "var(--border-color)";
+                  btnModeAll.style.fontWeight = "500";
+                }
+                if (btnModePartial) {
+                  btnModePartial.style.background = "var(--accent-color)";
+                  btnModePartial.style.color = "#fff";
+                  btnModePartial.style.borderColor = "var(--accent-color)";
+                  btnModePartial.style.fontWeight = "600";
+                }
+                if (allPanel) allPanel.style.display = "none";
+                if (partialPanel) partialPanel.style.display = "flex";
+              }
+            };
+
+            const setClearSubmode = (sub) => {
+              clearImgCurrentSubmode = sub;
+              if (sub === "range") {
+                if (btnSubRange) {
+                  btnSubRange.style.background = "var(--accent-color)";
+                  btnSubRange.style.color = "#fff";
+                  btnSubRange.style.borderColor = "var(--accent-color)";
+                  btnSubRange.style.fontWeight = "600";
+                }
+                if (btnSubMemory) {
+                  btnSubMemory.style.background = "var(--secondary-bg)";
+                  btnSubMemory.style.color = "var(--text-primary)";
+                  btnSubMemory.style.borderColor = "var(--border-color)";
+                  btnSubMemory.style.fontWeight = "500";
+                }
+                if (rangeBox) rangeBox.style.display = "flex";
+                if (memoryBox) memoryBox.style.display = "none";
+              } else {
+                if (btnSubRange) {
+                  btnSubRange.style.background = "var(--secondary-bg)";
+                  btnSubRange.style.color = "var(--text-primary)";
+                  btnSubRange.style.borderColor = "var(--border-color)";
+                  btnSubRange.style.fontWeight = "500";
+                }
+                if (btnSubMemory) {
+                  btnSubMemory.style.background = "var(--accent-color)";
+                  btnSubMemory.style.color = "#fff";
+                  btnSubMemory.style.borderColor = "var(--accent-color)";
+                  btnSubMemory.style.fontWeight = "600";
+                }
+                if (rangeBox) rangeBox.style.display = "none";
+                if (memoryBox) memoryBox.style.display = "flex";
+              }
+            };
+
+            if (btnModeAll) btnModeAll.onclick = () => setClearMode("all");
+            if (btnModePartial) btnModePartial.onclick = () => setClearMode("partial");
+            if (btnSubRange) btnSubRange.onclick = () => setClearSubmode("range");
+            if (btnSubMemory) btnSubMemory.onclick = () => setClearSubmode("memory");
+
+            if (memorySelect) {
+              memorySelect.onchange = () => {
+                const opt = memorySelect.selectedOptions && memorySelect.selectedOptions[0];
+                if (opt && opt.dataset.start) {
+                  if (memoryDesc) memoryDesc.textContent = `将清理第 ${opt.dataset.start} 条至第 ${opt.dataset.end} 条中的图片，保留记忆内容`;
+                } else {
+                  if (memoryDesc) memoryDesc.textContent = "";
+                }
+              };
+            }
+
+            clearImagesBtn.addEventListener("click", () => {
               if (!state.activeChatId) return;
               const chat = state.chats[state.activeChatId];
-              const confirmed = await showCustomConfirm(
-                "确认清图",
-                "确定要清空此聊天中的所有生图和图片吗？",
-                { confirmButtonClass: "btn-danger" },
-              );
-              if (confirmed) {
-                if (chat.history) {
-                  chat.history.forEach((msg) => {
-                    if (!msg) return;
-                    if (
-                      msg.type === "image" ||
-                      msg.type === "nov" ||
-                      msg.type === "sd" ||
-                      msg.type === "ai_image" ||
-                      msg.type === "realimag" ||
-                      msg.type === "naiimag"
-                    ) {
+              if (!chat) return;
+
+              const history = chat.history || [];
+              const nonSummaryMsgs = history.filter((m) => m && m.type !== "summary");
+              const totalCount = nonSummaryMsgs.length;
+
+              if (totalMsgText) totalMsgText.textContent = `共 ${totalCount} 条消息`;
+              if (startInput) {
+                startInput.value = "1";
+                startInput.min = "1";
+                startInput.max = String(Math.max(1, totalCount));
+              }
+              if (endInput) {
+                endInput.value = String(Math.max(1, totalCount));
+                endInput.min = "1";
+                endInput.max = String(Math.max(1, totalCount));
+              }
+
+              if (memorySelect) {
+                memorySelect.innerHTML = "";
+                const summaries = history.filter((m) => m && m.type === "summary");
+                if (summaries.length === 0) {
+                  const opt = document.createElement("option");
+                  opt.value = "";
+                  opt.textContent = "暂无已总结记忆";
+                  memorySelect.appendChild(opt);
+                  if (memoryDesc) memoryDesc.textContent = "";
+                } else {
+                  const defOpt = document.createElement("option");
+                  defOpt.value = "";
+                  defOpt.textContent = "请选择记忆";
+                  memorySelect.appendChild(defOpt);
+                  summaries.forEach((sum, idx) => {
+                    const rangeInfo = typeof getSummaryRangeInfo === "function" ? getSummaryRangeInfo(sum, chat) : { start: 1, end: 1 };
+                    const opt = document.createElement("option");
+                    opt.value = String(sum.timestamp || idx);
+                    opt.dataset.start = String(rangeInfo.start);
+                    opt.dataset.end = String(rangeInfo.end);
+                    const cleanSnippet = (sum.header || sum.content || "").replace(/[\r\n]+/g, " ").trim();
+                    const titleText = cleanSnippet.length > 20 ? cleanSnippet.slice(0, 20) + "..." : cleanSnippet;
+                    opt.textContent = `第${rangeInfo.start}条至第${rangeInfo.end}条：${titleText || '记忆'}`;
+                    memorySelect.appendChild(opt);
+                  });
+                  if (memoryDesc) memoryDesc.textContent = "";
+                }
+              }
+
+              setClearMode("all");
+              setClearSubmode("range");
+
+              clearImagesModal.style.display = "flex";
+              clearImagesModal.style.zIndex = "100003";
+              clearImagesModal.classList.add("visible");
+            });
+
+            if (confirmBtn) {
+              confirmBtn.onclick = async () => {
+                if (!state.activeChatId) return;
+                const chat = state.chats[state.activeChatId];
+                if (!chat || !Array.isArray(chat.history)) return;
+
+                const cleanSingleMsg = (msg) => {
+                  if (!msg) return;
+                  if (
+                    msg.type === "image" ||
+                    msg.type === "nov" ||
+                    msg.type === "sd" ||
+                    msg.type === "ai_image" ||
+                    msg.type === "realimag" ||
+                    msg.type === "naiimag"
+                  ) {
+                    msg.content = "[图片已清理]";
+                    if (msg.imageUrl) delete msg.imageUrl;
+                    if (msg.url) delete msg.url;
+                    if (msg.image) delete msg.image;
+                  } else if (msg.imageUrl) {
+                    delete msg.imageUrl;
+                    if (msg.url) delete msg.url;
+                    if (msg.image) delete msg.image;
+                  } else if (msg.type === "user_photo") {
+                    msg.content = "[图片已清理]";
+                    if (msg.imageUrl) delete msg.imageUrl;
+                    if (msg.url) delete msg.url;
+                    if (msg.image) delete msg.image;
+                  } else if (typeof msg.content === "string") {
+                    if (msg.content.startsWith("data:image")) {
                       msg.content = "[图片已清理]";
-                      if (msg.imageUrl) delete msg.imageUrl;
-                      if (msg.url) delete msg.url;
-                    } else if (msg.imageUrl) {
-                      delete msg.imageUrl;
-                    } else if (msg.type === "user_photo") {
-                      msg.content = "[图片已清理]";
-                    } else if (typeof msg.content === "string") {
+                    } else {
                       msg.content = msg.content
                         .replace(/<img[^>]*>/gi, "[图片已清理]")
                         .replace(/!\[.*?\]\([^\)]+\)/gi, "[图片已清理]");
-                    } else if (Array.isArray(msg.content)) {
-                      msg.content = msg.content.map((item) => {
-                        if (item && item.type === "image_url") {
-                          return { type: "text", text: "[图片已清理]" };
-                        }
-                        return item;
-                      });
                     }
-                  });
+                  } else if (Array.isArray(msg.content)) {
+                    msg.content = msg.content.map((item) => {
+                      if (item && item.type === "image_url") {
+                        return { type: "text", text: "[图片已清理]" };
+                      }
+                      return item;
+                    });
+                  }
+                };
+
+                let targetStart = 1;
+                let targetEnd = Infinity;
+
+                if (clearImgCurrentMode === "partial") {
+                  if (clearImgCurrentSubmode === "range") {
+                    const s = parseInt(startInput?.value, 10) || 1;
+                    const e = parseInt(endInput?.value, 10) || 1;
+                    targetStart = Math.min(s, e);
+                    targetEnd = Math.max(s, e);
+                  } else {
+                    const opt = memorySelect?.selectedOptions && memorySelect.selectedOptions[0];
+                    if (!opt || !opt.dataset.start) {
+                      if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请选择要清理的记忆");
+                      return;
+                    }
+                    targetStart = parseInt(opt.dataset.start, 10) || 1;
+                    targetEnd = parseInt(opt.dataset.end, 10) || 1;
+                  }
                 }
+
+                let nonSummaryCounter = 0;
+                chat.history.forEach((msg) => {
+                  if (!msg) return;
+                  if (msg.type === "summary") {
+                    return;
+                  }
+                  nonSummaryCounter++;
+                  if (clearImgCurrentMode === "all") {
+                    cleanSingleMsg(msg);
+                  } else if (nonSummaryCounter >= targetStart && nonSummaryCounter <= targetEnd) {
+                    cleanSingleMsg(msg);
+                  }
+                });
+
                 await db.chats.put(chat);
-                renderChatInterface(state.activeChatId);
-                renderChatList();
-                chatSettingsModal.classList.remove("visible");
-                await showCustomAlert("清图成功", "所有生图与图片已清理完成！");
-              }
-            });
+                if (typeof renderChatInterface === "function") renderChatInterface(state.activeChatId);
+                if (typeof renderChatList === "function") renderChatList();
+                closeClearModal();
+                if (chatSettingsModal) chatSettingsModal.classList.remove("visible");
+                if (typeof showCustomAlert === "function") {
+                  await showCustomAlert("清理完成", "已完成清理");
+                }
+              };
+            }
           }
 
           // 导出聊天记录按钮

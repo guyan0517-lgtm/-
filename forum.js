@@ -223,6 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
       fanficBar.style.display = "block";
       await populateFanficSelectors();
       await loadFanficPresets();
+      applyFanficPreset();
 
       const fanficContent = document.getElementById("fanfic-bar-content");
       const fanficToggle = document.getElementById("fanfic-bar-toggle-icon");
@@ -1128,6 +1129,8 @@ ${Object.values(state.chats)
     const charList = getAvailableCharacters();
     const select1 = document.getElementById("fanfic-char1-select");
     const select2 = document.getElementById("fanfic-char2-select");
+    const prevChar1 = select1 ? select1.value : "";
+    const prevChar2 = select2 ? select2.value : "";
     select1.innerHTML = "";
     select2.innerHTML = "";
     charList.forEach((char) => {
@@ -1140,8 +1143,14 @@ ${Object.values(state.chats)
       option2.textContent = char.name;
       select2.appendChild(option2);
     });
-    if (charList.length > 1) {
+    if (prevChar1 && charList.some((c) => c.name === prevChar1)) {
+      select1.value = prevChar1;
+    } else if (charList.length > 0) {
       select1.selectedIndex = 0;
+    }
+    if (prevChar2 && charList.some((c) => c.name === prevChar2)) {
+      select2.value = prevChar2;
+    } else if (charList.length > 1) {
       select2.selectedIndex = 1;
     }
 
@@ -1961,7 +1970,13 @@ ${chapterSummaries || "暂无摘要"}
   async function loadFanficPresets() {
     const select = document.getElementById("fanfic-preset-select");
     if (!select) return;
-    const currentVal = select.value;
+    let currentVal = select.value;
+    if (currentVal === "" || currentVal === null || currentVal === undefined) {
+      const saved = localStorage.getItem("fanfic_active_preset_index");
+      if (saved !== null && saved !== "") {
+        currentVal = saved;
+      }
+    }
     select.innerHTML = '<option value="">-- 选择预设 --</option>';
 
     if (!state.globalSettings.fanficPresets) {
@@ -1972,11 +1987,15 @@ ${chapterSummaries || "暂无摘要"}
       const option = document.createElement("option");
       option.value = index;
       option.textContent = preset.name;
+      option.addEventListener("click", () => {
+        applyFanficPreset();
+      });
       select.appendChild(option);
     });
 
-    if (currentVal !== "" && state.globalSettings.fanficPresets[currentVal]) {
+    if (currentVal !== "" && state.globalSettings.fanficPresets && state.globalSettings.fanficPresets[currentVal]) {
       select.value = currentVal;
+      applyFanficPreset();
     }
   }
 
@@ -2000,8 +2019,10 @@ ${chapterSummaries || "暂无摘要"}
     currentPreset.titlePrompt = document.getElementById("fanfic-title-prompt-input")?.value || "";
 
     await db.globalSettings.put(state.globalSettings);
+    localStorage.setItem("fanfic_active_preset_index", index);
     await loadFanficPresets();
     if (select) select.value = index;
+    applyFanficPreset();
 
     if (typeof showCustomAlert === "function") {
       await showCustomAlert("保存成功", `已更新当前预设【${currentPreset.name}】`);
@@ -2038,10 +2059,12 @@ ${chapterSummaries || "暂无摘要"}
     state.globalSettings.fanficPresets.unshift(preset);
 
     await db.globalSettings.put(state.globalSettings);
+    localStorage.setItem("fanfic_active_preset_index", "0");
     await loadFanficPresets();
 
     const select = document.getElementById("fanfic-preset-select");
     if (select) select.value = "0";
+    applyFanficPreset();
 
     if (typeof showCustomAlert === "function") {
       await showCustomAlert("新建成功", `新预设【${preset.name}】已保存并置顶`);
@@ -2053,12 +2076,23 @@ ${chapterSummaries || "暂无摘要"}
   function applyFanficPreset() {
     const select = document.getElementById("fanfic-preset-select");
     const index = select ? select.value : "";
-    if (index === "") return;
+    if (index === "" || index === null || index === undefined) {
+      localStorage.removeItem("fanfic_active_preset_index");
+      return;
+    }
 
+    localStorage.setItem("fanfic_active_preset_index", index);
+    if (!state.globalSettings.fanficPresets) return;
     const preset = state.globalSettings.fanficPresets[index];
     if (preset) {
-      if (document.getElementById("fanfic-char1-select")) document.getElementById("fanfic-char1-select").value = preset.char1;
-      if (document.getElementById("fanfic-char2-select")) document.getElementById("fanfic-char2-select").value = preset.char2;
+      const select1 = document.getElementById("fanfic-char1-select");
+      if (select1 && preset.char1) {
+        select1.value = preset.char1;
+      }
+      const select2 = document.getElementById("fanfic-char2-select");
+      if (select2 && preset.char2) {
+        select2.value = preset.char2;
+      }
       if (document.getElementById("fanfic-wordcount-input")) document.getElementById("fanfic-wordcount-input").value = preset.wordCount || "";
       if (document.getElementById("fanfic-type-input")) document.getElementById("fanfic-type-input").value = preset.type || "";
       if (document.getElementById("fanfic-style-input")) document.getElementById("fanfic-style-input").value = preset.style || "";
@@ -2082,6 +2116,8 @@ ${chapterSummaries || "暂无摘要"}
     if (confirmed) {
       state.globalSettings.fanficPresets.splice(index, 1);
       await db.globalSettings.put(state.globalSettings);
+      localStorage.removeItem("fanfic_active_preset_index");
+      if (select) select.value = "";
       await loadFanficPresets();
 
       if (document.getElementById("fanfic-wordcount-input")) document.getElementById("fanfic-wordcount-input").value = "";
@@ -3953,9 +3989,11 @@ ${customPromptRequirement}
     .getElementById("delete-fanfic-preset-btn")
     .addEventListener("click", deleteFanficPreset);
 
-  document
-    .getElementById("fanfic-preset-select")
-    .addEventListener("change", applyFanficPreset);
+  const fanficPresetSelectEl = document.getElementById("fanfic-preset-select");
+  if (fanficPresetSelectEl) {
+    fanficPresetSelectEl.addEventListener("change", applyFanficPreset);
+    fanficPresetSelectEl.addEventListener("input", applyFanficPreset);
+  }
 
   const forumBookshelfBtn = document.getElementById("open-forum-bookshelf-btn");
   if (forumBookshelfBtn) {

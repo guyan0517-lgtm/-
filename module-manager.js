@@ -5891,6 +5891,230 @@ ${chap.content}
       });
     },
 
+    openMultiModal() {
+      const modal = document.getElementById('module-multi-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.style.zIndex = '100004';
+      }
+      if (!this.multiFileList) this.multiFileList = [];
+      const statusBox = document.getElementById('module-multi-status-box');
+      if (statusBox) {
+        statusBox.style.display = 'none';
+        statusBox.textContent = '';
+      }
+      this.renderMultiFilesList();
+    },
+
+    closeMultiModal() {
+      const modal = document.getElementById('module-multi-modal');
+      if (modal) modal.style.display = 'none';
+      this.multiFileList = [];
+      const fileInput = document.getElementById('module-multi-files-input');
+      if (fileInput) fileInput.value = '';
+      const statusBox = document.getElementById('module-multi-status-box');
+      if (statusBox) {
+        statusBox.style.display = 'none';
+        statusBox.textContent = '';
+      }
+    },
+
+    renderMultiFilesList() {
+      const listEl = document.getElementById('module-multi-files-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+
+      if (!this.multiFileList || this.multiFileList.length === 0) {
+        const emptyTip = document.createElement('div');
+        emptyTip.id = 'module-multi-empty-tip';
+        emptyTip.style.cssText = 'text-align: center; color: var(--text-secondary); font-size: 11.5px; padding: 20px 0;';
+        emptyTip.textContent = '请选择要按序阅读分析的多个文件';
+        listEl.appendChild(emptyTip);
+        return;
+      }
+
+      this.multiFileList.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'module-merge-item-row';
+        row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); box-sizing: border-box; width: 100%;';
+
+        const leftBox = document.createElement('div');
+        leftBox.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
+
+        const orderBadge = document.createElement('div');
+        orderBadge.style.cssText = 'width: 22px; height: 22px; border-radius: 6px; background: var(--card-bg); display: flex; align-items: center; justify-content: center; color: var(--accent-color); flex-shrink: 0; font-size: 11px; font-weight: 700; border: 1px solid var(--border-color);';
+        orderBadge.textContent = `${index + 1}`;
+
+        const textCol = document.createElement('div');
+        textCol.style.cssText = 'display: flex; flex-direction: column; min-width: 0; flex: 1; overflow: hidden;';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.style.cssText = 'font-size: 12px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+        nameSpan.textContent = item.name;
+
+        const sizeSpan = document.createElement('span');
+        sizeSpan.style.cssText = 'font-size: 10px; color: var(--text-secondary);';
+        const kbSize = (item.size / 1024).toFixed(1);
+        sizeSpan.textContent = `${kbSize} KB`;
+
+        textCol.appendChild(nameSpan);
+        textCol.appendChild(sizeSpan);
+        leftBox.appendChild(orderBadge);
+        leftBox.appendChild(textCol);
+
+        const actionsBox = document.createElement('div');
+        actionsBox.style.cssText = 'display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto;';
+
+        if (index > 0) {
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.className = 'moe-btn-mini';
+          upBtn.style.cssText = 'width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px;';
+          upBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>';
+          upBtn.onclick = () => {
+            const temp = this.multiFileList[index - 1];
+            this.multiFileList[index - 1] = this.multiFileList[index];
+            this.multiFileList[index] = temp;
+            this.renderMultiFilesList();
+          };
+          actionsBox.appendChild(upBtn);
+        }
+
+        if (index < this.multiFileList.length - 1) {
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.className = 'moe-btn-mini';
+          downBtn.style.cssText = 'width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px;';
+          downBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+          downBtn.onclick = () => {
+            const temp = this.multiFileList[index + 1];
+            this.multiFileList[index + 1] = this.multiFileList[index];
+            this.multiFileList[index] = temp;
+            this.renderMultiFilesList();
+          };
+          actionsBox.appendChild(downBtn);
+        }
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'moe-btn-mini btn-danger';
+        delBtn.style.cssText = 'width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px;';
+        delBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        delBtn.onclick = () => {
+          this.multiFileList.splice(index, 1);
+          this.renderMultiFilesList();
+        };
+        actionsBox.appendChild(delBtn);
+
+        row.appendChild(leftBox);
+        row.appendChild(actionsBox);
+        listEl.appendChild(row);
+      });
+    },
+
+    async executeMultiAnalysis() {
+      if (!this.multiFileList || this.multiFileList.length === 0) {
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '请先选择需要分析的模组文件');
+        }
+        return;
+      }
+
+      const statusBox = document.getElementById('module-multi-status-box');
+      const startBtn = document.getElementById('start-module-multi-btn');
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.textContent = '正在按序读取文件...';
+      }
+      if (startBtn) {
+        startBtn.textContent = '解析中...';
+        startBtn.style.opacity = '0.7';
+        startBtn.disabled = true;
+      }
+
+      try {
+        const parsedSections = [];
+        const allImages = [];
+        let imageCounter = 1;
+
+        for (let i = 0; i < this.multiFileList.length; i++) {
+          const item = this.multiFileList[i];
+          if (statusBox) {
+            statusBox.textContent = `正在解析 ${i + 1} / ${this.multiFileList.length}：${item.name}`;
+          }
+          let parsed = null;
+          const ext = (item.ext || '').toLowerCase();
+          if (ext === 'txt') {
+            parsed = await this.parseTxtFile(item.file);
+          } else if (ext === 'docx' || ext === 'doc') {
+            parsed = await this.parseDocxFile(item.file);
+          } else if (ext === 'pdf') {
+            parsed = await this.parsePdfFile(item.file);
+          } else {
+            throw new Error(`不支持的文件格式：${item.name}`);
+          }
+
+          if (parsed && parsed.images && parsed.images.length > 0) {
+            parsed.images.forEach(img => {
+              allImages.push({
+                ...img,
+                imageIndex: imageCounter++
+              });
+            });
+          }
+
+          const fileBaseTitle = item.name.replace(/\.[^/.]+$/, '');
+          parsedSections.push(`【卷${i + 1}：${fileBaseTitle}】\n${parsed?.text || ''}`);
+        }
+
+        let combinedText = parsedSections.join('\n\n');
+        if (allImages.length > 0) {
+          const imageTagsList = allImages.map(img => `【图${img.imageIndex}】`).join(' ');
+          combinedText = combinedText + `\n\n【模组图库提取】${imageTagsList}`;
+        }
+
+        const totalWords = this.countWords(combinedText);
+        const firstName = this.multiFileList[0].name.replace(/\.[^/.]+$/, '');
+
+        this.currentParsedData = {
+          fileName: this.multiFileList.map(f => f.name).join('，'),
+          moduleName: firstName,
+          fileType: '多选模组',
+          text: combinedText,
+          images: allImages,
+          wordCount: totalWords,
+          analysisPrompt: DEFAULT_TRPG_ANALYSIS_PROMPT,
+          prompt: DEFAULT_TRPG_ANALYSIS_PROMPT,
+          cuttingPrompt: DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT,
+          isPureImagePdf: false
+        };
+
+        await this.saveRawFileToDB(this.currentParsedData);
+        this.saveDraft();
+        this.renderParsedResultUI(this.currentParsedData);
+        this.closeMultiModal();
+
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('解析完成', `已按顺序载入 ${this.multiFileList.length} 个模组文件`);
+        }
+      } catch (err) {
+        console.warn('[模组] 多选解析失败:', err);
+        if (statusBox) {
+          statusBox.style.display = 'block';
+          statusBox.textContent = `解析遇到错误：${err.message || err}`;
+        }
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('解析失败', err.message || '文件读取错误');
+        }
+      } finally {
+        if (startBtn) {
+          startBtn.textContent = '分析';
+          startBtn.style.opacity = '1';
+          startBtn.disabled = false;
+        }
+      }
+    },
+
     async extractTextFromSingleFile(file) {
       const ext = (file.name || '').split('.').pop().toLowerCase();
       if (ext === 'txt') {
@@ -8427,6 +8651,63 @@ ${imageList}
       if (startMergeBtn) {
         startMergeBtn.addEventListener('click', () => {
           this.executeMergeAndDownload();
+        });
+      }
+
+      const btnOpenMulti = document.getElementById('module-btn-open-multi');
+      if (btnOpenMulti) {
+        btnOpenMulti.addEventListener('click', () => {
+          this.openMultiModal();
+        });
+      }
+
+      const closeMultiBtn = document.getElementById('close-module-multi-modal-btn');
+      const cancelMultiBtn = document.getElementById('cancel-module-multi-modal-btn');
+      if (closeMultiBtn) {
+        closeMultiBtn.addEventListener('click', () => {
+          this.closeMultiModal();
+        });
+      }
+      if (cancelMultiBtn) {
+        cancelMultiBtn.addEventListener('click', () => {
+          this.closeMultiModal();
+        });
+      }
+
+      const selectMultiFilesBtn = document.getElementById('module-multi-select-files-btn');
+      const multiFilesInput = document.getElementById('module-multi-files-input');
+      if (selectMultiFilesBtn && multiFilesInput) {
+        selectMultiFilesBtn.addEventListener('click', () => {
+          multiFilesInput.value = '';
+          multiFilesInput.click();
+        });
+      }
+
+      if (multiFilesInput) {
+        multiFilesInput.addEventListener('change', (e) => {
+          const files = e.target.files;
+          if (!files || files.length === 0) return;
+          if (!this.multiFileList) this.multiFileList = [];
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const ext = f.name.split('.').pop().toLowerCase();
+            this.multiFileList.push({
+              id: `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+              file: f,
+              name: f.name,
+              size: f.size,
+              ext: ext
+            });
+          }
+          this.renderMultiFilesList();
+          multiFilesInput.value = '';
+        });
+      }
+
+      const startMultiBtn = document.getElementById('start-module-multi-btn');
+      if (startMultiBtn) {
+        startMultiBtn.addEventListener('click', () => {
+          this.executeMultiAnalysis();
         });
       }
 
