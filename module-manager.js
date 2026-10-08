@@ -6721,110 +6721,324 @@ ${chap.content}
 
       const locateBtn = document.getElementById('module-gallery-locate-btn');
       if (locateBtn) {
-        locateBtn.textContent = '定位中...';
+        locateBtn.textContent = '分析中...';
         locateBtn.disabled = true;
       }
 
-      const chapterSummary = chapters.map((c, i) => `${i + 1}. 【${c.title}】[${c.category}]: ${c.content.substring(0, 150).replace(/\n+/g, ' ')}...`).join('\n');
-      const imageList = images.map((img, i) => `${i + 1}. 名称: ${img.name || `图片_${i + 1}`} 尺寸:${img.width || 800}x${img.height || 600}`).join('\n');
+      try {
+        images.forEach((img, idx) => {
+          if (!img.imageIndex || typeof img.imageIndex !== 'number') {
+            img.imageIndex = idx + 1;
+          }
+        });
 
-      const prompt = `你是专业的跑团模组插图定位与剧透甄别专家。当前模组包含以下章节列表和插图列表：
+        let visionResults = [];
+        try {
+          const thumbnails = [];
+          for (let i = 0; i < images.length; i++) {
+            const img = images[i];
+            if (img.dataUrl) {
+              const thumb = await this.createThumbnailDataUrl(img.dataUrl, 260, 260);
+              thumbnails.push({
+                imageIndex: img.imageIndex,
+                name: img.name || `图${img.imageIndex}`,
+                dataUrl: thumb
+              });
+            }
+          }
 
-【模组章节列表】：
-${chapterSummary}
+          if (thumbnails.length > 0) {
+            const visionSysPrompt = `你是一个具备顶级鉴赏力的跑团模组插图与视觉美术资源专家。
+请仔细观察用户提供的多张模组图片画面视觉内容，结合原文件名与画面特征，判断每张图片具体是什么图，并生成精炼准确的名称、备注、剧透属性，以及是否为某HO位的猫即专属绑定NPC。
 
-【图片列表】：
-${imageList}
+【分类与识别要求】：
+1. 角色立绘：
+   - 包含人物全身像、半身像、肖像、怪物造型、NPC；
+   - 命名为具体角色名称或肖像，例如"林雪立绘"、"黑衣守卫肖像"；
+   - 若根据画面特征或文件名判断为某特定HO位的猫即专属绑定NPC、青梅竹马、专属搭档，标注 isHoCat 为 true，并给出 hoTag 例如 ho1 或 ho2；若为普通公共NPC或怪物，isHoCat 为 false；
+2. 场景地图：
+   - 包含建筑平面图、俯视图、区域示意图、房间走廊网格；
+   - 命名为具体建筑或地点地图，例如"洋馆一层平面图"、"浅草寺区域地图"；
+3. 剧情CG与场景插画：
+   - 包含大事件场景、关键对峙、伤亡、重要情节插图；
+   - 命名为事件CG，例如"雨中初遇CG"、"决战CG"；
+4. 道具与线索：
+   - 包含信件、手记、钥匙、图腾、神秘道具；
+   - 命名为道具名；
+5. 剧透判定 isSensitive：
+   - 涉及幕后真相、怪物终极异化、致命伤亡CG、密室地下层地图为 true；
+   - 常规初期NPC立绘、公共公开建筑地图、日常开场插画为 false。
 
-【任务要求】：
-1. 结合图片名称与各章节的剧情语境，判断每张图片最适宜插入的章节编号。
-2. 识别该图片对应的角色姓名、地点名称或线索触发关键词，例如角色初次登场，写入 targetAnchor 字段。
-3. 甄别剧透属性：后期异化形态立绘、关键伤亡CG、密室停尸房地图等核心剧透标记为 true；常规初期立绘、公开区域地图标记为 false。
-4. 提供一句精炼的中文内容描述。
-
-请直接输出 JSON 数组格式：
+请只输出合法的 JSON 数组：
 [
-  { "imageIndex": 1, "chapterIndex": 1, "targetAnchor": "角色名", "isSensitive": false, "description": "立绘描述" }
+  { "imageIndex": 1, "type": "portrait", "name": "林雪立绘", "annotation": "HO1专属猫初次出场立绘", "description": "身穿校服的高中女生", "isSensitive": false, "isHoCat": true, "hoTag": "ho1", "entityName": "林雪" }
+]`;
+            const visionUserPrompt = `请对附带的 ${thumbnails.length} 张图片按序号依次进行高精度视觉甄别与分类命名，输出合法JSON数组：`;
+            const visionRes = await this.callAI(visionSysPrompt, visionUserPrompt, thumbnails);
+            if (visionRes) {
+              const clean = visionRes.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+              const sIdx = clean.indexOf('[');
+              const eIdx = clean.lastIndexOf(']');
+              if (sIdx !== -1 && eIdx !== -1) {
+                visionResults = JSON.parse(clean.substring(sIdx, eIdx + 1));
+              }
+            }
+          }
+        } catch (vErr) {
+          console.error('视觉预检异常:', vErr);
+        }
+
+        images.forEach((img, idx) => {
+          const v = visionResults.find(r => r.imageIndex === img.imageIndex || r.imageIndex === (idx + 1));
+          if (v) {
+            if (v.name) img.name = v.name;
+            if (v.annotation) img.annotation = v.annotation;
+            if (v.description) img.description = v.description;
+            if (typeof v.isSensitive === 'boolean') img.isSensitive = v.isSensitive;
+            img.isHoCat = !!v.isHoCat;
+            img.hoTag = v.hoTag || '';
+            img.entityName = v.entityName || '';
+          }
+        });
+
+        const imageListSummary = images.map((img, i) => {
+          const catInfo = img.isHoCat ? `【HO专属猫，归属${img.hoTag || '特定HO'}】` : '';
+          return `${i + 1}. 图${img.imageIndex} 名称: ${img.name || `插图_${img.imageIndex}`} 备注: ${img.annotation || img.description || '无'} ${catInfo} 剧透: ${img.isSensitive ? '是' : '否'}`;
+        }).join('\n');
+
+        const chaptersDigest = chapters.map((c, i) => {
+          const cleanText = (c.content || '').replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+          return `━━━━━━━━━━━━━━━━━━━━\n【章节 ${i + 1}】标题：${c.title} ｜ 分类：${c.category || '正文'}\n${cleanText}`;
+        }).join('\n\n');
+
+        const placementPrompt = `你是专业的跑团模组插图排版与原位注入专家。
+你将通读以下模组的全部章节内容，并结合图库中的插图列表，判断每张图片在模组剧情中应该出现在哪里，并精准规划注入位置。
+
+【待处理图库插图列表】：
+${imageListSummary}
+
+【模组全部章节正文内容】：
+${chaptersDigest}
+
+━━━━━━━━━━━━━━━━━━━━
+【插图定位与注入铁律】：
+1. 人物立绘：
+   - 必须注入在该角色在模组剧情中【第一次正式出场、首次与调查员或剧情发生互动】的具体段落处！
+2. 极其核心的猫立绘双注入铁律：
+   - 如果该立绘是某个 HO 位的专属猫即绑定NPC或与特定HO存在专属羁绊的角色：
+     ① 在该 HO 位的【单人线】章节中例如包含该HO编号的单人线或秘密线等，该猫【第一次出场】时，必须规划一次立绘注入！
+     ② 在面向全部调查员的【公共正文章节】全体玩家共同经历的剧情中，当这只猫在公共剧情中【第一次正式出场】时，必须【再次规划一次立绘注入】！
+     确保无论玩家选择哪个 HO 位跑团，都能在公共大团剧情中初次见到这只猫时正确弹出立绘！
+3. 场景与地图：
+   - 必须插入在剧情中调查员【第一次进入该场景、抵达该地点、或展开该区域探索】的具体段落处！
+4. 剧情 CG 与道具线索：
+   - 插入在该剧情事件或高潮发生、或调查员发现并取得该线索或道具的具体段落处！
+5. 定位锚点规范：
+   - 对每个注入点，必须提供：
+     - chapterIndex: 目标章节编号，从1开始计算
+     - targetAnchor: 目标段落中必须存在的原文章节短句，字数在8到30字之间且在该章节中独一无二用于精准查找定位
+     - position: "after" 表示在该段落换行后插入标签，"before" 表示在该段落前插入标签
+     - reason: 注入原因说明，例如 HO1单人线猫初次登场 或 公共正文猫首次出场 或 首次进入洋馆一层
+
+请直接输出合法的 JSON 数组，格式如下：
+[
+  {
+    "imageIndex": 1,
+    "name": "猫-林雪立绘",
+    "annotation": "HO1专属猫初遇立绘",
+    "description": "高中女生制服半身像",
+    "isSensitive": false,
+    "placements": [
+      {
+        "chapterIndex": 2,
+        "targetAnchor": "少女转过身来，露出熟悉的温和微笑",
+        "position": "after",
+        "reason": "HO1单人线初次登场"
+      },
+      {
+        "chapterIndex": 5,
+        "targetAnchor": "林雪抱着一叠资料从走廊另一头快步走来",
+        "position": "after",
+        "reason": "公共正文首次登场"
+      }
+    ]
+  }
 ]`;
 
-      try {
-        const response = await this.callAI('你是一个高精度跑团模组插图排版定位助手，只输出合法JSON数组。', prompt);
         let parsedMatches = [];
         try {
-          const jsonMatch = response.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            parsedMatches = JSON.parse(jsonMatch[0]);
+          const placementRes = await this.callAI('你是一个高精度跑团模组插图排版定位助手，只输出合法JSON数组。', placementPrompt);
+          if (!placementRes) {
+            throw new Error('AI模型未返回定位分析结果');
           }
-        } catch (e) {
-          console.warn('[模组] 解析图片定位JSON异常', e);
+          const clean = placementRes.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+          const sIdx = clean.indexOf('[');
+          const eIdx = clean.lastIndexOf(']');
+          if (sIdx === -1 || eIdx === -1) {
+            throw new Error('AI模型返回格式无效，未找到JSON数组');
+          }
+          parsedMatches = JSON.parse(clean.substring(sIdx, eIdx + 1));
+        } catch (pErr) {
+          console.error('全文插图定位分析解析异常:', pErr);
+          throw pErr;
         }
 
         for (let i = 0; i < images.length; i++) {
           const img = images[i];
           const imgNum = img.imageIndex || (i + 1);
           img.imageIndex = imgNum;
-          const matched = parsedMatches.find(m => m.imageIndex === (i + 1) || m.imageIndex === imgNum);
-          let targetChap = chapters[0];
-          if (matched && matched.chapterIndex && chapters[matched.chapterIndex - 1]) {
-            targetChap = chapters[matched.chapterIndex - 1];
-          }
 
-          const placementText = `已定位至章节：${targetChap.title}`;
-          img.placement = placementText;
-          if (matched && typeof matched.isSensitive === 'boolean') {
-            img.isSensitive = matched.isSensitive;
-          }
-          if (matched && matched.description) {
-            img.description = matched.description;
-          }
-
-          if (img.id) {
-            await database.moduleImages.update(img.id, {
-              imageIndex: imgNum,
-              placement: placementText,
-              isSensitive: img.isSensitive,
-              description: img.description
-            });
+          const matched = parsedMatches.find(m => m.imageIndex === imgNum || m.imageIndex === (i + 1));
+          if (matched) {
+            if (matched.name && typeof matched.name === 'string') {
+              img.name = matched.name.trim();
+            }
+            if (matched.annotation && typeof matched.annotation === 'string') {
+              img.annotation = matched.annotation.trim();
+            }
+            if (matched.description && typeof matched.description === 'string') {
+              img.description = matched.description.trim();
+            }
+            if (typeof matched.isSensitive === 'boolean') {
+              img.isSensitive = matched.isSensitive;
+            }
           }
 
           const tag = `【图${imgNum}：${img.name || '插图'}】`;
           const shortTag = `【图${imgNum}】`;
-          if (!targetChap.content.includes(tag) && !targetChap.content.includes(shortTag)) {
-            const anchor = (matched && matched.targetAnchor) ? matched.targetAnchor.trim() : (img.name ? img.name.trim() : '');
+          const injectedChapterTitles = [];
+
+          let placements = [];
+          if (matched && Array.isArray(matched.placements) && matched.placements.length > 0) {
+            placements = matched.placements;
+          } else if (matched && matched.chapterIndex) {
+            placements = [{
+              chapterIndex: matched.chapterIndex,
+              targetAnchor: matched.targetAnchor || '',
+              position: matched.position || 'after',
+              reason: matched.reason || ''
+            }];
+          } else {
+            placements = [{
+              chapterIndex: 1,
+              targetAnchor: '',
+              position: 'after',
+              reason: '默认首章'
+            }];
+          }
+
+          for (const pl of placements) {
+            const cIdx = (typeof pl.chapterIndex === 'number' && pl.chapterIndex > 0 && pl.chapterIndex <= chapters.length)
+              ? (pl.chapterIndex - 1)
+              : 0;
+            const targetChap = chapters[cIdx] || chapters[0];
+            if (!targetChap) continue;
+
+            if (targetChap.content.includes(tag) || targetChap.content.includes(shortTag)) {
+              if (!injectedChapterTitles.includes(targetChap.title)) {
+                injectedChapterTitles.push(targetChap.title);
+              }
+              continue;
+            }
+
             let inserted = false;
+            const anchor = (pl.targetAnchor || '').trim();
             if (anchor && targetChap.content.includes(anchor)) {
               const anchorIdx = targetChap.content.indexOf(anchor);
-              const nextBreak = targetChap.content.indexOf('\n', anchorIdx);
-              if (nextBreak !== -1) {
-                targetChap.content = targetChap.content.slice(0, nextBreak) + `\n\n${tag}\n` + targetChap.content.slice(nextBreak);
+              if (pl.position === 'before') {
+                const prevLineBreak = targetChap.content.lastIndexOf('\n', anchorIdx);
+                const insertAt = prevLineBreak === -1 ? 0 : (prevLineBreak + 1);
+                targetChap.content = targetChap.content.slice(0, insertAt) + `${tag}\n\n` + targetChap.content.slice(insertAt);
+                inserted = true;
+              } else {
+                const nextLineBreak = targetChap.content.indexOf('\n', anchorIdx);
+                const insertAt = nextLineBreak === -1 ? targetChap.content.length : nextLineBreak;
+                targetChap.content = targetChap.content.slice(0, insertAt) + `\n\n${tag}\n` + targetChap.content.slice(insertAt);
                 inserted = true;
               }
             }
+
             if (!inserted) {
-              const firstParagraphBreak = targetChap.content.indexOf('\n\n');
-              if (firstParagraphBreak !== -1) {
-                targetChap.content = targetChap.content.slice(0, firstParagraphBreak) + `\n\n${tag}\n` + targetChap.content.slice(firstParagraphBreak);
+              const searchKeyword = (img.entityName || img.name || '').replace(/立绘|地图|CG|肖像|平面图/g, '').trim();
+              if (searchKeyword && searchKeyword.length >= 2 && targetChap.content.includes(searchKeyword)) {
+                const kwIdx = targetChap.content.indexOf(searchKeyword);
+                const nextBreak = targetChap.content.indexOf('\n', kwIdx);
+                const insertAt = nextBreak === -1 ? targetChap.content.length : nextBreak;
+                targetChap.content = targetChap.content.slice(0, insertAt) + `\n\n${tag}\n` + targetChap.content.slice(insertAt);
+                inserted = true;
+              }
+            }
+
+            if (!inserted) {
+              const firstPBreak = targetChap.content.indexOf('\n\n');
+              if (firstPBreak !== -1) {
+                targetChap.content = targetChap.content.slice(0, firstPBreak) + `\n\n${tag}\n` + targetChap.content.slice(firstPBreak);
               } else {
                 targetChap.content = `${targetChap.content}\n\n${tag}`;
               }
             }
+
             targetChap.wordCount = this.countWords(targetChap.content);
-            await database.moduleChapters.put(targetChap);
+            targetChap._modified = true;
+            if (!injectedChapterTitles.includes(targetChap.title)) {
+              injectedChapterTitles.push(targetChap.title);
+            }
+          }
+
+          const placementSummary = injectedChapterTitles.length > 0
+            ? `已注入：${injectedChapterTitles.join(' ｜ ')}`
+            : '已注入正文';
+          img.placement = placementSummary;
+
+          if (img.id) {
+            await database.moduleImages.update(img.id, {
+              imageIndex: imgNum,
+              name: img.name,
+              annotation: img.annotation || '',
+              description: img.description || '',
+              placement: img.placement,
+              isSensitive: !!img.isSensitive
+            });
+          } else {
+            await database.moduleImages.put(img);
+          }
+        }
+
+        for (const chap of chapters) {
+          if (chap._modified) {
+            delete chap._modified;
+            await database.moduleChapters.put(chap);
+          }
+        }
+
+        const allUpdatedChaps = await database.moduleChapters.where('moduleId').equals(moduleId).toArray();
+        let totalWords = 0;
+        allUpdatedChaps.forEach(c => {
+          totalWords += (c.wordCount || 0);
+        });
+        const mod = await database.modules.get(moduleId);
+        if (mod) {
+          mod.wordCount = totalWords;
+          await database.modules.update(moduleId, { wordCount: totalWords });
+          if (this.activeDetailModule && this.activeDetailModule.id === moduleId) {
+            this.activeDetailModule.wordCount = totalWords;
           }
         }
 
         await this.renderModuleDetailGallery(chapters, moduleId);
+
         if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('定位完成', `已成功将 ${images.length} 张插图智能匹配并标注至对应剧情章节`);
+          global.showCustomAlert('分析完成', `已成功识别 ${images.length} 张插图并注入至对应模组章节`);
         }
       } catch (err) {
-        console.warn('[模组] 智能定位插图异常:', err);
+        console.error('分析与插图注入异常:', err);
         if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('定位提示', '已将插图按顺序关联至各主要章节');
+          global.showCustomAlert('分析失败', err && err.message ? err.message : String(err));
         }
+        throw err;
       } finally {
         if (locateBtn) {
-          locateBtn.textContent = '定位';
+          locateBtn.textContent = '分析';
           locateBtn.disabled = false;
         }
       }
@@ -9349,14 +9563,29 @@ ${imageList}
           const files = e.target.files;
           if (!files || files.length === 0 || !this.activeDetailModule) return;
           const database = this.getDB();
+          let existingImages = [];
+          if (database && database.moduleImages) {
+            existingImages = await database.moduleImages.where('moduleId').equals(this.activeDetailModule.id).toArray();
+          }
+          let maxIndex = 0;
+          existingImages.forEach(img => {
+            if (typeof img.imageIndex === 'number' && img.imageIndex > maxIndex) {
+              maxIndex = img.imageIndex;
+            }
+          });
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const dataUrl = await this.compressImageFile(file);
+            maxIndex++;
+            const cleanName = file.name.replace(/\.[^/.]+$/, '').trim() || `插图 ${maxIndex}`;
             const imgRecord = {
               moduleId: this.activeDetailModule.id,
-              name: file.name.replace(/\.[^/.]+$/, '').trim() || `插图_${Date.now()}_${i + 1}`,
+              imageIndex: maxIndex,
+              name: cleanName,
               dataUrl: dataUrl,
-              placement: '未定位',
+              placement: '待分析',
+              annotation: '',
+              description: '',
               isSensitive: false
             };
             if (database && database.moduleImages) {

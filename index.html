@@ -2554,6 +2554,7 @@
                     <div style="display: flex; gap: 6px;">
                       <input type="file" id="module-gallery-file-input" accept="image/*" multiple style="display: none;" />
                       <button type="button" class="mod-capsule-btn" id="module-gallery-import-btn">导入</button>
+                      <button type="button" class="mod-capsule-btn" id="module-gallery-locate-btn">分析</button>
                       <button type="button" class="mod-capsule-btn" id="module-gallery-clear-discarded-btn">清理废弃</button>
                       <button type="button" class="mod-capsule-btn danger" id="module-gallery-clear-btn">清空</button>
                     </div>
@@ -31034,16 +31035,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (!locName || locName === '未知') return;
                 const allLocs = (typeof getAllChatLocations === "function") ? await getAllChatLocations(chat) : [];
                 const exactFound = allLocs.find(l => l.name === locName || (l.name && locName && l.name.trim() === locName.trim()));
-                if (exactFound && exactFound.desc) {
-                  if (typeof showLocationBubble === "function") {
-                    showLocationBubble(span, exactFound.name, exactFound.desc);
-                  } else if (typeof openChatLocationDetailModal === "function") {
-                    openChatLocationDetailModal(exactFound.name, exactFound.desc);
+                const descText = (exactFound && exactFound.desc && typeof exactFound.desc === 'string') ? exactFound.desc.trim() : '';
+                if (descText) {
+                  if (typeof activeLocationBubbleTarget !== 'undefined' && activeLocationBubbleTarget === span) {
+                    if (typeof hideLocationBubble === 'function') hideLocationBubble();
+                  } else if (typeof showLocationBubble === 'function') {
+                    showLocationBubble(span, descText);
                   }
                 } else {
-                  if (typeof openChatMapModal === "function") {
-                    openChatMapModal();
-                  }
+                  if (typeof hideLocationBubble === 'function') hideLocationBubble();
                 }
               };
             });
@@ -33173,7 +33173,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.openChatMapModal = openChatMapModal;
 
-        function showLocationBubble(targetEl, desc) {
+        function showLocationBubble(targetEl, maybeTitleOrDesc, maybeDesc) {
+          let desc = maybeDesc !== undefined ? maybeDesc : maybeTitleOrDesc;
           if (!desc || typeof desc !== "string" || !desc.trim()) return;
           const bubble = document.getElementById("chat-location-bubble");
           const titleEl = document.getElementById("chat-location-bubble-title");
