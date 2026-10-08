@@ -22502,11 +22502,43 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   box-sizing: border-box !important;
 }
 
-#fanfic-preference-bar,
+#fanfic-preference-bar {
+  height: auto !important;
+  overflow: hidden !important;
+}
+
 #fanfic-bar-content {
   height: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
+  max-height: 250px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#fanfic-bar-content.collapsed {
+  display: none !important;
+  max-height: 0 !important;
+  padding: 0 !important;
+}
+
+.fanfic-row.presets-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  width: 100% !important;
+}
+
+.fanfic-row.presets-row select {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+.fanfic-row.presets-row button {
+  flex: 0 0 auto !important;
+  width: auto !important;
 }
 
 /* 夜间模式适配 */
@@ -22550,7 +22582,6 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 /* 强制输入框不超出容器 */
 #fanfic-preference-bar input,
-#fanfic-preference-bar select,
 #fanfic-preference-bar textarea {
   width: 100% !important;
   max-width: 100% !important;
@@ -22559,18 +22590,27 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 }
 
 #fanfic-preference-bar select {
+  max-width: 100% !important;
+  min-width: 0 !important;
   background: var(--secondary-bg, #f3f4f6) !important;
   color: var(--text-primary) !important;
   border: 1px solid var(--border-color, #e5e7eb) !important;
   border-radius: 8px !important;
   height: 34px !important;
-  line-height: 22px !important;
+  line-height: 24px !important;
   padding: 4px 10px !important;
   font-size: 13px !important;
   outline: none !important;
   box-sizing: border-box !important;
   display: inline-flex !important;
   align-items: center !important;
+}
+
+#fanfic-preference-bar .presets-row select {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: calc(100% - 170px) !important;
 }
 
 #phone-screen.dark-mode #fanfic-preference-bar select {
@@ -33680,6 +33720,6 @@ select,
   font-weight: 600;
 }
 
-n, a:empty {
+n {
   display: none !important;
 }

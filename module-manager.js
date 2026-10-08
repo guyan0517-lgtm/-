@@ -2021,14 +2021,7 @@
         userInstruction: ''
       });
 
-      const mapNodes = [
-        { name: `${moduleName}主地域`, parent: '', level: 1, desc: '模组主要发生的大型地域环境' },
-        { name: '核心建筑群', parent: `${moduleName}主地域`, level: 2, desc: '调查活动集中展开的建筑区域' },
-        { name: '主要厅堂', parent: '核心建筑群', level: 3, desc: '' },
-        { name: '正厅走廊', parent: '核心建筑群', level: 3, desc: '' },
-        { name: '侧室与庭院', parent: '核心建筑群', level: 3, desc: '' },
-        { name: '后院秘道', parent: '核心建筑群', level: 3, desc: '' }
-      ];
+      const mapNodes = [];
 
       return {
         moduleType: isSandbox ? '沙盒' : '线性',
@@ -4351,21 +4344,9 @@ ${chap.content}
           }
         }
 
-        // 若仍为空，生成默认初始层级结构确保非空
+        // 若仍为空，保持干净不生成生硬的默认占位地点
         if (dbLocations.length === 0) {
-          const fallbackNodes = [
-            { moduleId: mod.id, name: `${mod.name}大区域`, parent: '', level: 1, desc: mod.summary || '主区域环境与主线背景', prompt: '', imageUrl: '', imageStatus: 'idle' },
-            { moduleId: mod.id, name: '核心建筑群', parent: `${mod.name}大区域`, level: 2, desc: '主要探索线索集中区域', prompt: '', imageUrl: '', imageStatus: 'idle' },
-            { moduleId: mod.id, name: '正厅走廊', parent: '核心建筑群', level: 3, desc: '', prompt: '', imageUrl: '', imageStatus: 'idle' },
-            { moduleId: mod.id, name: '侧室庭院', parent: '核心建筑群', level: 3, desc: '', prompt: '', imageUrl: '', imageStatus: 'idle' }
-          ];
-          for (const item of fallbackNodes) {
-            if (dbInstance.moduleLocationNav) {
-              const id = await dbInstance.moduleLocationNav.add(item);
-              item.id = id;
-            }
-            dbLocations.push(item);
-          }
+          // 不强制插入预设占位地点，保持地图清爽
         }
 
         // 同步更新 mod.mapNodes 供其他组件读取

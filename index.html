@@ -8340,9 +8340,16 @@
               <span>使用模组</span>
             </label>
           </div>
-          <div id="chat-map-footer-btns-row" style="display: flex; align-items: center; gap: 5px; width: 100%;">
+          <div id="chat-map-footer-btns-row" style="display: flex; align-items: center; gap: 5px; width: 100%; position: relative;">
             <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-view-toggle-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">图文</button>
-            <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-write-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">编写</button>
+            <div style="position: relative; flex: 1; min-width: 0; display: flex;">
+              <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-write-btn" style="width: 100%; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">编写</button>
+              <div id="chat-map-write-menu" style="display: none; position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%); background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); z-index: 100010; flex-direction: column; min-width: 60px; padding: 4px; gap: 4px;">
+                <button type="button" id="chat-map-write-option-map" class="chat-mod-footer-btn secondary" style="width: 100%; height: 26px; font-size: 11px; padding: 0 6px; white-space: nowrap; border: none; background: transparent; text-align: center; cursor: pointer;">地图</button>
+                <div style="height: 1px; background: var(--border-color); width: 100%;"></div>
+                <button type="button" id="chat-map-write-option-prompt" class="chat-mod-footer-btn secondary" style="width: 100%; height: 26px; font-size: 11px; padding: 0 6px; white-space: nowrap; border: none; background: transparent; text-align: center; cursor: pointer;">词条</button>
+              </div>
+            </div>
             <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-draw-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">绘制</button>
             <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-compress-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">压缩</button>
             <button type="button" class="chat-mod-footer-btn secondary" id="chat-map-clear-btn" style="flex: 1; min-width: 0; height: 30px; font-size: 11px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">清除</button>
@@ -9395,6 +9402,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
             <label style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin: 0;">词条</label>
             <textarea id="avatar-gen-prompt-input" class="moe-input" rows="3" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4; border-radius: 10px; padding: 8px 10px; color: var(--text-primary); background: var(--card-bg); border: 1px solid var(--border-color); resize: vertical; box-shadow: none;" placeholder="生成或输入英文生图词条"></textarea>
+          </div>
+
+          <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin: 0;">默认</label>
+            <textarea id="avatar-gen-default-prompt-input" class="moe-input" rows="2" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4; border-radius: 10px; padding: 8px 10px; color: var(--text-primary); background: var(--card-bg); border: 1px solid var(--border-color); resize: vertical; box-shadow: none;" placeholder="默认提示词，可保留或修改"></textarea>
           </div>
 
           <div style="display: flex; justify-content: center; align-items: center; width: 100%;">
@@ -10608,14 +10620,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <!-- 2. 可折叠的内容区域 -->
         <div id="fanfic-bar-content">
           <!-- 预设管理 -->
-          <div class="fanfic-row presets-row">
-            <select id="fanfic-preset-select">
-              <option value="">-- 读取配置 --</option>
+          <div class="fanfic-row presets-row" style="display: flex; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; margin-bottom: 8px;">
+            <select id="fanfic-preset-select" class="moe-input" style="flex: 1 1 auto; min-width: 0; height: 32px; padding: 2px 8px; font-size: 12px; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;">
+              <option value="">-- 选择预设 --</option>
             </select>
-            <button id="save-fanfic-preset-btn" class="mini-btn">保存</button>
-            <button id="delete-fanfic-preset-btn" class="mini-btn danger">
+            <button type="button" id="save-fanfic-preset-btn" class="mini-btn" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; flex-shrink: 0;">保存</button>
+            <button type="button" id="new-fanfic-preset-btn" class="mini-btn" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; background: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color); flex-shrink: 0;">新建</button>
+            <button type="button" id="delete-fanfic-preset-btn" class="mini-btn danger" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; flex-shrink: 0;">
               删除
             </button>
+          </div>
+
+          <!-- 书名要求 -->
+          <div class="fanfic-row full-width" style="margin-bottom: 8px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; display: block;">书名要求</label>
+            <input
+              type="text"
+              id="fanfic-title-prompt-input"
+              class="moe-input"
+              style="width: 100%; height: 32px; font-size: 12px; border-radius: 8px; padding: 4px 10px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;"
+              placeholder="书名必须结合主角身份与情景独创，二至六字"
+            />
           </div>
 
           <!-- CP 选择 -->
@@ -10705,10 +10730,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <span class="back-btn" id="back-from-forum-bookshelf"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
         <span>圈子书架</span>
       </div>
+      <div style="padding: 10px 16px 0 16px;">
+        <div class="form-group" style="margin: 0; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin: 0;">书名</label>
+            <button type="button" id="save-bookshelf-title-prompt-btn" class="moe-btn" style="height: 26px; padding: 0 12px; font-size: 12px; border-radius: 6px; background: var(--accent-color); color: #ffffff; border: none; cursor: pointer; flex-shrink: 0;">保存</button>
+          </div>
+          <textarea id="bookshelf-title-prompt-input" class="moe-input" rows="2" style="width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.4; border-radius: 8px; padding: 8px 10px; color: var(--text-primary); background: var(--secondary-bg); border: 1px solid var(--border-color); resize: vertical;" placeholder="设置默认书籍名称提示词"></textarea>
+        </div>
+      </div>
       <div
         id="forum-bookshelf-list"
         class="list-container forum-bookshelf-list"
-        style="padding-top: 0"
+        style="padding-top: 8px"
       >
         <!-- 追更的长篇会在这里展示 -->
       </div>
@@ -19620,12 +19654,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
+        const cleanModel = String(model || "gemini-1.5-flash").replace(/^models\//i, "").trim();
+
         // --- 4. 组装请求体 ---
         const body = {
           contents: contents,
           generationConfig: {
             temperature: parseFloat(temperature) || 0.8,
           },
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+          ]
         };
 
         // 只有当 systemInstruction 不为空时才添加该字段
@@ -19636,9 +19678,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         return {
-          url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${getRandomValue(
+          url: `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${String(getRandomValue(
             apiKey,
-          )}`,
+          ) || "").trim()}`,
           data: {
             method: "POST",
             headers: {
@@ -30698,58 +30740,54 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (e) {}
             }
 
-            // 过滤 <n> 与 <a> 标签及其包裹的内容，渲染为隐藏样式（不显示内容）
-            rawContentText = rawContentText
-              .replace(/<n\b[\s\S]*?<\/n>/gi, "")
-              .replace(/<n[\s\S]*?>/gi, "")
-              .replace(/<a\b[\s\S]*?<\/a>/gi, "")
-              .replace(/<a[\s\S]*?>/gi, "");
-
             // 剥离 Markdown 代码块包裹（如 ```html ... ```）
             if (/```(?:html)?[\s\S]*?```/i.test(rawContentText)) {
               const codeBlockMatch = rawContentText.match(/```(?:html)?\s*([\s\S]*?)\s*```/i);
               if (codeBlockMatch && codeBlockMatch[1]) {
                 const innerCode = codeBlockMatch[1].trim();
-                if (/^<(?:div|section|table|article|main|style|svg)\b[\s\S]*<\/(?:div|section|table|article|main|style|svg)>\s*$/i.test(innerCode)) {
+                if (/^<[\s\S]*>\s*$/i.test(innerCode)) {
                   rawContentText = innerCode;
                 }
               }
             }
 
-            // 判断是否是真正的完整结构化 HTML 卡片（如线索卡、独立卡片），普通文本中的 <...> 或 <> 绝不当作 HTML 卡片
-            const isFullHtmlCard = msg.type === "clue_html" || msg.isHtmlCard === true || (/^<(?:div|section|table|article|main|svg)\b[\s\S]*<\/(?:div|section|table|article|main|svg)>\s*$/i.test(rawContentText.trim()) && (rawContentText.includes("class=") || rawContentText.includes("style=")));
+            let formattedText = rawContentText;
+
+            if (formattedText.includes("【图") || formattedText.includes("[图")) {
+              formattedText = formattedText.replace(/(?:【|\[)图\s*(\d+)(?:[：:][^】\]]*)?(?:】|\])/g, (match, p1) => {
+                const imgNum = parseInt(p1, 10);
+                return `<div class="chat-module-img-slot" data-mod-id="${chat.activeModuleId || ''}" data-img-idx="${imgNum}"></div>`;
+              });
+            }
+
+            if (/(?:\[?地点\]?)[：:]/i.test(formattedText)) {
+              formattedText = formattedText.replace(/((?:\[?地点\]?)[：:]\s*)([^\n\r&<]+)/g, (match, p1, p2) => {
+                const locText = p2.trim();
+                if (!locText || locText === "未知") return match;
+                const parts = locText.split("-");
+                const wrappedParts = parts.map(part => {
+                  const trimmed = part.trim();
+                  return `<span class="chat-location-clickable" data-loc-name="${trimmed}">${trimmed}</span>`;
+                });
+                return `${p1}${wrappedParts.join("-")}`;
+              });
+            }
+
+            // 判断是否是独立卡片（如外层自带背景的结构化卡片），如果不是独立卡片，保持正常气泡背景
+            const isFullHtmlCard = msg.type === "clue_html" || msg.isHtmlCard === true || (/^<(?:div|section|table|article|main|svg)\b[\s\S]*<\/(?:div|section|table|article|main|svg)>\s*$/i.test(formattedText.trim()) && (formattedText.includes("class=") || formattedText.includes("style=")));
 
             if (isFullHtmlCard) {
               bubble.classList.add("is-html-card");
-              contentHtml = rawContentText + (msg.htmlContent ? `${msg.htmlContent}` : "");
+            }
+
+            // 如果包含 HTML 标签（如 blockquote, b, br, div, n, a 等），直接渲染为 HTML；若纯文本换行则转为 <br>
+            if (/<[a-zA-Z][\s\S]*>/i.test(formattedText)) {
+              if (!/<(?:br|p|div|table|blockquote|section|ul|ol|li)\b/i.test(formattedText)) {
+                formattedText = formattedText.replace(/\n/g, "<br>");
+              }
+              contentHtml = formattedText + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
             } else {
-              // 普通文本：先进行 HTML 字符安全转义，防止 <> 或 <标签> 被浏览器当成非法节点吞掉或导致气泡透明
-              let safeText = rawContentText
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;");
-
-              if (safeText.includes("【图") || safeText.includes("[图")) {
-                safeText = safeText.replace(/(?:【|\[)图\s*(\d+)(?:[：:][^】\]]*)?(?:】|\])/g, (match, p1) => {
-                  const imgNum = parseInt(p1, 10);
-                  return `<div class="chat-module-img-slot" data-mod-id="${chat.activeModuleId || ''}" data-img-idx="${imgNum}"></div>`;
-                });
-              }
-
-              if (/(?:\[?地点\]?)[：:]/i.test(safeText)) {
-                safeText = safeText.replace(/((?:\[?地点\]?)[：:]\s*)([^\n\r&<]+)/g, (match, p1, p2) => {
-                  const locText = p2.trim();
-                  if (!locText || locText === "未知") return match;
-                  const parts = locText.split("-");
-                  const wrappedParts = parts.map(part => {
-                    const trimmed = part.trim();
-                    return `<span class="chat-location-clickable" data-loc-name="${trimmed}">${trimmed}</span>`;
-                  });
-                  return `${p1}${wrappedParts.join("-")}`;
-                });
-              }
-
-              contentHtml = safeText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
+              contentHtml = formattedText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
             }
           }
 
@@ -30796,7 +30834,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             thinkingHtml = "";
             bubble.classList.remove("has-image", "is-realimag", "is-card-like", "is-sticker", "is-red-packet", "is-ls-disconnect", "is-ls-diary-notification", "is-waimai-request");
           } else if (!contentHtml.trim() && !quoteHtml && !msg.imageUrl && !msg.image && !msg.payload && !bubble.classList.contains("is-link-share") && !bubble.classList.contains("is-dating-summary") && !bubble.classList.contains("is-sticker") && !bubble.classList.contains("has-image") && !bubble.classList.contains("is-realimag") && !bubble.classList.contains("is-gift-notification")) {
-            return null;
+            contentHtml = "<span></span>";
           }
 
           // 2. 拼接最终的气泡内容
@@ -31177,10 +31215,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (heartBtn) {
             heartBtn.style.display = chat.isGroup ? "none" : "inline-flex";
           }
-          // 【群聊好感度按钮】群聊显示，单聊隐藏
+          // 【群聊好感度按钮】群聊仅保留右上角入口，底部入口在群聊时隐藏
           const groupAffectionBtn = document.getElementById("group-affection-btn");
           if (groupAffectionBtn) {
             groupAffectionBtn.style.display = chat.isGroup ? "inline-flex" : "none";
+          }
+          const chatAffectionBottomBtn = document.getElementById("chat-affection-bottom-btn");
+          if (chatAffectionBottomBtn) {
+            chatAffectionBottomBtn.style.display = chat.isGroup ? "none" : "inline-flex";
           }
 
           // 【战斗入口按钮与顶部栏】单聊隐藏，群聊显示
@@ -31269,88 +31311,227 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           {
             id: "weather_temperate",
             name: "温带气候",
+            seasons: {
+              "春季": [
+                { name: "晴天", rate: 35, note: "春光明媚，微风和煦，万物复苏" },
+                { name: "多云", rate: 25, note: "春云淡淡，微风习习，舒适宜人" },
+                { name: "小雨", rate: 20, note: "细雨绵绵，滋润大地，空气湿润" },
+                { name: "微风", rate: 15, note: "杨柳轻拂，暖意融融" },
+                { name: "雷阵雨", rate: 5, note: "春雷乍响，短时阵雨" }
+              ],
+              "夏季": [
+                { name: "晴朗酷热", rate: 40, note: "烈日高照，骄阳似火，气温炎热" },
+                { name: "雷阵雨", rate: 25, note: "午后骤起暴雨，电闪雷鸣，阵风强劲" },
+                { name: "多云闷热", rate: 20, note: "云层厚重，气压较低，体感闷热" },
+                { name: "大雨", rate: 15, note: "大雨滂沱，水汽漫漫，道路积水" }
+              ],
+              "秋季": [
+                { name: "秋高气爽", rate: 40, note: "天高云淡，凉风送爽，体感极佳" },
+                { name: "阴天", rate: 25, note: "天色阴沉，落叶缤纷，凉意渐浓" },
+                { name: "小雨", rate: 20, note: "秋雨连绵，夜凉如水，泥土湿润" },
+                { name: "大风", rate: 15, note: "秋风瑟瑟，树影摇曳，气温明显走低" }
+              ],
+              "冬季": [
+                { name: "晴冷", rate: 35, note: "天空湛蓝，寒风刺骨，阳光清冷" },
+                { name: "小雪", rate: 25, note: "雪花飘洒，轻盈落地，草木覆霜" },
+                { name: "阴沉大风", rate: 20, note: "天寒地冻，冷风呼啸，极度阴凉" },
+                { name: "大雪", rate: 15, note: "漫天飞雪，银装素裹，积雪深厚" },
+                { name: "冻雨", rate: 5, note: "冰冷雨丝落地成冰，地面极滑" }
+              ]
+            },
             items: [
-              { name: "晴朗", season: "春", note: "春风送暖，阳光明媚，微风和煦" },
-              { name: "微雨", season: "春", note: "细雨朦朦，草木清新，空气湿润" },
-              { name: "多云", season: "春", note: "云层舒缓，微风轻拂，气温适中" },
-              { name: "晨雾", season: "春", note: "薄雾缭绕，空气微凉，能见度略低" },
-              { name: "烈日", season: "夏", note: "夏日炎炎，阳光炽烈，体感温热" },
-              { name: "雷阵雨", season: "夏", note: "乌云密布，雷声隆隆，暴雨倾盆" },
-              { name: "晴热", season: "夏", note: "晴空无云，蝉鸣阵阵，空气闷热" },
-              { name: "阴天", season: "夏", note: "厚云遮日，稍有凉风，偶有闷雷" },
-              { name: "秋高气爽", season: "秋", note: "天空湛蓝，凉风习习，视野开阔" },
-              { name: "连绵阴雨", season: "秋", note: "细雨连绵，落叶纷飞，气温渐凉" },
-              { name: "多云微风", season: "秋", note: "白云朵朵，清风徐徐，舒适宜人" },
-              { name: "霜降晨凉", season: "秋", note: "晨霜微白，寒气初现，草木结露" },
-              { name: "晴冷", season: "冬", note: "冬阳微温，寒风阵阵，冷意扑面" },
-              { name: "漫天飞雪", season: "冬", note: "白雪皑皑，银装素裹，气温严寒" },
-              { name: "阴冷冬日", season: "冬", note: "铅云低垂，寒风刺骨，哈气成霜" },
-              { name: "初雪", season: "冬", note: "小雪纷扬，地面初白，清冷宁静" }
+              { name: "晴天", rate: 35, season: "春季", note: "春光明媚，微风和煦，万物复苏" },
+              { name: "多云", rate: 25, season: "春季", note: "春云淡淡，微风习习，舒适宜人" },
+              { name: "小雨", rate: 20, season: "春季", note: "细雨绵绵，滋润大地，空气湿润" },
+              { name: "晴朗酷热", rate: 40, season: "夏季", note: "烈日高照，骄阳似火，气温炎热" },
+              { name: "雷阵雨", rate: 25, season: "夏季", note: "午后骤起暴雨，电闪雷鸣，阵风强劲" },
+              { name: "秋高气爽", rate: 40, season: "秋季", note: "天高云淡，凉风送爽，体感极佳" },
+              { name: "阴天", rate: 25, season: "秋季", note: "天色阴沉，落叶缤纷，凉意渐浓" },
+              { name: "晴冷", rate: 35, season: "冬季", note: "天空湛蓝，寒风刺骨，阳光清冷" },
+              { name: "小雪", rate: 25, season: "冬季", note: "雪花飘洒，轻盈落地，草木覆霜" },
+              { name: "大雪", rate: 15, season: "冬季", note: "漫天飞雪，银装素裹，积雪深厚" }
             ]
           },
           {
             id: "weather_tropical",
             name: "热带气候",
+            seasons: {
+              "春季": [
+                { name: "晴朗温暖", rate: 45, note: "日光明媚，海风轻拂，温暖明朗" },
+                { name: "阵雨", rate: 30, note: "短时热带阵雨，很快雨过天晴" },
+                { name: "多云", rate: 25, note: "云絮散落，气候温润" }
+              ],
+              "夏季": [
+                { name: "艳阳高照", rate: 40, note: "烈日炎炎，气温极高，闷热难耐" },
+                { name: "热带暴雨", rate: 30, note: "午后骤起倾盆大雨，雨势凶猛，水汽弥漫" },
+                { name: "湿热多云", rate: 20, note: "云层厚重，空气湿度极高，体感黏热" },
+                { name: "台风大风", rate: 10, note: "强风肆虐，暴雨交加，海浪汹涌" }
+              ],
+              "秋季": [
+                { name: "晴朗微热", rate: 45, note: "阳光充沛，体感微热，微风送爽" },
+                { name: "骤雨", rate: 35, note: "午后局部降雨，稍带凉意" },
+                { name: "多云", rate: 20, note: "云霞绚丽，海风和煦" }
+              ],
+              "冬季": [
+                { name: "和煦晴天", rate: 55, note: "阳光柔和，微风不燥，温度最为舒适" },
+                { name: "多云凉爽", rate: 30, note: "云层适中，清晨微凉，舒适惬意" },
+                { name: "小雨", rate: 15, note: "细雨飘过，空气清新怡人" }
+              ]
+            },
             items: [
-              { name: "热带烈日", season: "旱", note: "阳光炽烈耀眼，紫外线强烈" },
-              { name: "干燥微风", season: "旱", note: "空气干燥，微风温热" },
-              { name: "热带暴雨", season: "雨", note: "倾盆大雨，雷鸣电闪，水汽弥漫" },
-              { name: "闷热潮湿", season: "雨", note: "空气极度潮湿，闷热难耐" }
+              { name: "艳阳高照", rate: 40, season: "夏季", note: "烈日炎炎，气温极高，闷热难耐" },
+              { name: "热带暴雨", rate: 30, season: "夏季", note: "午后骤起倾盆大雨，雨势凶猛，水汽弥漫" },
+              { name: "湿热多云", rate: 20, season: "夏季", note: "云层厚重，空气湿度极高，体感黏热" },
+              { name: "晴朗温暖", rate: 45, season: "春季", note: "日光明媚，海风轻拂，温暖明朗" },
+              { name: "和煦晴天", rate: 55, season: "冬季", note: "阳光柔和，微风不燥，温度最为舒适" }
             ]
           },
           {
             id: "weather_frigid",
             name: "寒带气候",
+            seasons: {
+              "春季": [
+                { name: "初融晴冷", rate: 40, note: "积雪初融，阳光清冽但寒气逼人" },
+                { name: "小雪", rate: 30, note: "春雪纷飞，料峭微寒" },
+                { name: "阴冷大风", rate: 30, note: "寒风呼啸，气温仍然在冰点以下" }
+              ],
+              "夏季": [
+                { name: "极昼凉晴", rate: 45, note: "极地阳光普照，微风清爽，短暂宜人" },
+                { name: "多云阴凉", rate: 35, note: "薄雾笼罩，体感微冷" },
+                { name: "冷雨", rate: 20, note: "冰冷细雨，带着刺骨寒意" }
+              ],
+              "秋季": [
+                { name: "早雪", rate: 40, note: "初冬早雪降临，大地转白" },
+                { name: "晴冷大风", rate: 35, note: "狂风卷着寒流，冰冷刺骨" },
+                { name: "阴沉结冰", rate: 25, note: "地面结冰，冷气凝结" }
+              ],
+              "冬季": [
+                { name: "暴风雪", rate: 35, note: "大雪纷飞，狂风卷雪，能见度极低，极度严寒" },
+                { name: "极夜晴冷", rate: 25, note: "天色幽暗，极地严寒，滴水成冰" },
+                { name: "小雪", rate: 20, note: "轻雪飘落，寒风料峭，积雪皑皑" },
+                { name: "阴沉大风", rate: 15, note: "极地寒风呼啸，体感极冷" },
+                { name: "冻雨", rate: 5, note: "冰冷雨丝接触地面即凝结成冰，道路极滑" }
+              ]
+            },
             items: [
-              { name: "极寒暴雪", season: "冬", note: "暴风雪肆虐，能见度极低，极度严寒" },
-              { name: "极光夜空", season: "冬", note: "极夜幽暗，绚丽极光，寒冷刺骨" },
-              { name: "清冷晴空", season: "夏", note: "阳光微弱，冰雪反射，空气清冷" },
-              { name: "苔原微风", season: "夏", note: "气温微升，苔原初显，寒风犹存" }
+              { name: "暴风雪", rate: 35, season: "冬季", note: "大雪纷飞，狂风卷雪，能见度极低，极度严寒" },
+              { name: "小雪", rate: 25, season: "冬季", note: "轻雪飘落，寒风料峭，积雪皑皑" },
+              { name: "初融晴冷", rate: 40, season: "春季", note: "积雪初融，阳光清冽但寒气逼人" },
+              { name: "极昼凉晴", rate: 45, season: "夏季", note: "极地阳光普照，微风清爽，短暂宜人" },
+              { name: "早雪", rate: 40, season: "秋季", note: "初冬早雪降临，大地转白" }
             ]
           }
         ];
 
+        function normalizeWeatherPoolInternal(pool) {
+          if (!pool) return pool;
+          const defaultList = [
+            { name: "晴天", rate: 40, note: "阳光明媚，视野开阔" },
+            { name: "多云", rate: 35, note: "云层微厚，体感舒适" },
+            { name: "小雨", rate: 25, note: "细雨绵绵，空气湿润" }
+          ];
+          if (!pool.seasons || typeof pool.seasons !== "object") {
+            pool.seasons = {
+              "春季": JSON.parse(JSON.stringify(defaultList)),
+              "夏季": JSON.parse(JSON.stringify(defaultList)),
+              "秋季": JSON.parse(JSON.stringify(defaultList)),
+              "冬季": JSON.parse(JSON.stringify(defaultList))
+            };
+          } else {
+            ["春季", "夏季", "秋季", "冬季"].forEach(s => {
+              if (!Array.isArray(pool.seasons[s]) || pool.seasons[s].length === 0) {
+                pool.seasons[s] = JSON.parse(JSON.stringify(defaultList));
+              }
+              pool.seasons[s].forEach(item => {
+                if (typeof item.rate === "undefined" || isNaN(parseFloat(item.rate))) {
+                  item.rate = 25;
+                }
+              });
+            });
+          }
+          if (!Array.isArray(pool.items) || pool.items.length === 0) {
+            pool.items = [];
+            ["春季", "夏季", "秋季", "冬季"].forEach(s => {
+              (pool.seasons[s] || []).forEach(it => {
+                pool.items.push({ ...it, season: s });
+              });
+            });
+          }
+          return pool;
+        }
+
         function getStoredWeatherPools() {
           try {
-            const raw = localStorage.getItem("system_weather_pools");
+            const raw = localStorage.getItem("coc_weather_pools") || localStorage.getItem("system_weather_pools");
             if (raw) {
               const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed.map(normalizeWeatherPoolInternal);
+              }
             }
           } catch (e) {
             console.warn("读取天气池异常:", e);
           }
-          return DEFAULT_WEATHER_POOLS;
+          return JSON.parse(JSON.stringify(DEFAULT_WEATHER_POOLS)).map(normalizeWeatherPoolInternal);
         }
         window.getStoredWeatherPools = getStoredWeatherPools;
 
-        function drawWeatherFromCurrentPool(month, poolName) {
+        function getSeasonNameByMonth(month) {
+          const m = parseInt(month, 10) || 1;
+          if (m >= 3 && m <= 5) return "春季";
+          if (m >= 6 && m <= 8) return "夏季";
+          if (m >= 9 && m <= 11) return "秋季";
+          return "冬季";
+        }
+        window.getSeasonNameByMonth = getSeasonNameByMonth;
+
+        function drawWeatherFromCurrentPool(seasonOrMonth, poolNameOrId) {
           const pools = getStoredWeatherPools();
-          const pool = pools.find(p => p.name === poolName || p.id === poolName) || pools[0];
-          if (!pool || !Array.isArray(pool.items) || pool.items.length === 0) {
-            return { name: "晴朗", note: "温和宜人，阳光明媚，视野开阔" };
+          let pool = null;
+          if (poolNameOrId) {
+            pool = pools.find(p => p.name === poolNameOrId || p.id === poolNameOrId);
+          }
+          if (!pool) {
+            const activeId = localStorage.getItem("coc_active_weather_pool_id");
+            if (activeId) pool = pools.find(p => p.id === activeId);
+          }
+          if (!pool) pool = pools[0];
+          normalizeWeatherPoolInternal(pool);
+
+          let seasonName = "春季";
+          if (typeof seasonOrMonth === "number" || (!isNaN(parseInt(seasonOrMonth)) && !String(seasonOrMonth).includes("季"))) {
+            seasonName = getSeasonNameByMonth(seasonOrMonth);
+          } else if (typeof seasonOrMonth === "string") {
+            const s = seasonOrMonth.trim();
+            if (s === "春" || s === "春季") seasonName = "春季";
+            else if (s === "夏" || s === "夏季") seasonName = "夏季";
+            else if (s === "秋" || s === "秋季") seasonName = "秋季";
+            else if (s === "冬" || s === "冬季") seasonName = "冬季";
+            else seasonName = getSeasonNameByMonth(new Date().getMonth() + 1);
+          } else {
+            seasonName = getSeasonNameByMonth(new Date().getMonth() + 1);
           }
 
-          const m = parseInt(month, 10) || (new Date().getMonth() + 1);
-          let season = "春";
-          if (m >= 3 && m <= 5) season = "春";
-          else if (m >= 6 && m <= 8) season = "夏";
-          else if (m >= 9 && m <= 11) season = "秋";
-          else season = "冬";
+          const items = (pool.seasons && Array.isArray(pool.seasons[seasonName]) && pool.seasons[seasonName].length > 0)
+            ? pool.seasons[seasonName]
+            : (Array.isArray(pool.items) && pool.items.length > 0 ? pool.items : [{ name: "晴天", rate: 100, note: "温和宜人" }]);
 
-          let matched = pool.items.filter(it => it.season === season);
-          if (matched.length === 0) {
-            if (pool.name === "热带气候") {
-              const isRainy = (m >= 5 && m <= 10);
-              matched = pool.items.filter(it => it.season === (isRainy ? "雨" : "旱"));
+          const totalRate = items.reduce((sum, item) => sum + (parseFloat(item.rate) || 0), 0);
+          if (totalRate <= 0) {
+            const picked = items[0];
+            return { name: picked.name, rate: picked.rate || 100, note: picked.note || "", season: seasonName, poolName: pool.name };
+          }
+
+          let rand = Math.random() * totalRate;
+          for (const item of items) {
+            const r = parseFloat(item.rate) || 0;
+            if (rand < r) {
+              return { name: item.name, rate: item.rate, note: item.note || "", season: seasonName, poolName: pool.name };
             }
+            rand -= r;
           }
-          if (matched.length === 0) {
-            matched = pool.items;
-          }
-
-          const picked = matched[Math.floor(Math.random() * matched.length)] || pool.items[0];
-          return { name: picked.name, note: picked.note || picked.desc || "" };
+          const last = items[items.length - 1];
+          return { name: last.name, rate: last.rate, note: last.note || "", season: seasonName, poolName: pool.name };
         }
         window.drawWeatherFromCurrentPool = drawWeatherFromCurrentPool;
 
@@ -32270,13 +32451,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               });
               parsedLocs = Array.from(resultMap.values());
             } else {
-              const charName = chat.name || "剧情世界";
-              parsedLocs = [
-                { id: "ctx_loc_1", name: `${charName}所在区域`, parent: "", level: 1, desc: "当前角色核心活动的常驻大地图" },
-                { id: "ctx_loc_2", name: "中央会客厅", parent: `${charName}所在区域`, level: 2, desc: "日常交谈与接见的重要区域" },
-                { id: "ctx_loc_3", name: "静谧书斋", parent: `${charName}所在区域`, level: 2, desc: "存放文献与记录的私密书房" },
-                { id: "ctx_loc_4", name: "临街花厅", parent: `${charName}所在区域`, level: 2, desc: "连接各处居室的安静庭院" }
-              ];
+              parsedLocs = [];
             }
           }
 
@@ -32478,8 +32653,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
+          const writeMenu = document.getElementById("chat-map-write-menu");
+          const writeOptionMap = document.getElementById("chat-map-write-option-map");
+          const writeOptionPrompt = document.getElementById("chat-map-write-option-prompt");
+
           if (writeBtn) {
-            writeBtn.onclick = async () => {
+            writeBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (writeMenu) {
+                writeMenu.style.display = (writeMenu.style.display === "flex") ? "none" : "flex";
+              }
+            };
+          }
+
+          document.addEventListener("click", (e) => {
+            if (writeMenu && !e.target.closest("#chat-map-write-menu") && e.target !== writeBtn) {
+              writeMenu.style.display = "none";
+            }
+          });
+
+          if (writeOptionMap) {
+            writeOptionMap.onclick = async () => {
+              if (writeMenu) writeMenu.style.display = "none";
               if (typeof window.showCustomAlert === "function") {
                 window.showCustomAlert("编写地图", "正在根据上下文分析地点并编写文字地图");
               }
@@ -32494,6 +32689,113 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (typeof window.showCustomAlert === "function") {
                   window.showCustomAlert("编写失败", err.message || String(err));
                 }
+              }
+            };
+          }
+
+          if (writeOptionPrompt) {
+            writeOptionPrompt.onclick = async () => {
+              if (writeMenu) writeMenu.style.display = "none";
+              const locations = await getAllChatLocations(chat);
+              if (locations.length === 0) {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "当前地图暂无可注入提示词的地点，请先编写地图");
+                }
+                return;
+              }
+
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("编写词条", `正在为 ${locations.length} 个地点批量生成生图提示词`);
+              }
+
+              const apiCfg = (typeof getEffectiveApiConfig === "function") ? getEffectiveApiConfig("draw") : (state.apiConfig || {});
+              const { proxyUrl, apiKey, model } = apiCfg;
+              const isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
+              const effectiveKey = typeof getRandomValue === "function" ? getRandomValue(apiKey) : (apiKey ? apiKey.split(",")[0].trim() : "");
+
+              const batchSize = 10;
+              for (let i = 0; i < locations.length; i += batchSize) {
+                const chunk = locations.slice(i, i + batchSize);
+                const locNames = chunk.map(l => `- 地点名称：${l.name}，简介：${l.desc || '无'}`).join("\n");
+                const systemPrompt = "你是一位跑团唯美插画提示词专家。请根据地点名称和描述，为各地点编写高质量NovelAI场景绘图英文提示词。只输出合法JSON数组。";
+                const userPrompt = `地点列表：\n${locNames}\n\n格式要求：只输出JSON数组，格式如下：\n[{"name": "地点名称", "prompt": "masterpiece, scenery, highly detailed, landscape, ..."}, ...]`;
+
+                try {
+                  let resText = "";
+                  if (isGemini) {
+                    const cleanModel = String(model || "gemini-1.5-flash").replace(/^models\//i, "").trim();
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${effectiveKey}`;
+                    const res = await fetch(url, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }]
+                      })
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      resText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                    }
+                  } else {
+                    const reqUrl = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "").endsWith("/v1") ? `${proxyUrl}/chat/completions` : `${proxyUrl}/v1/chat/completions`;
+                    const res = await fetch(reqUrl, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json", Authorization: `Bearer ${effectiveKey}` },
+                      body: JSON.stringify({
+                        model: (model || "gpt-3.5-turbo").replace(/^models\//i, "").trim(),
+                        messages: [
+                          { role: "system", content: systemPrompt },
+                          { role: "user", content: userPrompt }
+                        ]
+                      })
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      resText = data?.choices?.[0]?.message?.content || "";
+                    }
+                  }
+
+                  if (resText) {
+                    const cleanJson = resText.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+                    const startIdx = cleanJson.indexOf("[");
+                    const endIdx = cleanJson.lastIndexOf("]");
+                    if (startIdx !== -1 && endIdx !== -1) {
+                      const arr = JSON.parse(cleanJson.substring(startIdx, endIdx + 1));
+                      for (const item of arr) {
+                        const target = chunk.find(c => c.name === item.name);
+                        if (target && item.prompt) {
+                          target.prompt = item.prompt;
+                          if (target.isTemp && chat.settings && Array.isArray(chat.settings.temporaryLocations)) {
+                            const tNode = chat.settings.temporaryLocations.find(n => n.id === target.id || n.name === target.name);
+                            if (tNode) tNode.prompt = item.prompt;
+                          } else if (chat.settings && Array.isArray(chat.settings.contextMapData)) {
+                            const cNode = chat.settings.contextMapData.find(n => n.id === target.id || n.name === target.name);
+                            if (cNode) cNode.prompt = item.prompt;
+                          }
+                          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                          if (dbInstance && dbInstance.moduleLocationNav && target.id && !target.isTemp) {
+                            try {
+                              const navRec = await dbInstance.moduleLocationNav.get(target.id);
+                              if (navRec) {
+                                navRec.prompt = item.prompt;
+                                await dbInstance.moduleLocationNav.put(navRec);
+                              }
+                            } catch(e) {}
+                          }
+                        }
+                      }
+                    }
+                  }
+                } catch(e) {
+                  console.error("生成地点提示词失败:", e);
+                }
+              }
+
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+              await renderChatMapList();
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("完成", "地点提示词已注入完成，点击旁边的绘制即可逐一生图");
               }
             };
           }
@@ -32901,13 +33203,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   isTemp: false,
                 });
               });
-            } else {
-              const defaultLocs = [
-                { id: "ctx_1", name: "中央广场", parent: "", level: 1, desc: "城镇的核心区域与探索出发点", prompt: "central square, bustling fantasy town", imageUrl: "" },
-                { id: "ctx_2", name: "旧钟楼", parent: "中央广场", level: 2, desc: "俯瞰全景的古老机械时钟", prompt: "ancient mechanical clocktower, stone architecture", imageUrl: "" },
-                { id: "ctx_3", name: "静谧小巷", parent: "中央广场", level: 2, desc: "连接各个场所的安静石板道", prompt: "quiet cobblestone alleyway, peaceful fantasy street", imageUrl: "" }
-              ];
-              locations.push(...defaultLocs);
             }
           }
 
@@ -34218,7 +34513,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const globalReqInstruction = globalReq ? `\n【用户全局要求】：\n${globalReq}\n` : "";
 
           const prompt = `你拥有全球顶尖、令人叹为观止的资深矢量概念插画与示意地图设计大师造诣。请极尽你的极限，拿出你最深厚的艺术功底，根据以下地点清单、模组图库插图与世界观环境，绘制一张构图极度丰富饱满、充满探索氛围与艺术美感的【${styleName}】风格全矢量示意小地图（纯SVG代码）！\n\n` +
-            `地点层级与设定清单：\n${locSummary || '地点：中央广场、旧钟楼、静谧小巷、圣辉神殿'}\n\n` +
+            `地点层级与设定清单：\n${locSummary || '暂无地点'}\n\n` +
             `模组图库插图与环境数据：\n${gallerySummary || '暂无额外图库插图'}\n` +
             adaptiveInstruction +
             defaultStyleInstruction +
@@ -34595,7 +34890,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const persona = targetObj.settings?.aiPersona || targetObj.personality || "你是一个系统状态栏角色，负责记录当前剧情的客观状态。";
                 const columnPrompts = cols.map(c => {
                   let line = `- 栏目: ${c.label || '栏目'}`;
-                  if (c.type === "date") line += ` | 格式: [日期]：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入（例如1926年3月16日或2024年5月20日），绝对禁止套用现实生活中的真实日期`;
+                  if (c.type === "date") line += ` | 格式: [日期]：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入，绝对禁止套用现实生活中的真实日期`;
                   else if (c.type === "time") line += ` | 格式: [时间]：由AI根据上下文剧情自主推断具体时间填入（例如08:30或12:00或14:00），绝对禁止使用本地现实时间`;
                   else if (c.type === "weather") line += ` | 固定值: ${drawnWeatherName}`;
                   else if (c.type === "luck") line += ` | 固定值: ${hitLuck.name} (设定: ${hitLuck.note || '无'})`;
@@ -34671,6 +34966,20 @@ ${recentHistoryText}
             let finalContent = "";
             if (aiGeneratedContent) {
               finalContent = aiGeneratedContent;
+              for (const col of cols) {
+                const cleanLabel = (col.label || "").replace(/^[\[【]|[\]】]$/g, "").trim();
+                if (col.type === "weather" && drawnWeatherName) {
+                  const hasWeather = new RegExp(`(?:\\[?${cleanLabel || "天气"}\\]?)[：:]`).test(finalContent);
+                  if (!hasWeather) {
+                    finalContent = `${col.label || "[天气]"}：${drawnWeatherName}\n` + finalContent;
+                  }
+                } else if (col.type === "luck" && hitLuck && hitLuck.name) {
+                  const hasLuck = new RegExp(`(?:\\[?${cleanLabel || "幸运"}\\]?)[：:]`).test(finalContent);
+                  if (!hasLuck) {
+                    finalContent = `${col.label || "[幸运]"}：${hitLuck.name}\n` + finalContent;
+                  }
+                }
+              }
             } else {
               let resultLines = [];
               for (const col of cols) {
@@ -34809,6 +35118,9 @@ ${recentHistoryText}
           let drawnWeatherNote = "温和宜人，阳光明媚，视野开阔";
           let hitLuck = { name: "波澜不惊", note: "" };
           let luckInfo = { isNewRoll: false, cycle: 1, currentCount: 1, hitLuck };
+          let statusSenderName = "系统状态";
+          let templateFieldLines = "";
+          let textFormatLines = "";
 
           if (chat.isGroup) {
             statusMember = (chat.members || []).find(
@@ -34818,6 +35130,7 @@ ${recentHistoryText}
             // 严格规则：群聊只有当群成员中真正存在系统状态栏角色时，才注入系统状态栏提示词与处理状态栏
             if (statusMember) {
               if (!statusMember.roleType) statusMember.roleType = "system_status";
+              statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
               const sourceChat = state.chats[statusMember.id];
               statusSettings = statusMember.settings || (sourceChat && sourceChat.settings) || {};
               statusColumns = (statusSettings && Array.isArray(statusSettings.columns)) ? statusSettings.columns : [];
@@ -34830,36 +35143,89 @@ ${recentHistoryText}
                 luckInfo = resolvedStatus.luckInfo || { isNewRoll: false, cycle: 1, currentCount: 1, hitLuck };
                 lastStatusDate = resolvedStatus.lastEntry?.dateStr || null;
 
-                const fillableCols = statusColumns.filter(c => c.type !== "weather" && c.type !== "luck");
-                const fillableSpec = fillableCols.map(c => {
+                const hasWeather = resolvedStatus.hasWeatherCol;
+                const hasLuck = resolvedStatus.hasLuckCol;
+                const weatherCol = statusColumns.find(c => c && c.type === "weather");
+                const chosenPoolName = (weatherCol && weatherCol.format) ? weatherCol.format : "温带气候";
+
+                let poolInfoSection = "";
+                if (hasWeather) {
+                  const weatherPools = typeof getStoredWeatherPools === "function" ? getStoredWeatherPools() : [];
+                  const targetPool = weatherPools.find(p => p.name === chosenPoolName || p.id === chosenPoolName) || weatherPools[0];
+                  const poolTitle = targetPool?.name || chosenPoolName || "天气池";
+                  poolInfoSection += `\n【天气池信息】：当前所选天气池为【${poolTitle}】，系统已根据月份和环境自动抽取本回合天气为“${drawnWeatherName}”${drawnWeatherNote ? `（${drawnWeatherNote}）` : ""}。\n`;
+                }
+                if (hasLuck) {
+                  const hitNote = hitLuck?.note ? `（${hitLuck.note}）` : "";
+                  poolInfoSection += `\n【幸运信息】：本回合系统已完成掷骰，当前掷得的幸运为“${hitLuck.name}”${hitNote}。\n`;
+                }
+
+                let permissionNotice = "";
+                if (hasWeather && hasLuck) {
+                  permissionNotice = "【固定值说明】：天气、幸运均为系统底层注入值，你必须原样填入对应字段，绝对禁止自行篡改数值，禁止在后续对话中重复解释。";
+                } else if (hasWeather) {
+                  permissionNotice = "【固定值说明】：天气为系统底层注入值，你必须原样填入对应字段，绝对禁止自行篡改数值，禁止在后续对话中重复解释。";
+                } else if (hasLuck) {
+                  permissionNotice = "【固定值说明】：幸运为系统底层注入值，你必须原样填入对应字段，绝对禁止自行篡改数值，禁止在后续对话中重复解释。";
+                }
+
+                let columnGuidelineLines = [];
+                let ruleIdx = 1;
+                statusColumns.forEach(c => {
                   const cleanLabel = (c.label || '栏目').replace(/^[\[【]|[\]】]$/g, '').trim();
-                  if (c.type === "date") return `- "${cleanLabel}": 填入当前故事推断的日期，格式如 "1926年3月16日"`;
-                  if (c.type === "time") return `- "${cleanLabel}": 填入当前故事推断的时间，格式如 "14:30" 或 "08:00"`;
-                  if (c.type === "location") return `- "${cleanLabel}": 填入当前剧情推进的具体地点路径，如 "阿卡姆镇-密斯卡托尼克大学"`;
-                  return `- "${cleanLabel}": ${c.note ? '根据提示填入: ' + c.note : '根据当前剧情填入具体内容'}`;
-                }).join("\n");
+                  if (c.type === "date") {
+                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：必须结合当前模组剧情与背景设定推断故事内的虚拟日期，例如“盛夏八月某日”或“1920年7月15日”，绝对禁止填写本地现实世界的真实年月日，绝对禁止留空！`);
+                  } else if (c.type === "time") {
+                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：必须结合当前剧情发展与环境（白天、黄昏、深夜等）推断故事内的时刻，例如“14:30”或“08:00”或“深夜23:00”，绝对禁止照抄本地现实时间，绝对禁止填 12:00 敷衍！`);
+                  } else if (c.type === "location") {
+                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：必须结合当前角色身处的场景位置推断具体地点名称或路径，例如“千叶市-自由写作者住所”或“战神广场-核心建筑”，绝对禁止输出星号“*”，绝对禁止输出占位符，绝对禁止留空！`);
+                  } else if (c.type === "weather") {
+                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：系统已从【${chosenPoolName}】天气池抽取本轮天气为“${drawnWeatherName}”，请在 fields 字典的 "${cleanLabel}" 中原样填入“${drawnWeatherName}”，严禁擅自篡改。`);
+                  } else if (c.type === "luck") {
+                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：本轮系统固定掷骰值为“${hitLuck.name}”，请在 fields 字典的 "${cleanLabel}" 中原样填入“${hitLuck.name}”，严禁擅自篡改。`);
+                  } else if (c.type === "affection") {
+                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：仅在有好感变动时填写：角色中文全名+数字=当前值 或 -数字=当前值，无变化时不输出。`);
+                  } else {
+                    columnGuidelineLines.push(`${ruleIdx++}. 【${cleanLabel}】栏目：必须根据当前剧情填入具体数值或内容：${c.note ? c.note : '不得留空'}`);
+                  }
+                });
 
-                const statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
+                templateFieldLines = statusColumns.map(c => {
+                  const cleanLabel = (c.label || '栏目').replace(/^[\[【]|[\]】]$/g, '').trim();
+                  if (c.type === "date") return `    "${cleanLabel}": "必须结合剧情上下文推断具体故事日期，如盛夏八月某日或1920年7月15日，绝对禁止填现实生活日期，绝对禁止留空"`;
+                  if (c.type === "time") return `    "${cleanLabel}": "必须结合剧情推断具体时刻，如14:30或清晨08:00或深夜，绝对禁止使用现实时间，绝对禁止填12:00敷衍"`;
+                  if (c.type === "weather") return `    "${cleanLabel}": "${drawnWeatherName}"`;
+                  if (c.type === "luck") return `    "${cleanLabel}": "${hitLuck.name}"`;
+                  if (c.type === "location") return `    "${cleanLabel}": "必须结合当前场景推断具体推进地点路径，如千叶市-自由写作者住所，绝对禁止输出星号*，绝对禁止留空"`;
+                  if (c.type === "affection") return `    "${cleanLabel}": "仅在有好感变动时填写：角色中文全名+数字=当前值 或 -数字=当前值，无变化时不输出"`;
+                  return `    "${cleanLabel}": "必须根据当前剧情填入具体数值或内容：${c.note ? c.note : '不得留空'}"`;
+                }).join(",\n");
 
-                let autoSystemNotes = [];
-                if (resolvedStatus.hasWeatherCol) {
-                  autoSystemNotes.push(`- 天气由系统底层自动抽选填入，你无需填写也严禁在天气后添加任何描述文字。`);
-                }
-                if (resolvedStatus.hasLuckCol) {
-                  autoSystemNotes.push(`- 幸运由系统底层自动掷骰填入，你无需填写也严禁擅自修改。`);
-                }
+                statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
+                const omissionWarning = (chat._statusBarOmissionStreak && chat._statusBarOmissionStreak > 0)
+                  ? "\n【严重警告：检测到此前状态栏存在栏目遗漏，本次请务必严格逐项完整输出全部栏目，绝对禁止遗漏任何一行！】\n"
+                  : "";
 
                 systemStatusContext = `
-# 【系统状态栏专用指令】
-系统状态栏为独立的指令类型 {"type": "system_status", "name": "${statusSenderName}", "fields": { ... }}。
-在本次回复的 JSON 数组中，【第一条消息（index 0）必须是该系统状态栏指令】：
-- 状态栏所有栏目标题与顺序由系统严格锁定，绝对禁止你擅自拟定新格式或增加新栏目。
-${autoSystemNotes.join("\n")}
-- 你只需在 fields 字典中填写以下允许填写的纯净字段：
-${fillableSpec || '- 无需填写额外字段'}
-- 严禁在字段值中添加修饰说明、括号或多余描述，仅输出纯净数值或地点时间。
-- 示例：{"type": "system_status", "name": "${statusSenderName}", "fields": {"时间": "14:30", "地点": "图书馆"}}
-- 【铁律】：从第二条消息开始，由其他群成员角色进行正常的剧情对话；严禁在任何后续角色的对话消息中输出状态栏内容！
+# 【【【系统状态栏最高优先级绝对指令：违者生成失败】】】
+当前群聊已启用系统状态栏。
+【绝对强制规则一】：你本次回复生成的 JSON 数组中，【第1条消息（index 0）必须且必定是系统状态栏】！其发送者 "name" 字段【必须】为 "${statusSenderName}"，"type" 字段【必须】为 "system_status"！缺少第一条系统状态栏将导致前端系统彻底报错并判定为生成失败！
+【绝对强制规则二】：系统状态栏中的每一个栏目【都必须认真结合故事推断并完整填写，绝对禁止遗漏、绝对禁止留空、绝对禁止输出星号*、绝对禁止用现实生活真实时间代替】：
+${columnGuidelineLines.join("\n")}
+${permissionNotice}
+${poolInfoSection}
+
+【状态栏标准输出示例（第一条消息必须以此格式输出，且仅有这一种标准格式）】：
+{
+  "type": "system_status",
+  "name": "${statusSenderName}",
+  "fields": {
+${templateFieldLines}
+  }
+}
+
+【后续消息规则】：
+从第2条消息（index 1）开始，才由其他正常群成员角色进行剧情对话。严禁在任何其他角色的发言中重复输出状态栏！
 `;
               }
             }
@@ -36146,6 +36512,11 @@ ${fillableSpec || '- 无需填写额外字段'}
                 })
                 .join("\n\n");
 
+              const statusSenderName = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : "系统状态";
+              const fullMembersList = statusMember
+                ? `- **姓名**：${statusSenderName}（本名：${statusSenderName}）\n  - **角色人设**：系统专属状态栏广播员，负责在每一轮回复的第一项准确输出状态栏各项指标，不可或缺，绝对禁止遗漏。\n\n` + membersList
+                : membersList;
+
               const myNickname = chat.settings.myNickname || "我";
               // 1. 获取群公告内容
               const announcement = chat.settings.groupAnnouncement || "";
@@ -36163,24 +36534,26 @@ ${fillableSpec || '- 无需填写额外字段'}
               systemPrompt = `
 			# 角色
 			你是一个群聊AI，负责扮演【除了用户以外】的所有角色。
+			${statusMember ? systemStatusContext : ""}
 			# 【【【身份铁律：这是最高指令，必须严格遵守】】】
-			1.  **核心任务**: 你的唯一任务是扮演且仅能扮演下方“群成员列表”中明确列出的角色。
+			1.  **核心任务**: 你的唯一任务是扮演下方“群成员列表”中明确列出的角色${statusMember ? `，并在每轮回复最开头输出【${statusSenderName}】的系统状态栏` : ""}。
 			2.  **用户识别**: 用户的身份是【${myNickname}】。你【绝对、永远、在任何情况下都不能】生成 "name" 字段为 **"${myNickname}"** 的消息。
 			3.  **禁止杜撰**: 【绝对禁止】扮演任何未在列表中出现的额外角色。正文严禁自创未抽取的随机数值与天气。
 			4.  **【【【格式铁律：这是你的生命线，违者生成失败】】】**:
 			    -   你的回复【必须且只能】是一个严格的JSON数组格式的字符串。
 			    -   数组中的【每一个元素都必须是一个JSON对象】。
-			    -   ${statusMember ? `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)或系统状态栏名称【${statusMember.groupNickname || statusMember.originalName || "系统状态"}】。` : `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)。`}
+			    ${statusMember ? `    -   【首条消息强制规则】：回复数组的第1条消息（index 0）必须且必定是由【${statusSenderName}】发出的系统状态栏消息！缺少直接判定为生成失败！\n` : ""}
+			    -   ${statusMember ? `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)或系统状态栏名称【${statusSenderName}】。` : `每一个JSON对象都【必须包含一个 "name" 字段】，其值【必须是】下方列表中角色的【【本名】】(originalName)。`}
 			    -   缺少 "name" 字段的回复是无效的，会被系统拒绝。
 			5.  **角色扮演**: 严格遵守下方“群成员列表及人设”中的每一个角色的设定。
 			# 【群成员列表及COC角色档案】
-			${membersList}
+			${fullMembersList}
 			${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
 			6.  **禁止出戏**: 绝不能透露你是AI、模型，或提及“扮演”、“生成”等词语。
 			${isCognitionEnabled ? `7.  **情景感知**: 注意当前时间是 ${currentTime}。` : ""}
 			**标准输出格式示例:**
 			[
-			    {
+			    ${statusMember ? `{\n			      "type": "system_status",\n			      "name": "${statusSenderName}",\n			      "fields": {\n${templateFieldLines || '			        "状态": "正常"'}\n			      }\n			    },\n			    ` : ""}{
 			      "type": "text",
 			      "name": "角色名",
 			      "content": "你好！"
@@ -36188,7 +36561,7 @@ ${fillableSpec || '- 无需填写额外字段'}
 			  ]
 
 			## 你可以使用的操作指令:
-			-   **发送文本**: {"type": "text", "name": "角色名", "message": "文本内容"}
+			${statusMember ? `-   **输出系统状态栏**: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}-   **发送文本**: {"type": "text", "name": "角色名", "message": "文本内容"}
 			-   **发送语音**: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
 			-   **赠送或发放道具与线索**: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 			-   **发起进入战斗确认卡片**: 当剧情推进到战斗爆发、遭遇敌人或怪兽，或用户提出进入战斗时，发送 {"type": "suggest_combat"} 或在叙述中写 [进入战斗系统]，系统会自动向聊天中发送“是否进入战斗？”确认卡片。玩家确认前不得擅自进入战斗轮。
@@ -36222,7 +36595,7 @@ ${fillableSpec || '- 无需填写额外字段'}
 			${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- **COC人物面板**（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- **年龄**：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- **生日**：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- **性别**：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- **角色人设**：
 			${chat.settings.myPersona || "普通人"}
 
-			${systemStatusContext}
+			${statusMember ? `\n# 【系统状态栏最后郑重强调】\n再次强调：你本次回复的JSON数组中，第1条消息（index 0）必须且必定是由【${statusSenderName}】发出的系统状态栏，type 必须为 "system_status"，并在 fields 字典中完整推断并填写配置的各个栏目，绝对禁止输出星号*，绝对禁止留空，绝对禁止使用本地现实时间！\n` : ""}
 
 			现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`;
 
@@ -36532,7 +36905,7 @@ ${libraryList}
                 elemeContext += "【注意：饿了么菜单加载失败。】";
               }
               let systemStatusPromptBlock = "";
-              if (chat.roleType === "system_status") {
+              if (chat.roleType === "system_status" || (chat.settings?.columns && Array.isArray(chat.settings.columns) && chat.settings.columns.length > 0 && chat.settings.triggerMode !== "none")) {
                 const resolvedStatus = resolveTurnWeatherAndLuck(chat.settings, chat);
                 const drawnWeather = resolvedStatus.drawnWeather;
                 const hitLuck = resolvedStatus.hitLuck;
@@ -36541,7 +36914,7 @@ ${libraryList}
                 (chat.settings.columns || []).forEach(col => {
                   let fmt = col.format || "*";
                   if (col.type === "date") {
-                    colSpecs.push(`${col.label}：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入，例如 1926年3月16日 或 2024年5月20日，绝对禁止套用现实生活中的真实日期`);
+                    colSpecs.push(`${col.label}：由AI根据上下文剧情与对话自主推断当前故事中的具体日期填入，绝对禁止套用现实生活中的真实日期`);
                   } else if (col.type === "time") {
                     colSpecs.push(`${col.label}：由AI根据上下文剧情自主推断具体时间填入，例如 08:30 或 12:00 或 14:00，绝对禁止使用本地现实时间`);
                   } else if (col.type === "weather") {
@@ -37020,6 +37393,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               });
             }
 
+            if (chat.isGroup && statusMember && Array.isArray(statusColumns) && statusColumns.length > 0) {
+              const statusSenderName = statusMember.groupNickname || statusMember.originalName || "系统状态";
+              messagesPayload.push({
+                role: "system",
+                content: `【绝对最高优先级指令：本轮回复第1条消息必须是系统状态栏】\n你回复的JSON数组中，第1条消息（index 0）必须且必定是由【${statusSenderName}】发出的系统状态栏，type 必须为 "system_status"！\n请务必在 fields 字典中根据当前故事剧情上下文认真推断并填写配置的各个栏目，严禁输出星号*，严禁留空，严禁使用现实生活时间！`
+              });
+            }
+
             let isGemini = proxyUrl === GEMINI_API_URL;
             let geminiConfig = toGeminiRequestData(
               model,
@@ -37252,8 +37633,9 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
               const isChapterSwitchType = item.type === "suggest_switch_chapter" || item.type === "switch_chapter" || item.type === "suggest_manage_chapters" || item.type === "manage_chapters";
               const isInventoryType = item.type === "give_item" || item.type === "gift_item" || item.type === "obtain_item" || item.type === "inventory_card" || item.type === "apply_item_effect" || item.type === "transfer_item" || Boolean(item.give_item);
+              const isStatusType = item.type === "system_status" || item.type === "status_bar" || Boolean(item.fields) || Boolean(item.values);
 
-              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType && !isInventoryType) {
+              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType && !isInventoryType && !isStatusType) {
                 continue;
               }
 
@@ -37270,7 +37652,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               : (chat.settings?.triggerMode || "always");
             const hasStatusConfig = chat.isGroup
               ? (statusMember !== null && Array.isArray(statusColumns) && statusColumns.length > 0 && statusTriggerMode !== "none")
-              : (chat.roleType === "system_status" && statusTriggerMode !== "none");
+              : ((chat.roleType === "system_status" || (chat.settings?.columns && Array.isArray(chat.settings.columns) && chat.settings.columns.length > 0)) && statusTriggerMode !== "none");
 
             if (hasStatusConfig) {
               const statusSender = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : (chat.name || "系统状态");
@@ -37332,34 +37714,89 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
               const colsToRender = (Array.isArray(statusColumns) && statusColumns.length > 0) ? statusColumns : (chat.settings?.columns || []);
               let formattedLines = [];
+              if (!chat._lastStatusValues) chat._lastStatusValues = {};
+              let omittedFieldsCount = 0;
+
+              const normalizedFields = {};
+              Object.keys(extractedFields).forEach(k => {
+                if (!k) return;
+                const trimmed = String(k).trim();
+                const unbracketed = trimmed.replace(/^[\[【]|[\]】]$/g, "").trim();
+                normalizedFields[unbracketed] = extractedFields[k];
+                normalizedFields[trimmed] = extractedFields[k];
+              });
 
               colsToRender.forEach(col => {
                 if (!col) return;
                 const rawLabel = col.label || "栏目";
                 const cleanLabel = rawLabel.replace(/^[\[【]|[\]】]$/g, "").trim();
                 const bracketLabel = `[${cleanLabel}]`;
+                const fieldVal = (normalizedFields[cleanLabel] !== undefined)
+                  ? normalizedFields[cleanLabel]
+                  : (normalizedFields[rawLabel] !== undefined ? normalizedFields[rawLabel] : (normalizedFields[bracketLabel] !== undefined ? normalizedFields[bracketLabel] : undefined));
 
                 if (col.type === "date") {
-                  const val = extractedFields[cleanLabel] || extractedFields["日期"] || extractedFields["date"] || lastStatusDate || "1926年3月16日";
+                  let val = fieldVal || normalizedFields["日期"] || normalizedFields["date"] || lastStatusDate || chat._lastStatusValues["日期"] || "";
+                  if (!fieldVal && !normalizedFields["日期"] && !normalizedFields["date"]) {
+                    omittedFieldsCount++;
+                  }
+                  if (!val) {
+                    const now = new Date();
+                    val = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+                  }
+                  chat._lastStatusValues["日期"] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "time") {
-                  const val = extractedFields[cleanLabel] || extractedFields["时间"] || extractedFields["time"] || "12:00";
+                  let val = fieldVal || normalizedFields["时间"] || normalizedFields["time"] || chat._lastStatusValues["时间"] || "";
+                  if (!fieldVal && !normalizedFields["时间"] && !normalizedFields["time"]) {
+                    omittedFieldsCount++;
+                  }
+                  if (!val) {
+                    val = "12:00";
+                  }
+                  chat._lastStatusValues["时间"] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "weather") {
-                  formattedLines.push(`${bracketLabel}：${drawnWeatherName || '晴朗'}`);
+                  const val = drawnWeatherName || fieldVal || '晴朗';
+                  chat._lastStatusValues["天气"] = val;
+                  formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "luck") {
-                  formattedLines.push(`${bracketLabel}：${(hitLuck && hitLuck.name) ? hitLuck.name : '波澜不惊'}`);
+                  const val = (hitLuck && hitLuck.name) ? hitLuck.name : (fieldVal || '波澜不惊');
+                  chat._lastStatusValues["幸运"] = val;
+                  formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "location") {
-                  const val = extractedFields[cleanLabel] || extractedFields["地点"] || extractedFields["location"] || col.format || "当前场景";
+                  let val = fieldVal || normalizedFields["地点"] || normalizedFields["location"] || chat._lastStatusValues["地点"] || chat.settings?.currentLocation || "";
+                  if (!fieldVal && !normalizedFields["地点"] && !normalizedFields["location"]) {
+                    omittedFieldsCount++;
+                  }
+                  if (!val || val === "*" || val === "星号" || val === "无") {
+                    val = chat._lastStatusValues["地点"] || chat.settings?.currentLocation || (col.format && col.format !== "*" ? col.format : "") || "当前场景";
+                  }
+                  chat._lastStatusValues["地点"] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
                 } else if (col.type === "affection") {
-                  const val = extractedFields[cleanLabel] || extractedFields["好感度"];
-                  if (val) formattedLines.push(`${bracketLabel}：${val}`);
+                  const val = fieldVal || normalizedFields["好感度"];
+                  if (val && String(val).trim()) {
+                    formattedLines.push(`${bracketLabel}：${val}`);
+                  }
                 } else {
-                  const val = extractedFields[cleanLabel] || extractedFields[rawLabel] || col.format || "";
+                  let val = fieldVal || chat._lastStatusValues[cleanLabel] || col.format || "";
+                  if (!fieldVal) {
+                    omittedFieldsCount++;
+                  }
+                  if (!val) {
+                    val = col.format || "无";
+                  }
+                  chat._lastStatusValues[cleanLabel] = val;
                   formattedLines.push(`${bracketLabel}：${val}`);
                 }
               });
+
+              if (omittedFieldsCount > 0) {
+                chat._statusBarOmissionStreak = (chat._statusBarOmissionStreak || 0) + 1;
+              } else {
+                chat._statusBarOmissionStreak = 0;
+              }
 
               let mergedText = formattedLines.join("\n");
               if (mergedText) {
@@ -58115,21 +58552,27 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           const chat = state.chats[state.activeChatId];
           let personaVal = "";
           let savedPromptVal = "";
+          let defaultPromptVal = "";
+          const defaultPositiveNai = (typeof getNovelAISettings === "function" ? (getNovelAISettings().default_positive || "") : "");
 
           if (targetType === "my") {
             personaVal = (chat && chat.settings && (chat.settings.myPersona || chat.settings.userPersona)) || state.userPersona || "";
             savedPromptVal = (chat && chat.settings && chat.settings.lastMyAvatarPrompt) || "";
+            defaultPromptVal = (chat && chat.settings && chat.settings.lastMyAvatarDefaultPrompt !== undefined) ? chat.settings.lastMyAvatarDefaultPrompt : defaultPositiveNai;
           } else if (targetType === "ai") {
             personaVal = (chat && chat.settings && chat.settings.aiPersona) || (chat && chat.persona) || "";
             savedPromptVal = (chat && chat.settings && chat.settings.lastAiAvatarPrompt) || "";
+            defaultPromptVal = (chat && chat.settings && chat.settings.lastAiAvatarDefaultPrompt !== undefined) ? chat.settings.lastAiAvatarDefaultPrompt : defaultPositiveNai;
           } else if (targetType === "group") {
             personaVal = (chat && chat.settings && (chat.settings.groupDescription || chat.description)) || "";
             savedPromptVal = (chat && chat.settings && chat.settings.lastGroupAvatarPrompt) || "";
+            defaultPromptVal = (chat && chat.settings && chat.settings.lastGroupAvatarDefaultPrompt !== undefined) ? chat.settings.lastGroupAvatarDefaultPrompt : defaultPositiveNai;
           } else if (targetType === "member") {
             if (chat && editingMemberId) {
               const mem = (chat.members || []).find((m) => m.id === editingMemberId);
               personaVal = (mem && (mem.persona || (mem.settings && mem.settings.aiPersona))) || "";
               savedPromptVal = (mem && mem.lastAvatarPrompt) || "";
+              defaultPromptVal = (mem && mem.lastAvatarDefaultPrompt !== undefined) ? mem.lastAvatarDefaultPrompt : defaultPositiveNai;
             }
           }
 
@@ -58138,6 +58581,9 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
           const promptInput = document.getElementById("avatar-gen-prompt-input");
           if (promptInput) promptInput.value = savedPromptVal;
+
+          const defaultPromptInput = document.getElementById("avatar-gen-default-prompt-input");
+          if (defaultPromptInput) defaultPromptInput.value = defaultPromptVal;
 
           const placeholder = document.getElementById("avatar-gen-placeholder");
           if (placeholder) placeholder.style.display = "flex";
@@ -58253,7 +58699,9 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
         async function executeAvatarImageGen() {
           const promptInput = document.getElementById("avatar-gen-prompt-input");
           const promptText = promptInput ? promptInput.value.trim() : "";
-          if (!promptText) {
+          const defaultPromptInput = document.getElementById("avatar-gen-default-prompt-input");
+          const defaultPromptText = defaultPromptInput ? defaultPromptInput.value.trim() : "";
+          if (!promptText && !defaultPromptText) {
             if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先生成或输入词条");
             else alert("请先生成或输入词条");
             return;
@@ -58267,8 +58715,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
           const model = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
           const settings = getNovelAISettings();
-          const artist = settings.artist_prompt || "";
-          const fullPositivePrompt = [promptText, artist].filter(Boolean).join(", ");
+          const artist = (settings.artist_prompt || "").trim();
+          const fullPositivePrompt = [promptText, defaultPromptText, artist].filter(Boolean).join(", ");
           const fullNegativePrompt = settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry";
 
           const execBtn = document.getElementById("avatar-gen-execute-btn");
@@ -62643,7 +63091,104 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 let optimalCount = 0;
                 let failCount = 0;
 
+                const chatGroups = new Map();
+                const otherItems = [];
+
                 for (const item of selectedItems) {
+                  if (!includeCompressed && item.isCompressed) {
+                    optimalCount++;
+                    continue;
+                  }
+                  if (item.type === "chat" && item.recordId && dbInstance?.chats) {
+                    otherItems.push(item);
+                  } else if (item.table === "chats" && item.recordId && dbInstance?.chats) {
+                    if (!chatGroups.has(item.recordId)) chatGroups.set(item.recordId, []);
+                    chatGroups.get(item.recordId).push(item);
+                  } else {
+                    otherItems.push(item);
+                  }
+                }
+
+                // 批量处理聊天记录中的图片
+                for (const [chatId, items] of chatGroups.entries()) {
+                  try {
+                    const chat = (typeof state !== "undefined" && state?.chats && state.chats[chatId]) ? state.chats[chatId] : await dbInstance.chats.get(chatId);
+                    if (!chat) continue;
+                    let chatChanged = false;
+
+                    for (const item of items) {
+                      try {
+                        const targetDim = includeCompressed ? 960 : 1280;
+                        let compressed = await compressImage(item.dataUrl, quality, targetDim, true);
+                        if (compressed && compressed.startsWith("data:image") && (includeCompressed || compressed.length <= item.dataUrl.length)) {
+                          item.dataUrl = compressed;
+                          item.size = new Blob([compressed]).size;
+                          item.isCompressed = true;
+
+                          if (item.field === "history_array" && Array.isArray(chat.history)) {
+                            const msg = (item.timestamp ? chat.history.find(m => m.timestamp === item.timestamp) : null) || chat.history[item.msgIndex];
+                            if (msg && Array.isArray(msg.content)) {
+                              const part = msg.content[item.partIndex] || msg.content.find(p => p.type === "image_url");
+                              if (part && part.image_url) {
+                                part.image_url.url = compressed;
+                                part._compressed = true;
+                              }
+                              msg._compressed = true;
+                              chatChanged = true;
+                              successCount++;
+                            }
+                          } else if (item.field === "contextMapData" && Array.isArray(chat.settings?.contextMapData)) {
+                            const node = chat.settings.contextMapData.find(n => n.id === item.subId || n.name === item.nodeName);
+                            if (node) {
+                              node.imageUrl = compressed;
+                              chatChanged = true;
+                              successCount++;
+                            }
+                          } else if (item.field === "temporaryLocations" && Array.isArray(chat.settings?.temporaryLocations)) {
+                            const node = chat.settings.temporaryLocations.find(n => n.id === item.subId || n.name === item.nodeName);
+                            if (node) {
+                              node.imageUrl = compressed;
+                              chatChanged = true;
+                              successCount++;
+                            }
+                          } else if (item.field === "miniMapSvg" && chat.settings) {
+                            chat.settings.miniMapSvg = compressed;
+                            chatChanged = true;
+                            successCount++;
+                          } else if (Array.isArray(chat.history)) {
+                            const msg = (item.timestamp ? chat.history.find(m => m.timestamp === item.timestamp) : null) || chat.history[item.msgIndex];
+                            if (msg) {
+                              if (msg.imageUrl) msg.imageUrl = compressed;
+                              if (msg.url) msg.url = compressed;
+                              if (typeof msg.content === "string" && msg.content.startsWith("data:image/")) msg.content = compressed;
+                              if (msg.image) msg.image = compressed;
+                              msg._compressed = true;
+                              chatChanged = true;
+                              successCount++;
+                            }
+                          }
+                        } else {
+                          optimalCount++;
+                        }
+                      } catch (err) {
+                        failCount++;
+                      }
+                    }
+
+                    if (chatChanged) {
+                      await dbInstance.chats.put(chat);
+                      if (typeof state !== "undefined" && state?.chats && state.chats[chatId]) {
+                        state.chats[chatId] = chat;
+                      }
+                    }
+                  } catch (err) {
+                    console.warn("批量压缩聊天出错:", err);
+                    failCount += items.length;
+                  }
+                }
+
+                // 处理其它图片
+                for (const item of otherItems) {
                   if (item.type === "chat" && item.recordId && dbInstance?.chats) {
                     try {
                       const chat = await dbInstance.chats.get(item.recordId);
@@ -62651,185 +63196,42 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                         let chatCompCount = 0;
                         if (Array.isArray(chat.history)) {
                           for (const msg of chat.history) {
-                            if (Array.isArray(msg.content)) {
-                              for (const part of msg.content) {
-                                if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
-                                  try {
-                                    const comp = await compressImage(part.image_url.url, quality, 1280, true);
-                                    if (comp && comp.startsWith("data:image") && comp.length <= part.image_url.url.length) {
-                                      part.image_url.url = comp;
-                                      chatCompCount++;
-                                    } else { optimalCount++; }
-                                  } catch(e) { failCount++; }
-                                }
-                              }
-                            }
+                            if (msg._compressed && !includeCompressed) continue;
                             if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
                               try {
                                 const comp = await compressImage(msg.imageUrl, quality, 1280, true);
-                                if (comp && comp.startsWith("data:image") && comp.length <= msg.imageUrl.length) {
+                                if (comp && comp.startsWith("data:image") && (includeCompressed || comp.length <= msg.imageUrl.length)) {
                                   msg.imageUrl = comp;
-                                  chatCompCount++;
-                                } else { optimalCount++; }
-                              } catch(e) { failCount++; }
-                            }
-                            if (msg.url && typeof msg.url === "string" && msg.url.startsWith("data:image")) {
-                              try {
-                                const comp = await compressImage(msg.url, quality, 1280, true);
-                                if (comp && comp.startsWith("data:image") && comp.length <= msg.url.length) {
-                                  msg.url = comp;
-                                  if (msg.imageUrl) msg.imageUrl = comp;
-                                  chatCompCount++;
-                                } else { optimalCount++; }
-                              } catch(e) { failCount++; }
-                            }
-                            if (msg.content && typeof msg.content === "string" && msg.content.startsWith("data:image")) {
-                              try {
-                                const comp = await compressImage(msg.content, quality, 1280, true);
-                                if (comp && comp.startsWith("data:image") && comp.length <= msg.content.length) {
-                                  msg.content = comp;
-                                  chatCompCount++;
-                                } else { optimalCount++; }
-                              } catch(e) { failCount++; }
-                            }
-                            if (msg.image && typeof msg.image === "string" && msg.image.startsWith("data:image")) {
-                              try {
-                                const comp = await compressImage(msg.image, quality, 1280, true);
-                                if (comp && comp.startsWith("data:image") && comp.length <= msg.image.length) {
-                                  msg.image = comp;
-                                  chatCompCount++;
-                                } else { optimalCount++; }
-                              } catch(e) { failCount++; }
-                            }
-                            if (msg.cameraFrame && typeof msg.cameraFrame === "string" && msg.cameraFrame.startsWith("data:image")) {
-                              try {
-                                const comp = await compressImage(msg.cameraFrame, quality, 1280, true);
-                                if (comp && comp.startsWith("data:image") && comp.length <= msg.cameraFrame.length) {
-                                  msg.cameraFrame = comp;
-                                  chatCompCount++;
-                                } else { optimalCount++; }
-                              } catch(e) { failCount++; }
-                            }
-                            if (msg.item && msg.item.avatar && typeof msg.item.avatar === "string" && msg.item.avatar.startsWith("data:image")) {
-                              try {
-                                const comp = await compressImage(msg.item.avatar, quality, 640, true);
-                                if (comp && comp.startsWith("data:image") && comp.length <= msg.item.avatar.length) {
-                                  msg.item.avatar = comp;
-                                  chatCompCount++;
-                                } else { optimalCount++; }
-                              } catch(e) { failCount++; }
-                            }
-                          }
-                        }
-
-                        if (Array.isArray(chat.inventory)) {
-                          for (const it of chat.inventory) {
-                            if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                              try {
-                                const comp = await compressImage(it.avatar, quality, 640, true);
-                                if (comp && comp.startsWith("data:image") && comp.length <= it.avatar.length) {
-                                  it.avatar = comp;
+                                  msg._compressed = true;
                                   chatCompCount++;
                                 }
                               } catch(e) {}
                             }
                           }
                         }
-                        if (Array.isArray(chat.aiInventory)) {
-                          for (const it of chat.aiInventory) {
-                            if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                              try {
-                                const comp = await compressImage(it.avatar, quality, 640, true);
-                                if (comp && comp.startsWith("data:image") && comp.length <= it.avatar.length) {
-                                  it.avatar = comp;
-                                  chatCompCount++;
-                                }
-                              } catch(e) {}
-                            }
-                          }
-                        }
-                        if (Array.isArray(chat.members)) {
-                          for (const m of chat.members) {
-                            if (Array.isArray(m.inventory)) {
-                              for (const it of m.inventory) {
-                                if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
-                                  try {
-                                    const comp = await compressImage(it.avatar, quality, 640, true);
-                                    if (comp && comp.startsWith("data:image") && comp.length <= it.avatar.length) {
-                                      it.avatar = comp;
-                                      chatCompCount++;
-                                    }
-                                  } catch(e) {}
-                                }
-                              }
-                            }
-                          }
-                        }
-
-                        if (chat.settings?.aiAvatar && chat.settings.aiAvatar.startsWith("data:image")) {
-                          try {
-                            const comp = await compressImage(chat.settings.aiAvatar, quality, 1280, true);
-                            if (comp && comp.startsWith("data:image") && comp.length <= chat.settings.aiAvatar.length) {
-                              chat.settings.aiAvatar = comp;
-                              chatCompCount++;
-                            }
-                          } catch(e) {}
-                        }
-                        if (chat.settings?.userAvatar && chat.settings.userAvatar.startsWith("data:image")) {
-                          try {
-                            const comp = await compressImage(chat.settings.userAvatar, quality, 1280, true);
-                            if (comp && comp.startsWith("data:image") && comp.length <= chat.settings.userAvatar.length) {
-                              chat.settings.userAvatar = comp;
-                              chatCompCount++;
-                            }
-                          } catch(e) {}
-                        }
-                        if (chat.settings?.background && chat.settings.background.startsWith("data:image")) {
-                          try {
-                            const comp = await compressImage(chat.settings.background, quality, 1280, true);
-                            if (comp && comp.startsWith("data:image") && comp.length <= chat.settings.background.length) {
-                              chat.settings.background = comp;
-                              chatCompCount++;
-                            }
-                          } catch(e) {}
-                        }
-
                         await dbInstance.chats.put(chat);
                         if (typeof state !== "undefined" && state?.chats && state.chats[item.recordId]) {
                           state.chats[item.recordId] = chat;
                         }
                         successCount += chatCompCount;
-                        item.size = getStrBytes(chat.history) + getStrBytes(chat.settings);
                       }
                     } catch(e) {
-                      console.warn("压缩聊天数据失败:", e);
                       failCount++;
                     }
                   } else if (item.dataUrl && item.dataUrl.startsWith("data:image")) {
                     try {
-                      const maxDim = item.table === "inventory_items" ? 640 : 1280;
+                      const maxDim = item.table === "inventory_items" ? 640 : (includeCompressed ? 960 : 1280);
                       let compressed = await compressImage(item.dataUrl, quality, maxDim, true);
-                      if (compressed && compressed.startsWith("data:image") && (compressed.length < item.dataUrl.length || (compressed.length === item.dataUrl.length && quality < 0.8))) {
+                      if (compressed && compressed.startsWith("data:image") && (includeCompressed || compressed.length <= item.dataUrl.length)) {
                         item.dataUrl = compressed;
                         item.size = new Blob([compressed]).size;
+                        item.isCompressed = true;
                         await saveCompressedItemToDB(item, compressed, dbInstance);
                         successCount++;
-                      } else if (compressed && compressed.startsWith("data:image")) {
-                        // 强制进一步降维压缩以确保文件体积确切变小
-                        const secondPass = await compressImage(item.dataUrl, Math.min(quality, 0.4), Math.min(maxDim, 640), true);
-                        if (secondPass && secondPass.startsWith("data:image") && secondPass.length <= item.dataUrl.length) {
-                          item.dataUrl = secondPass;
-                          item.size = new Blob([secondPass]).size;
-                          await saveCompressedItemToDB(item, secondPass, dbInstance);
-                          successCount++;
-                        } else {
-                          optimalCount++;
-                        }
                       } else {
                         optimalCount++;
                       }
                     } catch (e) {
-                      console.warn("单张压缩失败:", e);
                       failCount++;
                     }
                   } else {
@@ -62838,14 +63240,16 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 }
 
                 let summaryMsg = `已成功压缩 ${successCount} 张图片`;
-                if (optimalCount > 0) summaryMsg += `，${optimalCount} 张已达最优无需再压`;
+                if (optimalCount > 0) summaryMsg += `，${optimalCount} 张跳过已压缩或无需再压`;
                 if (failCount > 0) summaryMsg += `，失败 ${failCount} 张`;
 
                 if (typeof window.showCustomAlert === "function") {
                   await window.showCustomAlert("压缩完成", summaryMsg);
                 }
 
+                loadedStorageImagesList.sort((a, b) => (b.size || 0) - (a.size || 0));
                 renderLoadedStorageImagesUI();
+                updateStorageImagesSummaryBar();
                 if (typeof calculateAndRenderStorageBreakdown === "function") {
                   await calculateAndRenderStorageBreakdown();
                 }
@@ -63306,6 +63710,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 chats.forEach(chat => {
                   const history = chat.history || [];
                   history.forEach((msg, mIdx) => {
+                    let hasPartImage = false;
                     if (Array.isArray(msg.content)) {
                       msg.content.forEach((part, pIdx) => {
                         if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
@@ -63322,74 +63727,32 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                             origin: `聊天《${chat.name}》消息配图`,
                             size: new Blob([part.image_url.url]).size,
                             dataUrl: part.image_url.url,
+                            isCompressed: !!(msg._compressed || part._compressed),
                             selected: false
                           });
+                          hasPartImage = true;
                         }
                       });
                     }
-                    if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
-                      loadedStorageImagesList.push({
-                        id: "chat_msg_img_" + chat.id + "_" + (msg.timestamp || mIdx),
-                        type: "image",
-                        table: "chats",
-                        recordId: chat.id,
-                        field: "history",
-                        msgIndex: mIdx,
-                        timestamp: msg.timestamp,
-                        name: "聊天消息图片",
-                        origin: `聊天《${chat.name}》消息配图`,
-                        size: new Blob([msg.imageUrl]).size,
-                        dataUrl: msg.imageUrl,
-                        selected: false
-                      });
-                    }
-                    if (msg.url && typeof msg.url === "string" && msg.url.startsWith("data:image")) {
-                      loadedStorageImagesList.push({
-                        id: "chat_msg_url_" + chat.id + "_" + (msg.timestamp || mIdx),
-                        type: "image",
-                        table: "chats",
-                        recordId: chat.id,
-                        field: "history_url",
-                        msgIndex: mIdx,
-                        timestamp: msg.timestamp,
-                        name: "聊天生图",
-                        origin: `聊天《${chat.name}》生成插图`,
-                        size: new Blob([msg.url]).size,
-                        dataUrl: msg.url,
-                        selected: false
-                      });
-                    }
-                    if (msg.content && typeof msg.content === "string" && msg.content.startsWith("data:image")) {
-                      loadedStorageImagesList.push({
-                        id: "chat_msg_content_" + chat.id + "_" + (msg.timestamp || mIdx),
-                        type: "image",
-                        table: "chats",
-                        recordId: chat.id,
-                        field: "history_content",
-                        msgIndex: mIdx,
-                        timestamp: msg.timestamp,
-                        name: "聊天消息图片",
-                        origin: `聊天《${chat.name}》图片消息`,
-                        size: new Blob([msg.content]).size,
-                        dataUrl: msg.content,
-                        selected: false
-                      });
-                    }
-                    if (msg.image && typeof msg.image === "string" && msg.image.startsWith("data:image")) {
-                      loadedStorageImagesList.push({
-                        id: "chat_msg_raw_img_" + chat.id + "_" + (msg.timestamp || mIdx),
-                        type: "image",
-                        table: "chats",
-                        recordId: chat.id,
-                        field: "history_image",
-                        msgIndex: mIdx,
-                        timestamp: msg.timestamp,
-                        name: "聊天消息图片",
-                        origin: `聊天《${chat.name}》图片消息`,
-                        size: new Blob([msg.image]).size,
-                        dataUrl: msg.image,
-                        selected: false
-                      });
+                    if (!hasPartImage) {
+                      const msgImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && msg.content.startsWith("data:image") ? msg.content : "") || msg.image;
+                      if (msgImg && typeof msgImg === "string" && msgImg.startsWith("data:image")) {
+                        loadedStorageImagesList.push({
+                          id: "chat_msg_img_" + chat.id + "_" + (msg.timestamp || mIdx),
+                          type: "image",
+                          table: "chats",
+                          recordId: chat.id,
+                          field: "history",
+                          msgIndex: mIdx,
+                          timestamp: msg.timestamp,
+                          name: "聊天消息图片",
+                          origin: `聊天《${chat.name}》消息配图`,
+                          size: new Blob([msgImg]).size,
+                          dataUrl: msgImg,
+                          isCompressed: !!msg._compressed,
+                          selected: false
+                        });
+                      }
                     }
                   });
 
@@ -63607,6 +63970,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               return true;
             });
           }
+
+          loadedStorageImagesList.sort((a, b) => (b.size || 0) - (a.size || 0));
 
           renderLoadedStorageImagesUI();
         }
@@ -69500,6 +69865,44 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           const execAvatarGenBtn = document.getElementById("avatar-gen-execute-btn");
           if (execAvatarGenBtn) execAvatarGenBtn.addEventListener("click", executeAvatarImageGen);
 
+          const defaultPromptInputEl = document.getElementById("avatar-gen-default-prompt-input");
+          if (defaultPromptInputEl) {
+            defaultPromptInputEl.addEventListener("input", async () => {
+              const val = defaultPromptInputEl.value;
+              const chat = state.chats[state.activeChatId];
+              if (!chat) return;
+              if (!chat.settings) chat.settings = {};
+              if (avatarGenState.currentTarget === "ai") chat.settings.lastAiAvatarDefaultPrompt = val;
+              else if (avatarGenState.currentTarget === "my") chat.settings.lastMyAvatarDefaultPrompt = val;
+              else if (avatarGenState.currentTarget === "group") chat.settings.lastGroupAvatarDefaultPrompt = val;
+              else if (avatarGenState.currentTarget === "member" && editingMemberId) {
+                const mem = (chat.members || []).find((m) => m.id === editingMemberId);
+                if (mem) mem.lastAvatarDefaultPrompt = val;
+              }
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+            });
+          }
+
+          const promptInputEl = document.getElementById("avatar-gen-prompt-input");
+          if (promptInputEl) {
+            promptInputEl.addEventListener("input", async () => {
+              const val = promptInputEl.value;
+              const chat = state.chats[state.activeChatId];
+              if (!chat) return;
+              if (!chat.settings) chat.settings = {};
+              if (avatarGenState.currentTarget === "ai") chat.settings.lastAiAvatarPrompt = val;
+              else if (avatarGenState.currentTarget === "my") chat.settings.lastMyAvatarPrompt = val;
+              else if (avatarGenState.currentTarget === "group") chat.settings.lastGroupAvatarPrompt = val;
+              else if (avatarGenState.currentTarget === "member" && editingMemberId) {
+                const mem = (chat.members || []).find((m) => m.id === editingMemberId);
+                if (mem) mem.lastAvatarPrompt = val;
+              }
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+            });
+          }
+
           const avatarFlipBtn = document.getElementById("avatar-gen-flip-btn");
           if (avatarFlipBtn) {
             avatarFlipBtn.addEventListener("click", () => {
@@ -69948,6 +70351,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               document.getElementById("char-heart-btn").style.display = "none";
               const groupAffectionBtn = document.getElementById("group-affection-btn");
               if (groupAffectionBtn) groupAffectionBtn.style.display = "none";
+              const chatAffectionBottomBtn = document.getElementById("chat-affection-bottom-btn");
+              if (chatAffectionBottomBtn) chatAffectionBottomBtn.style.display = "none";
               showScreen("chat-list-screen");
             });
 

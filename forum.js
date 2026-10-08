@@ -293,28 +293,46 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
-    const cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
-    const effectiveKey = typeof getRandomValue === "function" ? getRandomValue(apiKey) : (apiKey.includes(",") ? apiKey.split(",")[0].trim() : apiKey.trim());
+    const cleanedProxy = (proxyUrl || "https://api.openai.com").trim().replace(/\/+$/, "");
+    const effectiveKey = (typeof getRandomValue === "function" ? getRandomValue(apiKey) : (apiKey.includes(",") ? apiKey.split(",")[0].trim() : apiKey.trim())).trim();
     const tempVal = parseFloat(state.apiConfig.temperature);
     const safeTemp = (!isNaN(tempVal) && tempVal >= 0 && tempVal <= 2) ? tempVal : 0.7;
+    const cleanModel = (model || "gemini-1.5-flash").replace(/^models\//i, "").trim();
 
     if (isGemini) {
-      const cleanModel = (model || "gemini-1.5-flash").replace(/^models\//, "");
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${effectiveKey}`;
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: safeTemp
-        }
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
       };
       if (systemInstruction) {
         payload.systemInstruction = { parts: [{ text: systemInstruction }] };
       }
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      if (!response.ok && (response.status === 400 || response.status === 404)) {
+        const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${effectiveKey}`;
+        const fallbackPayload = {
+          contents: [{ role: "user", parts: [{ text: (systemInstruction ? systemInstruction + "\n\n" : "") + prompt }] }]
+        };
+        const retryRes = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fallbackPayload)
+        });
+        if (retryRes.ok) response = retryRes;
+      }
       if (!response.ok) {
         const errText = await response.text().catch(() => "");
         throw new Error(`API请求失败: ${response.status} ${errText}`);
@@ -331,11 +349,11 @@ document.addEventListener("DOMContentLoaded", () => {
       messages.push({ role: "user", content: prompt });
 
       const bodyPayload = {
-        model: model,
+        model: cleanModel,
         messages: messages
       };
       
-      const isO1O3 = model.toLowerCase().startsWith("o1") || model.toLowerCase().startsWith("o3") || model.toLowerCase().includes("reasoner");
+      const isO1O3 = cleanModel.toLowerCase().startsWith("o1") || cleanModel.toLowerCase().startsWith("o3") || cleanModel.toLowerCase().includes("reasoner");
       if (!isO1O3) {
         bodyPayload.temperature = safeTemp;
       }
@@ -349,10 +367,9 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify(bodyPayload)
       });
 
-      // 如果因为 system 消息导致 400 错误，自动降级为纯 user 消息重试
-      if (!response.ok && systemInstruction && (response.status === 400 || response.status === 422)) {
-        const fallbackMessages = [{ role: "user", content: `${systemInstruction}\n\n${prompt}` }];
-        bodyPayload.messages = fallbackMessages;
+      if (!response.ok && (response.status === 400 || response.status === 422)) {
+        delete bodyPayload.temperature;
+        bodyPayload.messages = [{ role: "user", content: (systemInstruction ? systemInstruction + "\n\n" : "") + prompt }];
         response = await fetch(requestUrl, {
           method: "POST",
           headers: {
@@ -361,6 +378,18 @@ document.addEventListener("DOMContentLoaded", () => {
           },
           body: JSON.stringify(bodyPayload)
         });
+
+        if (!response.ok && (response.status === 400 || response.status === 422)) {
+          bodyPayload.model = model;
+          response = await fetch(requestUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${effectiveKey}`
+            },
+            body: JSON.stringify(bodyPayload)
+          });
+        }
       }
 
       if (!response.ok) {
@@ -1115,6 +1144,12 @@ ${Object.values(state.chats)
       select1.selectedIndex = 0;
       select2.selectedIndex = 1;
     }
+
+    const titleInput = document.getElementById("fanfic-title-prompt-input");
+    if (titleInput && !titleInput.value) {
+      const savedTitle = localStorage.getItem("bookshelf_default_title_prompt");
+      titleInput.value = savedTitle !== null ? savedTitle : "书名必须根据角色人设与剧情背景独创，2至6字，朴素生动有代入感，严禁雷同、生僻或特殊符号。";
+    }
   }
 
   // ▼▼▼ 【修改点 3】生成AI内容时，使用全局变量 ▼▼▼
@@ -1407,6 +1442,12 @@ ${worldviewContext}
         "拾字人",
       ]) || "匿名太太";
 
+    const defaultNamingPrompt = "书名必须根据角色人设与剧情背景独创，2至6字，朴素生动有代入感，严禁雷同、生僻或特殊符号。";
+    const customNamingPrompt = (document.getElementById("fanfic-title-prompt-input")?.value.trim()) || (localStorage.getItem("bookshelf_default_title_prompt") || "").trim() || defaultNamingPrompt;
+    if (document.getElementById("fanfic-title-prompt-input")?.value.trim()) {
+      localStorage.setItem("bookshelf_default_title_prompt", customNamingPrompt);
+    }
+
     const prompt = `
 你是一位专业的同人连载作者。请为角色A和角色B创作一部长篇连载小说，先写出完整的第一章，并给出简短摘要，方便后续续写。
 
@@ -1416,7 +1457,8 @@ ${worldviewContext}
 - 用户: ${userPersona}
 
 # 命名要求
-书名必须朴实无华、自然生动（例如《旧日微光》《夏日风》《重逢》《同桌》《小城》《春日信》等2-6字朴素名字），严禁使用浮夸生僻、中二堆砌或带有特殊符号的名字。
+${customNamingPrompt}
+必须结合主角身份与情景独创生动书名，字数二至六字，贴合人物性格与故事氛围。
 
 # 写作要求
 ${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心理与细节互动。"}
@@ -1426,7 +1468,7 @@ ${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心�
 
 # 输出格式规范（必须严格输出纯 JSON 对象，禁止包裹任何其他说明）
 {
-  "seriesTitle": "朴实自然的书名",
+  "seriesTitle": "独创书名",
   "chapterTitle": "第一章标题",
   "chapterSummary": "用3-5句概括本章剧情要点",
   "chapterContent": "第一章完整正文，正文换行用\\n表示",
@@ -1449,6 +1491,9 @@ ${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心�
       }
 
       let seriesTitle = (parsed.seriesTitle || `${char1Name}与${char2Name}`).replace(/[《》]/g, "").trim();
+      if (!seriesTitle || seriesTitle === "旧日微光" || seriesTitle === "未命名" || seriesTitle === "无题") {
+        seriesTitle = `${char1Name}与${char2Name}的往事`;
+      }
       const chapterTitle = (parsed.chapterTitle || "第一章").replace(/^第\d+章\s*/i, "").trim();
       const rawChapterContent =
         parsed.chapterContent ||
@@ -1915,82 +1960,134 @@ ${chapterSummaries || "暂无摘要"}
   // 初始化/加载同人文预设
   async function loadFanficPresets() {
     const select = document.getElementById("fanfic-preset-select");
+    if (!select) return;
+    const currentVal = select.value;
     select.innerHTML = '<option value="">-- 选择预设 --</option>';
 
-    // 确保全局设置里有这个字段
     if (!state.globalSettings.fanficPresets) {
       state.globalSettings.fanficPresets = [];
     }
 
     state.globalSettings.fanficPresets.forEach((preset, index) => {
       const option = document.createElement("option");
-      option.value = index; // 使用索引作为 value
+      option.value = index;
       option.textContent = preset.name;
       select.appendChild(option);
     });
+
+    if (currentVal !== "" && state.globalSettings.fanficPresets[currentVal]) {
+      select.value = currentVal;
+    }
   }
 
+  // 保存到当前选中的预设中
   async function saveCurrentFanficPreset() {
-    const name = await showCustomPrompt("保存预设", "请为当前配置起个名字：");
-    if (!name) return;
+    const select = document.getElementById("fanfic-preset-select");
+    const index = select ? select.value : "";
+
+    if (index === "" || !state.globalSettings.fanficPresets || !state.globalSettings.fanficPresets[index]) {
+      await createNewFanficPreset();
+      return;
+    }
+
+    const currentPreset = state.globalSettings.fanficPresets[index];
+    currentPreset.char1 = document.getElementById("fanfic-char1-select")?.value || "";
+    currentPreset.char2 = document.getElementById("fanfic-char2-select")?.value || "";
+    currentPreset.wordCount = document.getElementById("fanfic-wordcount-input")?.value || "";
+    currentPreset.type = document.getElementById("fanfic-type-input")?.value || "";
+    currentPreset.style = document.getElementById("fanfic-style-input")?.value || "";
+    currentPreset.worldview = document.getElementById("fanfic-worldview-input")?.value || "";
+    currentPreset.titlePrompt = document.getElementById("fanfic-title-prompt-input")?.value || "";
+
+    await db.globalSettings.put(state.globalSettings);
+    await loadFanficPresets();
+    if (select) select.value = index;
+
+    if (typeof showCustomAlert === "function") {
+      await showCustomAlert("保存成功", `已更新当前预设【${currentPreset.name}】`);
+    } else {
+      alert(`已更新当前预设【${currentPreset.name}】`);
+    }
+  }
+
+  // 新建并将当前内容保存为新预设，显示在最上方
+  async function createNewFanficPreset() {
+    let name = null;
+    if (typeof showCustomPrompt === "function") {
+      name = await showCustomPrompt("新建预设", "请为当前配置起个名字：");
+    } else {
+      name = prompt("请为当前配置起个名字：");
+    }
+    if (!name || !name.trim()) return;
 
     const preset = {
       name: name.trim(),
-      char1: document.getElementById("fanfic-char1-select").value,
-      char2: document.getElementById("fanfic-char2-select").value,
-      wordCount: document.getElementById("fanfic-wordcount-input").value,
-      type: document.getElementById("fanfic-type-input").value, // 新增：类型
-      style: document.getElementById("fanfic-style-input").value, // 新增：文风
-      worldview: document.getElementById("fanfic-worldview-input").value,
+      char1: document.getElementById("fanfic-char1-select")?.value || "",
+      char2: document.getElementById("fanfic-char2-select")?.value || "",
+      wordCount: document.getElementById("fanfic-wordcount-input")?.value || "",
+      type: document.getElementById("fanfic-type-input")?.value || "",
+      style: document.getElementById("fanfic-style-input")?.value || "",
+      worldview: document.getElementById("fanfic-worldview-input")?.value || "",
+      titlePrompt: document.getElementById("fanfic-title-prompt-input")?.value || ""
     };
 
-    if (!state.globalSettings.fanficPresets)
+    if (!state.globalSettings.fanficPresets) {
       state.globalSettings.fanficPresets = [];
-    state.globalSettings.fanficPresets.push(preset);
+    }
+    // 新保存的预设显示在最上方
+    state.globalSettings.fanficPresets.unshift(preset);
 
     await db.globalSettings.put(state.globalSettings);
     await loadFanficPresets();
 
-    document.getElementById("fanfic-preset-select").value =
-      state.globalSettings.fanficPresets.length - 1;
-    alert("预设保存成功！");
+    const select = document.getElementById("fanfic-preset-select");
+    if (select) select.value = "0";
+
+    if (typeof showCustomAlert === "function") {
+      await showCustomAlert("新建成功", `新预设【${preset.name}】已保存并置顶`);
+    } else {
+      alert(`新预设【${preset.name}】已保存并置顶`);
+    }
   }
 
   function applyFanficPreset() {
-    const index = document.getElementById("fanfic-preset-select").value;
+    const select = document.getElementById("fanfic-preset-select");
+    const index = select ? select.value : "";
     if (index === "") return;
 
     const preset = state.globalSettings.fanficPresets[index];
     if (preset) {
-      document.getElementById("fanfic-char1-select").value = preset.char1;
-      document.getElementById("fanfic-char2-select").value = preset.char2;
-      document.getElementById("fanfic-wordcount-input").value =
-        preset.wordCount || "";
-      document.getElementById("fanfic-type-input").value = preset.type || ""; // 回填类型
-      document.getElementById("fanfic-style-input").value = preset.style || ""; // 回填文风
-      document.getElementById("fanfic-worldview-input").value =
-        preset.worldview || "";
+      if (document.getElementById("fanfic-char1-select")) document.getElementById("fanfic-char1-select").value = preset.char1;
+      if (document.getElementById("fanfic-char2-select")) document.getElementById("fanfic-char2-select").value = preset.char2;
+      if (document.getElementById("fanfic-wordcount-input")) document.getElementById("fanfic-wordcount-input").value = preset.wordCount || "";
+      if (document.getElementById("fanfic-type-input")) document.getElementById("fanfic-type-input").value = preset.type || "";
+      if (document.getElementById("fanfic-style-input")) document.getElementById("fanfic-style-input").value = preset.style || "";
+      if (document.getElementById("fanfic-worldview-input")) document.getElementById("fanfic-worldview-input").value = preset.worldview || "";
+      if (document.getElementById("fanfic-title-prompt-input")) document.getElementById("fanfic-title-prompt-input").value = preset.titlePrompt || "";
     }
   }
 
   // 删除选中的预设
   async function deleteFanficPreset() {
-    const index = document.getElementById("fanfic-preset-select").value;
+    const select = document.getElementById("fanfic-preset-select");
+    const index = select ? select.value : "";
     if (index === "") return;
 
-    const confirmed = await showCustomConfirm(
-      "确认删除",
-      "确定要删除这个预设吗？",
-    );
+    let confirmed = false;
+    if (typeof showCustomConfirm === "function") {
+      confirmed = await showCustomConfirm("确认删除", "确定要删除这个预设吗？");
+    } else {
+      confirmed = confirm("确定要删除这个预设吗？");
+    }
     if (confirmed) {
       state.globalSettings.fanficPresets.splice(index, 1);
       await db.globalSettings.put(state.globalSettings);
       await loadFanficPresets();
 
-      // 清空输入框
-      document.getElementById("fanfic-wordcount-input").value = "";
-      document.getElementById("fanfic-style-input").value = "";
-      document.getElementById("fanfic-worldview-input").value = "";
+      if (document.getElementById("fanfic-wordcount-input")) document.getElementById("fanfic-wordcount-input").value = "";
+      if (document.getElementById("fanfic-style-input")) document.getElementById("fanfic-style-input").value = "";
+      if (document.getElementById("fanfic-worldview-input")) document.getElementById("fanfic-worldview-input").value = "";
+      if (document.getElementById("fanfic-title-prompt-input")) document.getElementById("fanfic-title-prompt-input").value = "";
     }
   }
 
@@ -2719,8 +2816,9 @@ ${JSON.stringify(publicFigures, null, 2)}
     const nextIndex = maxChapterIndex + 1;
 
     ongoingSeriesTasks.add(seriesId);
-    const loadingOverlay = document.getElementById("generation-overlay");
-    if (loadingOverlay) loadingOverlay.classList.add("visible");
+    if (typeof showCustomAlert === "function") {
+      showCustomAlert("开始追更", `已在后台开始创作《${seriesTitle}》第${nextIndex}章，写好后会自动提醒`);
+    }
 
     const char1Persona =
       series.char1Persona || getPersonaByName(series.char1Name);
@@ -2854,17 +2952,14 @@ ${customPromptRequirement}
       if (activeSeriesId === seriesId) {
         await renderSeriesDetail(seriesId);
       }
-      if (loadingOverlay) loadingOverlay.classList.remove("visible");
       if (activeForumPostId) {
         await renderPostDetails(activeForumPostId);
       }
-      await showCustomAlert("追更完成", `第${nextIndex}章已经写好，去看看吧！`);
+      await showCustomAlert("追更完成", `《${cleanSeriesTitle}》第${nextIndex}章已经写好，快去看看吧！`);
     } catch (error) {
       console.error("追更失败:", error);
-      if (loadingOverlay) loadingOverlay.classList.remove("visible");
       await showCustomAlert("追更失败", `发生了一个错误：\n${error.message}`);
     } finally {
-      if (loadingOverlay) loadingOverlay.classList.remove("visible");
       ongoingSeriesTasks.delete(seriesId);
     }
   }
@@ -2999,6 +3094,11 @@ ${customPromptRequirement}
   }
 
   async function openForumBookshelf() {
+    const titlePromptInput = document.getElementById("bookshelf-title-prompt-input");
+    if (titlePromptInput) {
+      const saved = localStorage.getItem("bookshelf_default_title_prompt");
+      titlePromptInput.value = saved !== null ? saved : "书名必须根据角色人设与剧情背景独创，2至6字，朴素生动有代入感，严禁雷同、生僻或特殊符号。";
+    }
     await renderForumBookshelf();
     showScreen("forum-bookshelf-screen");
   }
@@ -3844,6 +3944,11 @@ ${customPromptRequirement}
     .getElementById("save-fanfic-preset-btn")
     .addEventListener("click", saveCurrentFanficPreset);
 
+  const newFanficPresetBtn = document.getElementById("new-fanfic-preset-btn");
+  if (newFanficPresetBtn) {
+    newFanficPresetBtn.addEventListener("click", createNewFanficPreset);
+  }
+
   document
     .getElementById("delete-fanfic-preset-btn")
     .addEventListener("click", deleteFanficPreset);
@@ -3855,6 +3960,24 @@ ${customPromptRequirement}
   const forumBookshelfBtn = document.getElementById("open-forum-bookshelf-btn");
   if (forumBookshelfBtn) {
     forumBookshelfBtn.addEventListener("click", openForumBookshelf);
+  }
+
+  const saveBookshelfPromptBtn = document.getElementById("save-bookshelf-title-prompt-btn");
+  if (saveBookshelfPromptBtn) {
+    saveBookshelfPromptBtn.addEventListener("click", async () => {
+      const inputEl = document.getElementById("bookshelf-title-prompt-input");
+      const val = inputEl ? inputEl.value.trim() : "";
+      localStorage.setItem("bookshelf_default_title_prompt", val);
+      if (typeof showCustomAlert === "function") {
+        await showCustomAlert("保存成功", "书籍名称提示词已保存。");
+      }
+    });
+  }
+
+  const initialTitlePromptInput = document.getElementById("bookshelf-title-prompt-input");
+  if (initialTitlePromptInput) {
+    const saved = localStorage.getItem("bookshelf_default_title_prompt");
+    initialTitlePromptInput.value = saved !== null ? saved : "书名必须根据角色人设与剧情背景独创，2至6字，朴素生动有代入感，严禁雷同、生僻或特殊符号。";
   }
 
   const backFromBookshelfBtn = document.getElementById(

@@ -468,12 +468,12 @@ window.getSeasonNameByMonth = getSeasonNameByMonth;
 // 标准化天气池数据结构，确保四季完整存在
 function normalizeWeatherPool(pool) {
   if (!pool) return pool;
+  const defaultList = [
+    { name: "晴天", rate: 40, note: "温和宜人" },
+    { name: "多云", rate: 35, note: "云层微厚" },
+    { name: "小雨", rate: 25, note: "细雨绵绵" }
+  ];
   if (!pool.seasons || typeof pool.seasons !== "object") {
-    const defaultList = Array.isArray(pool.items) && pool.items.length > 0 ? pool.items : [
-      { name: "晴天", rate: 50, note: "温和宜人" },
-      { name: "多云", rate: 30, note: "云层微厚" },
-      { name: "小雨", rate: 20, note: "细雨绵绵" }
-    ];
     pool.seasons = {
       "春季": JSON.parse(JSON.stringify(defaultList)),
       "夏季": JSON.parse(JSON.stringify(defaultList)),
@@ -485,12 +485,17 @@ function normalizeWeatherPool(pool) {
       if (!Array.isArray(pool.seasons[s]) || pool.seasons[s].length === 0) {
         pool.seasons[s] = Array.isArray(pool.items) && pool.items.length > 0
           ? JSON.parse(JSON.stringify(pool.items))
-          : [{ name: "晴天", rate: 50, note: "温和宜人" }];
+          : JSON.parse(JSON.stringify(defaultList));
       }
+      pool.seasons[s] = pool.seasons[s].map(item => ({
+        name: (item && item.name) ? String(item.name).trim() : "晴天",
+        rate: (item && typeof item.rate !== "undefined" && !isNaN(parseFloat(item.rate))) ? parseFloat(item.rate) : 25,
+        note: (item && item.note) ? String(item.note) : ""
+      }));
     });
   }
   if (!Array.isArray(pool.items) || pool.items.length === 0) {
-    pool.items = pool.seasons["春季"] || [];
+    pool.items = pool.seasons["春季"] || defaultList;
   }
   return pool;
 }
@@ -2897,7 +2902,8 @@ let activeWeatherSeason = "春季";
 
 function renderWeatherTab(container) {
   const pools = getStoredWeatherPools();
-  const activePool = getActiveWeatherPool();
+  const activeId = localStorage.getItem("coc_active_weather_pool_id");
+  let activePool = pools.find(p => p.id === activeId) || pools[0];
   normalizeWeatherPool(activePool);
 
   const seasonsList = ["春季", "夏季", "秋季", "冬季"];
@@ -3018,6 +3024,21 @@ function renderWeatherTab(container) {
   // 绑定事件：切换季节标签
   container.querySelectorAll(".weather-season-tab-btn").forEach(btn => {
     btn.onclick = () => {
+      const names = container.querySelectorAll(".weather-name-input");
+      const rates = container.querySelectorAll(".weather-rate-input");
+      const notes = container.querySelectorAll(".weather-note-input");
+      if (names.length > 0 && activePool && activePool.seasons) {
+        activePool.seasons[activeWeatherSeason] = [];
+        for (let i = 0; i < names.length; i++) {
+          activePool.seasons[activeWeatherSeason].push({
+            name: names[i].value.trim(),
+            rate: parseFloat(rates[i].value) || 0,
+            note: notes[i].value.trim()
+          });
+        }
+        activePool.items = activePool.seasons[activeWeatherSeason];
+        saveStoredWeatherPools(pools);
+      }
       activeWeatherSeason = btn.dataset.season;
       renderWeatherTab(container);
     };
@@ -3138,7 +3159,7 @@ function renderWeatherTab(container) {
 
   // 绑定事件：测试抽取
   document.getElementById("weather-test-draw-btn").onclick = async () => {
-    const drawn = window.drawWeatherFromCurrentPool(activeWeatherSeason);
+    const drawn = window.drawWeatherFromCurrentPool(activeWeatherSeason, activePool.id);
     const alertMsg = `${drawn.season}抽中：${drawn.name}，概率${drawn.rate}%，备注${drawn.note || "无"}`;
     if (typeof window.showCustomAlert === "function") {
       await window.showCustomAlert("抽取结果", alertMsg);
