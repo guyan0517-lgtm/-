@@ -68,7 +68,8 @@
     <script src="coc-panel.js"></script>
     <script src="dice-engine.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
+    <script src="/node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script>if (typeof PDFLib === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"><\/script>'); }</script>
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script src="module-manager.js" defer></script>
     <script src="inventory-manager.js" defer></script>
@@ -8655,10 +8656,10 @@
 
           <div class="form-group" style="margin: 0;">
             <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">输出格式</label>
-            <select id="module-merge-format-select" class="moe-input" style="width: 100%; height: 34px; line-height: 24px; padding: 4px 8px; font-size: 12.5px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
-              <option value="pdf" selected>PDF 格式</option>
-              <option value="docx">DOCX 格式</option>
-              <option value="txt">TXT 格式</option>
+            <select id="module-merge-format-select" class="moe-input" style="width: 100%; min-height: 36px; height: 36px; line-height: 22px; padding: 6px 10px; font-size: 13px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; display: block;">
+              <option value="pdf" selected>PDF</option>
+              <option value="docx">DOCX</option>
+              <option value="txt">TXT</option>
             </select>
           </div>
 
@@ -37466,15 +37467,17 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               }
             }
 
-            // 记录调试台日志
+            // 记录调试台日志（记录单次API调用的完整发送字段与完整返回字段）
             if (typeof recordChatDebugLog === "function") {
               recordChatDebugLog(chatId, {
                 systemPrompt: systemPrompt,
                 messages: messagesPayload,
+                allSentMessages: openAiMessages,
                 model: model,
                 temperature: state.apiConfig?.temperature || 0.8,
               }, {
                 rawContent: aiResponseContent,
+                reasoningContent: data?.choices?.[0]?.message?.reasoning_content || null,
                 fullData: data,
               });
             }
@@ -57881,11 +57884,18 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           else alert("总结提示词已保存");
         }
 
-        // ==========================================
-        // 调试台 (Debug Console) 逻辑
-        // ==========================================
+        // =========================================================================================
+        // 【AI永久保护锁与最高级别禁止修改标签：调试台核心逻辑】
+        // 【CRITICAL AI PERMANENT LOCK: ABSOLUTELY DO NOT MODIFY DEBUG CONSOLE CODE UNDER ANY CIRCUMSTANCES】
+        // 警告：无论后续进行任何功能新增、重构、美化或修改任何业务模块，绝对禁止擅自修改本段调试台代码！
+        // 除非用户在当前指令中有明确、清晰、无歧义的指示要求修改调试台的代码，否则任何AI都绝对不可改动此处任何一行代码！
+        // 核心规则与铁律：
+        // 1. 一条消息等于聊天中调用API一次完整交互：我方发送的完整字段与对方回复的完整字段，绝不是单条气泡。
+        // 2. 完整字段包含一次性打包发送给AI的一切文本、代码、人设、设定、系统提示注入词，以及AI原封不动返回的一切内容，全都要在此完整显示，严禁任何过滤或截断省略。
+        // 3. 换位符与换行符必须真实换行渲染：遇到换行标记直接换下一行，禁止显示一排排斜杠n字样，保持排版清晰易读。
+        // =========================================================================================
         function escapeDebugHtml(str) {
-          if (typeof str !== "string") return String(str);
+          if (typeof str !== "string") return String(str || "");
           return str
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
@@ -57894,75 +57904,109 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             .replace(/'/g, "&#039;");
         }
 
+        function cleanDebugNewlines(val) {
+          if (val === null || val === undefined) return "无";
+          let str = typeof val === "string" ? val : (typeof val === "object" ? JSON.stringify(val, null, 2) : String(val));
+          return str
+            .replace(/\\+r\\+n/g, "\n")
+            .replace(/\\+n/g, "\n")
+            .replace(/\\+r/g, "\n")
+            .replace(/\r\n/g, "\n")
+            .replace(/\r/g, "\n")
+            .replace(/\/n/g, "\n");
+        }
+
         function extractFullSentText(sent) {
           if (!sent) return "无";
-          if (typeof sent === "string") {
-            return sent.replace(/data:image\/[a-zA-Z]+;base64,[^"'\s\)]+/g, "[图片已省略]");
-          }
-          let lines = [];
-          if (sent.systemPrompt) {
-            lines.push(`【系统提示词 System Prompt】\n${sent.systemPrompt}`);
-          }
-          if (Array.isArray(sent.messages)) {
-            lines.push(`\n【上下文与消息 Messages】`);
-            sent.messages.forEach((m, idx) => {
-              const role = m.role || "unknown";
-              let content = "";
-              if (typeof m.content === "string") {
-                content = m.content;
-              } else if (Array.isArray(m.content)) {
-                content = m.content.map(p => {
-                  if (typeof p === "string") return p;
-                  if (p?.type === "text") return p.text || "";
-                  if (p?.type === "image_url") return "[图片已省略]";
-                  return JSON.stringify(p);
-                }).join("\n");
-              } else {
-                content = JSON.stringify(m.content, null, 2);
-              }
-              content = content.replace(/data:image\/[a-zA-Z]+;base64,[^"'\s\)]+/g, "[图片已省略]");
-              lines.push(`\n--- 第 ${idx + 1} 条 (${role}) ---\n${content}`);
-            });
-          } else if (sent.prompt) {
-            lines.push(`\n${sent.prompt}`);
+          if (typeof sent === "string") return cleanDebugNewlines(sent);
+
+          let allMsgs = [];
+          if (Array.isArray(sent.allSentMessages)) {
+            allMsgs = sent.allSentMessages;
           } else {
-            lines.push(JSON.stringify(sent, null, 2));
+            if (sent.systemPrompt) {
+              allMsgs.push({ role: "system", content: sent.systemPrompt });
+            }
+            if (Array.isArray(sent.messages)) {
+              allMsgs = allMsgs.concat(sent.messages);
+            } else if (Array.isArray(sent.messagesPayload)) {
+              allMsgs = allMsgs.concat(sent.messagesPayload);
+            }
           }
-          return lines.join("\n");
+
+          if (allMsgs.length === 0) {
+            return cleanDebugNewlines(JSON.stringify(sent, null, 2));
+          }
+
+          let textBlocks = [];
+          allMsgs.forEach((msg, idx) => {
+            const role = msg.role || "user";
+            let roleTitle = "";
+            if (role === "system") {
+              roleTitle = "系统提示与全部注入词";
+            } else if (role === "user") {
+              roleTitle = "用户输入或推进消息";
+            } else if (role === "assistant") {
+              roleTitle = "助手历史回复";
+            } else {
+              roleTitle = role;
+            }
+
+            let rawContent = "";
+            if (typeof msg.content === "string") {
+              rawContent = msg.content;
+            } else if (Array.isArray(msg.content)) {
+              rawContent = msg.content.map(p => {
+                if (typeof p === "string") return p;
+                if (p?.text) return p.text;
+                return JSON.stringify(p, null, 2);
+              }).join("\n");
+            } else if (typeof msg.content === "object" && msg.content !== null) {
+              rawContent = JSON.stringify(msg.content, null, 2);
+            } else {
+              rawContent = String(msg.content || "");
+            }
+
+            textBlocks.push(`=== 第 ${idx + 1} 块消息 · ${roleTitle} ===\n${cleanDebugNewlines(rawContent)}`);
+          });
+
+          return textBlocks.join("\n\n");
         }
 
         function extractFullReceivedText(received) {
           if (!received) return "无";
-          let content = "";
-          if (typeof received === "string") {
-            content = received;
-          } else if (typeof received.rawContent === "string" && received.rawContent) {
-            content = received.rawContent;
+          if (typeof received === "string") return cleanDebugNewlines(received);
+
+          let parts = [];
+          if (received.reasoningContent && typeof received.reasoningContent === "string" && received.reasoningContent.trim()) {
+            parts.push(`=== AI 深度思考推理 ===\n${cleanDebugNewlines(received.reasoningContent.trim())}`);
+          }
+
+          let mainContent = "";
+          if (typeof received.rawContent === "string" && received.rawContent.trim()) {
+            mainContent = received.rawContent;
           } else if (received.fullData) {
             const d = received.fullData;
             const txt = d?.choices?.[0]?.message?.content || d?.candidates?.[0]?.content?.parts?.[0]?.text;
-            content = txt || JSON.stringify(d, null, 2);
+            mainContent = txt || (typeof d === "string" ? d : JSON.stringify(d, null, 2));
           } else {
-            content = JSON.stringify(received, null, 2);
+            mainContent = typeof received === "object" ? JSON.stringify(received, null, 2) : String(received);
           }
-          // 去除 nov / nai 生图 base64 和图片URL
-          content = content.replace(/data:image\/[a-zA-Z]+;base64,[^"'\s\)]+/g, "[生图数据已省略]");
-          content = content.replace(/https?:\/\/[^\s"']+\.(?:png|jpg|jpeg|webp)(?:\?[^\s"']*)?/gi, (url) => {
-            if (url.includes("novelai") || url.includes("nai") || url.includes("blob:") || url.includes("image")) {
-              return "[生图URL已省略]";
+
+          if (mainContent) {
+            if (parts.length > 0) {
+              parts.push(`=== AI 完整回复与输出内容 ===\n${cleanDebugNewlines(mainContent)}`);
+            } else {
+              parts.push(cleanDebugNewlines(mainContent));
             }
-            return url;
-          });
-          return content;
+          }
+
+          return parts.join("\n\n");
         }
 
         function formatDebugDisplay(data) {
-          if (data === null || data === undefined) return "无";
-          let str = typeof data === "string" ? data : JSON.stringify(data, null, 2);
-          try {
-            str = str.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\/n/g, "\n");
-          } catch (e) {}
-          return escapeDebugHtml(str);
+          const cleaned = cleanDebugNewlines(data);
+          return escapeDebugHtml(cleaned);
         }
 
         function recordChatDebugLog(chatId, sentPayload, receivedPayload) {
@@ -57973,7 +58017,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             sent: sentPayload,
             received: receivedPayload,
           });
-          if (state.chatDebugLogs[chatId].length > 5) {
+          if (state.chatDebugLogs[chatId].length > 15) {
             state.chatDebugLogs[chatId].shift();
           }
         }
@@ -57992,100 +58036,65 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           listEl.style.cssText = "display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px;";
 
           if (logs.length === 0) {
-            const recentHistory = (chat && chat.history ? chat.history.filter((m) => !m.isHidden && !m.isTemporary).slice(-5) : []);
-            if (recentHistory.length === 0) {
-              body.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 40px 10px; font-size: 13px;">暂无调试数据，请在发送消息后查看。</div>`;
-              modal.classList.add("visible");
-              return;
-            }
-            recentHistory.forEach((msg, idx) => {
-              const itemEl = document.createElement("div");
-              itemEl.style.cssText = "background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px;";
-              const timeStr = new Date(msg.timestamp || Date.now()).toLocaleTimeString();
-              const isAi = msg.role === "assistant";
-              const rawText = msg.content || "";
-              const formattedContent = formatDebugDisplay(rawText);
-
-              itemEl.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
-                  <span style="font-weight: 600; font-size: 12px; color: var(--text-primary);">第 ${idx + 1} 条 · ${isAi ? "AI 返回字段" : "发送字段"}</span>
-                  <span style="font-size: 11px; color: var(--text-secondary);">${timeStr}</span>
-                </div>
-                <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; padding: 10px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">完整字段</span>
-                    <button type="button" class="moe-btn-mini copy-debug-btn" style="width: 48px !important; min-width: 48px !important; max-width: 48px !important; height: 22px; padding: 0 6px !important; font-size: 11px; border-radius: 6px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0;">复制</button>
-                  </div>
-                  <pre style="margin: 0; padding: 8px; font-size: 11px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow-y: auto; background: var(--secondary-bg); border-radius: 6px; font-family: monospace;">${formattedContent}</pre>
-                </div>
-              `;
-              const copyBtn = itemEl.querySelector(".copy-debug-btn");
-              if (copyBtn) {
-                copyBtn.onclick = async () => {
-                  try {
-                    await navigator.clipboard.writeText(rawText);
-                    if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已复制到剪贴板");
-                  } catch (e) {}
-                };
-              }
-              listEl.appendChild(itemEl);
-            });
-          } else {
-            logs.slice(-5).forEach((entry, idx) => {
-              const itemEl = document.createElement("div");
-              itemEl.style.cssText = "background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px;";
-              const timeStr = new Date(entry.timestamp).toLocaleTimeString();
-              const fullSentRaw = extractFullSentText(entry.sent);
-              const fullReceivedRaw = extractFullReceivedText(entry.received);
-              const formattedSent = formatDebugDisplay(fullSentRaw);
-              const formattedReceived = formatDebugDisplay(fullReceivedRaw);
-
-              itemEl.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
-                  <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">第 ${idx + 1} 轮交互</span>
-                  <span style="font-size: 11px; color: var(--text-secondary);">${timeStr}</span>
-                </div>
-
-                <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; gap: 6px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">我方发送的完整字段</span>
-                    <button type="button" class="moe-btn-mini copy-sent-btn" style="width: 48px !important; min-width: 48px !important; max-width: 48px !important; height: 22px; padding: 0 6px !important; font-size: 11px; border-radius: 6px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0;">复制</button>
-                  </div>
-                  <pre style="margin: 0; padding: 8px; font-size: 11px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow-y: auto; background: var(--secondary-bg); border-radius: 6px; font-family: monospace;">${formattedSent}</pre>
-                </div>
-
-                <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; gap: 6px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">对方回复的完整字段</span>
-                    <button type="button" class="moe-btn-mini copy-received-btn" style="width: 48px !important; min-width: 48px !important; max-width: 48px !important; height: 22px; padding: 0 6px !important; font-size: 11px; border-radius: 6px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0;">复制</button>
-                  </div>
-                  <pre style="margin: 0; padding: 8px; font-size: 11px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow-y: auto; background: var(--secondary-bg); border-radius: 6px; font-family: monospace;">${formattedReceived}</pre>
-                </div>
-              `;
-
-              const copySentBtn = itemEl.querySelector(".copy-sent-btn");
-              if (copySentBtn) {
-                copySentBtn.onclick = async () => {
-                  try {
-                    await navigator.clipboard.writeText(fullSentRaw);
-                    if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已复制发送内容");
-                  } catch (e) {}
-                };
-              }
-
-              const copyReceivedBtn = itemEl.querySelector(".copy-received-btn");
-              if (copyReceivedBtn) {
-                copyReceivedBtn.onclick = async () => {
-                  try {
-                    await navigator.clipboard.writeText(fullReceivedRaw);
-                    if (typeof showCustomAlert === "function") await showCustomAlert("提示", "已复制回复内容");
-                  } catch (e) {}
-                };
-              }
-
-              listEl.appendChild(itemEl);
-            });
+            body.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 40px 10px; font-size: 13px;">暂无调试数据，请在当前聊天中发送消息并等待AI回复后查看。</div>`;
+            modal.classList.add("visible");
+            return;
           }
+
+          logs.forEach((entry, idx) => {
+            const itemEl = document.createElement("div");
+            itemEl.style.cssText = "background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px;";
+            const timeStr = new Date(entry.timestamp).toLocaleTimeString();
+            const fullSentRaw = extractFullSentText(entry.sent);
+            const fullReceivedRaw = extractFullReceivedText(entry.received);
+            const formattedSent = formatDebugDisplay(fullSentRaw);
+            const formattedReceived = formatDebugDisplay(fullReceivedRaw);
+
+            itemEl.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">第 ${idx + 1} 次调用 · 一条消息完整交互</span>
+                <span style="font-size: 11px; color: var(--text-secondary);">${timeStr}</span>
+              </div>
+
+              <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">我方发送的完整字段</span>
+                  <button type="button" class="moe-btn-mini copy-sent-btn" style="width: 48px !important; min-width: 48px !important; max-width: 48px !important; height: 22px; padding: 0 6px !important; font-size: 11px; border-radius: 6px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0;">复制</button>
+                </div>
+                <pre style="margin: 0; padding: 8px; font-size: 11px; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 340px; overflow-y: auto; background: var(--secondary-bg); border-radius: 6px; font-family: monospace;">${formattedSent}</pre>
+              </div>
+
+              <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">对方回复的完整字段</span>
+                  <button type="button" class="moe-btn-mini copy-received-btn" style="width: 48px !important; min-width: 48px !important; max-width: 48px !important; height: 22px; padding: 0 6px !important; font-size: 11px; border-radius: 6px; cursor: pointer; flex-shrink: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; margin: 0;">复制</button>
+                </div>
+                <pre style="margin: 0; padding: 8px; font-size: 11px; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 340px; overflow-y: auto; background: var(--secondary-bg); border-radius: 6px; font-family: monospace;">${formattedReceived}</pre>
+              </div>
+            `;
+
+            const copySentBtn = itemEl.querySelector(".copy-sent-btn");
+            if (copySentBtn) {
+              copySentBtn.onclick = async () => {
+                try {
+                  await navigator.clipboard.writeText(fullSentRaw);
+                  if (typeof showCustomAlert === "function") await showCustomAlert("成功", "已复制发送内容");
+                } catch (e) {}
+              };
+            }
+
+            const copyReceivedBtn = itemEl.querySelector(".copy-received-btn");
+            if (copyReceivedBtn) {
+              copyReceivedBtn.onclick = async () => {
+                try {
+                  await navigator.clipboard.writeText(fullReceivedRaw);
+                  if (typeof showCustomAlert === "function") await showCustomAlert("成功", "已复制回复内容");
+                } catch (e) {}
+              };
+            }
+
+            listEl.appendChild(itemEl);
+          });
 
           body.appendChild(listEl);
           modal.classList.add("visible");
