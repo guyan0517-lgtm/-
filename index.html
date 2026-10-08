@@ -8385,6 +8385,7 @@
         </div>
         <!-- 底部操作按钮区域 -->
         <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px; width: 100%;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="delete-mini-map-btn" style="flex: 1; min-width: 0; height: 28px; font-size: 11px; padding: 0; font-family: inherit; display: inline-flex; align-items: center; justify-content: center;">删除</button>
           <button type="button" class="chat-mod-footer-btn secondary" id="modify-mini-map-btn" style="flex: 1; min-width: 0; height: 28px; font-size: 11px; padding: 0; font-family: inherit; display: inline-flex; align-items: center; justify-content: center;">修改小地图</button>
           <button type="button" class="chat-mod-footer-btn primary" id="confirm-mini-map-style-btn" style="flex: 1; min-width: 0; height: 28px; font-size: 11px; padding: 0; font-family: inherit; display: inline-flex; align-items: center; justify-content: center;">生成地图</button>
         </div>
@@ -32203,11 +32204,65 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const closeModal = () => modal.classList.remove("visible");
           if (closeBtn) closeBtn.onclick = closeModal;
 
+          const deleteBtn = document.getElementById("delete-mini-map-btn");
+          if (deleteBtn) {
+            deleteBtn.onclick = async () => {
+              const chat = state.chats[state.activeChatId];
+              if (!chat) return;
+              const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
+              const curSvg = isModMode
+                ? chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg
+                : (chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null));
+
+              if (!curSvg) {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "当前暂无小地图可供删除");
+                }
+                return;
+              }
+
+              let confirmed = true;
+              if (typeof window.showCustomConfirm === "function") {
+                confirmed = await window.showCustomConfirm("删除地图", isModMode ? "确认删除当前模组的小地图吗？" : "确认删除当前上下文小地图吗？");
+              } else if (typeof confirm === "function") {
+                confirmed = confirm(isModMode ? "确认删除当前模组的小地图吗？" : "确认删除当前上下文小地图吗？");
+              }
+              if (!confirmed) return;
+
+              if (isModMode) {
+                if (chat.settings?.moduleMiniMaps && chat.settings.moduleMiniMaps[chat.activeModuleId]) {
+                  delete chat.settings.moduleMiniMaps[chat.activeModuleId];
+                }
+              } else {
+                if (chat.settings) {
+                  delete chat.settings.contextMiniMapSvg;
+                  delete chat.settings.contextMiniMapStyle;
+                }
+              }
+              if (chat.settings) {
+                delete chat.settings.miniMapSvg;
+                delete chat.settings.miniMapStyle;
+              }
+
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance) await dbInstance.chats.put(chat);
+
+              renderChatMiniMap();
+              closeModal();
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "已删除当前小地图");
+              }
+            };
+          }
+
           const modifyBtn = document.getElementById("modify-mini-map-btn");
           if (modifyBtn) {
             modifyBtn.onclick = () => {
               const chat = state.chats[state.activeChatId];
-              const curSvg = chat?.settings?.miniMapSvg || (chat?.settings?.useModuleMap !== false && chat?.activeModuleId && chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg) || chat?.settings?.contextMiniMapSvg;
+              const isModMode = chat?.settings?.useModuleMap !== false && !!chat?.activeModuleId;
+              const curSvg = isModMode
+                ? chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg
+                : (chat?.settings?.contextMiniMapSvg || (!chat?.settings?.moduleMiniMaps ? chat?.settings?.miniMapSvg : null));
               if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
                 if (typeof window.showCustomAlert === "function") {
                   window.showCustomAlert("提示", "当前暂无已生成的小地图，请先点击“生成地图”生成基础小地图");
@@ -32597,12 +32652,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } else if (!chat.settings.useModuleMap && chat.settings.contextMiniMapSvg) {
                 chat.settings.miniMapSvg = chat.settings.contextMiniMapSvg;
                 chat.settings.miniMapStyle = chat.settings.contextMiniMapStyle || "奶油风";
+              } else {
+                delete chat.settings.miniMapSvg;
+                delete chat.settings.miniMapStyle;
               }
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance) await dbInstance.chats.put(chat);
               updateButtonsState();
               await renderChatMapList();
+              renderChatMiniMap();
             };
           }
 
@@ -33869,7 +33928,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
-          if (!card.style.top || card.style.top === "") {
+          const curLeft = parseFloat(card.style.left);
+          const curTop = parseFloat(card.style.top);
+          if (!card.style.top || card.style.top === "" || isNaN(curLeft) || isNaN(curTop) || curTop < 0 || curTop > (window.innerHeight - 60) || curLeft < -150 || curLeft > (window.innerWidth - 60)) {
             const initialLeft = Math.max(10, Math.floor((window.innerWidth - 350) / 2));
             card.style.left = initialLeft + "px";
             card.style.top = "100px";
@@ -34134,12 +34195,51 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
           const chat = state.chats[state.activeChatId];
-          if (!chat.settings?.miniMapSvg) {
-            container.innerHTML = "";
+          const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
+          let rawSvg = null;
+          if (isModMode) {
+            rawSvg = chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || null;
+            if (rawSvg) {
+              chat.settings.miniMapSvg = rawSvg;
+              chat.settings.miniMapStyle = chat.settings.moduleMiniMaps[chat.activeModuleId].style || chat.settings.miniMapStyle || "奶油风";
+            }
+          } else {
+            rawSvg = chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null);
+            if (rawSvg) {
+              chat.settings.miniMapSvg = rawSvg;
+              chat.settings.miniMapStyle = chat.settings.contextMiniMapStyle || chat.settings.miniMapStyle || "奶油风";
+            }
+          }
+
+          if (!rawSvg || typeof rawSvg !== "string" || !rawSvg.trim()) {
+            container.innerHTML = `<div style="padding: 30px 10px; text-align: center; color: var(--text-secondary); font-size: 12px;">暂无小地图数据，请先生成小地图</div>`;
             return;
           }
 
-          container.innerHTML = chat.settings.miniMapSvg;
+          let sanitizedSvg = rawSvg.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
+          const svgMatch = sanitizedSvg.match(/<svg[\s\S]*?<\/svg>/i);
+          if (svgMatch) {
+            sanitizedSvg = svgMatch[0];
+          } else if (sanitizedSvg.includes("<svg") && !sanitizedSvg.includes("</svg>")) {
+            sanitizedSvg = sanitizedSvg + "</svg>";
+          }
+
+          if (!sanitizedSvg.includes("viewBox=")) {
+            const wMatch = sanitizedSvg.match(/width=["']?(\d+)["']?/i);
+            const hMatch = sanitizedSvg.match(/height=["']?(\d+)["']?/i);
+            const w = wMatch ? wMatch[1] : 540;
+            const h = hMatch ? hMatch[1] : 400;
+            sanitizedSvg = sanitizedSvg.replace(/<svg\b/i, `<svg viewBox="0 0 ${w} ${h}"`);
+          }
+          if (!sanitizedSvg.includes("style=")) {
+            sanitizedSvg = sanitizedSvg.replace(/<svg\b/i, '<svg style="width: 100%; height: auto; max-width: 100%; display: block;"');
+          }
+
+          container.innerHTML = sanitizedSvg;
+
+          mapInnerZoom = 1;
+          mapInnerPanX = 0;
+          mapInnerPanY = 0;
           updateMiniMapInnerTransform();
 
           // 清洗与防御 SVG 内部可能包含的 transform 样式，彻底杜绝点击导致节点飞到左上角 (0,0) 的问题
@@ -34708,7 +34808,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const chat = state.chats[state.activeChatId];
           if (!chat) return;
 
-          const curSvg = chat.settings?.miniMapSvg || (chat.settings?.useModuleMap !== false && chat.activeModuleId && chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg) || chat.settings?.contextMiniMapSvg;
+          const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
+          const curSvg = isModMode
+            ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || null)
+            : (chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null));
           if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
             throw new Error("当前暂无已生成的小地图代码");
           }
@@ -34722,7 +34825,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }).join("\n");
 
           const globalReq = (localStorage.getItem("mini_map_global_requirement") || "").trim();
-          const curStyle = chat.settings?.miniMapStyle || "奶油风";
+          const curStyle = isModMode
+            ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.style || chat.settings?.miniMapStyle || "奶油风")
+            : (chat.settings?.contextMiniMapStyle || chat.settings?.miniMapStyle || "奶油风");
 
           const prompt = `你拥有全球顶尖的矢量概念插画与示意地图设计大师造诣。用户希望在现有的小地图SVG代码基础上进行精准的增量修改与优化。\n\n` +
             `【现有的完整小地图SVG代码】：\n${curSvg}\n\n` +
@@ -34788,6 +34893,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const svgMatch = newSvgCode.match(/<svg[\s\S]*?<\/svg>/i);
               if (svgMatch) {
                 newSvgCode = svgMatch[0];
+              } else if (newSvgCode.includes("<svg") && !newSvgCode.includes("</svg>")) {
+                newSvgCode = newSvgCode + "</svg>";
+              }
+              if (!newSvgCode.includes("viewBox=")) {
+                const wMatch = newSvgCode.match(/width=["']?(\d+)["']?/i);
+                const hMatch = newSvgCode.match(/height=["']?(\d+)["']?/i);
+                const w = wMatch ? wMatch[1] : 540;
+                const h = hMatch ? hMatch[1] : 400;
+                newSvgCode = newSvgCode.replace(/<svg\b/i, `<svg viewBox="0 0 ${w} ${h}"`);
               }
             }
           } else {
@@ -58600,27 +58714,32 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           let personaVal = "";
           let savedPromptVal = "";
           let defaultPromptVal = "";
-          const defaultPositiveNai = (typeof getNovelAISettings === "function" ? (getNovelAISettings().default_positive || "") : "");
+          const baselineAvatarDefaultPrompt = "solo, portrait, avatar, headshot";
+          const savedGlobalDefaultPrompt = localStorage.getItem("avatar_gen_default_prompt") || baselineAvatarDefaultPrompt;
 
           if (targetType === "my") {
             personaVal = (chat && chat.settings && (chat.settings.myPersona || chat.settings.userPersona)) || state.userPersona || "";
             savedPromptVal = (chat && chat.settings && chat.settings.lastMyAvatarPrompt) || "";
-            defaultPromptVal = (chat && chat.settings && chat.settings.lastMyAvatarDefaultPrompt !== undefined) ? chat.settings.lastMyAvatarDefaultPrompt : defaultPositiveNai;
+            defaultPromptVal = (chat && chat.settings && chat.settings.lastMyAvatarDefaultPrompt !== undefined) ? chat.settings.lastMyAvatarDefaultPrompt : savedGlobalDefaultPrompt;
           } else if (targetType === "ai") {
             personaVal = (chat && chat.settings && chat.settings.aiPersona) || (chat && chat.persona) || "";
             savedPromptVal = (chat && chat.settings && chat.settings.lastAiAvatarPrompt) || "";
-            defaultPromptVal = (chat && chat.settings && chat.settings.lastAiAvatarDefaultPrompt !== undefined) ? chat.settings.lastAiAvatarDefaultPrompt : defaultPositiveNai;
+            defaultPromptVal = (chat && chat.settings && chat.settings.lastAiAvatarDefaultPrompt !== undefined) ? chat.settings.lastAiAvatarDefaultPrompt : savedGlobalDefaultPrompt;
           } else if (targetType === "group") {
             personaVal = (chat && chat.settings && (chat.settings.groupDescription || chat.description)) || "";
             savedPromptVal = (chat && chat.settings && chat.settings.lastGroupAvatarPrompt) || "";
-            defaultPromptVal = (chat && chat.settings && chat.settings.lastGroupAvatarDefaultPrompt !== undefined) ? chat.settings.lastGroupAvatarDefaultPrompt : defaultPositiveNai;
+            defaultPromptVal = (chat && chat.settings && chat.settings.lastGroupAvatarDefaultPrompt !== undefined) ? chat.settings.lastGroupAvatarDefaultPrompt : savedGlobalDefaultPrompt;
           } else if (targetType === "member") {
             if (chat && editingMemberId) {
               const mem = (chat.members || []).find((m) => m.id === editingMemberId);
               personaVal = (mem && (mem.persona || (mem.settings && mem.settings.aiPersona))) || "";
               savedPromptVal = (mem && mem.lastAvatarPrompt) || "";
-              defaultPromptVal = (mem && mem.lastAvatarDefaultPrompt !== undefined) ? mem.lastAvatarDefaultPrompt : defaultPositiveNai;
+              defaultPromptVal = (mem && mem.lastAvatarDefaultPrompt !== undefined) ? mem.lastAvatarDefaultPrompt : savedGlobalDefaultPrompt;
             }
+          }
+
+          if (!defaultPromptVal || defaultPromptVal.includes("masterpiece") || defaultPromptVal.includes("best quality") || defaultPromptVal.includes("lowres") || defaultPromptVal.includes("highly detailed")) {
+            defaultPromptVal = savedGlobalDefaultPrompt || baselineAvatarDefaultPrompt;
           }
 
           const personaInput = document.getElementById("avatar-gen-persona-input");
@@ -58630,7 +58749,24 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           if (promptInput) promptInput.value = savedPromptVal;
 
           const defaultPromptInput = document.getElementById("avatar-gen-default-prompt-input");
-          if (defaultPromptInput) defaultPromptInput.value = defaultPromptVal;
+          if (defaultPromptInput) {
+            defaultPromptInput.value = defaultPromptVal;
+            defaultPromptInput.oninput = () => {
+              const val = defaultPromptInput.value;
+              localStorage.setItem("avatar_gen_default_prompt", val);
+              if (chat && chat.settings) {
+                if (avatarGenState.currentTarget === "ai") chat.settings.lastAiAvatarDefaultPrompt = val;
+                else if (avatarGenState.currentTarget === "my") chat.settings.lastMyAvatarDefaultPrompt = val;
+                else if (avatarGenState.currentTarget === "group") chat.settings.lastGroupAvatarDefaultPrompt = val;
+                else if (avatarGenState.currentTarget === "member" && editingMemberId) {
+                  const m = (chat.members || []).find((item) => item.id === editingMemberId);
+                  if (m) m.lastAvatarDefaultPrompt = val;
+                }
+                const dbInst = typeof db !== "undefined" ? db : (window.database || null);
+                if (dbInst) dbInst.chats.put(chat);
+              }
+            };
+          }
 
           const placeholder = document.getElementById("avatar-gen-placeholder");
           if (placeholder) placeholder.style.display = "flex";
@@ -58752,6 +58888,22 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请先生成或输入词条");
             else alert("请先生成或输入词条");
             return;
+          }
+
+          if (defaultPromptText) {
+            localStorage.setItem("avatar_gen_default_prompt", defaultPromptText);
+            const curChat = state.chats[state.activeChatId];
+            if (curChat && curChat.settings) {
+              if (avatarGenState.currentTarget === "ai") curChat.settings.lastAiAvatarDefaultPrompt = defaultPromptText;
+              else if (avatarGenState.currentTarget === "my") curChat.settings.lastMyAvatarDefaultPrompt = defaultPromptText;
+              else if (avatarGenState.currentTarget === "group") curChat.settings.lastGroupAvatarDefaultPrompt = defaultPromptText;
+              else if (avatarGenState.currentTarget === "member" && editingMemberId) {
+                const mem = (curChat.members || []).find((m) => m.id === editingMemberId);
+                if (mem) mem.lastAvatarDefaultPrompt = defaultPromptText;
+              }
+              const dbInst = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInst) dbInst.chats.put(curChat);
+            }
           }
 
           const apiKey = localStorage.getItem("novelai-api-key");
@@ -58940,6 +59092,11 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             const finalDataUrl = canvas.toDataURL("image/jpeg", 0.88);
             const promptInput = document.getElementById("avatar-gen-prompt-input");
             const currentPromptVal = promptInput ? promptInput.value.trim() : "";
+            const defaultPromptInput = document.getElementById("avatar-gen-default-prompt-input");
+            const currentDefaultVal = defaultPromptInput ? defaultPromptInput.value.trim() : "";
+            if (currentDefaultVal) {
+              localStorage.setItem("avatar_gen_default_prompt", currentDefaultVal);
+            }
             const chat = state.chats[state.activeChatId];
 
             if (avatarGenState.currentTarget === "ai") {
@@ -58950,6 +59107,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 chat.settings.aiAvatar = finalDataUrl;
                 chat.avatar = finalDataUrl;
                 chat.settings.lastAiAvatarPrompt = currentPromptVal;
+                if (currentDefaultVal) chat.settings.lastAiAvatarDefaultPrompt = currentDefaultVal;
                 await db.chats.put(chat);
               }
             } else if (avatarGenState.currentTarget === "my") {
@@ -58959,6 +59117,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 if (!chat.settings) chat.settings = {};
                 chat.settings.myAvatar = finalDataUrl;
                 chat.settings.lastMyAvatarPrompt = currentPromptVal;
+                if (currentDefaultVal) chat.settings.lastMyAvatarDefaultPrompt = currentDefaultVal;
                 await db.chats.put(chat);
               }
             } else if (avatarGenState.currentTarget === "group") {
@@ -58969,6 +59128,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 chat.settings.groupAvatar = finalDataUrl;
                 chat.avatar = finalDataUrl;
                 chat.settings.lastGroupAvatarPrompt = currentPromptVal;
+                if (currentDefaultVal) chat.settings.lastGroupAvatarDefaultPrompt = currentDefaultVal;
                 await db.chats.put(chat);
               }
             } else if (avatarGenState.currentTarget === "member") {
@@ -58979,6 +59139,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 if (member) {
                   member.avatar = finalDataUrl;
                   member.lastAvatarPrompt = currentPromptVal;
+                  if (currentDefaultVal) member.lastAvatarDefaultPrompt = currentDefaultVal;
                   await db.chats.put(chat);
                 }
               }
@@ -70000,15 +70161,19 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 clearTimeout(avatarImgClickTimer);
                 avatarImgClickCount = 0;
                 const imgData = avatarGenState.currentImage || document.getElementById("avatar-gen-result-image")?.src;
-                if (imgData && imgData.startsWith("data:image")) {
-                  const a = document.createElement("a");
-                  a.href = imgData;
-                  a.download = `avatar_${Date.now()}.png`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  if (typeof showCustomAlert === "function") {
-                    showCustomAlert("下载成功", "头像图片已开始下载");
+                if (imgData && (imgData.startsWith("data:image") || imgData.startsWith("http") || imgData.startsWith("blob:"))) {
+                  if (typeof window.downloadImage === "function") {
+                    window.downloadImage(imgData, `avatar_${Date.now()}.png`);
+                  } else {
+                    const a = document.createElement("a");
+                    a.href = imgData;
+                    a.download = `avatar_${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => document.body.removeChild(a), 100);
+                    if (typeof window.showDownloadToast === "function") {
+                      window.showDownloadToast("开始下载", "success");
+                    }
                   }
                 }
               }
@@ -70074,30 +70239,6 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             };
             avatarPreviewContainer.addEventListener("touchend", endTouch);
             avatarPreviewContainer.addEventListener("touchcancel", endTouch);
-          }
-
-          const avatarResultImg = document.getElementById("avatar-gen-result-image");
-          if (avatarResultImg) {
-            let avatarClickCount = 0;
-            let avatarLastClickTime = 0;
-            avatarResultImg.addEventListener("click", () => {
-              const now = Date.now();
-              if (now - avatarLastClickTime < 350) {
-                avatarClickCount++;
-                if (avatarClickCount >= 3) {
-                  avatarClickCount = 0;
-                  if (avatarGenState.currentImage) {
-                    const link = document.createElement("a");
-                    link.href = avatarGenState.currentImage;
-                    link.download = "avatar-" + Date.now() + ".png";
-                    link.click();
-                  }
-                }
-              } else {
-                avatarClickCount = 1;
-              }
-              avatarLastClickTime = now;
-            });
           }
 
           // 跑团模组聊天加载事件绑定
@@ -82020,35 +82161,38 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             }
 
             console.log("✅ [图片下载] 开始下载图片:", filename);
-            showDownloadToast("图片下载中...", "success");
+            showDownloadToast("开始下载", "success");
           } catch (error) {
             console.error("❌ [图片下载] 下载失败:", error);
             showDownloadToast("下载失败，请重试", "error");
           }
         }
+        window.downloadImage = downloadImage;
 
         // 显示下载提示（临时Toast）
         function showDownloadToast(
-          message = "📥 图片下载中...",
+          message = "开始下载",
           type = "success",
         ) {
           const toast = document.createElement("div");
-          toast.textContent = message;
+          toast.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>${message}</span>`;
           toast.style.cssText = `
 			            position: fixed;
 			            bottom: 20px;
 			            right: 20px;
 			            background: ${type === "success" ? "#4CAF50" : "#f44336"};
 			            color: white;
-			            padding: 12px 24px;
+			            padding: 10px 18px;
 			            border-radius: 8px;
 			            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 			            z-index: 10000;
-			            font-size: 14px;
+			            font-size: 13px;
 			            pointer-events: none;
 			            opacity: 0;
 			            transform: translateY(20px);
 			            transition: all 0.3s ease;
+			            display: flex;
+			            align-items: center;
 			        `;
 
           document.body.appendChild(toast);
@@ -82068,6 +82212,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             }, 300);
           }, 2000);
         }
+        window.showDownloadToast = showDownloadToast;
 
         // 生成智能文件名
         function generateFilename(imgElement) {

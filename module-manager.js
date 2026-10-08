@@ -734,11 +734,55 @@
             }
           }
 
-          const imageFiles = Object.keys(zip.files).filter(path => {
+          const allMediaFiles = Object.keys(zip.files).filter(path => {
             const p = path.toLowerCase();
             return p.startsWith('word/media/') && !p.endsWith('/');
           });
-          imageFiles.sort();
+
+          let imageFiles = [];
+          try {
+            const relsFile = zip.file('word/_rels/document.xml.rels');
+            const docFile = zip.file('word/document.xml');
+            if (relsFile && docFile) {
+              const relsXml = await relsFile.async('text');
+              const docXmlText = await docFile.async('text');
+              
+              const rIdToTarget = {};
+              const relMatches = relsXml.matchAll(/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/gi);
+              for (const m of relMatches) {
+                const rId = m[1];
+                let target = m[2];
+                if (target.startsWith('../')) target = target.replace(/^\.\.\//, '');
+                if (!target.startsWith('word/')) target = 'word/' + target.replace(/^media\//, 'media/');
+                rIdToTarget[rId] = target.toLowerCase();
+              }
+
+              const seenPaths = new Set();
+              const embedMatches = docXmlText.matchAll(/(?:r:embed|r:id)="([^"]+)"/gi);
+              for (const em of embedMatches) {
+                const rId = em[1];
+                const matchedTarget = rIdToTarget[rId];
+                if (matchedTarget) {
+                  const actualFile = allMediaFiles.find(f => f.toLowerCase() === matchedTarget);
+                  if (actualFile && !seenPaths.has(actualFile)) {
+                    seenPaths.add(actualFile);
+                    imageFiles.push(actualFile);
+                  }
+                }
+              }
+
+              const remaining = allMediaFiles.filter(f => !seenPaths.has(f));
+              remaining.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+              imageFiles = [...imageFiles, ...remaining];
+            }
+          } catch (relsErr) {
+            console.warn('[模组] 解析 Word 关系顺序异常，使用自然数排序:', relsErr);
+          }
+
+          if (imageFiles.length === 0) {
+            imageFiles = [...allMediaFiles];
+            imageFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+          }
 
           let imageIndex = 1;
           for (const imgPath of imageFiles) {
@@ -941,11 +985,13 @@
           continue;
         }
 
+        let curPageExcerpt = '';
         try {
           const pageText = await this.extractStructuredTextFromPdfPage(page);
           if (pageText) {
             textPieces.push(pageText);
             totalTextLength += pageText.length;
+            curPageExcerpt = pageText.trim().replace(/\s+/g, ' ').substring(0, 150);
           }
         } catch (tErr) {
           console.warn(`[模组] 第 ${pageNum} 页文本提取跳过:`, tErr);
@@ -1048,7 +1094,8 @@
                         description: `第${pageNum}页插图 ${width}×${height}`,
                         dataUrl: dataUrl,
                         isSensitive: false,
-                        placement: `第${pageNum}页`
+                        placement: `第${pageNum}页`,
+                        nearbyText: curPageExcerpt
                       });
                     }
                   }
@@ -1728,7 +1775,96 @@
       return segments.filter(s => s.trim().length > 0);
     },
 
-    async callAI(systemPrompt, userPrompt) {
+    async createThumbnailDataUrl(dataUrl, maxW = 320, maxH = 320) {
+      if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
+      return new Promise((resolve) => {
+        try {
+          const img = new Image();
+          img.onload = () => {
+            let w = img.naturalWidth || maxW;
+            let h = img.naturalHeight || maxH;
+            if (w > maxW || h > maxH) {
+              if (w / h > maxW / maxH) {
+                h = Math.round((h * maxW) / w);
+                w = maxW;
+              } else {
+                w = Math.round((w * maxH) / h);
+                h = maxH;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, w);
+            canvas.height = Math.max(1, h);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.75));
+          };
+          img.onerror = () => resolve(dataUrl);
+          img.src = dataUrl;
+        } catch (e) {
+          resolve(dataUrl);
+        }
+      });
+    },
+
+    async inspectImagesWithVision(images) {
+      if (!images || !Array.isArray(images) || images.length === 0) return [];
+      try {
+        const batch = images.slice(0, 16);
+        const imageThumbnails = [];
+        for (let i = 0; i < batch.length; i++) {
+          const img = batch[i];
+          if (!img.dataUrl) continue;
+          const thumb = await this.createThumbnailDataUrl(img.dataUrl, 280, 280);
+          imageThumbnails.push({
+            index: i + 1,
+            origName: img.name || `图${i + 1}`,
+            dataUrl: thumb
+          });
+        }
+        if (imageThumbnails.length === 0) return [];
+
+        const visionSysPrompt = `你是一个具备全球顶尖鉴赏力的高精度跑团模组插图视觉识别专家。请逐一仔细观察用户提供的多张模组图片画面视觉内容，对每一张图片进行严格的视觉分类与精准命名。
+【核心判别与命名铁律】：
+1. 地图（包含建筑平面图、俯视图、房间布局、迷宫走廊、区域地脉、地名路线网格）：
+   - 必定标注 isMap 为 true。
+   - 名称必须明确命名为地图名称（如：洋馆一层平面图、地下实验室结构图、森林迷宫概览），绝对禁止标注为任何角色姓名或NPC名字！
+   - description 详细写明画面中描绘的具体建筑空间、走廊房间与空间结构。
+2. 角色立绘（人物全身、半身、头像、怪物异形、NPC肖像、衣着外貌）：
+   - 必定标注 isMap 为 false。
+   - 名称必须命名为角色名称或立绘名称（如：NPC张三立绘、神秘黑衣人肖像、神话怪物外貌），绝对禁止标注为地图！
+   - description 详细描述该人物的衣着、发型、外观特征与姿态。
+3. 道具线索与场景CG：
+   - 信件、日记手迹、符文标记为道具线索；宏大剧情场景插画标记为剧情CG。
+4. 剧透与恐怖属性：
+   - 包含骨骼、血迹、触手、阴森恐怖场景判定 isHorror 为 true。
+   - 终战场景、幕后黑手真相判定 isSensitive 为 true。
+
+请只输出合法的 JSON 数组，严禁包含任何 Markdown 格式块或多余文字，格式严格如下：
+[
+  { "imageIndex": 1, "isMap": true, "name": "洋馆一层平面图", "description": "洋馆一层的俯视房间走廊建筑平面图", "annotation": "初期探索地图", "isSensitive": false, "isHorror": false, "shouldInclude": true }
+]`;
+
+        const visionUserPrompt = `请对附带的 ${imageThumbnails.length} 张图片按照顺序（图1到图${imageThumbnails.length}）进行高精度视觉识别与甄别，严格区分地图与角色立绘，并输出 JSON 数组：`;
+        const res = await this.callAI(visionSysPrompt, visionUserPrompt, imageThumbnails);
+        if (res) {
+          const cleanJson = res.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+          const startIdx = cleanJson.indexOf('[');
+          const endIdx = cleanJson.lastIndexOf(']');
+          if (startIdx !== -1 && endIdx !== -1) {
+            const parsed = JSON.parse(cleanJson.substring(startIdx, endIdx + 1));
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[模组] 视觉识别预检跳过，使用上下文与结构智能识别:', err);
+      }
+      return [];
+    },
+
+    async callAI(systemPrompt, userPrompt, imageParts = null) {
       const stateObj = global.state || (typeof window !== 'undefined' ? window.state : {}) || {};
       const apiCfg = (typeof global.getEffectiveApiConfig === 'function')
         ? global.getEffectiveApiConfig('module')
@@ -1761,19 +1897,42 @@
 
       let requestBody;
       if (isGemini) {
+        const parts = [];
+        if (Array.isArray(imageParts) && imageParts.length > 0) {
+          imageParts.forEach(img => {
+            if (img.inlineData) {
+              parts.push({ inlineData: img.inlineData });
+            } else if (img.dataUrl) {
+              const b64 = img.dataUrl.split(',')[1];
+              const mime = (img.dataUrl.match(/data:([^;]+);/) || [])[1] || 'image/jpeg';
+              if (b64) parts.push({ inlineData: { mimeType: mime, data: b64 } });
+            }
+          });
+        }
+        parts.push({ text: userPrompt });
         requestBody = {
-          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+          contents: [{ role: 'user', parts: parts }],
           generationConfig: {
             temperature: parseFloat(temperature) || 0.2
           },
           systemInstruction: { parts: [{ text: systemPrompt }] }
         };
       } else {
+        let userContent = userPrompt;
+        if (Array.isArray(imageParts) && imageParts.length > 0) {
+          userContent = [{ type: 'text', text: userPrompt }];
+          imageParts.forEach(img => {
+            const url = img.dataUrl || (img.inlineData ? `data:${img.inlineData.mimeType};base64,${img.inlineData.data}` : null);
+            if (url) {
+              userContent.push({ type: 'image_url', image_url: { url: url } });
+            }
+          });
+        }
         requestBody = {
           model: model,
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
+            { role: 'user', content: userContent }
           ],
           temperature: parseFloat(temperature) || 0.2,
           stream: false
@@ -2069,6 +2228,22 @@
 ${activePrompt}
 
 ━━━━━━━━━━━━━━━━━━
+【模组插图与地图高精度识别全局铁律（不可违反）】
+━━━━━━━━━━━━━━━━━━
+1. 绝对严禁混淆地图与角色立绘：
+   - 严禁将任何地图标注为角色人设、NPC姓名或个人名字！
+   - 严禁将任何角色立绘标注为地图或平面图！
+2. 地图特征与命名准则：
+   - 若画面为建筑平面、房间俯视、地名分布、走廊网格、迷宫、山脉水系等空间布局示意，必定为【地图】。
+   - 地图名称必须明确为具体的地图名称，如【XX一层平面图】、【地下室结构地图】、【小镇全貌地图】，绝不允许使用角色姓名命名。
+   - 地图的描述与注解必须说明该地图对应的建筑区域、楼层与探索范围。
+3. 角色立绘特征与命名准则：
+   - 若画面为主体人物形象、角色外貌、肖像、半身或全身立绘，必定为【角色立绘】。
+   - 角色立绘名称必须明确为【NPC XX立绘】或【XX外观立绘】。
+4. 多张地图的严格区分：
+   - 若模组内有多张地图，必须严格根据对应章节、页码以及楼层标识（如1F、2F、B1、洋馆外景、地宫等）精准区分，禁止将不同区域或楼层的地图混淆或张冠李戴。
+
+━━━━━━━━━━━━━━━━━━
 【输出格式规范】
 ━━━━━━━━━━━━━━━━━━
 输出严格的 JSON 对象，不得包含任何 markdown 语法块（如 \`\`\`json）或任何多余解释文字。
@@ -2123,6 +2298,25 @@ JSON 格式如下：
    - description: 图像视觉内容描述。
    - annotation: 针对守秘人带团与插图场景用途的精炼中文注释。`;
 
+        let visionResults = [];
+        if (this.currentParsedData.images && this.currentParsedData.images.length > 0) {
+          visionResults = await this.inspectImagesWithVision(this.currentParsedData.images);
+          if (Array.isArray(visionResults) && visionResults.length > 0) {
+            visionResults.forEach(v => {
+              const target = this.currentParsedData.images[v.imageIndex - 1];
+              if (target) {
+                if (v.name) target.name = v.name;
+                if (v.description) target.description = v.description;
+                if (v.annotation) target.annotation = v.annotation;
+                if (typeof v.isSensitive === 'boolean') target.isSensitive = v.isSensitive;
+                if (typeof v.isHorror === 'boolean') target.isHorror = v.isHorror;
+                if (typeof v.shouldInclude === 'boolean') target.shouldInclude = v.shouldInclude;
+                if (typeof v.isMap === 'boolean') target.isMap = v.isMap;
+              }
+            });
+          }
+        }
+
         const splitSelect = document.getElementById('module-split-parts-select');
         let requestedParts = splitSelect ? splitSelect.value : 'auto';
         let numParts = 1;
@@ -2153,8 +2347,13 @@ JSON 格式如下：
             userPrompt += `\n\n用户针对此重构方案的个性化补充意见：\n${this.globalOpinion}`;
           }
           if (segIdx === 0 && this.currentParsedData.images && this.currentParsedData.images.length > 0) {
-            const imgListDesc = this.currentParsedData.images.map((img, i) => `图${i + 1}: 页码${img.pageNumber || '未知'}, 尺寸${img.width}x${img.height}, 格式${img.format}`).join('\n');
-            userPrompt += `\n\n【提取到的候选插图列表】：\n${imgListDesc}`;
+            const imgListDesc = this.currentParsedData.images.map((img, i) => {
+              const origName = img.fileName || img.name || `插图_${i + 1}`;
+              const nearby = img.nearbyText ? `，所在页面上下文: "${img.nearbyText.substring(0, 100)}"` : '';
+              const mapHint = img.isMap ? '【视觉确认为地图】' : (img.name && (img.name.includes('图') || img.name.includes('平面') || img.name.includes('地图')) ? '【判定为地图】' : '');
+              return `图${i + 1}: 名称【${origName}】${mapHint}，第${img.pageNumber || '1'}页，尺寸${img.width || 800}x${img.height || 600} (${img.format || 'JPEG'})${nearby}`;
+            }).join('\n');
+            userPrompt += `\n\n【提取到的候选插图列表（已结合视觉特征与排版顺序）】：\n${imgListDesc}`;
           }
           userPrompt += `\n\n模组参考全文（当前分卷内容）：\n${segText}`;
 
@@ -2198,7 +2397,14 @@ JSON 格式如下：
                       if (assess.shouldInclude === false || assess.isUseful === false) return;
                       if (typeof assess.isSensitive === 'boolean') img.isSensitive = assess.isSensitive;
                       if (typeof assess.isHorror === 'boolean') img.isHorror = assess.isHorror;
-                      if (assess.name) img.name = assess.name;
+                      if (assess.name) {
+                        const isClearlyMap = img.isMap || (img.name && (img.name.includes('地图') || img.name.includes('平面图')));
+                        if (isClearlyMap && !assess.name.includes('图') && !assess.name.includes('平面') && !assess.name.includes('地') && !assess.name.includes('所') && !assess.name.includes('室')) {
+                          img.name = (img.name && (img.name.includes('地图') || img.name.includes('平面'))) ? img.name : `${assess.name}地图`;
+                        } else {
+                          img.name = assess.name;
+                        }
+                      }
                       if (assess.description) img.description = assess.description;
                       if (assess.annotation) img.annotation = assess.annotation;
                     }
@@ -5895,6 +6101,8 @@ ${chap.content}
                     }
                   }
                 }
+              } else {
+                throw new Error(`文件 ${item.name} 无法作为有效 PDF 解析`);
               }
             } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
               try {
@@ -5923,7 +6131,7 @@ ${chap.content}
           }
 
           if (mergedPdfDoc.getPageCount() === 0) {
-            mergedPdfDoc.addPage([595.28, 841.89]);
+            throw new Error('未成功提取到任何有效PDF页面，请检查原始PDF文件');
           }
           const pdfBytes = await mergedPdfDoc.save();
           downloadBlob = new Blob([pdfBytes], { type: 'application/pdf' });
