@@ -1,4 +1,4 @@
-const CACHE_NAME = "ephone-tuk-cache-v7";
+const CACHE_NAME = "ephone-tuk-cache-v4";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",

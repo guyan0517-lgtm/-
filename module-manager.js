@@ -492,10 +492,6 @@
     cutChapters: [],
     activeAuditChapter: null,
 
-    // 模组分析模式：单选 / 多选
-    analysisMode: 'single',
-    multiFilesList: [],
-
     getDB() {
       if (global.db) return global.db;
       if (typeof db !== 'undefined') return db;
@@ -1539,209 +1535,12 @@
       container.appendChild(grid);
     },
 
-    switchAnalysisMode(mode) {
-      this.analysisMode = mode;
-      const singleTab = document.getElementById('module-mode-single-tab');
-      const multiTab = document.getElementById('module-mode-multi-tab');
-      const singlePicker = document.getElementById('module-import-picker-card');
-      const mergeCard = document.getElementById('module-btn-open-merge');
-      const multiPicker = document.getElementById('module-multi-picker-card');
-      const infoCard = document.getElementById('module-file-info-card');
-      const promptContainer = document.getElementById('module-prompt-container');
-
-      if (singleTab) singleTab.classList.toggle('active', mode === 'single');
-      if (multiTab) multiTab.classList.toggle('active', mode === 'multi');
-
-      if (mode === 'single') {
-        if (multiPicker) multiPicker.style.display = 'none';
-        if (this.currentParsedData && this.currentParsedData.fileType !== '多文件') {
-          if (singlePicker) singlePicker.style.display = 'none';
-          if (mergeCard) mergeCard.style.display = 'none';
-          if (infoCard) infoCard.style.display = 'flex';
-          if (promptContainer) promptContainer.style.display = 'flex';
-        } else {
-          if (singlePicker) singlePicker.style.display = 'flex';
-          if (mergeCard) mergeCard.style.display = 'flex';
-          if (infoCard) infoCard.style.display = 'none';
-          if (promptContainer) promptContainer.style.display = 'none';
-        }
-      } else {
-        if (singlePicker) singlePicker.style.display = 'none';
-        if (mergeCard) mergeCard.style.display = 'none';
-        if (infoCard) infoCard.style.display = 'none';
-        if (multiPicker) multiPicker.style.display = 'flex';
-        this.renderMultiFileListUI();
-      }
-      this.updateBottomActionBar();
-    },
-
-    renderMultiFileListUI() {
-      const listEl = document.getElementById('module-multi-file-list');
-      const emptyEl = document.getElementById('module-multi-empty-placeholder');
-      const statsRow = document.getElementById('module-multi-stats-row');
-      const countEl = document.getElementById('module-multi-stat-count');
-      const promptContainer = document.getElementById('module-prompt-container');
-      if (!listEl) return;
-
-      if (!this.multiFilesList || this.multiFilesList.length === 0) {
-        if (emptyEl) emptyEl.style.display = 'flex';
-        listEl.style.display = 'none';
-        listEl.innerHTML = '';
-        if (statsRow) statsRow.style.display = 'none';
-        if (promptContainer) promptContainer.style.display = 'none';
-        if (countEl) countEl.textContent = '0 个';
-        this.updateBottomActionBar();
-        return;
-      }
-
-      if (emptyEl) emptyEl.style.display = 'none';
-      listEl.style.display = 'flex';
-      if (statsRow) statsRow.style.display = 'flex';
-      if (promptContainer) promptContainer.style.display = 'flex';
-      if (countEl) countEl.textContent = `${this.multiFilesList.length} 个`;
-
-      listEl.innerHTML = this.multiFilesList.map((file, idx) => `
-        <div class="module-multi-file-item" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box;">
-          <div style="width: 24px; height: 24px; border-radius: 6px; background: var(--secondary-bg); color: var(--accent-color); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">${idx + 1}</div>
-          <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 10px; font-size: 12px; color: var(--text-primary);" title="${file.name}">${file.name}</div>
-          <div style="display: flex; gap: 4px; flex-shrink: 0; align-items: center;">
-            <button type="button" class="summary-preset-btn btn-multi-up" data-idx="${idx}" style="height: 24px; padding: 0 6px; font-size: 11px;" ${idx === 0 ? 'disabled style="opacity: 0.4; cursor: not-allowed; height: 24px; padding: 0 6px; font-size: 11px;"' : ''}>上移</button>
-            <button type="button" class="summary-preset-btn btn-multi-down" data-idx="${idx}" style="height: 24px; padding: 0 6px; font-size: 11px;" ${idx === this.multiFilesList.length - 1 ? 'disabled style="opacity: 0.4; cursor: not-allowed; height: 24px; padding: 0 6px; font-size: 11px;"' : ''}>下移</button>
-            <button type="button" class="summary-preset-btn btn-multi-del" data-idx="${idx}" style="height: 24px; padding: 0 6px; font-size: 11px; color: var(--accent-color);">删除</button>
-          </div>
-        </div>
-      `).join('');
-
-      listEl.querySelectorAll('.btn-multi-up').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const idx = parseInt(btn.dataset.idx, 10);
-          if (idx > 0) {
-            const temp = this.multiFilesList[idx];
-            this.multiFilesList[idx] = this.multiFilesList[idx - 1];
-            this.multiFilesList[idx - 1] = temp;
-            this.renderMultiFileListUI();
-          }
-        });
-      });
-
-      listEl.querySelectorAll('.btn-multi-down').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const idx = parseInt(btn.dataset.idx, 10);
-          if (idx < this.multiFilesList.length - 1) {
-            const temp = this.multiFilesList[idx];
-            this.multiFilesList[idx] = this.multiFilesList[idx + 1];
-            this.multiFilesList[idx + 1] = temp;
-            this.renderMultiFileListUI();
-          }
-        });
-      });
-
-      listEl.querySelectorAll('.btn-multi-del').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const idx = parseInt(btn.dataset.idx, 10);
-          this.multiFilesList.splice(idx, 1);
-          this.renderMultiFileListUI();
-        });
-      });
-
-      this.updateBottomActionBar();
-    },
-
-    async processMultiFiles(filesList) {
-      if (!filesList || filesList.length === 0) {
-        throw new Error('未选择任何文件');
-      }
-
-      let combinedText = '';
-      let combinedImages = [];
-      const primaryBtn = document.getElementById('module-primary-action-btn');
-      const step1AnalyzeBtn = document.getElementById('module-step1-analyze-btn');
-
-      for (let i = 0; i < filesList.length; i++) {
-        const file = filesList[i];
-        const progressMsg = `正在解析 ${i + 1} / ${filesList.length}...`;
-        if (primaryBtn) primaryBtn.textContent = progressMsg;
-        if (step1AnalyzeBtn) step1AnalyzeBtn.textContent = progressMsg;
-
-        let parsedResult;
-        const name = file.name.toLowerCase();
-        try {
-          if (name.endsWith('.txt')) {
-            parsedResult = await this.parseTxtFile(file);
-          } else if (name.endsWith('.docx') || name.endsWith('.doc')) {
-            parsedResult = await this.parseDocxFile(file);
-          } else if (name.endsWith('.pdf')) {
-            parsedResult = await this.parsePdfFile(file);
-          } else {
-            throw new Error('不支持的文件格式: ' + file.name);
-          }
-        } catch (err) {
-          throw new Error(`文件 ${file.name} 解析失败: ${err.message || '格式错误'}`);
-        }
-
-        let fileText = parsedResult.text || '';
-        const fileHeader = `\n\n════════════════════════════════\n【文件 ${i + 1}】${file.name}\n════════════════════════════════\n\n`;
-        combinedText += (i === 0 ? '' : fileHeader) + fileText;
-
-        if (parsedResult.images && parsedResult.images.length > 0) {
-          parsedResult.images.forEach(img => {
-            const curImgIdx = combinedImages.length + 1;
-            combinedImages.push({
-              ...img,
-              imageIndex: curImgIdx,
-              sourceFile: file.name
-            });
-          });
-        }
-      }
-
-      if (combinedImages.length > 0) {
-        const imageTagsList = combinedImages.map(img => `【图${img.imageIndex}】`).join(' ');
-        combinedText = combinedText + `\n\n【模组图库提取】${imageTagsList}`;
-      }
-
-      const totalWords = this.countWords(combinedText);
-      const cleanBaseName = filesList[0].name.replace(/\.[^/.]+$/, '');
-      const multiSplitEl = document.getElementById('module-multi-split-select');
-      const splitPartsVal = multiSplitEl ? multiSplitEl.value : '1';
-
-      this.currentParsedData = {
-        fileName: filesList.map(f => f.name).join(' + '),
-        moduleName: cleanBaseName,
-        fileType: '多文件',
-        text: combinedText,
-        images: combinedImages,
-        wordCount: totalWords,
-        analysisPrompt: DEFAULT_TRPG_ANALYSIS_PROMPT,
-        prompt: DEFAULT_TRPG_ANALYSIS_PROMPT,
-        cuttingPrompt: DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT,
-        isPureImagePdf: false,
-        splitParts: splitPartsVal,
-        multiFiles: filesList.map(f => f.name)
-      };
-
-      const promptTextarea = document.getElementById('module-prompt-textarea');
-      if (promptTextarea && promptTextarea.value.trim()) {
-        this.currentParsedData.prompt = promptTextarea.value.trim();
-        this.currentParsedData.analysisPrompt = promptTextarea.value.trim();
-      }
-
-      await this.saveRawFileToDB(this.currentParsedData);
-      this.saveDraft();
-      return this.currentParsedData;
-    },
-
     updateModeUI(mode) {
       const parts = this.currentParsedData?.splitParts || 'auto';
       const step2SplitSelect = document.getElementById('module-step2-split-select');
       const step1SplitSelect = document.getElementById('module-split-parts-select');
-      const multiSplitSelect = document.getElementById('module-multi-split-select');
       if (step2SplitSelect) step2SplitSelect.value = parts;
       if (step1SplitSelect) step1SplitSelect.value = parts;
-      if (multiSplitSelect) multiSplitSelect.value = parts;
       this.saveDraft();
     },
 
@@ -1760,10 +1559,6 @@
       const targetPane = document.getElementById(`module-step${stepNumber}-pane`);
       if (targetPane) {
         targetPane.style.display = 'flex';
-      }
-
-      if (stepNumber === 1) {
-        this.switchAnalysisMode(this.analysisMode || 'single');
       }
 
       if (stepNumber === 2) {
@@ -1801,10 +1596,7 @@
 
       if (this.currentStep === 1) {
         if (secondaryBtn) {
-          const hasData = this.analysisMode === 'multi'
-            ? (this.multiFilesList && this.multiFilesList.length > 0)
-            : !!this.currentParsedData;
-          secondaryBtn.style.display = hasData ? 'flex' : 'none';
+          secondaryBtn.style.display = this.currentParsedData ? 'flex' : 'none';
           secondaryBtn.textContent = '重选';
         }
         if (rethinkBtn) rethinkBtn.style.display = 'none';
@@ -1852,30 +1644,18 @@
       this.isCuttingPaused = false;
       this.isCuttingCancelled = false;
       this.cutExecutionMode = 'batch';
-      this.multiFilesList = [];
       this.clearDraft();
 
       const fileInput = document.getElementById('module-file-input');
       if (fileInput) fileInput.value = '';
-      const multiFileInput = document.getElementById('module-multi-file-input');
-      if (multiFileInput) multiFileInput.value = '';
 
       const pickerCard = document.getElementById('module-import-picker-card');
       const infoCard = document.getElementById('module-file-info-card');
       const promptContainer = document.getElementById('module-prompt-container');
-      const mergeCard = document.getElementById('module-btn-open-merge');
 
-      if (this.analysisMode === 'multi') {
-        if (pickerCard) pickerCard.style.display = 'none';
-        if (mergeCard) mergeCard.style.display = 'none';
-        if (infoCard) infoCard.style.display = 'none';
-        this.renderMultiFileListUI();
-      } else {
-        if (pickerCard) pickerCard.style.display = 'flex';
-        if (mergeCard) mergeCard.style.display = 'flex';
-        if (infoCard) infoCard.style.display = 'none';
-        if (promptContainer) promptContainer.style.display = 'none';
-      }
+      if (pickerCard) pickerCard.style.display = 'flex';
+      if (infoCard) infoCard.style.display = 'none';
+      if (promptContainer) promptContainer.style.display = 'none';
       this.setWizardStep(1);
     },
 
@@ -2538,14 +2318,7 @@ JSON 格式如下：
         }
 
         const splitSelect = document.getElementById('module-split-parts-select');
-        const multiSplitSelect = document.getElementById('module-multi-split-select');
-        const step2SplitSelect = document.getElementById('module-step2-split-select');
-        let requestedParts = (this.analysisMode === 'multi' && multiSplitSelect) 
-          ? multiSplitSelect.value 
-          : (splitSelect ? splitSelect.value : (step2SplitSelect ? step2SplitSelect.value : (this.currentParsedData?.splitParts || 'auto')));
-        if (this.currentParsedData?.splitParts) {
-          requestedParts = this.currentParsedData.splitParts;
-        }
+        let requestedParts = splitSelect ? splitSelect.value : 'auto';
         let numParts = 1;
         const totalWords = this.currentParsedData.wordCount || this.currentParsedData.text.length;
         if (requestedParts === 'auto') {
@@ -2570,9 +2343,6 @@ JSON 格式如下：
         for (let segIdx = 0; segIdx < segments.length; segIdx++) {
           const segText = segments[segIdx].substring(0, 42000);
           let userPrompt = `模组名称：${this.currentParsedData.moduleName}\n总字数：${this.currentParsedData.wordCount}\n当前分析分卷：第 ${segIdx + 1} / ${segments.length} 卷\n\n重构分析提示词：\n${activePrompt}`;
-          if (this.currentParsedData.multiFiles && this.currentParsedData.multiFiles.length > 0) {
-            userPrompt += `\n\n模组包含多个文件，请按以下阅读顺序依次理解与连贯分析：\n${this.currentParsedData.multiFiles.map((fn, i) => `${i + 1}. ${fn}`).join('\n')}`;
-          }
           if (this.globalOpinion) {
             userPrompt += `\n\n用户针对此重构方案的个性化补充意见：\n${this.globalOpinion}`;
           }
@@ -8530,11 +8300,9 @@ ${imageList}
 
       const step2SplitSelect = document.getElementById('module-step2-split-select');
       const step1SplitSelect = document.getElementById('module-split-parts-select');
-      const multiSplitSelect = document.getElementById('module-multi-split-select');
       if (step2SplitSelect) {
         step2SplitSelect.addEventListener('change', () => {
           if (step1SplitSelect) step1SplitSelect.value = step2SplitSelect.value;
-          if (multiSplitSelect) multiSplitSelect.value = step2SplitSelect.value;
           if (this.currentParsedData) this.currentParsedData.splitParts = step2SplitSelect.value;
           this.saveDraft();
         });
@@ -8542,16 +8310,7 @@ ${imageList}
       if (step1SplitSelect) {
         step1SplitSelect.addEventListener('change', () => {
           if (step2SplitSelect) step2SplitSelect.value = step1SplitSelect.value;
-          if (multiSplitSelect) multiSplitSelect.value = step1SplitSelect.value;
           if (this.currentParsedData) this.currentParsedData.splitParts = step1SplitSelect.value;
-          this.saveDraft();
-        });
-      }
-      if (multiSplitSelect) {
-        multiSplitSelect.addEventListener('change', () => {
-          if (step1SplitSelect) step1SplitSelect.value = multiSplitSelect.value;
-          if (step2SplitSelect) step2SplitSelect.value = multiSplitSelect.value;
-          if (this.currentParsedData) this.currentParsedData.splitParts = multiSplitSelect.value;
           this.saveDraft();
         });
       }
@@ -8580,60 +8339,6 @@ ${imageList}
       if (cancelBtn) {
         cancelBtn.addEventListener('click', () => {
           this.cancelCutting();
-        });
-      }
-
-      const singleTab = document.getElementById('module-mode-single-tab');
-      const multiTab = document.getElementById('module-mode-multi-tab');
-      if (singleTab) {
-        singleTab.addEventListener('click', () => {
-          this.switchAnalysisMode('single');
-        });
-      }
-      if (multiTab) {
-        multiTab.addEventListener('click', () => {
-          this.switchAnalysisMode('multi');
-        });
-      }
-
-      const multiFileInput = document.getElementById('module-multi-file-input');
-      const multiEmptyEl = document.getElementById('module-multi-empty-placeholder');
-      const multiAddBtn = document.getElementById('module-multi-add-btn');
-      const multiClearBtn = document.getElementById('module-multi-clear-btn');
-
-      if (multiEmptyEl && multiFileInput) {
-        multiEmptyEl.addEventListener('click', () => {
-          multiFileInput.value = '';
-          multiFileInput.click();
-        });
-      }
-
-      if (multiAddBtn && multiFileInput) {
-        multiAddBtn.addEventListener('click', () => {
-          multiFileInput.value = '';
-          multiFileInput.click();
-        });
-      }
-
-      if (multiClearBtn) {
-        multiClearBtn.addEventListener('click', () => {
-          this.multiFilesList = [];
-          this.renderMultiFileListUI();
-        });
-      }
-
-      if (multiFileInput) {
-        multiFileInput.addEventListener('change', (e) => {
-          const files = Array.from(e.target.files || []);
-          if (files.length === 0) return;
-          if (!this.multiFilesList) this.multiFilesList = [];
-          files.forEach(f => {
-            const exists = this.multiFilesList.some(existing => existing.name === f.name && existing.size === f.size);
-            if (!exists) {
-              this.multiFilesList.push(f);
-            }
-          });
-          this.renderMultiFileListUI();
         });
       }
 
@@ -9071,53 +8776,6 @@ ${imageList}
 
       const handleAnalyze = async () => {
         if (this.currentStep === 1) {
-          if (this.analysisMode === 'multi') {
-            if (!this.multiFilesList || this.multiFilesList.length === 0) {
-              const multiInput = document.getElementById('module-multi-file-input');
-              if (multiInput) {
-                multiInput.value = '';
-                multiInput.click();
-              }
-              return;
-            }
-
-            if (primaryBtn) {
-              primaryBtn.textContent = '正在解析文件...';
-              primaryBtn.style.opacity = '0.7';
-            }
-            const step1AnalyzeBtn = document.getElementById('module-step1-analyze-btn');
-            if (step1AnalyzeBtn) {
-              step1AnalyzeBtn.textContent = '正在解析文件...';
-              step1AnalyzeBtn.style.opacity = '0.7';
-            }
-
-            try {
-              await this.processMultiFiles(this.multiFilesList);
-              if (primaryBtn) primaryBtn.textContent = '正在通读全文重构...';
-              if (step1AnalyzeBtn) step1AnalyzeBtn.textContent = '正在通读全文重构...';
-
-              const plan = await this.generateCuttingPlan();
-              this.renderPlanUI();
-              this.setWizardStep(2);
-            } catch (err) {
-              console.warn('[模组] 多选生成方案提示:', err);
-              if (typeof global.showCustomAlert === 'function') {
-                global.showCustomAlert('重构失败', err.message || err);
-              }
-            } finally {
-              if (primaryBtn) {
-                primaryBtn.textContent = '开始分析';
-                primaryBtn.style.opacity = '1';
-              }
-              if (step1AnalyzeBtn) {
-                step1AnalyzeBtn.textContent = '开始分析';
-                step1AnalyzeBtn.style.opacity = '1';
-              }
-              this.updateBottomActionBar();
-            }
-            return;
-          }
-
           if (!this.currentParsedData) {
             const fileInput = document.getElementById('module-file-input');
             if (fileInput) {
