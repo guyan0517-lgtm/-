@@ -29743,12 +29743,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               // 如果是用户自己
               senderDisplayName = chat.settings.myNickname || "我";
 
-              // 检查用户是否是群主
-              if (chat.ownerId === "user") {
-                const roleTag = document.createElement("span");
-                roleTag.className = "group-role-tag owner";
-                roleTag.textContent = "群主";
-                tagsContainer.appendChild(roleTag);
+              const isUserOwner = chat.ownerId === "user" || !chat.ownerId;
+              // 检查用户是否是群主（群聊中不显示群主的头衔）
+              if (isUserOwner) {
+                // 不显示群主头衔与角色
               }
               // 检查用户是否被设为管理员
               else if (chat.settings.isUserAdmin) {
@@ -29758,8 +29756,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 tagsContainer.appendChild(roleTag);
               }
 
-              // 检查用户是否有头衔
-              if (chat.settings.myGroupTitle) {
+              // 检查用户是否有头衔（群主不显示头衔）
+              if (!isUserOwner && chat.settings.myGroupTitle) {
                 const titleTag = document.createElement("span");
                 titleTag.className = "group-title-tag";
                 titleTag.textContent = chat.settings.myGroupTitle;
@@ -29784,11 +29782,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 tagsContainer.appendChild(muteTag);
               }
 
-              if (member && chat.ownerId === member.id) {
-                const roleTag = document.createElement("span");
-                roleTag.className = "group-role-tag owner";
-                roleTag.textContent = "群主";
-                tagsContainer.appendChild(roleTag);
+              const isMemberOwner = member && (chat.ownerId === member.id || member.isOwner);
+              if (isMemberOwner) {
+                // 群聊中不显示群主的头衔与角色
               } else if (member && member.isAdmin) {
                 const roleTag = document.createElement("span");
                 roleTag.className = "group-role-tag admin";
@@ -29796,7 +29792,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 tagsContainer.appendChild(roleTag);
               }
 
-              if (member && member.groupTitle) {
+              // 群主不显示头衔
+              if (!isMemberOwner && member && member.groupTitle) {
                 const titleTag = document.createElement("span");
                 titleTag.className = "group-title-tag";
                 titleTag.textContent = member.groupTitle;
@@ -75049,9 +75046,9 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                   row.querySelector(".sync-apply-btn").addEventListener("click", () => {
                     const aiPersonaInput = document.getElementById("ai-persona");
                     if (aiPersonaInput && item.persona) aiPersonaInput.value = item.persona;
-                    if (item.age) setAgeSelectValue("ai-age-input", item.age);
-                    if (item.birthday) setBirthdaySelects("ai", item.birthday);
-                    if (item.gender) setGenderInputValue("ai", item.gender);
+                    if (item.age !== undefined) setAgeSelectValue("ai-age-input", item.age || "");
+                    setBirthdaySelects("ai", item.birthday || "");
+                    if (item.gender !== undefined) setGenderInputValue("ai", item.gender || "");
                     if (item.genderNote) {
                       const aiGenderNoteInput = document.getElementById("ai-gender-note-input");
                       if (aiGenderNoteInput) aiGenderNoteInput.value = item.genderNote;
@@ -75170,9 +75167,9 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                   row.querySelector(".sync-apply-btn").addEventListener("click", () => {
                     const mPersonaInput = document.getElementById("member-persona-input");
                     if (mPersonaInput && item.persona) mPersonaInput.value = item.persona;
-                    if (item.age) setAgeSelectValue("member-age-input", item.age);
-                    if (item.birthday) setBirthdaySelects("member", item.birthday);
-                    if (item.gender) setGenderInputValue("member", item.gender);
+                    if (item.age !== undefined) setAgeSelectValue("member-age-input", item.age || "");
+                    setBirthdaySelects("member", item.birthday || "");
+                    if (item.gender !== undefined) setGenderInputValue("member", item.gender || "");
                     if (item.genderNote) {
                       const mGenderNoteInput = document.getElementById("member-gender-note-input");
                       if (mGenderNoteInput) mGenderNoteInput.value = item.genderNote;

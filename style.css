@@ -562,48 +562,36 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 /* ▼▼▼ 【最终修复版】请将这整块代码粘贴到 <style> 标签的最末尾 ▼▼▼ */
 
-/* 1. 先为【所有】头衔设置你想要的紫色作为默认值 */
-.group-title-tag {
-  background-color: #e9e7fd !important; /* 淡紫色背景 */
-  color: #5e548e !important; /* 深紫色文字 */
-  border: 1px solid #d9d5f8 !important; /* 稍深的紫色边框 */
+/* 1. 为所有自定义头衔设置与存入按键相同的强调色背景与白色文字 */
+.group-title-tag,
+.member-management-item .title-tag {
+  background-color: var(--accent-color, #4A7A68) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--accent-color, #4A7A68) !important;
+  font-weight: 500 !important;
 }
 
-/* 2. 然后，单独为【管理员】的头衔设置绿色 */
-.group-role-tag.admin ~ .group-title-tag {
-  background-color: #d4edda !important; /* 复制管理员标签的绿色 */
-  color: #155724 !important;
-  border: 1px solid #c3e6cb !important;
-}
-
-/* 3. 同理，为【群主】的头衔设置黄色 */
+/* 2. 无论角色，所有自定义头衔统一使用相同色彩 */
+.group-role-tag.admin ~ .group-title-tag,
 .group-role-tag.owner ~ .group-title-tag {
-  background-color: #fff2c2 !important; /* 复制群主标签的黄色 */
-  color: #d98c00 !important;
-  border: 1px solid #ffe89d !important;
+  background-color: var(--accent-color, #4A7A68) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--accent-color, #4A7A68) !important;
 }
 
-/* === 夜间模式适配 (原理相同) === */
-
-/* 夜间模式下的默认紫色 */
-#phone-screen.dark-mode .group-title-tag {
-  background-color: #3b3355 !important;
-  color: #c3b9e7 !important;
-  border-color: #514777 !important;
+/* 3. 群聊中不显示群主头衔 */
+.group-role-tag.owner {
+  display: none !important;
 }
 
-/* 夜间模式下的管理员绿色 */
-#phone-screen.dark-mode .group-role-tag.admin ~ .group-title-tag {
-  background-color: #104a3c !important;
-  color: #76ddc4 !important;
-  border-color: #176854 !important;
-}
-
-/* 夜间模式下的群主黄色 */
-#phone-screen.dark-mode .group-role-tag.owner ~ .group-title-tag {
-  background-color: #594200 !important;
-  color: #ffd466 !important;
-  border-color: #795b00 !important;
+/* === 夜间模式适配 === */
+#phone-screen.dark-mode .group-title-tag,
+#phone-screen.dark-mode .group-role-tag.admin ~ .group-title-tag,
+#phone-screen.dark-mode .group-role-tag.owner ~ .group-title-tag,
+#phone-screen.dark-mode .member-management-item .title-tag {
+  background-color: var(--accent-color, #4A7A68) !important;
+  color: #FFFFFF !important;
+  border-color: var(--accent-color, #4A7A68) !important;
 }
 
 /* ▲▲▲ 修复结束 ▲▲▲ */
@@ -16067,13 +16055,16 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 /* 头衔标签 */
 .member-management-item .title-tag {
   font-size: 11px;
-  color: var(--text-secondary);
-  background-color: #f0f2f5;
+  color: #FFFFFF !important;
+  background-color: var(--accent-color, #4A7A68) !important;
+  border: 1px solid var(--accent-color, #4A7A68) !important;
   padding: 2px 6px;
   border-radius: 4px;
 }
 #phone-screen.dark-mode .member-management-item .title-tag {
-  background-color: #3a3a3c;
+  background-color: var(--accent-color, #4A7A68) !important;
+  color: #FFFFFF !important;
+  border-color: var(--accent-color, #4A7A68) !important;
 }
 
 /* 操作按钮 */
@@ -16115,9 +16106,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   line-height: 1.4;
 }
 .group-role-tag.owner {
-  background-color: #fff2c2;
-  color: #d98c00;
-  border: 1px solid #ffe89d;
+  display: none !important;
 }
 .group-role-tag.admin {
   background-color: #d4edda;
@@ -16125,14 +16114,13 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   border: 1px solid #c3e6cb;
 }
 .group-title-tag {
-  background-color: #f0f2f5;
-  color: var(--text-secondary);
+  background-color: var(--accent-color, #4A7A68) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--accent-color, #4A7A68) !important;
 }
 
 #phone-screen.dark-mode .group-role-tag.owner {
-  background-color: #594200;
-  color: #ffd466;
-  border-color: #795b00;
+  display: none !important;
 }
 #phone-screen.dark-mode .group-role-tag.admin {
   background-color: #104a3c;
@@ -16140,7 +16128,9 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   border-color: #176854;
 }
 #phone-screen.dark-mode .group-title-tag {
-  background-color: #3a3a3c;
+  background-color: var(--accent-color, #4A7A68) !important;
+  color: #FFFFFF !important;
+  border-color: var(--accent-color, #4A7A68) !important;
 }
 
 /* ▲▲▲ 新CSS粘贴结束 ▲▲▲ */

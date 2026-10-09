@@ -174,7 +174,7 @@
     - 图片在图库与预览中默认展示模式为玩家模式，所有剧透图片默认进行遮挡防护。`;
 
   // 切割执行阶段完整提示词（6部分15条深度切割与整理规范）
-  const DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT = `你是模组切割 AI。你将收到：①模组原文全文；②一份切割方案初稿（分析阶段生成的章节计划）。你的任务：按初稿的章节划分，把原文整理分类成多个可直接用于带团的章节，严禁添加主观个人理解与总结点评。初稿是参考，不是圣旨——执行中若发现初稿切得不合理（章节错位、该合并的没合并、该拆的没拆、归属放错），你可以修正，但修正之处要在结果说明中注明。你只做文本的分类整理与标签标注，不涉及任何代码实现。所有输出使用中文。
+  const DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT = `你是模组切割 AI。你将收到：①模组原文全文；②一份全模组完整规划总大纲，并明确标明了你本次专属负责编写的目标章节。你的任务：严格按照大纲中明确分配给你的章节任务，把原文整理分类为可直接用于带团的章节，严禁添加主观个人理解与总结点评。大纲分配了几章，你就严格输出几章，章节数量与大纲必须严格一对一对应，严禁擅自拆分出额外章节，严禁擅自合并章节，严禁擅自新增大纲之外的章节。你只做文本的分类整理与标签标注，不涉及任何代码实现。所有输出使用中文。
 
 ━━━━━━━━━━━━━━━━━━
 【第一部分：基础逻辑（所有 AI 都必须遵守的信息归属规则）】
@@ -188,11 +188,11 @@
 3. 【全局去重】任何内容只出现在归属章节一次；发现重复，保留归属章节的完整版，删除其他位置的重复段落。
 
 ━━━━━━━━━━━━━━━━━━
-【第二部分：按初稿切割 + 自主思考】
+【第二部分：严格按大纲交付 + 全局防重】
 ━━━━━━━━━━━━━━━━━━
-4. 先通读原文全文（不得跳读），理解结构、真相、HO位、地点、NPC与猫；
-5. 对照切割方案初稿：初稿列出章节就按初稿的章节切；执行时保持自己的判断——若发现初稿把"白天与晚上"这类不同内容并成一章、或把某个HO的信息放错章、或某章过大过小，可自行调整（合并/拆分/移归属），并在结果说明中写清调整了哪里；
-6. 章节篇幅保持适中（4000-5000字，允许4000-6000浮动）；换段必须在小地点/小事件结束处，禁止事件正中截断。
+4. 先通读原文全文与完整规划总大纲，理解全篇结构、真相、HO位、地点、NPC与猫；
+5. 严格对标大纲执行：通读全局大纲是为了防止把属于其他大纲章节的内容写进自己的章节（如NPC人设、幕后真相、其他HO秘密在总大纲中若已有专门章节，本卷绝对不可越权整理或重复编写）。你本次输出必须且仅能输出大纲中明确指派由你负责的章节，每一章与大纲严格一一对应，绝不擅自多拆出一章，也绝不漏写一章；
+6. 章节篇幅保持适中；换段必须在小地点/小事件结束处，禁止事件正中截断。
 
 ━━━━━━━━━━━━━━━━━━
 【第三部分：切割执行规则】
@@ -542,6 +542,7 @@
           globalOpinion: this.globalOpinion,
           globalAuditReport: this.globalAuditReport || '',
           cutChapters: this.cutChapters,
+          cutChaptersBySegment: this.cutChaptersBySegment || [],
           cuttingCurrentIndex: typeof this.cuttingCurrentIndex === 'number' ? this.cuttingCurrentIndex : (this.cutChapters ? this.cutChapters.length : 0),
           isCuttingPaused: this.isCuttingPaused,
           timestamp: Date.now()
@@ -567,7 +568,12 @@
           this.currentPlan = draft.currentPlan || null;
           this.globalOpinion = draft.globalOpinion || '';
           this.globalAuditReport = draft.globalAuditReport || '';
-          this.cutChapters = Array.isArray(draft.cutChapters) ? draft.cutChapters : [];
+          this.cutChaptersBySegment = Array.isArray(draft.cutChaptersBySegment) ? draft.cutChaptersBySegment : [];
+          if (this.cutChaptersBySegment.length > 0) {
+            this.cutChapters = this.rebuildCutChaptersFromSegments();
+          } else {
+            this.cutChapters = Array.isArray(draft.cutChapters) ? draft.cutChapters : [];
+          }
           this.cuttingCurrentIndex = typeof draft.cuttingCurrentIndex === 'number' ? draft.cuttingCurrentIndex : this.cutChapters.length;
           this.isCuttingRunning = false;
           this.isCuttingPaused = true;
@@ -1731,6 +1737,38 @@
       return title || rawName;
     },
 
+    getAssignedChunksForSegment(segIdx, totalSegs) {
+      const allChunks = this.currentPlan?.chunks || [];
+      if (!allChunks || allChunks.length === 0) return [];
+      if (!totalSegs || totalSegs <= 1) return allChunks;
+      const total = allChunks.length;
+      const baseCount = Math.floor(total / totalSegs);
+      const remainder = total % totalSegs;
+      const startIdx = segIdx * baseCount + Math.min(segIdx, remainder);
+      const count = baseCount + (segIdx < remainder ? 1 : 0);
+      return allChunks.slice(startIdx, startIdx + count);
+    },
+
+    rebuildCutChaptersFromSegments() {
+      if (!this.cutChaptersBySegment || this.cutChaptersBySegment.length === 0) {
+        return this.cutChapters || [];
+      }
+      const flattened = [];
+      for (let s = 0; s < this.cutChaptersBySegment.length; s++) {
+        const segChaps = this.cutChaptersBySegment[s];
+        if (Array.isArray(segChaps)) {
+          segChaps.forEach(c => {
+            flattened.push(c);
+          });
+        }
+      }
+      flattened.forEach((chap, idx) => {
+        chap.id = 'chap_' + (idx + 1);
+        chap.sortOrder = idx + 1;
+      });
+      return flattened;
+    },
+
     splitTextIntoBalancedSegments(text, numParts) {
       if (!text || numParts <= 1) return [text];
       const totalLen = text.length;
@@ -2795,14 +2833,53 @@ ${fullText}`;
       return generated;
     },
 
-    async generateBatchAllChaptersWithAI(fullText, segIdx, totalSegs) {
+    async generateBatchAllChaptersWithAI(fullText, segIdx, totalSegs, customAssignedChunks = null) {
       const analysisPrompt = this.currentParsedData?.analysisPrompt || this.currentParsedData?.prompt || DEFAULT_TRPG_ANALYSIS_PROMPT;
       const cuttingPrompt = this.currentParsedData?.cuttingPrompt || DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT;
       const allChunks = this.currentPlan?.chunks || [];
-      const planOutline = allChunks.map((c, i) => `${i + 1}. 【${c.name}】(${c.category}) - ${c.reason || '按内容性质提取'}`).join('\n');
-
       const isSegmented = typeof segIdx === 'number' && typeof totalSegs === 'number' && totalSegs > 1;
-      const segNotice = isSegmented ? `\n【当前正在处理的分卷】：第 ${segIdx + 1} / ${totalSegs} 卷（请仅整理并输出属于本卷内容的章节）\n` : '';
+      const assignedChunks = (customAssignedChunks && customAssignedChunks.length > 0)
+        ? customAssignedChunks
+        : (isSegmented ? this.getAssignedChunksForSegment(segIdx, totalSegs) : allChunks);
+
+      const startIndexInAll = (assignedChunks.length > 0) ? allChunks.indexOf(assignedChunks[0]) : 0;
+      const startChapNum = startIndexInAll >= 0 ? (startIndexInAll + 1) : 1;
+      const endChapNum = startChapNum + assignedChunks.length - 1;
+
+      const planOutline = allChunks.map((c, i) => {
+        const globalNum = i + 1;
+        const isAssigned = assignedChunks.includes(c);
+        if (isSegmented) {
+          if (isAssigned) {
+            return `  👉 [本分卷负责编写 - 第 ${globalNum} 章]: 【${c.name}】(${c.category}) - ${c.reason || '按内容性质提取'}`;
+          } else {
+            return `  🔒 [由其他分卷负责 - 本卷严禁编写]: 【${c.name}】(${c.category}) - ${c.reason || '按内容性质提取'}`;
+          }
+        } else {
+          return `  👉 [第 ${globalNum} 章]: 【${c.name}】(${c.category}) - ${c.reason || '按内容性质提取'}`;
+        }
+      }).join('\n');
+
+      let segNotice = '';
+      if (isSegmented && assignedChunks.length > 0) {
+        const assignedList = assignedChunks.map((c, i) => {
+          const globalNum = startChapNum + i;
+          return `  ${i + 1}. 【本卷目标 ${i + 1}/${assignedChunks.length}，全大纲第 ${globalNum} 章】: 《${c.name}》 | 分类: ${c.category}`;
+        }).join('\n');
+
+        segNotice = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【当前分卷核心执行任务（极度重要！请严格遵守）】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+你当前正在负责执行：第 ${segIdx + 1} / ${totalSegs} 卷！
+你本次调用的专属职责：仅负责整理并输出全模组大纲中【第 ${startChapNum} 章 至 第 ${endChapNum} 章】对应的这 ${assignedChunks.length} 个章节！
+
+【你必须且仅能输出的 ${assignedChunks.length} 个目标章节清单】：
+${assignedList}
+
+【全局防重与范围红线指令】：
+1. 全局大纲通读意义：下方的【全模组完整规划章节大纲】是给你通读全局、防止跨章节重复归类的全局蓝图。如果某个NPC人设、幕后真相、地点线索已经在总大纲的其他章节（标记为 🔒 由其他分卷负责）中规划了，你在自己负责的这 ${assignedChunks.length} 章里绝对不要重复去写、去整理，防止多整理人设或剧情冲突！
+2. 严格按分配章节交付：你本次输出【必须且仅能】包含上述明确指定的 ${assignedChunks.length} 个章节，大纲规划了几章就输出几章，严禁擅自拆分出额外章节（例如严禁把5章私自切成10章），严禁合并章节，严禁遗漏跳过任何一章！`;
+      }
 
       const systemPrompt = `你是模组切割与整理 AI 专家。你的任务是根据规划大纲，将跑团模组内容整理并输出为全部对应章节。
 
@@ -2837,10 +2914,11 @@ ${cuttingPrompt}
    连续同类内容（如连续几段都是KP信息或都是正文剧情）只在该块的首段开头打上【KP信息】或【正文】，后续相同类别的自然段不需要每行重复打标！直到出现秘密、检定、插图或切换类型时才打新标签！
 3. 【禁止作者前言废话与页码】：作者推荐人数、页码、横线等一律彻底剔除！
 4. 【章节标题净化】：章节名称严禁重复附加模组名称！直接使用纯净章节名。
-5. 直接按上述起止标记格式输出全部章节内容。`;
+5. 【分卷严格执行边界】：${isSegmented && assignedChunks.length > 0 ? `你当前正在执行第 ${segIdx + 1} / ${totalSegs} 卷的任务！总大纲提供全部章节是为了让你通读全局、防止跨章重复归类人设与真相；但你本次输出必须且仅能输出本卷指定的 ${assignedChunks.length} 个章节（从第 ${startChapNum} 章到第 ${endChapNum} 章），严禁编写其他卷的章节，严禁多切或拆出额外章节，严禁漏写本卷分配的任何一章！` : `直接按规划大纲严格输出全部 ${allChunks.length} 个章节，严禁多切拆分或漏写。`}`;
 
-      const userPrompt = `【全模组规划章节大纲】：
+      const userPrompt = `【全模组完整规划章节大纲（全局参考底图，防止跨章内容重复归类或错位）】：
 ${planOutline}
+
 ${segNotice}
 ${this.globalOpinion ? `\n【用户全局修改意见】：\n${this.globalOpinion}\n` : ''}
 【模组参考原文】：
@@ -2871,6 +2949,7 @@ ${fullText}`;
             category: category,
             wordCount: words,
             content: content,
+            segIdx: typeof segIdx === 'number' ? segIdx : 0,
             fixCount: 0,
             stats: {
               mainTextCount: (content.match(/【正文】/g) || []).length,
@@ -2884,7 +2963,7 @@ ${fullText}`;
       }
 
       if (parsedChapters.length === 0) {
-        const regexSecondary = /(?:^|\n)#{2,4}\s*([^|\n]+?)(?:\s*\|\s*([^\n]+?))?\n([\s\S]*?)(?=(?:\n#{2,4}\s+)|$)/g;
+        const regexSecondary = /(?:^|\n)#{2,4}\s*([^|\n]+?)(?:\s*\|\s*([^=\n]+?))?\n([\s\S]*?)(?=(?:\n#{2,4}\s+)|$)/g;
         while ((match = regexSecondary.exec(generated)) !== null) {
           const rawTitle = (match[1] || '').trim();
           const category = (match[2] || '正文').trim();
@@ -2900,6 +2979,7 @@ ${fullText}`;
               category: category,
               wordCount: words,
               content: content,
+              segIdx: typeof segIdx === 'number' ? segIdx : 0,
               fixCount: 0,
               stats: {
                 mainTextCount: (content.match(/【正文】/g) || []).length,
@@ -2920,7 +3000,7 @@ ${fullText}`;
           const firstLineEnd = sec.indexOf('\n');
           const firstLine = firstLineEnd !== -1 ? sec.substring(0, firstLineEnd).trim() : sec.trim();
           const rest = firstLineEnd !== -1 ? sec.substring(firstLineEnd).trim() : '';
-          const planChunk = allChunks[idx] || { name: firstLine || `第${idx + 1}章`, category: '正文' };
+          const planChunk = assignedChunks[idx] || { name: firstLine || `第${idx + 1}章`, category: '正文' };
           const words = this.countWords(rest || sec);
           const cleanTitle = this.cleanChapterTitle(planChunk.name, this.currentParsedData?.moduleName);
 
@@ -2931,6 +3011,7 @@ ${fullText}`;
             category: planChunk.category,
             wordCount: words,
             content: rest || sec,
+            segIdx: typeof segIdx === 'number' ? segIdx : 0,
             fixCount: 0,
             stats: {
               mainTextCount: ((rest || sec).match(/【正文】/g) || []).length,
@@ -3291,6 +3372,7 @@ ${fullText}`;
         this.batchSegmentsCompleted = 0;
         this.cuttingCurrentIndex = 0;
         this.cutChapters = [];
+        this.cutChaptersBySegment = [];
         const cardList = document.getElementById('module-cut-card-list');
         if (cardList) cardList.innerHTML = '';
       }
@@ -3331,15 +3413,14 @@ ${fullText}`;
       if (resumeBtn) resumeBtn.style.display = 'none';
       if (cancelBtn) cancelBtn.style.display = 'inline-flex';
 
-      const startSegIdx = this.batchSegmentsCompleted || 0;
-
-      if (cardList && cardList.children.length === 0 && this.cutChapters.length > 0) {
-        this.cutChapters.forEach((chap, idx) => {
-          cardList.appendChild(this.createChapterCardElement(chap, idx));
-        });
+      if (!this.cutChaptersBySegment) {
+        this.cutChaptersBySegment = [];
       }
-
-      for (let segIdx = startSegIdx; segIdx < totalSegs; segIdx++) {
+      for (let segIdx = 0; segIdx < totalSegs; segIdx++) {
+        // 如果该分卷已有切好的章节，说明已经切好，严禁重复切割！
+        if (this.cutChaptersBySegment[segIdx] && this.cutChaptersBySegment[segIdx].length > 0) {
+          continue;
+        }
         if (this.isCuttingCancelled) {
           this.isCuttingRunning = false;
           this.saveDraft();
@@ -3366,7 +3447,8 @@ ${fullText}`;
 
         try {
           const segText = segments[segIdx];
-          const parsed = await this.generateBatchAllChaptersWithAI(segText, segIdx, totalSegs);
+          const assignedChunks = this.getAssignedChunksForSegment(segIdx, totalSegs);
+          const parsed = await this.generateBatchAllChaptersWithAI(segText, segIdx, totalSegs, assignedChunks);
           if (this.isCuttingCancelled) {
             this.isCuttingRunning = false;
             this.saveDraft();
@@ -3374,15 +3456,13 @@ ${fullText}`;
           }
 
           if (parsed && parsed.length > 0) {
-            parsed.forEach(chap => {
-              chap.id = 'chap_' + (this.cutChapters.length + 1);
-              chap.sortOrder = this.cutChapters.length + 1;
+            parsed.forEach((chap, cIdx) => {
+              chap.segIdx = segIdx;
+              chap.sortOrder = chap.sortOrder || (cIdx + 1);
               chap.title = this.cleanChapterTitle(chap.title, this.currentParsedData?.moduleName);
-              this.cutChapters.push(chap);
-              if (cardList) {
-                cardList.appendChild(this.createChapterCardElement(chap, this.cutChapters.length - 1));
-              }
             });
+            this.cutChaptersBySegment[segIdx] = parsed;
+            this.cutChapters = this.rebuildCutChaptersFromSegments();
             this.batchSegmentsCompleted = segIdx + 1;
             this.cuttingCurrentIndex = this.cutChapters.length;
             this.saveDraft();
@@ -3426,6 +3506,77 @@ ${fullText}`;
       this.saveDraft();
     },
 
+    async regenerateSingleSegment(segIdx) {
+      if (this.isCuttingRunning) {
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '当前有切割任务正在运行，请先等待或暂停');
+        }
+        return;
+      }
+      const fullText = this.currentParsedData?.text || '';
+      const splitSelect2 = document.getElementById('module-step2-split-select');
+      const splitSelect1 = document.getElementById('module-split-parts-select');
+      let requestedParts = (splitSelect2 ? splitSelect2.value : null) || (splitSelect1 ? splitSelect1.value : null) || (this.currentParsedData?.splitParts || 'auto');
+      let numParts = 1;
+      const totalWords = this.currentParsedData?.wordCount || fullText.length;
+      if (requestedParts === 'auto') {
+        if (totalWords > 80000) numParts = 4;
+        else if (totalWords > 40000) numParts = 3;
+        else if (totalWords > 20000) numParts = 2;
+        else numParts = 1;
+      } else {
+        numParts = parseInt(requestedParts, 10) || 1;
+      }
+      const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
+      if (segIdx < 0 || segIdx >= segments.length) return;
+
+      const totalSegs = segments.length;
+      const progressText = document.getElementById('module-progress-text');
+      const assignedChunks = this.getAssignedChunksForSegment(segIdx, totalSegs);
+
+      this.isCuttingRunning = true;
+      this.isCuttingPaused = false;
+      this.isCuttingCancelled = false;
+      if (progressText) {
+        progressText.textContent = `正在单独重新生成第 ${segIdx + 1}/${totalSegs} 卷...`;
+      }
+      this.renderCutChaptersUI();
+
+      try {
+        const segText = segments[segIdx];
+        const parsed = await this.generateBatchAllChaptersWithAI(segText, segIdx, totalSegs, assignedChunks);
+        if (parsed && parsed.length > 0) {
+          if (!this.cutChaptersBySegment) this.cutChaptersBySegment = [];
+          parsed.forEach((chap, cIdx) => {
+            chap.segIdx = segIdx;
+            chap.sortOrder = chap.sortOrder || (cIdx + 1);
+            chap.title = this.cleanChapterTitle(chap.title, this.currentParsedData?.moduleName);
+          });
+          this.cutChaptersBySegment[segIdx] = parsed;
+          this.cutChapters = this.rebuildCutChaptersFromSegments();
+          this.saveDraft();
+          this.renderCutChaptersUI();
+          if (progressText) {
+            progressText.textContent = `第 ${segIdx + 1} 卷重新生成完成 共 ${parsed.length} 章`;
+          }
+          if (typeof global.showCustomAlert === 'function') {
+            global.showCustomAlert('成功', `第 ${segIdx + 1} 卷已独立重新生成完毕，章节已更新！`);
+          }
+        } else {
+          throw new Error('未解析出有效章节');
+        }
+      } catch (err) {
+        console.warn('[模组] 单卷重切异常:', err);
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('失败', `第 ${segIdx + 1} 卷重新生成遇到异常：${err.message || err}`);
+        }
+      } finally {
+        this.isCuttingRunning = false;
+        this.updateBottomActionBar();
+        this.renderCutChaptersUI();
+      }
+    },
+
     renderCutChaptersUI() {
       const cardList = document.getElementById('module-cut-card-list');
       const progressText = document.getElementById('module-progress-text');
@@ -3467,6 +3618,46 @@ ${fullText}`;
       }
 
       this.updateBottomActionBar();
+
+      const fullText = this.currentParsedData?.text || '';
+      const splitSelect2 = document.getElementById('module-step2-split-select');
+      const splitSelect1 = document.getElementById('module-split-parts-select');
+      let requestedParts = (splitSelect2 ? splitSelect2.value : null) || (splitSelect1 ? splitSelect1.value : null) || (this.currentParsedData?.splitParts || 'auto');
+      let numParts = 1;
+      const totalWords = this.currentParsedData?.wordCount || fullText.length;
+      if (requestedParts === 'auto') {
+        if (totalWords > 80000) numParts = 4;
+        else if (totalWords > 40000) numParts = 3;
+        else if (totalWords > 20000) numParts = 2;
+        else numParts = 1;
+      } else {
+        numParts = parseInt(requestedParts, 10) || 1;
+      }
+
+      if (numParts > 1) {
+        const segsBar = document.createElement('div');
+        segsBar.className = 'mod-segments-bar';
+        segsBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding:10px; background:var(--secondary-bg); border:1px solid var(--border-color); border-radius:8px;';
+        for (let s = 0; s < numParts; s++) {
+          const segChaps = (this.cutChaptersBySegment && this.cutChaptersBySegment[s]) || [];
+          const assigned = this.getAssignedChunksForSegment(s, numParts);
+          const segItem = document.createElement('div');
+          segItem.style.cssText = 'display:flex; align-items:center; gap:6px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:6px; padding:4px 8px; font-size:12px; color:var(--text-primary);';
+          const isDone = segChaps.length > 0;
+          const statusText = isDone ? `${segChaps.length}章 已成` : `待切 ${assigned.length}章`;
+          segItem.innerHTML = `
+            <span style="font-weight:600;">卷${s + 1}</span>
+            <span style="font-size:11px; color:var(--text-secondary);">${statusText}</span>
+            <button type="button" class="moe-btn-mini btn-regen-seg" data-seg-idx="${s}" style="padding:2px 6px; font-size:11px; line-height:1.2; height:22px; cursor:pointer;" ${this.isCuttingRunning ? 'disabled' : ''}>重生</button>
+          `;
+          segItem.querySelector('.btn-regen-seg').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.regenerateSingleSegment(s);
+          });
+          segsBar.appendChild(segItem);
+        }
+        cardList.appendChild(segsBar);
+      }
 
       this.cutChapters.forEach((chap, idx) => {
         cardList.appendChild(this.createChapterCardElement(chap, idx));
