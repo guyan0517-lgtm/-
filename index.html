@@ -3074,7 +3074,30 @@
 
             <!-- 标题和状态的容器 -->
             <div id="chat-header-title-wrapper">
-              <div id="chat-header-main-line">
+              <div id="chat-header-main-line" style="position: relative;">
+                <!-- 心声按钮 仅单聊显示，群聊隐藏，定位于名字正左侧 -->
+                <span
+                  class="action-btn"
+                  id="char-heart-btn"
+                  title="心声"
+                  style="cursor: pointer; position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-right: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="var(--accent-color)"
+                    stroke="var(--accent-color)"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                    ></path>
+                  </svg>
+                </span>
                 <span id="chat-header-title">聊天对象</span>
               </div>
               <div id="chat-header-status">
@@ -3084,34 +3107,10 @@
             </div>
 
             <div class="header-actions">
-              <!-- 心声按钮 (仅单聊显示，群聊隐藏，沿用选中特别关心矢量图与主色调) -->
-              <span
-                class="action-btn"
-                id="char-heart-btn"
-                title="心声"
-                style="cursor: pointer;"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="var(--accent-color)"
-                  stroke="var(--accent-color)"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
-                  ></path>
-                </svg>
-              </span>
-              <!-- 地图按钮 (在网易云播放器左边，两个间隔不要太大) -->
+              <!-- 地图按钮 在网易云播放器左边 -->
               <span
                 class="action-btn"
                 id="chat-header-map-btn"
-                title="地图"
                 style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-right: 2px;"
                 onclick="if(typeof toggleChatMiniMapModal==='function'){toggleChatMiniMapModal();}else if(typeof openChatMiniMapModal==='function'){openChatMiniMapModal();}"
               >
@@ -7132,6 +7131,17 @@
               </div>
             </div>
 
+            <!-- 好感入口 -->
+            <div class="form-group" id="group-chat-affection-section" style="display: none;">
+              <button
+                type="button"
+                id="group-chat-affection-btn"
+                class="moe-btn moe-btn-secondary"
+                style="width: 100%; height: 38px; font-size: 13px; font-weight: 600; border-radius: 12px; margin-bottom: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;"
+                onclick="if(typeof openChatAffectionModal==='function')openChatAffectionModal();"
+              >好感</button>
+            </div>
+
             <!-- 聊天总结 -->
             <div class="form-group">
               <label class="toggle-switch-label">
@@ -7343,7 +7353,7 @@
                   id="voice-mode-btn"
                   class="moe-btn moe-btn-secondary"
                   onclick="if(typeof toggleVoiceMode==='function')toggleVoiceMode();"
-                  style="height: 36px; padding: 0 12px; font-size: 12px; font-weight: 600; flex-shrink: 0;"
+                  style="width: auto !important; min-width: 54px; max-width: 68px; height: 36px; padding: 0 12px; font-size: 12px; font-weight: 600; flex-shrink: 0; white-space: nowrap; margin: 0;"
                 >手动</button>
               </div>
             </div>
@@ -8414,7 +8424,7 @@
       </div>
     </div>
 
-    <div id="chat-affection-modal" class="modal">
+    <div id="chat-affection-modal" class="modal" style="z-index: 10002;">
       <div class="modal-content" style="max-width: 300px; width: calc(100% - 80px); margin: 0 auto; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: flex; flex-direction: column; max-height: 80vh;">
         <div class="modal-header" style="font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -25003,7 +25013,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               lockscreenWallpaper: state.globalSettings.lockscreenWallpaper,
             };
 
-            const actualFileName = customFileName || `EPhone-Full-Backup-${new Date().toISOString().split("T")[0]}.json`;
+            let actualFileName = (typeof customFileName === "string" && customFileName.trim())
+              ? customFileName
+              : (typeof formatAutoExportDateTime === "function" ? formatAutoExportDateTime() : `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+            if (!actualFileName.endsWith(".json")) actualFileName += ".json";
             const jsonText = JSON.stringify(backupData, null, 2);
             let dirHandle = customDirHandle;
             if (!dirHandle && typeof getStoredDirHandle === "function") {
@@ -67061,7 +67074,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           });
 
           const blobData = await response.blob();
-          const actualFileName = customFileName || `EPhone-Stream-Backup-${new Date().toISOString().split("T")[0]}.json`;
+          let actualFileName = (typeof customFileName === "string" && customFileName.trim())
+            ? customFileName
+            : (typeof formatAutoExportDateTime === "function" ? formatAutoExportDateTime() : `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+          if (!actualFileName.endsWith(".json")) actualFileName += ".json";
 
           let dirHandle = customDirHandle;
           if (!dirHandle && typeof getStoredDirHandle === "function") {
@@ -71730,7 +71746,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
           document
             .getElementById("export-data-btn")
-            .addEventListener("click", exportBackup);
+            .addEventListener("click", () => exportBackup());
           document
             .getElementById("import-btn")
             .addEventListener("click", () =>
@@ -72649,16 +72665,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           if (listenBtn) {
             listenBtn.addEventListener("click", handleListenTogetherClick);
           }
-          const chatMapBtn = document.getElementById("chat-map-btn");
-          if (chatMapBtn) {
-            chatMapBtn.addEventListener("click", () => {
-              if (typeof toggleChatMiniMapModal === "function") {
-                toggleChatMiniMapModal();
-              } else if (typeof openChatMiniMapModal === "function") {
-                openChatMiniMapModal();
-              }
-            });
-          }
+          // 右上角地图由行内 onclick 独立切换 HTML 小地图浮层
           document
             .getElementById("music-exit-btn")
             .addEventListener("click", () => endListenTogetherSession(true));
@@ -74154,6 +74161,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 isGroup ? "none" : "block";
               document.getElementById("streak-settings-section").style.display =
                 isGroup ? "none" : "block";
+              const groupAffectionSection = document.getElementById("group-chat-affection-section");
+              if (groupAffectionSection) {
+                groupAffectionSection.style.display = isGroup ? "block" : "none";
+              }
 
               const isDiceOrStatus = chat.isDiceBot || chat.roleType === "system_status" || chat.roleType === "dice" || chat.isDice;
               const aiInvBtn = document.getElementById("manage-ai-inventory-btn");
@@ -82254,7 +82265,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           });
           const exportStreamBtn = document.getElementById("export-data-stream-btn");
           if (exportStreamBtn) {
-            exportStreamBtn.addEventListener("click", exportDataStream);
+            exportStreamBtn.addEventListener("click", () => exportDataStream());
           }
           // 在 init() 函数的事件监听器区域末尾，粘贴下面这行代码
           document

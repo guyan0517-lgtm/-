@@ -3280,16 +3280,20 @@ ${fullText}`;
 
     resumeCutting() {
       this.isCuttingPaused = false;
+      this.isCuttingCancelled = false;
+      this.isCuttingRunning = true;
       const pauseBtn = document.getElementById('module-pause-btn');
       const resumeBtn = document.getElementById('module-resume-btn');
 
       if (pauseBtn) pauseBtn.style.display = 'inline-flex';
       if (resumeBtn) resumeBtn.style.display = 'none';
 
-      if (this.cutExecutionMode === 'batch') {
-        this.executeBatchCuttingSingleCall();
-      } else {
-        this.continueAsyncCuttingLoop();
+      if (!this._batchCallInProgress) {
+        if (this.cutExecutionMode === 'batch') {
+          this.executeBatchCuttingSingleCall();
+        } else {
+          this.continueAsyncCuttingLoop();
+        }
       }
     },
 
@@ -3531,12 +3535,14 @@ ${fullText}`;
         this.currentParsedData.prompt = promptEl.value.trim();
       }
 
-      this.setWizardStep(3);
+      this.isCuttingRunning = true;
+      this.isCuttingPaused = false;
+      this.isCuttingCancelled = false;
 
       const fullText = this.currentParsedData?.text || '';
       const numParts = this.getEffectiveSplitParts();
       const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
-      if (this.batchSegmentsCompleted >= segments.length) {
+      if (!this.cutChapters || this.cutChapters.length === 0 || this.batchSegmentsCompleted >= segments.length) {
         this.batchSegmentsCompleted = 0;
         this.cuttingCurrentIndex = 0;
         this.cutChapters = [];
@@ -3544,120 +3550,129 @@ ${fullText}`;
         const cardList = document.getElementById('module-cut-card-list');
         if (cardList) cardList.innerHTML = '';
       }
+
+      this.setWizardStep(3);
+      this.syncOngoingCuttingUI();
       await this.executeBatchCuttingSingleCall();
     },
 
     async executeBatchCuttingSingleCall() {
-      const fullText = this.currentParsedData?.text || '';
-      const progressText = document.getElementById('module-progress-text');
-      const progressBar = document.getElementById('module-progress-bar');
-      const cardList = document.getElementById('module-cut-card-list');
-      const pauseBtn = document.getElementById('module-pause-btn');
-      const resumeBtn = document.getElementById('module-resume-btn');
-      const cancelBtn = document.getElementById('module-cancel-btn');
+      if (this._batchCallInProgress) return;
+      this._batchCallInProgress = true;
+      try {
+        const fullText = this.currentParsedData?.text || '';
+        const progressText = document.getElementById('module-progress-text');
+        const progressBar = document.getElementById('module-progress-bar');
+        const cardList = document.getElementById('module-cut-card-list');
+        const pauseBtn = document.getElementById('module-pause-btn');
+        const resumeBtn = document.getElementById('module-resume-btn');
+        const cancelBtn = document.getElementById('module-cancel-btn');
 
-      const numParts = this.getEffectiveSplitParts();
-      const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
-      const totalSegs = segments.length;
+        const numParts = this.getEffectiveSplitParts();
+        const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
+        const totalSegs = segments.length;
 
-      this.isCuttingRunning = true;
-      this.isCuttingPaused = false;
-      this.isCuttingCancelled = false;
+        this.isCuttingRunning = true;
+        this.isCuttingPaused = false;
+        this.isCuttingCancelled = false;
 
-      if (pauseBtn) pauseBtn.style.display = 'inline-flex';
-      if (resumeBtn) resumeBtn.style.display = 'none';
-      if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+        if (pauseBtn) pauseBtn.style.display = 'inline-flex';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'inline-flex';
 
-      if (!this.cutChaptersBySegment) {
-        this.cutChaptersBySegment = [];
-      }
-      for (let segIdx = 0; segIdx < totalSegs; segIdx++) {
-        // 如果该分卷已有切好的章节，说明已经切好，严禁重复切割！
-        if (this.cutChaptersBySegment[segIdx] && this.cutChaptersBySegment[segIdx].length > 0) {
-          continue;
+        if (!this.cutChaptersBySegment) {
+          this.cutChaptersBySegment = [];
         }
-        if (this.isCuttingCancelled) {
-          this.isCuttingRunning = false;
-          this.saveDraft();
-          return;
-        }
-
-        while (this.isCuttingPaused) {
-          await new Promise(r => setTimeout(r, 300));
-          if (this.isCuttingCancelled) {
-            this.isCuttingRunning = false;
-            this.saveDraft();
-            return;
+        for (let segIdx = 0; segIdx < totalSegs; segIdx++) {
+          // 如果该分卷已有切好的章节，说明已经切好，严禁重复切割！
+          if (this.cutChaptersBySegment[segIdx] && this.cutChaptersBySegment[segIdx].length > 0) {
+            continue;
           }
-        }
-
-        if (progressText) {
-          progressText.textContent = totalSegs > 1
-            ? `分卷模式：正在整理第 ${segIdx + 1}/${totalSegs} 卷（已生成 ${this.cutChapters.length} 章）...`
-            : `正在整理输出全篇所有章节...`;
-        }
-        if (progressBar) {
-          progressBar.style.width = `${Math.round((segIdx / totalSegs) * 100)}%`;
-        }
-
-        try {
-          const assignedChunks = this.getAssignedChunksForSegment(segIdx, totalSegs);
-          const parsed = await this.generateBatchAllChaptersWithAI(fullText, segIdx, totalSegs, assignedChunks);
           if (this.isCuttingCancelled) {
             this.isCuttingRunning = false;
             this.saveDraft();
             return;
           }
 
-          if (parsed && parsed.length > 0) {
-            parsed.forEach((chap, cIdx) => {
-              chap.segIdx = segIdx;
-              chap.sortOrder = chap.sortOrder || (cIdx + 1);
-              chap.title = this.cleanChapterTitle(chap.title, this.currentParsedData?.moduleName);
-            });
-            this.cutChaptersBySegment[segIdx] = parsed;
-            this.cutChapters = this.rebuildCutChaptersFromSegments();
-            this.batchSegmentsCompleted = segIdx + 1;
-            this.cuttingCurrentIndex = this.cutChapters.length;
-            this.saveDraft();
-            this.renderCutChaptersUI();
-          } else {
-            throw new Error(`第 ${segIdx + 1} 卷未解析出有效章节`);
+          while (this.isCuttingPaused) {
+            await new Promise(r => setTimeout(r, 300));
+            if (this.isCuttingCancelled) {
+              this.isCuttingRunning = false;
+              this.saveDraft();
+              return;
+            }
           }
-        } catch (err) {
-          console.warn('[模组] 分卷整理提示:', err);
-          if (this.isCuttingCancelled) {
-            this.isCuttingRunning = false;
-            this.saveDraft();
-            return;
-          }
-          this.isCuttingRunning = false;
-          this.isCuttingPaused = true;
-          if (pauseBtn) pauseBtn.style.display = 'none';
-          if (resumeBtn) resumeBtn.style.display = 'inline-flex';
-          if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+
           if (progressText) {
-            progressText.textContent = `分卷整理第 ${segIdx + 1} 卷遇到网络波动已暂停 已完成 ${this.cutChapters.length} 章 点击继续重试`;
+            progressText.textContent = totalSegs > 1
+              ? `分卷模式：正在整理第 ${segIdx + 1}/${totalSegs} 卷（已生成 ${this.cutChapters.length} 章）...`
+              : `正在整理输出全篇所有章节...`;
           }
-          this.updateBottomActionBar();
-          this.saveDraft();
-          if (typeof global.showCustomAlert === 'function') {
-            global.showCustomAlert('生成暂停', `分卷整理第 ${segIdx + 1} 卷遇到网络波动：${err.message || err}。已为您自动保存当前进度，点击“继续”可重新从该卷继续生成。`);
+          if (progressBar) {
+            progressBar.style.width = `${Math.round((segIdx / totalSegs) * 100)}%`;
           }
-          return;
-        }
-      }
 
-      this.isCuttingRunning = false;
-      if (pauseBtn) pauseBtn.style.display = 'none';
-      if (resumeBtn) resumeBtn.style.display = 'none';
-      if (cancelBtn) cancelBtn.style.display = 'none';
-      if (progressText) {
-        progressText.textContent = `模组切割生成完成 共整理 ${this.cutChapters.length} 个带团专属章节`;
+          try {
+            const assignedChunks = this.getAssignedChunksForSegment(segIdx, totalSegs);
+            const parsed = await this.generateBatchAllChaptersWithAI(fullText, segIdx, totalSegs, assignedChunks);
+            if (this.isCuttingCancelled) {
+              this.isCuttingRunning = false;
+              this.saveDraft();
+              return;
+            }
+
+            if (parsed && parsed.length > 0) {
+              parsed.forEach((chap, cIdx) => {
+                chap.segIdx = segIdx;
+                chap.sortOrder = chap.sortOrder || (cIdx + 1);
+                chap.title = this.cleanChapterTitle(chap.title, this.currentParsedData?.moduleName);
+              });
+              this.cutChaptersBySegment[segIdx] = parsed;
+              this.cutChapters = this.rebuildCutChaptersFromSegments();
+              this.batchSegmentsCompleted = segIdx + 1;
+              this.cuttingCurrentIndex = this.cutChapters.length;
+              this.saveDraft();
+              this.syncOngoingCuttingUI();
+            } else {
+              throw new Error(`第 ${segIdx + 1} 卷未解析出有效章节`);
+            }
+          } catch (err) {
+            console.warn('[模组] 分卷整理提示:', err);
+            if (this.isCuttingCancelled) {
+              this.isCuttingRunning = false;
+              this.saveDraft();
+              return;
+            }
+            this.isCuttingRunning = false;
+            this.isCuttingPaused = true;
+            if (pauseBtn) pauseBtn.style.display = 'none';
+            if (resumeBtn) resumeBtn.style.display = 'inline-flex';
+            if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+            if (progressText) {
+              progressText.textContent = `分卷整理第 ${segIdx + 1} 卷遇到网络波动已暂停 已完成 ${this.cutChapters.length} 章 点击继续重试`;
+            }
+            this.updateBottomActionBar();
+            this.saveDraft();
+            if (typeof global.showCustomAlert === 'function') {
+              global.showCustomAlert('生成暂停', `分卷整理第 ${segIdx + 1} 卷遇到网络波动：${err.message || err}。已为您自动保存当前进度，点击“继续”可重新从该卷继续生成。`);
+            }
+            return;
+          }
+        }
+
+        this.isCuttingRunning = false;
+        if (pauseBtn) pauseBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (progressText) {
+          progressText.textContent = `模组切割生成完成 共整理 ${this.cutChapters.length} 个带团专属章节`;
+        }
+        if (progressBar) progressBar.style.width = '100%';
+        this.updateBottomActionBar();
+        this.saveDraft();
+      } finally {
+        this._batchCallInProgress = false;
       }
-      if (progressBar) progressBar.style.width = '100%';
-      this.updateBottomActionBar();
-      this.saveDraft();
     },
 
     async regenerateSingleSegment(segIdx) {
