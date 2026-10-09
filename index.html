@@ -73428,30 +73428,40 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           }
 
           function setBirthdaySelects(prefix, val) {
+            const mInp = document.getElementById(`${prefix}-birthday-month-input`);
+            const dInp = document.getElementById(`${prefix}-birthday-day-input`);
             const inp = document.getElementById(`${prefix}-birthday-input`);
-            if (inp) {
-              inp.value = val || "";
-              return;
-            }
             const mSel = document.getElementById(`${prefix}-birthday-month-select`);
             const dSel = document.getElementById(`${prefix}-birthday-day-select`);
-            if (!mSel || !dSel) return;
             if (!val) {
-              mSel.value = "";
-              dSel.value = "";
+              if (mInp) mInp.value = "";
+              if (dInp) dInp.value = "";
+              if (inp) inp.value = "";
+              if (mSel) mSel.value = "";
+              if (dSel) dSel.value = "";
               return;
             }
             const match = String(val).match(/(\d+)\s*月?(?:\s*(\d+)\s*日?)?/);
-            if (match) {
-              mSel.value = match[1] || "";
-              dSel.value = match[2] || "";
-            } else {
-              mSel.value = "";
-              dSel.value = "";
-            }
+            const mVal = match && match[1] ? match[1] : "";
+            const dVal = match && match[2] ? match[2] : "";
+            if (mInp) mInp.value = mVal;
+            if (dInp) dInp.value = dVal;
+            if (inp) inp.value = val || "";
+            if (mSel) mSel.value = mVal;
+            if (dSel) dSel.value = dVal;
           }
 
           function getBirthdayFromSelects(prefix) {
+            const mInp = document.getElementById(`${prefix}-birthday-month-input`);
+            const dInp = document.getElementById(`${prefix}-birthday-day-input`);
+            if (mInp || dInp) {
+              const mVal = (mInp ? mInp.value : "").trim();
+              const dVal = (dInp ? dInp.value : "").trim();
+              if (!mVal && !dVal) return "";
+              if (mVal && dVal) return `${mVal}月${dVal}日`;
+              if (mVal) return `${mVal}月`;
+              return `${dVal}日`;
+            }
             const inp = document.getElementById(`${prefix}-birthday-input`);
             if (inp) return inp.value.trim();
             const mSel = document.getElementById(`${prefix}-birthday-month-select`);

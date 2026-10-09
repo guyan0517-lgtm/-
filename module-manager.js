@@ -7337,10 +7337,18 @@ ${chaptersDigest}
         await db.modules.put(moduleRecord);
         await db.moduleChapters.bulkPut(chaptersToSave);
         if (imagesToSave.length > 0 && db.moduleImages) {
-          await db.moduleImages.bulkPut(imagesToSave);
+          try {
+            await db.moduleImages.bulkAdd(imagesToSave);
+          } catch (e) {
+            await db.moduleImages.bulkPut(imagesToSave);
+          }
         }
         if (locationNavList.length > 0 && db.moduleLocationNav) {
-          await db.moduleLocationNav.bulkPut(locationNavList);
+          try {
+            await db.moduleLocationNav.bulkAdd(locationNavList);
+          } catch (e) {
+            await db.moduleLocationNav.bulkPut(locationNavList);
+          }
         }
         return true;
       });
@@ -7690,16 +7698,32 @@ ${chaptersDigest}
           await db.modules.put(moduleRecord);
           await db.moduleChapters.bulkPut(chapters);
           if (locationNavList.length > 0 && db.moduleLocationNav) {
-            await db.moduleLocationNav.bulkPut(locationNavList);
+            try {
+              await db.moduleLocationNav.bulkAdd(locationNavList);
+            } catch (e) {
+              await db.moduleLocationNav.bulkPut(locationNavList);
+            }
           }
           if (imagesList.length > 0 && db.moduleImages) {
-            await db.moduleImages.bulkPut(imagesList);
+            try {
+              await db.moduleImages.bulkAdd(imagesList);
+            } catch (e) {
+              await db.moduleImages.bulkPut(imagesList);
+            }
           }
           if (cluePointersList.length > 0 && db.moduleCluePointers) {
-            await db.moduleCluePointers.bulkPut(cluePointersList);
+            try {
+              await db.moduleCluePointers.bulkAdd(cluePointersList);
+            } catch (e) {
+              await db.moduleCluePointers.bulkPut(cluePointersList);
+            }
           }
           if (hoRolesList.length > 0 && db.moduleHoRoles) {
-            await db.moduleHoRoles.bulkPut(hoRolesList);
+            try {
+              await db.moduleHoRoles.bulkAdd(hoRolesList);
+            } catch (e) {
+              await db.moduleHoRoles.bulkPut(hoRolesList);
+            }
           }
           return true;
         });
@@ -8388,6 +8412,7 @@ ${chaptersDigest}
       emptyContainer.style.display = 'none';
       listContainer.innerHTML = '';
 
+      const database = this.getDB();
       let allChapters = [];
       let allImages = [];
       try {
