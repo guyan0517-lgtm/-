@@ -37610,7 +37610,7 @@ ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${
 - 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
 ${isGroupMusicAllowed ? (() => {
   const pStr = (chat?.settings?.aiMusicPreference && chat.settings.aiMusicPreference !== "全部") ? chat.settings.aiMusicPreference : "纯乐、古风、日系、动漫、游戏、氛围配乐";
-  return `- 播放场景配乐或音乐: 当情节氛围、情绪渲染或转场需要背景音乐时，在相应消息文本末尾插入 [音乐: 准确歌名 - 歌手] 或 [音乐: 著名原声名]。当前设定的音乐风格偏好为 ${pStr}。严格音乐禁令：中文歌必须只能是古风歌曲，严禁出现任何现代流行的中文歌，严禁出现周杰伦等现代三次元流行歌手的歌曲。除古风中文歌外，优先选用纯音乐、日系动漫与游戏原声、世界音乐、影视氛围曲。\n`;
+  return `- 播放场景配乐或音乐: 必须根据具体场景与剧情氛围，并结合当前设定的音乐偏好标签 ${pStr} 挑选契合的曲目，在相应消息文本末尾插入 [音乐: 准确歌名 - 歌手] 或 [音乐: 著名原声名]。音乐禁令：严禁使用任何现代中文流行歌曲，严禁出现周杰伦等现代流行歌手的歌曲，古风歌曲不受此流行歌禁令限制。\n`;
 })() : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
 ${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}- 发送系统消息: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
@@ -38077,7 +38077,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			- **发送表情**: \`{"type": "sticker", "sticker_name": "表情的名字"}\`，表情名必须在表情列表中，禁止杜撰
 			${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (() => {
   const pStr = (chat?.settings?.aiMusicPreference && chat.settings.aiMusicPreference !== "全部") ? chat.settings.aiMusicPreference : "纯乐、古风、日系、动漫、游戏、氛围配乐";
-  return `- **播放场景配乐或音乐**: 当情节氛围、情绪渲染或转场需要背景音乐时，在相应消息文本末尾插入 [音乐: 准确歌名 - 歌手] 或 [音乐: 著名原声名]。当前设定的音乐风格偏好为 ${pStr}。严格音乐禁令：中文歌必须只能是古风歌曲，严禁出现任何现代流行的中文歌，严禁出现周杰伦等现代三次元流行歌手的歌曲。除古风中文歌外，优先选用纯音乐、日系动漫与游戏原声、世界音乐、影视氛围曲。\n`;
+  return `- **播放场景配乐或音乐**: 必须根据具体场景与剧情氛围，并结合当前设定的音乐偏好标签 ${pStr} 挑选契合的曲目，在相应消息文本末尾插入 [音乐: 准确歌名 - 歌手] 或 [音乐: 著名原声名]。音乐禁令：严禁使用任何现代中文流行歌曲，严禁出现周杰伦等现代流行歌手的歌曲，古风歌曲不受此流行歌禁令限制。\n`;
 })() : ""}- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
 			${
         chat.loadModuleImages && chat.activeModuleId
@@ -43377,16 +43377,118 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           };
         }
 
+        let musicFadeTimer = null;
+
+        function cancelMusicFade() {
+          if (musicFadeTimer) {
+            clearInterval(musicFadeTimer);
+            musicFadeTimer = null;
+          }
+          window._isFadingAudio = false;
+        }
+
+        function getTargetMusicVolume() {
+          if (typeof window._userMusicVolume === "number") {
+            return window._userMusicVolume;
+          }
+          const saved = localStorage.getItem("app_music_volume");
+          if (saved !== null && !isNaN(parseFloat(saved))) {
+            return Math.max(0, Math.min(1, parseFloat(saved)));
+          }
+          return 1;
+        }
+
+        function fadeOutMusic(duration = 350) {
+          return new Promise((resolve) => {
+            if (!audioPlayer || audioPlayer.paused || audioPlayer.volume <= 0) {
+              if (audioPlayer) audioPlayer.volume = 0;
+              resolve();
+              return;
+            }
+            cancelMusicFade();
+            window._isFadingAudio = true;
+            const startVol = audioPlayer.volume;
+            const stepMs = 25;
+            const totalSteps = Math.max(1, Math.round(duration / stepMs));
+            const volStep = startVol / totalSteps;
+            let currentStep = 0;
+
+            musicFadeTimer = setInterval(() => {
+              currentStep++;
+              const curVol = Math.max(0, startVol - volStep * currentStep);
+              try {
+                audioPlayer.volume = curVol;
+              } catch (e) {}
+              if (currentStep >= totalSteps || curVol <= 0) {
+                cancelMusicFade();
+                try {
+                  audioPlayer.volume = 0;
+                } catch (e) {}
+                resolve();
+              }
+            }, stepMs);
+          });
+        }
+
+        function fadeInMusic(duration = 450) {
+          return new Promise((resolve) => {
+            if (!audioPlayer) {
+              resolve();
+              return;
+            }
+            cancelMusicFade();
+            window._isFadingAudio = true;
+            const targetVol = getTargetMusicVolume();
+            if (targetVol <= 0) {
+              try {
+                audioPlayer.volume = 0;
+              } catch (e) {}
+              cancelMusicFade();
+              resolve();
+              return;
+            }
+            try {
+              audioPlayer.volume = 0;
+            } catch (e) {}
+            const stepMs = 25;
+            const totalSteps = Math.max(1, Math.round(duration / stepMs));
+            const volStep = targetVol / totalSteps;
+            let currentStep = 0;
+
+            musicFadeTimer = setInterval(() => {
+              currentStep++;
+              const curVol = Math.min(targetVol, volStep * currentStep);
+              try {
+                audioPlayer.volume = curVol;
+              } catch (e) {}
+              if (currentStep >= totalSteps || curVol >= targetVol) {
+                cancelMusicFade();
+                try {
+                  audioPlayer.volume = targetVol;
+                } catch (e) {}
+                resolve();
+              }
+            }, stepMs);
+          });
+        }
+
         async function playSong(index) {
+          if (audioPlayer && !audioPlayer.paused && audioPlayer.volume > 0) {
+            await fadeOutMusic(350);
+          } else if (audioPlayer) {
+            audioPlayer.volume = 0;
+          }
           await loadSong(index);
           try {
+            if (audioPlayer) audioPlayer.volume = 0;
             await audioPlayer.play();
 
-            state.musicState.isPlaying = true; // 播放成功后，直接设置状态为 true
-            updatePlayerUI(); // 并立即更新UI
+            state.musicState.isPlaying = true;
+            updatePlayerUI();
+            fadeInMusic(450);
           } catch (error) {
             console.error("音频播放失败:", error);
-            state.musicState.isPlaying = false; // 如果播放失败，也要确保状态正确
+            state.musicState.isPlaying = false;
             updatePlayerUI();
           }
         }
@@ -43394,12 +43496,25 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
         /**
          * 处理播放/暂停的函数
          */
-        function togglePlayPause() {
+        async function togglePlayPause() {
           if (audioPlayer.paused) {
             if (state.musicState.currentIndex > -1) {
-              playSong(state.musicState.currentIndex);
+              if (audioPlayer.src) {
+                try {
+                  audioPlayer.volume = 0;
+                  await audioPlayer.play();
+                  state.musicState.isPlaying = true;
+                  updatePlayerUI();
+                  fadeInMusic(450);
+                } catch (e) {
+                  playSong(state.musicState.currentIndex);
+                }
+              } else {
+                playSong(state.musicState.currentIndex);
+              }
             }
           } else {
+            await fadeOutMusic(350);
             audioPlayer.pause();
 
             state.musicState.isPlaying = false;
@@ -80421,7 +80536,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
           window.setMusicVolume = function (val) {
             const vol = Math.max(0, Math.min(1, parseFloat(val)));
-            if (audioPlayer) audioPlayer.volume = vol;
+            window._userMusicVolume = vol;
+            if (!window._isFadingAudio && audioPlayer) audioPlayer.volume = vol;
             localStorage.setItem("app_music_volume", vol);
             const pct = Math.round(vol * 100);
             if (lyricsVolSlider) lyricsVolSlider.value = pct;
