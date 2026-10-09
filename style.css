@@ -33794,3 +33794,14 @@ n {
   border-color: transparent !important;
   outline: none !important;
 }
+
+.chat-music-inline-track {
+  background: transparent !important;
+  border: none !important;
+}
+
+.chat-music-inline-track:hover {
+  opacity: 1 !important;
+  color: var(--text-primary) !important;
+}
+
