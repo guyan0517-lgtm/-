@@ -387,6 +387,95 @@
   global.setDefaultModuleCuttingPresetId = setDefaultModuleCuttingPresetId;
   global.renderModuleCuttingPresetsUI = renderModuleCuttingPresetsUI;
 
+  const DEFAULT_TRPG_MUSIC_PROMPT = `你是一个专业的跑团带团音频总监与模组剧情配乐专家。
+请仔细阅读以下模组的正文、场景与剧情，找出最适合配乐的剧情转折点、氛围场景与关键时刻。
+对于每个适合配乐的位置，推荐一首符合当下意境的音乐。
+输出严格的JSON数组格式，不要输出任何多余标记或解释，每个元素包含以下字段：
+[
+  {
+    "scene": "场景简述",
+    "keyword": "网易云搜索词或歌名",
+    "tag": "[音乐: 搜索词]"
+  }
+]`;
+
+  function getModuleMusicPresets() {
+    try {
+      const raw = localStorage.getItem('coc_module_music_presets');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const def = parsed.find((p) => p.id === 'preset_default_music');
+          if (def) {
+            def.prompt = DEFAULT_TRPG_MUSIC_PROMPT;
+          } else {
+            parsed.unshift({
+              id: 'preset_default_music',
+              name: '默认配乐',
+              prompt: DEFAULT_TRPG_MUSIC_PROMPT
+            });
+          }
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [
+      {
+        id: 'preset_default_music',
+        name: '默认配乐',
+        prompt: DEFAULT_TRPG_MUSIC_PROMPT
+      }
+    ];
+  }
+
+  function saveModuleMusicPresets(presets) {
+    try {
+      localStorage.setItem('coc_module_music_presets', JSON.stringify(presets));
+    } catch (e) {}
+  }
+
+  function getDefaultModuleMusicPresetId() {
+    try {
+      return localStorage.getItem('coc_module_default_music_preset_id') || 'preset_default_music';
+    } catch (e) {
+      return 'preset_default_music';
+    }
+  }
+
+  function setDefaultModuleMusicPresetId(id) {
+    try {
+      if (id) localStorage.setItem('coc_module_default_music_preset_id', id);
+      else localStorage.removeItem('coc_module_default_music_preset_id');
+    } catch (e) {}
+  }
+
+  function renderModuleMusicPresetsUI() {
+    const select = document.getElementById('module-music-preset-select');
+    if (!select) return;
+    const presets = getModuleMusicPresets();
+    const defaultId = getDefaultModuleMusicPresetId();
+    const currentVal = select.value || defaultId;
+    let optionsHtml = '<option value="">选择预设</option>';
+    optionsHtml += presets
+      .map((p) => {
+        const isDef = p.id === defaultId;
+        const prefix = isDef ? '默认 · ' : '';
+        const isSel = p.id === currentVal;
+        return `<option value="${p.id}" ${isSel ? 'selected' : ''}>${prefix}${p.name}</option>`;
+      })
+      .join('');
+    select.innerHTML = optionsHtml;
+    if (currentVal && presets.some((p) => p.id === currentVal)) {
+      select.value = currentVal;
+    }
+  }
+
+  global.getModuleMusicPresets = getModuleMusicPresets;
+  global.saveModuleMusicPresets = saveModuleMusicPresets;
+  global.getDefaultModuleMusicPresetId = getDefaultModuleMusicPresetId;
+  global.setDefaultModuleMusicPresetId = setDefaultModuleMusicPresetId;
+  global.renderModuleMusicPresetsUI = renderModuleMusicPresetsUI;
+
   const TAG_DEFINITIONS = {
     'COC': { category: '规则体系', desc: '基于克苏鲁的呼唤TRPG规则体系' },
     'COJ': { category: '规则体系', desc: '基于日系COC衍生风格与叙事规则体系' },
@@ -532,6 +621,72 @@
       return cleaned.trim();
     },
 
+    async _openDraftDB() {
+      if (this._draftDB) return this._draftDB;
+      return new Promise((resolve, reject) => {
+        if (typeof window === 'undefined' || !window.indexedDB) {
+          return reject(new Error('IndexedDB not supported'));
+        }
+        const req = window.indexedDB.open('TRPG_Module_Cutter_Cache_v2', 1);
+        req.onupgradeneeded = (e) => {
+          const dbInstance = e.target.result;
+          if (!dbInstance.objectStoreNames.contains('drafts')) {
+            dbInstance.createObjectStore('drafts');
+          }
+        };
+        req.onsuccess = (e) => {
+          this._draftDB = e.target.result;
+          resolve(this._draftDB);
+        };
+        req.onerror = (e) => reject(e.target.error);
+      });
+    },
+
+    async _saveDraftToIDB(data) {
+      try {
+        const dbInstance = await this._openDraftDB();
+        return new Promise((resolve, reject) => {
+          const tx = dbInstance.transaction('drafts', 'readwrite');
+          const store = tx.objectStore('drafts');
+          const req = store.put(data, 'active_cutter_draft');
+          req.onsuccess = () => resolve(true);
+          req.onerror = (e) => reject(e.target.error);
+        });
+      } catch (err) {
+        console.warn('[模组] IndexedDB 实时写入提示:', err);
+        return false;
+      }
+    },
+
+    async _loadDraftFromIDB() {
+      try {
+        const dbInstance = await this._openDraftDB();
+        return new Promise((resolve, reject) => {
+          const tx = dbInstance.transaction('drafts', 'readonly');
+          const store = tx.objectStore('drafts');
+          const req = store.get('active_cutter_draft');
+          req.onsuccess = (e) => resolve(e.target.result || null);
+          req.onerror = (e) => reject(e.target.error);
+        });
+      } catch (err) {
+        console.warn('[模组] IndexedDB 实时读取提示:', err);
+        return null;
+      }
+    },
+
+    async _clearDraftFromIDB() {
+      try {
+        const dbInstance = await this._openDraftDB();
+        return new Promise((resolve, reject) => {
+          const tx = dbInstance.transaction('drafts', 'readwrite');
+          const store = tx.objectStore('drafts');
+          const req = store.delete('active_cutter_draft');
+          req.onsuccess = () => resolve(true);
+          req.onerror = (e) => reject(e.target.error);
+        });
+      } catch (err) {}
+    },
+
     saveDraft() {
       try {
         const draftObj = {
@@ -544,86 +699,162 @@
           currentPlan: this.currentPlan,
           globalOpinion: this.globalOpinion,
           globalAuditReport: this.globalAuditReport || '',
-          cutChapters: this.cutChapters,
+          cutChapters: this.cutChapters || [],
           cutChaptersBySegment: this.cutChaptersBySegment || [],
           cuttingCurrentIndex: typeof this.cuttingCurrentIndex === 'number' ? this.cuttingCurrentIndex : (this.cutChapters ? this.cutChapters.length : 0),
-          isCuttingPaused: this.isCuttingPaused,
+          isCuttingPaused: this.isCuttingPaused !== false,
+          isAnalyzing: Boolean(this.isAnalyzing),
+          analysisStatusText: this.analysisStatusText || '',
           timestamp: Date.now()
         };
-        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftObj));
+
+        // 1. 优先存入持久化 IndexedDB（无配额瓶颈，确保万字模组与已切出的全部章节实时完整落地）
+        this._saveDraftToIDB(draftObj);
+
+        // 2. 作为第二层后备，写入 Dexie 的 moduleRawFiles
+        if (typeof db !== 'undefined' && db && db.moduleRawFiles) {
+          db.moduleRawFiles.put({
+            id: '__module_cutter_draft__',
+            fileName: this.currentParsedData?.moduleName || '模组草稿',
+            fileType: 'draft',
+            wordCount: this.currentParsedData?.wordCount || 0,
+            uploadedAt: Date.now(),
+            draftData: draftObj
+          }).catch(() => {});
+        }
+
+        // 3. 尝试存入 localStorage（作为轻量同步副本，排除巨大base64图片防止爆配额异常）
+        try {
+          let lightParsedData = this.currentParsedData;
+          if (lightParsedData && Array.isArray(lightParsedData.images) && lightParsedData.images.length > 0) {
+            lightParsedData = {
+              ...lightParsedData,
+              images: lightParsedData.images.map(img => ({
+                name: img.name,
+                fileName: img.fileName,
+                pageNumber: img.pageNumber,
+                format: img.format,
+                isMap: img.isMap,
+                shouldInclude: img.shouldInclude
+              }))
+            };
+          }
+          const lightDraft = {
+            ...draftObj,
+            currentParsedData: lightParsedData
+          };
+          localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(lightDraft));
+        } catch (lsErr) {
+          try {
+            localStorage.setItem(DRAFT_STORAGE_KEY + '_has_idb', String(Date.now()));
+          } catch (e2) {}
+        }
       } catch (e) {
         console.warn('[模组] 草稿保存提示', e);
       }
     },
 
+    applyDraft(draft) {
+      if (!draft || !draft.currentParsedData) return false;
+      this.currentStep = draft.currentStep || 1;
+      this.activeSubPanel = draft.activeSubPanel || 'wizard';
+      this.activeSubTab = draft.activeSubTab || 'chapters';
+      this.cutExecutionMode = draft.cutExecutionMode || 'batch';
+      this.batchSegmentsCompleted = typeof draft.batchSegmentsCompleted === 'number' ? draft.batchSegmentsCompleted : 0;
+      this.currentParsedData = draft.currentParsedData;
+      this.currentPlan = draft.currentPlan || null;
+      this.globalOpinion = draft.globalOpinion || '';
+      this.globalAuditReport = draft.globalAuditReport || '';
+      this.cutChaptersBySegment = Array.isArray(draft.cutChaptersBySegment) ? draft.cutChaptersBySegment : [];
+      if (this.cutChaptersBySegment.length > 0) {
+        this.cutChapters = this.rebuildCutChaptersFromSegments();
+      } else {
+        this.cutChapters = Array.isArray(draft.cutChapters) ? draft.cutChapters : [];
+      }
+      this.cuttingCurrentIndex = typeof draft.cuttingCurrentIndex === 'number' ? draft.cuttingCurrentIndex : this.cutChapters.length;
+      this.isCuttingRunning = false;
+      this.isCuttingPaused = true;
+      this.isCuttingCancelled = false;
+
+      this.updateModeUI(this.cutExecutionMode);
+
+      const opinionEl = document.getElementById('module-global-opinion-textarea');
+      if (opinionEl) opinionEl.value = this.globalOpinion;
+
+      const improvementPanel = document.getElementById('module-global-improvement-panel');
+      const improvementTextarea = document.getElementById('module-global-improvement-textarea');
+      const improvementStatus = document.getElementById('module-global-improvement-status');
+      if (this.globalAuditReport && improvementPanel && improvementTextarea) {
+        improvementPanel.style.display = 'flex';
+        improvementTextarea.value = this.globalAuditReport;
+        if (improvementStatus) improvementStatus.textContent = '已就绪';
+      }
+
+      this.renderParsedResultUI(this.currentParsedData, true);
+
+      if (this.currentPlan) {
+        this.renderPlanUI();
+      }
+
+      if (this.currentParsedData?.splitParts) {
+        const step2SplitSelect = document.getElementById('module-step2-split-select');
+        const step1SplitSelect = document.getElementById('module-split-parts-select');
+        if (step2SplitSelect) step2SplitSelect.value = this.currentParsedData.splitParts;
+        if (step1SplitSelect) step1SplitSelect.value = this.currentParsedData.splitParts;
+      }
+
+      if (this.currentStep === 3 || this.cutChapters.length > 0) {
+        this.setWizardStep(3);
+        this.renderCutChaptersUI();
+      } else if (this.currentStep === 2 && this.currentPlan) {
+        this.setWizardStep(2);
+        this.switchStep2SubTab(this.activeSubTab);
+      } else {
+        this.setWizardStep(1);
+      }
+
+      this.switchSubPanel(this.activeSubPanel);
+      return true;
+    },
+
     loadDraft() {
+      let loaded = false;
       try {
         const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-        if (!raw) return false;
-        const draft = JSON.parse(raw);
-        if (draft && draft.currentParsedData) {
-          this.currentStep = draft.currentStep || 1;
-          this.activeSubPanel = draft.activeSubPanel || 'wizard';
-          this.activeSubTab = draft.activeSubTab || 'chapters';
-          this.cutExecutionMode = draft.cutExecutionMode || 'batch';
-          this.batchSegmentsCompleted = typeof draft.batchSegmentsCompleted === 'number' ? draft.batchSegmentsCompleted : 0;
-          this.currentParsedData = draft.currentParsedData;
-          this.currentPlan = draft.currentPlan || null;
-          this.globalOpinion = draft.globalOpinion || '';
-          this.globalAuditReport = draft.globalAuditReport || '';
-          this.cutChaptersBySegment = Array.isArray(draft.cutChaptersBySegment) ? draft.cutChaptersBySegment : [];
-          if (this.cutChaptersBySegment.length > 0) {
-            this.cutChapters = this.rebuildCutChaptersFromSegments();
-          } else {
-            this.cutChapters = Array.isArray(draft.cutChapters) ? draft.cutChapters : [];
+        if (raw) {
+          const draft = JSON.parse(raw);
+          if (draft && draft.currentParsedData) {
+            loaded = this.applyDraft(draft);
           }
-          this.cuttingCurrentIndex = typeof draft.cuttingCurrentIndex === 'number' ? draft.cuttingCurrentIndex : this.cutChapters.length;
-          this.isCuttingRunning = false;
-          this.isCuttingPaused = true;
-          this.isCuttingCancelled = false;
-
-          this.updateModeUI(this.cutExecutionMode);
-
-          const opinionEl = document.getElementById('module-global-opinion-textarea');
-          if (opinionEl) opinionEl.value = this.globalOpinion;
-
-          const improvementPanel = document.getElementById('module-global-improvement-panel');
-          const improvementTextarea = document.getElementById('module-global-improvement-textarea');
-          const improvementStatus = document.getElementById('module-global-improvement-status');
-          if (this.globalAuditReport && improvementPanel && improvementTextarea) {
-            improvementPanel.style.display = 'flex';
-            improvementTextarea.value = this.globalAuditReport;
-            if (improvementStatus) improvementStatus.textContent = '已就绪';
-          }
-
-          this.renderParsedResultUI(this.currentParsedData, true);
-
-          if (this.currentPlan) {
-            this.renderPlanUI();
-          }
-
-          if (this.currentParsedData?.splitParts) {
-            const step2SplitSelect = document.getElementById('module-step2-split-select');
-            const step1SplitSelect = document.getElementById('module-split-parts-select');
-            if (step2SplitSelect) step2SplitSelect.value = this.currentParsedData.splitParts;
-            if (step1SplitSelect) step1SplitSelect.value = this.currentParsedData.splitParts;
-          }
-
-          if (this.currentStep === 3 || this.cutChapters.length > 0) {
-            this.setWizardStep(3);
-            this.renderCutChaptersUI();
-          } else if (this.currentStep === 2 && this.currentPlan) {
-            this.setWizardStep(2);
-            this.switchStep2SubTab(this.activeSubTab);
-          } else {
-            this.setWizardStep(1);
-          }
-
-          this.switchSubPanel(this.activeSubPanel);
-          return true;
         }
       } catch (e) {
         console.warn('[模组] 恢复草稿提示', e);
+      }
+      // 无论同步读取是否成功，立即触发从无容量限制的 IndexedDB 读取完整实时缓存
+      this.loadDraftAsync().catch(() => {});
+      return loaded;
+    },
+
+    async loadDraftAsync() {
+      try {
+        let idbDraft = await this._loadDraftFromIDB();
+        if (!idbDraft && typeof db !== 'undefined' && db && db.moduleRawFiles) {
+          const rec = await db.moduleRawFiles.get('__module_cutter_draft__');
+          if (rec && rec.draftData) {
+            idbDraft = rec.draftData;
+          }
+        }
+        if (idbDraft && idbDraft.currentParsedData) {
+          const currentCount = this.cutChapters ? this.cutChapters.length : 0;
+          const idbCount = (idbDraft.cutChapters ? idbDraft.cutChapters.length : 0) ||
+            (idbDraft.cutChaptersBySegment ? idbDraft.cutChaptersBySegment.flat().length : 0);
+          if (!this.currentParsedData || idbCount >= currentCount) {
+            this.applyDraft(idbDraft);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('[模组] 异步恢复实时草稿提示:', err);
       }
       return false;
     },
@@ -631,7 +862,12 @@
     clearDraft() {
       try {
         localStorage.removeItem(DRAFT_STORAGE_KEY);
+        localStorage.removeItem(DRAFT_STORAGE_KEY + '_has_idb');
       } catch (e) {}
+      this._clearDraftFromIDB().catch(() => {});
+      if (typeof db !== 'undefined' && db && db.moduleRawFiles) {
+        db.moduleRawFiles.delete('__module_cutter_draft__').catch(() => {});
+      }
     },
 
     countWords(text) {
@@ -2541,6 +2777,8 @@
       this.cutChaptersBySegment = [];
       this.batchSegmentsCompleted = 0;
       this.cuttingCurrentIndex = 0;
+      this.isAnalyzing = true;
+      this.saveDraft();
 
       const promptPresetSelect = document.getElementById('module-prompt-preset-select');
       const promptTextarea = document.getElementById('module-prompt-textarea');
@@ -2829,6 +3067,38 @@ JSON 格式如下：
                 }
               });
             }
+
+            if (allParsedChunks.length > 0) {
+              const currentTags = this.sortModuleTags(finalBgTag, finalEndingTag, finalContentTags, []);
+              this.currentPlan = {
+                moduleType: finalType,
+                ruleSystem: finalRuleSystem,
+                scaleType: finalScaleType,
+                summary: finalSummary,
+                bgTag: finalBgTag,
+                endingTag: finalEndingTag,
+                contentTags: finalContentTags,
+                customTags: [],
+                tags: currentTags,
+                moduleName: this.currentParsedData.moduleName,
+                totalWords: this.currentParsedData.wordCount,
+                chunks: allParsedChunks.map((c, cIdx) => ({
+                  id: 'chunk_' + (cIdx + 1),
+                  order: cIdx + 1,
+                  name: this.cleanChapterTitle(c.name, this.currentParsedData.moduleName),
+                  category: c.category || '正文',
+                  wordCount: c.wordCount || 1000,
+                  prefixPreview: c.prefixPreview || '',
+                  suffixPreview: c.suffixPreview || '',
+                  remarks: c.remarks || '',
+                  reason: c.reason || 'AI根据带团逻辑架构提炼',
+                  userInstruction: '',
+                  rawSlice: ''
+                })),
+                mapNodes: [...combinedMapNodes]
+              };
+              this.saveDraft();
+            }
           }
         }
 
@@ -2888,6 +3158,7 @@ JSON 格式如下：
       }
 
       this.currentPlan = plan;
+      this.isAnalyzing = false;
       this.saveDraft();
       return plan;
     },
@@ -4754,15 +5025,18 @@ ${chap.content}
       const tocView = document.getElementById('module-detail-toc-view');
       const mapView = document.getElementById('module-detail-map-view');
       const galleryView = document.getElementById('module-detail-gallery-view');
+      const musicView = document.getElementById('module-detail-music-view');
       if (chaptersView) chaptersView.style.display = 'flex';
       if (tocView) tocView.style.display = 'none';
       if (mapView) mapView.style.display = 'none';
       if (galleryView) galleryView.style.display = 'none';
+      if (musicView) musicView.style.display = 'none';
 
       this.renderModuleDetailGroupedChapters(chapters);
       this.renderModuleDetailToc(chapters);
       this.renderModuleDetailMap(chapters);
       this.renderModuleDetailGallery(chapters, mod.id);
+      this.renderModuleDetailMusic(chapters, mod.id);
     },
 
     renderModuleDetailGroupedChapters(chapters) {
@@ -6385,6 +6659,239 @@ ${chap.content}
       }
 
       modal.style.display = 'flex';
+    },
+
+    async renderModuleDetailMusic(chapters, moduleId) {
+      const targetModuleId = moduleId || (this.activeDetailModule ? this.activeDetailModule.id : null);
+      if (!targetModuleId) return;
+
+      const musicContainer = document.getElementById('module-music-list-container');
+      const countLabel = document.getElementById('module-music-count-label');
+      const promptBox = document.getElementById('module-music-prompt-container');
+      const togglePromptBtn = document.getElementById('module-music-toggle-prompt-btn');
+      const analyzeBtn = document.getElementById('module-music-ai-analyze-btn');
+      const clearBtn = document.getElementById('module-music-clear-btn');
+      const promptTextarea = document.getElementById('module-music-prompt-textarea');
+      const presetSelect = document.getElementById('module-music-preset-select');
+
+      const database = this.getDB();
+      let mod = null;
+      if (database && database.modules) {
+        mod = await database.modules.get(targetModuleId);
+      }
+      if (!mod && this.activeDetailModule) {
+        mod = this.activeDetailModule;
+      }
+      if (!mod) return;
+
+      mod.musicList = mod.musicList || [];
+
+      if (countLabel) {
+        countLabel.textContent = `配乐清单 ${mod.musicList.length} 首`;
+      }
+
+      if (typeof renderModuleMusicPresetsUI === 'function') {
+        renderModuleMusicPresetsUI();
+      }
+
+      const presets = typeof getModuleMusicPresets === 'function' ? getModuleMusicPresets() : [];
+      const defaultPresetId = typeof getDefaultModuleMusicPresetId === 'function' ? getDefaultModuleMusicPresetId() : 'preset_default_music';
+      const curPreset = presets.find(p => p.id === (presetSelect ? presetSelect.value : defaultPresetId)) || presets[0];
+      if (promptTextarea && (!promptTextarea.value || !promptTextarea.value.trim())) {
+        promptTextarea.value = (curPreset && curPreset.prompt) ? curPreset.prompt : DEFAULT_TRPG_MUSIC_PROMPT;
+      }
+
+      if (togglePromptBtn && !togglePromptBtn._bound) {
+        togglePromptBtn._bound = true;
+        togglePromptBtn.onclick = () => {
+          if (!promptBox) return;
+          const isHidden = promptBox.style.display === 'none';
+          promptBox.style.display = isHidden ? 'block' : 'none';
+          togglePromptBtn.textContent = isHidden ? '收起' : '预设';
+        };
+      }
+
+      if (musicContainer) {
+        musicContainer.innerHTML = '';
+        if (mod.musicList.length === 0) {
+          musicContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 24px; font-size: 12px;">当前模组暂无配乐，点击上方分析按键即可自动匹配</div>';
+        } else {
+          mod.musicList.forEach((m, idx) => {
+            const itemEl = document.createElement('div');
+            itemEl.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); gap: 8px;';
+            const leftCol = document.createElement('div');
+            leftCol.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
+            leftCol.innerHTML = `
+              <div style="width: 32px; height: 32px; border-radius: 6px; overflow: hidden; background: var(--card-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);">
+                <img src="${m.cover || 'https://i.postimg.cc/pT2xKzPz/album-cover-placeholder.png'}" style="width: 100%; height: 100%; object-fit: cover;" alt="封面" />
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.name || '曲目'}</div>
+                <div style="font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.artist || '原声'} · ${m.scene || '剧情氛围'}</div>
+              </div>
+            `;
+
+            const rightCol = document.createElement('div');
+            rightCol.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
+
+            const tagBadge = document.createElement('span');
+            tagBadge.style.cssText = 'font-size: 10.5px; padding: 2px 6px; border-radius: 6px; background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); white-space: nowrap; font-family: monospace;';
+            tagBadge.textContent = m.tag || `[音乐: ${m.name}]`;
+
+            const playBtn = document.createElement('button');
+            playBtn.type = 'button';
+            playBtn.className = 'mod-capsule-btn';
+            playBtn.textContent = '试听';
+            playBtn.style.padding = '2px 8px';
+            playBtn.style.fontSize = '11px';
+            playBtn.onclick = () => {
+              if (typeof window.playAutoSceneMusic === 'function') {
+                window.playAutoSceneMusic(m.name || m.keyword);
+              }
+            };
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'mod-capsule-btn danger';
+            delBtn.textContent = '删除';
+            delBtn.style.padding = '2px 6px';
+            delBtn.style.fontSize = '11px';
+            delBtn.onclick = async () => {
+              mod.musicList.splice(idx, 1);
+              if (database && database.modules && mod.id) {
+                await database.modules.put(mod);
+              }
+              await this.renderModuleDetailMusic(null, mod.id);
+            };
+
+            rightCol.appendChild(tagBadge);
+            rightCol.appendChild(playBtn);
+            rightCol.appendChild(delBtn);
+
+            itemEl.appendChild(leftCol);
+            itemEl.appendChild(rightCol);
+            musicContainer.appendChild(itemEl);
+          });
+        }
+      }
+
+      if (clearBtn && !clearBtn._bound) {
+        clearBtn._bound = true;
+        clearBtn.onclick = async () => {
+          let confirmed = false;
+          if (typeof global.showCustomConfirm === 'function') {
+            confirmed = await global.showCustomConfirm('清空', '确定清空当前模组全部配乐吗');
+          } else {
+            confirmed = confirm('确定清空当前模组全部配乐吗');
+          }
+          if (!confirmed) return;
+          mod.musicList = [];
+          if (database && database.modules && mod.id) {
+            await database.modules.put(mod);
+          }
+          await this.renderModuleDetailMusic(null, mod.id);
+        };
+      }
+
+      if (analyzeBtn && !analyzeBtn._bound) {
+        analyzeBtn._bound = true;
+        analyzeBtn.onclick = async () => {
+          try {
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = '分析中';
+            if (typeof global.showCustomAlert === 'function') {
+              await global.showCustomAlert('提示', '正在分析模组剧情并检索配乐');
+            }
+
+            let allChaps = [];
+            if (database && database.moduleChapters) {
+              allChaps = await database.moduleChapters.where('moduleId').equals(mod.id).sortBy('sortOrder');
+            }
+            let moduleText = '';
+            allChaps.forEach(c => {
+              moduleText += `\n【${c.title}】\n${c.content || ''}\n`;
+            });
+            if (!moduleText.trim()) {
+              moduleText = mod.description || mod.name || '模组';
+            }
+            const promptContent = promptTextarea ? promptTextarea.value.trim() : DEFAULT_TRPG_MUSIC_PROMPT;
+            const fullPrompt = `${promptContent}\n\n以下为模组文本内容：\n${moduleText.slice(0, 15000)}`;
+
+            const aiRes = await this.callAI('你是一个专业的跑团带团音频总监与模组剧情配乐专家，输出严格的JSON数组。', fullPrompt);
+            let musicList = [];
+            try {
+              let cleanText = aiRes.trim();
+              if (cleanText.includes('```json')) {
+                cleanText = cleanText.split('```json')[1].split('```')[0].trim();
+              } else if (cleanText.includes('```')) {
+                cleanText = cleanText.split('```')[1].split('```')[0].trim();
+              }
+              musicList = JSON.parse(cleanText);
+            } catch (err) {
+              console.warn('解析配乐JSON失败，尝试提取数组:', err);
+              const match = aiRes.match(/\[[\s\S]*\]/);
+              if (match) {
+                musicList = JSON.parse(match[0]);
+              }
+            }
+
+            if (!Array.isArray(musicList) || musicList.length === 0) {
+              throw new Error('未能从模组中解析出有效配乐方案');
+            }
+
+            mod.musicList = mod.musicList || [];
+            for (const item of musicList) {
+              const kw = item.keyword || item.name || '';
+              if (!kw) continue;
+              let songInfo = null;
+              if (typeof searchNeteaseMusic === 'function') {
+                try {
+                  const neteaseRes = await searchNeteaseMusic(kw);
+                  if (neteaseRes && neteaseRes.length > 0) songInfo = neteaseRes[0];
+                } catch (_) {}
+              }
+              if (!songInfo && typeof searchGdstudioMusic === 'function') {
+                try {
+                  const gdRes = await searchGdstudioMusic(kw);
+                  if (gdRes && gdRes.length > 0) songInfo = gdRes[0];
+                } catch (_) {}
+              }
+
+              const songName = songInfo ? songInfo.name : kw;
+              const songArtist = songInfo ? songInfo.artist : (item.artist || '原声');
+              const songCover = songInfo ? songInfo.cover : 'https://i.postimg.cc/pT2xKzPz/album-cover-placeholder.png';
+              const songId = songInfo ? songInfo.id : null;
+
+              mod.musicList.push({
+                id: songId || 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                name: songName,
+                artist: songArtist,
+                cover: songCover,
+                scene: item.scene || '剧情气氛',
+                keyword: kw,
+                tag: item.tag || `[音乐: ${songName}]`
+              });
+            }
+
+            if (database && database.modules && mod.id) {
+              await database.modules.put(mod);
+            }
+
+            if (typeof global.showCustomAlert === 'function') {
+              await global.showCustomAlert('成功', `已成功解析并添加 ${musicList.length} 首配乐`);
+            }
+            await this.renderModuleDetailMusic(null, mod.id);
+          } catch (err) {
+            console.error('智能配乐分析失败:', err);
+            if (typeof global.showCustomAlert === 'function') {
+              await global.showCustomAlert('失败', '智能配乐分析处理未完成');
+            }
+          } finally {
+            analyzeBtn.disabled = false;
+            analyzeBtn.textContent = '分析';
+          }
+        };
+      }
     },
 
     async compressImageFile(fileOrDataUrl, maxWidth = 1200, maxHeight = 1200, quality = 0.8) {
@@ -10041,6 +10548,9 @@ ${chaptersDigest}
         } else if (this.currentStep === 2) {
           if (this.isCuttingRunning) {
             this.setWizardStep(3);
+          } else if (this.cutChapters && this.cutChapters.length > 0) {
+            this.setWizardStep(3);
+            this.renderCutChaptersUI();
           } else {
             this.executeCuttingWorkflow();
           }
@@ -10084,6 +10594,9 @@ ${chaptersDigest}
         step2CutBtn.addEventListener('click', () => {
           if (this.isCuttingRunning) {
             this.setWizardStep(3);
+          } else if (this.cutChapters && this.cutChapters.length > 0) {
+            this.setWizardStep(3);
+            this.renderCutChaptersUI();
           } else {
             this.executeCuttingWorkflow();
           }
@@ -10277,12 +10790,123 @@ ${chaptersDigest}
           const tocView = document.getElementById('module-detail-toc-view');
           const mapView = document.getElementById('module-detail-map-view');
           const galleryView = document.getElementById('module-detail-gallery-view');
+          const musicView = document.getElementById('module-detail-music-view');
           if (chaptersView) chaptersView.style.display = target === 'chapters' ? 'flex' : 'none';
           if (tocView) tocView.style.display = target === 'toc' ? 'block' : 'none';
           if (mapView) mapView.style.display = target === 'map' ? 'block' : 'none';
           if (galleryView) galleryView.style.display = target === 'gallery' ? 'flex' : 'none';
+          if (musicView) {
+            musicView.style.display = target === 'music' ? 'flex' : 'none';
+            if (target === 'music' && this.activeDetailModule) {
+              this.renderModuleDetailMusic(null, this.activeDetailModule.id);
+            }
+          }
         });
       });
+
+      const musicPresetSelect = document.getElementById('module-music-preset-select');
+      if (musicPresetSelect) {
+        musicPresetSelect.addEventListener('change', () => {
+          const presets = getModuleMusicPresets();
+          const found = presets.find((p) => p.id === musicPresetSelect.value);
+          const promptInput = document.getElementById('module-music-prompt-textarea');
+          if (found && promptInput) {
+            promptInput.value = found.prompt;
+          }
+        });
+      }
+
+      const musicPresetDefaultBtn = document.getElementById('module-music-preset-default-btn');
+      if (musicPresetDefaultBtn) {
+        musicPresetDefaultBtn.addEventListener('click', async () => {
+          const select = document.getElementById('module-music-preset-select');
+          if (!select || !select.value) {
+            if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '请先选择预设');
+            return;
+          }
+          setDefaultModuleMusicPresetId(select.value);
+          renderModuleMusicPresetsUI();
+          if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '已设为默认预设');
+        });
+      }
+
+      const musicPresetNewBtn = document.getElementById('module-music-preset-new-btn');
+      if (musicPresetNewBtn) {
+        musicPresetNewBtn.addEventListener('click', async () => {
+          const promptInput = document.getElementById('module-music-prompt-textarea');
+          const promptText = promptInput ? promptInput.value.trim() : '';
+          let name = null;
+          if (typeof global.showCustomPrompt === 'function') {
+            name = await global.showCustomPrompt('新建预设', '请输入预设名称');
+          } else {
+            name = prompt('请输入预设名称');
+          }
+          if (!name || !name.trim()) return;
+
+          const presets = getModuleMusicPresets();
+          const newId = 'preset_music_' + Date.now();
+          presets.push({
+            id: newId,
+            name: name.trim(),
+            prompt: promptText || DEFAULT_TRPG_MUSIC_PROMPT
+          });
+          saveModuleMusicPresets(presets);
+          renderModuleMusicPresetsUI();
+          const select = document.getElementById('module-music-preset-select');
+          if (select) select.value = newId;
+          if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '新预设已保存');
+        });
+      }
+
+      const musicPresetSaveBtn = document.getElementById('module-music-preset-save-btn');
+      if (musicPresetSaveBtn) {
+        musicPresetSaveBtn.addEventListener('click', async () => {
+          const select = document.getElementById('module-music-preset-select');
+          const presets = getModuleMusicPresets();
+          const found = presets.find((p) => p.id === (select ? select.value : ''));
+          if (!found) {
+            if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '请先选择要保存覆盖的预设');
+            return;
+          }
+          const promptInput = document.getElementById('module-music-prompt-textarea');
+          const promptText = promptInput ? promptInput.value.trim() : '';
+          found.prompt = promptText;
+          saveModuleMusicPresets(presets);
+          renderModuleMusicPresetsUI();
+          if (select) select.value = found.id;
+          if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '已覆盖保存当前预设');
+        });
+      }
+
+      const musicPresetDeleteBtn = document.getElementById('module-music-preset-delete-btn');
+      if (musicPresetDeleteBtn) {
+        musicPresetDeleteBtn.addEventListener('click', async () => {
+          const select = document.getElementById('module-music-preset-select');
+          const presets = getModuleMusicPresets();
+          const idx = presets.findIndex((p) => p.id === (select ? select.value : ''));
+          if (idx === -1) {
+            if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '请先选择要删除的预设');
+            return;
+          }
+          if (presets[idx].id === 'preset_default_music') {
+            if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '默认预设不能删除');
+            return;
+          }
+          const confirmed = typeof global.showCustomConfirm === 'function'
+            ? await global.showCustomConfirm('确认删除', '确定删除该预设吗')
+            : confirm('确定删除该预设吗');
+          if (!confirmed) return;
+          presets.splice(idx, 1);
+          saveModuleMusicPresets(presets);
+          renderModuleMusicPresetsUI();
+          const promptInput = document.getElementById('module-music-prompt-textarea');
+          if (promptInput) {
+            const firstPreset = getModuleMusicPresets()[0];
+            promptInput.value = firstPreset ? firstPreset.prompt : DEFAULT_TRPG_MUSIC_PROMPT;
+          }
+          if (typeof global.showCustomAlert === 'function') await global.showCustomAlert('提示', '预设已删除');
+        });
+      }
 
       const galleryImportBtn = document.getElementById('module-gallery-import-btn');
       const galleryFileInput = document.getElementById('module-gallery-file-input');
@@ -10662,24 +11286,30 @@ ${chaptersDigest}
     }
   };
 
-  function renderModulesScreen() {
+  async function renderModulesScreen() {
     console.log('[模组] 渲染模组主界面');
     if (!ModuleManager.currentParsedData) {
-      if (!ModuleManager.loadDraft()) {
-        ModuleManager.resetImportUI();
-        ModuleManager.switchSubPanel('library');
-        ModuleManager.setWizardStep(1);
-      }
-    } else {
-      ModuleManager.switchSubPanel(ModuleManager.activeSubPanel || 'library');
-      ModuleManager.setWizardStep(ModuleManager.currentStep || 1);
-      if (ModuleManager.currentStep === 3) {
-        if (ModuleManager.isCuttingRunning) {
-          ModuleManager.syncOngoingCuttingUI();
-        } else {
-          ModuleManager.renderCutChaptersUI();
+      const loadedSync = ModuleManager.loadDraft();
+      if (!loadedSync) {
+        const loadedAsync = await ModuleManager.loadDraftAsync();
+        if (!loadedAsync) {
+          ModuleManager.resetImportUI();
+          ModuleManager.switchSubPanel('library');
+          ModuleManager.setWizardStep(1);
+          return;
         }
       }
+    }
+    ModuleManager.switchSubPanel(ModuleManager.activeSubPanel || 'library');
+    ModuleManager.setWizardStep(ModuleManager.currentStep || 1);
+    if (ModuleManager.currentStep === 3) {
+      if (ModuleManager.isCuttingRunning) {
+        ModuleManager.syncOngoingCuttingUI();
+      } else {
+        ModuleManager.renderCutChaptersUI();
+      }
+    } else if (ModuleManager.currentStep === 2) {
+      ModuleManager.renderPlanUI();
     }
   }
   global.renderModulesScreen = renderModulesScreen;

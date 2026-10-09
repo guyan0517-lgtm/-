@@ -2593,10 +2593,28 @@
                       <span style="font-weight: 600; font-size: 13px; color: var(--text-primary);" id="module-music-count-label">配乐清单 0 首</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
+                      <button type="button" class="mod-capsule-btn" id="module-music-toggle-prompt-btn">预设</button>
                       <button type="button" class="mod-capsule-btn primary" id="module-music-ai-analyze-btn">分析</button>
                       <button type="button" class="mod-capsule-btn danger" id="module-music-clear-btn">清空</button>
                     </div>
                   </div>
+
+                  <!-- 音乐提示词与预设配置区 -->
+                  <div class="module-prompt-container" id="module-music-prompt-container" style="display: none; margin-bottom: 4px;">
+                    <div class="form-group" style="margin-bottom: 8px;">
+                      <select id="module-music-preset-select" class="moe-input" style="height: 34px; line-height: 20px; font-size: 12px; width: 100%; box-sizing: border-box;">
+                        <option value="">选择预设</option>
+                      </select>
+                      <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+                        <button type="button" id="module-music-preset-default-btn" class="summary-preset-btn">默认</button>
+                        <button type="button" id="module-music-preset-new-btn" class="summary-preset-btn">新建</button>
+                        <button type="button" id="module-music-preset-save-btn" class="summary-preset-btn">保存</button>
+                        <button type="button" id="module-music-preset-delete-btn" class="summary-preset-btn">删除</button>
+                      </div>
+                    </div>
+                    <textarea class="module-prompt-textarea" id="module-music-prompt-textarea" rows="6"></textarea>
+                  </div>
+
                   <div id="module-music-list-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
               </div>
@@ -3107,11 +3125,12 @@
             </div>
 
             <div class="header-actions">
-              <!-- 地图按钮 在网易云播放器左边 -->
+              <!-- HTML 地图浮层按钮 放在网易云播放器左边 -->
               <span
                 class="action-btn"
                 id="chat-header-map-btn"
-                style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-right: 2px;"
+                title="地图"
+                style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center;"
                 onclick="if(typeof toggleChatMiniMapModal==='function'){toggleChatMiniMapModal();}else if(typeof openChatMiniMapModal==='function'){openChatMiniMapModal();}"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -3125,7 +3144,7 @@
               <span class="action-btn" id="listen-together-btn" title="音乐" style="cursor: pointer;">
                 <img src="https://i.postimg.cc/CxjpF6gK/yi-qi-ting.png" alt="音乐" style="height: 22px; width: 22px;" />
               </span>
-              <span class="action-btn" id="chat-settings-btn" title="聊天设置"
+              <span class="action-btn" id="chat-settings-btn" title="设置"
                 ><img
                   src="https://i.postimg.cc/bvPq64cv/CCA834-BA-5-A90-408-D-94-FA-7-EE156-B6-A765.png"
                   alt="设置"
@@ -3952,11 +3971,11 @@
                 <div id="music-total-time" class="time-display">0:00</div>
               </div>
               <div class="music-controls">
-                <button id="music-prev-btn">◀</button>
+                <button id="music-prev-btn">上一首</button>
                 <button id="music-play-pause-btn" class="play-pause-btn">
-                  ▶
+                  开始
                 </button>
-                <button id="music-next-btn">▶</button>
+                <button id="music-next-btn">下一首</button>
                 <button id="music-mode-btn">顺序</button>
                 <button id="toggle-lyrics-bar-btn" title="桌面歌词">
                   悬浮
@@ -7366,14 +7385,28 @@
               </label>
             </div>
 
+            <div class="form-group" id="chat-ai-music-style-group" style="margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-weight: 600; font-size: 13px; color: var(--text-primary);">偏好</span>
+              <button type="button" id="chat-music-preference-btn" class="moe-btn moe-btn-secondary" style="width: auto !important; min-width: 60px; max-width: 140px; height: 32px; padding: 0 10px; font-size: 12px; font-weight: 600; margin: 0; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">全部</button>
+            </div>
+
             <div class="form-group" id="group-minimax-voice-group" style="display: none;">
               <label>成员音色</label>
-              <button
-                type="button"
-                id="open-group-minimax-modal-btn"
-                class="moe-btn moe-btn-secondary"
-                style="width: 100%;"
-              >音色</button>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <button
+                  type="button"
+                  id="open-group-minimax-modal-btn"
+                  class="moe-btn moe-btn-secondary"
+                  style="flex: 1;"
+                >音色</button>
+                <button
+                  type="button"
+                  id="group-voice-mode-btn"
+                  class="moe-btn moe-btn-secondary"
+                  onclick="if(typeof toggleVoiceMode==='function')toggleVoiceMode();"
+                  style="width: auto !important; min-width: 54px; max-width: 68px; height: 36px; padding: 0 12px; font-size: 12px; font-weight: 600; flex-shrink: 0; white-space: nowrap; margin: 0;"
+                >手动</button>
+              </div>
             </div>
 
             <div class="form-group" id="minimax-language-boost-group">
@@ -9504,6 +9537,80 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <div class="modal-body" id="debug-console-body" style="padding: 14px 16px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; background: var(--card-bg);"></div>
         <div class="modal-footer" style="display: flex; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border-color); background: var(--card-bg);">
           <button type="button" class="chat-mod-footer-btn secondary" id="close-debug-console-btn">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 音乐偏好模态框 -->
+    <div id="music-style-modal" class="modal">
+      <div class="modal-content" style="max-width: 340px; width: 86%; max-height: 85vh; display: flex; flex-direction: column; border-radius: 18px; padding: 0; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden; margin: auto;">
+        <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--card-bg);">
+          <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">偏好</span>
+          <span id="close-music-style-modal-x" style="cursor: pointer; font-size: 20px; color: var(--text-secondary); line-height: 1;">×</span>
+        </div>
+        <div class="modal-body" style="padding: 16px 18px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px; background: var(--card-bg);">
+          <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">勾选你希望AI播放的音乐风格：</div>
+          <div id="music-style-tags-container" style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="全部" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>全部</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="纯音乐" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>纯音乐</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="古风" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>古风</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="日语" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>日语</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="抒情" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>抒情</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="嘻哈" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>嘻哈</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="蓝调" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>蓝调</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="流行" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>流行</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="摇滚" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>摇滚</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="电子" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>电子</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="民谣" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>民谣</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="爵士" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>爵士</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="治愈" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>治愈</span>
+            </label>
+            <label class="music-style-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); font-size: 12px; color: var(--text-primary); cursor: pointer; user-select: none;">
+              <input type="checkbox" value="悬疑" style="width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+              <span>悬疑</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 18px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: var(--card-bg);">
+          <button type="button" class="moe-btn moe-btn-primary" id="save-music-style-modal-btn" style="height: 32px; padding: 0 16px; font-size: 12px; font-weight: 600;">确定</button>
         </div>
       </div>
     </div>
@@ -20075,16 +20182,78 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         // 检查音频链接是否真的可以播放
         function checkAudioAvailability(url) {
+          if (!url) return Promise.resolve(false);
           return new Promise((resolve) => {
+            let settled = false;
+            const timer = setTimeout(() => {
+              if (!settled) {
+                settled = true;
+                resolve(true);
+              }
+            }, 3000);
             const tester = new Audio();
-            tester.addEventListener("loadedmetadata", () => resolve(true), {
-              once: true,
-            });
-            tester.addEventListener("error", () => resolve(false), {
-              once: true,
-            });
+            tester.addEventListener("loadedmetadata", () => {
+              if (!settled) {
+                settled = true;
+                clearTimeout(timer);
+                resolve(true);
+              }
+            }, { once: true });
+            tester.addEventListener("error", () => {
+              if (!settled) {
+                settled = true;
+                clearTimeout(timer);
+                resolve(false);
+              }
+            }, { once: true });
             tester.src = url;
           });
+        }
+
+        async function fetchPlayableMusicUrl(songId, source = "netease") {
+          if (!songId) return null;
+          try {
+            const gdUrl = `https://music-api.gdstudio.xyz/api.php?types=url&id=${encodeURIComponent(songId)}&source=netease`;
+            let gdRes = null;
+            try {
+              const res = await fetch(gdUrl);
+              if (res.ok) gdRes = await res.json();
+            } catch (_) {
+              try {
+                const proxyRes = await fetch("/api/proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ url: gdUrl, method: "GET" })
+                });
+                if (proxyRes.ok) gdRes = await proxyRes.json();
+              } catch (_) {}
+            }
+            if (gdRes && gdRes.url && (await checkAudioAvailability(gdRes.url))) {
+              return gdRes.url;
+            }
+          } catch (_) {}
+
+          try {
+            const vkUrl = source === "tencent"
+              ? `https://api.vkeys.cn/v2/music/tencent?id=${encodeURIComponent(songId)}`
+              : `https://api.vkeys.cn/v2/music/netease?id=${encodeURIComponent(songId)}`;
+            const vkRes = await fetch(vkUrl);
+            if (vkRes.ok) {
+              const vkData = await vkRes.json();
+              if (vkData?.data?.url && (await checkAudioAvailability(vkData.data.url))) {
+                return vkData.data.url;
+              }
+            }
+          } catch (_) {}
+
+          try {
+            const outerUrl = `https://music.163.com/song/media/outer/url?id=${encodeURIComponent(songId)}.mp3`;
+            if (await checkAudioAvailability(outerUrl)) {
+              return outerUrl;
+            }
+          } catch (_) {}
+
+          return null;
         }
 
         /**
@@ -20577,21 +20746,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
 
-          // 到这里，我们已经有了一首歌的基本信息 (id, source, name, artist)
-          // 下面的逻辑就是调用API获取真实的播放链接
+          // 获取真实的播放链接
+          let playableUrl = await fetchPlayableMusicUrl(songData.id, songData.source);
 
-          const apiUrl =
-            songData.source === "netease"
-              ? `https://api.vkeys.cn/v2/music/netease?id=${songData.id}`
-              : `https://api.vkeys.cn/v2/music/tencent?id=${songData.id}`;
-
-          const result = await Http_Get(apiUrl);
+          if (!playableUrl) {
+            const apiUrl =
+              songData.source === "netease"
+                ? `https://api.vkeys.cn/v2/music/netease?id=${songData.id}`
+                : `https://api.vkeys.cn/v2/music/tencent?id=${songData.id}`;
+            const result = await Http_Get(apiUrl);
+            if (result?.data?.url && (await checkAudioAvailability(result.data.url))) {
+              playableUrl = result.data.url;
+            }
+          }
 
           // 检查获取到的链接是否真的能播放
-          if (
-            !result?.data?.url ||
-            !(await checkAudioAvailability(result.data.url))
-          ) {
+          if (!playableUrl) {
             await showCustomAlert(
               "获取失败",
               `找到了《${name}》，但无法获取有效的播放链接。`,
@@ -20607,11 +20777,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const newSong = {
             name: songData.name,
             artist: songData.artist,
-            src: result.data.url, // 使用我们刚刚获取到的真实、可播放的URL！
+            src: playableUrl,
             cover: songData.cover,
             isLocal: false,
             lrcContent: lrcContent,
-            isTemporary: true, // 标记为临时歌曲，24小时后可能会失效
+            isTemporary: true,
             addedTimestamp: Date.now(),
           };
 
@@ -20642,7 +20812,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         window.playAutoSceneMusic = async function (keyword) {
           if (!keyword || typeof keyword !== "string") return;
-          const cleanKeyword = keyword.trim().replace(/^《|》$/g, "");
+          const cleanKeyword = keyword.trim().replace(/^《|》$/g, "").replace(/^\[|\]$/g, "").replace(/^【|】$/g, "");
           if (!cleanKeyword) return;
 
           let songName = cleanKeyword;
@@ -20651,6 +20821,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const parts = cleanKeyword.split("-");
             songName = parts[0].trim();
             artist = parts.slice(1).join("-").trim();
+          } else if (cleanKeyword.includes("——")) {
+            const parts = cleanKeyword.split("——");
+            songName = parts[0].trim();
+            artist = parts.slice(1).join("——").trim();
           }
 
           let songData = null;
@@ -20661,9 +20835,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           } catch (_) {}
 
+          if (!songData && artist) {
+            try {
+              const onlyNameResults = await searchNeteaseMusic(songName, "");
+              if (onlyNameResults && onlyNameResults.length > 0) {
+                songData = onlyNameResults[0];
+              }
+            } catch (_) {}
+          }
+
           if (!songData) {
             try {
-              const gdstudioResults = await searchGdstudioMusic(cleanKeyword);
+              const gdstudioResults = await searchGdstudioMusic(songName);
               if (gdstudioResults && gdstudioResults.length > 0) {
                 songData = gdstudioResults[0];
               }
@@ -20679,20 +20862,32 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } catch (_) {}
           }
 
+          if (!songData) {
+            try {
+              const fallbackSearch = await searchNeteaseMusic(cleanKeyword.replace(/配乐|原声|纯音乐|BGM|bgm|主题曲|插曲/gi, "").trim(), "");
+              if (fallbackSearch && fallbackSearch.length > 0) {
+                songData = fallbackSearch[0];
+              }
+            } catch (_) {}
+          }
+
           if (!songData) return;
 
-          let playableUrl = null;
-          const apiUrl =
-            songData.source === "netease" || songData.originalSource === "netease"
-              ? `https://api.vkeys.cn/v2/music/netease?id=${songData.id}`
-              : `https://api.vkeys.cn/v2/music/tencent?id=${songData.id}`;
+          let playableUrl = await fetchPlayableMusicUrl(songData.id, songData.source || songData.originalSource || "netease");
 
-          try {
-            const result = await Http_Get(apiUrl);
-            if (result?.data?.url && (await checkAudioAvailability(result.data.url))) {
-              playableUrl = result.data.url;
-            }
-          } catch (_) {}
+          if (!playableUrl) {
+            const apiUrl =
+              songData.source === "netease" || songData.originalSource === "netease"
+                ? `https://api.vkeys.cn/v2/music/netease?id=${songData.id}`
+                : `https://api.vkeys.cn/v2/music/tencent?id=${songData.id}`;
+
+            try {
+              const result = await Http_Get(apiUrl);
+              if (result?.data?.url && (await checkAudioAvailability(result.data.url))) {
+                playableUrl = result.data.url;
+              }
+            } catch (_) {}
+          }
 
           if (!playableUrl && songData.id) {
             try {
@@ -21766,6 +21961,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 });
                 block += `\n`;
               }
+            }
+
+            // 模组剧情配乐规则
+            if (Array.isArray(mod.musicList) && mod.musicList.length > 0) {
+              block += `## 模组剧情配乐规则\n` +
+                `当前模组配置了特定情景配乐。当带团推进到对应剧情、气氛或场景时，在叙述中原样附带对应的音乐标签，系统会自动为玩家播放应景音乐。\n` +
+                `模组配乐清单：\n`;
+              mod.musicList.forEach((m) => {
+                const sName = m.name || m.keyword || '曲目';
+                const sTag = m.tag || `[音乐: ${sName}]`;
+                const sScene = m.scene || '剧情气氛';
+                block += `- 标签 ${sTag}：用于 ${sScene}，曲目 ${sName}\n`;
+              });
+              block += `\n`;
             }
 
             // 章节切换模式提示词注入（自动模式与半自动模式）
@@ -25017,20 +25226,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               : (typeof formatAutoExportDateTime === "function" ? formatAutoExportDateTime() : `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
             if (!actualFileName.endsWith(".json")) actualFileName += ".json";
             const jsonText = JSON.stringify(backupData, null, 2);
-            let dirHandle = customDirHandle;
-            if (!dirHandle && typeof getStoredDirHandle === "function") {
-              dirHandle = await getStoredDirHandle();
-            }
+
             const isAutoExport = Boolean(customDirHandle);
-            if (isAutoExport && dirHandle && typeof dirHandle.getFileHandle === "function") {
+            if (isAutoExport && customDirHandle && typeof customDirHandle.getFileHandle === "function") {
               try {
-                if (typeof dirHandle.queryPermission === "function") {
-                  const perm = await dirHandle.queryPermission({ mode: "readwrite" });
+                if (typeof customDirHandle.queryPermission === "function") {
+                  const perm = await customDirHandle.queryPermission({ mode: "readwrite" });
                   if (perm !== "granted") {
-                    await dirHandle.requestPermission({ mode: "readwrite" });
+                    await customDirHandle.requestPermission({ mode: "readwrite" });
                   }
                 }
-                const fileHandle = await dirHandle.getFileHandle(actualFileName, { create: true });
+                const fileHandle = await customDirHandle.getFileHandle(actualFileName, { create: true });
                 const writable = await fileHandle.createWritable();
                 await writable.write(jsonText);
                 await writable.close();
@@ -25039,13 +25245,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (fsErr) {
                 console.warn("写入选定目录失败，将使用浏览器下载:", fsErr);
               }
-            } else if (dirHandle && typeof dirHandle.getFileHandle === "function") {
-              try {
-                const fileHandle = await dirHandle.getFileHandle(actualFileName, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(jsonText);
-                await writable.close();
-              } catch (_) {}
             }
 
             const blob = new Blob([jsonText], {
@@ -25059,9 +25258,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-            await showCustomAlert("导出成功", `备份文件已成功生成并开始下载: ${actualFileName}`);
+            await showCustomAlert("导出成功", `备份文件已开始下载: ${actualFileName}`);
           } catch (error) {
             console.error("导出数据时出错:", error);
             await showCustomAlert(
@@ -31140,6 +31339,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   return `<span class="chat-location-clickable" data-loc-name="${trimmed}">${trimmed}</span>`;
                 });
                 return `${p1}${wrappedParts.join("-")}`;
+              });
+            }
+
+            // 渲染音乐小卡片
+            const musicTagRegex = /(?:\[|【)(?:音乐|BGM|背景音乐|音效|bgm)[:：]\s*([^\]】]+)(?:\]|】)/gi;
+            if (musicTagRegex.test(formattedText)) {
+              formattedText = formattedText.replace(musicTagRegex, (match, p1) => {
+                const musicKeyword = (p1 || "").trim();
+                return `
+                  <div class="chat-music-badge-card" data-music-keyword="${encodeURIComponent(musicKeyword)}" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; margin: 6px 0; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; user-select: none; max-width: 260px;" onclick="if(typeof window.playAutoSceneMusic==='function'){window.playAutoSceneMusic(decodeURIComponent('${encodeURIComponent(musicKeyword)}'));}">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--card-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color); color: var(--accent-color);">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                      </svg>
+                    </div>
+                    <div style="display: flex; flex-direction: column; overflow: hidden; min-width: 0;">
+                      <span style="font-size: 10px; color: var(--text-secondary); line-height: 1;">音乐</span>
+                      <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;">${musicKeyword}</span>
+                    </div>
+                  </div>
+                `;
               });
             }
 
@@ -37359,7 +37581,7 @@ ${isGroupThinkingActive ? `    "thinking": "1. 意图分析... 2. 心理推演..
 ## 你可以使用的操作指令列表:
 ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
 - 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
-${isGroupMusicAllowed ? `- 播放音乐或音效: 当察觉到当前情景适合播放特定音乐或音效时，在回复文本中插入 [音乐: 歌曲名或搜索词] 标签，系统会在后台自动检索播放。\n` : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
+${isGroupMusicAllowed ? `- 播放场景配乐或音乐: 当情节氛围需要背景音乐BGM或角色分享歌曲时，在文本末尾单独插入 [音乐: 准确歌名 - 歌手] 或 [音乐: 著名原声BGM]。偏好日系旋律BGM、古风配乐、动漫游戏抒情插曲或人声歌曲，严禁晦涩英文老歌；恐怖悬疑场景放恐怖氛围曲，生死诀别放凄美悲伤配乐，情感漫步放抒情旋律，决战放激昂燃曲。\n` : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
 ${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}- 发送系统消息: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
 
@@ -37823,7 +38045,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			- **发送文本**: \`{"type": "text", "content": "你好呀！"}\`
 			- **发送语音**: \`{"type": "voice_message", "content": "语音的文字内容..."}\`
 			- **发送表情**: \`{"type": "sticker", "sticker_name": "表情的名字"}\`(表情名必须在表情列表中，禁止杜撰)
-			${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? `- **播放音乐或音效**: 当察觉到当前情景适合播放特定音乐或音效时，在回复文本中插入 [音乐: 歌曲名或搜索词] 标签，系统会在后台自动检索播放。\n` : ""}- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
+			${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? `- **播放场景配乐或音乐**: 当情节氛围需要背景音乐BGM或你想要分享歌曲时，在文本末尾单独插入 [音乐: 准确歌名 - 歌手] 或 [音乐: 著名原声BGM]。偏好日系旋律BGM、古风配乐、动漫游戏抒情插曲或人声歌曲，严禁晦涩英文老歌；恐怖悬疑场景放恐怖氛围曲，生死诀别放凄美悲伤配乐，情感漫步放抒情旋律，决战放激昂燃曲。\n` : ""}- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
 			${
         chat.loadModuleImages && chat.activeModuleId
           ? `- **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n`
@@ -41998,6 +42220,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                           }
                         }
                       }
+                      const groupMusicMatch =
+                        textWithoutThoughts.match(/\[(?:音乐|BGM|音效|bgm)[:：]\s*([^\]]+)\]/i) ||
+                        textWithoutThoughts.match(/【(?:音乐注入|BGM|背景音乐|音效|音乐)[:：]\s*([^】]+)】/i);
+                      if (groupMusicMatch && groupMusicMatch[1] && typeof window.playAutoSceneMusic === "function") {
+                        window.playAutoSceneMusic(groupMusicMatch[1].trim());
+                      }
                       aiMessage = { ...baseMessage, content: cleanMsgText };
                     }
                   }
@@ -42934,7 +43162,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
 
           // 3. 控制播放/暂停按钮和头像闪烁
-          playPauseBtn.textContent = state.musicState.isPlaying ? "❚❚" : "▶";
+          playPauseBtn.textContent = state.musicState.isPlaying ? "暂停" : "开始";
           avatarsContainer.classList.toggle(
             "flashing",
             state.musicState.isPlaying,
@@ -61339,6 +61567,11 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             btn.textContent = newMode === "auto" ? "默认" : "手动";
             btn.title = newMode === "auto" ? "默认" : "手动";
           }
+          const groupBtn = document.getElementById("group-voice-mode-btn");
+          if (groupBtn) {
+            groupBtn.textContent = newMode === "auto" ? "默认" : "手动";
+            groupBtn.title = newMode === "auto" ? "默认" : "手动";
+          }
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           if (dbInstance && dbInstance.chats) {
             dbInstance.chats.put(chat);
@@ -67077,20 +67310,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             : (typeof formatAutoExportDateTime === "function" ? formatAutoExportDateTime() : `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
           if (!actualFileName.endsWith(".json")) actualFileName += ".json";
 
-          let dirHandle = customDirHandle;
-          if (!dirHandle && typeof getStoredDirHandle === "function") {
-            dirHandle = await getStoredDirHandle();
-          }
           const isAutoExport = Boolean(customDirHandle);
-          if (isAutoExport && dirHandle && typeof dirHandle.getFileHandle === "function") {
+          if (isAutoExport && customDirHandle && typeof customDirHandle.getFileHandle === "function") {
             try {
-              if (typeof dirHandle.queryPermission === "function") {
-                const perm = await dirHandle.queryPermission({ mode: "readwrite" });
+              if (typeof customDirHandle.queryPermission === "function") {
+                const perm = await customDirHandle.queryPermission({ mode: "readwrite" });
                 if (perm !== "granted") {
-                  await dirHandle.requestPermission({ mode: "readwrite" });
+                  await customDirHandle.requestPermission({ mode: "readwrite" });
                 }
               }
-              const fileHandle = await dirHandle.getFileHandle(actualFileName, { create: true });
+              const fileHandle = await customDirHandle.getFileHandle(actualFileName, { create: true });
               const writable = await fileHandle.createWritable();
               await writable.write(blobData);
               await writable.close();
@@ -67100,13 +67329,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             } catch (fsErr) {
               console.warn("写入选定目录失败，将使用浏览器下载:", fsErr);
             }
-          } else if (dirHandle && typeof dirHandle.getFileHandle === "function") {
-            try {
-              const fileHandle = await dirHandle.getFileHandle(actualFileName, { create: true });
-              const writable = await fileHandle.createWritable();
-              await writable.write(blobData);
-              await writable.close();
-            } catch (_) {}
           }
 
           // 7. 创建并触发下载链接
@@ -67117,11 +67339,11 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          URL.revokeObjectURL(url);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-          // 关闭“请稍候”的弹窗
+          // 关闭提示弹窗
           hideCustomModal();
-          await showCustomAlert("导出成功", `流式备份文件已成功生成并开始下载: ${actualFileName}`);
+          await showCustomAlert("导出成功", `流式备份文件已开始下载: ${actualFileName}`);
         }
         /**
          * 恢复所有App名称为默认值
@@ -74949,9 +75171,18 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   const curVoiceMode = (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") ? "默认" : "手动";
                   voiceModeBtn.textContent = curVoiceMode;
                 }
+                const groupVoiceModeBtn = document.getElementById("group-voice-mode-btn");
+                if (groupVoiceModeBtn) {
+                  const curVoiceMode = (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") ? "默认" : "手动";
+                  groupVoiceModeBtn.textContent = curVoiceMode;
+                }
                 const chatMusicSwitch = document.getElementById("chat-ai-music-switch");
                 if (chatMusicSwitch) {
                   chatMusicSwitch.checked = chat.settings?.aiMusicEnabled !== false;
+                }
+                const chatMusicPrefBtn = document.getElementById("chat-music-preference-btn");
+                if (chatMusicPrefBtn) {
+                  chatMusicPrefBtn.textContent = chat.settings?.aiMusicPreference || "全部";
                 }
                 // 加载语言增强和语速设置
                 const langBoostSelect = document.getElementById(
@@ -75498,6 +75729,35 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 await dbInstance.chats.put(chat);
               }
               if (groupMinimaxVoiceModal) groupMinimaxVoiceModal.classList.remove("visible");
+            });
+          }
+
+          const chatMusicPrefBtn = document.getElementById("chat-music-preference-btn");
+          if (chatMusicPrefBtn) {
+            chatMusicPrefBtn.addEventListener("click", async () => {
+              const prefOptions = [
+                { text: "全部", value: "全部" },
+                { text: "纯乐", value: "纯乐" },
+                { text: "日系", value: "日系" },
+                { text: "古风", value: "古风" },
+                { text: "流行", value: "流行" },
+                { text: "抒情", value: "抒情" },
+                { text: "燃系", value: "燃系" },
+                { text: "恐怖", value: "恐怖" }
+              ];
+              const selected = await showChoiceModal("音乐偏好", prefOptions);
+              if (selected) {
+                chatMusicPrefBtn.textContent = selected;
+                if (state.activeChatId && state.chats[state.activeChatId]) {
+                  const c = state.chats[state.activeChatId];
+                  if (!c.settings) c.settings = {};
+                  c.settings.aiMusicPreference = selected;
+                  const dbInst = typeof db !== "undefined" ? db : (window.database || null);
+                  if (dbInst && dbInst.chats) {
+                    await dbInst.chats.put(c);
+                  }
+                }
+              }
             });
           }
 
@@ -76129,7 +76389,11 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   .value.trim();
                 const chatMusicSwitch = document.getElementById("chat-ai-music-switch");
                 if (chatMusicSwitch) {
-                  chat.settings.aiMusicEnabled = chatMusicSwitch.checked;
+                  chatMusicSwitch.checked = chat.settings?.aiMusicEnabled !== false;
+                }
+                const chatMusicPrefBtn = document.getElementById("chat-music-preference-btn");
+                if (chatMusicPrefBtn && chat.settings) {
+                  chat.settings.aiMusicPreference = chatMusicPrefBtn.textContent.trim() || "全部";
                 }
                 const langBoost = document.getElementById(
                   "minimax-language-boost-select",

@@ -1696,52 +1696,68 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   color: #333;
 }
 #music-time-counter {
-  font-size: 12px;
-  color: #555;
-  margin-bottom: 20px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
 }
 #music-player-song-title {
-  font-size: 20px;
+  font-size: 14px;
   font-weight: 600;
-  margin-bottom: 5px;
+  margin-bottom: 2px;
   text-align: center;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #music-player-artist {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 25px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-align: center;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .music-controls {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 8px;
   width: 100%;
-  margin-bottom: 30px;
+  margin-bottom: 6px;
+  flex-wrap: nowrap;
 }
 .music-controls button {
   background: none;
   border: none;
-  font-size: 16px;
-  font-weight: bold;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  color: #333;
-  width: 44px;
-  height: 44px;
-  display: flex;
+  color: var(--text-primary);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  display: inline-flex;
   justify-content: center;
   align-items: center;
-  transition: transform 0.2s;
+  transition: transform 0.15s;
+  white-space: nowrap !important;
+  line-height: 1;
+  flex-shrink: 0;
+  padding: 0;
 }
 .music-controls button:active {
-  transform: scale(0.9);
+  transform: scale(0.92);
 }
 .music-controls .play-pause-btn {
-  font-size: 24px;
-  width: 60px;
-  height: 60px;
+  font-size: 18px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
   border-radius: 50%;
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--secondary-bg, rgba(0, 0, 0, 0.05));
 }
 .music-bottom-actions {
   display: flex;
@@ -5273,7 +5289,8 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   justify-content: center;
   align-items: flex-start;
   padding-top: 60px;
-  background-color: rgba(0, 0, 0, 0.3);
+  background-color: transparent !important;
+  pointer-events: none;
   opacity: 0;
   visibility: hidden;
   transform: translateY(-50px);
@@ -5289,22 +5306,25 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 }
 
 .music-player-window {
-  width: 70%;
-  min-height: 420px;
-  background-color: rgba(255, 255, 255, 0.6);
+  width: min(86%, 320px);
+  min-height: auto;
+  max-width: 320px;
+  margin: 0 16px;
+  pointer-events: auto;
+  background-color: var(--card-bg, rgba(255, 255, 255, 0.95));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-radius: 25px;
-  box-shadow: 0 8px 32px 0 rgba(25, 25, 25, 0.37);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  padding: 25px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border-color);
+  padding: 18px 16px 14px 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: #1f1f1f;
+  color: var(--text-primary);
   position: relative;
-  justify-content: space-between;
-  padding-bottom: 15px;
+  justify-content: flex-start;
+  gap: 4px;
 }
 
 .music-player-top-actions {
@@ -5416,6 +5436,50 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 .music-controls {
   margin-top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+.music-controls button {
+  white-space: nowrap !important;
+  line-height: 1;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 500;
+  height: 30px;
+  width: auto;
+  min-width: 44px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background-color: var(--secondary-bg, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.music-controls button#music-mode-btn,
+.music-controls button#toggle-lyrics-bar-btn {
+  width: auto;
+  min-width: 40px;
+  padding: 0 6px;
+  font-size: 11px;
+  border-radius: 8px;
+  background-color: var(--secondary-bg, rgba(0, 0, 0, 0.05));
+}
+.music-controls button.play-pause-btn {
+  width: auto;
+  min-width: 48px;
+  height: 30px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  color: var(--accent-color);
+  background-color: var(--secondary-bg, rgba(0, 0, 0, 0.06));
 }
 
 #music-return-btn,
@@ -7719,9 +7783,9 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 /* 8. 封面和歌词的切换容器 (保持不变) */
 #music-display-area {
-  width: 192px;
-  height: 192px;
-  margin-bottom: 15px;
+  width: 130px;
+  height: 130px;
+  margin-bottom: 8px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.3s ease;
@@ -7760,10 +7824,10 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   margin-bottom: 2px;
 }
 #music-player-artist {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 .music-player-window {
-  min-height: 480px;
+  min-height: auto;
 }
 
 /* ▲▲▲ 布局微调版样式粘贴结束 ▲▲▲ */
