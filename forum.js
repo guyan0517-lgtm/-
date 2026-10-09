@@ -811,6 +811,48 @@ document.addEventListener("DOMContentLoaded", () => {
           <textarea id="series-custom-prompt-input" rows="2" style="width: 100%; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); padding: 8px; font-size: 12px; resize: vertical; box-sizing: border-box;" placeholder="输入自定义下一章剧情要求或续写提示...">${series?.customContinuationPrompt || ""}</textarea>
         </div>
         ` : ""}
+
+        <div class="post-comments-section" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 2px;">
+            <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0;">评论 ${comments.length}</h3>
+            <button type="button" class="mini-btn" id="generate-forum-comments-btn" style="height: 28px; padding: 0 10px; font-size: 12px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer;">生成评论</button>
+          </div>
+          ${comments.length === 0 ? `<div style="text-align: center; color: var(--text-secondary); font-size: 13px; padding: 20px 0;">暂无评论</div>` : `
+            <div class="post-comments-container">
+              ${comments.map((comment, index) => {
+                let commentAvatar = "https://i.postimg.cc/PxZrFFFL/o-o-1.jpg";
+                const cChar = Object.values(state.chats).find(c => c.name === comment.author);
+                if (cChar && cChar.settings?.aiAvatar) {
+                  commentAvatar = cChar.settings.aiAvatar;
+                } else if (comment.author === (state.qzoneSettings?.nickname || "我")) {
+                  commentAvatar = state.qzoneSettings?.avatar || commentAvatar;
+                } else if (window.getAvatarForName) {
+                  commentAvatar = window.getAvatarForName(comment.author);
+                }
+                const timeStr = comment.timestamp ? new Date(comment.timestamp).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+                return `
+                  <div class="post-comment-item" data-commenter-name="${comment.author}" style="cursor: pointer;">
+                    <img src="${commentAvatar}" class="comment-avatar-small" />
+                    <div class="comment-details">
+                      <div class="comment-header-line">
+                        <span class="comment-author">${comment.author}</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <span class="comment-floor">${index + 1}楼</span>
+                          <button type="button" class="forum-comment-delete-btn" data-id="${comment.id}" style="background: none; border: none; color: var(--text-secondary); font-size: 11px; cursor: pointer; padding: 0 4px;">删除</button>
+                        </div>
+                      </div>
+                      <div class="comment-text">
+                        ${comment.replyTo ? `<span style="color: var(--accent-color); margin-right: 4px;">@${comment.replyTo}</span>` : ""}
+                        ${(comment.content || "").replace(/\n/g, "<br>")}
+                      </div>
+                      ${timeStr ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; opacity: 0.8;">${timeStr}</div>` : ""}
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          `}
+        </div>
     `;
 
     const copyBtn = contentEl.querySelector("#post-copy-content-btn");
@@ -3470,6 +3512,12 @@ ${customPromptRequirement}
       if (input.value.trim() === "") {
         input.placeholder = "发布你的评论...";
         delete input.dataset.replyTo;
+      }
+    });
+    commentInputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleAddComment();
       }
     });
   }

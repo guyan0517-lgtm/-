@@ -33713,3 +33713,9 @@ select,
 n {
   display: none !important;
 }
+
+.message-bubble.playing-quote-audio {
+  box-shadow: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+}

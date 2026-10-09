@@ -1396,7 +1396,16 @@
                 <select
                   id="minimax-speech-model-select"
                   class="moe-input"
-                ></select>
+                >
+                  <option value="speech-2.8-turbo">speech-2.8-turbo</option>
+                  <option value="speech-2.8-hd">speech-2.8-hd</option>
+                  <option value="speech-2.6-hd">speech-2.6-hd</option>
+                  <option value="speech-2.6-turbo">speech-2.6-turbo</option>
+                  <option value="speech-02-hd">speech-02-hd</option>
+                  <option value="speech-02-turbo">speech-02-turbo</option>
+                  <option value="speech-01-hd">speech-01-hd</option>
+                  <option value="speech-01-turbo">speech-01-turbo</option>
+                </select>
               </div>
               <button
                 id="fetch-minimax-speech-models-btn"
@@ -1606,6 +1615,8 @@
                 <div class="form-group">
                   <label>模型</label>
                   <select id="novelai-model" class="moe-input">
+                    <option value="nai-diffusion-5-curated">V5 Curated</option>
+                    <option value="nai-diffusion-5-full">V5 Full</option>
                     <option value="nai-diffusion-4-curated-preview">
                       V4.5 Curated
                     </option>
@@ -2302,6 +2313,9 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- 分析执行与状态提示条 -->
+                <div id="module-step1-status-banner" style="display: none; padding: 8px 12px; margin-bottom: 8px; border-radius: 8px; background: var(--secondary-bg, #F0EFEA); font-size: 12px; font-weight: 500; align-items: center; justify-content: space-between;"></div>
 
                 <!-- 分析提示词配置区 -->
                 <div class="module-prompt-container" id="module-prompt-container" style="display: none;">
@@ -3401,12 +3415,13 @@
             <button
               id="voice-message-btn"
               class="chat-action-icon-btn action-button"
-              title="发送语音"
-              style="display: none !important;"
+              title="语音"
+              type="button"
+              onclick="if(typeof handleManualVoiceButtonClick==='function')handleManualVoiceButtonClick();"
             >
               <svg
-                width="24"
-                height="24"
+                width="22"
+                height="22"
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -3423,6 +3438,14 @@
                 <path d="M8 23h8" />
               </svg>
             </button>
+            <button
+              id="voice-mode-btn"
+              class="chat-action-icon-btn action-button"
+              title="模式"
+              type="button"
+              onclick="if(typeof toggleVoiceMode==='function')toggleVoiceMode();"
+              style="font-size: 11.5px; font-weight: 600; width: 38px; height: 38px; border-radius: 50%; padding: 0;"
+            >手动</button>
             <button
               id="send-waimai-request-btn"
               class="chat-action-icon-btn action-button"
@@ -7308,6 +7331,16 @@
               />
             </div>
 
+            <div class="form-group" id="group-minimax-voice-group" style="display: none;">
+              <label>成员音色</label>
+              <button
+                type="button"
+                id="open-group-minimax-modal-btn"
+                class="moe-btn moe-btn-secondary"
+                style="width: 100%;"
+              >音色</button>
+            </div>
+
             <div class="form-group" id="minimax-language-boost-group">
               <label for="minimax-language-boost-select"
                 >Minimax 语言增强</label
@@ -8079,6 +8112,19 @@
         </div>
         <div class="modal-footer">
           <button class="cancel" id="cancel-sync-persona-btn">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="group-minimax-voice-modal" class="modal">
+      <div class="modal-content" style="max-width: 360px;">
+        <div class="modal-header"><span>音色</span></div>
+        <div class="modal-body" style="padding: 16px; max-height: 400px; overflow-y: auto;">
+          <div id="group-minimax-voice-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="cancel" id="cancel-group-minimax-voice-btn">取消</button>
+          <button type="button" class="save" id="save-group-minimax-voice-btn">保存</button>
         </div>
       </div>
     </div>
@@ -10832,10 +10878,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
       <!-- 帖子页底部操作栏 -->
       <div
         id="post-bottom-bar"
-        style="padding: 10px 16px; background: var(--background-color); border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: flex-end; gap: 10px;"
+        style="padding: 10px 16px; background: var(--background-color); border-top: 1px solid var(--border-color); display: flex; align-items: center; gap: 10px;"
       >
-        <button id="post-fav-btn" class="moe-btn" style="min-width: 90px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color);">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+        <div id="post-comment-input-area" style="flex: 1; display: flex; align-items: center; gap: 8px;">
+          <input
+            type="text"
+            id="post-comment-input"
+            class="moe-input"
+            placeholder="发布你的评论..."
+            style="flex: 1; height: 36px; border-radius: 18px; padding: 0 14px; font-size: 13px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color);"
+          />
+          <button
+            type="button"
+            id="send-post-comment-btn"
+            class="moe-btn"
+            style="height: 36px; padding: 0 14px; border-radius: 18px; font-size: 13px; font-weight: 500; background: var(--accent-color); color: #ffffff; border: none; cursor: pointer; flex-shrink: 0;"
+          >发送</button>
+        </div>
+        <button id="post-fav-btn" class="moe-btn" style="min-width: 76px; height: 36px; border-radius: 18px; font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); flex-shrink: 0;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
           <span id="post-fav-text">收藏</span>
         </button>
       </div>
@@ -21424,19 +21485,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           document.getElementById("thought-chain-bind-modal").classList.remove("visible");
         }
 
+        function isChatThoughtChainActive(chat) {
+          if (!chat || chat.thoughtChainEnabled === false) return false;
+          return Boolean(chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId) || chat.thoughtChainEnabled === true);
+        }
+
         async function getThoughtChainPromptBlock(chat) {
-          if (!chat || chat.thoughtChainEnabled === false || !chat.thoughtChainId) return "";
+          if (!isChatThoughtChainActive(chat)) return "";
           try {
-            const preset = await db.thoughtChainPresets.get(chat.thoughtChainId);
-            if (!preset) return "";
+            const presetId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId);
+            let preset = null;
+            if (presetId) {
+              try {
+                preset = await db.thoughtChainPresets.get(presetId);
+              } catch (e) {}
+            }
             let block = "\n# 【角色思维链与深度思考规范】\n" +
-              "预设名称：" + preset.name + "\n" +
-              "【思维链输出规范】：请在生成 JSON 时，务必将你的深度思考与推演过程写入顶层 \"thinking\" 字段中。格式示例：\n" +
-              "{\n  \"thinking\": \"1. 分析对方意图... 2. 拟定角色心理... 3. 确定发言语气...\",\n  \"chatResponse\": [ {\"type\": \"text\", \"content\": \"示例文本\"} ],\n  \"innerVoice\": null\n}\n" +
-              "以下是思维链的具体设定要求：\n" +
-              (preset.generalContent || "");
-            if (chat.thoughtChainEnableCoc !== false && preset.cocContent) {
-              block += "\n" + preset.cocContent;
+              (preset ? "预设名称：" + preset.name + "\n" : "") +
+              "【思维链格式与渲染规范】：\n" +
+              "1. 渲染机制：系统会在聊天界面将你的思维链独立提取并渲染为“思考过程”可折叠面板，展示给用户查看你的内心推演与心路历程，与正文消息气泡分开渲染。\n" +
+              "2. 填写格式：你必须在最终回复前，将你的完整思考过程、环境与意图分析、角色心理推演、语气策略写入顶层 \"thinking\" 字段中。格式要求清晰有层次：\n" +
+              "   - 意图分析：深入分析对话者当前的真实意图、情绪潜台词与行动诉求。\n" +
+              "   - 心理推演：结合自身角色性格、经历、好感度与当前情境，推演内心情感反应与深层动机。\n" +
+              "   - 策略拟定：规划本次回复的发言口吻、微表情、肢体动作与核心观点。\n" +
+              "3. 严禁混淆：绝对禁止将思考过程写在正文文本中，思考推演必须且只能写入 \"thinking\" 字段。\n";
+            if (preset && preset.generalContent) {
+              block += "【思维链规则设定】：\n" + preset.generalContent + "\n";
+            }
+            if (chat.thoughtChainEnableCoc !== false && preset && preset.cocContent) {
+              block += "【跑团模块思考规则】：\n" + preset.cocContent + "\n";
             }
             return block + "\n";
           } catch (e) {
@@ -26735,6 +26812,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           // 从文档中获取的完整模型列表
           const models = [
+            "speech-2.8-turbo",
+            "speech-2.8-hd",
             "speech-2.6-hd",
             "speech-2.6-turbo",
             "speech-02-hd",
@@ -26996,15 +27075,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             // V4/V4.5 和 V3 使用不同的请求体格式
             let requestBody;
 
-            if (model.includes("nai-diffusion-4")) {
-              // V4/V4.5 使用新格式 (params_version: 3)
+            if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+              // V4/V4.5/V5 使用新格式
               const finalTestPrompt = [settings.artist_prompt, prompt].filter(Boolean).join(", ");
               requestBody = {
                 input: finalTestPrompt,
                 model: model,
                 action: "generate",
                 parameters: {
-                  params_version: 3, // V4必须使用版本3
+                  params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                   width: width,
                   height: height,
                   scale: settings.cfg_scale,
@@ -27023,7 +27102,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   legacy: false,
                   add_original_image: true,
                   cfg_rescale: 0,
-                  noise_schedule: "karras", // V4使用karras
+                  noise_schedule: "karras", // V4/V5使用karras
                   legacy_v3_extend: false,
                   skip_cfg_above_sigma: null,
                   use_coords: false,
@@ -27031,7 +27110,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   normalize_reference_strength_multiple: true,
                   inpaintImg2ImgStrength: 1,
                   characterPrompts: [],
-                  // V4专用提示词格式
+                  // V4/V5专用提示词格式
                   v4_prompt: {
                     caption: {
                       base_caption: prompt,
@@ -27040,7 +27119,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     use_coords: false,
                     use_order: true,
                   },
-                  // V4专用负面提示词格式
+                  // V4/V5专用负面提示词格式
                   v4_negative_prompt: {
                     caption: {
                       base_caption: negativePrompt,
@@ -27093,9 +27172,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             // 根据模型选择不同的API端点
             let apiUrl;
 
-            // V4/V4.5 模型使用流式端点
-            if (model.includes("nai-diffusion-4")) {
-              // V4/V4.5 默认使用流式端点
+            // V4/V4.5/V5 模型使用流式端点
+            if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
               apiUrl = "https://image.novelai.net/ai/generate-image-stream";
             } else {
               // V3 及更早版本使用标准端点
@@ -27362,14 +27440,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
 
           let requestBody;
-          if (model.includes("nai-diffusion-4")) {
+          if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
             requestBody = {
               input: finalPrompt,
               model: model,
               action: "generate",
               parameters: {
                 ...commonParams,
-                params_version: 3,
+                params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                 negative_prompt: negativePrompt,
                 noise_schedule: "karras",
                 deliberate_euler_ancestral_bug: false,
@@ -27410,7 +27488,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
-          let apiUrl = model.includes("nai-diffusion-4")
+          let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
             ? "https://image.novelai.net/ai/generate-image-stream"
             : "https://image.novelai.net/ai/generate-image";
           let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
@@ -30678,7 +30756,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }">`;
           } else {
             let rawContentText = String(msg.content || "");
-            const hasThinkingModule = Boolean(chat && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
+            const hasThinkingModule = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : Boolean(chat && chat.thoughtChainEnabled !== false && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
             extractedThinkingText = hasThinkingModule ? (msg.thinking || null) : null;
             if (hasThinkingModule) {
               if (/<thinking>[\s\S]*?<\/thinking>/i.test(rawContentText)) {
@@ -30921,7 +30999,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           // 思维链折叠块渲染
           let thinkingHtml = "";
-          const hasThinkingModule = Boolean(chat && chat.thoughtChainEnabled !== false && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
+          const hasThinkingModule = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : Boolean(chat && chat.thoughtChainEnabled !== false && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
           if (!isUser && hasThinkingModule && extractedThinkingText && String(extractedThinkingText).trim().length > 0) {
             const displayThinkingText = String(extractedThinkingText).replace(/\n/g, "<br>");
             thinkingHtml = `
@@ -31138,6 +31216,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 await window.executeChapterSwitch(tid, tTitle, true);
               }
             };
+          }
+
+          if (!msg.type || msg.type === "text") {
+            let bubbleClickCount = 0;
+            let bubbleClickTimer = null;
+            bubble.addEventListener("click", (e) => {
+              if (isSelectionMode) return;
+              if (e.target.closest("a, button, input, select, .chat-location-clickable, .chat-module-img-slot, .thought-chain-summary")) return;
+              bubbleClickCount++;
+              if (bubbleClickCount === 3 || e.detail === 3) {
+                bubbleClickCount = 0;
+                if (bubbleClickTimer) {
+                  clearTimeout(bubbleClickTimer);
+                  bubbleClickTimer = null;
+                }
+                handleTripleClickQuoteVoice(msg, bubble, chat);
+                return;
+              }
+              if (bubbleClickTimer) clearTimeout(bubbleClickTimer);
+              bubbleClickTimer = setTimeout(() => {
+                bubbleClickCount = 0;
+              }, 450);
+            });
           }
 
           return wrapper;
@@ -31388,7 +31489,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const transferBtn = document.getElementById("transfer-btn");
           if (transferBtn) transferBtn.style.display = "none";
           const voiceMsgBtn = document.getElementById("voice-message-btn");
-          if (voiceMsgBtn) voiceMsgBtn.style.display = "none";
+          if (voiceMsgBtn) voiceMsgBtn.style.display = "flex";
+          const voiceModeBtn = document.getElementById("voice-mode-btn");
+          if (voiceModeBtn) {
+            voiceModeBtn.style.display = "flex";
+            const curMode = (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") ? "默认" : "手动";
+            voiceModeBtn.textContent = curMode;
+            voiceModeBtn.title = curMode;
+          }
           startPetDecayTimer();
         }
 
@@ -36012,8 +36120,7 @@ ${recentHistoryText}
                       const [width, height] = settings.resolution
                         .split("x")
                         .map(Number);
-                      let requestBody;
-                      let apiUrl = model.includes("nai-diffusion-4")
+                      let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
                         ? "https://image.novelai.net/ai/generate-image-stream"
                         : "https://image.novelai.net/ai/generate-image";
 
@@ -36030,14 +36137,14 @@ ${recentHistoryText}
                         qualityToggle: settings.quality_toggle,
                       };
 
-                      if (model.includes("nai-diffusion-4")) {
+                      if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
                         requestBody = {
                           input: finalPositivePrompt,
                           model,
                           action: "generate",
                           parameters: {
                             ...commonParams,
-                            params_version: 3,
+                            params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                             negative_prompt: finalNegativePrompt,
                             noise_schedule: "karras",
                             deliberate_euler_ancestral_bug: false,
@@ -37051,10 +37158,11 @@ ${recentHistoryText}
 			- "${announcement}"
 			`;
               }
+              const isGroupThinkingActive = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : false;
               // updated by lrq 251027
               systemPrompt = `
 # 【第一大类】你可以使用的操作指令
-你的回复必须且只能是一个严格的JSON数组格式的字符串。数组中的每一个元素都必须是一个JSON对象。每一个JSON对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
+你的回复必须且只能是一个严格的JSON数组格式的字符串。数组中的每一个元素都必须是一个JSON对象。每一个JSON对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段${isGroupThinkingActive ? `，以及 "thinking" 字段。开启思维链状态下，系统会在界面将 "thinking" 字段独立渲染为对应角色的“思考过程”面板，你必须在其中详细写下该角色的心理推演与意图分析` : ""}。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
 
 ## 标准输出格式示例:
 [
@@ -37066,7 +37174,7 @@ ${templateFieldLines || '      "状态": "正常"'}
     }
   },
 ` : ""}  {
-    "type": "text",
+${isGroupThinkingActive ? `    "thinking": "1. 意图分析... 2. 心理推演... 3. 拟定语气与回复策略...",\n` : ""}    "type": "text",
     "name": "角色名",
     "content": "对话内容"
   }
@@ -37132,7 +37240,7 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                     // AI消息的处理逻辑保持不变...
                     let assistantMsgObject = { type: msg.type || "text" };
                     assistantMsgObject.name = msg.senderName;
-                    if (msg.thinking) {
+                    if (isGroupThinkingActive && msg.thinking) {
                       assistantMsgObject.thinking = "在此处渲染了思维链";
                     }
                     if (msg.type === "sticker") {
@@ -37471,6 +37579,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 `;
               }
 
+              const isSingleThinkingActive = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : false;
+
               systemPrompt = `### **【第一部分：角色核心设定与COC人物面板】**
 
 			你现在将扮演一个名为“**${chat.name}**”的角色。
@@ -37485,11 +37595,11 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
 			你的每一次回复都【**必须**】是一个**单一且完整**的JSON对象。绝对禁止返回JSON数组或纯文本。
 
-			**1. JSON对象结构:**
+${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			该JSON对象【**必须**】包含三个顶级键: "thinking"、"chatResponse" 和 "innerVoice"。
 
 			**2. "thinking" 键:**
-			- **类型**: 字符串或 null。开启思维链时在此填写你的推理分析与思考过程，未开启或无思考时填 null。
+			- **类型**: 字符串。系统会在聊天界面将此字段独立渲染为“思考过程”可折叠面板供用户查看。你必须在此字段中写下完整的深度推理与思考过程，格式需分点清晰展开（包括意图分析、角色心理推演、语气与策略拟定），绝对禁止填写 null。
 
 			**3. "chatResponse" 键:**
 			- **类型**: JSON数组 []。
@@ -37502,7 +37612,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
 			**5. 标准输出格式示例:**
 			{
-			  "thinking": "在这里详细写下你的思考过程与推理分析...",
+			  "thinking": "1. 意图分析：对方在向我询问情况...\\n2. 心理推演：感到有些关切与在意...\\n3. 策略拟定：以温和自然的语气回复对方...",
 			  "chatResponse": [
 			    {
 			      "type": "text",
@@ -37510,7 +37620,28 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 			    }
 			  ],
 			  "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n\t\t\t    "thoughts": "心声内容..."\n\t\t\t  }` : `null`}
-			}
+			}` : `			**1. JSON对象结构:**
+			该JSON对象【**必须**】包含两个顶级键: "chatResponse" 和 "innerVoice"。
+
+			**2. "chatResponse" 键:**
+			- **类型**: JSON数组 []。
+			- **格式**: 消息对象的具体格式见下方的【第三部分：可使用的操作指令】。
+
+			**3. "innerVoice" 键:**
+            ${chat.settings?.innerVoiceEnabled ? `- **类型**: JSON对象 {}。
+            - **必含字段**:
+                - "thoughts": (字符串) 对应标签【心声】。你的内心独白和感受。` : `- **类型**: null。当前心声功能未开启，请填写 null。`}
+
+			**4. 标准输出格式示例:**
+			{
+			  "chatResponse": [
+			    {
+			      "type": "text",
+			      "content": "你好呀！"
+			    }
+			  ],
+			  "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n\t\t\t    "thoughts": "心声内容..."\n\t\t\t  }` : `null`}
+			}`}
 
 			### **【第三部分：可使用的操作指令】**
 			- **发送文本**: \`{"type": "text", "content": "你好呀！"}\`
@@ -37563,7 +37694,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
 
                   if (msg.role === "assistant") {
                     let assistantMsgObject = { type: msg.type || "text" };
-                    if (msg.thinking) {
+                    if (isSingleThinkingActive && msg.thinking) {
                       assistantMsgObject.thinking = "在此处渲染了思维链";
                     }
                     if (msg.type === "sticker") {
@@ -40175,14 +40306,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                         // ★★★ V4/V4.5 和 V3 使用不同的请求体格式 ★★★
                         let requestBody;
 
-                        if (model.includes("nai-diffusion-4")) {
-                          // V4/V4.5 使用新格式 (params_version: 3)
+                        if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+                          // V4/V4.5/V5 使用新格式
                           requestBody = {
                             input: finalPositivePrompt,
                             model: model,
                             action: "generate",
                             parameters: {
-                              params_version: 3, // V4必须使用版本3
+                              params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                               width: width,
                               height: height,
                               scale: settings.cfg_scale,
@@ -40269,9 +40400,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                         // 根据模型选择不同的API端点
                         let apiUrl;
 
-                        // V4/V4.5 模型使用流式端点
-                        if (model.includes("nai-diffusion-4")) {
-                          // V4/V4.5 默认使用流式端点
+                        // V4/V4.5/V5 模型使用流式端点
+                        if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
                           apiUrl =
                             "https://image.novelai.net/ai/generate-image-stream";
                         } else {
@@ -40601,14 +40731,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     // ★★★ V4/V4.5 和 V3 使用不同的请求体格式 ★★★
                     let requestBody;
 
-                    if (model.includes("nai-diffusion-4")) {
-                      // V4/V4.5 使用新格式 (params_version: 3)
+                    if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+                      // V4/V4.5/V5 使用新格式
                       requestBody = {
                         input: finalPositivePrompt,
                         model: model,
                         action: "generate",
                         parameters: {
-                          params_version: 3, // V4必须使用版本3
+                          params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                           width: width,
                           height: height,
                           scale: settings.cfg_scale,
@@ -40695,9 +40825,8 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                     // ★★★ 根据模型选择不同的API端点 ★★★
                     let apiUrl;
 
-                    // V4/V4.5 模型使用流式端点
-                    if (model.includes("nai-diffusion-4")) {
-                      // V4/V4.5 默认使用流式端点
+                    // V4/V4.5/V5 模型使用流式端点
+                    if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
                       apiUrl =
                         "https://image.novelai.net/ai/generate-image-stream";
                     } else {
@@ -42231,6 +42360,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             if (chat.settings && chat.settings.keeperForcedDraw) {
               await executeKeeperForcedDraw(chatId);
             }
+
+            if (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") {
+              setTimeout(() => {
+                if (typeof handleAutoQuoteVoiceAfterAiReply === "function") {
+                  handleAutoQuoteVoiceAfterAiReply(chat);
+                }
+              }, 400);
+            }
           } catch (error) {
             chat.history = chat.history.filter((msg) => !msg.isTemporary);
             if (
@@ -42268,6 +42405,13 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               String(state.activeChatId) === String(chat.id)
             ) {
               renderChatInterface(chat.id);
+              if (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") {
+                setTimeout(() => {
+                  if (typeof handleAutoQuoteVoiceAfterAiReply === "function") {
+                    handleAutoQuoteVoiceAfterAiReply(chat);
+                  }
+                }, 300);
+              }
             }
           } finally {
             if (window.activeGeneratingChats) {
@@ -44795,14 +44939,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               qualityToggle: settings.quality_toggle !== false,
             };
 
-            if (model.includes("nai-diffusion-4")) {
+            if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
               requestBody = {
                 input: finalPositivePrompt,
                 model: model,
                 action: "generate",
                 parameters: {
                   ...commonParams,
-                  params_version: 3,
+                  params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                   negative_prompt: finalNegativePrompt,
                   noise_schedule: "karras",
                   deliberate_euler_ancestral_bug: false,
@@ -44848,7 +44992,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               };
             }
 
-            let apiUrl = model.includes("nai-diffusion-4")
+            let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
               ? "https://image.novelai.net/ai/generate-image-stream"
               : "https://image.novelai.net/ai/generate-image";
             let corsProxy =
@@ -58964,14 +59108,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             };
 
             let requestBody;
-            if (model.includes("nai-diffusion-4")) {
+            if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
               requestBody = {
                 input: finalPositivePrompt,
                 model: model,
                 action: "generate",
                 parameters: {
                   ...commonParams,
-                  params_version: 3,
+                  params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                   negative_prompt: finalNegativePrompt,
                   noise_schedule: "karras",
                   deliberate_euler_ancestral_bug: false,
@@ -59004,7 +59148,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               };
             }
 
-            let apiUrl = model.includes("nai-diffusion-4")
+            let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
               ? "https://image.novelai.net/ai/generate-image-stream"
               : "https://image.novelai.net/ai/generate-image";
             let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
@@ -59328,14 +59472,14 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             };
 
             let requestBody;
-            if (model.includes("nai-diffusion-4")) {
+            if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
               requestBody = {
                 input: fullPositivePrompt,
                 model: model,
                 action: "generate",
                 parameters: {
                   ...commonParams,
-                  params_version: 3,
+                  params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                   negative_prompt: fullNegativePrompt,
                   noise_schedule: "karras",
                   deliberate_euler_ancestral_bug: false,
@@ -59368,7 +59512,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               };
             }
 
-            let apiUrl = model.includes("nai-diffusion-4")
+            let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
               ? "https://image.novelai.net/ai/generate-image-stream"
               : "https://image.novelai.net/ai/generate-image";
             let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
@@ -59806,13 +59950,13 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
           try {
             const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
             let requestBody;
-            if (model.includes("nai-diffusion-4")) {
+            if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
               requestBody = {
                 input: finalPositivePrompt,
                 model: model,
                 action: "generate",
                 parameters: {
-                  params_version: 3,
+                  params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                   width: width || 1024,
                   height: height || 1024,
                   scale: settings.cfg_scale || 5,
@@ -59862,7 +60006,7 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               };
             }
 
-            let apiUrl = model.includes("nai-diffusion-4")
+            let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
               ? "https://image.novelai.net/ai/generate-image-stream"
               : "https://image.novelai.net/ai/generate-image";
             let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
@@ -60548,6 +60692,9 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
               b.classList.remove("playing");
             });
           }
+          document.querySelectorAll(".playing-quote-audio").forEach((b) => {
+            b.classList.remove("playing-quote-audio");
+          });
 
           isTtsPlaying = false;
           currentTtsAudioBubble = null;
@@ -60780,6 +60927,254 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             stopMinimaxAudio();
           }
         }
+
+        async function playQuoteAudioSource(audioHexOrData, bubble, msg) {
+          stopMinimaxAudio();
+          await new Promise((resolve) => setTimeout(resolve, 50));
+
+          const ttsPlayer = document.getElementById("tts-audio-player");
+          if (!ttsPlayer) return;
+
+          const mainAudioPlayer = document.getElementById("audio-player");
+          if (mainAudioPlayer && !mainAudioPlayer.paused) {
+            mainAudioPlayer.pause();
+            state.musicState.isPlaying = false;
+            updatePlayerUI();
+          }
+
+          const audioUrl = audioHexOrData.startsWith("data:") || audioHexOrData.startsWith("blob:")
+            ? audioHexOrData
+            : hexToBlobUrl(audioHexOrData);
+
+          if (!audioUrl) return;
+
+          isTtsPlaying = true;
+          bubble.classList.add("playing-quote-audio");
+
+          const cleanup = () => {
+            isTtsPlaying = false;
+            bubble.classList.remove("playing-quote-audio");
+            if (!audioHexOrData.startsWith("data:") && !audioHexOrData.startsWith("blob:")) {
+              URL.revokeObjectURL(audioUrl);
+            }
+            ttsPlayer.onended = null;
+            ttsPlayer.onerror = null;
+          };
+
+          ttsPlayer.onended = cleanup;
+          ttsPlayer.onerror = (e) => {
+            cleanup();
+          };
+
+          ttsPlayer.src = audioUrl;
+          try {
+            await ttsPlayer.play();
+          } catch (err) {
+            console.warn("播放语音异常:", err);
+            cleanup();
+          }
+        }
+
+        async function handleTripleClickQuoteVoice(msg, bubble, chat) {
+          if (window.getSelection) {
+            try {
+              window.getSelection().removeAllRanges();
+            } catch (e) {}
+          }
+          if (!msg) return;
+          const content = String(msg.content || msg.text || "");
+          const quotes = [];
+          const regex = /「([^」]+)」/g;
+          let match;
+          while ((match = regex.exec(content)) !== null) {
+            const q = match[1].trim();
+            if (q) quotes.push(q);
+          }
+          if (quotes.length === 0) {
+            return;
+          }
+          let textToRead = "";
+          if (quotes.length === 1) {
+            textToRead = quotes[0];
+          } else {
+            textToRead = quotes.map((q, idx) => {
+              let trimmed = q.trim();
+              if (idx === quotes.length - 1) return trimmed;
+              if (/[，、]$/.test(trimmed)) {
+                trimmed = trimmed.slice(0, -1);
+              }
+              return trimmed + "…… ";
+            }).join("");
+          }
+
+          if (msg.quoteAudioHex || msg.quoteAudioData) {
+            await playQuoteAudioSource(msg.quoteAudioHex || msg.quoteAudioData, bubble, msg);
+            return;
+          }
+
+          const isUser = msg.role === "user" || msg.sender === "user" || msg.isUser || (chat.isGroup ? (chat.ownerId === "user" && msg.senderId === "user") : false);
+          let voiceId = "";
+          if (chat.isGroup) {
+            if (isUser) {
+              voiceId = chat.settings?.myVoiceId || chat.settings?.userMinimaxVoiceId || chat.settings?.minimaxVoiceId || "";
+            } else {
+              const member = (chat.members || []).find(
+                (m) => m.id === msg.senderId || m.originalName === msg.senderName || m.originalName === msg.sender || m.groupNickname === msg.senderName || m.groupNickname === msg.sender
+              );
+              if (member) {
+                voiceId = member.minimaxVoiceId || (chat.settings?.memberVoices && chat.settings.memberVoices[member.id]) || "";
+                if (!voiceId && member.id && state.chats && state.chats[member.id]) {
+                  voiceId = state.chats[member.id].settings?.minimaxVoiceId || "";
+                }
+              }
+              if (!voiceId) {
+                voiceId = chat.settings?.minimaxVoiceId || "";
+              }
+            }
+          } else {
+            if (isUser) {
+              voiceId = chat.settings?.myVoiceId || chat.settings?.userMinimaxVoiceId || chat.settings?.minimaxVoiceId || "";
+            } else {
+              voiceId = chat.settings?.minimaxVoiceId || "";
+            }
+          }
+
+          if (!voiceId) {
+            await showCustomAlert("语音播放失败", "尚未为该角色配置音色标识。");
+            return;
+          }
+
+          const groupId = state.apiConfig?.minimaxGroupId;
+          const apiKey = state.apiConfig?.minimaxApiKey;
+          if (!groupId || !apiKey) {
+            await showCustomAlert("语音播放失败", "尚未配置Minimax的Group ID和API Key。");
+            return;
+          }
+
+          const provider = state.apiConfig?.minimaxProvider || "cn";
+          const speechModel = state.apiConfig?.minimaxSpeechModel || "speech-01-turbo";
+          const baseUrl = provider === "cn" ? "https://api.minimaxi.com" : "https://api.minimax.io";
+          const requestUrl = `${baseUrl}/v1/t2a_v2`;
+          const speed = chat.settings?.speed ?? 1.0;
+          const langBoost = chat.settings?.language_boost;
+
+          const requestBody = {
+            model: speechModel,
+            text: textToRead,
+            voice_setting: {
+              voice_id: voiceId,
+              speed: speed,
+            },
+          };
+          if (langBoost) {
+            requestBody.language_boost = langBoost;
+          }
+
+          if (bubble) bubble.classList.add("playing-quote-audio");
+
+          try {
+            const response = await fetch(`${requestUrl}?GroupId=${groupId}`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(requestBody),
+            });
+            const result = await response.json();
+            if (!response.ok || (result.base_resp && result.base_resp.status_code !== 0)) {
+              throw new Error(`API错误码 ${result.base_resp?.status_code || response.status}: ${result.base_resp?.status_msg || response.statusText}`);
+            }
+            if (!result.data || !result.data.audio) {
+              throw new Error("API响应中未找到有效的音频数据。");
+            }
+
+            msg.quoteAudioHex = result.data.audio;
+            const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+            if (dbInstance && dbInstance.chats) {
+              await dbInstance.chats.put(chat);
+            }
+
+            await playQuoteAudioSource(msg.quoteAudioHex, bubble, msg);
+          } catch (err) {
+            if (bubble) bubble.classList.remove("playing-quote-audio");
+            console.error("生成台词语音失败:", err);
+            await showCustomAlert("语音合成失败", `错误信息: ${err.message}`);
+          }
+        }
+
+        async function handleAutoQuoteVoiceAfterAiReply(chat) {
+          if (!chat) return;
+          const msgs = chat.history || chat.messages || [];
+          if (!Array.isArray(msgs) || msgs.length === 0) return;
+          const chatScreenEl = document.getElementById("chat-interface-screen");
+          if (!chatScreenEl || !chatScreenEl.classList.contains("active")) return;
+          if (String(state.activeChatId) !== String(chat.id)) return;
+
+          const recentMsgsWithQuotes = [];
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            const m = msgs[i];
+            const isUser = m.role === "user" || m.sender === "user" || m.isUser || (chat.isGroup ? (chat.ownerId === "user" && m.senderId === "user") : false);
+            if (isUser) {
+              break;
+            }
+            if (m.content && /「[^」]+」/.test(String(m.content))) {
+              recentMsgsWithQuotes.unshift(m);
+            }
+          }
+          if (recentMsgsWithQuotes.length === 0) return;
+
+          for (const targetMsg of recentMsgsWithQuotes) {
+            const bubble = document.querySelector(`.message-bubble[data-timestamp="${targetMsg.timestamp}"]`) ||
+                           document.querySelector('#message-flow-container .message-bubble:last-child');
+            await handleTripleClickQuoteVoice(targetMsg, bubble, chat);
+            if (window.ttsPlayer && !window.ttsPlayer.paused) {
+              await new Promise(resolve => {
+                const onEnd = () => {
+                  window.ttsPlayer.removeEventListener("ended", onEnd);
+                  window.ttsPlayer.removeEventListener("error", onEnd);
+                  resolve();
+                };
+                window.ttsPlayer.addEventListener("ended", onEnd);
+                window.ttsPlayer.addEventListener("error", onEnd);
+              });
+            }
+          }
+        }
+
+        window.toggleVoiceMode = function() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+          if (!chat.settings) chat.settings = {};
+          const currentMode = chat.settings.voiceMode || localStorage.getItem("default_voice_mode") || "manual";
+          const newMode = currentMode === "manual" ? "auto" : "manual";
+          chat.settings.voiceMode = newMode;
+          localStorage.setItem("default_voice_mode", newMode);
+          const btn = document.getElementById("voice-mode-btn");
+          if (btn) {
+            btn.textContent = newMode === "auto" ? "默认" : "手动";
+            btn.title = newMode === "auto" ? "默认" : "手动";
+          }
+          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+          if (dbInstance && dbInstance.chats) {
+            dbInstance.chats.put(chat);
+          }
+        };
+
+        window.handleManualVoiceButtonClick = function() {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+          if (window.isTtsPlaying) {
+            stopMinimaxAudio();
+            return;
+          }
+          handleAutoQuoteVoiceAfterAiReply(chat);
+        };
+
+        window.handleAutoQuoteVoiceAfterAiReply = handleAutoQuoteVoiceAfterAiReply;
+
 
         // 角色手机外观预设功能核心函数
 
@@ -73838,6 +74233,10 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
                 "block";
               document.getElementById("minimax-voice-id-group").style.display =
                 isGroup ? "none" : "block";
+              const groupVoiceGroup = document.getElementById("group-minimax-voice-group");
+              if (groupVoiceGroup) {
+                groupVoiceGroup.style.display = isGroup ? "block" : "none";
+              }
               document.getElementById("my-persona-group").style.display =
                 "block";
               document.getElementById("my-avatar-group").style.display =
@@ -74731,6 +75130,101 @@ ${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
             .addEventListener("click", () => {
               chatSettingsModal.classList.remove("visible");
             });
+
+          const openGroupMinimaxModalBtn = document.getElementById("open-group-minimax-modal-btn");
+          const groupMinimaxVoiceModal = document.getElementById("group-minimax-voice-modal");
+          const groupMinimaxVoiceList = document.getElementById("group-minimax-voice-list");
+          const cancelGroupMinimaxVoiceBtn = document.getElementById("cancel-group-minimax-voice-btn");
+          const saveGroupMinimaxVoiceBtn = document.getElementById("save-group-minimax-voice-btn");
+
+          if (openGroupMinimaxModalBtn) {
+            openGroupMinimaxModalBtn.addEventListener("click", () => {
+              if (!groupMinimaxVoiceModal || !groupMinimaxVoiceList) return;
+              const chat = state.chats[state.activeChatId];
+              if (!chat || !chat.isGroup) return;
+
+              groupMinimaxVoiceList.innerHTML = "";
+
+              const userVoiceId = chat.settings?.myVoiceId || chat.settings?.userMinimaxVoiceId || "";
+              const userAvatar = (state.user && state.user.avatar) || (chat.settings && chat.settings.myAvatar) || defaultAvatar;
+              const userName = (chat.settings && chat.settings.myGroupNickname) || (state.user && state.user.name) || "我";
+
+              const userRow = document.createElement("div");
+              userRow.className = "group-minimax-member-row";
+              userRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-color);";
+              userRow.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                  <img src="${userAvatar}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />
+                  <span style="font-size: 13px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${userName}</span>
+                </div>
+                <input type="text" class="moe-input group-voice-input" data-is-user="true" placeholder="音色ID" value="${userVoiceId}" style="width: 130px; flex-shrink: 0;" />
+              `;
+              groupMinimaxVoiceList.appendChild(userRow);
+
+              const members = chat.members || [];
+              members.forEach((m) => {
+                const mAvatar = m.avatar || defaultAvatar;
+                const mName = m.groupNickname || m.originalName || m.name || "成员";
+                const mVoiceId = m.minimaxVoiceId || (chat.settings?.memberVoices && chat.settings.memberVoices[m.id]) || "";
+
+                const row = document.createElement("div");
+                row.className = "group-minimax-member-row";
+                row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-color);";
+                row.innerHTML = `
+                  <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                    <img src="${mAvatar}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />
+                    <span style="font-size: 13px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${mName}</span>
+                  </div>
+                  <input type="text" class="moe-input group-voice-input" data-member-id="${m.id}" placeholder="音色ID" value="${mVoiceId}" style="width: 130px; flex-shrink: 0;" />
+                `;
+                groupMinimaxVoiceList.appendChild(row);
+              });
+
+              groupMinimaxVoiceModal.classList.add("visible");
+            });
+          }
+
+          if (cancelGroupMinimaxVoiceBtn) {
+            cancelGroupMinimaxVoiceBtn.addEventListener("click", () => {
+              if (groupMinimaxVoiceModal) groupMinimaxVoiceModal.classList.remove("visible");
+            });
+          }
+
+          if (saveGroupMinimaxVoiceBtn) {
+            saveGroupMinimaxVoiceBtn.addEventListener("click", async () => {
+              const chat = state.chats[state.activeChatId];
+              if (!chat) {
+                if (groupMinimaxVoiceModal) groupMinimaxVoiceModal.classList.remove("visible");
+                return;
+              }
+              if (!chat.settings) chat.settings = {};
+              if (!chat.settings.memberVoices) chat.settings.memberVoices = {};
+
+              const inputs = groupMinimaxVoiceModal.querySelectorAll(".group-voice-input");
+              inputs.forEach((input) => {
+                const val = input.value.trim();
+                if (input.dataset.isUser === "true") {
+                  chat.settings.myVoiceId = val;
+                  chat.settings.userMinimaxVoiceId = val;
+                } else {
+                  const memberId = input.dataset.memberId;
+                  if (memberId) {
+                    chat.settings.memberVoices[memberId] = val;
+                    const member = (chat.members || []).find((m) => m.id === memberId);
+                    if (member) {
+                      member.minimaxVoiceId = val;
+                    }
+                  }
+                }
+              });
+
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance && dbInstance.chats) {
+                await dbInstance.chats.put(chat);
+              }
+              if (groupMinimaxVoiceModal) groupMinimaxVoiceModal.classList.remove("visible");
+            });
+          }
 
           const importMyPersonaBtn = document.getElementById("import-my-persona-btn");
           const importAiPersonaBtn = document.getElementById("import-ai-persona-btn");
