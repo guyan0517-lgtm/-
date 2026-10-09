@@ -3074,7 +3074,7 @@
 
             <!-- 标题和状态的容器 -->
             <div id="chat-header-title-wrapper">
-              <div id="chat-header-main-line" style="position: relative;">
+              <div id="chat-header-main-line" style="position: relative; height: 24px; display: flex; align-items: center; justify-content: center;">
                 <!-- 心声按钮 仅单聊显示，群聊隐藏，定位于名字正左侧 -->
                 <span
                   class="action-btn"
@@ -8611,7 +8611,6 @@
     <div id="chat-mini-map-modal" class="chat-mini-map-floating-overlay">
       <div id="chat-mini-map-floating-card" class="chat-mini-map-floating-card">
         <div class="chat-mini-map-drag-bar" id="chat-mini-map-drag-handle">
-          <button type="button" class="chat-mini-map-tiny-close" id="fav-chat-mini-map-btn" title="收藏" style="margin-right: 6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
           <button type="button" class="chat-mini-map-tiny-close" id="close-chat-mini-map-btn" title="关闭"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
         </div>
         <div id="chat-mini-map-view-box" style="display: flex; flex-direction: column; position: relative;">
@@ -27568,7 +27567,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
           const localModel = localStorage.getItem("novelai-model") || "";
-          const model = options.model || localModel || domModel || "nai-diffusion-4-5-full";
+          const model = options.model || domModel || localModel || "nai-diffusion-4-5-full";
 
           if (!apiKey) {
             throw new Error("请先在设置中配置 NovelAI API Key");
@@ -28187,6 +28186,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const novelaiApiKey = localStorage.getItem("novelai-api-key") || "";
           document.getElementById("novelai-switch").checked = novelaiEnabled;
           document.getElementById("novelai-model").value = novelaiModel;
+          const naiModelSelect = document.getElementById("novelai-model");
+          if (naiModelSelect && !naiModelSelect._hasAutoSave) {
+            naiModelSelect._hasAutoSave = true;
+            naiModelSelect.addEventListener("change", (e) => {
+              localStorage.setItem("novelai-model", e.target.value);
+            });
+          }
           document.getElementById("novelai-api-key").value = novelaiApiKey;
           document.getElementById("novelai-details").style.display =
             novelaiEnabled ? "block" : "none";
@@ -28788,30 +28794,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               chatHeaderTitle.textContent = displayName;
               chatHeaderTitle.classList.remove("typing-status");
               statusContainer.style.display = "none";
-              document.getElementById(
-                "chat-header-title-wrapper",
-              ).style.justifyContent = "center";
             } else {
               chatHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : (chat.settings?.offlineMode?.enabled ? "对方正在赴约中..." : "对方正在输入...");
               chatHeaderTitle.classList.add("typing-status");
               statusContainer.style.display = "none";
-              document.getElementById(
-                "chat-header-title-wrapper",
-              ).style.justifyContent = "flex-start";
             }
           } else {
             chatHeaderTitle.textContent = displayName;
             chatHeaderTitle.classList.remove("typing-status");
             if (chat.isGroup) {
               statusContainer.style.display = "none";
-              document.getElementById(
-                "chat-header-title-wrapper",
-              ).style.justifyContent = "center";
             } else {
               statusContainer.style.display = "flex";
-              document.getElementById(
-                "chat-header-title-wrapper",
-              ).style.justifyContent = "flex-start";
               statusTextEl.textContent = chat.status?.text || "在线";
               statusContainer.classList.toggle(
                 "busy",
@@ -40470,7 +40464,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
                         // 获取NAI设置（从localStorage读取）
                         const apiKey = localStorage.getItem("novelai-api-key");
+                        const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
                         const model =
+                          domModel ||
                           localStorage.getItem("novelai-model") ||
                           "nai-diffusion-4-5-full";
                         const settings = getNovelAISettings();
@@ -40896,7 +40892,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
                     // 获取NAI设置（从localStorage读取）
                     const apiKey = localStorage.getItem("novelai-api-key");
+                    const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
                     const model =
+                      domModel ||
                       localStorage.getItem("novelai-model") ||
                       "nai-diffusion-4-5-full";
                     const settings = getNovelAISettings();
@@ -78945,13 +78943,11 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             .getElementById("theme-toggle-switch")
             .addEventListener("change", toggleTheme);
 
-          // 绑定消息操作菜单中的“转化线索”按钮
+          // 绑定消息操作菜单中的“转化线索”按钮备用逻辑
           document
             .getElementById("quote-message-btn")
             .addEventListener("click", () => {
-              if (typeof convertMessageBubbleToClue === "function") {
-                convertMessageBubbleToClue();
-              } else if (typeof startReplyToMessage === "function") {
+              if (typeof convertMessageBubbleToClue !== "function" && typeof startReplyToMessage === "function") {
                 startReplyToMessage();
               }
             });

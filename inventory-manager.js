@@ -915,6 +915,105 @@
     }
   }
 
+  // 重新生成线索HTML排版
+  async function regenerateClueItemHtml(item, btn) {
+    if (!item) return;
+    const oldBtnText = btn ? btn.textContent : "重排";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "生成中";
+    }
+    showClueToast("正在生成HTML排版");
+
+    try {
+      let moduleContext = "";
+      const chat = (typeof state !== "undefined" && state.chats && state.activeChatId) ? state.chats[state.activeChatId] : null;
+      const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+      if (chat && chat.activeModuleId && dbInstance && dbInstance.modules) {
+        try {
+          const curMod = await dbInstance.modules.get(chat.activeModuleId);
+          if (curMod) {
+            moduleContext += `当前模组名称：${curMod.title || "未知模组"}\n`;
+          }
+          if (dbInstance.moduleChapters) {
+            const chaps = await dbInstance.moduleChapters.where("moduleId").equals(chat.activeModuleId).toArray();
+            const openChaps = chaps.filter(c => c.isOpen);
+            if (openChaps.length > 0) {
+              moduleContext += `当前所在章节：${openChaps.map(c => c.title).join("、")}\n`;
+            }
+          }
+        } catch (e) {}
+      }
+
+      const useSubApi = Boolean(state.apiConfig && state.apiConfig.subApiUses && state.apiConfig.subApiUses.optimize && state.apiConfig.subApiKey);
+      let proxyUrl = useSubApi ? (state.apiConfig.subProxyUrl || "https://api.openai.com") : (state.apiConfig?.proxyUrl || "https://api.openai.com");
+      let apiKey = useSubApi ? state.apiConfig.subApiKey : (state.apiConfig?.apiKey || "");
+      let model = useSubApi ? (state.apiConfig.subModel || "gpt-4o-mini") : (state.apiConfig?.model || "gpt-4o-mini");
+
+      const prompt = `请为以下线索道具重新设计一个高度仿真、小巧精致、拟物的HTML片段：
+线索名称：${item.name}
+线索简介：${item.desc || ""}
+原线索内容：${item.content || ""}
+${moduleContext}
+HTML设计与排版核心规范：
+1. 仿真拟物与精致美观：请根据线索类型自主决定外观，例如手机聊天截图拟真、复古牛皮纸信件、手写日记碎片、病历尸检报告、密信收据、羊皮纸卷轴等。
+2. 尺寸与自适应：所有根容器与内部元素必须使用 max-width: 100%，width: auto 或 100%，box-sizing: border-box。禁止出现固定超大宽高，排版紧凑适中。
+3. 纯净无多余外边框：卡片自身具有完整的内边距、阴影和背景样式即可，卡片外层不要添加多余的外部空白边框。
+4. 样式内联：所有CSS样式请直接写在HTML元素的style属性中或使用style标签包含在内。
+只输出纯HTML代码，不要包含外部样式表，禁止包含Markdown代码块或额外说明。`;
+
+      let generatedHtml = "";
+      let isGemini = proxyUrl === (typeof GEMINI_API_URL !== "undefined" ? GEMINI_API_URL : "");
+      if (isGemini && typeof toGeminiRequestData === "function") {
+        let geminiConfig = toGeminiRequestData(model, apiKey, prompt, [{ role: "user", content: prompt }], isGemini);
+        if (geminiConfig) {
+          const res = await fetch(geminiConfig.url, geminiConfig.data);
+          const data = await res.json();
+          generatedHtml = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        }
+      } else {
+        const reqUrl = proxyUrl.endsWith("/v1") ? `${proxyUrl}/chat/completions` : (proxyUrl.includes("/chat/completions") ? proxyUrl : `${proxyUrl}/v1/chat/completions`);
+        const res = await fetch(reqUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.3,
+          }),
+        });
+        const data = await res.json();
+        generatedHtml = data?.choices?.[0]?.message?.content || "";
+      }
+
+      generatedHtml = generatedHtml.replace(/^```(?:html)?\s*/i, "").replace(/```\s*$/i, "").trim();
+      if (generatedHtml) {
+        item.content = generatedHtml;
+        const inventory = getCurrentChatInventory();
+        const found = inventory.find(i => i.id === item.id);
+        if (found) found.content = generatedHtml;
+        await saveCurrentChatInventory(inventory);
+        if (dbInstance && dbInstance.inventoryItems) {
+          try { await dbInstance.inventoryItems.put(item); } catch (e) {}
+        }
+        showClueToast("HTML排版已生成");
+      } else {
+        showClueToast("未获取到排版内容");
+      }
+    } catch (err) {
+      console.error("生成HTML失败:", err);
+      showClueToast("生成HTML失败");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldBtnText;
+      }
+    }
+  }
+
   // 打开物品详情 1x1 面板
   function openInventoryItemDetailModal(item) {
     activeDetailItem = item;
@@ -989,16 +1088,17 @@
       if (item.category === "prop") {
         actionBtn.style.display = "inline-flex";
         actionBtn.textContent = "使用";
+        actionBtn.title = "使用";
         actionBtn.onclick = async () => {
           modal.classList.remove("visible");
           await useInventoryProp(item);
         };
       } else if (item.category === "clue") {
         actionBtn.style.display = "inline-flex";
-        actionBtn.textContent = "阅读";
-        actionBtn.onclick = () => {
-          modal.classList.remove("visible");
-          openClueReaderModal(item);
+        actionBtn.textContent = "重排";
+        actionBtn.title = "重新生成HTML";
+        actionBtn.onclick = async () => {
+          await regenerateClueItemHtml(item, actionBtn);
         };
       } else {
         actionBtn.style.display = "none";
@@ -1935,9 +2035,7 @@
     }, 2000);
   }
 
-  let clueInnerZoom = 1.0;
-  let clueInnerPanX = 0;
-  let clueInnerPanY = 0;
+  let clueCardScale = 1.0;
   let clueCardInitialized = false;
   let currentReadingClueItem = null;
 
@@ -1947,12 +2045,9 @@
     if (!bodyEl) return;
     const targetEl = document.getElementById("clue-proportional-wrapper") || bodyEl.firstElementChild || bodyEl;
     if (targetEl) {
-      targetEl.style.transformOrigin = "top center";
-      targetEl.style.willChange = "transform";
-      targetEl.style.transition = isInstant ? "none" : "transform 0.15s cubic-bezier(0.25, 1, 0.5, 1)";
-      targetEl.style.transform = `translate3d(${clueInnerPanX}px, ${clueInnerPanY}px, 0px) scale(${clueInnerZoom})`;
-      if (viewBox && targetEl.offsetHeight > 0) {
-        viewBox.style.height = `${Math.ceil(targetEl.offsetHeight * clueInnerZoom)}px`;
+      targetEl.style.transform = "none";
+      if (viewBox) {
+        viewBox.style.height = "auto";
       }
     }
   }
@@ -1977,7 +2072,8 @@
       const rect = card.getBoundingClientRect();
       cardStartLeft = rect.left;
       cardStartTop = rect.top;
-      card.style.transform = "none";
+      card.style.transformOrigin = "top center";
+      card.style.transform = `scale(${clueCardScale})`;
       card.style.left = cardStartLeft + "px";
       card.style.top = cardStartTop + "px";
       document.addEventListener("mousemove", onCardDragMove);
@@ -2060,9 +2156,6 @@
       viewBox.style.overflow = "hidden";
       viewBox.style.touchAction = "none";
 
-      let isPanning = false;
-      let panStartX = 0, panStartY = 0;
-      let startPanX = 0, startPanY = 0;
       let initialPinchDistance = null;
       let initialPinchScale = 1;
 
@@ -2097,75 +2190,42 @@
         return Math.sqrt(dx * dx + dy * dy);
       };
 
-      const clampPanAndZoom = () => {
-        if (clueInnerZoom <= 1.0) {
-          clueInnerPanX = 0;
-          clueInnerPanY = 0;
-        } else {
-          const vbRect = viewBox.getBoundingClientRect();
-          const maxPanX = (vbRect.width * (clueInnerZoom - 1)) / 2;
-          const maxPanY = (vbRect.height * (clueInnerZoom - 1)) / 2;
-          clueInnerPanX = Math.max(-maxPanX, Math.min(maxPanX, clueInnerPanX));
-          clueInnerPanY = Math.max(-maxPanY, Math.min(maxPanY, clueInnerPanY));
-        }
-      };
-
-      viewBox.addEventListener("touchstart", (e) => {
+      card.addEventListener("touchstart", (e) => {
         if (e.touches.length === 3) {
           if (e.cancelable) e.preventDefault();
           triggerFavoriteClue();
         } else if (e.touches.length === 2) {
-          isPanning = false;
           initialPinchDistance = getTouchDistance(e.touches[0], e.touches[1]);
-          initialPinchScale = clueInnerZoom;
-        } else if (e.touches.length === 1) {
-          isPanning = true;
-          panStartX = e.touches[0].clientX;
-          panStartY = e.touches[0].clientY;
-          startPanX = clueInnerPanX;
-          startPanY = clueInnerPanY;
+          initialPinchScale = clueCardScale;
         }
       }, { passive: false });
 
-      viewBox.addEventListener("touchmove", (e) => {
+      card.addEventListener("touchmove", (e) => {
         if (e.touches.length === 2 && initialPinchDistance) {
           if (e.cancelable) e.preventDefault();
           const curDist = getTouchDistance(e.touches[0], e.touches[1]);
           const ratio = curDist / initialPinchDistance;
-          clueInnerZoom = Math.max(0.4, Math.min(5.0, initialPinchScale * ratio));
-          clampPanAndZoom();
-          updateClueInnerTransform(true);
-        } else if (e.touches.length === 1 && isPanning && clueInnerZoom > 1.0) {
-          if (e.cancelable) e.preventDefault();
-          const dx = e.touches[0].clientX - panStartX;
-          const dy = e.touches[0].clientY - panStartY;
-          clueInnerPanX = startPanX + dx;
-          clueInnerPanY = startPanY + dy;
-          clampPanAndZoom();
-          updateClueInnerTransform(true);
+          clueCardScale = Math.max(0.4, Math.min(3.5, initialPinchScale * ratio));
+          card.style.transformOrigin = "top center";
+          card.style.transform = `scale(${clueCardScale})`;
         }
       }, { passive: false });
 
-      viewBox.addEventListener("touchend", (e) => {
+      card.addEventListener("touchend", (e) => {
         if (e.touches.length < 2) {
           initialPinchDistance = null;
         }
-        if (e.touches.length === 0) {
-          isPanning = false;
-          clampPanAndZoom();
-          updateClueInnerTransform(false);
-        }
       });
 
-      viewBox.addEventListener("wheel", (e) => {
+      card.addEventListener("wheel", (e) => {
+        if (e.target.closest("button") || e.target.closest("a")) return;
         e.preventDefault();
         const delta = e.deltaY < 0 ? 0.15 : -0.15;
-        clueInnerZoom = Math.max(0.4, Math.min(5.0, clueInnerZoom + delta));
-        clampPanAndZoom();
-        updateClueInnerTransform(true);
+        clueCardScale = Math.max(0.4, Math.min(3.5, clueCardScale + delta));
+        card.style.transformOrigin = "top center";
+        card.style.transform = `scale(${clueCardScale})`;
       }, { passive: false });
 
-      let isMouseDownPan = false;
       viewBox.addEventListener("mousedown", (e) => {
         if (e.target.closest("button") || e.target.closest("a")) return;
         clickCount++;
@@ -2178,31 +2238,6 @@
         clickTimer = setTimeout(() => {
           clickCount = 0;
         }, 400);
-
-        if (clueInnerZoom <= 1.0) return;
-        isMouseDownPan = true;
-        panStartX = e.clientX;
-        panStartY = e.clientY;
-        startPanX = clueInnerPanX;
-        startPanY = clueInnerPanY;
-      });
-
-      window.addEventListener("mousemove", (e) => {
-        if (!isMouseDownPan) return;
-        const dx = e.clientX - panStartX;
-        const dy = e.clientY - panStartY;
-        clueInnerPanX = startPanX + dx;
-        clueInnerPanY = startPanY + dy;
-        clampPanAndZoom();
-        updateClueInnerTransform(true);
-      });
-
-      window.addEventListener("mouseup", () => {
-        if (isMouseDownPan) {
-          isMouseDownPan = false;
-          clampPanAndZoom();
-          updateClueInnerTransform(false);
-        }
       });
     }
   }
@@ -2231,9 +2266,7 @@
     }
     bodyEl.innerHTML = `<div id="clue-proportional-wrapper" style="width: 100%; box-sizing: border-box; display: block;">${rawHtml}</div>`;
 
-    clueInnerZoom = 1.0;
-    clueInnerPanX = 0;
-    clueInnerPanY = 0;
+    clueCardScale = 1.0;
 
     if (!card.style.top || card.style.top === "") {
       const initialLeft = Math.max(10, Math.floor((window.innerWidth - 330) / 2));
@@ -2241,7 +2274,8 @@
       card.style.top = "100px";
     }
     card.style.width = "330px";
-    card.style.transform = "none";
+    card.style.transformOrigin = "top center";
+    card.style.transform = "scale(1)";
 
     updateClueInnerTransform(true);
 
@@ -2441,7 +2475,9 @@
   }
 
   // 气泡长按：转化线索
+  let isConvertingMessageToClue = false;
   async function convertMessageBubbleToClue() {
+    if (isConvertingMessageToClue) return;
     const targetTimestamp = (typeof window.activeMessageTimestamp !== "undefined" && window.activeMessageTimestamp) || (typeof window.lastSelectedMessageTimestamp !== "undefined" && window.lastSelectedMessageTimestamp) || (typeof activeMessageTimestamp !== "undefined" && activeMessageTimestamp);
     if (!targetTimestamp || typeof state === "undefined" || !state.activeChatId) {
       showClueToast("请选择需要转化的消息");
@@ -2472,6 +2508,7 @@
       return;
     }
 
+    isConvertingMessageToClue = true;
     showClueToast("正在提取线索，请稍候");
 
     try {
@@ -2616,6 +2653,8 @@ HTML设计与排版核心规范：
       renderInventoryList();
       showClueToast("线索转化完成");
       openClueReaderModal(fallbackClue);
+    } finally {
+      isConvertingMessageToClue = false;
     }
   }
 

@@ -109,7 +109,7 @@
 109: 15. 【设身处地自检（内部判断，不输出）】：生成方案前，假设自己是守秘人——只加载这些切出的章节能否顺利带完整场？能否知道下一步引导玩家去哪？会不会缺关键信息、会不会剧透？若带不下去，必须调整切法（合并章节、加导航摘要、补指向关系）。
 110: 16. 【带团流程目录】额外生成一份轻量纯流程指向（仅流程流向、关键触发条件与注意事项），绝不进行心理分析、文学鉴赏、台词指导或RP教学；模组类型（一句话）；主线流程（导入→自由探索→转折→结局，每步一句话）；关键地点清单（名称+一句话）；关键事件/线索清单（名称+触发条件一句话）；结局条件（各结局关键点一句话）；带团注意（防剧透边界、必查机制）。
 111: 17. 【地点导航与线索指向】（沙盒类必做，时间线类按需）：每个地点生成导航摘要（1-2句：名称、一句话提示[不剧透]、进入条件、可产出）；提取线索指向表（示例：传单 → 莲荷町#2201、老人 → 钥匙挂饰 → 深谷电车站）；标注各地点开放条件（开场开放/获得线索后开放/特定时间开放）。
-112: 18. 【模组地图】（沙盒类必生成，时间线类跟随剧情生成）：按第四部分的地点层级树生成地图；末级可不写简介；简介不剧透。
+112: 18. 【模组地图】（无论沙盒类还是线性类，所有模组均必须完整生成地图）：按第四部分的地点层级树收录模组内出现的全部空间地点，构建完整的三级地图层级树（大区域/建筑分区/具体场所）；末级可不写简介；简介用于空间导航，必须精炼且严禁剧透。
 113: 
 114: ━━━━━━━━━━━━━━━━━━
 115: 【第八部分：输出与自检】
@@ -596,7 +596,7 @@
             if (improvementStatus) improvementStatus.textContent = '已就绪';
           }
 
-          this.renderParsedResultUI(this.currentParsedData);
+          this.renderParsedResultUI(this.currentParsedData, true);
 
           if (this.currentPlan) {
             this.renderPlanUI();
@@ -1552,11 +1552,14 @@
     },
 
     updateModeUI(mode) {
-      const parts = this.currentParsedData?.splitParts || 'auto';
       const step2SplitSelect = document.getElementById('module-step2-split-select');
       const step1SplitSelect = document.getElementById('module-split-parts-select');
-      if (step2SplitSelect) step2SplitSelect.value = parts;
-      if (step1SplitSelect) step1SplitSelect.value = parts;
+      const parts = this.currentParsedData?.splitParts || (step2SplitSelect && step2SplitSelect.value) || (step1SplitSelect && step1SplitSelect.value) || '1';
+      if (this.currentParsedData) {
+        this.currentParsedData.splitParts = parts;
+      }
+      if (step2SplitSelect && step2SplitSelect.value !== parts) step2SplitSelect.value = parts;
+      if (step1SplitSelect && step1SplitSelect.value !== parts) step1SplitSelect.value = parts;
       this.saveDraft();
     },
 
@@ -1650,11 +1653,19 @@
         if (secondaryBtn) {
           secondaryBtn.style.display = 'flex';
           secondaryBtn.textContent = '返回';
+          secondaryBtn.disabled = false;
+          secondaryBtn.style.opacity = '1';
         }
-        if (rethinkBtn) rethinkBtn.style.display = 'flex';
+        if (rethinkBtn) {
+          rethinkBtn.style.display = 'flex';
+          rethinkBtn.disabled = Boolean(this.isAnalyzing);
+          rethinkBtn.style.opacity = this.isAnalyzing ? '0.7' : '1';
+        }
         if (primaryBtn) {
           primaryBtn.style.display = 'flex';
           primaryBtn.textContent = '切割';
+          primaryBtn.disabled = false;
+          primaryBtn.style.opacity = '1';
         }
         if (step3BackBtn) step3BackBtn.style.display = 'none';
         if (batchAuditBtn) batchAuditBtn.style.display = 'none';
@@ -1665,11 +1676,31 @@
         if (secondaryBtn) secondaryBtn.style.display = 'none';
         if (rethinkBtn) rethinkBtn.style.display = 'none';
         if (primaryBtn) primaryBtn.style.display = 'none';
-        if (step3BackBtn) step3BackBtn.style.display = 'flex';
-        if (batchAuditBtn) batchAuditBtn.style.display = 'flex';
-        if (exportBtn) exportBtn.style.display = 'flex';
-        if (saveLibraryBtn) saveLibraryBtn.style.display = 'flex';
-        if (finishBtn) finishBtn.style.display = 'flex';
+        if (step3BackBtn) {
+          step3BackBtn.style.display = 'flex';
+          step3BackBtn.disabled = false;
+          step3BackBtn.style.opacity = '1';
+        }
+        if (batchAuditBtn) {
+          batchAuditBtn.style.display = 'flex';
+          batchAuditBtn.disabled = false;
+          batchAuditBtn.style.opacity = '1';
+        }
+        if (exportBtn) {
+          exportBtn.style.display = 'flex';
+          exportBtn.disabled = false;
+          exportBtn.style.opacity = '1';
+        }
+        if (saveLibraryBtn) {
+          saveLibraryBtn.style.display = 'flex';
+          saveLibraryBtn.disabled = false;
+          saveLibraryBtn.style.opacity = '1';
+        }
+        if (finishBtn) {
+          finishBtn.style.display = 'flex';
+          finishBtn.disabled = false;
+          finishBtn.style.opacity = '1';
+        }
       }
     },
 
@@ -1677,6 +1708,9 @@
       this.currentParsedData = null;
       this.currentPlan = null;
       this.cutChapters = [];
+      this.cutChaptersBySegment = [];
+      this.batchSegmentsCompleted = 0;
+      this.cuttingCurrentIndex = 0;
       this.isCuttingRunning = false;
       this.isCuttingPaused = false;
       this.isCuttingCancelled = false;
@@ -1696,9 +1730,16 @@
       this.setWizardStep(1);
     },
 
-    renderParsedResultUI(data) {
+    renderParsedResultUI(data, isRestore = false) {
       if (!data) return;
       this.currentParsedData = data;
+      if (!isRestore) {
+        this.currentPlan = null;
+        this.cutChapters = [];
+        this.cutChaptersBySegment = [];
+        this.batchSegmentsCompleted = 0;
+        this.cuttingCurrentIndex = 0;
+      }
 
       const pickerCard = document.getElementById('module-import-picker-card');
       const infoCard = document.getElementById('module-file-info-card');
@@ -1758,21 +1799,26 @@
     },
 
     getEffectiveSplitParts() {
-      if (this.cutChaptersBySegment && this.cutChaptersBySegment.length > 1) {
-        return this.cutChaptersBySegment.length;
+      const step2SplitSelect = document.getElementById('module-step2-split-select');
+      const step1SplitSelect = document.getElementById('module-split-parts-select');
+      let requestedParts = '';
+      if (this.currentStep === 2 && step2SplitSelect && step2SplitSelect.value) {
+        requestedParts = step2SplitSelect.value;
+      } else if (this.currentStep === 1 && step1SplitSelect && step1SplitSelect.value) {
+        requestedParts = step1SplitSelect.value;
+      } else if (step2SplitSelect && step2SplitSelect.value) {
+        requestedParts = step2SplitSelect.value;
+      } else if (step1SplitSelect && step1SplitSelect.value) {
+        requestedParts = step1SplitSelect.value;
+      } else {
+        requestedParts = this.currentParsedData?.splitParts || 'auto';
       }
+
+      if (this.currentParsedData) {
+        this.currentParsedData.splitParts = requestedParts;
+      }
+
       const fullText = this.currentParsedData?.text || '';
-      const splitSelect2 = document.getElementById('module-step2-split-select');
-      const splitSelect1 = document.getElementById('module-split-parts-select');
-      let requestedParts = this.currentParsedData?.splitParts;
-      if (!requestedParts || requestedParts === '1') {
-        if (splitSelect2 && splitSelect2.value && splitSelect2.value !== '1') {
-          requestedParts = splitSelect2.value;
-        } else if (splitSelect1 && splitSelect1.value && splitSelect1.value !== '1') {
-          requestedParts = splitSelect1.value;
-        }
-      }
-      if (!requestedParts) requestedParts = 'auto';
       const totalWords = this.currentParsedData?.wordCount || fullText.length;
       let numParts = 1;
       if (requestedParts === 'auto') {
@@ -1783,12 +1829,13 @@
       } else {
         numParts = parseInt(requestedParts, 10) || 1;
       }
-      if (this.cutChaptersBySegment && this.cutChaptersBySegment.length > 1) {
-        numParts = Math.max(numParts, this.cutChaptersBySegment.length);
+
+      if (step2SplitSelect && step2SplitSelect.value !== requestedParts) {
+        step2SplitSelect.value = requestedParts;
       }
-      const valToSet = this.currentParsedData?.splitParts || (numParts > 1 ? String(numParts) : 'auto');
-      if (step2SplitSelect && valToSet && step2SplitSelect.value !== valToSet) step2SplitSelect.value = valToSet;
-      if (step1SplitSelect && valToSet && step1SplitSelect.value !== valToSet) step1SplitSelect.value = valToSet;
+      if (step1SplitSelect && step1SplitSelect.value !== requestedParts) {
+        step1SplitSelect.value = requestedParts;
+      }
       return numParts;
     },
 
@@ -2102,6 +2149,97 @@
       return list;
     },
 
+    extractFallbackMapNodes(text, chunks = []) {
+      const nodes = [];
+      const seen = new Set();
+      const modName = this.currentParsedData?.moduleName || '模组总览';
+      nodes.push({
+        name: modName,
+        parent: '',
+        level: 1,
+        desc: '模组核心探索主区域'
+      });
+      seen.add(modName);
+
+      const placeKeywords = ['室', '房', '厅', '馆', '街', '站', '校', '院', '楼', '区', '店', '场', '洞', '山', '屋', '阁', '廊', '台', '库', '所', '道', '町', '社', '坛', '桥', '园', '林', '塔', '门', '海', '岛', '堡', '市', '镇', '村', '寺', '殿', '宅', '庄', '城', '1F', '2F', '3F', 'B1', '一层', '二层', '地下室'];
+
+      let currentBuilding = '';
+
+      if (text && typeof text === 'string') {
+        const lines = text.split('\n');
+        for (let i = 0; i < lines.length && nodes.length < 35; i++) {
+          const line = lines[i].trim();
+          if (!line || line.length > 50) continue;
+
+          let placeCandidate = '';
+          const tagMatch = line.match(/(?:【地点[：:]?\s*|【场所[：:]?\s*|【建筑[：:]?\s*|【场景[：:]?\s*|地点[：:]\s*|场所[：:]\s*|场景[：:]\s*)([^】\n\r，。！？]{2,25})/);
+          if (tagMatch) {
+            placeCandidate = tagMatch[1].trim();
+          } else if (line.startsWith('#') || line.startsWith('第') || line.startsWith('【')) {
+            const clean = line.replace(/^[#\s\d一二三四五六七八九十章节回幕【】*·-]+/, '').replace(/[】】].*$/, '').trim();
+            if (clean && clean.length >= 2 && clean.length <= 20 && placeKeywords.some(kw => clean.includes(kw))) {
+              placeCandidate = clean;
+            }
+          }
+
+          if (placeCandidate) {
+            placeCandidate = placeCandidate.replace(/^[\d\.\-_、杠]+/, '').trim();
+            if (placeCandidate && !seen.has(placeCandidate) && placeCandidate !== modName) {
+              seen.add(placeCandidate);
+              const isMacro = placeCandidate.includes('区') || placeCandidate.includes('市') || placeCandidate.includes('镇') || placeCandidate.includes('山') || placeCandidate.includes('岛') || placeCandidate.includes('街') || placeCandidate.includes('町') || placeCandidate.includes('城');
+              const isRoom = placeCandidate.includes('室') || placeCandidate.includes('房') || placeCandidate.includes('廊') || placeCandidate.includes('台') || placeCandidate.includes('阁') || placeCandidate.includes('1F') || placeCandidate.includes('2F') || placeCandidate.includes('B1') || placeCandidate.includes('层');
+              let level = 2;
+              let parent = modName;
+              if (isRoom && currentBuilding) {
+                level = 3;
+                parent = currentBuilding;
+              } else if (!isMacro) {
+                level = 2;
+                currentBuilding = placeCandidate;
+                parent = modName;
+              } else {
+                level = 1;
+                parent = modName;
+              }
+              nodes.push({
+                name: placeCandidate,
+                parent: parent,
+                level: level,
+                desc: '模组空间地点'
+              });
+            }
+          }
+        }
+      }
+
+      if (Array.isArray(chunks)) {
+        chunks.forEach(c => {
+          const name = (c.name || '').replace(/^[\d\.\-_]+/, '').trim();
+          if (name && placeKeywords.some(kw => name.includes(kw))) {
+            if (!seen.has(name) && name !== modName && nodes.length < 40) {
+              seen.add(name);
+              nodes.push({
+                name: name,
+                parent: modName,
+                level: 2,
+                desc: c.remarks || c.reason || '模组关键探索场景'
+              });
+            }
+          }
+        });
+      }
+
+      if (nodes.length <= 1) {
+        nodes.push({ name: '核心调查区域', parent: modName, level: 2, desc: '调查员主要活动分区' });
+        nodes.push({ name: '建筑外景与正门', parent: '核心调查区域', level: 3, desc: '入口探索与外部线索调查' });
+        nodes.push({ name: '一层主探索大厅', parent: '核心调查区域', level: 3, desc: '关键线索与NPC交涉地点' });
+        nodes.push({ name: '二层走廊与私密房间', parent: '核心调查区域', level: 3, desc: '深层秘密搜查与资料检定' });
+        nodes.push({ name: '地下暗室与决战地点', parent: '核心调查区域', level: 3, desc: '幕后高潮对峙与结局触发点' });
+      }
+
+      return nodes;
+    },
+
     generateLocalPlan(data) {
       const text = data.text || '';
       const totalLen = text.length;
@@ -2297,7 +2435,7 @@
         userInstruction: ''
       });
 
-      const mapNodes = [];
+      const mapNodes = this.extractFallbackMapNodes(text, chunks);
 
       return {
         moduleType: isSandbox ? '沙盒' : '线性',
@@ -2316,15 +2454,106 @@
       };
     },
 
+    salvagePartialAiPlan(rawText) {
+      if (!rawText || typeof rawText !== 'string') return null;
+      try {
+        const chunks = [];
+        const mapNodes = [];
+        let moduleType = '线性';
+        let ruleSystem = 'coc';
+        let scaleType = '1v1';
+        let bgTag = '日模';
+        let endingTag = '普通';
+        let summary = '模组概览';
+
+        const typeMatch = rawText.match(/"moduleType"\s*:\s*"([^"]+)"/);
+        if (typeMatch) moduleType = typeMatch[1];
+        const ruleMatch = rawText.match(/"ruleSystem"\s*:\s*"([^"]+)"/);
+        if (ruleMatch) ruleSystem = ruleMatch[1];
+        const scaleMatch = rawText.match(/"scaleType"\s*:\s*"([^"]+)"/);
+        if (scaleMatch) scaleType = scaleMatch[1];
+        const bgMatch = rawText.match(/"bgTag"\s*:\s*"([^"]+)"/);
+        if (bgMatch) bgTag = bgMatch[1];
+        const endMatch = rawText.match(/"endingTag"\s*:\s*"([^"]+)"/);
+        if (endMatch) endingTag = endMatch[1];
+        const sumMatch = rawText.match(/"summary"\s*:\s*"([^"]+)"/);
+        if (sumMatch) summary = sumMatch[1];
+
+        const mapRegex = /\{\s*"name"\s*:\s*"([^"]+)"(?:[^{}]*?"parent"\s*:\s*"([^"]*)")?(?:[^{}]*?"level"\s*:\s*([0-9]+))?(?:[^{}]*?"desc"\s*:\s*"([^"]*)")?[^{}]*?\}/g;
+        let mMatch;
+        const seenM = new Set();
+        while ((mMatch = mapRegex.exec(rawText)) !== null) {
+          const mName = mMatch[1].trim();
+          if (mName && !seenM.has(mName) && !mName.includes('大区域') && !mName.includes('建筑分区') && !mName.includes('核心探索主区域')) {
+            seenM.add(mName);
+            mapNodes.push({
+              name: mName,
+              parent: (mMatch[2] || '').trim(),
+              level: parseInt(mMatch[3], 10) || 2,
+              desc: (mMatch[4] || '').trim()
+            });
+          }
+        }
+
+        const chunkRegex = /\{\s*"order"\s*:\s*([0-9]+)[^{}]*?"name"\s*:\s*"([^"]+)"(?:[^{}]*?"category"\s*:\s*"([^"]*)")?(?:[^{}]*?"wordCount"\s*:\s*([0-9]+))?(?:[^{}]*?"reason"\s*:\s*"([^"]*)")?(?:[^{}]*?"prefixPreview"\s*:\s*"([^"]*)")?(?:[^{}]*?"suffixPreview"\s*:\s*"([^"]*)")?(?:[^{}]*?"remarks"\s*:\s*"([^"]*)")?[^{}]*?\}/g;
+        let cMatch;
+        while ((cMatch = chunkRegex.exec(rawText)) !== null) {
+          const cName = cMatch[2].trim();
+          if (cName && !cName.includes('00-模组已知信息')) {
+            chunks.push({
+              order: parseInt(cMatch[1], 10) || (chunks.length + 1),
+              name: cName,
+              category: (cMatch[3] || '正文').trim(),
+              wordCount: parseInt(cMatch[4], 10) || 1200,
+              reason: (cMatch[5] || '').trim(),
+              prefixPreview: (cMatch[6] || '').trim(),
+              suffixPreview: (cMatch[7] || '').trim(),
+              remarks: (cMatch[8] || '').trim()
+            });
+          }
+        }
+
+        if (chunks.length > 0 || mapNodes.length > 0) {
+          return {
+            moduleType,
+            ruleSystem,
+            scaleType,
+            bgTag,
+            endingTag,
+            summary,
+            chunks,
+            mapNodes
+          };
+        }
+      } catch (e) {
+        console.warn('[模组] 挽救不完整 AI 方案异常', e);
+      }
+      return null;
+    },
+
     async generateCuttingPlan() {
       if (!this.currentParsedData) {
         throw new Error('未选择模组文件');
       }
 
+      this.currentPlan = null;
+      this.cutChapters = [];
+      this.cutChaptersBySegment = [];
+      this.batchSegmentsCompleted = 0;
+      this.cuttingCurrentIndex = 0;
+
+      const promptPresetSelect = document.getElementById('module-prompt-preset-select');
       const promptTextarea = document.getElementById('module-prompt-textarea');
       if (promptTextarea && promptTextarea.value.trim()) {
         this.currentParsedData.analysisPrompt = promptTextarea.value.trim();
         this.currentParsedData.prompt = promptTextarea.value.trim();
+      } else if (promptPresetSelect && promptPresetSelect.value) {
+        const presets = getModulePromptPresets();
+        const found = presets.find(p => p.id === promptPresetSelect.value);
+        if (found && found.prompt) {
+          this.currentParsedData.analysisPrompt = found.prompt;
+          this.currentParsedData.prompt = found.prompt;
+        }
       }
 
       const opinionEl = document.getElementById('module-global-opinion-textarea');
@@ -2332,7 +2561,8 @@
         this.globalOpinion = opinionEl.value.trim();
       }
 
-      let plan;
+      let plan = null;
+      let lastAiError = null;
       try {
         const activePrompt = this.currentParsedData.analysisPrompt || this.currentParsedData.prompt || DEFAULT_TRPG_ANALYSIS_PROMPT;
         this.currentParsedData.analysisPrompt = activePrompt;
@@ -2370,6 +2600,11 @@ JSON 格式如下：
   "bgTag": "日模",
   "endingTag": "普通",
   "contentTags": ["校园", "恐怖"],
+  "mapNodes": [
+    { "name": "核心探索主区域", "parent": "", "level": 1, "desc": "空间说明" },
+    { "name": "主要建筑或街区", "parent": "核心探索主区域", "level": 2, "desc": "建筑说明" },
+    { "name": "具体房间或微观场所", "parent": "主要建筑或街区", "level": 3, "desc": "无剧透简短说明" }
+  ],
   "chunks": [
     {
       "order": 1,
@@ -2381,11 +2616,6 @@ JSON 格式如下：
       "suffixPreview": "该章节在原文中的末尾文字后100字（到哪结束）",
       "remarks": "章节内容备注：明确指出本章包含什么具体内容与要点；若原文中有散落在各处的额外补充信息（如KP信息中的NPC人设背景、HO专属设定与秘密、道具伏笔等），在此处备注注明将这些散落信息归纳进本章节"
     }
-  ],
-  "mapNodes": [
-    { "name": "大区域", "parent": "", "level": 1, "desc": "空间说明" },
-    { "name": "建筑分区", "parent": "大区域", "level": 2, "desc": "建筑说明" },
-    { "name": "具体场所", "parent": "建筑分区", "level": 3, "desc": "" }
   ],
   "imageAnalysis": [
     {
@@ -2399,14 +2629,15 @@ JSON 格式如下：
   ]
 }
 注意：
-1. moduleType 只能是 "线性"、"沙盒" 或 "其他" 三者之一，禁止附带任何注解。
-2. ruleSystem 只能是 "coc" 或 "coj"。
-3. scaleType: 若模组设有专属 HO 位，按数量判定为 "2ho"、"3ho"、"4ho"，若大于4人有ho则判定为 "多ho"；若为无 HO 位模组，单人判定为 "1v1" 或 "单人"，多人则根据模组开头游玩人数填写为 "*人" 或 "*-*人"（例如 "2-4人"、"3-5人" 等）。
-4. summary: 绝对不能出现任何剧透与剧情走向。直接沿用作者在模组介绍中写的模组简介；若无原简介则只写最最最最最最开头最基础的已知内容，绝不包含正文剧情走向。
-5. bgTag 必须单选，只能是 "日模"、"美模"、"现代中国"、"古风" 四者之一，禁止其它值。
-6. endingTag 必须单选，只能是 "危险"、"普通" 或 "安全" 三者之一。
-7. contentTags 必须为多选数组，只能从预设列表 ["校园", "复活", "粉红", "NTR", "血腥暴力", "纯爱", "茶番", "恐怖", "Meta"] 中挑选，符合几个选几个，不符合留空数组 []。
-8. imageAnalysis 必须逐一甄别所有提取插图：
+1. mapNodes 必须在 chunks 前完整输出！收录模组内所有空间地点、建筑、街道、楼层、房间，构建完整的三级层级树（level 1 为大区域/城镇/总地域，level 2 为建筑分区/街道/独立场所，level 3 为具体房间/走廊/微观场所）。每个节点必须包含 name、parent、level、desc。严禁输出空数组！
+2. moduleType 只能是 "线性"、"沙盒" 或 "其他" 三者之一，禁止附带任何注解。
+3. ruleSystem 只能是 "coc" 或 "coj"。
+4. scaleType: 若模组设有专属 HO 位，按数量判定为 "2ho"、"3ho"、"4ho"，若大于4人有ho则判定为 "多ho"；若为无 HO 位模组，单人判定为 "1v1" 或 "单人"，多人则根据模组开头游玩人数填写为 "*人" 或 "*-*人"（例如 "2-4人"、"3-5人" 等）。
+5. summary: 绝对不能出现任何剧透与剧情走向。直接沿用作者在模组介绍中写的模组简介；若无原简介则只写最最最最最最开头最基础的已知内容，绝不包含正文剧情走向。
+6. bgTag 必须单选，只能是 "日模"、"美模"、"现代中国"、"古风" 四者之一，禁止其它值。
+7. endingTag 必须单选，只能是 "危险"、"普通" 或 "安全" 三者之一。
+8. contentTags 必须为多选数组，只能从预设列表 ["校园", "复活", "粉红", "NTR", "血腥暴力", "纯爱", "茶番", "恐怖", "Meta"] 中挑选，符合几个选几个，不符合留空数组 []。
+9. imageAnalysis 必须逐一甄别所有提取插图：
    - shouldInclude: 布尔值。若为纯文本页面扫描、无意义分隔线条、重复花边、装饰图标则设为 false；若为有意义的立绘、地图、手迹、怪物图、CG则设为 true。
    - isSensitive: 布尔值。若为后期决战、幕后黑手真相、神话生物真面目、隐藏密室等核心剧透，设为 true；若为公开世界观地图、已知NPC立绘、开局已知信息则设为 false。
    - isHorror: 布尔值。对恐怖元素极度敏感（低判定阈值）：包含半人半骨骼、骷髅、尸体血迹、怪物触手、异形异变、夜晚昏暗阴森场景、诡异压抑画面、心理恐怖氛围等不论真恐怖还是心理恐怖，一律判定为 true；常规明亮普通立绘或正常地图设为 false。
@@ -2473,94 +2704,138 @@ JSON 格式如下：
           userPrompt += `\n\n模组参考全文（当前分卷内容）：\n${segText}`;
 
           const aiResultText = await this.callAI(systemPrompt, userPrompt);
+          let parsedAiPlan = null;
           if (aiResultText) {
-            const cleanJson = aiResultText.replace(/```json/gi, '').replace(/```/g, '').trim();
-            const parsedAiPlan = JSON.parse(cleanJson);
-            if (parsedAiPlan) {
-              if (segIdx === 0) {
-                if (parsedAiPlan.moduleType) {
-                  if (parsedAiPlan.moduleType.includes('沙盒')) finalType = '沙盒';
-                  else if (parsedAiPlan.moduleType.includes('其他')) finalType = '其他';
-                  else finalType = '线性';
+            let jsonStr = aiResultText.trim();
+            const startIdx = jsonStr.indexOf('{');
+            const endIdx = jsonStr.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx > startIdx) {
+              jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+            }
+            try {
+              parsedAiPlan = JSON.parse(jsonStr);
+            } catch (pErr) {
+              try {
+                const sanitized = jsonStr.replace(/,\s*([\]}])/g, '$1');
+                parsedAiPlan = JSON.parse(sanitized);
+              } catch (pErr2) {
+                parsedAiPlan = this.salvagePartialAiPlan(aiResultText);
+                if (!parsedAiPlan) {
+                  console.warn('[模组] 解析 AI JSON 规划大纲重试失败:', pErr2);
                 }
-                if (parsedAiPlan.ruleSystem && parsedAiPlan.ruleSystem.toLowerCase().includes('coj')) {
-                  finalRuleSystem = 'coj';
-                }
-                if (parsedAiPlan.scaleType) {
-                  finalScaleType = parsedAiPlan.scaleType.trim();
-                }
-                if (['日模', '美模', '现代中国', '古风'].includes(parsedAiPlan.bgTag)) {
-                  finalBgTag = parsedAiPlan.bgTag;
-                }
-                if (['危险', '普通', '安全'].includes(parsedAiPlan.endingTag)) {
-                  finalEndingTag = parsedAiPlan.endingTag;
-                }
-                if (parsedAiPlan.summary) {
-                  finalSummary = parsedAiPlan.summary;
-                }
-                if (Array.isArray(parsedAiPlan.imageAnalysis) && this.currentParsedData.images) {
-                  const assessmentMap = new Map();
-                  parsedAiPlan.imageAnalysis.forEach(a => {
-                    if (a && typeof a.imageIndex === 'number') {
-                      assessmentMap.set(a.imageIndex, a);
-                    }
-                  });
-                  const filteredImages = [];
-                  this.currentParsedData.images.forEach((img, idx) => {
-                    const assess = assessmentMap.get(idx + 1) || assessmentMap.get(img.imageIndex);
-                    if (assess) {
-                      if (assess.shouldInclude === false || assess.isUseful === false) return;
-                      if (typeof assess.isSensitive === 'boolean') img.isSensitive = assess.isSensitive;
-                      if (typeof assess.isHorror === 'boolean') img.isHorror = assess.isHorror;
-                      if (assess.name) {
-                        const isClearlyMap = img.isMap || (img.name && (img.name.includes('地图') || img.name.includes('平面图')));
-                        if (isClearlyMap && !assess.name.includes('图') && !assess.name.includes('平面') && !assess.name.includes('地') && !assess.name.includes('所') && !assess.name.includes('室')) {
-                          img.name = (img.name && (img.name.includes('地图') || img.name.includes('平面'))) ? img.name : `${assess.name}地图`;
-                        } else {
-                          img.name = assess.name;
-                        }
-                      }
-                      if (assess.description) img.description = assess.description;
-                      if (assess.annotation) img.annotation = assess.annotation;
-                    }
-                    filteredImages.push(img);
-                  });
-                  this.currentParsedData.images = filteredImages;
-                }
-              }
-
-              const ALLOWED_CONTENT_TAGS = ['校园', '复活', '粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta'];
-              if (Array.isArray(parsedAiPlan.contentTags)) {
-                parsedAiPlan.contentTags.forEach(t => {
-                  if (ALLOWED_CONTENT_TAGS.includes(t) && !finalContentTags.includes(t)) {
-                    finalContentTags.push(t);
-                  }
-                });
-              }
-
-              if (Array.isArray(parsedAiPlan.chunks)) {
-                parsedAiPlan.chunks.forEach(c => {
-                  allParsedChunks.push({
-                    order: allParsedChunks.length + 1,
-                    name: c.name,
-                    category: c.category || '正文',
-                    wordCount: c.wordCount || 1000,
-                    reason: c.reason || '',
-                    prefixPreview: c.prefixPreview || '',
-                    suffixPreview: c.suffixPreview || '',
-                    remarks: c.remarks || c.notes || ''
-                  });
-                });
-              }
-
-              if (Array.isArray(parsedAiPlan.mapNodes)) {
-                parsedAiPlan.mapNodes.forEach(node => {
-                  if (!combinedMapNodes.some(n => n.name === node.name)) {
-                    combinedMapNodes.push(node);
-                  }
-                });
               }
             }
+          }
+
+          if (parsedAiPlan) {
+            if (segIdx === 0) {
+              if (parsedAiPlan.moduleType) {
+                if (parsedAiPlan.moduleType.includes('沙盒')) finalType = '沙盒';
+                else if (parsedAiPlan.moduleType.includes('其他')) finalType = '其他';
+                else finalType = '线性';
+              }
+              if (parsedAiPlan.ruleSystem && parsedAiPlan.ruleSystem.toLowerCase().includes('coj')) {
+                finalRuleSystem = 'coj';
+              }
+              if (parsedAiPlan.scaleType) {
+                finalScaleType = parsedAiPlan.scaleType.trim();
+              }
+              if (['日模', '美模', '现代中国', '古风'].includes(parsedAiPlan.bgTag)) {
+                finalBgTag = parsedAiPlan.bgTag;
+              }
+              if (['危险', '普通', '安全'].includes(parsedAiPlan.endingTag)) {
+                finalEndingTag = parsedAiPlan.endingTag;
+              }
+              if (parsedAiPlan.summary) {
+                finalSummary = parsedAiPlan.summary;
+              }
+              if (Array.isArray(parsedAiPlan.imageAnalysis) && this.currentParsedData.images) {
+                const assessmentMap = new Map();
+                parsedAiPlan.imageAnalysis.forEach(a => {
+                  if (a && typeof a.imageIndex === 'number') {
+                    assessmentMap.set(a.imageIndex, a);
+                  }
+                });
+                const filteredImages = [];
+                this.currentParsedData.images.forEach((img, idx) => {
+                  const assess = assessmentMap.get(idx + 1) || assessmentMap.get(img.imageIndex);
+                  if (assess) {
+                    if (assess.shouldInclude === false || assess.isUseful === false) return;
+                    if (typeof assess.isSensitive === 'boolean') img.isSensitive = assess.isSensitive;
+                    if (typeof assess.isHorror === 'boolean') img.isHorror = assess.isHorror;
+                    if (assess.name) {
+                      const isClearlyMap = img.isMap || (img.name && (img.name.includes('地图') || img.name.includes('平面图')));
+                      if (isClearlyMap && !assess.name.includes('图') && !assess.name.includes('平面') && !assess.name.includes('地') && !assess.name.includes('所') && !assess.name.includes('室')) {
+                        img.name = (img.name && (img.name.includes('地图') || img.name.includes('平面'))) ? img.name : `${assess.name}地图`;
+                      } else {
+                        img.name = assess.name;
+                      }
+                    }
+                    if (assess.description) img.description = assess.description;
+                    if (assess.annotation) img.annotation = assess.annotation;
+                  }
+                  filteredImages.push(img);
+                });
+                this.currentParsedData.images = filteredImages;
+              }
+            }
+
+            const ALLOWED_CONTENT_TAGS = ['校园', '复活', '粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta'];
+            if (Array.isArray(parsedAiPlan.contentTags)) {
+              parsedAiPlan.contentTags.forEach(t => {
+                if (ALLOWED_CONTENT_TAGS.includes(t) && !finalContentTags.includes(t)) {
+                  finalContentTags.push(t);
+                }
+              });
+            }
+
+            if (Array.isArray(parsedAiPlan.chunks)) {
+              parsedAiPlan.chunks.forEach(c => {
+                allParsedChunks.push({
+                  order: allParsedChunks.length + 1,
+                  name: c.name,
+                  category: c.category || '正文',
+                  wordCount: c.wordCount || 1000,
+                  reason: c.reason || '',
+                  prefixPreview: c.prefixPreview || '',
+                  suffixPreview: c.suffixPreview || '',
+                  remarks: c.remarks || c.notes || ''
+                });
+              });
+            }
+
+            const rawMapNodes = parsedAiPlan.mapNodes || parsedAiPlan.map || parsedAiPlan.locations || parsedAiPlan.places || parsedAiPlan.map_nodes || parsedAiPlan.mapTree;
+            if (Array.isArray(rawMapNodes)) {
+              rawMapNodes.forEach(node => {
+                let nName = '';
+                let nParent = '';
+                let nLevel = 1;
+                let nDesc = '';
+                if (typeof node === 'string') {
+                  nName = node.trim();
+                } else if (node && typeof node === 'object') {
+                  nName = (node.name || node.title || node.location || node.place || '').trim();
+                  nParent = (node.parent || node.parentName || '').trim();
+                  nLevel = parseInt(node.level, 10) || 1;
+                  nDesc = (node.desc || node.description || '').trim();
+                }
+                if (nName && !combinedMapNodes.some(n => n.name === nName)) {
+                  combinedMapNodes.push({
+                    name: nName,
+                    parent: nParent,
+                    level: nLevel,
+                    desc: nDesc
+                  });
+                }
+              });
+            }
+          }
+        }
+
+        if (combinedMapNodes.length <= 1) {
+          const fallbackNodes = this.extractFallbackMapNodes(this.currentParsedData.text, allParsedChunks);
+          if (fallbackNodes && fallbackNodes.length > combinedMapNodes.length) {
+            combinedMapNodes = fallbackNodes;
           }
         }
 
@@ -2601,10 +2876,14 @@ JSON 格式如下：
           };
         }
       } catch (err) {
-        console.warn('[模组] AI 重构提示，使用内置带团结构重组引擎', err);
+        console.warn('[模组] AI 重构提示:', err);
+        lastAiError = err;
       }
 
       if (!plan) {
+        if (lastAiError) {
+          throw lastAiError;
+        }
         plan = this.generateLocalPlan(this.currentParsedData);
       }
 
@@ -2803,24 +3082,24 @@ JSON 格式如下：
 
       const mapContainer = document.getElementById('module-plan-map-view');
       if (mapContainer) {
-        const mapNodes = this.currentPlan.mapNodes || [];
-        if (mapNodes.length === 0) {
-          mapContainer.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">当前模组地图正在生成或随主线剧情动态展开</div>';
-        } else {
-          mapContainer.innerHTML = '';
-          mapNodes.forEach(node => {
-            const nodeEl = document.createElement('div');
-            nodeEl.className = `module-map-node level-${node.level || 1}`;
-            nodeEl.innerHTML = `
-              <div class="module-map-node-title">
-                <span>${node.name}</span>
-                <span class="module-map-badge">${node.level === 1 ? '大区域' : node.level === 2 ? '建筑分区' : '具体场所'}</span>
-              </div>
-              ${node.level < 3 && node.desc ? `<div class="module-map-node-desc">${node.desc}</div>` : ''}
-            `;
-            mapContainer.appendChild(nodeEl);
-          });
+        let mapNodes = this.currentPlan.mapNodes || [];
+        if (mapNodes.length <= 1) {
+          mapNodes = this.extractFallbackMapNodes(this.currentParsedData?.text, this.currentPlan.chunks);
+          this.currentPlan.mapNodes = mapNodes;
         }
+        mapContainer.innerHTML = '';
+        mapNodes.forEach(node => {
+          const nodeEl = document.createElement('div');
+          nodeEl.className = `module-map-node level-${node.level || 1}`;
+          nodeEl.innerHTML = `
+            <div class="module-map-node-title">
+              <span>${node.name}</span>
+              <span class="module-map-badge">${node.level === 1 ? '大区域' : node.level === 2 ? '建筑分区' : '具体场所'}</span>
+            </div>
+            ${node.desc ? `<div class="module-map-node-desc">${node.desc}</div>` : ''}
+          `;
+          mapContainer.appendChild(nodeEl);
+        });
       }
 
       renderModuleCuttingPresetsUI();
@@ -3353,7 +3632,7 @@ ${fullText}`;
       if (cardList) {
         cardList.innerHTML = '';
         const numParts = this.getEffectiveSplitParts();
-        if (numParts > 1) {
+        if (numParts >= 1) {
           const segsBar = document.createElement('div');
           segsBar.className = 'mod-segments-bar';
           segsBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding:10px; background:var(--secondary-bg); border:1px solid var(--border-color); border-radius:8px;';
@@ -3535,25 +3814,30 @@ ${fullText}`;
         this.currentParsedData.prompt = promptEl.value.trim();
       }
 
+      this._batchCallInProgress = false;
       this.isCuttingRunning = true;
       this.isCuttingPaused = false;
       this.isCuttingCancelled = false;
 
-      const fullText = this.currentParsedData?.text || '';
-      const numParts = this.getEffectiveSplitParts();
-      const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
-      if (!this.cutChapters || this.cutChapters.length === 0 || this.batchSegmentsCompleted >= segments.length) {
-        this.batchSegmentsCompleted = 0;
-        this.cuttingCurrentIndex = 0;
-        this.cutChapters = [];
-        this.cutChaptersBySegment = [];
-        const cardList = document.getElementById('module-cut-card-list');
-        if (cardList) cardList.innerHTML = '';
-      }
+      this.batchSegmentsCompleted = 0;
+      this.cuttingCurrentIndex = 0;
+      this.cutChapters = [];
+      this.cutChaptersBySegment = [];
+      const cardList = document.getElementById('module-cut-card-list');
+      if (cardList) cardList.innerHTML = '';
 
       this.setWizardStep(3);
       this.syncOngoingCuttingUI();
-      await this.executeBatchCuttingSingleCall();
+      try {
+        await this.executeBatchCuttingSingleCall();
+      } catch (err) {
+        console.error('[模组] 批量切割流程异常:', err);
+        this.isCuttingRunning = false;
+        this.updateBottomActionBar();
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('切割失败', err.message || String(err));
+        }
+      }
     },
 
     async executeBatchCuttingSingleCall() {
@@ -3777,7 +4061,7 @@ ${fullText}`;
 
       const numParts = this.getEffectiveSplitParts();
 
-      if (numParts > 1) {
+      if (numParts >= 1) {
         const segsBar = document.createElement('div');
         segsBar.className = 'mod-segments-bar';
         segsBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; padding:10px; background:var(--secondary-bg); border:1px solid var(--border-color); border-radius:8px;';
