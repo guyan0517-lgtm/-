@@ -278,7 +278,7 @@
 
 【最高执行铁律——零脑补与纯事实提取原则】：
 你的任务是通读用户提供的模组原文文档全文，精准定位目标角色的全部信息，用最准确客观的大白话逐一提取出该角色的全部设定。
-1. 绝对忠实原文事实：角色的一切姓名、年龄、生日、性别、性格、说话方式、数值属性、技能、外貌、随身道具、经历事件，必须100%来自模组原文记录。
+1. 绝对忠实原文事实：角色的一切姓名、年龄、生日、性别、性格、说话方式、数值属性、技能、外貌、随身道具、经历事件，必须100%来自模组原文记录。姓名提取铁律：只填写模组开局展示的普通名字，严禁填写隐藏真名、翻译名字、附加称号；若角色的姓氏带有身份剧透，例如贵族姓氏或世家姓氏等导致提前得知其未公开身份，严禁填写剧透姓氏，只保留模组开局默认称呼的名字。
 2. 绝对禁止自行推断与臆想：绝对禁止根据人物经历自行推测、脑补或推断该角色是什么性格、应该做什么事；喜好、厌恶、习惯等内容必须是模组正文中清清楚楚明确记载的事实。模组若未明确写明，必须直接写“无”或“模组未提及”，绝对禁止AI自行编造！
 3. 说话方式模板：必须严格遵循 语风加语调加性格特质 模板，如 大白话+中式语气+温和随和 或 古风+中式语调+沉稳克制。
 4. 防剧透隔离：明确列出该角色身上的隐藏剧透项（如深夜化妖、隐秘身份等），明确标明初期绝对禁止直接透露或露馅，绝不在初遇描写妖瞳兽耳等异样，保证在初期正常扮演。
@@ -287,7 +287,7 @@
 【严格输出排版格式】：
 
 一. 基础信息
-* 姓名：[模组原文公开姓名]
+* 姓名：[仅填模组开局展示的普通名字，不填真名、翻译名或剧透姓氏]
 * 年龄：[模组原文记载，若无写无]
 * 生日：[模组原文记载，若无写无]
 * 性别：[模组原文记载，若无写无]
@@ -1423,6 +1423,11 @@
           gender: finalGender,
           genderNote: "",
           hiddenPersona: isLocked ? finalPersona : undefined,
+          hiddenAge: isLocked ? finalAge : undefined,
+          hiddenBirthday: isLocked ? finalBirthday : undefined,
+          hiddenGender: isLocked ? finalGender : undefined,
+          hiddenSpeechStyle: isLocked ? finalSpeechStyle : undefined,
+          speechStyleViewMode: isLocked ? "player" : "keeper",
           isInvestigatorLocked: isLocked,
           activePersonaViewMode: isLocked ? "investigator" : "keeper",
           myPersona: state.qzoneSettings?.weiboUserPersona || "一个普通人",

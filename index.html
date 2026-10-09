@@ -1198,6 +1198,15 @@
                   打开后，ai知晓实际日期，时间。关闭后，ai不知道现在的时间，日期。
                 </p>
               </div>
+              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
+                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
+                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">音乐</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="global-ai-music-switch" checked />
+                    <span class="slider"></span>
+                  </label>
+                </label>
+              </div>
               <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color);">
                 <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">效果</label>
                 <select id="map-location-effect-select" class="moe-input" style="width: 100%; height: 36px; line-height: 36px; font-size: 13px;">
@@ -2544,6 +2553,7 @@
                   <span class="module-subtab" data-tab="toc">目录</span>
                   <span class="module-subtab" data-tab="map">地图</span>
                   <span class="module-subtab" data-tab="gallery">图库</span>
+                  <span class="module-subtab" data-tab="music">音乐</span>
                 </div>
 
                 <!-- 分类分组章节列表 -->
@@ -2574,6 +2584,20 @@
                     </div>
                   </div>
                   <div id="module-gallery-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;"></div>
+                </div>
+
+                <!-- 音乐视图 -->
+                <div id="module-detail-music-view" style="display: none; flex-direction: column; gap: 10px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; flex-wrap: wrap; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-weight: 600; font-size: 13px; color: var(--text-primary);" id="module-music-count-label">配乐清单 0 首</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                      <button type="button" class="mod-capsule-btn primary" id="module-music-ai-analyze-btn">分析</button>
+                      <button type="button" class="mod-capsule-btn danger" id="module-music-clear-btn">清空</button>
+                    </div>
+                  </div>
+                  <div id="module-music-list-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
               </div>
             </div>
@@ -3047,14 +3071,6 @@
           <!-- 默认控件：包含标题、状态栏和常规按钮 -->
           <div class="default-controls">
             <span class="back-btn" id="back-to-list-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
-            <span class="action-btn" id="chat-map-btn" title="地图" style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-left: 2px;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
-                <line x1="9" y1="3" x2="9" y2="18"></line>
-                <line x1="15" y1="6" x2="15" y2="21"></line>
-                <circle cx="12" cy="12" r="2.2" fill="currentColor" fill-opacity="0.3"></circle>
-              </svg>
-            </span>
 
             <!-- 标题和状态的容器 -->
             <div id="chat-header-title-wrapper">
@@ -3091,26 +3107,19 @@
                   ></path>
                 </svg>
               </span>
-              <!-- 群聊好感度按钮 (在右上角地图左边) -->
+              <!-- 地图按钮 (在网易云播放器左边，两个间隔不要太大) -->
               <span
                 class="action-btn"
-                id="group-affection-btn"
-                title="好感度"
-                style="cursor: pointer; display: none;"
-                onclick="if(typeof openChatAffectionModal==='function')openChatAffectionModal();"
+                id="chat-header-map-btn"
+                title="地图"
+                style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-right: 2px;"
+                onclick="if(typeof toggleChatMiniMapModal==='function'){toggleChatMiniMapModal();}else if(typeof openChatMiniMapModal==='function'){openChatMiniMapModal();}"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
+                  <line x1="9" y1="3" x2="9" y2="18"></line>
+                  <line x1="15" y1="6" x2="15" y2="21"></line>
+                  <circle cx="12" cy="12" r="2.2" fill="currentColor" fill-opacity="0.3"></circle>
                 </svg>
               </span>
               <!-- 音乐按钮 -->
@@ -3431,14 +3440,6 @@
                 <path d="M8 23h8" />
               </svg>
             </button>
-            <button
-              id="voice-mode-btn"
-              class="chat-action-icon-btn action-button"
-              title="模式"
-              type="button"
-              onclick="if(typeof toggleVoiceMode==='function')toggleVoiceMode();"
-              style="font-size: 11.5px; font-weight: 600; width: 38px; height: 38px; border-radius: 50%; padding: 0;"
-            >手动</button>
             <button
               id="send-waimai-request-btn"
               class="chat-action-icon-btn action-button"
@@ -6764,6 +6765,14 @@
               <button type="button" id="investigator-unlock-btn" class="moe-btn-mini" style="height: 24px; padding: 0 8px; font-size: 11px; font-weight: 600; color: var(--accent-color); border: 1px solid var(--accent-color); background: transparent; cursor: pointer;">解锁</button>
             </div>
 
+            <div class="form-group" id="chat-speech-style-group" style="display: none; margin-top: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label for="chat-speech-style-input" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin: 0;">说话风格</label>
+                <button type="button" id="chat-speech-style-mode-btn" class="moe-btn-mini" style="height: 22px; padding: 0 8px; font-size: 10px; font-weight: 600; border-radius: 4px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">玩家</button>
+              </div>
+              <input type="text" id="chat-speech-style-input" class="moe-input" style="height: 26px; font-size: 11px; padding: 2px 6px;" placeholder="说话风格与语气" />
+            </div>
+
             <div class="form-group" id="ai-persona-group">
               <label for="ai-persona">对方人设</label>
               <textarea id="ai-persona" rows="10" class="moe-input" placeholder=""></textarea>
@@ -7321,12 +7330,30 @@
 
             <div class="form-group" id="minimax-voice-id-group">
               <label>Minimax 语音ID</label>
-              <input
-                type="text"
-                id="minimax-voice-id-input"
-                class="moe-input"
-                placeholder="例如：male-01"
-              />
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input
+                  type="text"
+                  id="minimax-voice-id-input"
+                  class="moe-input"
+                  placeholder="例如：male-01"
+                  style="flex: 1;"
+                />
+                <button
+                  type="button"
+                  id="voice-mode-btn"
+                  class="moe-btn moe-btn-secondary"
+                  onclick="if(typeof toggleVoiceMode==='function')toggleVoiceMode();"
+                  style="height: 36px; padding: 0 12px; font-size: 12px; font-weight: 600; flex-shrink: 0;"
+                >手动</button>
+              </div>
+            </div>
+
+            <div class="form-group" id="chat-ai-music-group" style="margin-top: 8px;">
+              <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                <span class="toggle-switch-text" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">音乐</span>
+                <input type="checkbox" id="chat-ai-music-switch" checked />
+                <span class="toggle-switch-slider"></span>
+              </label>
             </div>
 
             <div class="form-group" id="group-minimax-voice-group" style="display: none;">
@@ -14705,6 +14732,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
       <!-- 底部操作固定栏 -->
       <div id="persona-creator-actions" style="display: none; padding: 10px 16px; background: var(--background-color); border-top: 1px solid var(--border-color); align-items: center; justify-content: flex-end; gap: 10px; position: sticky; bottom: 0; z-index: 20;">
+        <button type="button" id="persona-unlock-btn" class="mini-btn" style="min-width: 70px; height: 36px; border-radius: 8px; font-size: 13px; font-weight: 500; background: var(--secondary-bg); color: var(--accent-color); border: 1px solid var(--accent-color); cursor: pointer; display: none; align-items: center; justify-content: center; line-height: 1;">解锁</button>
         <button type="button" id="persona-copy-card-btn" class="mini-btn" style="min-width: 80px; height: 36px; border-radius: 8px; font-size: 13px; font-weight: 500; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">复制</button>
         <button type="button" id="persona-import-friend-btn" class="moe-btn" style="min-width: 100px; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 600; background-color: var(--accent-color); color: #ffffff; border: 1px solid var(--accent-color); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; line-height: 1;">导入</button>
       </div>
@@ -27905,6 +27933,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (realTimeSwitch) {
             realTimeSwitch.checked = state.apiConfig.realTimeCognitionEnabled !== false;
           }
+          const globalMusicSwitch = document.getElementById("global-ai-music-switch");
+          if (globalMusicSwitch) {
+            globalMusicSwitch.checked = state.apiConfig.globalAiMusicEnabled !== false && localStorage.getItem("global_ai_music_enabled") !== "false";
+          }
 
           const mapEffectSelect = document.getElementById("map-location-effect-select");
           const mapColorPreview = document.getElementById("map-location-color-preview");
@@ -31629,7 +31661,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (voiceMsgBtn) voiceMsgBtn.style.display = "flex";
           const voiceModeBtn = document.getElementById("voice-mode-btn");
           if (voiceModeBtn) {
-            voiceModeBtn.style.display = "flex";
             const curMode = (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") ? "默认" : "手动";
             voiceModeBtn.textContent = curMode;
             voiceModeBtn.title = curMode;
@@ -37296,6 +37327,7 @@ ${recentHistoryText}
 			`;
               }
               const isGroupThinkingActive = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : false;
+              const isGroupMusicAllowed = ((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false);
               // updated by lrq 251027
               systemPrompt = `
 # 【第一大类】你可以使用的操作指令
@@ -37320,8 +37352,7 @@ ${isGroupThinkingActive ? `    "thinking": "1. 意图分析... 2. 心理推演..
 ## 你可以使用的操作指令列表:
 ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
 - 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
-- 播放音乐或音效: 当察觉到当前情景适合播放特定音乐或音效时，在回复文本中插入 [音乐: 歌曲名或搜索词] 标签，系统会在后台自动检索播放。
-- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
+${isGroupMusicAllowed ? `- 播放音乐或音效: 当察觉到当前情景适合播放特定音乐或音效时，在回复文本中插入 [音乐: 歌曲名或搜索词] 标签，系统会在后台自动检索播放。\n` : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
 ${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}- 发送系统消息: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
 
@@ -37785,8 +37816,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			- **发送文本**: \`{"type": "text", "content": "你好呀！"}\`
 			- **发送语音**: \`{"type": "voice_message", "content": "语音的文字内容..."}\`
 			- **发送表情**: \`{"type": "sticker", "sticker_name": "表情的名字"}\`(表情名必须在表情列表中，禁止杜撰)
-			- **播放音乐或音效**: 当察觉到当前情景适合播放特定音乐或音效时，在回复文本中插入 [音乐: 歌曲名或搜索词] 标签，系统会在后台自动检索播放。
-			- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
+			${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? `- **播放音乐或音效**: 当察觉到当前情景适合播放特定音乐或音效时，在回复文本中插入 [音乐: 歌曲名或搜索词] 标签，系统会在后台自动检索播放。\n` : ""}- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
 			${
         chat.loadModuleImages && chat.activeModuleId
           ? `- **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n`
@@ -67727,12 +67757,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
 
           replies.forEach((item, index) => {
+            if (!item && item !== 0) return;
             const div = document.createElement("div");
             div.className = "quick-reply-item";
 
             // 兼容处理
-            let type = typeof item === "string" ? "text" : item.type;
-            let content = typeof item === "string" ? item : item.content;
+            let type = typeof item === "string" ? "text" : (item.type || "text");
+            let rawContent = typeof item === "string" ? item : (item.content !== undefined && item.content !== null ? item.content : "");
+            let safeContent = typeof escapeHtml === "function" ? escapeHtml(rawContent) : String(rawContent).replace(/[&<>"']/g, "");
 
             // 标签生成
             let typeBadge = "";
@@ -67753,7 +67785,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
       <!-- 左侧：点击发送区域 -->
       <div class="quick-reply-content" style="flex:1; display:flex; align-items:center; overflow:hidden; cursor:pointer;" title="点击发送">
         ${typeBadge}
-        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${content}</span>
+        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeContent}</span>
       </div>
       
       <!-- 右侧：操作按钮区域 -->
@@ -67770,23 +67802,30 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
     `;
 
             // 绑定事件：发送
-            div
-              .querySelector(".quick-reply-content")
-              .addEventListener("click", () => {
+            const contentEl = div.querySelector(".quick-reply-content");
+            if (contentEl) {
+              contentEl.addEventListener("click", () => {
                 sendQuickReply(item);
               });
+            }
 
             // 绑定事件：编辑
-            div.querySelector(".btn-edit").addEventListener("click", (e) => {
-              e.stopPropagation(); // 防止触发发送
-              editQuickReply(index);
-            });
+            const editBtn = div.querySelector(".btn-edit");
+            if (editBtn) {
+              editBtn.addEventListener("click", (e) => {
+                e.stopPropagation(); // 防止触发发送
+                editQuickReply(index);
+              });
+            }
 
             // 绑定事件：删除
-            div.querySelector(".btn-delete").addEventListener("click", (e) => {
-              e.stopPropagation(); // 防止触发发送
-              deleteQuickReply(index);
-            });
+            const deleteBtn = div.querySelector(".btn-delete");
+            if (deleteBtn) {
+              deleteBtn.addEventListener("click", (e) => {
+                e.stopPropagation(); // 防止触发发送
+                deleteQuickReply(index);
+              });
+            }
 
             listEl.appendChild(div);
           });
@@ -73158,6 +73197,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               );
               const cognitionSwitch = document.getElementById("real-time-cognition-switch");
               state.apiConfig.realTimeCognitionEnabled = cognitionSwitch ? cognitionSwitch.checked : true;
+              const globalMusicSwitch = document.getElementById("global-ai-music-switch");
+              state.apiConfig.globalAiMusicEnabled = globalMusicSwitch ? globalMusicSwitch.checked : true;
+              localStorage.setItem("global_ai_music_enabled", state.apiConfig.globalAiMusicEnabled ? "true" : "false");
 
               const subProxyEl = document.getElementById("sub-proxy-url");
               if (subProxyEl) state.apiConfig.subProxyUrl = subProxyEl.value.trim();
@@ -74748,9 +74790,15 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 const invKeeperBtn = document.getElementById("investigator-mode-keeper-btn");
                 const invUnlockBtn = document.getElementById("investigator-unlock-btn");
                 const aiPersonaTextarea = document.getElementById("ai-persona");
+                const ageGroup = document.getElementById("ai-age-input") ? document.getElementById("ai-age-input").closest("div[style*='display: flex']") : null;
+                const cocGroup = document.getElementById("ai-coc-panel-container") || document.querySelector(".ai-coc-panel-section");
+                const speechStyleGroup = document.getElementById("chat-speech-style-group");
+                const speechStyleInput = document.getElementById("chat-speech-style-input");
+                const speechStyleModeBtn = document.getElementById("chat-speech-style-mode-btn");
 
                 if (chat.settings.isInvestigatorLocked) {
                   if (investigatorControlBar) investigatorControlBar.style.display = "flex";
+                  if (speechStyleGroup) speechStyleGroup.style.display = "block";
                   if (!chat.settings.hiddenPersona && chat.settings.aiPersona) {
                     chat.settings.hiddenPersona = chat.settings.aiPersona;
                   }
@@ -74762,13 +74810,31 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                       invKeeperBtn.classList.toggle("active", mode === "keeper");
                     }
                     if (mode === "investigator") {
-                      aiPersonaTextarea.value = "【调查员模式·保密档案】\n公开姓名：" + (chat.name || "调查员") + "\n已启用模组防剧透协议，对方人设与幕后真相处于保密锁定状态。\n如需查看完整人设与幕后真相，请切换至守密人模式。";
+                      aiPersonaTextarea.value = "保密档案\n公开姓名：" + (chat.name || "调查员") + "\n已启用模组防剧透协议，对方人设与幕后真相处于保密锁定状态。\n如需查看完整人设与幕后真相，请切换至守秘人模式。";
                       aiPersonaTextarea.setAttribute("readonly", "true");
                       aiPersonaTextarea.style.opacity = "0.7";
+                      if (ageGroup) ageGroup.style.display = "none";
+                      if (cocGroup) cocGroup.style.display = "none";
                     } else {
                       aiPersonaTextarea.value = chat.settings.hiddenPersona || chat.settings.aiPersona || "";
                       aiPersonaTextarea.removeAttribute("readonly");
                       aiPersonaTextarea.style.opacity = "1";
+                      if (ageGroup) ageGroup.style.display = "flex";
+                      if (cocGroup) cocGroup.style.display = "block";
+                    }
+
+                    if (speechStyleInput && speechStyleModeBtn) {
+                      const isSpeechKeeper = chat.settings.speechStyleViewMode === "keeper";
+                      speechStyleModeBtn.textContent = isSpeechKeeper ? "守秘" : "玩家";
+                      if (isSpeechKeeper) {
+                        speechStyleInput.value = chat.settings.hiddenSpeechStyle || chat.settings.speechStyle || "";
+                        speechStyleInput.removeAttribute("readonly");
+                        speechStyleInput.style.opacity = "1";
+                      } else {
+                        speechStyleInput.value = "保密";
+                        speechStyleInput.setAttribute("readonly", "true");
+                        speechStyleInput.style.opacity = "0.7";
+                      }
                     }
                   };
 
@@ -74784,11 +74850,28 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   if (invKeeperBtn) {
                     invKeeperBtn.onclick = async () => {
                       if (chat.settings.activePersonaViewMode === "keeper") return;
-                      const c1 = await showCustomConfirm("守密人模式确认", "切换至守密人模式将展示该角色的全部幕后真相与剧透设定，确定继续吗？");
+                      const c1 = await showCustomConfirm("守秘人模式确认", "切换至守秘人模式将展示该角色的全部幕后真相与剧透设定，确定继续吗？");
                       if (!c1) return;
-                      const c2 = await showCustomConfirm("再次确认", "请确认你当前是本跑团的守秘人(KP/DM)，玩家查看可能会严重破坏游戏体验，确定要查看完整档案吗？");
+                      const c2 = await showCustomConfirm("再次确认", "请确认你当前是本跑团的守秘人，玩家查看可能会严重破坏游戏体验，确定要查看完整档案吗？");
                       if (!c2) return;
                       applyInvestigatorViewMode("keeper");
+                      await db.chats.put(chat);
+                    };
+                  }
+
+                  if (speechStyleModeBtn) {
+                    speechStyleModeBtn.onclick = async () => {
+                      if (chat.settings.speechStyleViewMode === "keeper") {
+                        chat.settings.speechStyleViewMode = "player";
+                        applyInvestigatorViewMode(chat.settings.activePersonaViewMode || "investigator");
+                        await db.chats.put(chat);
+                        return;
+                      }
+                      const c = await showCustomConfirm("说话风格模式", "确定切换至守秘人模式查看该角色的说话风格与语气吗？");
+                      if (!c) return;
+                      chat.settings.speechStyleViewMode = "keeper";
+                      applyInvestigatorViewMode(chat.settings.activePersonaViewMode || "investigator");
+                      await db.chats.put(chat);
                     };
                   }
 
@@ -74798,13 +74881,28 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                       if (!confirmed) return;
                       chat.settings.isInvestigatorLocked = false;
                       chat.settings.aiPersona = chat.settings.hiddenPersona || chat.settings.aiPersona || "";
+                      if (chat.settings.hiddenAge !== undefined) chat.settings.age = chat.settings.hiddenAge;
+                      if (chat.settings.hiddenBirthday !== undefined) chat.settings.birthday = chat.settings.hiddenBirthday;
+                      if (chat.settings.hiddenGender !== undefined) chat.settings.gender = chat.settings.hiddenGender;
+                      if (chat.settings.hiddenSpeechStyle !== undefined) chat.settings.speechStyle = chat.settings.hiddenSpeechStyle;
                       delete chat.settings.hiddenPersona;
+                      delete chat.settings.hiddenAge;
+                      delete chat.settings.hiddenBirthday;
+                      delete chat.settings.hiddenGender;
+                      delete chat.settings.hiddenSpeechStyle;
                       delete chat.settings.activePersonaViewMode;
+                      delete chat.settings.speechStyleViewMode;
                       await db.chats.put(chat);
                       if (investigatorControlBar) investigatorControlBar.style.display = "none";
+                      if (speechStyleGroup) speechStyleGroup.style.display = "none";
                       aiPersonaTextarea.value = chat.settings.aiPersona;
                       aiPersonaTextarea.removeAttribute("readonly");
                       aiPersonaTextarea.style.opacity = "1";
+                      if (ageGroup) ageGroup.style.display = "flex";
+                      if (cocGroup) cocGroup.style.display = "block";
+                      setAgeSelectValue("ai-age-input", chat.settings.age);
+                      setBirthdaySelects("ai", chat.settings.birthday);
+                      setGenderInputValue("ai", chat.settings.gender);
                       if (typeof showCustomAlert === "function") {
                         await showCustomAlert("已解锁", "该角色已恢复为普通好友。");
                       }
@@ -74812,6 +74910,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   }
                 } else {
                   if (investigatorControlBar) investigatorControlBar.style.display = "none";
+                  if (speechStyleGroup) speechStyleGroup.style.display = "none";
+                  if (ageGroup) ageGroup.style.display = "flex";
+                  if (cocGroup) cocGroup.style.display = "block";
                   aiPersonaTextarea.removeAttribute("readonly");
                   aiPersonaTextarea.style.opacity = "1";
                   aiPersonaTextarea.value = chat.settings.aiPersona || "";
@@ -74834,6 +74935,15 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   chat.settings.aiAvatar || defaultAvatar;
                 document.getElementById("minimax-voice-id-input").value =
                   chat.settings.minimaxVoiceId || "";
+                const voiceModeBtn = document.getElementById("voice-mode-btn");
+                if (voiceModeBtn) {
+                  const curVoiceMode = (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") ? "默认" : "手动";
+                  voiceModeBtn.textContent = curVoiceMode;
+                }
+                const chatMusicSwitch = document.getElementById("chat-ai-music-switch");
+                if (chatMusicSwitch) {
+                  chatMusicSwitch.checked = chat.settings?.aiMusicEnabled !== false;
+                }
                 // 加载语言增强和语速设置
                 const langBoostSelect = document.getElementById(
                   "minimax-language-boost-select",
@@ -76008,6 +76118,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 chat.settings.minimaxVoiceId = document
                   .getElementById("minimax-voice-id-input")
                   .value.trim();
+                const chatMusicSwitch = document.getElementById("chat-ai-music-switch");
+                if (chatMusicSwitch) {
+                  chat.settings.aiMusicEnabled = chatMusicSwitch.checked;
+                }
                 const langBoost = document.getElementById(
                   "minimax-language-boost-select",
                 ).value;
