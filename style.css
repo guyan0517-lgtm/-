@@ -33815,10 +33815,6 @@ select,
   font-weight: 600;
 }
 
-n {
-  display: none !important;
-}
-
 .message-bubble.playing-quote-audio {
   box-shadow: none !important;
   border-color: transparent !important;
@@ -33834,4 +33830,13 @@ n {
   opacity: 1 !important;
   color: var(--text-primary) !important;
 }
+
+.desktop-app-icon[onclick*="chat-list-screen"] .chat-unread-desktop-badge,
+.desktop-app-icon[onclick*="chat-list-screen"] .unread-indicator,
+.desktop-app-icon[onclick*="chat-list-screen"] .unread-count,
+.desktop-app-icon[onclick*="chat-list-screen"] [class*="unread"],
+.desktop-app-icon[onclick*="chat-list-screen"] [class*="badge"] {
+  display: none !important;
+}
+
 

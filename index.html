@@ -22229,36 +22229,47 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (switchMode === 'auto' || switchMode === 'semi') {
               const scopeIds = chat.moduleAiScopeChapterIds || [];
               const scopeChaps = allChaps.filter(c => scopeIds.includes(c.id) || scopeIds.includes(String(c.id)));
-              const activeScopeList = (scopeChaps.length > 0 ? scopeChaps : allChaps)
-                .map((sc, idx) => `${idx + 1}. ${sc.title} (ID: ${sc.id})`)
-                .join('\n');
+              const targetScope = scopeChaps.length > 0 ? scopeChaps : allChaps;
+              const selectedChapterIds = (chat.selectedModuleChapterIds || []).map(String);
+              const activeScopeList = targetScope.map((sc, idx) => {
+                const isCurrentlyActive = selectedChapterIds.includes(String(sc.id));
+                const statusTag = isCurrentlyActive ? '【当前状态: 已开启加载】' : '【当前状态: 未开启】';
+                const titleLower = `${sc.title || ''} ${sc.category || ''}`;
+                let typeTag = '【阶段剧情/场景探索资料】';
+                if (/真相|背景|大纲|事前|公开|机制|秘密|守秘人|KP|总览|设定/i.test(titleLower)) {
+                  typeTag = '【长效全局核心资料 - 带团基石，全程严禁关闭】';
+                } else if (/NPC|人设|角色|猫|世界书/i.test(titleLower)) {
+                  typeTag = '【角色人设资料 - 登场时开启且在场期间不可关闭】';
+                }
+                return `${idx + 1}. ID: ${sc.id} | 标题: ${sc.title} | 分类: ${sc.category || '正文'} | 属性: ${typeTag} | ${statusTag}`;
+              }).join('\n');
 
               if (switchMode === 'auto') {
                 block += `## 模组章节自动切换与信息按需管理规则\n` +
                   `当前处于自动模式。你拥有在AI管辖章节范围内根据剧情进展自动改勾选的权限。\n` +
-                  `AI管辖章节列表：\n${activeScopeList}\n\n` +
-                  `信息按需判断与章节开关核心准则：\n` +
-                  `1. 核心判断原则：你必须根据目前带团需要哪些信息、不需要哪些信息来精细判断打开哪个章节、关掉哪个章节。绝对禁止在带完一个章节后把前面所有章节一刀切全部关掉！\n` +
-                  `2. 长效背景信息永久保持开启：事前公开、模组已知信息、幕后真相与机制、KP信息、总大纲等属于全局核心资料，带团全程必须时刻参考，严禁擅自关闭。若这些关键章节被关闭，你将无法掌握真相与机制！\n` +
-                  `3. 登场角色与猫人设按需即时开启：当剧情中有新NPC或猫登场互动时，必须主动开启该NPC的人设章节，以掌握其性格台词与扮演风格；只要该角色在后续剧情中仍可能登场或存在互动，其人设章节必须持续保持开启，严禁关闭！\n` +
-                  `4. 仅关闭确实不再需要的旧事件章节：只有当某个微观小事件或旧场景已彻底探索完毕、且后续剧情完全不再需要其中的线索时，才将该特定旧章节放入关闭列表。若不确定是否还需要，宁可保留开启，也坚决不要关闭！\n` +
+                  `AI管辖章节列表与当前开启状态：\n${activeScopeList}\n\n` +
+                  `信息按需判断与章节开关核心铁律：\n` +
+                  `1. 绝对禁止一刀切全关：严禁在带完一个章节后把前面所有章节一刀切全部关掉！带团如同查阅模组书，绝不是每到一个新章节就将所有旧资料全数关闭！\n` +
+                  `2. 长效背景与真相信息永久保持开启：事前公开、模组已知信息、幕后真相与机制、KP总纲等属于全局核心资料，带团全程必须时刻参考以掌握幕后真相与判定依据，严禁关闭！绝不可将其放入 closeChapterIds！若关闭你将失去上帝视角与真相依据！\n` +
+                  `3. 登场角色与猫人设按需即时开启：当剧情中有新NPC或猫登场互动时，必须主动开启该NPC的人设章节，以掌握其性格台词与扮演风格；只要该角色在后续剧情中仍在场、有戏份或可能再度出场，其人设章节必须持续保持开启，严禁在进入新章节时顺手关闭！\n` +
+                  `4. 仅关闭确实不再需要的旧事件章节：只有当某个微观小事件或旧场景已彻底探索完毕、且后续剧情完全不再需要其中的任何线索与信息时，才将该特定旧章节放入关闭列表。若不确定是否还需要，宁可保留开启，closeChapterIds 必须传空数组 []！\n` +
                   `5. 必须显式输出管理指令代码：在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
-                  `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID1", "要开启的章节ID2"], "closeChapterIds": ["确实已无需参考、要关闭的旧章节ID"], "summary": "开启XX，关闭XX"}\`\n` +
-                  `   若无需关闭任何章节，closeChapterIds 必须传空数组 []，严禁把不需要关闭的背景、真相、人设一起关掉。\n` +
+                  `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID1"], "closeChapterIds": [], "summary": "开启XX"}\`\n` +
+                  `   通常换章只需在 openChapterIds 中填入接下来需要参考的新章节；closeChapterIds 绝大多数时候都应该是空数组 []，严禁把不需要关闭的背景、真相、人设一起关掉。\n` +
                   `6. 换章触发点：当且仅当当前章节剧情已真正带到了末尾，并且玩家明确表示同意推进时，你在回复中输出上述指令代码。若玩家还想在当前场景自由互动，坚决不切换章节，继续陪玩家互动。\n` +
                   `7. 用户手动勾选的其他非管辖章节为固定参考资料，你绝不可关闭或覆盖它们。\n\n`;
               } else if (switchMode === 'semi') {
                 block += `## 模组章节半自动切换与信息按需管理规则\n` +
                   `当前处于半自动模式。你拥有判断剧情完结并提请换章的权限。\n` +
-                  `AI管辖章节列表：\n${activeScopeList}\n\n` +
-                  `信息按需判断与章节开关核心准则：\n` +
-                  `1. 核心判断原则：你必须根据目前带团需要哪些信息、不需要哪些信息来精细提请开启哪个章节、关闭哪个章节。绝对禁止在带完一个章节后把前面所有章节一刀切全部关掉！\n` +
-                  `2. 长效背景信息永久保持开启：事前公开、模组已知信息、幕后真相与机制、KP信息、总大纲等属于全局核心资料，带团全程必须时刻参考，严禁擅自提请关闭。若这些关键章节被关闭，你将无法掌握真相与机制！\n` +
-                  `3. 登场角色与猫人设按需即时开启：当剧情中有新NPC或猫登场互动时，必须主动提请开启该NPC的人设章节，以掌握其性格台词与扮演风格；只要该角色在后续剧情中仍可能登场或存在互动，其人设章节必须持续保持开启，严禁关闭！\n` +
-                  `4. 仅关闭确实不再需要的旧事件章节：只有当某个微观小事件或旧场景已彻底探索完毕、且后续剧情完全不再需要其中的线索时，才将该特定旧章节放入关闭列表。若不确定是否还需要，宁可保留开启，也坚决不要关闭！\n` +
+                  `AI管辖章节列表与当前开启状态：\n${activeScopeList}\n\n` +
+                  `信息按需判断与章节开关核心铁律：\n` +
+                  `1. 绝对禁止一刀切全关：严禁在带完一个章节后把前面所有章节一刀切全部关掉！带团如同查阅模组书，绝不是每到一个新章节就将所有旧资料全数关闭！\n` +
+                  `2. 长效背景与真相信息永久保持开启：事前公开、模组已知信息、幕后真相与机制、KP总纲等属于全局核心资料，带团全程必须时刻参考以掌握幕后真相与判定依据，严禁提请关闭！绝不可将其放入 closeChapterIds！若关闭你将失去上帝视角与真相依据！\n` +
+                  `3. 登场角色与猫人设按需即时开启：当剧情中有新NPC或猫登场互动时，必须主动提请开启该NPC的人设章节，以掌握其性格台词与扮演风格；只要该角色在后续剧情中仍在场、有戏份或可能再度出场，其人设章节必须持续保持开启，严禁在进入新章节时顺手关闭！\n` +
+                  `4. 仅关闭确实不再需要的旧事件章节：只有当某个微观小事件或旧场景已彻底探索完毕、且后续剧情完全不再需要其中的任何线索与信息时，才将该特定旧章节放入关闭列表。若不确定是否还需要，宁可保留开启，closeChapterIds 必须传空数组 []！\n` +
                   `5. 必须显式输出提请指令代码：在回复正文最后完整输出以下JSON指令代码：\n` +
-                  `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["确实已无需参考、建议关闭的旧章节ID"], "summary": "已到达XX，建议开启XX"}\`\n` +
-                  `   若无需关闭任何章节，closeChapterIds 必须传空数组 []，严禁把不需要关闭的背景、真相、人设一起关掉。\n` +
+                  `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": [], "summary": "已到达XX，建议开启XX"}\`\n` +
+                  `   通常换章只需在 openChapterIds 中填入接下来建议参考的新章节；closeChapterIds 绝大多数时候都应该是空数组 []，严禁把不需要关闭的背景、真相、人设一起关掉。\n` +
                   `6. 系统会在聊天中独立渲染带有【继续】按钮的确认卡片气泡。当玩家点击【继续】按钮或在对话中回复继续、进入下一章、推进等意图时，系统将改勾选并加载对应章节。若玩家拒绝或忽略，切换挂起，不加载下一章，玩家可继续在当前场景自由互动。\n` +
                   `7. 用户手动勾选的其他非管辖章节为固定参考资料，不可关闭或覆盖。\n\n`;
               }
@@ -26947,41 +26958,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           state.charStickers = charStickers || [];
           state.worldBooks = worldBooks || [];
           currentDatingScenes = datingScenes || [];
-          // 加载播放列表并注入“隐形”保活音频
-          window.state.musicState.playlist = musicLib?.playlist || [];
-
+          // 加载播放列表并清理保活与保护音轨
           const keepAliveUrl = "https://files.catbox.moe/7jn7bp.mp3";
-
-          // 检查列表中是否已经有这个音频了
-          const existingKeepAliveIndex =
-            window.state.musicState.playlist.findIndex(
-              (t) => t.src === keepAliveUrl,
-            );
-
-          // 如果已经存在，先删掉旧的，确保它永远在第一位且信息最新
-          if (existingKeepAliveIndex > -1) {
-            window.state.musicState.playlist.splice(existingKeepAliveIndex, 1);
+          window.state.musicState.playlist = (musicLib?.playlist || []).filter(
+            (t) => t && !t.isKeepAlive && t.src !== keepAliveUrl && !String(t.name || "").includes("保活") && !String(t.name || "").includes("保护")
+          );
+          if (typeof db !== "undefined" && db.musicLibrary) {
+            try {
+              const cleanPerm = window.state.musicState.playlist.filter((t) => !t.isTemporary);
+              db.musicLibrary.put({ id: "main", playlist: cleanPerm }).catch(() => {});
+            } catch (e) {}
           }
-
-          // 创建保活专用对象
-          const keepAliveTrack = {
-            name: "【后台保活模式】(静音)",
-            artist: "点击播放以保持后台运行",
-            src: keepAliveUrl,
-            // 使用 API设置 的图标作为封面
-            cover:
-              "https://i.postimg.cc/y8YfDNNr/D9FD94FC0A3523D02D9EE3A7B0F57396.png",
-            isLocal: false,
-            lrcContent:
-              "[00:00.00]⚠️ 后台保活运行中...\n[00:02.00]此音频无声\n[00:05.00]用于防止API请求中断\n[99:99.99]End",
-            isTemporary: false,
-            addedTimestamp: Date.now(),
-            // ★★★ 核心标记：这是一个保活音轨 ★★★
-            isKeepAlive: true,
-          };
-
-          // 强制插到播放列表的第 0 位
-          window.state.musicState.playlist.unshift(keepAliveTrack);
 
           state.personaPresets = personaPresets || [];
           state.apiPresets = apiPresets || [];
@@ -27061,9 +27048,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.getEffectiveApiConfig = getEffectiveApiConfig;
 
         async function saveGlobalPlaylist() {
-          // 1. 在保存前，先从当前播放列表中过滤掉所有被标记为 isTemporary 的歌曲
+          // 1. 在保存前，先从当前播放列表中过滤掉所有临时歌曲与保活保护歌曲
           const permanentPlaylist = state.musicState.playlist.filter(
-            (track) => !track.isTemporary,
+            (track) => track && !track.isTemporary && !track.isKeepAlive && track.src !== "https://files.catbox.moe/7jn7bp.mp3" && !String(track.name || "").includes("保活") && !String(track.name || "").includes("保护"),
           );
 
           // 2. 只将这个“永久播放列表”保存到数据库中
@@ -29000,12 +28987,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             });
           }
 
-          // 1. 桌面QQ图标红点已彻底去除，不影响内部聊天与联系人未读提示
-          const desktopIconBg = document.querySelector('.desktop-app-icon[onclick*="chat-list-screen"] .icon-bg-desktop');
-          if (desktopIconBg) {
-            const badge = desktopIconBg.querySelector('.chat-unread-desktop-badge');
-            if (badge) badge.remove();
-          }
+          // 1. 桌面QQ图标红点彻底去除，不影响内部聊天与联系人未读提示
+          const qqDesktopApps = document.querySelectorAll('.desktop-app-icon[onclick*="chat-list-screen"]');
+          qqDesktopApps.forEach((app) => {
+            app.querySelectorAll('.chat-unread-desktop-badge, .unread-indicator, .unread-count, [class*="unread"], [class*="badge"]').forEach((b) => b.remove());
+          });
 
           // 2. 聊天列表底部导航栏消息红点
           const messagesNavSpan = document.querySelector('#chat-list-bottom-nav .nav-item[data-view="messages-view"] span');
@@ -31778,8 +31764,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             // 如果包含 HTML 标签（如 blockquote, b, br, div, n, a 等），直接渲染为 HTML；若纯文本换行则转为 <br>
+            // 注意：排除系统动态插入的插图槽位、地点标签、配乐条等系统节点，保证包含插图时的文本换行正常生效
             if (/<[a-zA-Z][\s\S]*>/i.test(formattedText)) {
-              if (!/<(?:br|p|div|table|blockquote|section|ul|ol|li)\b/i.test(formattedText)) {
+              const textWithoutSystemTags = formattedText
+                .replace(/<div\s+class="chat-module-img-slot"[^>]*><\/div>/gi, "")
+                .replace(/<span\s+class="chat-location-clickable"[^>]*>[\s\S]*?<\/span>/gi, "")
+                .replace(/<div\s+class="chat-music-inline-track"[^>]*>[\s\S]*?<\/div>/gi, "");
+
+              if (!/<(?:br|p|div|table|blockquote|section|ul|ol|li)\b/i.test(textWithoutSystemTags)) {
                 formattedText = formattedText.replace(/\n/g, "<br>");
               }
               contentHtml = formattedText + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
@@ -32083,9 +32075,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let currentSelected = (chat.selectedModuleChapterIds || []).slice();
           const scopeIds = chat.moduleAiScopeChapterIds || [];
 
-          // 关闭指定章节（仅在管辖范围或列表中移除）
+          // 关闭指定章节（仅在管辖范围或列表中移除，且对真相、背景、大纲、NPC人设实施安全保护）
           if (closeChapterIds && closeChapterIds.length > 0) {
-            currentSelected = currentSelected.filter(id => !closeChapterIds.includes(id) && !closeChapterIds.includes(String(id)));
+            let protectedIds = new Set();
+            try {
+              if (chat.activeModuleId && dbInstance && dbInstance.moduleChapters) {
+                const allModuleChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
+                allModuleChaps.forEach(c => {
+                  const t = `${c.title || ''} ${c.category || ''}`;
+                  if (/真相|背景|大纲|事前|公开|机制|秘密|守秘人|KP|总览|设定|人设|NPC|猫/i.test(t)) {
+                    protectedIds.add(c.id);
+                    protectedIds.add(String(c.id));
+                  }
+                });
+              }
+            } catch (_) {}
+
+            currentSelected = currentSelected.filter(id => {
+              if (protectedIds.has(id) || protectedIds.has(String(id))) {
+                return true;
+              }
+              return !closeChapterIds.includes(id) && !closeChapterIds.includes(String(id));
+            });
           }
 
           // 开启指定章节
@@ -33715,22 +33726,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const onToggleChange = async () => {
               chat.settings.useModuleMap = useModToggle.checked;
               
-              // 切换地图源时同步切换对应保存的小地图
+              // 切换地图源时同步切换对应保存的小地图（独立于当前群聊与模组，不读取/污染模组对象）
               if (chat.settings.useModuleMap && chat.activeModuleId) {
                 let modMap = chat.settings.moduleMiniMaps?.[chat.activeModuleId] || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)] || (!isNaN(Number(chat.activeModuleId)) ? chat.settings.moduleMiniMaps?.[Number(chat.activeModuleId)] : null);
-                if (!modMap && dbInstance && dbInstance.modules) {
-                  try {
-                    let mod = await dbInstance.modules.get(chat.activeModuleId);
-                    if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
-                    if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
-                    if (mod && mod.miniMapSvg) {
-                      modMap = { svg: mod.miniMapSvg, style: mod.miniMapStyle || "奶油风" };
-                      if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
-                      chat.settings.moduleMiniMaps[chat.activeModuleId] = modMap;
-                      chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMap;
-                    }
-                  } catch (e) {}
-                }
                 if (modMap?.svg) {
                   chat.settings.miniMapSvg = modMap.svg;
                   chat.settings.miniMapStyle = modMap.style || "奶油风";
@@ -34980,11 +34978,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               Object.keys(state.chats).forEach(cId => {
                 if (cId === state.activeChatId) return;
                 const c = state.chats[cId];
-                if (!c || !c.settings?.miniMapSvg) return;
-                if (currentModId && c.activeModuleId === currentModId) {
-                  otherChatsWithMap.push({ id: cId, chat: c });
+                if (!c) return;
+                if (currentModId) {
+                  const cModMap = c.settings?.moduleMiniMaps?.[currentModId]
+                    || c.settings?.moduleMiniMaps?.[String(currentModId)]
+                    || (!isNaN(Number(currentModId)) ? c.settings?.moduleMiniMaps?.[Number(currentModId)] : null);
+                  const cSvg = cModMap?.svg || (String(c.activeModuleId) === String(currentModId) ? c.settings?.miniMapSvg : null);
+                  if (cSvg) {
+                    otherChatsWithMap.push({
+                      id: cId,
+                      chat: c,
+                      svg: cSvg,
+                      style: cModMap?.style || c.settings?.miniMapStyle || "默认"
+                    });
+                  }
                 } else if (!currentModId && c.settings?.miniMapSvg) {
-                  otherChatsWithMap.push({ id: cId, chat: c });
+                  otherChatsWithMap.push({
+                    id: cId,
+                    chat: c,
+                    svg: c.settings.miniMapSvg,
+                    style: c.settings?.miniMapStyle || "默认"
+                  });
                 }
               });
 
@@ -35012,7 +35026,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     </div>
                     <div style="display: flex; flex-direction: column; min-width: 0;">
                       <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.chat.name || "群聊"}</span>
-                      <span style="font-size: 10px; color: var(--text-secondary);">风格: ${item.chat.settings?.miniMapStyle || "默认"}</span>
+                      <span style="font-size: 10px; color: var(--text-secondary);">风格: ${item.style || item.chat.settings?.miniMapStyle || "默认"}</span>
                     </div>
                   </div>
                   <button type="button" class="mod-capsule-btn primary import-action-btn" style="flex-shrink: 0; font-size: 11px; padding: 3px 10px;">导入</button>
@@ -35021,8 +35035,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const importActionBtn = row.querySelector(".import-action-btn");
                 if (importActionBtn) {
                   importActionBtn.onclick = async () => {
-                    const srcSvg = item.chat.settings.miniMapSvg;
-                    const srcStyle = item.chat.settings.miniMapStyle || "奶油风";
+                    const srcSvg = item.svg || item.chat.settings?.miniMapSvg;
+                    const srcStyle = item.style || item.chat.settings?.miniMapStyle || "奶油风";
                     if (!currentChat.settings) currentChat.settings = {};
                     if (isModMode) {
                       if (!currentChat.settings.moduleMiniMaps) currentChat.settings.moduleMiniMaps = {};
@@ -35034,41 +35048,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       currentChat.settings.moduleMiniMaps[String(currentChat.activeModuleId)] = modMapObj;
                       if (!isNaN(Number(currentChat.activeModuleId))) {
                         currentChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
-                      }
-                      const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-                      if (dbInstance && dbInstance.modules) {
-                        try {
-                          let mod = await dbInstance.modules.get(currentChat.activeModuleId);
-                          if (!mod && !isNaN(Number(currentChat.activeModuleId))) mod = await dbInstance.modules.get(Number(currentChat.activeModuleId));
-                          if (!mod) mod = await dbInstance.modules.get(String(currentChat.activeModuleId));
-                          if (mod) {
-                            mod.miniMapSvg = srcSvg;
-                            mod.miniMapStyle = srcStyle;
-                            await dbInstance.modules.put(mod);
-                          }
-                        } catch (e) {}
-                      }
-                      if (typeof state !== "undefined" && state.chats) {
-                        Object.values(state.chats).forEach((otherChat) => {
-                          if (
-                            otherChat &&
-                            otherChat.id !== currentChat.id &&
-                            String(otherChat.activeModuleId) === String(currentChat.activeModuleId)
-                          ) {
-                            if (!otherChat.settings) otherChat.settings = {};
-                            if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
-                            otherChat.settings.moduleMiniMaps[currentChat.activeModuleId] = modMapObj;
-                            otherChat.settings.moduleMiniMaps[String(currentChat.activeModuleId)] = modMapObj;
-                            if (!isNaN(Number(currentChat.activeModuleId))) {
-                              otherChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
-                            }
-                            otherChat.settings.miniMapSvg = srcSvg;
-                            otherChat.settings.miniMapStyle = srcStyle;
-                            if (dbInstance && dbInstance.chats) {
-                              dbInstance.chats.put(otherChat).catch(() => {});
-                            }
-                          }
-                        });
                       }
                     } else {
                       currentChat.settings.contextMiniMapSvg = srcSvg;
@@ -35173,41 +35152,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       currentChat.settings.moduleMiniMaps[String(currentChat.activeModuleId)] = modMapObj;
                       if (!isNaN(Number(currentChat.activeModuleId))) {
                         currentChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
-                      }
-                      const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-                      if (dbInstance && dbInstance.modules) {
-                        try {
-                          let mod = await dbInstance.modules.get(currentChat.activeModuleId);
-                          if (!mod && !isNaN(Number(currentChat.activeModuleId))) mod = await dbInstance.modules.get(Number(currentChat.activeModuleId));
-                          if (!mod) mod = await dbInstance.modules.get(String(currentChat.activeModuleId));
-                          if (mod) {
-                            mod.miniMapSvg = mapSvg;
-                            mod.miniMapStyle = mapStyle;
-                            await dbInstance.modules.put(mod);
-                          }
-                        } catch (e) {}
-                      }
-                      if (typeof state !== "undefined" && state.chats) {
-                        Object.values(state.chats).forEach((otherChat) => {
-                          if (
-                            otherChat &&
-                            otherChat.id !== currentChat.id &&
-                            String(otherChat.activeModuleId) === String(currentChat.activeModuleId)
-                          ) {
-                            if (!otherChat.settings) otherChat.settings = {};
-                            if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
-                            otherChat.settings.moduleMiniMaps[currentChat.activeModuleId] = modMapObj;
-                            otherChat.settings.moduleMiniMaps[String(currentChat.activeModuleId)] = modMapObj;
-                            if (!isNaN(Number(currentChat.activeModuleId))) {
-                              otherChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
-                            }
-                            otherChat.settings.miniMapSvg = mapSvg;
-                            otherChat.settings.miniMapStyle = mapStyle;
-                            if (dbInstance && dbInstance.chats) {
-                              dbInstance.chats.put(otherChat).catch(() => {});
-                            }
-                          }
-                        });
                       }
                     } else {
                       currentChat.settings.contextMiniMapSvg = mapSvg;
@@ -35811,34 +35755,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat.settings?.useModuleMap === true && !!chat?.activeModuleId);
           let rawSvg = null;
           if (isModMode) {
-            rawSvg = chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg
-              || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg
-              || (!isNaN(Number(chat.activeModuleId)) ? chat.settings?.moduleMiniMaps?.[Number(chat.activeModuleId)]?.svg : null)
-              || chat.settings?.miniMapSvg
-              || null;
-            if (!rawSvg && typeof db !== "undefined" && db.modules && chat.activeModuleId) {
-              try {
-                let mod = await db.modules.get(chat.activeModuleId);
-                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await db.modules.get(Number(chat.activeModuleId));
-                if (!mod) mod = await db.modules.get(String(chat.activeModuleId));
-                if (mod && mod.miniMapSvg) {
-                  rawSvg = mod.miniMapSvg;
-                  if (!chat.settings) chat.settings = {};
-                  if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
-                  const mObj = { svg: mod.miniMapSvg, style: mod.miniMapStyle || "奶油风" };
-                  chat.settings.moduleMiniMaps[chat.activeModuleId] = mObj;
-                  chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = mObj;
-                  chat.settings.miniMapSvg = mod.miniMapSvg;
-                  chat.settings.miniMapStyle = mod.miniMapStyle || "奶油风";
-                }
-              } catch (e) {}
-            }
+            const curModMap = chat.settings?.moduleMiniMaps?.[chat.activeModuleId]
+              || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]
+              || (!isNaN(Number(chat.activeModuleId)) ? chat.settings?.moduleMiniMaps?.[Number(chat.activeModuleId)] : null);
+            rawSvg = curModMap?.svg || null;
             if (rawSvg) {
               chat.settings.miniMapSvg = rawSvg;
-              chat.settings.miniMapStyle = chat.settings.moduleMiniMaps?.[chat.activeModuleId]?.style
-                || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)]?.style
-                || chat.settings.miniMapStyle
-                || "奶油风";
+              chat.settings.miniMapStyle = curModMap?.style || "奶油风";
+            } else {
+              chat.settings.miniMapSvg = null;
             }
           } else {
             rawSvg = chat.settings?.contextMiniMapSvg || null;
@@ -36324,7 +36249,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }).join("\n");
 
           const adaptiveInstruction = (styleName === "自适应" || !styleName)
-            ? `\n【自适应风格深度智能决策指令】：\n你必须根据以上地点清单中的所有地名、层级以及详细简介设定，自主推演最契合当前世界观题材的殿堂级艺术画风，并自主调配最美观、舒适、赏心悦目的色彩体系！\n【底色要求】：不要规定底色必须是某种固定颜色，由你自主决定；但严禁使用黑色或者是深蓝色、深灰色作为底色！整张地图必须采用舒适明亮的浅色调或自然明快色调，严禁任何压抑暗黑风格！\n`
+            ? `\n【自适应风格深度智能决策指令】：\n你必须根据以上地点清单中的所有地名、层级以及详细简介设定，自主推演最契合当前世界观题材的殿堂级艺术画风，并自主调配最美观、舒适、赏心悦目的色彩体系！\n【配色与构图多样性核心准则】：每一次生成均应当展现独具匠心的构图创意、生动丰富的环境视角与和谐独特的色彩搭配，拒绝千篇一律的单一配色与重复建筑布局！\n【底色要求】：不要规定底色必须是某种固定颜色，由你自主决定；但严禁使用黑色或者是深蓝色、深灰色作为底色！整张地图必须采用舒适明亮的浅色调或自然明快色调，严禁任何压抑暗黑风格！\n`
             : "";
 
           const defaultDetail = (typeof MINI_MAP_STYLE_DETAILS !== "undefined") ? MINI_MAP_STYLE_DETAILS[styleName] : null;
@@ -36432,10 +36357,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               }
 
+              const mapTemperature = (styleName === "自适应" || !styleName) ? 0.75 : 0.6;
               let requestBody = isGemini
                 ? {
                     contents: [{ role: "user", parts: [...geminiImageParts, { text: prompt }] }],
-                    generationConfig: { temperature: 0.4 },
+                    generationConfig: { temperature: mapTemperature },
                     systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。特别注意：不要规定底色必须是某种固定颜色，但严禁使用黑色、深蓝色或深灰色作为底色，必须采用舒适明朗的浅色调或自然明快色调。" }] }
                   }
                 : {
@@ -36444,7 +36370,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       { role: "system", content: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。特别注意：不要规定底色必须是某种固定颜色，但严禁使用黑色、深蓝色或深灰色作为底色，必须采用舒适明朗的浅色调或自然明快色调。" },
                       { role: "user", content: openaiImageParts.length > 0 ? [{ type: "text", text: prompt }, ...openaiImageParts] : prompt }
                     ],
-                    temperature: 0.4,
+                    temperature: mapTemperature,
                     stream: false
                   };
 
@@ -36498,40 +36424,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
             if (!isNaN(Number(chat.activeModuleId))) {
               chat.settings.moduleMiniMaps[Number(chat.activeModuleId)] = modMapObj;
-            }
-            if (dbInstance && dbInstance.modules) {
-              try {
-                let mod = await dbInstance.modules.get(chat.activeModuleId);
-                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
-                if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
-                if (mod) {
-                  mod.miniMapSvg = svgCode;
-                  mod.miniMapStyle = styleName;
-                  await dbInstance.modules.put(mod);
-                }
-              } catch (e) {}
-            }
-            if (typeof state !== "undefined" && state.chats) {
-              Object.values(state.chats).forEach((otherChat) => {
-                if (
-                  otherChat &&
-                  otherChat.id !== chat.id &&
-                  String(otherChat.activeModuleId) === String(chat.activeModuleId)
-                ) {
-                  if (!otherChat.settings) otherChat.settings = {};
-                  if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
-                  otherChat.settings.moduleMiniMaps[chat.activeModuleId] = modMapObj;
-                  otherChat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
-                  if (!isNaN(Number(chat.activeModuleId))) {
-                    otherChat.settings.moduleMiniMaps[Number(chat.activeModuleId)] = modMapObj;
-                  }
-                  otherChat.settings.miniMapSvg = svgCode;
-                  otherChat.settings.miniMapStyle = styleName;
-                  if (dbInstance && dbInstance.chats) {
-                    dbInstance.chats.put(otherChat).catch(() => {});
-                  }
-                }
-              });
             }
           } else {
             chat.settings.contextMiniMapSvg = svgCode;
@@ -36675,40 +36567,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
             if (!isNaN(Number(chat.activeModuleId))) {
               chat.settings.moduleMiniMaps[Number(chat.activeModuleId)] = modMapObj;
-            }
-            if (dbInstance && dbInstance.modules) {
-              try {
-                let mod = await dbInstance.modules.get(chat.activeModuleId);
-                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
-                if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
-                if (mod) {
-                  mod.miniMapSvg = newSvgCode;
-                  mod.miniMapStyle = curStyle;
-                  await dbInstance.modules.put(mod);
-                }
-              } catch (e) {}
-            }
-            if (typeof state !== "undefined" && state.chats) {
-              Object.values(state.chats).forEach((otherChat) => {
-                if (
-                  otherChat &&
-                  otherChat.id !== chat.id &&
-                  String(otherChat.activeModuleId) === String(chat.activeModuleId)
-                ) {
-                  if (!otherChat.settings) otherChat.settings = {};
-                  if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
-                  otherChat.settings.moduleMiniMaps[chat.activeModuleId] = modMapObj;
-                  otherChat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
-                  if (!isNaN(Number(chat.activeModuleId))) {
-                    otherChat.settings.moduleMiniMaps[Number(chat.activeModuleId)] = modMapObj;
-                  }
-                  otherChat.settings.miniMapSvg = newSvgCode;
-                  otherChat.settings.miniMapStyle = curStyle;
-                  if (dbInstance && dbInstance.chats) {
-                    dbInstance.chats.put(otherChat).catch(() => {});
-                  }
-                }
-              });
             }
           } else {
             chat.settings.contextMiniMapSvg = newSvgCode;
@@ -44235,6 +44093,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             return;
           }
           state.musicState.playlist.forEach((track, index) => {
+            if (!track || track.isKeepAlive || track.src === "https://files.catbox.moe/7jn7bp.mp3" || String(track.name || "").includes("保活") || String(track.name || "").includes("保护")) return;
             const item = document.createElement("div");
             item.className = "playlist-item";
             if (index === state.musicState.currentIndex)
