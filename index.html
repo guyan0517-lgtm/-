@@ -34682,25 +34682,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           // 未勾选使用模组时：严格仅返回上下文地图，如果上下文没有地图则留空返回空数组
           if (chat?.settings && Array.isArray(chat.settings.contextMapData) && chat.settings.contextMapData.length > 0) {
-            let modNameSet = new Set();
-            if (chat.activeModuleId && dbInstance) {
-              try {
-                if (dbInstance.moduleLocationNav) {
-                  const mLocs = await dbInstance.moduleLocationNav.where("moduleId").equals(chat.activeModuleId).toArray();
-                  mLocs.forEach(m => { if (m.name) modNameSet.add(m.name); });
-                }
-                if (dbInstance.modules) {
-                  let mObj = await dbInstance.modules.get(chat.activeModuleId);
-                  if (mObj && Array.isArray(mObj.mapNodes)) {
-                    mObj.mapNodes.forEach(m => { if (m.name) modNameSet.add(m.name); });
-                  }
-                }
-              } catch (e) {}
-            }
-
             chat.settings.contextMapData.forEach((loc) => {
               if (loc.isModule || (loc.id && String(loc.id).startsWith("mod_"))) return;
-              if (modNameSet.has(loc.name)) return;
               locations.push({
                 id: loc.id || "ctx_" + loc.name,
                 name: loc.name,
@@ -35450,23 +35433,42 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
                 if (isEditing) {
                   const oldName = loc.name;
+                  if (oldName && oldName !== name) {
+                    chat.settings.contextMapData.forEach(t => {
+                      if (t.parent === oldName) t.parent = name;
+                    });
+                    if (chat.settings.currentLocation === oldName) {
+                      chat.settings.currentLocation = name;
+                    }
+                  }
                   const cItem = chat.settings.contextMapData.find(t => t.id === loc.id || t.name === oldName);
                   if (cItem) {
                     cItem.name = name;
                     cItem.level = lvl;
                     cItem.parent = parent;
                     cItem.desc = desc;
+                    cItem.isModule = false;
                   }
                 } else {
-                  chat.settings.contextMapData.push({
-                    id: "ctx_loc_" + Date.now(),
-                    name: name,
-                    parent: parent,
-                    desc: desc,
-                    level: lvl,
-                    prompt: "",
-                    imageUrl: ""
-                  });
+                  chat.settings.contextMapData = chat.settings.contextMapData.filter(t => t.name !== name || (!t.isModule && !String(t.id).startsWith("mod_")));
+                  const existingItem = chat.settings.contextMapData.find(t => t.name === name);
+                  if (existingItem) {
+                    existingItem.level = lvl;
+                    existingItem.parent = parent;
+                    existingItem.desc = desc;
+                    existingItem.isModule = false;
+                  } else {
+                    chat.settings.contextMapData.push({
+                      id: "ctx_loc_" + Date.now(),
+                      name: name,
+                      parent: parent,
+                      desc: desc,
+                      level: lvl,
+                      prompt: "",
+                      imageUrl: "",
+                      isModule: false
+                    });
+                  }
                 }
               }
 
