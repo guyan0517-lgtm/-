@@ -22234,44 +22234,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const activeScopeList = targetScope.map((sc, idx) => {
                 const isCurrentlyActive = selectedChapterIds.includes(String(sc.id));
                 const statusTag = isCurrentlyActive ? '【当前状态: 已开启加载】' : '【当前状态: 未开启】';
-                const titleLower = `${sc.title || ''} ${sc.category || ''}`;
-                let typeTag = '【阶段剧情/场景探索资料】';
-                if (/真相|背景|大纲|事前|公开|机制|秘密|守秘人|KP|总览|设定/i.test(titleLower)) {
-                  typeTag = '【长效全局核心资料 - 带团基石，全程严禁关闭】';
-                } else if (/NPC|人设|角色|猫|世界书/i.test(titleLower)) {
-                  typeTag = '【角色人设资料 - 登场时开启且在场期间不可关闭】';
-                }
-                return `${idx + 1}. ID: ${sc.id} | 标题: ${sc.title} | 分类: ${sc.category || '正文'} | 属性: ${typeTag} | ${statusTag}`;
+                return `${idx + 1}. ID: ${sc.id} | 标题: ${sc.title} | 分类: ${sc.category || '正文'} | ${statusTag}`;
               }).join('\n');
 
               if (switchMode === 'auto') {
                 block += `## 模组章节自动切换与信息按需管理规则\n` +
                   `当前处于自动模式。你拥有在AI管辖章节范围内根据剧情进展自动改勾选的权限。\n` +
                   `AI管辖章节列表与当前开启状态：\n${activeScopeList}\n\n` +
-                  `信息按需判断与章节开关核心铁律：\n` +
-                  `1. 绝对禁止一刀切全关：严禁在带完一个章节后把前面所有章节一刀切全部关掉！带团如同查阅模组书，绝不是每到一个新章节就将所有旧资料全数关闭！\n` +
-                  `2. 长效背景与真相信息永久保持开启：事前公开、模组已知信息、幕后真相与机制、KP总纲等属于全局核心资料，带团全程必须时刻参考以掌握幕后真相与判定依据，严禁关闭！绝不可将其放入 closeChapterIds！若关闭你将失去上帝视角与真相依据！\n` +
-                  `3. 登场角色与猫人设按需即时开启：当剧情中有新NPC或猫登场互动时，必须主动开启该NPC的人设章节，以掌握其性格台词与扮演风格；只要该角色在后续剧情中仍在场、有戏份或可能再度出场，其人设章节必须持续保持开启，严禁在进入新章节时顺手关闭！\n` +
-                  `4. 仅关闭确实不再需要的旧事件章节：只有当某个微观小事件或旧场景已彻底探索完毕、且后续剧情完全不再需要其中的任何线索与信息时，才将该特定旧章节放入关闭列表。若不确定是否还需要，宁可保留开启，closeChapterIds 必须传空数组 []！\n` +
-                  `5. 必须显式输出管理指令代码：在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
-                  `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID1"], "closeChapterIds": [], "summary": "开启XX"}\`\n` +
-                  `   通常换章只需在 openChapterIds 中填入接下来需要参考的新章节；closeChapterIds 绝大多数时候都应该是空数组 []，严禁把不需要关闭的背景、真相、人设一起关掉。\n` +
-                  `6. 换章触发点：当且仅当当前章节剧情已真正带到了末尾，并且玩家明确表示同意推进时，你在回复中输出上述指令代码。若玩家还想在当前场景自由互动，坚决不切换章节，继续陪玩家互动。\n` +
-                  `7. 用户手动勾选的其他非管辖章节为固定参考资料，你绝不可关闭或覆盖它们。\n\n`;
+                  `信息按需判断与章节开关核心准则：\n` +
+                  `1. 按剧情需要动态判断：你拥有管辖列表中各章节的开关权。请通读模组内容，根据当前小故事、小章节与场景的实际需要，智能判断哪些章节当前有用、哪些无用。\n` +
+                  `2. 真相与全局背景的判断：整个模组的全局核心真相与总纲带团全程有用，应当保持开启；而如果是某个特定小章节、小故事的局部真相，带完该小故事并进入下一个小故事后如果已经没有用处，可以关闭。\n` +
+                  `3. 角色与猫人设的动态判断：当前场景若无猫或某NPC出现、模组本章节内容也无需该角色出场，可以将其人设章节关闭；后续章节若发现有猫或该角色出场互动，应在进入新章节时及时开启。\n` +
+                  `4. 已探索完的旧章节处理：当某个小章节或场景已带完且后续完全不再需要其线索时，可将其放入 closeChapterIds 中关闭。若尚不确定是否还有用，则保留开启。\n` +
+                  `5. 显式输出管理指令代码：在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
+                  `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\`\n` +
+                  `6. 换章触发点：当当前章节剧情已真正进行到末尾，并且玩家明确表示同意推进时，输出上述指令代码。\n` +
+                  `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其开关权限，绝不可关闭或覆盖它们。\n\n`;
               } else if (switchMode === 'semi') {
                 block += `## 模组章节半自动切换与信息按需管理规则\n` +
-                  `当前处于半自动模式。你拥有判断剧情完结并提请换章的权限。\n` +
+                  `当前处于半自动模式。你拥有在AI管辖章节范围内判断剧情完结并提请换章的权限。\n` +
                   `AI管辖章节列表与当前开启状态：\n${activeScopeList}\n\n` +
-                  `信息按需判断与章节开关核心铁律：\n` +
-                  `1. 绝对禁止一刀切全关：严禁在带完一个章节后把前面所有章节一刀切全部关掉！带团如同查阅模组书，绝不是每到一个新章节就将所有旧资料全数关闭！\n` +
-                  `2. 长效背景与真相信息永久保持开启：事前公开、模组已知信息、幕后真相与机制、KP总纲等属于全局核心资料，带团全程必须时刻参考以掌握幕后真相与判定依据，严禁提请关闭！绝不可将其放入 closeChapterIds！若关闭你将失去上帝视角与真相依据！\n` +
-                  `3. 登场角色与猫人设按需即时开启：当剧情中有新NPC或猫登场互动时，必须主动提请开启该NPC的人设章节，以掌握其性格台词与扮演风格；只要该角色在后续剧情中仍在场、有戏份或可能再度出场，其人设章节必须持续保持开启，严禁在进入新章节时顺手关闭！\n` +
-                  `4. 仅关闭确实不再需要的旧事件章节：只有当某个微观小事件或旧场景已彻底探索完毕、且后续剧情完全不再需要其中的任何线索与信息时，才将该特定旧章节放入关闭列表。若不确定是否还需要，宁可保留开启，closeChapterIds 必须传空数组 []！\n` +
-                  `5. 必须显式输出提请指令代码：在回复正文最后完整输出以下JSON指令代码：\n` +
-                  `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": [], "summary": "已到达XX，建议开启XX"}\`\n` +
-                  `   通常换章只需在 openChapterIds 中填入接下来建议参考的新章节；closeChapterIds 绝大多数时候都应该是空数组 []，严禁把不需要关闭的背景、真相、人设一起关掉。\n` +
-                  `6. 系统会在聊天中独立渲染带有【继续】按钮的确认卡片气泡。当玩家点击【继续】按钮或在对话中回复继续、进入下一章、推进等意图时，系统将改勾选并加载对应章节。若玩家拒绝或忽略，切换挂起，不加载下一章，玩家可继续在当前场景自由互动。\n` +
-                  `7. 用户手动勾选的其他非管辖章节为固定参考资料，不可关闭或覆盖。\n\n`;
+                  `信息按需判断与章节开关核心准则：\n` +
+                  `1. 按剧情需要动态判断：你拥有管辖列表中各章节的提请开关权。请根据当前小故事、小章节与场景需要，智能判断各章节是否有用。\n` +
+                  `2. 真相与全局背景的判断：整个模组的全局核心真相与总纲带团全程有用，应提请保持开启；如果是特定小章节的局部真相，带完并进入下一小故事后不再有用，可提请关闭。\n` +
+                  `3. 角色与猫人设的动态判断：当前场景若无猫或NPC出现且无需出场，可提请关闭；后续章节若有猫或角色出现，应在新章节提请开启。\n` +
+                  `4. 已探索完的旧章节处理：微观小事件或场景探索完毕且后续不再需要时，可提请关闭。\n` +
+                  `5. 显式输出提请指令代码：在回复正文最后完整输出以下JSON指令代码：\n` +
+                  `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\`\n` +
+                  `6. 换章触发点：当当前章节剧情已带完，并且玩家明确表示同意推进时提请切换。系统会展示继续按钮供玩家确认。\n` +
+                  `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其提请关闭权限，不可覆盖。\n\n`;
               }
             }
 
@@ -32075,24 +32066,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let currentSelected = (chat.selectedModuleChapterIds || []).slice();
           const scopeIds = chat.moduleAiScopeChapterIds || [];
 
-          // 关闭指定章节（仅在管辖范围或列表中移除，且对真相、背景、大纲、NPC人设实施安全保护）
+          // 关闭指定章节（仅在管辖范围内的章节中移除已勾选，非管辖章节不受影响）
           if (closeChapterIds && closeChapterIds.length > 0) {
-            let protectedIds = new Set();
-            try {
-              if (chat.activeModuleId && dbInstance && dbInstance.moduleChapters) {
-                const allModuleChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
-                allModuleChaps.forEach(c => {
-                  const t = `${c.title || ''} ${c.category || ''}`;
-                  if (/真相|背景|大纲|事前|公开|机制|秘密|守秘人|KP|总览|设定|人设|NPC|猫/i.test(t)) {
-                    protectedIds.add(c.id);
-                    protectedIds.add(String(c.id));
-                  }
-                });
-              }
-            } catch (_) {}
-
             currentSelected = currentSelected.filter(id => {
-              if (protectedIds.has(id) || protectedIds.has(String(id))) {
+              // 只有在管辖范围内的章节，AI 才可以关闭；不在管辖范围内的章节为用户手动管理，AI不可关闭
+              if (scopeIds.length > 0 && !scopeIds.includes(id) && !scopeIds.includes(String(id))) {
                 return true;
               }
               return !closeChapterIds.includes(id) && !closeChapterIds.includes(String(id));
@@ -32349,7 +32327,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (voiceMsgBtn) voiceMsgBtn.style.display = "flex";
           const voiceModeBtn = document.getElementById("voice-mode-btn");
           if (voiceModeBtn) {
-            const curMode = (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") ? "默认" : "手动";
+            const curMode = (chat.settings?.voiceMode === "auto") ? "默认" : "手动";
             voiceModeBtn.textContent = curMode;
             voiceModeBtn.title = curMode;
           }
@@ -43601,8 +43579,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               updateGlobalChatUnreadBadge();
             }
 
-            // --- 语音台词自动播报（立即无缝触发，无需等待生图完成） ---
-            if (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") {
+            // --- 语音台词自动播报（仅当该聊天设置为默认模式时才自动朗读；手动模式绝不自动朗读） ---
+            if (chat.settings?.voiceMode === "auto") {
               setTimeout(() => {
                 if (typeof handleAutoQuoteVoiceAfterAiReply === "function") {
                   handleAutoQuoteVoiceAfterAiReply(chat);
@@ -43653,7 +43631,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               String(state.activeChatId) === String(chat.id)
             ) {
               renderChatInterface(chat.id);
-              if (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") {
+              if (chat.settings?.voiceMode === "auto") {
                 setTimeout(() => {
                   if (typeof handleAutoQuoteVoiceAfterAiReply === "function") {
                     handleAutoQuoteVoiceAfterAiReply(chat);
@@ -47627,7 +47605,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               isUserAdmin: false,
               myGroupTitle: "",
               affectionEnabled: false,
-              affectionList: [],
+              voiceMode: "manual",
               summary: {
                 enabled: true,
                 mode: "auto",
@@ -62756,10 +62734,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const chat = state.chats[state.activeChatId];
           if (!chat) return;
           if (!chat.settings) chat.settings = {};
-          const currentMode = chat.settings.voiceMode || localStorage.getItem("default_voice_mode") || "manual";
+          const currentMode = chat.settings.voiceMode === "auto" ? "auto" : "manual";
           const newMode = currentMode === "manual" ? "auto" : "manual";
           chat.settings.voiceMode = newMode;
-          localStorage.setItem("default_voice_mode", newMode);
           const btn = document.getElementById("voice-mode-btn");
           if (btn) {
             btn.textContent = newMode === "auto" ? "默认" : "手动";
@@ -76413,12 +76390,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   chat.settings.minimaxVoiceId || "";
                 const voiceModeBtn = document.getElementById("voice-mode-btn");
                 if (voiceModeBtn) {
-                  const curVoiceMode = (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") ? "默认" : "手动";
+                  const curVoiceMode = (chat.settings?.voiceMode === "auto") ? "默认" : "手动";
                   voiceModeBtn.textContent = curVoiceMode;
                 }
                 const groupVoiceModeBtn = document.getElementById("group-voice-mode-btn");
                 if (groupVoiceModeBtn) {
-                  const curVoiceMode = (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") ? "默认" : "手动";
+                  const curVoiceMode = (chat.settings?.voiceMode === "auto") ? "默认" : "手动";
                   groupVoiceModeBtn.textContent = curVoiceMode;
                 }
                 const chatMusicSwitch = document.getElementById("chat-ai-music-switch");
