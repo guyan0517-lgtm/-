@@ -389,11 +389,13 @@
 
   const DEFAULT_TRPG_MUSIC_PROMPT = `你是一个专业的跑团带团音频总监与模组剧情配乐专家。
 请仔细阅读以下模组的正文、场景与剧情，找出最适合配乐的剧情转折点、氛围场景与关键时刻。
-对于每个适合配乐的位置，推荐一首符合当下意境的音乐。
+对于每个适合配乐的位置，推荐一首符合当下意境的音乐，并明确标出该配乐插入在模组的具体章节与段落剧情位置。
 输出严格的JSON数组格式，不要输出任何多余标记或解释，每个元素包含以下字段：
 [
   {
-    "scene": "场景简述",
+    "chapter": "模组章节标题，如：序章、第一章 迷雾林 或 场景一",
+    "position": "具体插入段落位置与情境，如：调查暗门处、遭遇伏击时 或 旅店大厅初次会面",
+    "scene": "场景简述与氛围情境",
     "keyword": "网易云搜索词或歌名",
     "tag": "[音乐: 搜索词]"
   }
@@ -6746,6 +6748,10 @@ ${chap.content}
               <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.name || '曲目'}</div>
                 <div style="font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.artist || '原声'} · ${m.scene || '剧情氛围'}</div>
+                <div style="font-size: 10px; color: var(--accent-color); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px;">
+                  <span style="padding: 1px 4px; border-radius: 4px; background: var(--card-bg); border: 1px solid var(--border-color); font-weight: 600; flex-shrink: 0;">位置</span>
+                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${m.chapter ? m.chapter + ' · ' : ''}${m.position || m.scene || '模组剧情'}</span>
+                </div>
               </div>
             `;
 
@@ -6827,7 +6833,7 @@ ${chap.content}
             }
             let moduleText = '';
             allChaps.forEach(c => {
-              moduleText += `\n【${c.title}】\n${c.content || ''}\n`;
+              moduleText += `\n【章节标题: ${c.title}】\n${c.content || ''}\n`;
             });
             if (!moduleText.trim()) {
               moduleText = mod.description || mod.name || '模组';
@@ -6885,6 +6891,8 @@ ${chap.content}
                 name: songName,
                 artist: songArtist,
                 cover: songCover,
+                chapter: item.chapter || item.section || '',
+                position: item.position || item.location || item.scene || '模组剧情',
                 scene: item.scene || '剧情气氛',
                 keyword: kw,
                 tag: item.tag || `[音乐: ${songName}]`

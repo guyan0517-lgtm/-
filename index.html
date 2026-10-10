@@ -1383,6 +1383,10 @@
             <div class="moe-card-header">
               <span class="icon">🗣️</span>
               <h3>Minimax 语音</h3>
+              <div style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+                <button type="button" class="moe-btn-small" onclick="window.copyAndOpenLink('https://platform.minimaxi.com/user-center/basic-information')" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">国内</button>
+                <button type="button" class="moe-btn-small" onclick="window.copyAndOpenLink('https://api.minimax.chat')" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">旧版</button>
+              </div>
             </div>
             <div class="moe-card-body">
               <div class="form-group">
@@ -1631,6 +1635,9 @@
             <div class="moe-card-header">
               <span class="icon">🎨</span>
               <h3>NovelAI 生图</h3>
+              <div style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+                <button type="button" class="moe-btn-small" onclick="window.copyAndOpenLink('https://novelai.net')" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">官网</button>
+              </div>
             </div>
             <div class="moe-card-body">
               <div class="form-group">
@@ -1699,6 +1706,9 @@
             <div class="moe-card-header">
               <span class="icon">🌸</span>
               <h3>Pollinations 生图</h3>
+              <div style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+                <button type="button" class="moe-btn-small" onclick="window.copyAndOpenLink('https://pollinations.ai')" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">官网</button>
+              </div>
             </div>
             <div class="moe-card-body">
               <div class="form-group">
@@ -1755,15 +1765,18 @@
 
               <div class="moe-divider"></div>
 
-              <h4
-                style="
-                  font-size: 14px;
-                  margin-bottom: 10px;
-                  color: var(--accent-color);
-                "
-              >
-                ☁️ GitHub 云备份
-              </h4>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h4
+                  style="
+                    font-size: 14px;
+                    margin: 0;
+                    color: var(--accent-color);
+                  "
+                >
+                  ☁️ GitHub 云备份
+                </h4>
+                <button type="button" class="moe-btn-small" onclick="window.copyAndOpenLink('https://github.com')" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">官网</button>
+              </div>
               <div class="form-group">
                 <input
                   type="password"
@@ -2018,7 +2031,7 @@
         <input
           id="import-data-input"
           type="file"
-          accept="application/json"
+          accept=".json,application/json,text/plain,application/octet-stream,*/*"
           hidden
         />
       </div>
@@ -4337,7 +4350,7 @@
                   <input
                     type="file"
                     id="import-home-preset-input"
-                    accept=".json"
+                    accept=".json,application/json,text/plain,application/octet-stream,*/*"
                     hidden
                   />
                 </div>
@@ -5554,7 +5567,7 @@
                     <input
                       type="file"
                       id="import-char-phone-preset-input"
-                      accept=".json"
+                      accept=".json,application/json,text/plain,application/octet-stream,*/*"
                       hidden
                     />
                   </div>
@@ -7921,7 +7934,7 @@
             <input
               type="file"
               id="import-chat-history-input"
-              accept="application/json"
+              accept=".json,application/json,text/plain,application/octet-stream,*/*"
               hidden
             />
 
@@ -8588,6 +8601,20 @@
     <div id="chat-location-bubble" class="chat-location-bubble" style="display: none;">
       <div class="chat-location-bubble-title" id="chat-location-bubble-title"></div>
       <div class="chat-location-bubble-desc" id="chat-location-bubble-desc"></div>
+    </div>
+
+    <!-- 图文地点卡片轻量浮窗 -->
+    <div id="chat-location-rich-popup" class="chat-location-rich-popup" style="display: none; position: fixed; z-index: 9999999; width: 230px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22); overflow: hidden; flex-direction: column; user-select: none;">
+      <div id="chat-location-rich-drag-header" style="position: relative; width: 100%; cursor: move; touch-action: none; overflow: hidden; background: var(--secondary-bg);">
+        <img id="chat-location-rich-img" src="" alt="地点图片" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; border-top-left-radius: 11px; border-top-right-radius: 11px; pointer-events: none;" />
+        <button type="button" id="chat-location-rich-close-btn" style="position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 0, 0, 0.45); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; padding: 0; z-index: 2;">&times;</button>
+      </div>
+      <div style="padding: 8px 10px; background: var(--card-bg); position: relative;">
+        <div id="chat-location-rich-desc" style="font-size: 11px; line-height: 1.45; color: var(--text-primary); max-height: 110px; overflow-y: auto; word-break: break-word; white-space: pre-wrap;"></div>
+        <div id="chat-location-rich-resize-handle" style="position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none; display: flex; align-items: flex-end; justify-content: flex-end; padding: 2px;">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" style="color: var(--text-secondary); opacity: 0.6;"><path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke-width="1.2" stroke-linecap="round"/></svg>
+        </div>
+      </div>
     </div>
 
     <!-- 小地图风格选择弹窗 -->
@@ -17219,7 +17246,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <input
             id="import-chunked-data-input"
             type="file"
-            accept="application/json"
+            accept=".json,application/json,text/plain,application/octet-stream,*/*"
             hidden
           />
         </div>
@@ -17232,7 +17259,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <input
       id="import-from-330-input"
       type="file"
-      accept="application/json"
+      accept=".json,application/json,text/plain,application/octet-stream,*/*"
       hidden
     />
 
@@ -17925,7 +17952,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
       </div>
     </div>
     <!-- 隐藏的文件选择器 -->
-    <input type="file" id="import-quick-reply-input" accept=".json" hidden />
+    <input type="file" id="import-quick-reply-input" accept=".json,application/json,text/plain,application/octet-stream,*/*" hidden />
 
     <!-- 时间轴/存档管理模态框 -->
     <div id="branching-modal" class="modal">
@@ -23646,6 +23673,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (typeof hideLocationBubble === "function") {
             try { hideLocationBubble(); } catch (_) {}
           }
+          if (typeof hideRichLocationPopup === "function") {
+            try { hideRichLocationPopup(); } catch (_) {}
+          }
           if (
             !document
               .getElementById("logistics-screen")
@@ -28788,6 +28818,81 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         window.renderApiSettingsProxy = renderApiSettings;
 
+        window.copyAndOpenLink = async function (url) {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(url);
+            } else {
+              const ta = document.createElement("textarea");
+              ta.value = url;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand("copy");
+              document.body.removeChild(ta);
+            }
+          } catch (_) {}
+          if (typeof showCustomAlert === "function") {
+            await showCustomAlert("提示", "官网链接已复制，可前往浏览器粘贴访问");
+          } else {
+            alert("官网链接已复制，可前往浏览器粘贴访问");
+          }
+          try {
+            window.open(url, "_blank");
+          } catch (_) {}
+        };
+
+        function updateGlobalChatUnreadBadge() {
+          let totalUnread = 0;
+          if (state && state.chats) {
+            const seenIds = new Set();
+            Object.values(state.chats).forEach((chat) => {
+              if (chat && chat.id && !seenIds.has(String(chat.id))) {
+                seenIds.add(String(chat.id));
+                totalUnread += (chat.unreadCount || 0);
+              }
+            });
+          }
+
+          // 1. 桌面图标红点
+          const desktopIconBg = document.querySelector('.desktop-app-icon[onclick*="chat-list-screen"] .icon-bg-desktop');
+          if (desktopIconBg) {
+            let badge = desktopIconBg.querySelector('.chat-unread-desktop-badge');
+            if (totalUnread > 0) {
+              if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'unread-indicator chat-unread-desktop-badge';
+                badge.style.cssText = 'position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; background-color: #ff3b30; color: white; font-size: 11px; font-weight: bold; line-height: 18px; text-align: center; border-radius: 9px; box-shadow: 0 1px 2px rgba(0,0,0,0.3); z-index: 10; display: block;';
+                desktopIconBg.style.position = 'relative';
+                desktopIconBg.appendChild(badge);
+              }
+              badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+              badge.style.display = 'block';
+            } else if (badge) {
+              badge.style.display = 'none';
+            }
+          }
+
+          // 2. 聊天列表底部导航栏消息红点
+          const messagesNavSpan = document.querySelector('#chat-list-bottom-nav .nav-item[data-view="messages-view"] span');
+          if (messagesNavSpan) {
+            let navBadge = messagesNavSpan.querySelector('.chat-unread-nav-badge');
+            if (totalUnread > 0) {
+              if (!navBadge) {
+                navBadge = document.createElement('span');
+                navBadge.className = 'unread-indicator chat-unread-nav-badge';
+                navBadge.style.cssText = 'position: absolute; top: -8px; right: -15px; min-width: 18px; height: 18px; padding: 0 5px; background-color: #ff3b30; color: white; font-size: 11px; font-weight: bold; line-height: 18px; text-align: center; border-radius: 9px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); z-index: 5; display: block;';
+                messagesNavSpan.style.position = 'relative';
+                messagesNavSpan.appendChild(navBadge);
+              }
+              navBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+              navBadge.style.display = 'block';
+            } else if (navBadge) {
+              navBadge.style.display = 'none';
+            }
+          }
+        }
+        window.updateGlobalChatUnreadBadge = updateGlobalChatUnreadBadge;
+
         async function renderChatList() {
           const chatListEl = document.getElementById("chat-list");
           chatListEl.innerHTML = "";
@@ -28798,6 +28903,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (allChats.length === 0) {
             chatListEl.innerHTML =
               '<p style="text-align:center; color: var(--text-secondary); margin-top: 50px; font-size: 13px;">暂无会话消息，可在联系人中发起聊天</p>';
+            updateGlobalChatUnreadBadge();
             return;
           }
 
@@ -28828,6 +28934,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const item = createChatListItem(chat);
             chatListEl.appendChild(item);
           });
+
+          updateGlobalChatUnreadBadge();
         }
 
         function createChatListItem(chat) {
@@ -31660,14 +31768,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const allLocs = (typeof getAllChatLocations === "function") ? await getAllChatLocations(chat) : [];
                 const exactFound = allLocs.find(l => l.name === locName || (l.name && locName && l.name.trim() === locName.trim()));
                 const descText = (exactFound && exactFound.desc && typeof exactFound.desc === 'string') ? exactFound.desc.trim() : '';
-                if (descText) {
-                  if (typeof activeLocationBubbleTarget !== 'undefined' && activeLocationBubbleTarget === span) {
-                    if (typeof hideLocationBubble === 'function') hideLocationBubble();
-                  } else if (typeof showLocationBubble === 'function') {
-                    showLocationBubble(span, descText);
+                const isRichMode = (chat?.settings?.mapViewMode === 'rich');
+
+                if (isRichMode) {
+                  if (typeof hideLocationBubble === 'function') hideLocationBubble();
+                  const popup = document.getElementById('chat-location-rich-popup');
+                  if (popup && popup.style.display !== 'none' && activeRichLocationPopupName === locName) {
+                    hideRichLocationPopup();
+                  } else if (typeof showRichLocationPopup === 'function') {
+                    showRichLocationPopup(span, locName, exactFound, descText);
                   }
                 } else {
-                  if (typeof hideLocationBubble === 'function') hideLocationBubble();
+                  if (typeof hideRichLocationPopup === 'function') hideRichLocationPopup();
+                  if (descText) {
+                    if (typeof activeLocationBubbleTarget !== 'undefined' && activeLocationBubbleTarget === span) {
+                      if (typeof hideLocationBubble === 'function') hideLocationBubble();
+                    } else if (typeof showLocationBubble === 'function') {
+                      showLocationBubble(span, descText);
+                    }
+                  } else {
+                    if (typeof hideLocationBubble === 'function') hideLocationBubble();
+                  }
                 }
               };
             });
@@ -31984,6 +32105,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (chat.unreadCount > 0) {
             chat.unreadCount = 0;
             await db.chats.put(chat); // 别忘了把这个改变同步到数据库
+          }
+          if (typeof updateGlobalChatUnreadBadge === "function") {
+            updateGlobalChatUnreadBadge();
           }
           // 把 openChat 函数挂载到全局 window 对象上
           window.openChat = openChat;
@@ -33880,6 +34004,133 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           activeLocationBubbleTarget = null;
         }
 
+        let activeRichLocationPopupName = null;
+        let isRichPopupDraggableInitialized = false;
+
+        function initRichLocationPopupInteractions() {
+          if (isRichPopupDraggableInitialized) return;
+          const popup = document.getElementById("chat-location-rich-popup");
+          const dragHeader = document.getElementById("chat-location-rich-drag-header");
+          const closeBtn = document.getElementById("chat-location-rich-close-btn");
+          const resizeHandle = document.getElementById("chat-location-rich-resize-handle");
+          if (!popup || !dragHeader || !closeBtn || !resizeHandle) return;
+          isRichPopupDraggableInitialized = true;
+
+          closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            hideRichLocationPopup();
+          });
+
+          let isDragging = false;
+          let dragStartX = 0;
+          let dragStartY = 0;
+          let startLeft = 0;
+          let startTop = 0;
+
+          dragHeader.addEventListener("pointerdown", (e) => {
+            if (e.target === closeBtn || closeBtn.contains(e.target)) return;
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            const rect = popup.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            try { dragHeader.setPointerCapture(e.pointerId); } catch (_) {}
+          });
+
+          dragHeader.addEventListener("pointermove", (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - dragStartX;
+            const dy = e.clientY - dragStartY;
+            let nLeft = startLeft + dx;
+            let nTop = startTop + dy;
+            const maxL = Math.max(10, window.innerWidth - popup.offsetWidth - 10);
+            const maxT = Math.max(10, window.innerHeight - popup.offsetHeight - 10);
+            nLeft = Math.max(5, Math.min(maxL, nLeft));
+            nTop = Math.max(5, Math.min(maxT, nTop));
+            popup.style.left = nLeft + "px";
+            popup.style.top = nTop + "px";
+          });
+
+          const stopDrag = (e) => {
+            if (isDragging) {
+              isDragging = false;
+              try { dragHeader.releasePointerCapture(e.pointerId); } catch (_) {}
+            }
+          };
+          dragHeader.addEventListener("pointerup", stopDrag);
+          dragHeader.addEventListener("pointercancel", stopDrag);
+
+          let isResizing = false;
+          let resizeStartX = 0;
+          let startWidth = 0;
+
+          resizeHandle.addEventListener("pointerdown", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            isResizing = true;
+            resizeStartX = e.clientX;
+            startWidth = popup.offsetWidth;
+            try { resizeHandle.setPointerCapture(e.pointerId); } catch (_) {}
+          });
+
+          resizeHandle.addEventListener("pointermove", (e) => {
+            if (!isResizing) return;
+            const dx = e.clientX - resizeStartX;
+            const minW = 160;
+            const maxW = Math.min(window.innerWidth - 20, 480);
+            const newW = Math.max(minW, Math.min(maxW, startWidth + dx));
+            popup.style.width = newW + "px";
+          });
+
+          const stopResize = (e) => {
+            if (isResizing) {
+              isResizing = false;
+              try { resizeHandle.releasePointerCapture(e.pointerId); } catch (_) {}
+            }
+          };
+          resizeHandle.addEventListener("pointerup", stopResize);
+          resizeHandle.addEventListener("pointercancel", stopResize);
+        }
+
+        function showRichLocationPopup(targetEl, locName, exactFound, descText) {
+          const popup = document.getElementById("chat-location-rich-popup");
+          const imgEl = document.getElementById("chat-location-rich-img");
+          const descEl = document.getElementById("chat-location-rich-desc");
+          if (!popup || !imgEl || !descEl) return;
+          initRichLocationPopupInteractions();
+
+          const fallbackSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='1.5'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpath d='m21 15-5-5L5 21'/%3E%3C/svg%3E";
+          imgEl.src = (exactFound && exactFound.imageUrl && exactFound.imageUrl.trim()) ? exactFound.imageUrl.trim() : fallbackSvg;
+          descEl.textContent = (descText || (exactFound && exactFound.desc) || "暂无简介").trim();
+
+          const isAlreadyShown = (popup.style.display === "flex" || popup.style.display === "block");
+          activeRichLocationPopupName = locName;
+          popup.style.display = "flex";
+
+          if (!isAlreadyShown && targetEl) {
+            const rect = targetEl.getBoundingClientRect();
+            const popW = popup.offsetWidth || 230;
+            let left = rect.left + rect.width / 2 - popW / 2;
+            left = Math.max(10, Math.min(window.innerWidth - popW - 10, left));
+            let top = rect.bottom + 8;
+            if (top + 300 > window.innerHeight) {
+              top = Math.max(10, rect.top - 310);
+            }
+            popup.style.left = left + "px";
+            popup.style.top = top + "px";
+          }
+        }
+
+        function hideRichLocationPopup() {
+          const popup = document.getElementById("chat-location-rich-popup");
+          if (popup) {
+            popup.style.display = "none";
+          }
+          activeRichLocationPopupName = null;
+        }
+        window.hideRichLocationPopup = hideRichLocationPopup;
+
         function showImageModal(url) {
           if (!url) return;
           const modal = document.getElementById("chat-map-image-modal");
@@ -34004,6 +34255,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               hideLocationBubble();
             }
           }
+          const richPopup = document.getElementById("chat-location-rich-popup");
+          if (richPopup && richPopup.style.display !== "none") {
+            if (!richPopup.contains(e.target) && !e.target.closest(".chat-location-clickable")) {
+              hideRichLocationPopup();
+            }
+          }
         }, true);
 
         window.addEventListener("click", (e) => {
@@ -34011,6 +34268,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (bubble && bubble.style.display !== "none") {
             if (!bubble.contains(e.target) && (!activeLocationBubbleTarget || !activeLocationBubbleTarget.contains(e.target))) {
               hideLocationBubble();
+            }
+          }
+          const richPopup = document.getElementById("chat-location-rich-popup");
+          if (richPopup && richPopup.style.display !== "none") {
+            if (!richPopup.contains(e.target) && !e.target.closest(".chat-location-clickable")) {
+              hideRichLocationPopup();
             }
           }
         }, true);
@@ -42827,6 +43090,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 if (!isCurrentlyViewingThisChat) {
                   // 如果用户不在当前聊天界面，就把这个聊天的未读数 +1
                   chat.unreadCount = (chat.unreadCount || 0) + 1;
+                  if (typeof renderChatList === "function") renderChatList();
+                  if (typeof updateGlobalChatUnreadBadge === "function") updateGlobalChatUnreadBadge();
                 } else {
                   chat.unreadCount = 0;
                 }
@@ -42991,23 +43256,27 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             }
             checkAndTriggerSummary(chatId);
 
-            // --- 续火花逻辑 ---
-            if (await updateStreak(chatId)) {
-              // 如果火花天数发生了变化，就刷新聊天列表
-              renderChatList();
+            // --- 续火花与列表红点刷新逻辑 ---
+            await updateStreak(chatId);
+            renderChatList();
+            if (typeof updateGlobalChatUnreadBadge === "function") {
+              updateGlobalChatUnreadBadge();
             }
 
-            // --- 守密人末尾强制生图 ---
-            if (chat.settings && chat.settings.keeperForcedDraw) {
-              await executeKeeperForcedDraw(chatId);
-            }
-
+            // --- 语音台词自动播报（立即无缝触发，无需等待生图完成） ---
             if (chat.settings?.voiceMode === "auto" || localStorage.getItem("default_voice_mode") === "auto") {
               setTimeout(() => {
                 if (typeof handleAutoQuoteVoiceAfterAiReply === "function") {
                   handleAutoQuoteVoiceAfterAiReply(chat);
                 }
-              }, 400);
+              }, 150);
+            }
+
+            // --- 守密人末尾强制生图（后台异步生成，不阻塞语音合成与播放） ---
+            if (chat.settings && chat.settings.keeperForcedDraw) {
+              executeKeeperForcedDraw(chatId).catch((drawErr) => {
+                console.error("守密人末尾强制生图执行失败:", drawErr);
+              });
             }
           } catch (error) {
             chat.history = chat.history.filter((msg) => !msg.isTemporary);
@@ -50211,6 +50480,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               // 保存并刷新UI
               await db.chats.put(chat);
               renderChatList();
+              if (typeof updateGlobalChatUnreadBadge === "function") {
+                updateGlobalChatUnreadBadge();
+              }
 
               console.log(
                 `群聊 "${chat.name}" 后台互动成功，生成了 ${messagesArray.length} 条新消息。`,
@@ -61494,14 +61766,25 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
          */
         let _activeAutoVoiceQueueId = 0;
 
-        function stopMinimaxAudio() {
-          _activeAutoVoiceQueueId++;
-          if (!isTtsPlaying) return;
+        function stopMinimaxAudio(cancelAutoQueue = true) {
+          if (cancelAutoQueue) {
+            _activeAutoVoiceQueueId++;
+          }
+          if (!isTtsPlaying) {
+            const ttsPlayer = document.getElementById("tts-audio-player");
+            if (ttsPlayer) {
+              ttsPlayer.pause();
+              ttsPlayer.src = "";
+            }
+            return;
+          }
 
           isIntentionalStop = true;
           const ttsPlayer = document.getElementById("tts-audio-player");
-          ttsPlayer.pause();
-          ttsPlayer.src = ""; // 这会触发 onerror 事件，从而执行清理
+          if (ttsPlayer) {
+            ttsPlayer.pause();
+            ttsPlayer.src = ""; // 这会触发 onerror 事件，从而执行清理
+          }
 
           if (window.currentAnimatingBubbles) {
             window.currentAnimatingBubbles.forEach((b) => {
@@ -61737,7 +62020,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
         function playQuoteAudioSource(audioHexOrData, bubble, msg) {
           return new Promise(async (resolve) => {
-            stopMinimaxAudio();
+            stopMinimaxAudio(false);
             await new Promise((r) => setTimeout(r, 50));
 
             const ttsPlayer = document.getElementById("tts-audio-player");
@@ -61940,10 +62223,11 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
           if (recentMsgsToPlay.length === 0) return;
 
-          const hasQuotes = recentMsgsToPlay.some(m => /「[^」]+」/.test(String(m.content || "")));
-          const targetMsgs = hasQuotes
-            ? recentMsgsToPlay.filter(m => /「[^」]+」/.test(String(m.content || "")))
-            : recentMsgsToPlay;
+          // 仅筛选包含「」台词的气泡，若气泡内没有「」，直接跳过该气泡，不留空白等待
+          const targetMsgs = recentMsgsToPlay.filter((m) =>
+            /「[^」]+」/.test(String(m.content || ""))
+          );
+          if (targetMsgs.length === 0) return;
 
           const queueId = ++_activeAutoVoiceQueueId;
 
@@ -61956,7 +62240,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             await handleTripleClickQuoteVoice(targetMsg, bubble, chat);
 
             if (queueId !== _activeAutoVoiceQueueId) break;
-            await new Promise((r) => setTimeout(r, 350));
+            // 每条台词播放自然结束之后，短暂停顿200毫秒立即播报下一条
+            await new Promise((r) => setTimeout(r, 200));
           }
         }
 
@@ -72381,7 +72666,13 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             );
           document
             .getElementById("import-data-input")
-            .addEventListener("change", (e) => importBackup(e.target.files[0]));
+            .addEventListener("change", (e) => {
+              const file = e.target.files && e.target.files[0];
+              if (file) {
+                importBackup(file);
+              }
+              e.target.value = "";
+            });
           document
             .getElementById("back-to-list-btn")
             .addEventListener("click", () => {
@@ -82020,13 +82311,18 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               const found = presets.find((p) => p.id === presetSelect.value);
               const promptInput = document.getElementById("summary-prompt-input");
               const countInput = document.getElementById("summary-count-input");
+              const maxMemoryInput = document.getElementById("max-memory");
               if (found) {
                 if (promptInput) promptInput.value = found.prompt;
                 if (countInput && found.count !== undefined) countInput.value = found.count;
+                if (maxMemoryInput && found.contextCount !== undefined) maxMemoryInput.value = found.contextCount;
                 const chat = state.chats[state.activeChatId];
-                if (chat && chat.settings && chat.settings.summary) {
+                if (chat && chat.settings) {
+                  if (!chat.settings.summary) chat.settings.summary = {};
                   chat.settings.summary.prompt = found.prompt;
                   if (found.count !== undefined) chat.settings.summary.count = found.count;
+                  if (found.contextCount !== undefined) chat.settings.summary.contextCount = found.contextCount;
+                  if (found.contextCount !== undefined) chat.settings.maxMemory = found.contextCount;
                 }
               }
             });
@@ -82053,8 +82349,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             presetNewBtn.addEventListener("click", async () => {
               const promptInput = document.getElementById("summary-prompt-input");
               const countInput = document.getElementById("summary-count-input");
+              const maxMemoryInput = document.getElementById("max-memory");
               const promptText = promptInput ? promptInput.value.trim() : "";
               const countVal = countInput ? (parseInt(countInput.value) || 20) : 20;
+              const contextCountVal = maxMemoryInput ? (parseInt(maxMemoryInput.value) || 20) : 20;
               let name = null;
               if (typeof showCustomPrompt === "function") {
                 name = await showCustomPrompt("新建预设", "请输入预设名称");
@@ -82070,6 +82368,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 name: name.trim(),
                 prompt: promptText,
                 count: countVal,
+                contextCount: contextCountVal,
               });
               saveSummaryPresets(presets);
               renderSummaryPresetsUI();
@@ -82093,10 +82392,13 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }
               const promptInput = document.getElementById("summary-prompt-input");
               const countInput = document.getElementById("summary-count-input");
+              const maxMemoryInput = document.getElementById("max-memory");
               const promptText = promptInput ? promptInput.value.trim() : "";
               const countVal = countInput ? (parseInt(countInput.value) || 20) : 20;
+              const contextCountVal = maxMemoryInput ? (parseInt(maxMemoryInput.value) || 20) : 20;
               found.prompt = promptText;
               found.count = countVal;
+              found.contextCount = contextCountVal;
               saveSummaryPresets(presets);
               renderSummaryPresetsUI();
               if (select) select.value = found.id;
@@ -85080,8 +85382,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
       accept=".json, .jsonl, .txt, .docx, .doc"
       style="display: none"
     />
-    <input type="file" id="ludo-qbank-import-input" accept=".json" hidden />
+    <input type="file" id="ludo-qbank-import-input" accept=".json,application/json,text/plain,application/octet-stream,*/*" hidden />
     <input type="file" id="inner-voice-bg-input" accept="image/*" hidden />
-    <input type="file" id="script-kill-import-input" accept=".json" hidden />
+    <input type="file" id="script-kill-import-input" accept=".json,application/json,text/plain,application/octet-stream,*/*" hidden />
   </body>
 </html>
