@@ -33839,4 +33839,10 @@ select,
   display: none !important;
 }
 
+#chat-list-bottom-nav .nav-item[data-view="messages-view"] .chat-unread-nav-badge,
+#chat-list-bottom-nav .nav-item[data-view="messages-view"] .unread-indicator,
+#chat-list-bottom-nav .nav-item[data-view="messages-view"] .unread-count {
+  display: none !important;
+}
+
 

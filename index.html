@@ -29001,23 +29001,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             app.querySelectorAll('.chat-unread-desktop-badge, .unread-indicator, .unread-count, [class*="unread"], [class*="badge"]').forEach((b) => b.remove());
           });
 
-          // 2. 聊天列表底部导航栏消息红点
-          const messagesNavSpan = document.querySelector('#chat-list-bottom-nav .nav-item[data-view="messages-view"] span');
-          if (messagesNavSpan) {
-            let navBadge = messagesNavSpan.querySelector('.chat-unread-nav-badge');
-            if (totalUnread > 0) {
-              if (!navBadge) {
-                navBadge = document.createElement('span');
-                navBadge.className = 'unread-indicator chat-unread-nav-badge';
-                navBadge.style.cssText = 'position: absolute; top: -8px; right: -15px; min-width: 18px; height: 18px; padding: 0 5px; background-color: #ff3b30; color: white; font-size: 11px; font-weight: bold; line-height: 18px; text-align: center; border-radius: 9px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); z-index: 5; display: block;';
-                messagesNavSpan.style.position = 'relative';
-                messagesNavSpan.appendChild(navBadge);
-              }
-              navBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-              navBadge.style.display = 'block';
-            } else if (navBadge) {
-              navBadge.style.display = 'none';
-            }
+          // 2. 聊天列表底部导航栏消息红点：去除消息字样右上角红点
+          const messagesNav = document.querySelector('#chat-list-bottom-nav .nav-item[data-view="messages-view"]');
+          if (messagesNav) {
+            messagesNav.querySelectorAll('.chat-unread-nav-badge, .unread-indicator, .unread-count, [class*="unread"], [class*="badge"]').forEach((b) => b.remove());
           }
         }
         window.updateGlobalChatUnreadBadge = updateGlobalChatUnreadBadge;
