@@ -39332,6 +39332,19 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               });
             }
 
+            // 守秘人前置提示词注入逻辑
+            const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
+            if (isKeeperAssigned) {
+              const isForcedDrawActive = !!(chat.settings && chat.settings.keeperForcedDraw === true);
+              let keeperPrefixInstruction = "";
+              if (isForcedDrawActive) {
+                keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百字，二百五十到三百五十为最佳，宁少毋多；需要分四个及以上气泡时，说明一回合带团内容太多，必须删减后续剧情。\n·上下文消息中所有生图都由末尾强制系统生图进行，尽管你能看到，但那并不是你发的，是系统自动进行的，因此你无需进行任何nov生图，除非玩家要求或提示词中要求。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
+              } else {
+                keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百字，二百五十到三百五十为最佳，宁少毋多；需要分四个及以上气泡时，说明一回合带团内容太多，必须删减后续剧情。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
+              }
+              systemPrompt = keeperPrefixInstruction + systemPrompt;
+            }
+
             let isGemini = proxyUrl === GEMINI_API_URL;
             let geminiConfig = toGeminiRequestData(
               model,
