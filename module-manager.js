@@ -389,7 +389,7 @@
 
   const DEFAULT_TRPG_MUSIC_PROMPT = `你是一个专业的跑团带团音频总监与模组剧情配乐专家。
 请仔细阅读以下模组的正文、场景与剧情，找出最适合配乐的剧情转折点、氛围场景与关键时刻。
-对于每个适合配乐的位置，推荐一首符合当下意境的音乐，并明确标出该配乐插入在模组的具体章节与段落剧情位置。
+对于每个适合配乐的位置，推荐一首网易云或音乐平台中真实存在的具体歌曲或纯音乐原声，必须是真实具体的歌曲名，严禁输出“推荐曲名”、“背景音乐”、“战斗音乐”、“氛围曲”等泛指标签。
 输出严格的JSON数组格式，不要输出任何多余标记或解释，每个元素包含以下字段：
 [
   {
@@ -397,10 +397,9 @@
     "position": "具体插入段落位置与情境，如：调查暗门处、遭遇伏击时 或 旅店大厅初次会面",
     "anchor": "该段落中8到25字的原文章节短句，用于在正文中精确定位插入点",
     "scene": "场景简述与氛围情境",
-    "name": "推荐曲目名称",
+    "name": "真实具体的歌曲名，纯歌名，严禁带有书名号、中括号、前缀或标签",
     "artist": "歌手或作曲家",
-    "keyword": "网易云搜索词或歌名",
-    "tag": "[音乐: 推荐曲名]"
+    "keyword": "真实准确的网易云歌曲搜索词"
   }
 ]`;
 
@@ -6795,10 +6794,10 @@ ${chap.content}
             const midCol = document.createElement('div');
             midCol.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;';
 
-            const cleanName = m.name || m.keyword || '曲目';
+            const cleanName = (m.name || m.keyword || '曲目').replace(/^\[(?:音乐|BGM|背景音乐|音效|bgm|music|标签)[:：]\s*/i, '').replace(/[\]】》]+$/g, '').replace(/^[《\[【]+/g, '').trim();
             const cleanArtist = m.artist || '原声';
             const cleanScene = m.scene || '剧情气氛';
-            const cleanTag = m.tag || `[音乐: ${cleanName}]`;
+            const cleanTag = `[音乐: ${cleanName}]`;
             const cleanPos = (m.chapter ? m.chapter + ' · ' : '') + (m.position || m.scene || '模组剧情');
 
             midCol.innerHTML = `
@@ -6989,27 +6988,36 @@ ${chap.content}
             targetMod.musicList = targetMod.musicList || [];
 
             for (const item of musicList) {
-              const kw = item.keyword || item.name || '';
-              if (!kw) continue;
+              let cleanItemName = String(item.name || item.keyword || '').trim();
+              cleanItemName = cleanItemName.replace(/^\[(?:音乐|BGM|背景音乐|音效|bgm|music|标签)[:：]\s*/i, '')
+                                           .replace(/[\]】》\)\s]+$/g, '')
+                                           .replace(/^[\[【《\(\s]+/g, '')
+                                           .trim();
+              let searchKw = String(item.keyword || cleanItemName || '').trim();
+              searchKw = searchKw.replace(/^\[(?:音乐|BGM|背景音乐|音效|bgm|music|标签)[:：]\s*/i, '')
+                                 .replace(/[\]】》\)\s]+$/g, '')
+                                 .replace(/^[\[【《\(\s]+/g, '')
+                                 .trim();
+              if (!searchKw && !cleanItemName) continue;
               let songInfo = null;
               if (typeof searchNeteaseMusic === 'function') {
                 try {
-                  const neteaseRes = await searchNeteaseMusic(kw);
+                  const neteaseRes = await searchNeteaseMusic(searchKw || cleanItemName);
                   if (neteaseRes && neteaseRes.length > 0) songInfo = neteaseRes[0];
                 } catch (_) {}
               }
               if (!songInfo && typeof searchGdstudioMusic === 'function') {
                 try {
-                  const gdRes = await searchGdstudioMusic(kw);
+                  const gdRes = await searchGdstudioMusic(searchKw || cleanItemName);
                   if (gdRes && gdRes.length > 0) songInfo = gdRes[0];
                 } catch (_) {}
               }
 
-              const songName = songInfo ? songInfo.name : (item.name || kw);
+              const songName = songInfo ? songInfo.name : (cleanItemName || searchKw || '曲目');
               const songArtist = songInfo ? songInfo.artist : (item.artist || '原声');
               const songCover = songInfo ? songInfo.cover : 'https://i.postimg.cc/pT2xKzPz/album-cover-placeholder.png';
               const songId = songInfo ? songInfo.id : null;
-              const songTag = item.tag || `[音乐: ${songName}]`;
+              const songTag = `[音乐: ${songName}]`;
 
               targetMod.musicList.push({
                 id: songId || 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -7019,7 +7027,7 @@ ${chap.content}
                 chapter: item.chapter || item.section || '',
                 position: item.position || item.location || item.scene || '模组剧情',
                 scene: item.scene || '剧情气氛',
-                keyword: kw,
+                keyword: songName,
                 tag: songTag
               });
 

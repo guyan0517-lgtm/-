@@ -20942,8 +20942,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         window.playAutoSceneMusic = async function (keyword) {
           if (!keyword || typeof keyword !== "string") return;
-          const cleanKeyword = keyword.trim().replace(/^《|》$/g, "").replace(/^\[|\]$/g, "").replace(/^【|】$/g, "");
-          if (!cleanKeyword) return;
+          let cleanKeyword = keyword.trim().replace(/^《|》$/g, "").replace(/^\[|\]$/g, "").replace(/^【|】$/g, "");
+          cleanKeyword = cleanKeyword.replace(/^(?:音乐|BGM|背景音乐|音效|bgm|music|标签)[:：]\s*/i, "").trim();
+          cleanKeyword = cleanKeyword.replace(/^\[|\]$/g, "").replace(/^【|】$/g, "").replace(/^《|》$/g, "").trim();
+          if (!cleanKeyword || cleanKeyword.includes("推荐曲名") || cleanKeyword.includes("背景音乐") || cleanKeyword.includes("战斗音乐")) return;
 
           const now = Date.now();
           if (window._lastAutoSceneKeyword === cleanKeyword && now - (window._lastAutoSceneTime || 0) < 3000) {
@@ -21174,6 +21176,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const floatingBar = document.getElementById("floating-lyrics-bar");
           const floatingText = document.getElementById("floating-lyric-text");
           if (floatingBar && floatingText) {
+            if (typeof applyFloatingLyricsSavedPosition === "function") {
+              applyFloatingLyricsSavedPosition();
+            }
             floatingBar.style.display = "flex";
             floatingText.textContent = `♪ ${newSong.name} - ${newSong.artist}`;
           }
@@ -22206,8 +22211,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 `当前模组配置了特定情景配乐。当带团推进到对应剧情、气氛或场景时，在叙述中原样附带对应的音乐标签，系统会自动为玩家播放应景音乐。\n` +
                 `模组配乐清单：\n`;
               mod.musicList.forEach((m) => {
-                const sName = m.name || m.keyword || '曲目';
-                const sTag = m.tag || `[音乐: ${sName}]`;
+                let sName = (m.name || m.keyword || '曲目').trim();
+                sName = sName.replace(/^\[(?:音乐|BGM|背景音乐|音效|bgm|music|标签)[:：]\s*/i, '')
+                             .replace(/[\]】》\)\s]+$/g, '')
+                             .replace(/^[\[【《\(\s]+/g, '')
+                             .trim();
+                if (!sName || sName.includes('推荐曲名') || sName.includes('背景音乐') || sName.includes('战斗音乐')) return;
+                const sTag = `[音乐: ${sName}]`;
                 const sScene = m.scene || '剧情气氛';
                 block += `- 标签 ${sTag}：用于 ${sScene}，曲目 ${sName}\n`;
               });
@@ -29316,7 +29326,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const statusTextEl = statusContainer.querySelector(".status-text");
 
           window.activeGeneratingChats = window.activeGeneratingChats || {};
-          const isThisChatGenerating = !!(window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId]);
+          window.activeGeneratingKeeperDraw = window.activeGeneratingKeeperDraw || {};
+          const isThisChatGenerating = !!(window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId] || window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[chatId]);
           if (isThisChatGenerating) {
             if (chat.isGroup) {
               chatHeaderTitle.textContent = displayName;
@@ -29487,7 +29498,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const typingIndicator = document.createElement("div");
           typingIndicator.id = "typing-indicator";
           window.activeGeneratingChats = window.activeGeneratingChats || {};
-          if (window.activeGeneratingChats[chatId]) {
+          window.activeGeneratingKeeperDraw = window.activeGeneratingKeeperDraw || {};
+          const isGeneratingCurrently = !!(window.activeGeneratingChats[chatId] || window.activeGeneratingChats[chat.id] || window.activeGeneratingKeeperDraw[chatId] || window.activeGeneratingKeeperDraw[chat.id]);
+          if (isGeneratingCurrently) {
             if (chat.isGroup) {
               typingIndicator.textContent = "群成员正在回复中...";
               typingIndicator.style.display = "block";
@@ -43819,7 +43832,13 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             if (String(state.activeChatId) === String(chat.id) && chatScreenActive) {
               const curTypingInd = document.getElementById("typing-indicator");
               if (curTypingInd) {
-                curTypingInd.style.display = "none";
+                const isKeeperDrawing = !!(window.activeGeneratingKeeperDraw && (window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[chatId]));
+                if (chat.isGroup && (chat.settings?.keeperForcedDraw || isKeeperDrawing)) {
+                  curTypingInd.textContent = "群成员正在回复中...";
+                  curTypingInd.style.display = "block";
+                } else {
+                  curTypingInd.style.display = "none";
+                }
               }
               const curHeaderTitle = document.getElementById("chat-header-title");
               const targetChatObj = state.chats[chat.id] || state.chats[chatId] || chat;
@@ -43994,37 +44013,30 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             startListenTogetherSession(targetChatId);
             return;
           }
-          if (state.musicState.activeChatId === targetChatId) {
-            document
-              .getElementById("music-player-overlay")
-              .classList.add("visible");
-          } else {
-            const oldChatName =
-              state.chats[state.musicState.activeChatId]?.name || "未知";
-            const newChatName = state.chats[targetChatId]?.name || "当前";
-            const confirmed = await showCustomConfirm(
-              "切换听歌对象",
-              `您正和「${oldChatName}」听歌。要结束并开始和「${newChatName}」的新会话吗？`,
-              { confirmButtonClass: "btn-danger" },
-            );
-            if (confirmed) {
-              await endListenTogetherSession(true);
-              await new Promise((resolve) => setTimeout(resolve, 50));
-              startListenTogetherSession(targetChatId);
-            }
-          }
+          // 全局共通：无论在哪个群聊或私聊，直接打开播放器，绝不打断或重置音乐
+          state.musicState.activeChatId = targetChatId;
+          updatePlayerUI();
+          updatePlaylistUI();
+          document
+            .getElementById("music-player-overlay")
+            .classList.add("visible");
         }
 
         async function startListenTogetherSession(chatId) {
           const chat = state.chats[chatId];
-          if (!chat) return;
-          state.musicState.totalElapsedTime = chat.musicData.totalTime || 0;
           state.musicState.isActive = true;
           state.musicState.activeChatId = chatId;
-          if (state.musicState.playlist.length > 0) {
-            state.musicState.currentIndex = 0;
-          } else {
-            state.musicState.currentIndex = -1;
+          if (chat && chat.musicData) {
+            state.musicState.totalElapsedTime = chat.musicData.totalTime || 0;
+          }
+          // 保持当前曲目与进度，绝不从头重置
+          if (state.musicState.currentIndex < 0) {
+            if (state.musicState.playlist.length > 0) {
+              state.musicState.currentIndex = 0;
+              loadSong(0);
+            } else {
+              state.musicState.currentIndex = -1;
+            }
           }
           if (state.musicState.timerId) clearInterval(state.musicState.timerId);
           state.musicState.timerId = setInterval(() => {
@@ -44067,6 +44079,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
         function returnToChat() {
           closeMusicPlayerWithAnimation(() => {
             if (state.musicState.isActive && lyricsBarSettings.showOnClose) {
+              if (typeof applyFloatingLyricsSavedPosition === "function") {
+                applyFloatingLyricsSavedPosition();
+              }
               document.getElementById("floating-lyrics-bar").style.display =
                 "flex";
             }
@@ -44078,8 +44093,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           if (!iconImg) return;
           if (
             forceReset ||
-            !state.musicState.isActive ||
-            state.musicState.activeChatId !== chatId
+            !state.musicState.isActive
           ) {
             iconImg.src = "https://i.postimg.cc/CxjpF6gK/yi-qi-ting.png";
             iconImg.className = "";
@@ -44333,10 +44347,29 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
         let isFloatingLyricsLocked = localStorage.getItem("floating_lyrics_locked") === "true";
 
+        function applyFloatingLyricsSavedPosition() {
+          const bar = document.getElementById("floating-lyrics-bar");
+          if (!bar) return;
+          const savedPos = localStorage.getItem("floating_lyrics_position");
+          if (savedPos) {
+            try {
+              const pos = JSON.parse(savedPos);
+              if (pos && pos.left && pos.top) {
+                bar.style.left = pos.left;
+                bar.style.top = pos.top;
+                bar.style.transform = pos.transform || "none";
+              }
+            } catch (e) {}
+          }
+        }
+        window.applyFloatingLyricsSavedPosition = applyFloatingLyricsSavedPosition;
+
         function updateLyricsLockUI() {
           const lockBtn = document.getElementById("music-lock-lyrics-btn");
           const lockSvg = document.getElementById("music-lock-lyrics-svg");
           const floatingBar = document.getElementById("floating-lyrics-bar");
+
+          applyFloatingLyricsSavedPosition();
 
           if (lockBtn && lockSvg) {
             if (isFloatingLyricsLocked) {
@@ -53998,10 +54031,21 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             document.removeEventListener("mouseup", onDragEnd);
             document.removeEventListener("touchmove", onDragMove);
             document.removeEventListener("touchend", onDragEnd);
+
+            if (bar.style.left && bar.style.top) {
+              localStorage.setItem("floating_lyrics_position", JSON.stringify({
+                left: bar.style.left,
+                top: bar.style.top,
+                transform: "none"
+              }));
+            }
           };
 
           bar.addEventListener("mousedown", onDragStart);
           bar.addEventListener("touchstart", onDragStart, { passive: true });
+          if (typeof applyFloatingLyricsSavedPosition === "function") {
+            applyFloatingLyricsSavedPosition();
+          }
           if (typeof updateLyricsLockUI === "function") {
             updateLyricsLockUI();
           }
@@ -54010,6 +54054,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
         function applyLyricsSettings() {
           const bar = document.getElementById("floating-lyrics-bar");
           const toggleBtn = document.getElementById("toggle-lyrics-bar-btn");
+
+          if (typeof applyFloatingLyricsSavedPosition === "function") {
+            applyFloatingLyricsSavedPosition();
+          }
 
           // 应用样式
           bar.style.fontSize = `${lyricsBarSettings.fontSize}px`;
@@ -61299,6 +61347,24 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const chat = state.chats[chatId];
           if (!chat || !chat.settings || !chat.settings.keeperForcedDraw) return;
 
+          window.activeGeneratingKeeperDraw = window.activeGeneratingKeeperDraw || {};
+          window.activeGeneratingKeeperDraw[chat.id] = true;
+          window.activeGeneratingKeeperDraw[String(chat.id)] = true;
+          window.activeGeneratingKeeperDraw[chatId] = true;
+
+          if (chat.isGroup && String(state.activeChatId) === String(chat.id)) {
+            const typingInd = document.getElementById("typing-indicator");
+            if (typingInd) {
+              typingInd.textContent = "群成员正在回复中...";
+              typingInd.style.display = "block";
+              const messagesContainer = document.getElementById("chat-messages");
+              if (messagesContainer) {
+                messagesContainer.appendChild(typingInd);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+              }
+            }
+          }
+
           try {
             console.log("执行守秘人末尾强制生图...");
             const maxMem = chat.settings.maxMemory || 12;
@@ -61505,6 +61571,18 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             await db.chats.put(chat);
             if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
               appendMessage(errorMsg, chat);
+            }
+          } finally {
+            if (window.activeGeneratingKeeperDraw) {
+              delete window.activeGeneratingKeeperDraw[chat.id];
+              delete window.activeGeneratingKeeperDraw[String(chat.id)];
+              delete window.activeGeneratingKeeperDraw[chatId];
+            }
+            if (chat.isGroup && String(state.activeChatId) === String(chat.id)) {
+              const curTypingInd = document.getElementById("typing-indicator");
+              if (curTypingInd && (!window.activeGeneratingChats || !window.activeGeneratingChats[chat.id])) {
+                curTypingInd.style.display = "none";
+              }
             }
           }
         }
@@ -74199,6 +74277,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             lockLyricsBtn.addEventListener("click", () => {
               isFloatingLyricsLocked = !isFloatingLyricsLocked;
               localStorage.setItem("floating_lyrics_locked", isFloatingLyricsLocked ? "true" : "false");
+              const floatingBar = document.getElementById("floating-lyrics-bar");
+              if (floatingBar && floatingBar.style.left && floatingBar.style.top) {
+                localStorage.setItem("floating_lyrics_position", JSON.stringify({
+                  left: floatingBar.style.left,
+                  top: floatingBar.style.top,
+                  transform: floatingBar.style.transform || "none"
+                }));
+              }
               if (typeof updateLyricsLockUI === "function") {
                 updateLyricsLockUI();
               }
