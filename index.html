@@ -20223,7 +20223,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function fetchPlayableMusicUrl(songId, source = "netease") {
           if (!songId) return null;
           try {
-            const gdUrl = `https://music-api.gdstudio.xyz/api.php?types=url&id=${encodeURIComponent(songId)}&source=netease`;
+            const gdUrl = `https://music-api.gdstudio.xyz/api.php?btwaf=20639888&types=url&source=${encodeURIComponent(source || "netease")}&id=${encodeURIComponent(songId)}&br=320`;
             let gdRes = null;
             try {
               const res = await fetch(gdUrl);
@@ -20820,51 +20820,95 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
-        function pickBestSongCandidate(results, targetName, targetArtist) {
-          if (!results || !Array.isArray(results) || results.length === 0) return null;
+        window.formatAiMusicInstruction = function(prefVal) {
+          const pStr = (prefVal && prefVal !== "全部") ? prefVal : "全部";
+          const tags = pStr === "全部" ? ["纯乐", "人声"] : pStr.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean);
+          const hasPure = tags.includes("纯乐") || tags.includes("纯音乐");
+          const hasVocal = tags.includes("人声");
+          const otherTags = tags.filter((s) => s !== "纯乐" && s !== "纯音乐" && s !== "人声" && s !== "全部");
+          const genreText = otherTags.length > 0 ? otherTags.join("、") : "古风、日系、动漫、游戏、氛围配乐";
+
+          let vocalRule = "";
+          if (hasPure && !hasVocal) {
+            vocalRule = "当前只允许选择纯音乐。所有配乐必须为纯乐、原声配乐或无歌词版本，严禁输出有人声演唱的曲目，格式如 [音乐: 准确曲名 - 纯音乐] 或 [音乐: 准确曲名 - 原声]";
+          } else if (hasVocal && !hasPure) {
+            vocalRule = "当前只允许选择有人声演唱的歌曲。严禁选择纯音乐或无歌词版本，必须输出带有人声歌词的歌曲，格式如 [音乐: 准确歌名 - 歌手]";
+          } else {
+            vocalRule = "你可以根据当前剧情氛围自主判断选择纯音乐或人声歌曲。若选择纯乐版本请标明纯音乐，格式如 [音乐: 准确曲名 - 纯音乐]；若选择人声歌曲，格式如 [音乐: 准确歌名 - 歌手]";
+          }
+
+          return `- 播放场景配乐或音乐: 必须根据具体场景与剧情氛围挑选曲目。风格标签限定为 ${genreText}。${vocalRule}。音乐禁令：严禁使用任何现代中文流行歌曲，严禁出现周杰伦等现代流行歌手的歌曲，古风歌曲不受此流行歌禁令限制。\n`;
+        };
+
+        function evaluateSongCandidateScore(song, targetName, targetArtist, isPureMusicRequested = false) {
+          if (!song || !song.id) return -9999;
+          const name = String(song.name || "").trim().toLowerCase();
+          const artist = String(song.artist || "").trim().toLowerCase();
           const cleanTargetName = (targetName || "").trim().toLowerCase().replace(/[\s\-_—《》【】\[\]()（）]/g, "");
           const cleanTargetArtist = (targetArtist || "").trim().toLowerCase().replace(/[\s\-_—《》【】\[\]()（）]/g, "");
+          const cleanSongName = name.replace(/[\s\-_—《》【】\[\]()（）]/g, "");
+          const cleanSongArtist = artist.replace(/[\s\-_—《》【】\[\]()（）]/g, "");
 
-          let bestCandidate = null;
-          let bestScore = -999;
+          let score = 0;
 
-          for (const song of results) {
-            if (!song || !song.id) continue;
-            const name = String(song.name || "").trim().toLowerCase();
-            const artist = String(song.artist || "").trim().toLowerCase();
-            const cleanSongName = name.replace(/[\s\-_—《》【】\[\]()（）]/g, "");
-            const cleanSongArtist = artist.replace(/[\s\-_—《》【】\[\]()（）]/g, "");
+          // JD音乐台音源优先加分（免除VIP限制）
+          if (song.apiProvider === "gdstudio") {
+            score += 35;
+          }
 
-            let score = 0;
+          if (cleanSongName === cleanTargetName) {
+            score += 100;
+          } else if (cleanSongName.startsWith(cleanTargetName)) {
+            score += 60;
+          } else if (cleanSongName.includes(cleanTargetName)) {
+            score += 40;
+          } else {
+            score -= 30;
+          }
 
-            if (cleanSongName === cleanTargetName) {
-              score += 100;
-            } else if (cleanSongName.startsWith(cleanTargetName)) {
-              score += 60;
-            } else if (cleanSongName.includes(cleanTargetName)) {
-              score += 40;
+          if (cleanTargetArtist) {
+            if (cleanSongArtist.includes(cleanTargetArtist) || cleanTargetArtist.includes(cleanSongArtist)) {
+              score += 50;
             } else {
-              score -= 30;
+              score -= 20;
             }
+          }
 
-            if (cleanTargetArtist) {
-              if (cleanSongArtist.includes(cleanTargetArtist) || cleanTargetArtist.includes(cleanSongArtist)) {
-                score += 50;
-              } else {
-                score -= 20;
+          const pureIndicators = ["纯音乐", "纯乐", "伴奏", "instrumental", "piano", "钢琴", "原声", "bgm", "ost", "吉他", "小提琴"];
+          const hasPureIndicator = pureIndicators.some(w => name.includes(w) || artist.includes(w));
+
+          if (isPureMusicRequested) {
+            if (hasPureIndicator) {
+              score += 90;
+            }
+            const pureJunk = ["remix", "dj", "变奏", "片段", "铃声", "翻唱", "live", "现场版", "加速版", "降速版", "电音版"];
+            for (const w of pureJunk) {
+              if (name.includes(w) && !cleanTargetName.includes(w)) {
+                score -= 40;
               }
             }
-
+          } else {
             const junkWords = ["remix", "伴奏", "dj", "变奏", "片段", "铃声", "翻唱", "live", "现场版", "cover", "加速版", "降速版", "电音版"];
             for (const w of junkWords) {
               if (name.includes(w) && !cleanTargetName.includes(w)) {
                 score -= 40;
               }
             }
+          }
 
-            const lenDiff = Math.abs(cleanSongName.length - cleanTargetName.length);
-            score -= lenDiff * 2;
+          const lenDiff = Math.abs(cleanSongName.length - cleanTargetName.length);
+          score -= lenDiff * 2;
 
+          return score;
+        }
+
+        function pickBestSongCandidate(results, targetName, targetArtist, isPureMusicRequested = false) {
+          if (!results || !Array.isArray(results) || results.length === 0) return null;
+          let bestCandidate = null;
+          let bestScore = -99999;
+
+          for (const song of results) {
+            const score = evaluateSongCandidateScore(song, targetName, targetArtist, isPureMusicRequested);
             if (score > bestScore) {
               bestScore = score;
               bestCandidate = song;
@@ -20926,13 +20970,52 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             artist = parts.slice(1).join("——").trim();
           }
 
+          const curChat = (state.activeChatId && state.chats[state.activeChatId]) ? state.chats[state.activeChatId] : null;
+          const pPref = curChat?.settings?.aiMusicPreference || "";
+          const pPrefTags = pPref.split(/[,，、\s]+/).map(s => s.trim()).filter(Boolean);
+          const prefOnlyPure = (pPrefTags.includes("纯乐") || pPrefTags.includes("纯音乐")) && !pPrefTags.includes("人声");
+          const prefOnlyVocal = pPrefTags.includes("人声") && !(pPrefTags.includes("纯乐") || pPrefTags.includes("纯音乐"));
+
+          const isKeywordPure = /纯音乐|纯乐|伴奏|instrumental|piano|钢琴|吉他|原声|bgm|ost/i.test(cleanKeyword);
+          const isKeywordVocal = /人声|演唱|翻唱|vocal/i.test(cleanKeyword);
+
+          const isPureMusicRequested = prefOnlyPure || (isKeywordPure && !prefOnlyVocal && !isKeywordVocal);
+
           let allCandidates = [];
+
+          // 优先使用 JD音乐台搜索（免除VIP限制）
           try {
-            const neteaseResults = await searchNeteaseMusic(songName, artist);
-            if (neteaseResults && neteaseResults.length > 0) {
-              allCandidates.push(...neteaseResults);
+            const searchKw = isPureMusicRequested
+              ? `${songName.replace(/纯音乐|纯乐|伴奏|原声|bgm|ost/gi, "").trim()} 纯音乐`
+              : songName;
+            const gdstudioResults = await searchGdstudioMusic(searchKw);
+            if (gdstudioResults && gdstudioResults.length > 0) {
+              allCandidates.push(...gdstudioResults);
             }
           } catch (_) {}
+
+          if (allCandidates.length < 5) {
+            try {
+              const normalGd = await searchGdstudioMusic(songName);
+              if (normalGd && normalGd.length > 0) {
+                for (const item of normalGd) {
+                  if (!allCandidates.some(c => String(c.id) === String(item.id))) {
+                    allCandidates.push(item);
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+
+          // 备用网易云与QQ音乐搜索
+          if (allCandidates.length === 0) {
+            try {
+              const neteaseResults = await searchNeteaseMusic(songName, artist);
+              if (neteaseResults && neteaseResults.length > 0) {
+                allCandidates.push(...neteaseResults);
+              }
+            } catch (_) {}
+          }
 
           if (allCandidates.length === 0 && artist) {
             try {
@@ -20942,13 +21025,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             } catch (_) {}
           }
-
-          try {
-            const gdstudioResults = await searchGdstudioMusic(songName);
-            if (gdstudioResults && gdstudioResults.length > 0) {
-              allCandidates.push(...gdstudioResults);
-            }
-          } catch (_) {}
 
           if (allCandidates.length === 0) {
             try {
@@ -20968,7 +21044,61 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } catch (_) {}
           }
 
-          const songData = pickBestSongCandidate(allCandidates, songName, artist);
+          let songData = null;
+          let candidateLrcMap = new Map();
+
+          if (isPureMusicRequested && allCandidates.length > 0) {
+            const scoredList = allCandidates.map(c => ({
+              candidate: c,
+              score: evaluateSongCandidateScore(c, songName, artist, true)
+            })).sort((a, b) => b.score - a.score);
+
+            const topCandidates = scoredList.slice(0, 4);
+            const lrcChecks = await Promise.all(topCandidates.map(async (item) => {
+              const c = item.candidate;
+              const source = c.source || c.originalSource || "netease";
+              try {
+                const lrc = await getLyricsForSong(c.id, source, c.apiProvider);
+                return { candidate: c, lrc: lrc || "", baseScore: item.score };
+              } catch (_) {
+                return { candidate: c, lrc: "", baseScore: item.score };
+              }
+            }));
+
+            let bestPureItem = null;
+            let highestPureScore = -99999;
+            for (const item of lrcChecks) {
+              candidateLrcMap.set(item.candidate.id, item.lrc);
+              let score = item.baseScore;
+              const lrc = (item.lrc || "").trim();
+              const parsed = parseLRC(lrc);
+              const isNoLyric = !lrc ||
+                lrc.includes("纯音乐") ||
+                lrc.includes("暂无歌词") ||
+                lrc.includes("没有填词") ||
+                parsed.length === 0 ||
+                (parsed.length <= 2 && /纯音乐|instrumental|伴奏/i.test(lrc));
+
+              if (isNoLyric) {
+                score += 200;
+              } else if (parsed.length > 5) {
+                score -= 150;
+              }
+
+              if (score > highestPureScore) {
+                highestPureScore = score;
+                bestPureItem = item;
+              }
+            }
+
+            if (bestPureItem) {
+              songData = bestPureItem.candidate;
+            }
+          }
+
+          if (!songData) {
+            songData = pickBestSongCandidate(allCandidates, songName, artist, isPureMusicRequested);
+          }
           if (!songData) return;
 
           let playableUrl = await fetchPlayableMusicUrl(songData.id, songData.source || songData.originalSource || "netease");
@@ -20998,8 +21128,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (!playableUrl) return;
 
-          const lrcContent =
-            (await getLyricsForSong(songData.id, songData.source || "netease")) || "";
+          let lrcContent = candidateLrcMap.get(songData.id);
+          if (lrcContent === undefined) {
+            lrcContent =
+              (await getLyricsForSong(songData.id, songData.source || songData.originalSource || "netease", songData.apiProvider)) || "";
+          }
 
           const newSong = {
             name: songData.name || songName,
@@ -31901,7 +32034,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   clearTimeout(bubbleClickTimer);
                   bubbleClickTimer = null;
                 }
-                handleTripleClickQuoteVoice(msg, bubble, chat);
+                if (typeof handleManualQuoteVoiceClick === "function") {
+                  handleManualQuoteVoiceClick(msg, bubble, chat);
+                } else {
+                  handleTripleClickQuoteVoice(msg, bubble, chat);
+                }
                 return;
               }
               if (bubbleClickTimer) clearTimeout(bubbleClickTimer);
@@ -33119,7 +33256,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (!chat) return;
               const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
               const curSvg = isModMode
-                ? chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg
+                ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || chat.settings?.miniMapSvg || null)
                 : (chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null));
 
               if (!curSvg) {
@@ -33169,7 +33306,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const chat = state.chats[state.activeChatId];
               const isModMode = chat?.settings?.useModuleMap !== false && !!chat?.activeModuleId;
               const curSvg = isModMode
-                ? chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg
+                ? (chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat?.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || chat?.settings?.miniMapSvg || null)
                 : (chat?.settings?.contextMiniMapSvg || (!chat?.settings?.moduleMiniMaps ? chat?.settings?.miniMapSvg : null));
               if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
                 if (typeof window.showCustomAlert === "function") {
@@ -33549,14 +33686,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (useModToggle) {
-            useModToggle.checked = chat.settings.useModuleMap !== false;
-            useModToggle.onchange = async () => {
+            useModToggle.checked = chat.settings.useModuleMap !== false && !!chat.activeModuleId;
+            const onToggleChange = async () => {
               chat.settings.useModuleMap = useModToggle.checked;
               
               // 切换地图源时同步切换对应保存的小地图
-              if (chat.settings.useModuleMap && chat.activeModuleId && chat.settings.moduleMiniMaps?.[chat.activeModuleId]) {
-                chat.settings.miniMapSvg = chat.settings.moduleMiniMaps[chat.activeModuleId].svg;
-                chat.settings.miniMapStyle = chat.settings.moduleMiniMaps[chat.activeModuleId].style || "奶油风";
+              if (chat.settings.useModuleMap && chat.activeModuleId) {
+                const modMap = chat.settings.moduleMiniMaps?.[chat.activeModuleId] || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)];
+                if (modMap?.svg) {
+                  chat.settings.miniMapSvg = modMap.svg;
+                  chat.settings.miniMapStyle = modMap.style || "奶油风";
+                }
               } else if (!chat.settings.useModuleMap && chat.settings.contextMiniMapSvg) {
                 chat.settings.miniMapSvg = chat.settings.contextMiniMapSvg;
                 chat.settings.miniMapStyle = chat.settings.contextMiniMapStyle || "奶油风";
@@ -33571,6 +33711,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               await renderChatMapList();
               renderChatMiniMap();
             };
+            useModToggle.onchange = onToggleChange;
+            useModToggle.oninput = onToggleChange;
           }
 
           updateButtonsState();
@@ -33833,6 +33975,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
                 for (const loc of locsToDraw) {
                   if (!isMapImagesDrawing) break;
+
+                  // 检查是否已有缓存或同名地点已有图片（模组库或任意群聊），避免重复生图与多重复制
+                  let existingImg = loc.imageUrl || null;
+                  if (!existingImg && dbInstance && dbInstance.moduleLocationNav && chat.activeModuleId) {
+                    try {
+                      let navList = await dbInstance.moduleLocationNav.where("moduleId").equals(chat.activeModuleId).toArray();
+                      if (navList.length === 0 && !isNaN(Number(chat.activeModuleId))) {
+                        navList = await dbInstance.moduleLocationNav.where("moduleId").equals(Number(chat.activeModuleId)).toArray();
+                      }
+                      if (navList.length === 0) {
+                        navList = await dbInstance.moduleLocationNav.where("moduleId").equals(String(chat.activeModuleId)).toArray();
+                      }
+                      const match = navList.find((x) => x.name === loc.name && x.imageUrl);
+                      if (match) existingImg = match.imageUrl;
+                    } catch (e) {}
+                  }
+                  if (!existingImg && dbInstance && dbInstance.modules && chat.activeModuleId) {
+                    try {
+                      let mod = await dbInstance.modules.get(chat.activeModuleId);
+                      if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
+                      if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
+                      if (mod && Array.isArray(mod.mapNodes)) {
+                        const match = mod.mapNodes.find((x) => x.name === loc.name && x.imageUrl);
+                        if (match) existingImg = match.imageUrl;
+                      }
+                    } catch (e) {}
+                  }
+                  if (!existingImg && typeof state !== "undefined" && state.chats) {
+                    for (const c of Object.values(state.chats)) {
+                      if (!c || !c.settings) continue;
+                      const matchCust = (c.settings.customLocations || []).find((x) => x.name === loc.name && x.imageUrl);
+                      if (matchCust) { existingImg = matchCust.imageUrl; break; }
+                      const matchCtx = (c.settings.contextMapData || []).find((x) => x.name === loc.name && x.imageUrl);
+                      if (matchCtx) { existingImg = matchCtx.imageUrl; break; }
+                    }
+                  }
+
+                  if (existingImg) {
+                    loc.imageUrl = existingImg;
+                    await saveLocationImage(chat, loc, existingImg);
+                    successCount++;
+                    await renderChatMapList();
+                    continue;
+                  }
                   
                   const locPromptText = (loc.prompt || `${loc.name}${loc.desc ? ', ' + loc.desc : ''}`).trim();
                   let b64 = null;
@@ -34281,18 +34467,37 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function getAllChatLocations(chat) {
           let locations = [];
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-          const useModule = (chat?.settings?.useModuleMap !== false);
+          const toggleEl = document.getElementById("chat-map-use-module-toggle");
+          const useModule = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap !== false && !!chat?.activeModuleId);
 
           if (useModule && chat && chat.activeModuleId && dbInstance) {
             try {
               let modLocs = [];
               if (dbInstance.moduleLocationNav) {
                 modLocs = await dbInstance.moduleLocationNav.where("moduleId").equals(chat.activeModuleId).toArray();
+                if (modLocs.length === 0 && !isNaN(Number(chat.activeModuleId))) {
+                  modLocs = await dbInstance.moduleLocationNav.where("moduleId").equals(Number(chat.activeModuleId)).toArray();
+                }
+                if (modLocs.length === 0) {
+                  modLocs = await dbInstance.moduleLocationNav.where("moduleId").equals(String(chat.activeModuleId)).toArray();
+                }
               }
-              if (modLocs.length === 0 && dbInstance.modules) {
-                const mod = await dbInstance.modules.get(chat.activeModuleId);
+              if (dbInstance.modules) {
+                let mod = await dbInstance.modules.get(chat.activeModuleId);
+                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
+                if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
                 if (mod && Array.isArray(mod.mapNodes) && mod.mapNodes.length > 0) {
-                  modLocs = mod.mapNodes;
+                  if (modLocs.length === 0) {
+                    modLocs = mod.mapNodes;
+                  } else {
+                    // 若 moduleLocationNav 中地点缺失图片，从 mod.mapNodes 中补充复用同一张图片
+                    modLocs.forEach(ml => {
+                      if (!ml.imageUrl) {
+                        const matchInMod = mod.mapNodes.find(mn => mn.name === ml.name && mn.imageUrl);
+                        if (matchInMod) ml.imageUrl = matchInMod.imageUrl;
+                      }
+                    });
+                  }
                 }
               }
               if (modLocs && modLocs.length > 0) {
@@ -34306,15 +34511,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     prompt: loc.prompt || "",
                     imageUrl: loc.imageUrl || loc.dataUrl || "",
                     isTemp: false,
+                    isModule: true,
                   });
                 });
               }
             } catch (e) {}
-          }
-
-          if (locations.length === 0) {
+          } else {
+            // 当取消使用模组，或者未挂载模组时：展示当前上下文中的地图数据；如果上下文中没有地图数据，则为空
             if (chat?.settings && Array.isArray(chat.settings.contextMapData) && chat.settings.contextMapData.length > 0) {
               chat.settings.contextMapData.forEach((loc) => {
+                if (loc.isModule || (loc.id && String(loc.id).startsWith("mod_"))) return;
                 locations.push({
                   id: loc.id || "ctx_" + loc.name,
                   name: loc.name,
@@ -34339,6 +34545,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (chat?.settings && Array.isArray(chat.settings.customLocations)) {
             chat.settings.customLocations.forEach(cLoc => {
               if (deletedNames.has(cLoc.name)) return;
+              if (!useModule && (cLoc.isModule || (cLoc.id && String(cLoc.id).startsWith("mod_")))) return;
               const idx = locations.findIndex(l => (cLoc.originalName && l.name === cLoc.originalName) || l.id === cLoc.id || l.name === cLoc.name);
               if (idx !== -1) {
                 locations[idx] = {
@@ -34350,7 +34557,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   prompt: cLoc.prompt || locations[idx].prompt || "",
                   imageUrl: cLoc.imageUrl || locations[idx].imageUrl || "",
                 };
-              } else {
+              } else if (useModule) {
                 locations.push({
                   id: cLoc.id || "custom_" + cLoc.name,
                   name: cLoc.name,
@@ -34387,32 +34594,82 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         async function saveLocationImage(chat, node, b64, newPrompt) {
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-          const useModule = (chat?.settings?.useModuleMap !== false);
+          const toggleEl = document.getElementById("chat-map-use-module-toggle");
+          const useModule = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap !== false && !!chat?.activeModuleId);
 
           if (useModule && chat && chat.activeModuleId && dbInstance) {
-            if (dbInstance.moduleLocationNav && node.id) {
+            if (dbInstance.moduleLocationNav) {
               try {
-                const found = await dbInstance.moduleLocationNav.get(node.id);
-                if (found) {
-                  found.imageUrl = b64;
-                  if (newPrompt !== undefined) found.prompt = newPrompt;
-                  await dbInstance.moduleLocationNav.put(found);
+                let navItems = [];
+                if (typeof node.id === "number") {
+                  const direct = await dbInstance.moduleLocationNav.get(node.id);
+                  if (direct) navItems.push(direct);
+                }
+                if (navItems.length === 0) {
+                  navItems = await dbInstance.moduleLocationNav.where("moduleId").equals(chat.activeModuleId).toArray();
+                  if (navItems.length === 0 && !isNaN(Number(chat.activeModuleId))) {
+                    navItems = await dbInstance.moduleLocationNav.where("moduleId").equals(Number(chat.activeModuleId)).toArray();
+                  }
+                  if (navItems.length === 0) {
+                    navItems = await dbInstance.moduleLocationNav.where("moduleId").equals(String(chat.activeModuleId)).toArray();
+                  }
+                }
+                for (const found of navItems) {
+                  if (found.name === node.name || found.id === node.id) {
+                    found.imageUrl = b64;
+                    if (newPrompt !== undefined) found.prompt = newPrompt;
+                    await dbInstance.moduleLocationNav.put(found);
+                  }
                 }
               } catch (e) {}
             }
             if (dbInstance.modules) {
               try {
-                const mod = await dbInstance.modules.get(chat.activeModuleId);
+                let mod = await dbInstance.modules.get(chat.activeModuleId);
+                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
+                if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
                 if (mod && Array.isArray(mod.mapNodes)) {
                   const target = mod.mapNodes.find(m => m.name === node.name);
                   if (target) {
                     target.imageUrl = b64;
                     if (newPrompt !== undefined) target.prompt = newPrompt;
                   }
-                  await dbInstance.modules.update(chat.activeModuleId, { mapNodes: mod.mapNodes });
+                  await dbInstance.modules.update(mod.id, { mapNodes: mod.mapNodes });
                 }
               } catch (e) {}
             }
+            if (node.isTemp && Array.isArray(chat.settings?.temporaryLocations)) {
+              const t = chat.settings.temporaryLocations.find(l => l.id === node.id || l.name === node.name);
+              if (t) {
+                t.imageUrl = b64;
+                if (newPrompt !== undefined) t.prompt = newPrompt;
+              }
+            }
+            if (Array.isArray(chat.settings?.customLocations)) {
+              const c = chat.settings.customLocations.find(l => l.name === node.name);
+              if (c) {
+                c.imageUrl = b64;
+                if (newPrompt !== undefined) c.prompt = newPrompt;
+              }
+            }
+            // 同步给所有使用该模组的群聊，全局仅保留并调用同一份图片
+            if (typeof state !== "undefined" && state.chats) {
+              Object.values(state.chats).forEach(otherChat => {
+                if (otherChat && otherChat.id !== chat.id && String(otherChat.activeModuleId) === String(chat.activeModuleId)) {
+                  if (Array.isArray(otherChat.settings?.customLocations)) {
+                    const oc = otherChat.settings.customLocations.find(l => l.name === node.name);
+                    if (oc) oc.imageUrl = b64;
+                  }
+                  if (dbInstance && dbInstance.chats) {
+                    dbInstance.chats.put(otherChat).catch(() => {});
+                  }
+                }
+              });
+            }
+            if (dbInstance && chat.id) {
+              await dbInstance.chats.put(chat);
+            }
+            return;
           }
 
           if (!chat.settings) chat.settings = {};
@@ -34425,25 +34682,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
           } else {
-            if (!Array.isArray(chat.settings.contextMapData) || chat.settings.contextMapData.length === 0) {
-              const locs = await getAllChatLocations(chat);
-              chat.settings.contextMapData = locs.map(l => ({
-                id: l.id,
-                name: l.name,
-                parent: l.parent,
-                level: l.level,
-                desc: l.desc,
-                prompt: l.name === node.name && newPrompt !== undefined ? newPrompt : (l.prompt || ""),
-                imageUrl: l.name === node.name ? b64 : (l.imageUrl || "")
-              }));
+            if (!Array.isArray(chat.settings.contextMapData)) {
+              chat.settings.contextMapData = [];
+            }
+            const t = chat.settings.contextMapData.find(l => l.id === node.id || l.name === node.name);
+            if (t) {
+              t.imageUrl = b64;
+              if (newPrompt !== undefined) t.prompt = newPrompt;
             } else {
-              const t = chat.settings.contextMapData.find(l => l.id === node.id || l.name === node.name);
-              if (t) {
-                t.imageUrl = b64;
-                if (newPrompt !== undefined) t.prompt = newPrompt;
-              } else {
-                chat.settings.contextMapData.push({ id: node.id, name: node.name, parent: node.parent, level: node.level, desc: node.desc, prompt: newPrompt || "", imageUrl: b64 });
-              }
+              chat.settings.contextMapData.push({ id: node.id, name: node.name, parent: node.parent, level: node.level, desc: node.desc, prompt: newPrompt || "", imageUrl: b64 });
             }
           }
           if (dbInstance && chat.id) {
@@ -35446,10 +35693,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
           let rawSvg = null;
           if (isModMode) {
-            rawSvg = chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || null;
+            rawSvg = chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg
+              || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg
+              || chat.settings?.miniMapSvg
+              || null;
             if (rawSvg) {
               chat.settings.miniMapSvg = rawSvg;
-              chat.settings.miniMapStyle = chat.settings.moduleMiniMaps[chat.activeModuleId].style || chat.settings.miniMapStyle || "奶油风";
+              chat.settings.miniMapStyle = chat.settings.moduleMiniMaps?.[chat.activeModuleId]?.style
+                || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)]?.style
+                || chat.settings.miniMapStyle
+                || "奶油风";
             }
           } else {
             rawSvg = chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null);
@@ -36128,7 +36381,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
           const curSvg = isModMode
-            ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || null)
+            ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || chat.settings?.miniMapSvg || null)
             : (chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null));
           if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
             throw new Error("当前暂无已生成的小地图代码");
@@ -36144,7 +36397,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const globalReq = (localStorage.getItem("mini_map_global_requirement") || "").trim();
           const curStyle = isModMode
-            ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.style || chat.settings?.miniMapStyle || "奶油风")
+            ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.style || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.style || chat.settings?.miniMapStyle || "奶油风")
             : (chat.settings?.contextMiniMapStyle || chat.settings?.miniMapStyle || "奶油风");
 
           const prompt = `你拥有全球顶尖的矢量概念插画与示意地图设计大师造诣。用户希望在现有的小地图SVG代码基础上进行精准的增量修改与优化。\n\n` +
@@ -36235,19 +36488,54 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!chat.settings) chat.settings = {};
           if (chat.settings.useModuleMap !== false && chat.activeModuleId) {
             if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
-            chat.settings.moduleMiniMaps[chat.activeModuleId] = {
+            const modMapObj = {
               svg: newSvgCode,
               style: curStyle
             };
+            chat.settings.moduleMiniMaps[chat.activeModuleId] = modMapObj;
+            chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
+            if (dbInstance && dbInstance.modules) {
+              try {
+                await dbInstance.modules.update(chat.activeModuleId, {
+                  miniMapSvg: newSvgCode,
+                  miniMapStyle: curStyle
+                });
+                if (!isNaN(Number(chat.activeModuleId))) {
+                  await dbInstance.modules.update(Number(chat.activeModuleId), {
+                    miniMapSvg: newSvgCode,
+                    miniMapStyle: curStyle
+                  });
+                }
+              } catch (e) {}
+            }
+            if (typeof state !== "undefined" && state.chats) {
+              Object.values(state.chats).forEach((otherChat) => {
+                if (
+                  otherChat &&
+                  otherChat.id !== chat.id &&
+                  String(otherChat.activeModuleId) === String(chat.activeModuleId)
+                ) {
+                  if (!otherChat.settings) otherChat.settings = {};
+                  if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
+                  otherChat.settings.moduleMiniMaps[chat.activeModuleId] = modMapObj;
+                  otherChat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
+                  otherChat.settings.miniMapSvg = newSvgCode;
+                  otherChat.settings.miniMapStyle = curStyle;
+                  if (dbInstance && dbInstance.chats) {
+                    dbInstance.chats.put(otherChat).catch(() => {});
+                  }
+                }
+              });
+            }
           } else {
             chat.settings.contextMiniMapSvg = newSvgCode;
             chat.settings.contextMiniMapStyle = curStyle;
           }
           chat.settings.miniMapSvg = newSvgCode;
+          chat.settings.miniMapStyle = curStyle;
           if (dbInstance) await dbInstance.chats.put(chat);
 
-          const miniModal = document.getElementById("chat-mini-map-modal");
-          if (miniModal && miniModal.classList.contains("visible")) {
+          if (typeof renderChatMiniMap === "function") {
             renderChatMiniMap();
           }
 
@@ -38006,10 +38294,7 @@ ${isGroupThinkingActive ? `    "thinking": "1. 意图分析... 2. 心理推演..
 ## 你可以使用的操作指令列表:
 ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
 - 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
-${isGroupMusicAllowed ? (() => {
-  const pStr = (chat?.settings?.aiMusicPreference && chat.settings.aiMusicPreference !== "全部") ? chat.settings.aiMusicPreference : "纯乐、古风、日系、动漫、游戏、氛围配乐";
-  return `- 播放场景配乐或音乐: 必须根据具体场景与剧情氛围，并结合当前设定的音乐偏好标签 ${pStr} 挑选契合的曲目，在相应消息文本末尾插入 [音乐: 准确歌名 - 歌手] 或 [音乐: 著名原声名]。音乐禁令：严禁使用任何现代中文流行歌曲，严禁出现周杰伦等现代流行歌手的歌曲，古风歌曲不受此流行歌禁令限制。\n`;
-})() : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
+${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
 ${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}- 发送系统消息: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
 
@@ -38473,10 +38758,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			- **发送文本**: \`{"type": "text", "content": "你好呀！"}\`
 			- **发送语音**: \`{"type": "voice_message", "content": "语音的文字内容..."}\`
 			- **发送表情**: \`{"type": "sticker", "sticker_name": "表情的名字"}\`，表情名必须在表情列表中，禁止杜撰
-			${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (() => {
-  const pStr = (chat?.settings?.aiMusicPreference && chat.settings.aiMusicPreference !== "全部") ? chat.settings.aiMusicPreference : "纯乐、古风、日系、动漫、游戏、氛围配乐";
-  return `- **播放场景配乐或音乐**: 必须根据具体场景与剧情氛围，并结合当前设定的音乐偏好标签 ${pStr} 挑选契合的曲目，在相应消息文本末尾插入 [音乐: 准确歌名 - 歌手] 或 [音乐: 著名原声名]。音乐禁令：严禁使用任何现代中文流行歌曲，严禁出现周杰伦等现代流行歌手的歌曲，古风歌曲不受此流行歌禁令限制。\n`;
-})() : ""}- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
+			${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
 			${
         chat.loadModuleImages && chat.activeModuleId
           ? `- **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n`
@@ -43684,6 +43966,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           if (typeof updateLyricsLockUI === "function") {
             updateLyricsLockUI();
           }
+
+          // 6. 更新播放模式按钮文本
+          const modeBtn = document.getElementById("music-mode-btn");
+          if (modeBtn) {
+            modeBtn.textContent = {
+              order: "顺序",
+              random: "随机",
+              single: "单曲",
+            }[state.musicState.playMode] || "顺序";
+          }
         }
 
         function updateElapsedTimeDisplay() {
@@ -44031,8 +44323,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
         }
 
         // 播放下一首（正确跳过保活音频）
-        function playNext() {
+        function playNext(isManual = false) {
           if (state.musicState.playlist.length === 0) return;
+
+          // 若非手动点击（由歌曲自然播放结束触发），且当前处于单曲循环模式，重播当前歌曲
+          if (!isManual && state.musicState.playMode === "single") {
+            if (state.musicState.currentIndex >= 0 && state.musicState.currentIndex < state.musicState.playlist.length) {
+              playSong(state.musicState.currentIndex);
+              return;
+            }
+          }
 
           let nextIndex = state.musicState.currentIndex; // 使用临时变量作为起点
           let attempts = 0; // 防止死循环的安全计数
@@ -44040,13 +44340,21 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           do {
             switch (state.musicState.playMode) {
               case "random":
-                // 随机模式：直接生成一个随机数
-                nextIndex = Math.floor(
-                  Math.random() * state.musicState.playlist.length,
-                );
+                // 随机模式：如果有多首歌曲，随机挑选一首不同于当前曲目的歌曲
+                if (state.musicState.playlist.length > 1) {
+                  let rIndex = nextIndex;
+                  let rAttempts = 0;
+                  do {
+                    rIndex = Math.floor(Math.random() * state.musicState.playlist.length);
+                    rAttempts++;
+                  } while (rIndex === state.musicState.currentIndex && rAttempts < 10);
+                  nextIndex = rIndex;
+                } else {
+                  nextIndex = 0;
+                }
                 break;
               case "single":
-                // 单曲循环模式：虽然通常由ended触发重播，但在手动点击下一首时，应当切换到下一首
+                // 单曲循环模式：在手动点击下一首时，切换到下一首
                 nextIndex = (nextIndex + 1) % state.musicState.playlist.length;
                 break;
               case "order":
@@ -44061,7 +44369,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             // 如果选中的是保活音频 (isKeepAlive=true)
             // 并且列表里不只有这一首歌
             // 并且没有尝试超过列表长度的2倍（防止全都是保活音频导致死循环）
-            state.musicState.playlist[nextIndex].isKeepAlive &&
+            state.musicState.playlist[nextIndex]?.isKeepAlive &&
             state.musicState.playlist.length > 1 &&
             attempts < state.musicState.playlist.length * 2
           );
@@ -44081,7 +44389,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               state.musicState.playlist.length;
             attempts++;
           } while (
-            state.musicState.playlist[newIndex].isKeepAlive &&
+            state.musicState.playlist[newIndex]?.isKeepAlive &&
             state.musicState.playlist.length > 1 &&
             attempts < state.musicState.playlist.length * 2
           );
@@ -44094,11 +44402,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const currentModeIndex = modes.indexOf(state.musicState.playMode);
           state.musicState.playMode =
             modes[(currentModeIndex + 1) % modes.length];
-          document.getElementById("music-mode-btn").textContent = {
-            order: "顺序",
-            random: "随机",
-            single: "单曲",
-          }[state.musicState.playMode];
+          const modeBtn = document.getElementById("music-mode-btn");
+          if (modeBtn) {
+            modeBtn.textContent = {
+              order: "顺序",
+              random: "随机",
+              single: "单曲",
+            }[state.musicState.playMode] || "顺序";
+          }
         }
 
         async function addSongFromURL() {
@@ -62202,6 +62513,66 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
         }
 
+        function getMessageSpeakerIdentifier(m, chat) {
+          if (!m) return "";
+          const isUser = m.role === "user" || m.sender === "user" || m.isUser || (chat && chat.isGroup ? (chat.ownerId === "user" && m.senderId === "user") : false);
+          if (isUser) return "__user__";
+          if (chat && chat.isGroup) {
+            return String(m.senderId || m.senderName || m.sender || "unknown_member");
+          }
+          return String(chat ? (chat.id || "ai") : "ai");
+        }
+
+        async function handleManualQuoteVoiceClick(startMsg, clickedBubble, chat) {
+          if (!startMsg || !chat) return;
+          const msgs = chat.history || chat.messages || [];
+          if (!Array.isArray(msgs) || msgs.length === 0) return;
+
+          const startIdx = msgs.findIndex((m) => String(m.timestamp) === String(startMsg.timestamp));
+          if (startIdx === -1) {
+            await handleTripleClickQuoteVoice(startMsg, clickedBubble, chat);
+            return;
+          }
+
+          const startSpeaker = getMessageSpeakerIdentifier(startMsg, chat);
+          const sameSpeakerMsgs = [];
+          for (let i = startIdx; i < msgs.length; i++) {
+            const curMsg = msgs[i];
+            if (!curMsg) continue;
+            const curSpeaker = getMessageSpeakerIdentifier(curMsg, chat);
+            if (curSpeaker !== startSpeaker) {
+              break;
+            }
+            if (/「[^」]+」/.test(String(curMsg.content || curMsg.text || ""))) {
+              sameSpeakerMsgs.push(curMsg);
+            }
+          }
+
+          if (sameSpeakerMsgs.length === 0) {
+            await handleTripleClickQuoteVoice(startMsg, clickedBubble, chat);
+            return;
+          }
+
+          const queueId = ++_activeAutoVoiceQueueId;
+
+          for (let k = 0; k < sameSpeakerMsgs.length; k++) {
+            if (queueId !== _activeAutoVoiceQueueId) break;
+            if (String(state.activeChatId) !== String(chat.id)) break;
+
+            const targetMsg = sameSpeakerMsgs[k];
+            let bubble = null;
+            if (k === 0 && clickedBubble && document.body.contains(clickedBubble)) {
+              bubble = clickedBubble;
+            } else {
+              bubble = document.querySelector(`.message-bubble[data-timestamp="${targetMsg.timestamp}"]`);
+            }
+            await handleTripleClickQuoteVoice(targetMsg, bubble, chat);
+
+            if (queueId !== _activeAutoVoiceQueueId) break;
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
+
         async function handleAutoQuoteVoiceAfterAiReply(chat) {
           if (!chat) return;
           const msgs = chat.history || chat.messages || [];
@@ -62223,7 +62594,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
           if (recentMsgsToPlay.length === 0) return;
 
-          // 仅筛选包含「」台词的气泡，若气泡内没有「」，直接跳过该气泡，不留空白等待
           const targetMsgs = recentMsgsToPlay.filter((m) =>
             /「[^」]+」/.test(String(m.content || ""))
           );
@@ -62231,16 +62601,15 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
           const queueId = ++_activeAutoVoiceQueueId;
 
-          for (const targetMsg of targetMsgs) {
+          for (let k = 0; k < targetMsgs.length; k++) {
             if (queueId !== _activeAutoVoiceQueueId) break;
             if (String(state.activeChatId) !== String(chat.id)) break;
 
-            const bubble = document.querySelector(`.message-bubble[data-timestamp="${targetMsg.timestamp}"]`) ||
-                           document.querySelector('#message-flow-container .message-bubble:last-child');
+            const targetMsg = targetMsgs[k];
+            const bubble = document.querySelector(`.message-bubble[data-timestamp="${targetMsg.timestamp}"]`);
             await handleTripleClickQuoteVoice(targetMsg, bubble, chat);
 
             if (queueId !== _activeAutoVoiceQueueId) break;
-            // 每条台词播放自然结束之后，短暂停顿200毫秒立即播报下一条
             await new Promise((r) => setTimeout(r, 200));
           }
         }
@@ -73606,7 +73975,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             .addEventListener("click", togglePlayPause);
           document
             .getElementById("music-next-btn")
-            .addEventListener("click", playNext);
+            .addEventListener("click", () => playNext(true));
           document
             .getElementById("music-prev-btn")
             .addEventListener("click", playPrev);
@@ -73682,9 +74051,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               console.log("保活音频循环中...");
               audioPlayer.currentTime = 0;
               audioPlayer.play().catch((e) => console.error("重播失败:", e));
+            } else if (state.musicState.playMode === "single") {
+              // 单曲循环模式：单曲结束强制重播当前歌曲，不播放其他歌
+              audioPlayer.currentTime = 0;
+              audioPlayer.play().catch((e) => {
+                console.error("单曲重播失败:", e);
+                playSong(state.musicState.currentIndex);
+              });
             } else {
               // 正常歌曲走正常逻辑
-              playNext();
+              playNext(false);
             }
           });
 
@@ -76456,11 +76832,11 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
 
           const MUSIC_PREF_LIST = [
-            "全部", "纯乐", "古风", "日系", "动漫", "游戏",
-            "恐怖", "悬疑", "悲伤", "抒情", "治愈", "燃曲",
-            "战斗", "欢快", "唯美", "空灵", "史诗", "奇幻",
-            "幽默", "轻松", "赛博", "蒸汽", "民谣", "蓝调",
-            "爵士", "摇滚", "电子"
+            "全部", "纯乐", "人声", "古风", "日系", "动漫",
+            "游戏", "恐怖", "悬疑", "悲伤", "抒情", "治愈",
+            "燃曲", "战斗", "欢快", "唯美", "空灵", "史诗",
+            "奇幻", "幽默", "轻松", "赛博", "蒸汽", "民谣",
+            "蓝调", "爵士", "摇滚", "电子"
           ];
 
           function openMusicPreferenceModal() {

@@ -7832,11 +7832,23 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 #music-lyrics-container {
   display: none;
 }
+#music-display-area.show-lyrics {
+  width: 100%;
+  height: 192px;
+}
 #music-display-area.show-lyrics #music-album-cover {
   display: none;
 }
 #music-display-area.show-lyrics #music-lyrics-container {
   display: block;
+}
+#music-display-area.show-lyrics ~ #music-player-song-title,
+#music-display-area.show-lyrics ~ #music-player-artist {
+  display: none !important;
+}
+#ls-display-area.show-lyrics ~ #ls-song-title,
+#ls-display-area.show-lyrics ~ #ls-artist {
+  display: none !important;
 }
 #music-player-song-title {
   margin-bottom: 2px;

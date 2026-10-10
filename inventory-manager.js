@@ -436,6 +436,68 @@
     const fallbackPrompt = `1item, ${item.name || "item"}${item.desc ? ", " + item.desc : ""}, masterpiece, best quality`;
     const promptToUse = effectivePrompt || fallbackPrompt;
 
+    // 道具图片去重：优先检索当前会话、其他所有群聊或全局道具库中是否已有同名道具图片，避免重复生图与多重复制
+    const findExistingItemAvatar = (name) => {
+      if (!name || typeof name !== "string") return null;
+      const targetName = name.trim();
+      if (!targetName) return null;
+      if (typeof state !== "undefined" && state.chats) {
+        for (const otherChat of Object.values(state.chats)) {
+          if (!otherChat) continue;
+          const pools = [otherChat.inventory, otherChat.aiInventory];
+          if (Array.isArray(otherChat.members)) {
+            otherChat.members.forEach((m) => {
+              if (Array.isArray(m.inventory)) pools.push(m.inventory);
+            });
+          }
+          for (const list of pools) {
+            if (!Array.isArray(list)) continue;
+            const match = list.find(
+              (i) =>
+                i &&
+                i.name &&
+                i.name.trim() === targetName &&
+                i.avatar &&
+                typeof i.avatar === "string" &&
+                i.avatar.trim()
+            );
+            if (match) return match.avatar;
+          }
+        }
+      }
+      return null;
+    };
+
+    const cachedAvatar = item.avatar || findExistingItemAvatar(item.name);
+    if (cachedAvatar) {
+      item.avatar = cachedAvatar;
+      const syncList = (list) => {
+        if (!Array.isArray(list)) return;
+        list.forEach((i) => {
+          if (
+            i &&
+            (i.id === item.id ||
+              (i.name === item.name && (i.desc || "") === (item.desc || "")))
+          ) {
+            i.avatar = cachedAvatar;
+          }
+        });
+      };
+      syncList(chat.inventory);
+      syncList(chat.aiInventory);
+      if (Array.isArray(chat.members)) {
+        chat.members.forEach((m) => syncList(m.inventory));
+      }
+      if (dbInstance && dbInstance.chats) {
+        await dbInstance.chats.put(chat);
+      }
+      renderInventoryList();
+      if (typeof renderGlobalInventoryList === "function") {
+        renderGlobalInventoryList();
+      }
+      return;
+    }
+
     if (promptToUse && typeof window.callNovelAiDirect === "function") {
       // 异步调用，默认640x640小方图，生成后即时压缩至0.4
       window.callNovelAiDirect(promptToUse, {
@@ -2626,7 +2688,13 @@ HTML设计与排版核心规范：
       showClueToast("线索转化完成");
       openClueReaderModal(newClueItem);
 
-      if (cluePrompt && typeof window.callNovelAiDirect === "function") {
+      const cachedClueAvatar = findExistingItemAvatar(newClueItem.name);
+      if (cachedClueAvatar) {
+        newClueItem.avatar = cachedClueAvatar;
+        await saveCurrentChatInventory(inventory);
+        renderInventoryList();
+        if (typeof renderGlobalInventoryList === "function") renderGlobalInventoryList();
+      } else if (cluePrompt && typeof window.callNovelAiDirect === "function") {
         window.callNovelAiDirect(cluePrompt, {
           resolution: "640x640",
           seed: Math.floor(Math.random() * 4294967295),

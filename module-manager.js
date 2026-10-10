@@ -6111,19 +6111,37 @@ ${chap.content}
             statusTip.textContent = `正在绘制 第 ${i + 1} 张 共 ${targetLocs.length} 张 地点：${loc.name}`;
           }
 
-          let imgDataUrl = '';
-          if (typeof window.callNovelAiDirect === 'function') {
-            imgDataUrl = await window.callNovelAiDirect(locPromptText, {
-              artist: fullArtistPrompt,
-              negativePrompt: defaultNeg,
-              resolution: naiSettings.resolution || '1024x1024',
-              seed: Math.floor(Math.random() * 4294967295)
-            });
-          } else if (typeof generateNovelAIImageForCharacter === 'function') {
-            const promptParts = [];
-            if (fullArtistPrompt) promptParts.push(fullArtistPrompt);
-            if (locPromptText) promptParts.push(locPromptText);
-            imgDataUrl = await generateNovelAIImageForCharacter('', promptParts.join(', '));
+          // 优先检查该地点是否已有生成的图片（模组库或任意群聊中），实现全量图片去重复用
+          let existingDataUrl = '';
+          if (Array.isArray(locations)) {
+            const m = locations.find(x => x.name === loc.name && x.imageUrl);
+            if (m) existingDataUrl = m.imageUrl;
+          }
+          if (!existingDataUrl && typeof state !== 'undefined' && state.chats) {
+            for (const c of Object.values(state.chats)) {
+              if (!c || !c.settings) continue;
+              const cl = (c.settings.customLocations || []).find(x => x.name === loc.name && x.imageUrl);
+              if (cl) { existingDataUrl = cl.imageUrl; break; }
+              const ctx = (c.settings.contextMapData || []).find(x => x.name === loc.name && x.imageUrl);
+              if (ctx) { existingDataUrl = ctx.imageUrl; break; }
+            }
+          }
+
+          let imgDataUrl = existingDataUrl;
+          if (!imgDataUrl) {
+            if (typeof window.callNovelAiDirect === 'function') {
+              imgDataUrl = await window.callNovelAiDirect(locPromptText, {
+                artist: fullArtistPrompt,
+                negativePrompt: defaultNeg,
+                resolution: naiSettings.resolution || '1024x1024',
+                seed: Math.floor(Math.random() * 4294967295)
+              });
+            } else if (typeof generateNovelAIImageForCharacter === 'function') {
+              const promptParts = [];
+              if (fullArtistPrompt) promptParts.push(fullArtistPrompt);
+              if (locPromptText) promptParts.push(locPromptText);
+              imgDataUrl = await generateNovelAIImageForCharacter('', promptParts.join(', '));
+            }
           }
 
           if (!imgDataUrl) {
@@ -6131,7 +6149,7 @@ ${chap.content}
           }
 
           if (imgDataUrl) {
-            if (typeof compressImage === 'function') {
+            if (typeof compressImage === 'function' && !existingDataUrl) {
               imgDataUrl = await compressImage(imgDataUrl, 0.5, 900);
             }
             loc.imageUrl = imgDataUrl;
@@ -6147,6 +6165,20 @@ ${chap.content}
                   await dbInstance.modules.update(moduleId, { mapNodes: mod.mapNodes });
                 }
               } catch (e) {}
+            }
+            // 同步给所有使用该模组的群聊，全局仅保留并调用同一份图片
+            if (typeof state !== 'undefined' && state.chats) {
+              Object.values(state.chats).forEach(c => {
+                if (c && String(c.activeModuleId) === String(moduleId)) {
+                  if (Array.isArray(c.settings?.customLocations)) {
+                    const match = c.settings.customLocations.find(cl => cl.name === loc.name);
+                    if (match) match.imageUrl = imgDataUrl;
+                  }
+                  if (dbInstance && dbInstance.chats) {
+                    dbInstance.chats.put(c).catch(() => {});
+                  }
+                }
+              });
             }
 
             this.renderModuleDetailMap(chapters);
@@ -6368,6 +6400,19 @@ ${chap.content}
                   }
                 }
               } catch (e) {}
+            }
+            if (typeof state !== 'undefined' && state.chats) {
+              Object.values(state.chats).forEach(c => {
+                if (c && String(c.activeModuleId) === String(moduleId)) {
+                  if (Array.isArray(c.settings?.customLocations)) {
+                    const match = c.settings.customLocations.find(cl => cl.name === loc.name);
+                    if (match) match.imageUrl = imgDataUrl;
+                  }
+                  if (dbInstance && dbInstance.chats) {
+                    dbInstance.chats.put(c).catch(() => {});
+                  }
+                }
+              });
             }
 
             this.renderModuleDetailMap(chapters);
