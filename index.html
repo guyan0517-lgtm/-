@@ -33608,8 +33608,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.toggleChatMapModal = toggleChatMapModal;
 
-        let isMiniMapGenerating = false;
-        let miniMapAbortController = null;
+        const miniMapGeneratingControllers = new Map();
+        function isMiniMapGenerating(targetChatId = null) {
+          const cid = targetChatId || state.activeChatId;
+          return cid ? miniMapGeneratingControllers.has(String(cid)) : false;
+        }
         let isMapImagesDrawing = false;
         let mapImagesAbortController = null;
         let isChatMapEditing = false;
@@ -33669,7 +33672,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               viewToggleBtn.textContent = chat.settings.mapViewMode === "rich" ? "文字" : "图文";
             }
             if (topGenBtn) {
-              if (isMiniMapGenerating) {
+              if (isMiniMapGenerating(chat.id)) {
                 topGenBtn.textContent = "暂停";
               } else {
                 topGenBtn.textContent = "生成小地图";
@@ -33732,13 +33735,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (topGenBtn) {
             topGenBtn.onclick = async () => {
-              if (isMiniMapGenerating) {
-                if (miniMapAbortController) {
-                  miniMapAbortController.abort();
-                  miniMapAbortController = null;
+              const currentChatId = chat.id;
+              if (isMiniMapGenerating(currentChatId)) {
+                const ctrl = miniMapGeneratingControllers.get(String(currentChatId));
+                if (ctrl) {
+                  try { ctrl.abort(); } catch(e) {}
+                  miniMapGeneratingControllers.delete(String(currentChatId));
                 }
-                isMiniMapGenerating = false;
-                topGenBtn.textContent = "继续";
+                if (topGenBtn && String(state.activeChatId) === String(currentChatId)) {
+                  topGenBtn.textContent = "继续";
+                }
                 if (typeof window.showCustomAlert === "function") {
                   window.showCustomAlert("提示", "已暂停生成小地图");
                 }
@@ -33749,23 +33755,32 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               hideLocationBubble();
 
               openMiniMapStylePickerModal(async (style) => {
-                isMiniMapGenerating = true;
-                updateButtonsState();
+                const abortCtrl = new AbortController();
+                miniMapGeneratingControllers.set(String(currentChatId), abortCtrl);
+                if (topGenBtn && String(state.activeChatId) === String(currentChatId)) {
+                  topGenBtn.textContent = "暂停";
+                }
                 if (typeof window.showCustomAlert === "function") {
                   window.showCustomAlert("提示", "正在后台生成小地图，生成完成后会自动通知您");
                 }
                 try {
-                  await generateChatMiniMapSvg(style);
-                  isMiniMapGenerating = false;
-                  updateButtonsState();
+                  await generateChatMiniMapSvg(style, currentChatId, abortCtrl.signal);
+                  miniMapGeneratingControllers.delete(String(currentChatId));
+                  if (topGenBtn && String(state.activeChatId) === String(currentChatId)) {
+                    topGenBtn.textContent = "生成小地图";
+                  }
                   if (typeof window.showCustomAlert === "function") {
                     window.showCustomAlert("提示", "小地图生成完毕");
                   }
                 } catch (e) {
-                  console.error("生成小地图异常:", e);
-                  isMiniMapGenerating = false;
-                  if (topGenBtn) topGenBtn.textContent = "继续";
-                  if (typeof window.showCustomAlert === "function") {
+                  miniMapGeneratingControllers.delete(String(currentChatId));
+                  if (e?.name !== "AbortError") {
+                    console.error("生成小地图异常:", e);
+                  }
+                  if (topGenBtn && String(state.activeChatId) === String(currentChatId)) {
+                    topGenBtn.textContent = "继续";
+                  }
+                  if (e?.name !== "AbortError" && typeof window.showCustomAlert === "function") {
                     window.showCustomAlert("提示", "生成小地图中断，点击可继续生成");
                   }
                 }
@@ -36176,9 +36191,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.buildProceduralMiniMapSvg = buildProceduralMiniMapSvg;
 
-        async function generateChatMiniMapSvg(styleName = "自适应") {
-          if (!state.activeChatId) return;
-          const chat = state.chats[state.activeChatId];
+        async function generateChatMiniMapSvg(styleName = "自适应", targetChatId = null, abortSignal = null) {
+          const resolvedChatId = targetChatId || state.activeChatId;
+          if (!resolvedChatId) return;
+          let chat = state.chats[resolvedChatId] || state.chats[String(resolvedChatId)] || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(resolvedChatId)));
+          if (!chat && typeof db !== "undefined" && db.chats) {
+            try {
+              chat = await db.chats.get(typeof resolvedChatId === "number" ? resolvedChatId : parseInt(resolvedChatId)) || await db.chats.get(String(resolvedChatId));
+              if (chat && state.chats) {
+                state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
+              }
+            } catch (e) {}
+          }
           if (!chat) return;
 
           const locations = await getAllChatLocations(chat);
@@ -36352,11 +36377,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     stream: false
                   };
 
-              const resp = await fetch(requestUrl, {
+              const fetchOptions = {
                 method: "POST",
                 headers: requestHeaders,
                 body: JSON.stringify(requestBody)
-              });
+              };
+              if (abortSignal) {
+                fetchOptions.signal = abortSignal;
+              }
+              const resp = await fetch(requestUrl, fetchOptions);
 
               if (resp.ok) {
                 const respData = await resp.json();
@@ -36409,11 +36438,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           chat.settings.miniMapSvg = svgCode;
           chat.settings.miniMapStyle = styleName;
+          if (state.chats) {
+            state.chats[chat.id] = chat;
+            state.chats[String(chat.id)] = chat;
+          }
           if (dbInstance) await dbInstance.chats.put(chat);
 
-          // 若地图浮层已处于打开状态，立即原地刷新渲染
+          // 若当前活跃查看的正是此聊天且地图浮层已处于打开状态，立即原地刷新渲染
           const miniModal = document.getElementById("chat-mini-map-modal");
-          if (miniModal && miniModal.classList.contains("visible")) {
+          if (miniModal && miniModal.classList.contains("visible") && String(state.activeChatId) === String(chat.id)) {
             renderChatMiniMap();
           }
 
@@ -39667,6 +39700,21 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             let newMessagesToRender = [];
 
             let notificationShown = false;
+
+            // 守密人末尾强制生图：立即在后台并发启动生图任务，不阻塞前端文字逐条延迟播放，且后台切换切走切回不中断
+            window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
+            let finishTurnRender = null;
+            window.chatTurnRenderPromise[String(chat.id)] = new Promise((resolve) => {
+              finishTurnRender = resolve;
+            });
+
+            let keeperDrawStarted = false;
+            if (chat.settings && chat.settings.keeperForcedDraw) {
+              keeperDrawStarted = true;
+              executeKeeperForcedDraw(chatId, messagesArray).catch((drawErr) => {
+                console.error("守密人末尾强制生图执行失败:", drawErr);
+              });
+            }
 
             for (const msgData of messagesArray) {
               if (!msgData || typeof msgData !== "object") {
@@ -43423,6 +43471,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }
             }
 
+            if (finishTurnRender) {
+              finishTurnRender();
+              finishTurnRender = null;
+            }
+            delete window.chatTurnRenderPromise[String(chat.id)];
+
             if (callHasBeenHandled && videoCallState.isGroupCall) {
               videoCallState.isAwaitingResponse = false;
               if (videoCallState.participants.length > 0) {
@@ -43588,13 +43642,20 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }, 150);
             }
 
-            // --- 守密人末尾强制生图（后台异步生成，不阻塞语音合成与播放） ---
-            if (chat.settings && chat.settings.keeperForcedDraw) {
+            // --- 守密人末尾强制生图（如果之前未启动则兜底启动） ---
+            if (chat.settings && chat.settings.keeperForcedDraw && !keeperDrawStarted) {
               executeKeeperForcedDraw(chatId).catch((drawErr) => {
                 console.error("守密人末尾强制生图执行失败:", drawErr);
               });
             }
           } catch (error) {
+            if (finishTurnRender) {
+              finishTurnRender();
+              finishTurnRender = null;
+            }
+            if (chat && chat.id) {
+              delete window.chatTurnRenderPromise[String(chat.id)];
+            }
             chat.history = chat.history.filter((msg) => !msg.isTemporary);
             if (
               !chat.isGroup &&
@@ -61168,8 +61229,17 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           imgObj.src = avatarGenState.currentImage;
         }
 
-        async function executeKeeperForcedDraw(chatId) {
-          const chat = state.chats[chatId];
+        async function executeKeeperForcedDraw(chatId, currentTurnMsgs = null) {
+          let chat = state.chats[chatId] || state.chats[String(chatId)] || (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
+          if (!chat && typeof db !== "undefined" && db.chats) {
+            try {
+              chat = await db.chats.get(typeof chatId === "number" ? chatId : parseInt(chatId)) || await db.chats.get(String(chatId));
+              if (chat && state.chats) {
+                state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
+              }
+            } catch (e) {}
+          }
           if (!chat || !chat.settings || !chat.settings.keeperForcedDraw) return;
 
           window.activeGeneratingKeeperDraw = window.activeGeneratingKeeperDraw || {};
@@ -61193,7 +61263,22 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           try {
             console.log("执行守秘人末尾强制生图...");
             const maxMem = chat.settings.maxMemory || 12;
-            const recentMsgs = (chat.history || [])
+            let combinedHistory = [...(chat.history || [])];
+            if (Array.isArray(currentTurnMsgs)) {
+              for (const item of currentTurnMsgs) {
+                if (item) {
+                  const text = item.content || item.message || (typeof item === "string" ? item : "");
+                  if (text) {
+                    combinedHistory.push({
+                      role: "assistant",
+                      senderName: item.name || (chat.isGroup ? "群成员" : chat.name),
+                      content: text
+                    });
+                  }
+                }
+              }
+            }
+            const recentMsgs = combinedHistory
               .filter((m) => m && !m.isHidden && !m.isTemporary && m.type !== "naiimag")
               .slice(-maxMem);
 
@@ -61392,9 +61477,20 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               content: `[强制生图调用失败: ${err.message}]`,
               timestamp: Date.now(),
             };
+            if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
+              try {
+                await window.chatTurnRenderPromise[String(chat.id)];
+              } catch (e) {}
+            }
             chat.history.push(errorMsg);
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
+            }
             await db.chats.put(chat);
-            if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
+            const msgContainer = document.getElementById("chat-messages");
+            const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${errorMsg.timestamp}"]`);
+            if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
               appendMessage(errorMsg, chat);
             }
           } finally {
@@ -61452,9 +61548,20 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               content: `[NovelAI生图提示词: ${aiPrompt}]`,
               timestamp: Date.now(),
             };
+            if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
+              try {
+                await window.chatTurnRenderPromise[String(chat.id)];
+              } catch (e) {}
+            }
             chat.history.push(fallbackMessage);
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
+            }
             await db.chats.put(chat);
-            if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
+            const msgContainer = document.getElementById("chat-messages");
+            const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${fallbackMessage.timestamp}"]`);
+            if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
               appendMessage(fallbackMessage, chat);
             }
             return;
@@ -61594,10 +61701,22 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               timestamp: Date.now(),
             };
 
+            if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
+              try {
+                await window.chatTurnRenderPromise[String(chat.id)];
+              } catch (e) {}
+            }
             chat.history.push(aiMessage);
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
+            }
             await db.chats.put(chat);
-            if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
+            const msgContainer = document.getElementById("chat-messages");
+            const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${aiMessage.timestamp}"]`);
+            if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
               appendMessage(aiMessage, chat);
+              if (typeof playNotificationSound === "function") playNotificationSound();
             }
           } catch (err) {
             console.warn("NovelAI图片生成失败，降级显示提示词:", err);
@@ -61615,9 +61734,20 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               content: `[图片生成异常: ${err.message || "请求失败"}]`,
               timestamp: Date.now(),
             };
+            if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
+              try {
+                await window.chatTurnRenderPromise[String(chat.id)];
+              } catch (e) {}
+            }
             chat.history.push(fallbackMessage);
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
+            }
             await db.chats.put(chat);
-            if (state.activeChatId === chat.id && document.getElementById("chat-interface-screen").classList.contains("active")) {
+            const msgContainer = document.getElementById("chat-messages");
+            const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${fallbackMessage.timestamp}"]`);
+            if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
               appendMessage(fallbackMessage, chat);
             }
           }
