@@ -8575,7 +8575,7 @@
         <div class="modal-footer" id="chat-map-modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
           <div style="display: flex; align-items: center; justify-content: flex-start;">
             <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: var(--text-secondary); user-select: none;">
-              <input type="checkbox" id="chat-map-use-module-toggle" checked style="width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent-color);" />
+              <input type="checkbox" id="chat-map-use-module-toggle" style="width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent-color);" />
               <span>使用模组</span>
             </label>
           </div>
@@ -31901,19 +31901,36 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const allLocs = (typeof getAllChatLocations === "function") ? await getAllChatLocations(chat) : [];
                 const exactFound = allLocs.find(l => l.name === locName || (l.name && locName && l.name.trim() === locName.trim()));
                 const descText = (exactFound && exactFound.desc && typeof exactFound.desc === 'string') ? exactFound.desc.trim() : '';
+                const hasImg = Boolean(exactFound && exactFound.imageUrl && typeof exactFound.imageUrl === 'string' && exactFound.imageUrl.trim());
+                const hasDesc = Boolean(descText);
                 const isRichMode = (chat?.settings?.mapViewMode === 'rich');
 
-                if (isRichMode) {
+                if (!hasImg && !hasDesc) {
                   if (typeof hideLocationBubble === 'function') hideLocationBubble();
-                  const popup = document.getElementById('chat-location-rich-popup');
-                  if (popup && popup.style.display !== 'none' && activeRichLocationPopupName === locName) {
-                    hideRichLocationPopup();
-                  } else if (typeof showRichLocationPopup === 'function') {
-                    showRichLocationPopup(span, locName, exactFound, descText);
+                  if (typeof hideRichLocationPopup === 'function') hideRichLocationPopup();
+                  return;
+                }
+
+                if (isRichMode) {
+                  if (hasImg) {
+                    if (typeof hideLocationBubble === 'function') hideLocationBubble();
+                    const popup = document.getElementById('chat-location-rich-popup');
+                    if (popup && popup.style.display !== 'none' && activeRichLocationPopupName === locName) {
+                      hideRichLocationPopup();
+                    } else if (typeof showRichLocationPopup === 'function') {
+                      showRichLocationPopup(span, locName, exactFound, descText);
+                    }
+                  } else if (hasDesc) {
+                    if (typeof hideRichLocationPopup === 'function') hideRichLocationPopup();
+                    if (typeof activeLocationBubbleTarget !== 'undefined' && activeLocationBubbleTarget === span) {
+                      if (typeof hideLocationBubble === 'function') hideLocationBubble();
+                    } else if (typeof showLocationBubble === 'function') {
+                      showLocationBubble(span, descText);
+                    }
                   }
                 } else {
                   if (typeof hideRichLocationPopup === 'function') hideRichLocationPopup();
-                  if (descText) {
+                  if (hasDesc) {
                     if (typeof activeLocationBubbleTarget !== 'undefined' && activeLocationBubbleTarget === span) {
                       if (typeof hideLocationBubble === 'function') hideLocationBubble();
                     } else if (typeof showLocationBubble === 'function') {
@@ -32224,6 +32241,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 try { dbChat = await db.chats.get(chat.id); } catch (e) {}
               }
               if (dbChat) {
+                const memHistoryLen = (chat && Array.isArray(chat.history)) ? chat.history.length : 0;
+                const dbHistoryLen = (Array.isArray(dbChat.history)) ? dbChat.history.length : 0;
+                if (memHistoryLen > dbHistoryLen) {
+                  dbChat.history = chat.history;
+                  try { await db.chats.put(dbChat); } catch (_) {}
+                }
                 if (!state.chats) state.chats = {};
                 state.chats[dbChat.id] = dbChat;
                 state.chats[String(dbChat.id)] = dbChat;
@@ -33621,7 +33644,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (!chat.settings) chat.settings = {};
           if (!chat.settings.mapViewMode) chat.settings.mapViewMode = "text";
-          if (chat.settings.useModuleMap === undefined) chat.settings.useModuleMap = true;
+          if (chat.settings.useModuleMap === undefined) chat.settings.useModuleMap = false;
 
           const useModToggle = document.getElementById("chat-map-use-module-toggle");
           const topGenBtn = document.getElementById("chat-map-top-gen-btn");
@@ -33687,7 +33710,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (useModToggle) {
-            useModToggle.checked = chat.settings.useModuleMap !== false && !!chat.activeModuleId;
+            useModToggle.checked = chat.settings.useModuleMap === true && !!chat.activeModuleId;
             const onToggleChange = async () => {
               chat.settings.useModuleMap = useModToggle.checked;
               
@@ -33710,9 +33733,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (modMap?.svg) {
                   chat.settings.miniMapSvg = modMap.svg;
                   chat.settings.miniMapStyle = modMap.style || "奶油风";
+                } else {
+                  chat.settings.miniMapSvg = null;
                 }
-              } else if (!chat.settings.useModuleMap && chat.settings.contextMiniMapSvg) {
-                chat.settings.miniMapSvg = chat.settings.contextMiniMapSvg;
+              } else {
+                chat.settings.miniMapSvg = chat.settings.contextMiniMapSvg || null;
                 chat.settings.miniMapStyle = chat.settings.contextMiniMapStyle || "奶油风";
               }
 
@@ -34479,7 +34504,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let locations = [];
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           const toggleEl = document.getElementById("chat-map-use-module-toggle");
-          const useModule = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap !== false && !!chat?.activeModuleId);
+          const useModule = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
 
           if (useModule && chat && chat.activeModuleId && dbInstance) {
             try {
@@ -34606,7 +34631,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function saveLocationImage(chat, node, b64, newPrompt) {
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           const toggleEl = document.getElementById("chat-map-use-module-toggle");
-          const useModule = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap !== false && !!chat?.activeModuleId);
+          const useModule = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
 
           if (useModule && chat && chat.activeModuleId && dbInstance) {
             if (dbInstance.moduleLocationNav) {
@@ -35781,7 +35806,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
           const chat = state.chats[state.activeChatId];
-          const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
+          const toggleEl = document.getElementById("chat-map-use-module-toggle");
+          const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat.settings?.useModuleMap === true && !!chat?.activeModuleId);
           let rawSvg = null;
           if (isModMode) {
             rawSvg = chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg
@@ -35814,10 +35840,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 || "奶油风";
             }
           } else {
-            rawSvg = chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null);
+            rawSvg = chat.settings?.contextMiniMapSvg || null;
             if (rawSvg) {
               chat.settings.miniMapSvg = rawSvg;
-              chat.settings.miniMapStyle = chat.settings.contextMiniMapStyle || chat.settings.miniMapStyle || "奶油风";
+              chat.settings.miniMapStyle = chat.settings.contextMiniMapStyle || "奶油风";
+            } else {
+              chat.settings.miniMapSvg = null;
             }
           }
 
@@ -36253,7 +36281,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
 
           let galleryImages = [];
-          if (chat.settings?.useModuleMap !== false && chat.activeModuleId && dbInstance && dbInstance.moduleImages) {
+          const toggleEl = document.getElementById("chat-map-use-module-toggle");
+          const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+          if (isModMode && chat.activeModuleId && dbInstance && dbInstance.moduleImages) {
             try {
               galleryImages = await dbInstance.moduleImages.where("moduleId").equals(chat.activeModuleId).toArray();
             } catch (e) {}
@@ -43469,6 +43499,18 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               if (aiMessage) {
                 // 1. 将新消息存入历史记录
                 chat.history.push(aiMessage);
+                if (state.chats) {
+                  state.chats[chat.id] = chat;
+                  state.chats[String(chat.id)] = chat;
+                  state.chats[chatId] = chat;
+                }
+                if (typeof db !== "undefined" && db.chats) {
+                  try {
+                    await db.chats.put(chat);
+                  } catch (syncErr) {
+                    console.warn("即时同步AI新消息异常:", syncErr);
+                  }
+                }
 
                 if (!isViewingThisChat || document.hidden) {
                   let notificationText;
