@@ -32300,6 +32300,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (activeMiniModal && activeMiniModal.classList.contains("visible") && typeof renderChatMiniMap === "function") {
             renderChatMiniMap();
           }
+          const mapToggleEl = document.getElementById("chat-map-use-module-toggle");
+          if (mapToggleEl) {
+            mapToggleEl.checked = Boolean(chat.settings?.useModuleMap === true && chat.activeModuleId);
+          }
           toggleCallButtons(chat.isGroup || false);
           // 【心声功能】根据是否为单聊，显示或隐藏心形按钮
           const heartBtn = document.getElementById("char-heart-btn");
@@ -33052,6 +33056,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         // ==========================================
         // 地图面板与小地图相关函数
         // ==========================================
+        function isChatModuleMapMode(chat) {
+          if (!chat || !chat.activeModuleId) return false;
+          const modal = document.getElementById("chat-map-modal");
+          const toggleEl = document.getElementById("chat-map-use-module-toggle");
+          if (modal && modal.classList.contains("visible") && toggleEl) {
+            return Boolean(toggleEl.checked && chat.activeModuleId);
+          }
+          return Boolean(chat.settings?.useModuleMap === true && chat.activeModuleId);
+        }
+        window.isChatModuleMapMode = isChatModuleMapMode;
+
         let currentMiniMapStyle = "自适应";
         let activeLocationBubbleTarget = null;
 
@@ -33296,10 +33311,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             deleteBtn.onclick = async () => {
               const chat = state.chats[state.activeChatId];
               if (!chat) return;
-              const toggleEl = document.getElementById("chat-map-use-module-toggle");
-              const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat.settings?.useModuleMap === true && !!chat?.activeModuleId);
+              const isModMode = isChatModuleMapMode(chat);
               const curSvg = isModMode
-                ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || null)
+                ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || (!isNaN(Number(chat.activeModuleId)) ? chat.settings?.moduleMiniMaps?.[Number(chat.activeModuleId)]?.svg : null) || null)
                 : (chat.settings?.contextMiniMapSvg || null);
 
               if (!curSvg) {
@@ -33317,9 +33331,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               if (!confirmed) return;
 
-              if (isModMode) {
-                if (chat.settings?.moduleMiniMaps && chat.settings.moduleMiniMaps[chat.activeModuleId]) {
+              if (isModMode && chat.activeModuleId) {
+                if (chat.settings?.moduleMiniMaps) {
                   delete chat.settings.moduleMiniMaps[chat.activeModuleId];
+                  delete chat.settings.moduleMiniMaps[String(chat.activeModuleId)];
+                  if (!isNaN(Number(chat.activeModuleId))) {
+                    delete chat.settings.moduleMiniMaps[Number(chat.activeModuleId)];
+                  }
                 }
               } else {
                 if (chat.settings) {
@@ -33333,7 +33351,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-              if (dbInstance) await dbInstance.chats.put(chat);
+              if (dbInstance && chat.id) await dbInstance.chats.put(chat);
+              if (typeof state !== 'undefined' && state?.chats) {
+                state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
+              }
 
               renderChatMiniMap();
               closeModal();
@@ -33347,10 +33369,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (modifyBtn) {
             modifyBtn.onclick = () => {
               const chat = state.chats[state.activeChatId];
-              const toggleEl = document.getElementById("chat-map-use-module-toggle");
-              const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+              if (!chat) return;
+              const isModMode = isChatModuleMapMode(chat);
               const curSvg = isModMode
-                ? (chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat?.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || null)
+                ? (chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat?.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || (!isNaN(Number(chat.activeModuleId)) ? chat?.settings?.moduleMiniMaps?.[Number(chat.activeModuleId)]?.svg : null) || null)
                 : (chat?.settings?.contextMiniMapSvg || null);
               if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
                 if (typeof window.showCustomAlert === "function") {
@@ -33733,7 +33755,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (useModToggle) {
-            useModToggle.checked = Boolean(chat.settings.useModuleMap === true && chat.activeModuleId);
+            useModToggle.checked = Boolean(chat.settings?.useModuleMap === true && chat.activeModuleId);
             const onToggleChange = async () => {
               const isChecked = useModToggle.checked;
               if (isChecked && !chat.activeModuleId) {
@@ -33745,13 +33767,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 return;
               }
 
-              chat.settings.useModuleMap = isChecked;
-              
-              if (chat.settings.useModuleMap && chat.activeModuleId) {
-                chat.settings.deletedLocationNames = [];
-                chat.settings.customLocations = [];
-                chat.settings.temporaryLocations = [];
-                let modMap = chat.settings.moduleMiniMaps?.[chat.activeModuleId] || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)] || (!isNaN(Number(chat.activeModuleId)) ? chat.settings.moduleMiniMaps?.[Number(chat.activeModuleId)] : null);
+              if (isChecked) {
+                const hasModMapModifications = Boolean(
+                  (Array.isArray(chat.settings?.temporaryLocations) && chat.settings.temporaryLocations.length > 0) ||
+                  (Array.isArray(chat.settings?.deletedLocationNames) && chat.settings.deletedLocationNames.length > 0) ||
+                  (Array.isArray(chat.settings?.customLocations) && chat.settings.customLocations.length > 0)
+                );
+
+                if (hasModMapModifications) {
+                  let shouldOverwrite = false;
+                  const promptText = "检测到模组地图与模组库之中的不一致，是否要使用模组库的地图进行覆盖。";
+                  if (typeof window.showCustomConfirm === "function") {
+                    shouldOverwrite = await window.showCustomConfirm("提示", promptText);
+                  } else if (typeof confirm === "function") {
+                    shouldOverwrite = confirm(promptText);
+                  }
+
+                  if (shouldOverwrite) {
+                    chat.settings.deletedLocationNames = [];
+                    chat.settings.customLocations = [];
+                    chat.settings.temporaryLocations = [];
+                  }
+                }
+
+                chat.settings.useModuleMap = true;
+                let modMap = chat.settings.moduleMiniMaps?.[chat.activeModuleId] 
+                  || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)] 
+                  || (!isNaN(Number(chat.activeModuleId)) ? chat.settings.moduleMiniMaps?.[Number(chat.activeModuleId)] : null);
                 if (modMap?.svg) {
                   chat.settings.miniMapSvg = modMap.svg;
                   chat.settings.miniMapStyle = modMap.style || "奶油风";
@@ -33759,14 +33801,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   chat.settings.miniMapSvg = null;
                 }
               } else {
+                chat.settings.useModuleMap = false;
                 chat.settings.miniMapSvg = chat.settings.contextMiniMapSvg || null;
                 chat.settings.miniMapStyle = chat.settings.contextMiniMapStyle || "奶油风";
               }
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-              if (dbInstance) await dbInstance.chats.put(chat);
+              if (dbInstance && chat.id) await dbInstance.chats.put(chat);
               if (typeof state !== 'undefined' && state?.chats) {
                 state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
               }
               updateButtonsState();
               await renderChatMapList();
@@ -34221,8 +34265,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           };
 
-          await renderChatMapList();
           modal.classList.add("visible");
+          await renderChatMapList();
         }
         window.openChatMapModal = openChatMapModal;
 
@@ -34546,11 +34590,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function getAllChatLocations(chat) {
           let locations = [];
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-          const toggleEl = document.getElementById("chat-map-use-module-toggle");
-          const isModalOpen = document.getElementById("chat-map-modal")?.classList.contains("visible");
-          const useModule = (isModalOpen && toggleEl) 
-            ? (toggleEl.checked && !!chat?.activeModuleId) 
-            : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+          const useModule = isChatModuleMapMode(chat);
 
           if (useModule && chat && chat.activeModuleId && dbInstance) {
             try {
@@ -34655,8 +34695,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           // 未勾选使用模组时：严格仅返回上下文地图，如果上下文没有地图则留空返回空数组
           if (chat?.settings && Array.isArray(chat.settings.contextMapData) && chat.settings.contextMapData.length > 0) {
+            let modNameSet = new Set();
+            if (chat.activeModuleId && dbInstance) {
+              try {
+                if (dbInstance.moduleLocationNav) {
+                  const mLocs = await dbInstance.moduleLocationNav.where("moduleId").equals(chat.activeModuleId).toArray();
+                  mLocs.forEach(m => { if (m.name) modNameSet.add(m.name); });
+                }
+                if (dbInstance.modules) {
+                  let mObj = await dbInstance.modules.get(chat.activeModuleId);
+                  if (mObj && Array.isArray(mObj.mapNodes)) {
+                    mObj.mapNodes.forEach(m => { if (m.name) modNameSet.add(m.name); });
+                  }
+                }
+              } catch (e) {}
+            }
+
             chat.settings.contextMapData.forEach((loc) => {
               if (loc.isModule || (loc.id && String(loc.id).startsWith("mod_"))) return;
+              if (modNameSet.has(loc.name)) return;
               locations.push({
                 id: loc.id || "ctx_" + loc.name,
                 name: loc.name,
@@ -34676,11 +34733,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         async function saveLocationImage(chat, node, b64, newPrompt) {
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-          const toggleEl = document.getElementById("chat-map-use-module-toggle");
-          const isModalOpen = document.getElementById("chat-map-modal")?.classList.contains("visible");
-          const useModule = (isModalOpen && toggleEl) 
-            ? (toggleEl.checked && !!chat?.activeModuleId) 
-            : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+          const useModule = isChatModuleMapMode(chat);
 
           if (!chat.settings) chat.settings = {};
 
@@ -34975,7 +35028,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const renderList = async () => {
             listContainer.innerHTML = "";
-            const isModMode = currentChat.settings?.useModuleMap !== false && !!currentChat.activeModuleId;
+            const isModMode = isChatModuleMapMode(currentChat);
             const destModeName = isModMode ? "模组地图" : "上下文地图";
 
             if (currentTab === "groups") {
@@ -34986,7 +35039,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 tabFavsBtn.className = "chat-mod-footer-btn secondary";
               }
               if (hintEl) {
-                hintEl.textContent = "从其他群组导入已生成的小地图：";
+                hintEl.textContent = isModMode ? "从加载了相同模组的其他群组导入已生成的小地图：" : "从其他群组导入已生成的上下文小地图：";
               }
 
               const currentModId = currentChat.activeModuleId;
@@ -34996,7 +35049,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (cId === state.activeChatId) return;
                 const c = state.chats[cId];
                 if (!c) return;
-                if (currentModId) {
+                if (isModMode && currentModId) {
                   const cModMap = c.settings?.moduleMiniMaps?.[currentModId]
                     || c.settings?.moduleMiniMaps?.[String(currentModId)]
                     || (!isNaN(Number(currentModId)) ? c.settings?.moduleMiniMaps?.[Number(currentModId)] : null);
@@ -35009,12 +35062,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       style: cModMap?.style || c.settings?.miniMapStyle || "默认"
                     });
                   }
-                } else if (!currentModId && c.settings?.miniMapSvg) {
+                } else if (!isModMode && c.settings?.contextMiniMapSvg) {
                   otherChatsWithMap.push({
                     id: cId,
                     chat: c,
-                    svg: c.settings.miniMapSvg,
-                    style: c.settings?.miniMapStyle || "默认"
+                    svg: c.settings.contextMiniMapSvg,
+                    style: c.settings?.contextMiniMapStyle || "默认"
                   });
                 }
               });
@@ -35055,7 +35108,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     const srcSvg = item.svg || item.chat.settings?.miniMapSvg;
                     const srcStyle = item.style || item.chat.settings?.miniMapStyle || "奶油风";
                     if (!currentChat.settings) currentChat.settings = {};
-                    if (isModMode) {
+                    if (isModMode && currentChat.activeModuleId) {
                       if (!currentChat.settings.moduleMiniMaps) currentChat.settings.moduleMiniMaps = {};
                       const modMapObj = {
                         svg: srcSvg,
@@ -35066,30 +35119,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       if (!isNaN(Number(currentChat.activeModuleId))) {
                         currentChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
                       }
+                      currentChat.settings.miniMapSvg = srcSvg;
+                      currentChat.settings.miniMapStyle = srcStyle;
                     } else {
                       currentChat.settings.contextMiniMapSvg = srcSvg;
                       currentChat.settings.contextMiniMapStyle = srcStyle;
+                      currentChat.settings.miniMapSvg = srcSvg;
+                      currentChat.settings.miniMapStyle = srcStyle;
                     }
-                    currentChat.settings.miniMapSvg = srcSvg;
-                    currentChat.settings.miniMapStyle = srcStyle;
 
-                    if (item.chat.settings.temporaryLocations) {
-                      currentChat.settings.temporaryLocations = JSON.parse(JSON.stringify(item.chat.settings.temporaryLocations));
-                    }
-                    if (item.chat.settings.customLocations) {
-                      currentChat.settings.customLocations = JSON.parse(JSON.stringify(item.chat.settings.customLocations));
-                    }
-                    if (item.chat.settings.deletedLocationNames) {
-                      currentChat.settings.deletedLocationNames = JSON.parse(JSON.stringify(item.chat.settings.deletedLocationNames));
-                    }
-                    if (item.chat.settings.contextMapData) {
-                      currentChat.settings.contextMapData = JSON.parse(JSON.stringify(item.chat.settings.contextMapData));
-                    }
-                    if (item.chat.settings.mapViewMode) {
-                      currentChat.settings.mapViewMode = item.chat.settings.mapViewMode;
-                    }
                     const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-                    if (dbInstance) await dbInstance.chats.put(currentChat);
+                    if (dbInstance && currentChat.id) await dbInstance.chats.put(currentChat);
+                    if (typeof state !== 'undefined' && state?.chats) {
+                      state.chats[currentChat.id] = currentChat;
+                      state.chats[String(currentChat.id)] = currentChat;
+                    }
                     closeModal();
                     if (typeof window.showCustomAlert === "function") {
                       window.showCustomAlert("导入成功", `已成功将地图导入到${destModeName}`);
@@ -35159,7 +35203,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (importBtn) {
                   importBtn.onclick = async () => {
                     if (!currentChat.settings) currentChat.settings = {};
-                    if (isModMode) {
+                    if (isModMode && currentChat.activeModuleId) {
                       if (!currentChat.settings.moduleMiniMaps) currentChat.settings.moduleMiniMaps = {};
                       const modMapObj = {
                         svg: mapSvg,
@@ -35170,27 +35214,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       if (!isNaN(Number(currentChat.activeModuleId))) {
                         currentChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
                       }
+                      currentChat.settings.miniMapSvg = mapSvg;
+                      currentChat.settings.miniMapStyle = mapStyle;
                     } else {
                       currentChat.settings.contextMiniMapSvg = mapSvg;
                       currentChat.settings.contextMiniMapStyle = mapStyle;
+                      currentChat.settings.miniMapSvg = mapSvg;
+                      currentChat.settings.miniMapStyle = mapStyle;
                     }
-                    currentChat.settings.miniMapSvg = mapSvg;
-                    currentChat.settings.miniMapStyle = mapStyle;
 
-                    if (item.temporaryLocations && Array.isArray(item.temporaryLocations)) {
-                      currentChat.settings.temporaryLocations = JSON.parse(JSON.stringify(item.temporaryLocations));
-                    }
-                    if (item.customLocations && Array.isArray(item.customLocations)) {
-                      currentChat.settings.customLocations = JSON.parse(JSON.stringify(item.customLocations));
-                    }
-                    if (item.contextMapData && Array.isArray(item.contextMapData)) {
-                      currentChat.settings.contextMapData = JSON.parse(JSON.stringify(item.contextMapData));
-                    }
-                    if (item.mapViewMode) {
-                      currentChat.settings.mapViewMode = item.mapViewMode;
-                    }
                     const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-                    if (dbInstance) await dbInstance.chats.put(currentChat);
+                    if (dbInstance && currentChat.id) await dbInstance.chats.put(currentChat);
+                    if (typeof state !== 'undefined' && state?.chats) {
+                      state.chats[currentChat.id] = currentChat;
+                      state.chats[String(currentChat.id)] = currentChat;
+                    }
                     closeModal();
                     if (typeof window.showCustomAlert === "function") {
                       window.showCustomAlert("导入成功", `已成功将地图导入到${destModeName}`);
@@ -35300,8 +35338,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (!ok) return;
               }
               if (!chat.settings) chat.settings = {};
-              const toggleEl = document.getElementById("chat-map-use-module-toggle");
-              const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+              const isModMode = isChatModuleMapMode(chat);
 
               const toDeleteParents = [loc.name];
               const deletedSet = new Set([loc.name]);
@@ -35356,8 +35393,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const desc = descInput.value.trim();
 
               if (!chat.settings) chat.settings = {};
-              const toggleEl = document.getElementById("chat-map-use-module-toggle");
-              const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+              const isModMode = isChatModuleMapMode(chat);
 
               if (isModMode) {
                 if (!Array.isArray(chat.settings.temporaryLocations)) {
@@ -35801,8 +35837,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
           const chat = state.chats[state.activeChatId];
-          const toggleEl = document.getElementById("chat-map-use-module-toggle");
-          const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat.settings?.useModuleMap === true && !!chat?.activeModuleId);
+          const isModMode = isChatModuleMapMode(chat);
           let rawSvg = null;
           if (isModMode) {
             const curModMap = chat.settings?.moduleMiniMaps?.[chat.activeModuleId]
@@ -36267,8 +36302,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
 
           let galleryImages = [];
-          const toggleEl = document.getElementById("chat-map-use-module-toggle");
-          const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+          const isModMode = isChatModuleMapMode(chat);
           if (isModMode && chat.activeModuleId && dbInstance && dbInstance.moduleImages) {
             try {
               galleryImages = await dbInstance.moduleImages.where("moduleId").equals(chat.activeModuleId).toArray();
@@ -36478,7 +36512,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           // 生成成功后覆盖旧地图
           if (!chat.settings) chat.settings = {};
-          if (chat.settings.useModuleMap !== false && chat.activeModuleId) {
+          const isModMode = isChatModuleMapMode(chat);
+          if (isModMode && chat.activeModuleId) {
             if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
             const modMapObj = {
               svg: svgCode,
@@ -36518,10 +36553,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const chat = state.chats[state.activeChatId];
           if (!chat) return;
 
-          const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
+          const isModMode = isChatModuleMapMode(chat);
           const curSvg = isModMode
-            ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || chat.settings?.miniMapSvg || null)
-            : (chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null));
+            ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || (!isNaN(Number(chat.activeModuleId)) ? chat.settings?.moduleMiniMaps?.[Number(chat.activeModuleId)]?.svg : null) || null)
+            : (chat.settings?.contextMiniMapSvg || null);
           if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
             throw new Error("当前暂无已生成的小地图代码");
           }
@@ -36625,7 +36660,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (!chat.settings) chat.settings = {};
-          if (chat.settings.useModuleMap !== false && chat.activeModuleId) {
+          const isModMode = isChatModuleMapMode(chat);
+          if (isModMode && chat.activeModuleId) {
             if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
             const modMapObj = {
               svg: newSvgCode,
@@ -36642,7 +36678,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           chat.settings.miniMapSvg = newSvgCode;
           chat.settings.miniMapStyle = curStyle;
-          if (dbInstance) await dbInstance.chats.put(chat);
+          if (dbInstance && chat.id) await dbInstance.chats.put(chat);
+          if (state.chats) {
+            state.chats[chat.id] = chat;
+            state.chats[String(chat.id)] = chat;
+          }
 
           if (typeof renderChatMiniMap === "function") {
             renderChatMiniMap();
