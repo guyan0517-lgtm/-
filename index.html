@@ -22234,29 +22234,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 .join('\n');
 
               if (switchMode === 'auto') {
-                block += `## 模组章节自动切换与多章管理规则\n` +
-                  `当前处于【自动模式】。你拥有在AI管辖章节范围内根据剧情进展自动改勾选的权限，支持同时开启多个关联章节（如地点与事件）以及同时关闭已完成的章节。\n` +
+                block += `## 模组章节自动切换与信息按需管理规则\n` +
+                  `当前处于自动模式。你拥有在AI管辖章节范围内根据剧情进展自动改勾选的权限。\n` +
                   `AI管辖章节列表：\n${activeScopeList}\n\n` +
-                  `自动改勾选的核心前提与触发逻辑（极度重要）：\n` +
-                  `1. 【核心前提】：你必须首先将当前章节的正文剧情完整带完、带到了本章末尾的交接点。单个章节内可能包含多个不同地点或场景，在当前章节剧情未彻底走完前，哪怕玩家在章节内的不同地点之间走动、探索或聊天，你都坚决不能提前切换章节！\n` +
-                  `2. 【必须显式输出指令代码】：系统依赖你在消息内容中附带的代码来触发换章与生成气泡。严禁仅在口头上用自然语言说换章，必须在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
-                  `   - 多章节同时管理：\`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID1", "要开启的章节ID2"], "closeChapterIds": ["要关闭的章节ID"]}\`\n` +
-                  `   - 单章节直接切换：\`{"type": "switch_chapter", "chapterId": "目标章节ID", "chapterTitle": "目标章节名称"}\`\n` +
-                  `3. 【换章触发点】：当且仅当当前章节剧情已真正带到了末尾（例如NPC或KPC提出去睡觉、准备进入下一阶段），并且玩家明确表示同意推进（例如玩家回复"好吧我们去睡觉"、"那进入下一天吧"、"出发去下一个大阶段"）时，你在回复中输出上述换章指令代码，系统会自动执行改勾选并生成独立的章节切换通知气泡。\n` +
-                  `4. 【玩家保留意愿时不切换】：如果当前章节已到末尾，但玩家表示还想继续互动（例如"我不想睡觉，还想再玩会"、"我还有事情要做"），你必须坚决保持当前章节不切换，继续陪玩家互动，严禁输出换章指令代码，直到玩家后续真正确认同意推进时才输出换章指令代码。\n` +
-                  `5. 用户手动勾选的其他非管辖章节为固定参考资料，你绝不可关闭或覆盖它们。\n\n`;
+                  `信息按需判断与章节开关核心准则：\n` +
+                  `1. 核心判断原则：你必须根据目前带团需要哪些信息、不需要哪些信息来精细判断打开哪个章节、关掉哪个章节。绝对禁止在带完一个章节后把前面所有章节一刀切全部关掉！\n` +
+                  `2. 长效背景信息永久保持开启：事前公开、模组已知信息、幕后真相与机制、KP信息、总大纲等属于全局核心资料，带团全程必须时刻参考，严禁擅自关闭。若这些关键章节被关闭，你将无法掌握真相与机制！\n` +
+                  `3. 登场角色与猫人设按需即时开启：当剧情中有新NPC或猫登场互动时，必须主动开启该NPC的人设章节，以掌握其性格台词与扮演风格；只要该角色在后续剧情中仍可能登场或存在互动，其人设章节必须持续保持开启，严禁关闭！\n` +
+                  `4. 仅关闭确实不再需要的旧事件章节：只有当某个微观小事件或旧场景已彻底探索完毕、且后续剧情完全不再需要其中的线索时，才将该特定旧章节放入关闭列表。若不确定是否还需要，宁可保留开启，也坚决不要关闭！\n` +
+                  `5. 必须显式输出管理指令代码：在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
+                  `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID1", "要开启的章节ID2"], "closeChapterIds": ["确实已无需参考、要关闭的旧章节ID"], "summary": "开启XX，关闭XX"}\`\n` +
+                  `   若无需关闭任何章节，closeChapterIds 必须传空数组 []，严禁把不需要关闭的背景、真相、人设一起关掉。\n` +
+                  `6. 换章触发点：当且仅当当前章节剧情已真正带到了末尾，并且玩家明确表示同意推进时，你在回复中输出上述指令代码。若玩家还想在当前场景自由互动，坚决不切换章节，继续陪玩家互动。\n` +
+                  `7. 用户手动勾选的其他非管辖章节为固定参考资料，你绝不可关闭或覆盖它们。\n\n`;
               } else if (switchMode === 'semi') {
-                block += `## 模组章节半自动切换与多章管理规则\n` +
-                  `当前处于【半自动模式】。你拥有判断剧情完结并提请换章的权限，支持同时建议开启或关闭多个章节。\n` +
+                block += `## 模组章节半自动切换与信息按需管理规则\n` +
+                  `当前处于半自动模式。你拥有判断剧情完结并提请换章的权限。\n` +
                   `AI管辖章节列表：\n${activeScopeList}\n\n` +
-                  `带团操作与切换细节：\n` +
-                  `1. 当你带完当前章节的核心剧情后，严禁仅在口头上提议换章，必须在回复正文最后完整输出包含以下换章建议指令代码：\n` +
-                  `   - 多章节建议格式：\`{"type": "suggest_manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "本章已带完，是否切换下一章？"}\`\n` +
-                  `   - 单章节建议格式：\`{"type": "suggest_switch_chapter", "nextChapterId": "目标章节ID", "nextChapterTitle": "目标章节名称"}\`\n` +
-                  `2. 系统会在聊天中独立渲染带有【继续】按钮的确认卡片气泡。\n` +
-                  `3. 当玩家点击【继续】按钮或在对话中回复"继续"、"进入下一章"、"推进"等意图时，系统将改勾选并加载对应章节。\n` +
-                  `4. 若玩家拒绝或忽略，切换挂起：不加载下一章，当前章节保持不变，玩家可继续在当前场景自由互动；挂起后想继续时，玩家任何时候表达推进意图或点击提示中的继续按钮，随时可恢复切换。\n` +
-                  `5. 用户手动勾选的其他非管辖章节为固定参考资料，不可关闭或覆盖。\n\n`;
+                  `信息按需判断与章节开关核心准则：\n` +
+                  `1. 核心判断原则：你必须根据目前带团需要哪些信息、不需要哪些信息来精细提请开启哪个章节、关闭哪个章节。绝对禁止在带完一个章节后把前面所有章节一刀切全部关掉！\n` +
+                  `2. 长效背景信息永久保持开启：事前公开、模组已知信息、幕后真相与机制、KP信息、总大纲等属于全局核心资料，带团全程必须时刻参考，严禁擅自提请关闭。若这些关键章节被关闭，你将无法掌握真相与机制！\n` +
+                  `3. 登场角色与猫人设按需即时开启：当剧情中有新NPC或猫登场互动时，必须主动提请开启该NPC的人设章节，以掌握其性格台词与扮演风格；只要该角色在后续剧情中仍可能登场或存在互动，其人设章节必须持续保持开启，严禁关闭！\n` +
+                  `4. 仅关闭确实不再需要的旧事件章节：只有当某个微观小事件或旧场景已彻底探索完毕、且后续剧情完全不再需要其中的线索时，才将该特定旧章节放入关闭列表。若不确定是否还需要，宁可保留开启，也坚决不要关闭！\n` +
+                  `5. 必须显式输出提请指令代码：在回复正文最后完整输出以下JSON指令代码：\n` +
+                  `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["确实已无需参考、建议关闭的旧章节ID"], "summary": "已到达XX，建议开启XX"}\`\n` +
+                  `   若无需关闭任何章节，closeChapterIds 必须传空数组 []，严禁把不需要关闭的背景、真相、人设一起关掉。\n` +
+                  `6. 系统会在聊天中独立渲染带有【继续】按钮的确认卡片气泡。当玩家点击【继续】按钮或在对话中回复继续、进入下一章、推进等意图时，系统将改勾选并加载对应章节。若玩家拒绝或忽略，切换挂起，不加载下一章，玩家可继续在当前场景自由互动。\n` +
+                  `7. 用户手动勾选的其他非管辖章节为固定参考资料，不可关闭或覆盖。\n\n`;
               }
             }
 
@@ -28996,23 +29000,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             });
           }
 
-          // 1. 桌面图标红点
+          // 1. 桌面QQ图标红点已彻底去除，不影响内部聊天与联系人未读提示
           const desktopIconBg = document.querySelector('.desktop-app-icon[onclick*="chat-list-screen"] .icon-bg-desktop');
           if (desktopIconBg) {
-            let badge = desktopIconBg.querySelector('.chat-unread-desktop-badge');
-            if (totalUnread > 0) {
-              if (!badge) {
-                badge = document.createElement('span');
-                badge.className = 'unread-indicator chat-unread-desktop-badge';
-                badge.style.cssText = 'position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; background-color: #ff3b30; color: white; font-size: 11px; font-weight: bold; line-height: 18px; text-align: center; border-radius: 9px; box-shadow: 0 1px 2px rgba(0,0,0,0.3); z-index: 10; display: block;';
-                desktopIconBg.style.position = 'relative';
-                desktopIconBg.appendChild(badge);
-              }
-              badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-              badge.style.display = 'block';
-            } else if (badge) {
-              badge.style.display = 'none';
-            }
+            const badge = desktopIconBg.querySelector('.chat-unread-desktop-badge');
+            if (badge) badge.remove();
           }
 
           // 2. 聊天列表底部导航栏消息红点
@@ -32150,12 +32142,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
           if (!dbInstance) return;
 
-          const scopeIds = chat.moduleAiScopeChapterIds || [];
           let currentSelected = (chat.selectedModuleChapterIds || []).slice();
-          if (scopeIds.length > 0) {
-            currentSelected = currentSelected.filter(id => !scopeIds.includes(id) && !scopeIds.includes(String(id)));
-          }
-          if (!currentSelected.includes(targetChapterId)) {
+          if (!currentSelected.includes(targetChapterId) && !currentSelected.includes(String(targetChapterId))) {
             currentSelected.push(targetChapterId);
           }
           chat.selectedModuleChapterIds = currentSelected;
