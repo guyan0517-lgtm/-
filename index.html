@@ -36512,7 +36512,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           // 生成成功后覆盖旧地图
           if (!chat.settings) chat.settings = {};
-          const isModMode = isChatModuleMapMode(chat);
           if (isModMode && chat.activeModuleId) {
             if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
             const modMapObj = {
@@ -36660,7 +36659,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (!chat.settings) chat.settings = {};
-          const isModMode = isChatModuleMapMode(chat);
           if (isModMode && chat.activeModuleId) {
             if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
             const modMapObj = {
