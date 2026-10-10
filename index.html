@@ -35000,10 +35000,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (!currentChat.settings) currentChat.settings = {};
                     if (isModMode) {
                       if (!currentChat.settings.moduleMiniMaps) currentChat.settings.moduleMiniMaps = {};
-                      currentChat.settings.moduleMiniMaps[currentChat.activeModuleId] = {
+                      const modMapObj = {
                         svg: srcSvg,
                         style: srcStyle
                       };
+                      currentChat.settings.moduleMiniMaps[currentChat.activeModuleId] = modMapObj;
+                      currentChat.settings.moduleMiniMaps[String(currentChat.activeModuleId)] = modMapObj;
+                      if (!isNaN(Number(currentChat.activeModuleId))) {
+                        currentChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
+                      }
+                      const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                      if (dbInstance && dbInstance.modules) {
+                        try {
+                          let mod = await dbInstance.modules.get(currentChat.activeModuleId);
+                          if (!mod && !isNaN(Number(currentChat.activeModuleId))) mod = await dbInstance.modules.get(Number(currentChat.activeModuleId));
+                          if (!mod) mod = await dbInstance.modules.get(String(currentChat.activeModuleId));
+                          if (mod) {
+                            mod.miniMapSvg = srcSvg;
+                            mod.miniMapStyle = srcStyle;
+                            await dbInstance.modules.put(mod);
+                          }
+                        } catch (e) {}
+                      }
+                      if (typeof state !== "undefined" && state.chats) {
+                        Object.values(state.chats).forEach((otherChat) => {
+                          if (
+                            otherChat &&
+                            otherChat.id !== currentChat.id &&
+                            String(otherChat.activeModuleId) === String(currentChat.activeModuleId)
+                          ) {
+                            if (!otherChat.settings) otherChat.settings = {};
+                            if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
+                            otherChat.settings.moduleMiniMaps[currentChat.activeModuleId] = modMapObj;
+                            otherChat.settings.moduleMiniMaps[String(currentChat.activeModuleId)] = modMapObj;
+                            if (!isNaN(Number(currentChat.activeModuleId))) {
+                              otherChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
+                            }
+                            otherChat.settings.miniMapSvg = srcSvg;
+                            otherChat.settings.miniMapStyle = srcStyle;
+                            if (dbInstance && dbInstance.chats) {
+                              dbInstance.chats.put(otherChat).catch(() => {});
+                            }
+                          }
+                        });
+                      }
                     } else {
                       currentChat.settings.contextMiniMapSvg = srcSvg;
                       currentChat.settings.contextMiniMapStyle = srcStyle;
@@ -35099,10 +35139,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (!currentChat.settings) currentChat.settings = {};
                     if (isModMode) {
                       if (!currentChat.settings.moduleMiniMaps) currentChat.settings.moduleMiniMaps = {};
-                      currentChat.settings.moduleMiniMaps[currentChat.activeModuleId] = {
+                      const modMapObj = {
                         svg: mapSvg,
                         style: mapStyle
                       };
+                      currentChat.settings.moduleMiniMaps[currentChat.activeModuleId] = modMapObj;
+                      currentChat.settings.moduleMiniMaps[String(currentChat.activeModuleId)] = modMapObj;
+                      if (!isNaN(Number(currentChat.activeModuleId))) {
+                        currentChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
+                      }
+                      const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                      if (dbInstance && dbInstance.modules) {
+                        try {
+                          let mod = await dbInstance.modules.get(currentChat.activeModuleId);
+                          if (!mod && !isNaN(Number(currentChat.activeModuleId))) mod = await dbInstance.modules.get(Number(currentChat.activeModuleId));
+                          if (!mod) mod = await dbInstance.modules.get(String(currentChat.activeModuleId));
+                          if (mod) {
+                            mod.miniMapSvg = mapSvg;
+                            mod.miniMapStyle = mapStyle;
+                            await dbInstance.modules.put(mod);
+                          }
+                        } catch (e) {}
+                      }
+                      if (typeof state !== "undefined" && state.chats) {
+                        Object.values(state.chats).forEach((otherChat) => {
+                          if (
+                            otherChat &&
+                            otherChat.id !== currentChat.id &&
+                            String(otherChat.activeModuleId) === String(currentChat.activeModuleId)
+                          ) {
+                            if (!otherChat.settings) otherChat.settings = {};
+                            if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
+                            otherChat.settings.moduleMiniMaps[currentChat.activeModuleId] = modMapObj;
+                            otherChat.settings.moduleMiniMaps[String(currentChat.activeModuleId)] = modMapObj;
+                            if (!isNaN(Number(currentChat.activeModuleId))) {
+                              otherChat.settings.moduleMiniMaps[Number(currentChat.activeModuleId)] = modMapObj;
+                            }
+                            otherChat.settings.miniMapSvg = mapSvg;
+                            otherChat.settings.miniMapStyle = mapStyle;
+                            if (dbInstance && dbInstance.chats) {
+                              dbInstance.chats.put(otherChat).catch(() => {});
+                            }
+                          }
+                        });
+                      }
                     } else {
                       currentChat.settings.contextMiniMapSvg = mapSvg;
                       currentChat.settings.contextMiniMapStyle = mapStyle;
