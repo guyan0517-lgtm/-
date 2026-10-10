@@ -20138,7 +20138,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           isPlaying: false,
           playlist: [],
           currentIndex: -1,
-          playMode: "order",
+          playMode: localStorage.getItem("music_play_mode") || "order",
           totalElapsedTime: 0,
           timerId: null,
 
@@ -31739,11 +31739,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             // 提取正文中的音乐标签，直接在对应气泡尾部副容器渲染为迷你透明文字行
             const detectedMusicKeywords = [];
-            const musicRegex = /(?:\[|【|\(|（)(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\]】\)\r\n]+)(?:\]|】|\)|）)?/gi;
+            const musicRegex = /(?:\[(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\]\r\n]+)\]|【(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^】\r\n]+)】|\((?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\)\r\n]+)\)|（(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^）\r\n]+)）|(?:\[|【|\(|（)?(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\r\n\]】\)]+)(?:\]|】|\)|）)?)/gi;
             let mMatch;
             while ((mMatch = musicRegex.exec(formattedText)) !== null) {
-              let kw = mMatch[1] ? mMatch[1].trim() : "";
-              kw = kw.replace(/[\]】\)\）]$/, "").trim();
+              let kw = (mMatch[1] || mMatch[2] || mMatch[3] || mMatch[4] || mMatch[5] || "").trim();
+              kw = kw.replace(/^[\[【\(（《]+|[\]】\)）》]+$/g, "").trim();
               if (kw && !detectedMusicKeywords.includes(kw)) {
                 detectedMusicKeywords.push(kw);
               }
@@ -31752,7 +31752,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               detectedMusicKeywords.push(detectedMusicKeyword);
             }
             if (detectedMusicKeywords.length > 0) {
-              formattedText = formattedText.replace(/(?:\[|【|\(|（)(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\]】\)\r\n]+)(?:\]|】|\)|）)?/gi, "").trim();
+              formattedText = formattedText.replace(musicRegex, "").trim();
               musicLineHtml = detectedMusicKeywords.map(kw => `
                 <div class="chat-music-inline-track" data-music-keyword="${encodeURIComponent(kw)}" style="display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 1px 4px; font-size: 11px; color: var(--text-secondary); background: transparent; cursor: pointer; user-select: none; opacity: 0.85; transition: opacity 0.2s;" onclick="if(typeof window.playOrResumeSceneMusic==='function'){window.playOrResumeSceneMusic(decodeURIComponent('${encodeURIComponent(kw)}'));}">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; color: var(--text-secondary);">
@@ -31760,7 +31760,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     <circle cx="6" cy="18" r="3"></circle>
                     <circle cx="18" cy="16" r="3"></circle>
                   </svg>
-                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;">${kw}</span>
+                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;">${kw}</span>
                 </div>
               `).join("");
             }
@@ -32187,9 +32187,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (msg) {
               const rawText = typeof msg.content === "string" ? msg.content : (typeof msg.text === "string" ? msg.text : "");
               if (rawText) {
-                const musicMatch = rawText.match(/(?:\[|【|\(|（)(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\]】\)\r\n]+)(?:\]|】|\)|）)?/i);
-                if (musicMatch && musicMatch[1] && typeof window.playAutoSceneMusic === "function") {
-                  let kw = musicMatch[1].replace(/[\]】\)\）]$/, "").trim();
+                const musicMatch = rawText.match(/(?:\[(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\]\r\n]+)\]|【(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^】\r\n]+)】|\((?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\)\r\n]+)\)|（(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^）\r\n]+)）|(?:\[|【|\(|（)?(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\r\n\]】\)]+)(?:\]|】|\)|）)?)/i);
+                if (musicMatch && typeof window.playAutoSceneMusic === "function") {
+                  let kw = (musicMatch[1] || musicMatch[2] || musicMatch[3] || musicMatch[4] || musicMatch[5] || "").trim();
+                  kw = kw.replace(/^[\[【\(（《]+|[\]】\)）》]+$/g, "").trim();
                   if (kw) window.playAutoSceneMusic(kw);
                 }
               }
@@ -33692,7 +33693,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               
               // 切换地图源时同步切换对应保存的小地图
               if (chat.settings.useModuleMap && chat.activeModuleId) {
-                const modMap = chat.settings.moduleMiniMaps?.[chat.activeModuleId] || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)];
+                let modMap = chat.settings.moduleMiniMaps?.[chat.activeModuleId] || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)] || (!isNaN(Number(chat.activeModuleId)) ? chat.settings.moduleMiniMaps?.[Number(chat.activeModuleId)] : null);
+                if (!modMap && dbInstance && dbInstance.modules) {
+                  try {
+                    let mod = await dbInstance.modules.get(chat.activeModuleId);
+                    if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
+                    if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
+                    if (mod && mod.miniMapSvg) {
+                      modMap = { svg: mod.miniMapSvg, style: mod.miniMapStyle || "奶油风" };
+                      if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
+                      chat.settings.moduleMiniMaps[chat.activeModuleId] = modMap;
+                      chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMap;
+                    }
+                  } catch (e) {}
+                }
                 if (modMap?.svg) {
                   chat.settings.miniMapSvg = modMap.svg;
                   chat.settings.miniMapStyle = modMap.style || "奶油风";
@@ -33700,9 +33714,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } else if (!chat.settings.useModuleMap && chat.settings.contextMiniMapSvg) {
                 chat.settings.miniMapSvg = chat.settings.contextMiniMapSvg;
                 chat.settings.miniMapStyle = chat.settings.contextMiniMapStyle || "奶油风";
-              } else {
-                delete chat.settings.miniMapSvg;
-                delete chat.settings.miniMapStyle;
               }
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
@@ -35695,8 +35706,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (isModMode) {
             rawSvg = chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg
               || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg
+              || (!isNaN(Number(chat.activeModuleId)) ? chat.settings?.moduleMiniMaps?.[Number(chat.activeModuleId)]?.svg : null)
               || chat.settings?.miniMapSvg
               || null;
+            if (!rawSvg && typeof db !== "undefined" && db.modules && chat.activeModuleId) {
+              try {
+                let mod = await db.modules.get(chat.activeModuleId);
+                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await db.modules.get(Number(chat.activeModuleId));
+                if (!mod) mod = await db.modules.get(String(chat.activeModuleId));
+                if (mod && mod.miniMapSvg) {
+                  rawSvg = mod.miniMapSvg;
+                  if (!chat.settings) chat.settings = {};
+                  if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
+                  const mObj = { svg: mod.miniMapSvg, style: mod.miniMapStyle || "奶油风" };
+                  chat.settings.moduleMiniMaps[chat.activeModuleId] = mObj;
+                  chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = mObj;
+                  chat.settings.miniMapSvg = mod.miniMapSvg;
+                  chat.settings.miniMapStyle = mod.miniMapStyle || "奶油风";
+                }
+              } catch (e) {}
+            }
             if (rawSvg) {
               chat.settings.miniMapSvg = rawSvg;
               chat.settings.miniMapStyle = chat.settings.moduleMiniMaps?.[chat.activeModuleId]?.style
@@ -36350,10 +36379,49 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!chat.settings) chat.settings = {};
           if (chat.settings.useModuleMap !== false && chat.activeModuleId) {
             if (!chat.settings.moduleMiniMaps) chat.settings.moduleMiniMaps = {};
-            chat.settings.moduleMiniMaps[chat.activeModuleId] = {
+            const modMapObj = {
               svg: svgCode,
               style: styleName
             };
+            chat.settings.moduleMiniMaps[chat.activeModuleId] = modMapObj;
+            chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
+            if (!isNaN(Number(chat.activeModuleId))) {
+              chat.settings.moduleMiniMaps[Number(chat.activeModuleId)] = modMapObj;
+            }
+            if (dbInstance && dbInstance.modules) {
+              try {
+                let mod = await dbInstance.modules.get(chat.activeModuleId);
+                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
+                if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
+                if (mod) {
+                  mod.miniMapSvg = svgCode;
+                  mod.miniMapStyle = styleName;
+                  await dbInstance.modules.put(mod);
+                }
+              } catch (e) {}
+            }
+            if (typeof state !== "undefined" && state.chats) {
+              Object.values(state.chats).forEach((otherChat) => {
+                if (
+                  otherChat &&
+                  otherChat.id !== chat.id &&
+                  String(otherChat.activeModuleId) === String(chat.activeModuleId)
+                ) {
+                  if (!otherChat.settings) otherChat.settings = {};
+                  if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
+                  otherChat.settings.moduleMiniMaps[chat.activeModuleId] = modMapObj;
+                  otherChat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
+                  if (!isNaN(Number(chat.activeModuleId))) {
+                    otherChat.settings.moduleMiniMaps[Number(chat.activeModuleId)] = modMapObj;
+                  }
+                  otherChat.settings.miniMapSvg = svgCode;
+                  otherChat.settings.miniMapStyle = styleName;
+                  if (dbInstance && dbInstance.chats) {
+                    dbInstance.chats.put(otherChat).catch(() => {});
+                  }
+                }
+              });
+            }
           } else {
             chat.settings.contextMiniMapSvg = svgCode;
             chat.settings.contextMiniMapStyle = styleName;
@@ -36494,17 +36562,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
             chat.settings.moduleMiniMaps[chat.activeModuleId] = modMapObj;
             chat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
+            if (!isNaN(Number(chat.activeModuleId))) {
+              chat.settings.moduleMiniMaps[Number(chat.activeModuleId)] = modMapObj;
+            }
             if (dbInstance && dbInstance.modules) {
               try {
-                await dbInstance.modules.update(chat.activeModuleId, {
-                  miniMapSvg: newSvgCode,
-                  miniMapStyle: curStyle
-                });
-                if (!isNaN(Number(chat.activeModuleId))) {
-                  await dbInstance.modules.update(Number(chat.activeModuleId), {
-                    miniMapSvg: newSvgCode,
-                    miniMapStyle: curStyle
-                  });
+                let mod = await dbInstance.modules.get(chat.activeModuleId);
+                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
+                if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
+                if (mod) {
+                  mod.miniMapSvg = newSvgCode;
+                  mod.miniMapStyle = curStyle;
+                  await dbInstance.modules.put(mod);
                 }
               } catch (e) {}
             }
@@ -36519,6 +36588,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (!otherChat.settings.moduleMiniMaps) otherChat.settings.moduleMiniMaps = {};
                   otherChat.settings.moduleMiniMaps[chat.activeModuleId] = modMapObj;
                   otherChat.settings.moduleMiniMaps[String(chat.activeModuleId)] = modMapObj;
+                  if (!isNaN(Number(chat.activeModuleId))) {
+                    otherChat.settings.moduleMiniMaps[Number(chat.activeModuleId)] = modMapObj;
+                  }
                   otherChat.settings.miniMapSvg = newSvgCode;
                   otherChat.settings.miniMapStyle = curStyle;
                   if (dbInstance && dbInstance.chats) {
@@ -36537,6 +36609,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (typeof renderChatMiniMap === "function") {
             renderChatMiniMap();
+          }
+          if (typeof renderChatMapList === "function") {
+            renderChatMapList();
           }
 
           if (typeof window.showCustomAlert === "function") {
@@ -44279,7 +44354,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
           await loadSong(index);
           try {
-            if (audioPlayer) audioPlayer.volume = 0;
+            if (audioPlayer) {
+              audioPlayer.volume = 0;
+              audioPlayer.loop = (state.musicState.playMode === "single");
+            }
             await audioPlayer.play();
 
             state.musicState.isPlaying = true;
@@ -44380,6 +44458,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
         // 播放上一首（自动跳过保活音频）
         function playPrev() {
           if (state.musicState.playlist.length === 0) return;
+          if (state.musicState.playMode === "single") {
+            playSong(state.musicState.currentIndex);
+            return;
+          }
+          if (state.musicState.playMode === "random") {
+            playNext(true);
+            return;
+          }
           let newIndex = state.musicState.currentIndex;
           let attempts = 0;
 
@@ -44402,6 +44488,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const currentModeIndex = modes.indexOf(state.musicState.playMode);
           state.musicState.playMode =
             modes[(currentModeIndex + 1) % modes.length];
+          localStorage.setItem("music_play_mode", state.musicState.playMode);
+          if (audioPlayer) {
+            audioPlayer.loop = (state.musicState.playMode === "single");
+          }
           const modeBtn = document.getElementById("music-mode-btn");
           if (modeBtn) {
             modeBtn.textContent = {
@@ -74053,11 +74143,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               audioPlayer.play().catch((e) => console.error("重播失败:", e));
             } else if (state.musicState.playMode === "single") {
               // 单曲循环模式：单曲结束强制重播当前歌曲，不播放其他歌
-              audioPlayer.currentTime = 0;
-              audioPlayer.play().catch((e) => {
-                console.error("单曲重播失败:", e);
+              if (state.musicState.currentIndex >= 0 && state.musicState.currentIndex < state.musicState.playlist.length) {
                 playSong(state.musicState.currentIndex);
-              });
+              } else {
+                audioPlayer.currentTime = 0;
+                audioPlayer.play().catch(() => {});
+              }
             } else {
               // 正常歌曲走正常逻辑
               playNext(false);
