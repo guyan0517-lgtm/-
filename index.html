@@ -7082,17 +7082,6 @@
               </div>
             </div>
 
-            <!-- 原有代码 -->
-            <div class="form-group">
-              <label for="max-memory">上下文记忆条数</label>
-              <input
-                type="number"
-                id="max-memory"
-                value="10"
-                class="moe-input"
-              />
-            </div>
-
             <div class="form-group">
               <label>回复条数区间 (Min - Max)</label>
               <div style="display: flex; gap: 10px; align-items: center">
@@ -7258,15 +7247,26 @@
                   >
                 </div>
               </div>
-              <div class="form-group">
-                <label>触发条数</label>
-                <input
-                  type="number"
-                  id="summary-count-input"
-                  value="20"
-                  min="1"
-                  class="moe-input"
-                />
+              <div class="moe-grid-row">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label>触发条数</label>
+                  <input
+                    type="number"
+                    id="summary-count-input"
+                    value="20"
+                    min="1"
+                    class="moe-input"
+                  />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="max-memory">上下文记忆条数</label>
+                  <input
+                    type="number"
+                    id="max-memory"
+                    value="10"
+                    class="moe-input"
+                  />
+                </div>
               </div>
               <div class="form-group">
                 <label>总结提示词</label>
