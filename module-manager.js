@@ -395,9 +395,12 @@
   {
     "chapter": "模组章节标题，如：序章、第一章 迷雾林 或 场景一",
     "position": "具体插入段落位置与情境，如：调查暗门处、遭遇伏击时 或 旅店大厅初次会面",
+    "anchor": "该段落中8到25字的原文章节短句，用于在正文中精确定位插入点",
     "scene": "场景简述与氛围情境",
+    "name": "推荐曲目名称",
+    "artist": "歌手或作曲家",
     "keyword": "网易云搜索词或歌名",
-    "tag": "[音乐: 搜索词]"
+    "tag": "[音乐: 推荐曲名]"
   }
 ]`;
 
@@ -6783,29 +6786,32 @@ ${chap.content}
         } else {
           mod.musicList.forEach((m, idx) => {
             const itemEl = document.createElement('div');
-            itemEl.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); gap: 8px;';
-            const leftCol = document.createElement('div');
-            leftCol.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
-            leftCol.innerHTML = `
-              <div style="width: 32px; height: 32px; border-radius: 6px; overflow: hidden; background: var(--card-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);">
-                <img src="${m.cover || 'https://i.postimg.cc/pT2xKzPz/album-cover-placeholder.png'}" style="width: 100%; height: 100%; object-fit: cover;" alt="封面" />
-              </div>
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.name || '曲目'}</div>
-                <div style="font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.artist || '原声'} · ${m.scene || '剧情氛围'}</div>
-                <div style="font-size: 10px; color: var(--accent-color); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px;">
-                  <span style="padding: 1px 4px; border-radius: 4px; background: var(--card-bg); border: 1px solid var(--border-color); font-weight: 600; flex-shrink: 0;">位置</span>
-                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${m.chapter ? m.chapter + ' · ' : ''}${m.position || m.scene || '模组剧情'}</span>
-                </div>
+            itemEl.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); gap: 10px; width: 100%; box-sizing: border-box;';
+
+            const leftCover = document.createElement('div');
+            leftCover.style.cssText = 'width: 38px; height: 38px; border-radius: 8px; overflow: hidden; background: var(--card-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);';
+            leftCover.innerHTML = `<img src="${m.cover || 'https://i.postimg.cc/pT2xKzPz/album-cover-placeholder.png'}" style="width: 100%; height: 100%; object-fit: cover;" alt="封面" />`;
+
+            const midCol = document.createElement('div');
+            midCol.style.cssText = 'flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;';
+
+            const cleanName = m.name || m.keyword || '曲目';
+            const cleanArtist = m.artist || '原声';
+            const cleanScene = m.scene || '剧情气氛';
+            const cleanTag = m.tag || `[音乐: ${cleanName}]`;
+            const cleanPos = (m.chapter ? m.chapter + ' · ' : '') + (m.position || m.scene || '模组剧情');
+
+            midCol.innerHTML = `
+              <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;">${cleanName}</div>
+              <div style="font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;">${cleanArtist} · ${cleanScene}</div>
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 10px; margin-top: 1px; min-width: 0; overflow: hidden;">
+                <span style="padding: 1px 5px; border-radius: 4px; background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); font-family: monospace; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;">${cleanTag}</span>
+                <span style="color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;">${cleanPos}</span>
               </div>
             `;
 
             const rightCol = document.createElement('div');
-            rightCol.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
-
-            const tagBadge = document.createElement('span');
-            tagBadge.style.cssText = 'font-size: 10.5px; padding: 2px 6px; border-radius: 6px; background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); white-space: nowrap; font-family: monospace;';
-            tagBadge.textContent = m.tag || `[音乐: ${m.name}]`;
+            rightCol.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto;';
 
             const playBtn = document.createElement('button');
             playBtn.type = 'button';
@@ -6815,7 +6821,7 @@ ${chap.content}
             playBtn.style.fontSize = '11px';
             playBtn.onclick = () => {
               if (typeof window.playAutoSceneMusic === 'function') {
-                window.playAutoSceneMusic(m.name || m.keyword);
+                window.playAutoSceneMusic(cleanName || m.keyword);
               }
             };
 
@@ -6826,27 +6832,57 @@ ${chap.content}
             delBtn.style.padding = '2px 6px';
             delBtn.style.fontSize = '11px';
             delBtn.onclick = async () => {
-              mod.musicList.splice(idx, 1);
-              if (database && database.modules && mod.id) {
+              const currentModId = targetModuleId;
+              const [deletedItem] = mod.musicList.splice(idx, 1);
+              if (database && database.modules && currentModId) {
                 await database.modules.put(mod);
               }
-              await this.renderModuleDetailMusic(null, mod.id);
+              if (database && database.moduleChapters && deletedItem) {
+                let chaps = await database.moduleChapters.where('moduleId').equals(currentModId).sortBy('sortOrder');
+                if (chaps.length === 0 && !isNaN(Number(currentModId))) {
+                  chaps = await database.moduleChapters.where('moduleId').equals(Number(currentModId)).sortBy('sortOrder');
+                }
+                const delName = deletedItem.name || deletedItem.keyword || '';
+                const delTag = deletedItem.tag || `[音乐: ${delName}]`;
+                for (const chap of chaps) {
+                  let text = chap.content || '';
+                  if (delTag && text.includes(delTag)) {
+                    text = text.split(delTag).join('');
+                  }
+                  if (delName) {
+                    const tagRegex = new RegExp('\\[音乐[：:]\\s*' + delName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^\\]]*\\]', 'g');
+                    text = text.replace(tagRegex, '');
+                  }
+                  text = text.replace(/\n{3,}/g, '\n\n').trim();
+                  if (text !== chap.content) {
+                    chap.content = text;
+                    chap.wordCount = typeof this.countWords === 'function' ? this.countWords(chap.content) : chap.content.length;
+                    await database.moduleChapters.put(chap);
+                  }
+                }
+                if (this.activeDetailModule && String(this.activeDetailModule.id) === String(currentModId)) {
+                  this.renderModuleDetailGroupedChapters(chaps);
+                }
+              }
+              if (this.activeDetailModule && String(this.activeDetailModule.id) === String(currentModId)) {
+                await this.renderModuleDetailMusic(null, currentModId);
+              }
             };
 
-            rightCol.appendChild(tagBadge);
             rightCol.appendChild(playBtn);
             rightCol.appendChild(delBtn);
 
-            itemEl.appendChild(leftCol);
+            itemEl.appendChild(leftCover);
+            itemEl.appendChild(midCol);
             itemEl.appendChild(rightCol);
             musicContainer.appendChild(itemEl);
           });
         }
       }
 
-      if (clearBtn && !clearBtn._bound) {
-        clearBtn._bound = true;
+      if (clearBtn) {
         clearBtn.onclick = async () => {
+          const currentModId = targetModuleId;
           let confirmed = false;
           if (typeof global.showCustomConfirm === 'function') {
             confirmed = await global.showCustomConfirm('清空', '确定清空当前模组全部配乐吗');
@@ -6854,17 +6890,46 @@ ${chap.content}
             confirmed = confirm('确定清空当前模组全部配乐吗');
           }
           if (!confirmed) return;
-          mod.musicList = [];
-          if (database && database.modules && mod.id) {
-            await database.modules.put(mod);
+
+          let targetMod = null;
+          if (database && database.modules) {
+            targetMod = await database.modules.get(currentModId);
           }
-          await this.renderModuleDetailMusic(null, mod.id);
+          if (!targetMod) targetMod = mod;
+
+          targetMod.musicList = [];
+          if (database && database.modules && currentModId) {
+            await database.modules.put(targetMod);
+          }
+
+          if (database && database.moduleChapters) {
+            let chaps = await database.moduleChapters.where('moduleId').equals(currentModId).sortBy('sortOrder');
+            if (chaps.length === 0 && !isNaN(Number(currentModId))) {
+              chaps = await database.moduleChapters.where('moduleId').equals(Number(currentModId)).sortBy('sortOrder');
+            }
+            for (const chap of chaps) {
+              let text = chap.content || '';
+              const newText = text.replace(/\[音乐[：:][^\]]+\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+              if (newText !== text) {
+                chap.content = newText;
+                chap.wordCount = typeof this.countWords === 'function' ? this.countWords(chap.content) : chap.content.length;
+                await database.moduleChapters.put(chap);
+              }
+            }
+            if (this.activeDetailModule && String(this.activeDetailModule.id) === String(currentModId)) {
+              this.renderModuleDetailGroupedChapters(chaps);
+            }
+          }
+
+          if (this.activeDetailModule && String(this.activeDetailModule.id) === String(currentModId)) {
+            await this.renderModuleDetailMusic(null, currentModId);
+          }
         };
       }
 
-      if (analyzeBtn && !analyzeBtn._bound) {
-        analyzeBtn._bound = true;
+      if (analyzeBtn) {
         analyzeBtn.onclick = async () => {
+          const runForModuleId = targetModuleId;
           try {
             analyzeBtn.disabled = true;
             analyzeBtn.textContent = '分析中';
@@ -6872,16 +6937,25 @@ ${chap.content}
               await global.showCustomAlert('提示', '正在分析模组剧情并检索配乐');
             }
 
+            let targetMod = null;
+            if (database && database.modules) {
+              targetMod = await database.modules.get(runForModuleId);
+            }
+            if (!targetMod) targetMod = mod;
+
             let allChaps = [];
             if (database && database.moduleChapters) {
-              allChaps = await database.moduleChapters.where('moduleId').equals(mod.id).sortBy('sortOrder');
+              allChaps = await database.moduleChapters.where('moduleId').equals(runForModuleId).sortBy('sortOrder');
+              if (allChaps.length === 0 && !isNaN(Number(runForModuleId))) {
+                allChaps = await database.moduleChapters.where('moduleId').equals(Number(runForModuleId)).sortBy('sortOrder');
+              }
             }
             let moduleText = '';
             allChaps.forEach(c => {
               moduleText += `\n【章节标题: ${c.title}】\n${c.content || ''}\n`;
             });
             if (!moduleText.trim()) {
-              moduleText = mod.description || mod.name || '模组';
+              moduleText = targetMod.description || targetMod.name || '模组';
             }
             const promptContent = promptTextarea ? promptTextarea.value.trim() : DEFAULT_TRPG_MUSIC_PROMPT;
             const fullPrompt = `${promptContent}\n\n以下为模组文本内容：\n${moduleText.slice(0, 15000)}`;
@@ -6908,7 +6982,12 @@ ${chap.content}
               throw new Error('未能从模组中解析出有效配乐方案');
             }
 
-            mod.musicList = mod.musicList || [];
+            if (database && database.modules) {
+              const latestMod = await database.modules.get(runForModuleId);
+              if (latestMod) targetMod = latestMod;
+            }
+            targetMod.musicList = targetMod.musicList || [];
+
             for (const item of musicList) {
               const kw = item.keyword || item.name || '';
               if (!kw) continue;
@@ -6926,12 +7005,13 @@ ${chap.content}
                 } catch (_) {}
               }
 
-              const songName = songInfo ? songInfo.name : kw;
+              const songName = songInfo ? songInfo.name : (item.name || kw);
               const songArtist = songInfo ? songInfo.artist : (item.artist || '原声');
               const songCover = songInfo ? songInfo.cover : 'https://i.postimg.cc/pT2xKzPz/album-cover-placeholder.png';
               const songId = songInfo ? songInfo.id : null;
+              const songTag = item.tag || `[音乐: ${songName}]`;
 
-              mod.musicList.push({
+              targetMod.musicList.push({
                 id: songId || 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
                 name: songName,
                 artist: songArtist,
@@ -6940,18 +7020,65 @@ ${chap.content}
                 position: item.position || item.location || item.scene || '模组剧情',
                 scene: item.scene || '剧情气氛',
                 keyword: kw,
-                tag: item.tag || `[音乐: ${songName}]`
+                tag: songTag
               });
+
+              if (allChaps.length > 0) {
+                let targetChap = null;
+                if (item.chapter) {
+                  targetChap = allChaps.find(c => c.title && (c.title.includes(item.chapter) || item.chapter.includes(c.title)));
+                }
+                if (!targetChap) {
+                  targetChap = allChaps[0];
+                }
+                if (targetChap && !targetChap.content.includes(songTag)) {
+                  let inserted = false;
+                  const anchor = (item.anchor || '').trim();
+                  if (anchor && targetChap.content.includes(anchor)) {
+                    const aIdx = targetChap.content.indexOf(anchor);
+                    const nBreak = targetChap.content.indexOf('\n', aIdx);
+                    const insAt = nBreak === -1 ? targetChap.content.length : nBreak;
+                    targetChap.content = targetChap.content.slice(0, insAt) + `\n\n${songTag}\n` + targetChap.content.slice(insAt);
+                    inserted = true;
+                  }
+                  if (!inserted) {
+                    const posHint = (item.position || item.scene || '').replace(/剧情|氛围|背景/g, '').trim();
+                    if (posHint && posHint.length >= 2 && targetChap.content.includes(posHint)) {
+                      const pIdx = targetChap.content.indexOf(posHint);
+                      const nBreak = targetChap.content.indexOf('\n', pIdx);
+                      const insAt = nBreak === -1 ? targetChap.content.length : nBreak;
+                      targetChap.content = targetChap.content.slice(0, insAt) + `\n\n${songTag}\n` + targetChap.content.slice(insAt);
+                      inserted = true;
+                    }
+                  }
+                  if (!inserted) {
+                    const firstP = targetChap.content.indexOf('\n\n');
+                    if (firstP !== -1) {
+                      targetChap.content = targetChap.content.slice(0, firstP) + `\n\n${songTag}\n` + targetChap.content.slice(firstP);
+                    } else {
+                      targetChap.content = `${targetChap.content}\n\n${songTag}`;
+                    }
+                  }
+                  targetChap.wordCount = typeof this.countWords === 'function' ? this.countWords(targetChap.content) : targetChap.content.length;
+                  if (database && database.moduleChapters) {
+                    await database.moduleChapters.put(targetChap);
+                  }
+                }
+              }
             }
 
-            if (database && database.modules && mod.id) {
-              await database.modules.put(mod);
+            if (database && database.modules && runForModuleId) {
+              await database.modules.put(targetMod);
             }
 
             if (typeof global.showCustomAlert === 'function') {
-              await global.showCustomAlert('成功', `已成功解析并添加 ${musicList.length} 首配乐`);
+              await global.showCustomAlert('成功', `已成功解析并添加 ${musicList.length} 首配乐并插入对应章节`);
             }
-            await this.renderModuleDetailMusic(null, mod.id);
+
+            if (this.activeDetailModule && String(this.activeDetailModule.id) === String(runForModuleId)) {
+              this.renderModuleDetailGroupedChapters(allChaps);
+              await this.renderModuleDetailMusic(null, runForModuleId);
+            }
           } catch (err) {
             console.error('智能配乐分析失败:', err);
             if (typeof global.showCustomAlert === 'function') {
