@@ -62921,6 +62921,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
         async function handleAutoQuoteVoiceAfterAiReply(chat) {
           if (!chat) return;
+          if (chat.settings?.voiceMode !== "auto") return;
           const msgs = chat.history || chat.messages || [];
           if (!Array.isArray(msgs) || msgs.length === 0) return;
           const chatScreenEl = document.getElementById("chat-interface-screen");
@@ -62968,6 +62969,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const currentMode = chat.settings.voiceMode === "auto" ? "auto" : "manual";
           const newMode = currentMode === "manual" ? "auto" : "manual";
           chat.settings.voiceMode = newMode;
+          if (state.chats) {
+            state.chats[chat.id] = chat;
+            state.chats[String(chat.id)] = chat;
+          }
           const btn = document.getElementById("voice-mode-btn");
           if (btn) {
             btn.textContent = newMode === "auto" ? "默认" : "手动";
@@ -78445,7 +78450,21 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 };
               }
 
+              const currentVoiceModeBtn = chat.isGroup
+                ? document.getElementById("group-voice-mode-btn")
+                : document.getElementById("voice-mode-btn");
+              if (currentVoiceModeBtn) {
+                chat.settings.voiceMode =
+                  currentVoiceModeBtn.textContent.trim() === "默认"
+                    ? "auto"
+                    : "manual";
+              }
+
               await db.chats.put(chat);
+              if (state.chats) {
+                state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
+              }
 
               applyScopedCss(
                 chat.settings.customCss,
