@@ -1773,16 +1773,6 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   font-weight: 500;
   cursor: pointer;
 }
-#music-exit-btn {
-  background-color: rgba(255, 100, 100, 0.7);
-  color: white;
-  margin-right: 5px;
-}
-#music-return-btn {
-  background-color: rgba(0, 123, 255, 0.7);
-  color: white;
-  margin-left: 5px;
-}
 
 #music-playlist-panel {
   position: absolute;
@@ -5293,10 +5283,11 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-50px);
+  transform: translateY(-20px);
   transition:
-    opacity 0.4s ease-out,
-    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    opacity 0.25s ease-out,
+    transform 0.25s ease-out,
+    visibility 0.25s ease-out;
 }
 
 #music-player-overlay.visible {
@@ -5329,33 +5320,42 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 .music-player-top-actions {
   position: absolute;
-  top: 15px;
-  left: 15px;
-  right: 15px;
-  width: calc(100% - 30px);
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  width: calc(100% - 28px);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  z-index: 30;
+  pointer-events: auto;
 }
 .top-left-cluster {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 8px;
 }
 #music-return-btn,
 #music-exit-btn {
-  background: none;
-  border: none;
-  font-size: 28px;
-  font-weight: 300;
+  background: var(--secondary-bg, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--border-color);
+  font-size: 12px;
   cursor: pointer;
-  color: #555;
-  padding: 5px;
-  line-height: 1;
+  color: var(--text-secondary);
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s, background-color 0.2s, color 0.2s;
 }
-#music-exit-btn {
-  font-size: 24px;
-  font-weight: 400;
+
+#music-return-btn:hover,
+#music-exit-btn:hover {
+  color: var(--text-primary);
+  background: var(--card-bg, rgba(255, 255, 255, 0.95));
 }
 
 .music-progress-bar-container {
@@ -5439,7 +5439,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   width: 100%;
   flex-wrap: nowrap;
 }
@@ -5450,12 +5450,12 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 500;
   height: 30px;
   width: auto;
-  min-width: 44px;
-  padding: 0 6px;
+  min-width: 42px;
+  padding: 0 5px;
   border-radius: 8px;
   background-color: var(--secondary-bg, rgba(0, 0, 0, 0.05));
   border: 1px solid var(--border-color);
@@ -5465,31 +5465,40 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 .music-controls button#music-mode-btn,
 .music-controls button#toggle-lyrics-bar-btn {
   width: auto;
-  min-width: 40px;
-  padding: 0 6px;
+  min-width: 38px;
+  padding: 0 5px;
   font-size: 11px;
   border-radius: 8px;
   background-color: var(--secondary-bg, rgba(0, 0, 0, 0.05));
 }
 .music-controls button.play-pause-btn {
   width: auto;
-  min-width: 48px;
+  min-width: 46px;
   height: 30px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   border-radius: 8px;
   color: var(--accent-color);
   background-color: var(--secondary-bg, rgba(0, 0, 0, 0.06));
 }
 
+.music-controls button#music-lock-lyrics-btn {
+  width: auto;
+  min-width: 28px;
+  height: 30px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 #music-return-btn,
-#music-exit-btn,
 #music-playlist-btn {
   position: relative;
 }
 
 #music-return-btn {
-  top: -2px;
+  top: 0;
 }
 #music-playlist-btn {
   top: -3px;
@@ -6549,6 +6558,15 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 #floating-lyrics-bar.dragging {
   cursor: grabbing;
   cursor: -webkit-grabbing;
+}
+
+#floating-lyrics-bar.locked {
+  pointer-events: none !important;
+}
+
+#floating-lyrics-bar.locked .close-btn,
+#floating-lyrics-bar.locked #lyrics-settings-btn {
+  display: none !important;
 }
 /* ▲▲▲ 新CSS粘贴结束 ▲▲▲ */
 

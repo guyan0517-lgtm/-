@@ -606,7 +606,25 @@
 
     async getAllModules() {
       return this.safeDBOperation('获取所有模组', async (db) => {
-        return await db.modules.toArray();
+        const list = await db.modules.toArray();
+        if (!Array.isArray(list)) return [];
+        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        const seenIds = new Set();
+        const seenNames = new Set();
+        const unique = [];
+        for (const m of list) {
+          if (!m || !m.id) continue;
+          const normName = (m.name || '').trim().toLowerCase();
+          if (seenIds.has(m.id)) continue;
+          if (normName && seenNames.has(normName)) {
+            try { db.modules.delete(m.id); } catch (_) {}
+            continue;
+          }
+          seenIds.add(m.id);
+          if (normName) seenNames.add(normName);
+          unique.push(m);
+        }
+        return unique;
       }, []);
     },
 
@@ -813,7 +831,7 @@
         this.setWizardStep(1);
       }
 
-      this.switchSubPanel(this.activeSubPanel);
+      this.activeSubPanel = draft.activeSubPanel || this.activeSubPanel || 'library';
       return true;
     },
 
@@ -8411,27 +8429,50 @@ ${chaptersDigest}
     },
 
     async saveCutModuleToLibrary() {
-      if (!this.cutChapters || this.cutChapters.length === 0) {
-        if (typeof global.showCustomAlert === "function") {
-          global.showCustomAlert("提示", "暂无已重构好的章节数据");
+      if (this._isSavingToLibrary) return;
+      this._isSavingToLibrary = true;
+      try {
+        if (!this.cutChapters || this.cutChapters.length === 0) {
+          if (typeof global.showCustomAlert === "function") {
+            global.showCustomAlert("提示", "暂无已重构好的章节数据");
+          }
+          return;
         }
-        return;
-      }
 
-      const moduleId = "mod_" + Date.now();
-      const bgTag = this.currentPlan?.bgTag || "日模";
-      const endingTag = this.currentPlan?.endingTag || "普通";
-      const contentTags = this.currentPlan?.contentTags || [];
-      const customTags = this.currentPlan?.customTags || [];
-      const allTags = this.sortModuleTags(bgTag, endingTag, contentTags, customTags);
+        const modName = this.currentParsedData?.moduleName || "跑团模组";
+        let moduleId = this._currentSavedModuleId || null;
 
-      const chaptersToSave = this.cutChapters.map((chap, idx) => ({
-        ...chap,
-        id: "chap_" + Date.now() + "_" + (idx + 1) + "_" + Math.random().toString(36).substr(2, 6),
-        sortOrder: chap.sortOrder || (idx + 1),
-        wordCount: this.countWords(chap.content || ""),
-        moduleId: moduleId
-      }));
+        if (!moduleId) {
+          const database = this.getDB();
+          if (database && database.modules) {
+            try {
+              const existingMods = await database.modules.toArray();
+              const matchedMod = existingMods.find(m => (m.name || "").trim().toLowerCase() === modName.trim().toLowerCase());
+              if (matchedMod) {
+                moduleId = matchedMod.id;
+              }
+            } catch (e) {}
+          }
+        }
+
+        if (!moduleId) {
+          moduleId = "mod_" + Date.now();
+        }
+        this._currentSavedModuleId = moduleId;
+
+        const bgTag = this.currentPlan?.bgTag || "日模";
+        const endingTag = this.currentPlan?.endingTag || "普通";
+        const contentTags = this.currentPlan?.contentTags || [];
+        const customTags = this.currentPlan?.customTags || [];
+        const allTags = this.sortModuleTags(bgTag, endingTag, contentTags, customTags);
+
+        const chaptersToSave = this.cutChapters.map((chap, idx) => ({
+          ...chap,
+          id: "chap_" + Date.now() + "_" + (idx + 1) + "_" + Math.random().toString(36).substr(2, 6),
+          sortOrder: chap.sortOrder || (idx + 1),
+          wordCount: this.countWords(chap.content || ""),
+          moduleId: moduleId
+        }));
 
       const imagesToSave = (this.currentParsedData?.images || []).map((img, iIdx) => ({
         moduleId: moduleId,
@@ -8504,9 +8545,29 @@ ${chaptersDigest}
       };
 
       const dbSuccess = await this.safeDBOperation("保存模组到数据库", async (db) => {
+        try {
+          const allExisting = await db.modules.toArray();
+          const targetNormName = (moduleRecord.name || "").trim().toLowerCase();
+          for (const m of allExisting) {
+            if (m && m.id !== moduleId && (m.name || "").trim().toLowerCase() === targetNormName) {
+              await db.modules.delete(m.id);
+              if (db.moduleChapters) {
+                await db.moduleChapters.where("moduleId").equals(m.id).delete();
+              }
+            }
+          }
+        } catch (_) {}
         await db.modules.put(moduleRecord);
+        if (db.moduleChapters) {
+          try {
+            await db.moduleChapters.where("moduleId").equals(moduleId).delete();
+          } catch (_) {}
+        }
         await db.moduleChapters.bulkPut(chaptersToSave);
         if (imagesToSave.length > 0 && db.moduleImages) {
+          try {
+            await db.moduleImages.where("moduleId").equals(moduleId).delete();
+          } catch (_) {}
           try {
             await db.moduleImages.bulkAdd(imagesToSave);
           } catch (e) {
@@ -8514,6 +8575,9 @@ ${chaptersDigest}
           }
         }
         if (locationNavList.length > 0 && db.moduleLocationNav) {
+          try {
+            await db.moduleLocationNav.where("moduleId").equals(moduleId).delete();
+          } catch (_) {}
           try {
             await db.moduleLocationNav.bulkAdd(locationNavList);
           } catch (e) {
@@ -8540,7 +8604,10 @@ ${chaptersDigest}
       if (typeof global.showCustomAlert === "function") {
         global.showCustomAlert("保存成功", "模组【" + moduleRecord.name + "】及 " + chaptersToSave.length + " 个带团章节已安全存入模组库。");
       }
-    },
+    } finally {
+      this._isSavingToLibrary = false;
+    }
+  },
     async exportModuleZipBundle(specificChapters = null, specificName = null, specificModuleId = null) {
       const chaptersToExport = specificChapters || this.cutChapters;
       if (!chaptersToExport || chaptersToExport.length === 0) return;
@@ -9539,7 +9606,12 @@ ${chaptersDigest}
       const emptyContainer = document.getElementById('module-library-empty');
       if (!listContainer || !emptyContainer) return;
 
+      this._libraryRenderToken = (this._libraryRenderToken || 0) + 1;
+      const currentToken = this._libraryRenderToken;
+
       let allModules = await this.getAllModules();
+      if (currentToken !== this._libraryRenderToken) return;
+
       if (searchKeyword.trim()) {
         const kw = searchKeyword.trim().toLowerCase();
         allModules = allModules.filter(m => m.name.toLowerCase().includes(kw));
@@ -9572,15 +9644,27 @@ ${chaptersDigest}
         });
       }
 
-      if (!allModules || allModules.length === 0) {
-        listContainer.style.display = 'none';
-        emptyContainer.style.display = 'flex';
-        return;
+      if (Array.isArray(allModules) && allModules.length > 0) {
+        const uniqueModulesMap = new Map();
+        allModules.forEach(mod => {
+          if (!mod || !mod.id) return;
+          const modName = (mod.name || "").trim().toLowerCase();
+          const key = modName || String(mod.id);
+          const existing = uniqueModulesMap.get(key);
+          if (!existing || (mod.createdAt || 0) >= (existing.createdAt || 0)) {
+            uniqueModulesMap.set(key, mod);
+          }
+        });
+        allModules = Array.from(uniqueModulesMap.values());
       }
 
-      listContainer.style.display = 'flex';
-      emptyContainer.style.display = 'none';
-      listContainer.innerHTML = '';
+      if (!allModules || allModules.length === 0) {
+        if (currentToken !== this._libraryRenderToken) return;
+        listContainer.style.display = 'none';
+        emptyContainer.style.display = 'flex';
+        listContainer.innerHTML = '';
+        return;
+      }
 
       const database = this.getDB();
       let allChapters = [];
@@ -9593,6 +9677,8 @@ ${chaptersDigest}
           allImages = await database.moduleImages.toArray();
         }
       } catch (e) {}
+
+      if (currentToken !== this._libraryRenderToken) return;
 
       const chapsByMod = new Map();
       allChapters.forEach(c => {
@@ -9608,7 +9694,15 @@ ${chaptersDigest}
         imgsByMod.get(mId).push(img);
       });
 
+      const fragment = document.createDocumentFragment();
+      const renderedCardKeys = new Set();
+
       allModules.forEach(mod => {
+        if (!mod || !mod.id) return;
+        const normKey = (mod.name || "").trim().toLowerCase() || String(mod.id);
+        if (renderedCardKeys.has(normKey)) return;
+        renderedCardKeys.add(normKey);
+
         const item = document.createElement('div');
         item.className = 'mod-lib-card';
         item.style.cursor = 'pointer';
@@ -9706,8 +9800,18 @@ ${chaptersDigest}
           });
         }
 
-        listContainer.appendChild(item);
+        fragment.appendChild(item);
       });
+
+      if (currentToken !== this._libraryRenderToken) return;
+      listContainer.style.display = 'flex';
+      emptyContainer.style.display = 'none';
+      if (typeof listContainer.replaceChildren === 'function') {
+        listContainer.replaceChildren(fragment);
+      } else {
+        listContainer.innerHTML = '';
+        listContainer.appendChild(fragment);
+      }
     },
 
     // ==========================================

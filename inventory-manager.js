@@ -2072,7 +2072,7 @@ HTML设计与排版核心规范：
       const rect = card.getBoundingClientRect();
       cardStartLeft = rect.left;
       cardStartTop = rect.top;
-      card.style.transformOrigin = "top center";
+      card.style.transformOrigin = "top left";
       card.style.transform = `scale(${clueCardScale})`;
       card.style.left = cardStartLeft + "px";
       card.style.top = cardStartTop + "px";
@@ -2089,8 +2089,10 @@ HTML设计与排版核心规范：
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const dx = clientX - dragStartX;
       const dy = clientY - dragStartY;
-      const maxLeft = window.innerWidth - card.offsetWidth - 10;
-      const maxTop = window.innerHeight - card.offsetHeight - 10;
+      const currentWidth = (card.getBoundingClientRect().width) || 300;
+      const currentHeight = (card.getBoundingClientRect().height) || 200;
+      const maxLeft = Math.max(10, window.innerWidth - currentWidth - 10);
+      const maxTop = Math.max(10, window.innerHeight - currentHeight - 10);
       const newLeft = Math.max(10, Math.min(maxLeft, cardStartLeft + dx));
       const newTop = Math.max(10, Math.min(maxTop, cardStartTop + dy));
       card.style.left = newLeft + "px";
@@ -2110,42 +2112,53 @@ HTML设计与排版核心规范：
 
     if (resizeHandle) {
       let isResizing = false;
-      let resizeStartX = 0, initialWidth = 330;
+      let resizeStartX = 0;
+      let initialCardWidth = 330;
 
       const onResizeStart = (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
         isResizing = true;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+        if (!clientX || clientX <= 0) return;
+
         resizeStartX = clientX;
-        const rect = card.getBoundingClientRect();
-        initialWidth = rect.width;
-        document.addEventListener("mousemove", onResizeMove);
-        document.addEventListener("mouseup", onResizeEnd);
-        document.addEventListener("touchmove", onResizeMove, { passive: false });
-        document.addEventListener("touchend", onResizeEnd);
+        initialCardWidth = parseFloat(card.style.width) || card.offsetWidth || 330;
+        card.style.maxWidth = "none";
+
+        const onResizeMove = (moveEvt) => {
+          if (!isResizing) return;
+          const curX = (moveEvt.touches && moveEvt.touches[0]) ? moveEvt.touches[0].clientX : moveEvt.clientX;
+          if (!curX || curX <= 0) return;
+          if (moveEvt.cancelable) moveEvt.preventDefault();
+
+          const scale = clueCardScale || 1.0;
+          const dx = curX - resizeStartX;
+          const targetWidth = initialCardWidth + (dx / scale);
+          const clampedWidth = Math.max(160, Math.min(Math.max(window.innerWidth * 3, 1200), Math.round(targetWidth)));
+          card.style.width = clampedWidth + "px";
+          const wrapper = document.getElementById("clue-proportional-wrapper");
+          if (wrapper) {
+            wrapper.style.width = "100%";
+          }
+          updateClueInnerTransform(true);
+        };
+
+        const onResizeEnd = () => {
+          isResizing = false;
+          window.removeEventListener("mousemove", onResizeMove);
+          window.removeEventListener("mouseup", onResizeEnd);
+          window.removeEventListener("touchmove", onResizeMove);
+          window.removeEventListener("touchend", onResizeEnd);
+          window.removeEventListener("touchcancel", onResizeEnd);
+        };
+
+        window.addEventListener("mousemove", onResizeMove);
+        window.addEventListener("mouseup", onResizeEnd);
+        window.addEventListener("touchmove", onResizeMove, { passive: false });
+        window.addEventListener("touchend", onResizeEnd);
+        window.addEventListener("touchcancel", onResizeEnd);
         e.preventDefault();
         e.stopPropagation();
-      };
-
-      const onResizeMove = (e) => {
-        if (!isResizing) return;
-        if (e.cancelable) e.preventDefault();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const dx = clientX - resizeStartX;
-        const newWidth = Math.max(160, Math.min(window.innerWidth - 20, initialWidth + dx));
-        card.style.width = newWidth + "px";
-        const wrapper = document.getElementById("clue-proportional-wrapper");
-        if (wrapper) {
-          wrapper.style.width = "100%";
-        }
-        updateClueInnerTransform(true);
-      };
-
-      const onResizeEnd = () => {
-        isResizing = false;
-        document.removeEventListener("mousemove", onResizeMove);
-        document.removeEventListener("mouseup", onResizeEnd);
-        document.removeEventListener("touchmove", onResizeMove);
-        document.removeEventListener("touchend", onResizeEnd);
       };
 
       resizeHandle.addEventListener("mousedown", onResizeStart);
@@ -2206,7 +2219,7 @@ HTML设计与排版核心规范：
           const curDist = getTouchDistance(e.touches[0], e.touches[1]);
           const ratio = curDist / initialPinchDistance;
           clueCardScale = Math.max(0.4, Math.min(3.5, initialPinchScale * ratio));
-          card.style.transformOrigin = "top center";
+          card.style.transformOrigin = "top left";
           card.style.transform = `scale(${clueCardScale})`;
         }
       }, { passive: false });
@@ -2222,7 +2235,7 @@ HTML设计与排版核心规范：
         e.preventDefault();
         const delta = e.deltaY < 0 ? 0.15 : -0.15;
         clueCardScale = Math.max(0.4, Math.min(3.5, clueCardScale + delta));
-        card.style.transformOrigin = "top center";
+        card.style.transformOrigin = "top left";
         card.style.transform = `scale(${clueCardScale})`;
       }, { passive: false });
 
@@ -2274,7 +2287,7 @@ HTML设计与排版核心规范：
       card.style.top = "100px";
     }
     card.style.width = "330px";
-    card.style.transformOrigin = "top center";
+    card.style.transformOrigin = "top left";
     card.style.transform = "scale(1)";
 
     updateClueInnerTransform(true);

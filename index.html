@@ -1425,6 +1425,28 @@
             </div>
           </div>
 
+          <!-- 音乐卡片 -->
+          <div class="moe-card">
+            <div class="moe-card-header">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+              <h3>音乐</h3>
+            </div>
+            <div class="moe-card-body">
+              <div class="form-group">
+                <label>渐变: <span id="music-fade-duration-value">1.0s</span></label>
+                <input
+                  type="range"
+                  id="music-fade-duration-slider"
+                  min="0.2"
+                  max="5.0"
+                  step="0.1"
+                  value="1.0"
+                  class="moe-slider"
+                />
+              </div>
+            </div>
+          </div>
+
           <!-- 微博卡片 -->
           <div class="moe-card">
             <div class="moe-card-header">
@@ -3937,10 +3959,23 @@
             <!-- 2. 顶部操作按钮 -->
             <div class="music-player-top-actions">
               <div class="top-left-cluster">
-                <button id="music-return-btn">‹</button>
-                <button id="music-exit-btn">×</button>
+                <button type="button" id="music-return-btn" class="moe-btn" title="返回" style="width: 28px; height: 28px; padding: 0; border-radius: 8px; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 12H5"></path>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                  </svg>
+                </button>
+                <button type="button" id="music-exit-btn" class="moe-btn" title="退出" style="width: 28px; height: 28px; padding: 0; border-radius: 8px; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                  </svg>
+                </button>
               </div>
-              <span id="music-playlist-btn">☰</span>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span id="music-playlist-btn" title="播放列表" style="color: var(--text-secondary); cursor: pointer; font-size: 16px;">☰</span>
+              </div>
             </div>
 
             <!-- 3. 封面和歌词的切换容器 -->
@@ -3971,6 +4006,12 @@
                 <div id="music-total-time" class="time-display">0:00</div>
               </div>
               <div class="music-controls">
+                <button id="music-lock-lyrics-btn" title="锁定">
+                  <svg id="music-lock-lyrics-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </button>
                 <button id="music-prev-btn">上一首</button>
                 <button id="music-play-pause-btn" class="play-pause-btn">
                   开始
@@ -20833,6 +20874,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const cleanKeyword = keyword.trim().replace(/^《|》$/g, "").replace(/^\[|\]$/g, "").replace(/^【|】$/g, "");
           if (!cleanKeyword) return;
 
+          const now = Date.now();
+          if (window._lastAutoSceneKeyword === cleanKeyword && now - (window._lastAutoSceneTime || 0) < 3000) {
+            return;
+          }
+          if (window._autoSceneMusicBusyKeyword === cleanKeyword) {
+            return;
+          }
+          window._autoSceneMusicBusyKeyword = cleanKeyword;
+          window._lastAutoSceneKeyword = cleanKeyword;
+          window._lastAutoSceneTime = now;
+
+          try {
+
           let songName = cleanKeyword;
           let artist = "";
           if (cleanKeyword.includes("-")) {
@@ -20939,6 +20993,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           let targetIndex;
           if (existingIndex !== -1) {
+            if (existingIndex === state.musicState.currentIndex && state.musicState.isPlaying && audioPlayer && !audioPlayer.paused) {
+              return;
+            }
             targetIndex = existingIndex;
           } else {
             state.musicState.playlist.push(newSong);
@@ -20959,6 +21016,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (floatingBar && floatingText) {
             floatingBar.style.display = "flex";
             floatingText.textContent = `♪ ${newSong.name} - ${newSong.artist}`;
+          }
+          } finally {
+            window._autoSceneMusicBusyKeyword = null;
           }
         };
 
@@ -28166,6 +28226,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             globalMusicSwitch.checked = state.apiConfig.globalAiMusicEnabled !== false && localStorage.getItem("global_ai_music_enabled") !== "false";
           }
 
+          const musicFadeSlider = document.getElementById("music-fade-duration-slider");
+          const musicFadeVal = document.getElementById("music-fade-duration-value");
+          if (musicFadeSlider && musicFadeVal) {
+            const curFade = state.apiConfig?.musicFadeDuration !== undefined ? state.apiConfig.musicFadeDuration : 1.0;
+            musicFadeSlider.value = curFade;
+            musicFadeVal.textContent = parseFloat(curFade).toFixed(1) + "s";
+            musicFadeSlider.oninput = () => {
+              musicFadeVal.textContent = parseFloat(musicFadeSlider.value).toFixed(1) + "s";
+            };
+          }
+
           const mapEffectSelect = document.getElementById("map-location-effect-select");
           const mapColorPreview = document.getElementById("map-location-color-preview");
           const mapColorInput = document.getElementById("map-location-color-input");
@@ -29930,11 +30001,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   continueBtn.style.cursor = 'default';
                   if (pData.openChapterIds || pData.closeChapterIds) {
                     if (typeof window.executeChapterManage === 'function') {
-                      await window.executeChapterManage(pData.openChapterIds || [], pData.closeChapterIds || [], '', true);
+                      await window.executeChapterManage(pData.openChapterIds || [], pData.closeChapterIds || [], '', false);
                     }
                   } else if (pData.nextChapterId) {
                     if (typeof window.executeChapterSwitch === 'function') {
-                      await window.executeChapterSwitch(pData.nextChapterId, pData.nextChapterTitle, true);
+                      await window.executeChapterSwitch(pData.nextChapterId, pData.nextChapterTitle, false);
                     }
                   }
                 };
@@ -31160,11 +31231,54 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"manage_chapters"[\s\S]*?\}\s*```/g, "").replace(manageMatch[0], "").trim();
                   if (chat && chat.activeModuleId && !msg._chapterManaged) {
                     msg._chapterManaged = true;
-                    setTimeout(async () => {
-                      if (typeof window.executeChapterManage === 'function') {
-                        await window.executeChapterManage(manageObj.openChapterIds || [], manageObj.closeChapterIds || [], manageObj.summary || '', true);
-                      }
-                    }, 50);
+                    if (chat.moduleSwitchMode === 'semi') {
+                      chat.pendingChapterManage = {
+                        openChapterIds: manageObj.openChapterIds || [],
+                        closeChapterIds: manageObj.closeChapterIds || [],
+                        openChapterTitles: manageObj.openChapterTitles || [],
+                        closeChapterTitles: manageObj.closeChapterTitles || [],
+                        summary: manageObj.summary || '本章已带完，是否切换下一章？'
+                      };
+                      setTimeout(async () => {
+                        const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                        let openTitles = manageObj.openChapterTitles || [];
+                        let closeTitles = manageObj.closeChapterTitles || [];
+                        if ((!openTitles.length || !closeTitles.length) && dbInstance && dbInstance.moduleChapters && chat.activeModuleId) {
+                          try {
+                            const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
+                            if (!openTitles.length && manageObj.openChapterIds) {
+                              openTitles = allChaps.filter(c => (manageObj.openChapterIds || []).includes(c.id) || (manageObj.openChapterIds || []).includes(String(c.id))).map(c => c.title);
+                            }
+                            if (!closeTitles.length && manageObj.closeChapterIds) {
+                              closeTitles = allChaps.filter(c => (manageObj.closeChapterIds || []).includes(c.id) || (manageObj.closeChapterIds || []).includes(String(c.id))).map(c => c.title);
+                            }
+                          } catch (e) {}
+                        }
+                        const cardMsg = {
+                          id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                          role: "system",
+                          type: "module_semi_switch_card",
+                          content: manageObj.summary || "本章已带完，是否切换下一章？",
+                          pendingData: {
+                            openChapterIds: manageObj.openChapterIds || [],
+                            closeChapterIds: manageObj.closeChapterIds || [],
+                            openChapterTitles: openTitles,
+                            closeChapterTitles: closeTitles,
+                            summary: manageObj.summary || "本章已带完，是否切换下一章？"
+                          },
+                          timestamp: Date.now()
+                        };
+                        chat.history.push(cardMsg);
+                        if (dbInstance) await dbInstance.chats.put(chat);
+                        appendMessage(cardMsg, chat);
+                      }, 50);
+                    } else if (chat.moduleSwitchMode === 'auto') {
+                      setTimeout(async () => {
+                        if (typeof window.executeChapterManage === 'function') {
+                          await window.executeChapterManage(manageObj.openChapterIds || [], manageObj.closeChapterIds || [], manageObj.summary || '', true);
+                        }
+                      }, 50);
+                    }
                   }
                 }
               } catch (e) {}
@@ -31176,11 +31290,32 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"switch_chapter"[\s\S]*?\}\s*```/g, "").replace(switchMatch[0], "").trim();
                   if (chat && chat.activeModuleId && switchObj.chapterId && !msg._chapterSwitched) {
                     msg._chapterSwitched = true;
-                    setTimeout(async () => {
-                      if (typeof window.executeChapterSwitch === 'function') {
-                        await window.executeChapterSwitch(switchObj.chapterId, switchObj.chapterTitle, true);
-                      }
-                    }, 50);
+                    if (chat.moduleSwitchMode === 'semi') {
+                      chat.pendingChapterSwitch = { nextChapterId: switchObj.chapterId, nextChapterTitle: switchObj.chapterTitle || "下一章" };
+                      setTimeout(async () => {
+                        const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                        const cardMsg = {
+                          id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                          role: "system",
+                          type: "module_semi_switch_card",
+                          content: "本章已带完，是否切换下一章？",
+                          pendingData: {
+                            nextChapterId: switchObj.chapterId,
+                            nextChapterTitle: switchObj.chapterTitle || "下一章"
+                          },
+                          timestamp: Date.now()
+                        };
+                        chat.history.push(cardMsg);
+                        if (dbInstance) await dbInstance.chats.put(chat);
+                        appendMessage(cardMsg, chat);
+                      }, 50);
+                    } else if (chat.moduleSwitchMode === 'auto') {
+                      setTimeout(async () => {
+                        if (typeof window.executeChapterSwitch === 'function') {
+                          await window.executeChapterSwitch(switchObj.chapterId, switchObj.chapterTitle, true);
+                        }
+                      }, 50);
+                    }
                   }
                 }
               } catch (e) {}
@@ -39180,11 +39315,31 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   const targetId = msgData.nextChapterId || msgData.chapterId;
                   const targetTitle = msgData.nextChapterTitle || msgData.chapterTitle || "下一章";
                   if (targetId && chat && chat.activeModuleId) {
-                    setTimeout(async () => {
-                      if (typeof window.executeChapterSwitch === 'function') {
-                        await window.executeChapterSwitch(targetId, targetTitle, true);
+                    if (chat.moduleSwitchMode === 'semi') {
+                      chat.pendingChapterSwitch = { nextChapterId: targetId, nextChapterTitle: targetTitle };
+                      const cardMsg = {
+                        id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                        role: "system",
+                        type: "module_semi_switch_card",
+                        content: msgData.summary || "本章已带完，是否切换下一章？",
+                        pendingData: {
+                          nextChapterId: targetId,
+                          nextChapterTitle: targetTitle
+                        },
+                        timestamp: messageTimestamp++
+                      };
+                      chat.history.push(cardMsg);
+                      await db.chats.put(chat);
+                      if (isViewingThisChat) {
+                        appendMessage(cardMsg, chat);
                       }
-                    }, 50);
+                    } else if (chat.moduleSwitchMode === 'auto') {
+                      setTimeout(async () => {
+                        if (typeof window.executeChapterSwitch === 'function') {
+                          await window.executeChapterSwitch(targetId, targetTitle, true);
+                        }
+                      }, 50);
+                    }
                   }
                   continue;
                 }
@@ -39235,11 +39390,54 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 }
                 case "manage_chapters": {
                   if (chat && chat.activeModuleId) {
-                    setTimeout(async () => {
-                      if (typeof window.executeChapterManage === 'function') {
-                        await window.executeChapterManage(msgData.openChapterIds || [], msgData.closeChapterIds || [], msgData.summary || '', true);
+                    if (chat.moduleSwitchMode === 'semi') {
+                      const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                      let openTitles = msgData.openChapterTitles || [];
+                      let closeTitles = msgData.closeChapterTitles || [];
+                      if ((!openTitles.length || !closeTitles.length) && dbInstance && dbInstance.moduleChapters && chat.activeModuleId) {
+                        try {
+                          const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
+                          if (!openTitles.length && msgData.openChapterIds) {
+                            openTitles = allChaps.filter(c => (msgData.openChapterIds || []).includes(c.id) || (msgData.openChapterIds || []).includes(String(c.id))).map(c => c.title);
+                          }
+                          if (!closeTitles.length && msgData.closeChapterIds) {
+                            closeTitles = allChaps.filter(c => (msgData.closeChapterIds || []).includes(c.id) || (msgData.closeChapterIds || []).includes(String(c.id))).map(c => c.title);
+                          }
+                        } catch (e) {}
                       }
-                    }, 50);
+                      chat.pendingChapterManage = {
+                        openChapterIds: msgData.openChapterIds || [],
+                        closeChapterIds: msgData.closeChapterIds || [],
+                        openChapterTitles: openTitles,
+                        closeChapterTitles: closeTitles,
+                        summary: msgData.summary || "本章已带完，是否切换下一章？"
+                      };
+                      const cardMsg = {
+                        id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                        role: "system",
+                        type: "module_semi_switch_card",
+                        content: msgData.summary || "本章已带完，是否切换下一章？",
+                        pendingData: {
+                          openChapterIds: msgData.openChapterIds || [],
+                          closeChapterIds: msgData.closeChapterIds || [],
+                          openChapterTitles: openTitles,
+                          closeChapterTitles: closeTitles,
+                          summary: msgData.summary || "本章已带完，是否切换下一章？"
+                        },
+                        timestamp: messageTimestamp++
+                      };
+                      chat.history.push(cardMsg);
+                      await db.chats.put(chat);
+                      if (isViewingThisChat) {
+                        appendMessage(cardMsg, chat);
+                      }
+                    } else if (chat.moduleSwitchMode === 'auto') {
+                      setTimeout(async () => {
+                        if (typeof window.executeChapterManage === 'function') {
+                          await window.executeChapterManage(msgData.openChapterIds || [], msgData.closeChapterIds || [], msgData.summary || '', true);
+                        }
+                      }, 50);
+                    }
                   }
                   continue;
                 }
@@ -42252,11 +42450,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                           }
                         }
                       }
-                      const groupMusicMatch = textWithoutThoughts.match(/(?:\[|【|\(|（)(?:音乐|BGM|背景音乐|音效|bgm|音乐注入|music)[:：]\s*([^\]】\)\r\n]+)(?:\]|】|\)|）)?/i);
-                      if (groupMusicMatch && groupMusicMatch[1] && typeof window.playAutoSceneMusic === "function") {
-                        let kw = groupMusicMatch[1].replace(/[\]】\)\）]$/, "").trim();
-                        if (kw) window.playAutoSceneMusic(kw);
-                      }
                       aiMessage = { ...baseMessage, content: cleanMsgText };
                     }
                   }
@@ -42634,6 +42827,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 if (!isCurrentlyViewingThisChat) {
                   // 如果用户不在当前聊天界面，就把这个聊天的未读数 +1
                   chat.unreadCount = (chat.unreadCount || 0) + 1;
+                } else {
+                  chat.unreadCount = 0;
                 }
 
                 // 2. 只有在当前正在查看此聊天界面时，才执行追加到 DOM
@@ -42779,6 +42974,13 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   }
                 }
               }
+            }
+
+            if (
+              document.getElementById("chat-interface-screen")?.classList.contains("active") &&
+              String(state.activeChatId) === String(chat.id)
+            ) {
+              chat.unreadCount = 0;
             }
 
             await db.chats.put(chat);
@@ -43210,6 +43412,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           if (displayArea) {
             displayArea.classList.remove("show-lyrics");
           }
+          if (typeof updateLyricsLockUI === "function") {
+            updateLyricsLockUI();
+          }
         }
 
         function updateElapsedTimeDisplay() {
@@ -43363,19 +43568,43 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           updatePlaylistUI();
           updatePlayerUI();
 
-          // 尝试播放
-          try {
-            if (state.musicState.isPlaying) {
-              await audioPlayer.play();
-            }
-          } catch (e) {
-            console.warn("加载后自动播放被拦截", e);
-          }
-
           audioPlayer.onloadedmetadata = () => {
             updateMusicProgressBar();
           };
         }
+
+        let isFloatingLyricsLocked = localStorage.getItem("floating_lyrics_locked") === "true";
+
+        function updateLyricsLockUI() {
+          const lockBtn = document.getElementById("music-lock-lyrics-btn");
+          const lockSvg = document.getElementById("music-lock-lyrics-svg");
+          const floatingBar = document.getElementById("floating-lyrics-bar");
+
+          if (lockBtn && lockSvg) {
+            if (isFloatingLyricsLocked) {
+              lockBtn.title = "解锁";
+              lockBtn.style.color = "var(--accent-color)";
+              lockBtn.style.opacity = "1";
+              lockSvg.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
+            } else {
+              lockBtn.title = "锁定";
+              lockBtn.style.color = "var(--text-primary)";
+              lockBtn.style.opacity = "0.75";
+              lockSvg.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path>';
+            }
+          }
+
+          if (floatingBar) {
+            if (isFloatingLyricsLocked) {
+              floatingBar.classList.add("locked");
+              floatingBar.style.pointerEvents = "none";
+            } else {
+              floatingBar.classList.remove("locked");
+              floatingBar.style.pointerEvents = "auto";
+            }
+          }
+        }
+        window.updateLyricsLockUI = updateLyricsLockUI;
 
         let musicFadeTimer = null;
 
@@ -43385,6 +43614,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             musicFadeTimer = null;
           }
           window._isFadingAudio = false;
+        }
+
+        function getFadeDurationMs() {
+          const d = parseFloat(state.apiConfig?.musicFadeDuration);
+          if (!isNaN(d) && d > 0) {
+            return Math.round(d * 1000);
+          }
+          return 1000;
         }
 
         function getTargetMusicVolume() {
@@ -43398,7 +43635,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           return 1;
         }
 
-        function fadeOutMusic(duration = 350) {
+        function fadeOutMusic(duration = getFadeDurationMs()) {
           return new Promise((resolve) => {
             if (!audioPlayer || audioPlayer.paused || audioPlayer.volume <= 0) {
               if (audioPlayer) audioPlayer.volume = 0;
@@ -43408,7 +43645,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             cancelMusicFade();
             window._isFadingAudio = true;
             const startVol = audioPlayer.volume;
-            const stepMs = 25;
+            const stepMs = 20;
             const totalSteps = Math.max(1, Math.round(duration / stepMs));
             const volStep = startVol / totalSteps;
             let currentStep = 0;
@@ -43430,7 +43667,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           });
         }
 
-        function fadeInMusic(duration = 450) {
+        function fadeInMusic(duration = getFadeDurationMs()) {
           return new Promise((resolve) => {
             if (!audioPlayer) {
               resolve();
@@ -43450,7 +43687,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             try {
               audioPlayer.volume = 0;
             } catch (e) {}
-            const stepMs = 25;
+            const stepMs = 20;
             const totalSteps = Math.max(1, Math.round(duration / stepMs));
             const volStep = targetVol / totalSteps;
             let currentStep = 0;
@@ -43473,8 +43710,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
         }
 
         async function playSong(index) {
+          const fadeMs = getFadeDurationMs();
           if (audioPlayer && !audioPlayer.paused && audioPlayer.volume > 0) {
-            await fadeOutMusic(350);
+            await fadeOutMusic(fadeMs);
           } else if (audioPlayer) {
             audioPlayer.volume = 0;
           }
@@ -43485,7 +43723,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
             state.musicState.isPlaying = true;
             updatePlayerUI();
-            fadeInMusic(450);
+            fadeInMusic(fadeMs);
           } catch (error) {
             console.error("音频播放失败:", error);
             state.musicState.isPlaying = false;
@@ -43497,6 +43735,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
          * 处理播放/暂停的函数
          */
         async function togglePlayPause() {
+          const fadeMs = getFadeDurationMs();
           if (audioPlayer.paused) {
             if (state.musicState.currentIndex > -1) {
               if (audioPlayer.src) {
@@ -43505,7 +43744,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   await audioPlayer.play();
                   state.musicState.isPlaying = true;
                   updatePlayerUI();
-                  fadeInMusic(450);
+                  fadeInMusic(fadeMs);
                 } catch (e) {
                   playSong(state.musicState.currentIndex);
                 }
@@ -43514,7 +43753,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }
             }
           } else {
-            await fadeOutMusic(350);
+            await fadeOutMusic(fadeMs);
             audioPlayer.pause();
 
             state.musicState.isPlaying = false;
@@ -45045,7 +45284,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   content: String(action.content),
                   timestamp: Date.now(),
                 };
-                chat.unreadCount = (chat.unreadCount || 0) + 1;
+                const isViewingInactiveChat =
+                  document.getElementById("chat-interface-screen")?.classList.contains("active") &&
+                  String(state.activeChatId) === String(chatId);
+                if (!isViewingInactiveChat) {
+                  chat.unreadCount = (chat.unreadCount || 0) + 1;
+                } else {
+                  chat.unreadCount = 0;
+                }
                 chat.history.push(aiMessage);
                 await db.chats.put(chat);
                 showNotification(chatId, aiMessage.content);
@@ -49938,7 +50184,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 Date.now();
 
               // 给用户发通知
-              chat.unreadCount = (chat.unreadCount || 0) + messagesArray.length;
+              const isViewingThisGroup =
+                document.getElementById("chat-interface-screen")?.classList.contains("active") &&
+                String(state.activeChatId) === String(chat.id);
+              if (!isViewingThisGroup) {
+                chat.unreadCount = (chat.unreadCount || 0) + messagesArray.length;
+              } else {
+                chat.unreadCount = 0;
+              }
               // 获取该条消息发送者的头像
               let bgSenderAvatar = null;
               if (chat.isGroup) {
@@ -50761,17 +51014,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
         function closeMusicPlayerWithAnimation(callback) {
           const overlay = document.getElementById("music-player-overlay");
-          if (!overlay.classList.contains("visible")) {
+          if (!overlay || !overlay.classList.contains("visible")) {
             if (callback) callback();
             return;
           }
           overlay.classList.remove("visible");
           setTimeout(() => {
-            document
-              .getElementById("music-playlist-panel")
-              .classList.remove("visible");
+            const panel = document.getElementById("music-playlist-panel");
+            if (panel) panel.classList.remove("visible");
             if (callback) callback();
-          }, 400);
+          }, 250);
         }
 
         function parseLRC(lrcContent) {
@@ -52891,6 +53143,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           let offsetX, offsetY;
 
           const onDragStart = (e) => {
+            if (isFloatingLyricsLocked) {
+              return;
+            }
             // 检查点击的是否是按钮，如果是，则不开始拖动
             if (
               e.target.closest("#lyrics-settings-btn") ||
@@ -52952,6 +53207,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
           bar.addEventListener("mousedown", onDragStart);
           bar.addEventListener("touchstart", onDragStart, { passive: true });
+          if (typeof updateLyricsLockUI === "function") {
+            updateLyricsLockUI();
+          }
         }
 
         function applyLyricsSettings() {
@@ -61234,7 +61492,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
         /**
          * 停止当前正在播放的Minimax TTS语音
          */
+        let _activeAutoVoiceQueueId = 0;
+
         function stopMinimaxAudio() {
+          _activeAutoVoiceQueueId++;
           if (!isTtsPlaying) return;
 
           isIntentionalStop = true;
@@ -61288,10 +61549,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
          * 调用 Minimax TTS API 生成语音并播放
          * @param {string} text - 要转换为语音的合并后的文本
          * @param {string} voiceId - Minimax 的语音 ID
-        /**
-         * 调用 Minimax TTS API 生成语音并播放
-         * @param {string} text - 要转换为语音的合并后的文本
-         * @param {string} voiceId - Minimax 的语音 ID
          * @param {Array<HTMLElement>} bubblesToAnimate - 需要播放动画的所有语音气泡元素的数组
          * @param {Object} targetMsg - 当前点击的消息对象，用于本地缓存
          */
@@ -61310,13 +61567,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             const spinner = b.querySelector(".loading-spinner");
             if (spinner) spinner.style.display = "block";
           });
-
-          const mainAudioPlayer = document.getElementById("audio-player");
-          if (mainAudioPlayer && !mainAudioPlayer.paused) {
-            mainAudioPlayer.pause();
-            state.musicState.isPlaying = false;
-            updatePlayerUI();
-          }
 
           const chat = state.chats[state.activeChatId];
           if (!chat) {
@@ -61485,51 +61735,56 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           }
         }
 
-        async function playQuoteAudioSource(audioHexOrData, bubble, msg) {
-          stopMinimaxAudio();
-          await new Promise((resolve) => setTimeout(resolve, 50));
+        function playQuoteAudioSource(audioHexOrData, bubble, msg) {
+          return new Promise(async (resolve) => {
+            stopMinimaxAudio();
+            await new Promise((r) => setTimeout(r, 50));
 
-          const ttsPlayer = document.getElementById("tts-audio-player");
-          if (!ttsPlayer) return;
-
-          const mainAudioPlayer = document.getElementById("audio-player");
-          if (mainAudioPlayer && !mainAudioPlayer.paused) {
-            mainAudioPlayer.pause();
-            state.musicState.isPlaying = false;
-            updatePlayerUI();
-          }
-
-          const audioUrl = audioHexOrData.startsWith("data:") || audioHexOrData.startsWith("blob:")
-            ? audioHexOrData
-            : hexToBlobUrl(audioHexOrData);
-
-          if (!audioUrl) return;
-
-          isTtsPlaying = true;
-          bubble.classList.add("playing-quote-audio");
-
-          const cleanup = () => {
-            isTtsPlaying = false;
-            bubble.classList.remove("playing-quote-audio");
-            if (!audioHexOrData.startsWith("data:") && !audioHexOrData.startsWith("blob:")) {
-              URL.revokeObjectURL(audioUrl);
+            const ttsPlayer = document.getElementById("tts-audio-player");
+            if (!ttsPlayer) {
+              resolve();
+              return;
             }
-            ttsPlayer.onended = null;
-            ttsPlayer.onerror = null;
-          };
 
-          ttsPlayer.onended = cleanup;
-          ttsPlayer.onerror = (e) => {
-            cleanup();
-          };
+            const audioUrl = audioHexOrData.startsWith("data:") || audioHexOrData.startsWith("blob:")
+              ? audioHexOrData
+              : hexToBlobUrl(audioHexOrData);
 
-          ttsPlayer.src = audioUrl;
-          try {
-            await ttsPlayer.play();
-          } catch (err) {
-            console.warn("播放语音异常:", err);
-            cleanup();
-          }
+            if (!audioUrl) {
+              resolve();
+              return;
+            }
+
+            isTtsPlaying = true;
+            if (bubble) bubble.classList.add("playing-quote-audio");
+
+            let settled = false;
+            const cleanup = () => {
+              if (settled) return;
+              settled = true;
+              isTtsPlaying = false;
+              if (bubble) bubble.classList.remove("playing-quote-audio");
+              if (!audioHexOrData.startsWith("data:") && !audioHexOrData.startsWith("blob:")) {
+                URL.revokeObjectURL(audioUrl);
+              }
+              ttsPlayer.onended = null;
+              ttsPlayer.onerror = null;
+              resolve();
+            };
+
+            ttsPlayer.onended = cleanup;
+            ttsPlayer.onerror = () => {
+              cleanup();
+            };
+
+            ttsPlayer.src = audioUrl;
+            try {
+              await ttsPlayer.play();
+            } catch (err) {
+              console.warn("播放语音异常:", err);
+              cleanup();
+            }
+          });
         }
 
         async function handleTripleClickQuoteVoice(msg, bubble, chat) {
@@ -61546,6 +61801,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           while ((match = regex.exec(content)) !== null) {
             const q = match[1].trim();
             if (q) quotes.push(q);
+          }
+          if (quotes.length === 0) {
+            const trimmed = content.trim();
+            if (trimmed) quotes.push(trimmed);
           }
           if (quotes.length === 0) {
             return;
@@ -61668,34 +61927,36 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           if (!chatScreenEl || !chatScreenEl.classList.contains("active")) return;
           if (String(state.activeChatId) !== String(chat.id)) return;
 
-          const recentMsgsWithQuotes = [];
+          const recentMsgsToPlay = [];
           for (let i = msgs.length - 1; i >= 0; i--) {
             const m = msgs[i];
             const isUser = m.role === "user" || m.sender === "user" || m.isUser || (chat.isGroup ? (chat.ownerId === "user" && m.senderId === "user") : false);
             if (isUser) {
               break;
             }
-            if (m.content && /「[^」]+」/.test(String(m.content))) {
-              recentMsgsWithQuotes.unshift(m);
+            if (m.content) {
+              recentMsgsToPlay.unshift(m);
             }
           }
-          if (recentMsgsWithQuotes.length === 0) return;
+          if (recentMsgsToPlay.length === 0) return;
 
-          for (const targetMsg of recentMsgsWithQuotes) {
+          const hasQuotes = recentMsgsToPlay.some(m => /「[^」]+」/.test(String(m.content || "")));
+          const targetMsgs = hasQuotes
+            ? recentMsgsToPlay.filter(m => /「[^」]+」/.test(String(m.content || "")))
+            : recentMsgsToPlay;
+
+          const queueId = ++_activeAutoVoiceQueueId;
+
+          for (const targetMsg of targetMsgs) {
+            if (queueId !== _activeAutoVoiceQueueId) break;
+            if (String(state.activeChatId) !== String(chat.id)) break;
+
             const bubble = document.querySelector(`.message-bubble[data-timestamp="${targetMsg.timestamp}"]`) ||
                            document.querySelector('#message-flow-container .message-bubble:last-child');
             await handleTripleClickQuoteVoice(targetMsg, bubble, chat);
-            if (window.ttsPlayer && !window.ttsPlayer.paused) {
-              await new Promise(resolve => {
-                const onEnd = () => {
-                  window.ttsPlayer.removeEventListener("ended", onEnd);
-                  window.ttsPlayer.removeEventListener("error", onEnd);
-                  resolve();
-                };
-                window.ttsPlayer.addEventListener("ended", onEnd);
-                window.ttsPlayer.addEventListener("error", onEnd);
-              });
-            }
+
+            if (queueId !== _activeAutoVoiceQueueId) break;
+            await new Promise((r) => setTimeout(r, 350));
           }
         }
 
@@ -72134,9 +72395,19 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               ); // 清除预览区的自定义样式
 
               const exitInput = document.getElementById("chat-input");
-              if (exitInput && state.activeChatId !== null && state.activeChatId !== undefined) {
-                window.chatDrafts = window.chatDrafts || {};
-                window.chatDrafts[state.activeChatId] = exitInput.value;
+              if (state.activeChatId !== null && state.activeChatId !== undefined) {
+                if (exitInput) {
+                  window.chatDrafts = window.chatDrafts || {};
+                  window.chatDrafts[state.activeChatId] = exitInput.value;
+                }
+                const currentChat = state.chats[state.activeChatId];
+                if (currentChat) {
+                  currentChat.unreadCount = 0;
+                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                  if (dbInstance && dbInstance.chats) {
+                    dbInstance.chats.put(currentChat).catch(() => {});
+                  }
+                }
               }
               exitSelectionMode();
               state.activeChatId = null;
@@ -73032,9 +73303,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             listenBtn.addEventListener("click", handleListenTogetherClick);
           }
           // 右上角地图由行内 onclick 独立切换 HTML 小地图浮层
-          document
-            .getElementById("music-exit-btn")
-            .addEventListener("click", () => endListenTogetherSession(true));
+          const musicExitBtnEl = document.getElementById("music-exit-btn");
+          if (musicExitBtnEl) {
+            musicExitBtnEl.addEventListener("click", () => endListenTogetherSession(true));
+          }
           document
             .getElementById("music-return-btn")
             .addEventListener("click", returnToChat);
@@ -73050,6 +73322,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           document
             .getElementById("music-mode-btn")
             .addEventListener("click", changePlayMode);
+          const lockLyricsBtn = document.getElementById("music-lock-lyrics-btn");
+          if (lockLyricsBtn) {
+            lockLyricsBtn.addEventListener("click", () => {
+              isFloatingLyricsLocked = !isFloatingLyricsLocked;
+              localStorage.setItem("floating_lyrics_locked", isFloatingLyricsLocked ? "true" : "false");
+              if (typeof updateLyricsLockUI === "function") {
+                updateLyricsLockUI();
+              }
+            });
+          }
           document
             .getElementById("music-playlist-btn")
             .addEventListener("click", () => {
@@ -73188,7 +73470,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }
 
               // 挂起换章触发逻辑（半自动模式）
-              if (chat && (content.includes("继续") || content.includes("进入下一章") || content.includes("睡觉") || content.includes("到第二天") || content.includes("下一站") || content.includes("推进"))) {
+              if (chat && chat.moduleSwitchMode === 'semi' && (content.includes("继续") || content.includes("进入下一章") || content.includes("推进"))) {
                 if (chat.pendingChapterManage) {
                   const pM = chat.pendingChapterManage;
                   if (typeof window.executeChapterManage === 'function') {
@@ -73573,6 +73855,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               const globalMusicSwitch = document.getElementById("global-ai-music-switch");
               state.apiConfig.globalAiMusicEnabled = globalMusicSwitch ? globalMusicSwitch.checked : true;
               localStorage.setItem("global_ai_music_enabled", state.apiConfig.globalAiMusicEnabled ? "true" : "false");
+              const musicFadeSliderEl = document.getElementById("music-fade-duration-slider");
+              if (musicFadeSliderEl) {
+                state.apiConfig.musicFadeDuration = parseFloat(musicFadeSliderEl.value) || 1.0;
+              }
 
               const subProxyEl = document.getElementById("sub-proxy-url");
               if (subProxyEl) state.apiConfig.subProxyUrl = subProxyEl.value.trim();
@@ -80563,14 +80849,26 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             );
           }
 
-          // 歌词栏上的关闭按钮
-          document
-            .querySelector("#floating-lyrics-bar .close-btn")
-            .addEventListener("click", (e) => {
+          // 歌词栏上的关闭按钮：停止音乐并关闭浮层
+          const floatingLyricsCloseBtn = document.querySelector("#floating-lyrics-bar .close-btn");
+          if (floatingLyricsCloseBtn) {
+            floatingLyricsCloseBtn.addEventListener("click", (e) => {
               e.stopPropagation();
-              document.getElementById("floating-lyrics-bar").style.display =
-                "none";
+              lyricsBarSettings.showOnClose = false;
+              const bar = document.getElementById("floating-lyrics-bar");
+              if (bar) bar.style.display = "none";
+              const toggleBtn = document.getElementById("toggle-lyrics-bar-btn");
+              if (toggleBtn) {
+                toggleBtn.textContent = "隐藏";
+                toggleBtn.style.opacity = "0.5";
+              }
+              if (typeof endListenTogetherSession === "function") {
+                endListenTogetherSession(true);
+              } else if (audioPlayer) {
+                audioPlayer.pause();
+              }
             });
+          }
 
           // 播放器里的“悬浮/隐藏”开关
           document
