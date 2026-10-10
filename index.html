@@ -8609,7 +8609,7 @@
         <img id="chat-location-rich-img" src="" alt="地点图片" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; border-top-left-radius: 11px; border-top-right-radius: 11px; pointer-events: none;" />
         <button type="button" id="chat-location-rich-close-btn" style="position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 0, 0, 0.45); color: #ffffff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; padding: 0; z-index: 2;">&times;</button>
       </div>
-      <div style="padding: 8px 10px; background: var(--card-bg); position: relative;">
+      <div id="chat-location-rich-desc-container" style="padding: 8px 10px; background: var(--card-bg); position: relative;">
         <div id="chat-location-rich-desc" style="font-size: 11px; line-height: 1.45; color: var(--text-primary); max-height: 110px; overflow-y: auto; word-break: break-word; white-space: pre-wrap;"></div>
         <div id="chat-location-rich-resize-handle" style="position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none; display: flex; align-items: flex-end; justify-content: flex-end; padding: 2px;">
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" style="color: var(--text-secondary); opacity: 0.6;"><path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke-width="1.2" stroke-linecap="round"/></svg>
@@ -22540,11 +22540,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (chat.activeModuleId === mod.id) {
                       chat.activeModuleId = null;
                       chat.selectedModuleChapterIds = [];
+                      if (chat.settings) chat.settings.useModuleMap = false;
                     } else {
                       chat.activeModuleId = mod.id;
                       if (!chat.selectedModuleChapterIds) chat.selectedModuleChapterIds = [];
+                      if (!chat.settings) chat.settings = {};
+                      chat.settings.deletedLocationNames = [];
+                      chat.settings.customLocations = [];
+                      chat.settings.temporaryLocations = [];
+                      if (chat.settings.useModuleMap) {
+                        let modMap = chat.settings.moduleMiniMaps?.[mod.id] || chat.settings.moduleMiniMaps?.[String(mod.id)] || (!isNaN(Number(mod.id)) ? chat.settings.moduleMiniMaps?.[Number(mod.id)] : null);
+                        if (modMap?.svg) {
+                          chat.settings.miniMapSvg = modMap.svg;
+                          chat.settings.miniMapStyle = modMap.style || "奶油风";
+                        } else {
+                          chat.settings.miniMapSvg = null;
+                        }
+                      }
                     }
                     await db.chats.put(chat);
+                    if (typeof state !== 'undefined' && state?.chats) {
+                      state.chats[chat.id] = chat;
+                    }
                     await renderChatModulePickerList(currentModulePickerFilter);
                     if (typeof updateChatModuleMapBar === 'function') {
                       updateChatModuleMapBar(chat);
@@ -31412,7 +31429,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               <div class="inventory-chat-card-wrap">
                 <div class="inventory-chat-card-header">${headerText}</div>
                 <div class="inventory-chat-card" data-item-id="${it.id || ''}" data-item-name="${it.name || ''}">
-                  <div class="inventory-chat-card-avatar" data-avatar-id="${it.id || ''}" data-avatar-name="${it.name || ''}" onclick="event.stopPropagation(); if('${it.avatar || ''}' && typeof openFullImageModal==='function')openFullImageModal('${it.avatar || ''}');">
+                  <div class="inventory-chat-card-avatar" data-avatar-id="${it.id || ''}" data-avatar-name="${it.name || ''}" data-avatar-url="${it.avatar || ''}">
                     ${avatarHtml}
                   </div>
                   <div class="inventory-chat-card-body">
@@ -32022,6 +32039,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               semiBtn.style.opacity = "0.6";
               if (typeof window.executeChapterSwitch === 'function') {
                 await window.executeChapterSwitch(tid, tTitle, true);
+              }
+            };
+          }
+
+          const invAvatarEl = bubble.querySelector('.inventory-chat-card-avatar');
+          if (invAvatarEl) {
+            invAvatarEl.onclick = (e) => {
+              e.stopPropagation();
+              const aUrl = invAvatarEl.getAttribute('data-avatar-url');
+              if (aUrl && typeof openFullImageModal === 'function') {
+                openFullImageModal(aUrl);
               }
             };
           }
@@ -33268,10 +33296,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             deleteBtn.onclick = async () => {
               const chat = state.chats[state.activeChatId];
               if (!chat) return;
-              const isModMode = chat.settings?.useModuleMap !== false && !!chat.activeModuleId;
+              const toggleEl = document.getElementById("chat-map-use-module-toggle");
+              const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat.settings?.useModuleMap === true && !!chat?.activeModuleId);
               const curSvg = isModMode
-                ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || chat.settings?.miniMapSvg || null)
-                : (chat.settings?.contextMiniMapSvg || (!chat.settings?.moduleMiniMaps ? chat.settings?.miniMapSvg : null));
+                ? (chat.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || null)
+                : (chat.settings?.contextMiniMapSvg || null);
 
               if (!curSvg) {
                 if (typeof window.showCustomAlert === "function") {
@@ -33318,10 +33347,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (modifyBtn) {
             modifyBtn.onclick = () => {
               const chat = state.chats[state.activeChatId];
-              const isModMode = chat?.settings?.useModuleMap !== false && !!chat?.activeModuleId;
+              const toggleEl = document.getElementById("chat-map-use-module-toggle");
+              const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
               const curSvg = isModMode
-                ? (chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat?.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || chat?.settings?.miniMapSvg || null)
-                : (chat?.settings?.contextMiniMapSvg || (!chat?.settings?.moduleMiniMaps ? chat?.settings?.miniMapSvg : null));
+                ? (chat?.settings?.moduleMiniMaps?.[chat.activeModuleId]?.svg || chat?.settings?.moduleMiniMaps?.[String(chat.activeModuleId)]?.svg || null)
+                : (chat?.settings?.contextMiniMapSvg || null);
               if (!curSvg || typeof curSvg !== "string" || !curSvg.trim()) {
                 if (typeof window.showCustomAlert === "function") {
                   window.showCustomAlert("提示", "当前暂无已生成的小地图，请先点击“生成地图”生成基础小地图");
@@ -33703,12 +33733,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (useModToggle) {
-            useModToggle.checked = chat.settings.useModuleMap === true && !!chat.activeModuleId;
+            useModToggle.checked = Boolean(chat.settings.useModuleMap === true && chat.activeModuleId);
             const onToggleChange = async () => {
-              chat.settings.useModuleMap = useModToggle.checked;
+              const isChecked = useModToggle.checked;
+              if (isChecked && !chat.activeModuleId) {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "当前聊天未绑定模组，请先在聊天设置中绑定模组");
+                }
+                useModToggle.checked = false;
+                chat.settings.useModuleMap = false;
+                return;
+              }
+
+              chat.settings.useModuleMap = isChecked;
               
-              // 切换地图源时同步切换对应保存的小地图（独立于当前群聊与模组，不读取/污染模组对象）
               if (chat.settings.useModuleMap && chat.activeModuleId) {
+                chat.settings.deletedLocationNames = [];
+                chat.settings.customLocations = [];
+                chat.settings.temporaryLocations = [];
                 let modMap = chat.settings.moduleMiniMaps?.[chat.activeModuleId] || chat.settings.moduleMiniMaps?.[String(chat.activeModuleId)] || (!isNaN(Number(chat.activeModuleId)) ? chat.settings.moduleMiniMaps?.[Number(chat.activeModuleId)] : null);
                 if (modMap?.svg) {
                   chat.settings.miniMapSvg = modMap.svg;
@@ -33723,12 +33765,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance) await dbInstance.chats.put(chat);
+              if (typeof state !== 'undefined' && state?.chats) {
+                state.chats[chat.id] = chat;
+              }
               updateButtonsState();
               await renderChatMapList();
               renderChatMiniMap();
             };
             useModToggle.onchange = onToggleChange;
-            useModToggle.oninput = onToggleChange;
           }
 
           updateButtonsState();
@@ -33921,19 +33965,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                           if (target.isTemp && chat.settings && Array.isArray(chat.settings.temporaryLocations)) {
                             const tNode = chat.settings.temporaryLocations.find(n => n.id === target.id || n.name === target.name);
                             if (tNode) tNode.prompt = item.prompt;
+                          } else if (chat.settings?.useModuleMap && chat.activeModuleId) {
+                            if (!Array.isArray(chat.settings.customLocations)) chat.settings.customLocations = [];
+                            const cNode = chat.settings.customLocations.find(n => n.id === target.id || n.name === target.name);
+                            if (cNode) {
+                              cNode.prompt = item.prompt;
+                            } else {
+                              chat.settings.customLocations.push({
+                                id: target.id || ("custom_loc_" + Date.now()),
+                                name: target.name,
+                                level: target.level || 1,
+                                parent: target.parent || "",
+                                desc: target.desc || "",
+                                prompt: item.prompt,
+                                imageUrl: target.imageUrl || "",
+                                originalName: target.name
+                              });
+                            }
                           } else if (chat.settings && Array.isArray(chat.settings.contextMapData)) {
                             const cNode = chat.settings.contextMapData.find(n => n.id === target.id || n.name === target.name);
                             if (cNode) cNode.prompt = item.prompt;
-                          }
-                          const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-                          if (dbInstance && dbInstance.moduleLocationNav && target.id && !target.isTemp) {
-                            try {
-                              const navRec = await dbInstance.moduleLocationNav.get(target.id);
-                              if (navRec) {
-                                navRec.prompt = item.prompt;
-                                await dbInstance.moduleLocationNav.put(navRec);
-                              }
-                            } catch(e) {}
                           }
                         }
                       }
@@ -34311,12 +34362,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const popup = document.getElementById("chat-location-rich-popup");
           const imgEl = document.getElementById("chat-location-rich-img");
           const descEl = document.getElementById("chat-location-rich-desc");
+          const descContainer = document.getElementById("chat-location-rich-desc-container");
           if (!popup || !imgEl || !descEl) return;
           initRichLocationPopupInteractions();
 
           const fallbackSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='1.5'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpath d='m21 15-5-5L5 21'/%3E%3C/svg%3E";
           imgEl.src = (exactFound && exactFound.imageUrl && exactFound.imageUrl.trim()) ? exactFound.imageUrl.trim() : fallbackSvg;
-          descEl.textContent = (descText || (exactFound && exactFound.desc) || "暂无简介").trim();
+          
+          const rawDesc = (descText || (exactFound && exactFound.desc) || "").trim();
+          if (rawDesc) {
+            descEl.textContent = rawDesc;
+            if (descContainer) descContainer.style.display = "block";
+            imgEl.style.borderRadius = "11px 11px 0 0";
+          } else {
+            descEl.textContent = "";
+            if (descContainer) descContainer.style.display = "none";
+            imgEl.style.borderRadius = "11px";
+          }
 
           const isAlreadyShown = (popup.style.display === "flex" || popup.style.display === "block");
           activeRichLocationPopupName = locName;
@@ -34358,12 +34420,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             modal.style.display = "none";
             img.src = "";
           };
-          if (backdrop) backdrop.onclick = closeModal;
-          modal.onclick = (e) => {
-            if (e.target !== img && !e.target.closest(".modal-content")) {
-              closeModal(e);
-            }
-          };
+          if (backdrop) backdrop.onclick = null;
+          modal.onclick = null;
+          const closeBtn = document.getElementById("close-chat-map-image-modal-btn");
+          const cancelBtn = document.getElementById("chat-map-image-modal-cancel-btn");
+          if (closeBtn) closeBtn.onclick = closeModal;
+          if (cancelBtn) cancelBtn.onclick = closeModal;
         }
         window.showImageModal = showImageModal;
         window.viewImage = showImageModal;
@@ -34397,7 +34459,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             modal.style.display = "none";
           };
 
-          if (backdrop) backdrop.onclick = closeModal;
+          if (backdrop) backdrop.onclick = null;
+          modal.onclick = null;
           if (closeBtn) closeBtn.onclick = closeModal;
           if (cancelBtn) cancelBtn.onclick = closeModal;
 
@@ -34469,12 +34532,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               hideLocationBubble();
             }
           }
-          const richPopup = document.getElementById("chat-location-rich-popup");
-          if (richPopup && richPopup.style.display !== "none") {
-            if (!richPopup.contains(e.target) && !e.target.closest(".chat-location-clickable")) {
-              hideRichLocationPopup();
-            }
-          }
         }, true);
 
         window.addEventListener("click", (e) => {
@@ -34484,19 +34541,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               hideLocationBubble();
             }
           }
-          const richPopup = document.getElementById("chat-location-rich-popup");
-          if (richPopup && richPopup.style.display !== "none") {
-            if (!richPopup.contains(e.target) && !e.target.closest(".chat-location-clickable")) {
-              hideRichLocationPopup();
-            }
-          }
         }, true);
 
         async function getAllChatLocations(chat) {
           let locations = [];
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           const toggleEl = document.getElementById("chat-map-use-module-toggle");
-          const useModule = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+          const isModalOpen = document.getElementById("chat-map-modal")?.classList.contains("visible");
+          const useModule = (isModalOpen && toggleEl) 
+            ? (toggleEl.checked && !!chat?.activeModuleId) 
+            : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
 
           if (useModule && chat && chat.activeModuleId && dbInstance) {
             try {
@@ -34518,7 +34572,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (modLocs.length === 0) {
                     modLocs = mod.mapNodes;
                   } else {
-                    // 若 moduleLocationNav 中地点缺失图片，从 mod.mapNodes 中补充复用同一张图片
                     modLocs.forEach(ml => {
                       if (!ml.imageUrl) {
                         const matchInMod = mod.mapNodes.find(mn => mn.name === ml.name && mn.imageUrl);
@@ -34544,75 +34597,76 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 });
               }
             } catch (e) {}
-          } else {
-            // 当取消使用模组，或者未挂载模组时：展示当前上下文中的地图数据；如果上下文中没有地图数据，则为空
-            if (chat?.settings && Array.isArray(chat.settings.contextMapData) && chat.settings.contextMapData.length > 0) {
-              chat.settings.contextMapData.forEach((loc) => {
-                if (loc.isModule || (loc.id && String(loc.id).startsWith("mod_"))) return;
+
+            const deletedNames = new Set(chat?.settings?.deletedLocationNames || []);
+            if (deletedNames.size > 0) {
+              locations = locations.filter(l => !deletedNames.has(l.name));
+            }
+
+            if (chat?.settings && Array.isArray(chat.settings.customLocations)) {
+              chat.settings.customLocations.forEach(cLoc => {
+                if (deletedNames.has(cLoc.name)) return;
+                const idx = locations.findIndex(l => (cLoc.originalName && l.name === cLoc.originalName) || l.id === cLoc.id || l.name === cLoc.name);
+                if (idx !== -1) {
+                  locations[idx] = {
+                    ...locations[idx],
+                    name: cLoc.name,
+                    parent: cLoc.parent || "",
+                    level: cLoc.level || locations[idx].level || 1,
+                    desc: cLoc.desc !== undefined ? cLoc.desc : locations[idx].desc,
+                    prompt: cLoc.prompt || locations[idx].prompt || "",
+                    imageUrl: cLoc.imageUrl || locations[idx].imageUrl || "",
+                  };
+                } else {
+                  locations.push({
+                    id: cLoc.id || "custom_" + cLoc.name,
+                    name: cLoc.name,
+                    parent: cLoc.parent || "",
+                    level: cLoc.level || 1,
+                    desc: cLoc.desc || "",
+                    prompt: cLoc.prompt || "",
+                    imageUrl: cLoc.imageUrl || "",
+                    isTemp: false,
+                    isModule: true,
+                  });
+                }
+              });
+            }
+
+            if (chat && chat.settings && Array.isArray(chat.settings.temporaryLocations)) {
+              chat.settings.temporaryLocations.forEach((loc) => {
+                if (deletedNames.has(loc.name)) return;
                 locations.push({
-                  id: loc.id || "ctx_" + loc.name,
+                  id: loc.id,
                   name: loc.name,
                   parent: loc.parent || "",
-                  level: loc.level || 1,
+                  level: loc.level || (loc.parent ? 2 : 1),
                   desc: loc.desc || loc.description || "",
                   prompt: loc.prompt || "",
                   imageUrl: loc.imageUrl || "",
-                  isTemp: false,
+                  isTemp: true,
+                  isModule: true,
                 });
               });
             }
+
+            return locations;
           }
 
-          // 应用本群删除过滤
-          const deletedNames = new Set(chat?.settings?.deletedLocationNames || []);
-          if (deletedNames.size > 0) {
-            locations = locations.filter(l => !deletedNames.has(l.name));
-          }
-
-          // 应用本群自定义地点覆盖与修改
-          if (chat?.settings && Array.isArray(chat.settings.customLocations)) {
-            chat.settings.customLocations.forEach(cLoc => {
-              if (deletedNames.has(cLoc.name)) return;
-              if (!useModule && (cLoc.isModule || (cLoc.id && String(cLoc.id).startsWith("mod_")))) return;
-              const idx = locations.findIndex(l => (cLoc.originalName && l.name === cLoc.originalName) || l.id === cLoc.id || l.name === cLoc.name);
-              if (idx !== -1) {
-                locations[idx] = {
-                  ...locations[idx],
-                  name: cLoc.name,
-                  parent: cLoc.parent || "",
-                  level: cLoc.level || locations[idx].level || 1,
-                  desc: cLoc.desc !== undefined ? cLoc.desc : locations[idx].desc,
-                  prompt: cLoc.prompt || locations[idx].prompt || "",
-                  imageUrl: cLoc.imageUrl || locations[idx].imageUrl || "",
-                };
-              } else if (useModule) {
-                locations.push({
-                  id: cLoc.id || "custom_" + cLoc.name,
-                  name: cLoc.name,
-                  parent: cLoc.parent || "",
-                  level: cLoc.level || 1,
-                  desc: cLoc.desc || "",
-                  prompt: cLoc.prompt || "",
-                  imageUrl: cLoc.imageUrl || "",
-                  isTemp: false,
-                });
-              }
-            });
-          }
-
-          // 追加本群临时新增地点
-          if (chat && chat.settings && Array.isArray(chat.settings.temporaryLocations)) {
-            chat.settings.temporaryLocations.forEach((loc) => {
-              if (deletedNames.has(loc.name)) return;
+          // 未勾选使用模组时：严格仅返回上下文地图，如果上下文没有地图则留空返回空数组
+          if (chat?.settings && Array.isArray(chat.settings.contextMapData) && chat.settings.contextMapData.length > 0) {
+            chat.settings.contextMapData.forEach((loc) => {
+              if (loc.isModule || (loc.id && String(loc.id).startsWith("mod_"))) return;
               locations.push({
-                id: loc.id,
+                id: loc.id || "ctx_" + loc.name,
                 name: loc.name,
                 parent: loc.parent || "",
-                level: loc.level || (loc.parent ? 2 : 1),
+                level: loc.level || 1,
                 desc: loc.desc || loc.description || "",
                 prompt: loc.prompt || "",
                 imageUrl: loc.imageUrl || "",
-                isTemp: true,
+                isTemp: false,
+                isModule: false,
               });
             });
           }
@@ -34623,84 +34677,51 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function saveLocationImage(chat, node, b64, newPrompt) {
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           const toggleEl = document.getElementById("chat-map-use-module-toggle");
-          const useModule = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
+          const isModalOpen = document.getElementById("chat-map-modal")?.classList.contains("visible");
+          const useModule = (isModalOpen && toggleEl) 
+            ? (toggleEl.checked && !!chat?.activeModuleId) 
+            : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
 
-          if (useModule && chat && chat.activeModuleId && dbInstance) {
-            if (dbInstance.moduleLocationNav) {
-              try {
-                let navItems = [];
-                if (typeof node.id === "number") {
-                  const direct = await dbInstance.moduleLocationNav.get(node.id);
-                  if (direct) navItems.push(direct);
-                }
-                if (navItems.length === 0) {
-                  navItems = await dbInstance.moduleLocationNav.where("moduleId").equals(chat.activeModuleId).toArray();
-                  if (navItems.length === 0 && !isNaN(Number(chat.activeModuleId))) {
-                    navItems = await dbInstance.moduleLocationNav.where("moduleId").equals(Number(chat.activeModuleId)).toArray();
-                  }
-                  if (navItems.length === 0) {
-                    navItems = await dbInstance.moduleLocationNav.where("moduleId").equals(String(chat.activeModuleId)).toArray();
-                  }
-                }
-                for (const found of navItems) {
-                  if (found.name === node.name || found.id === node.id) {
-                    found.imageUrl = b64;
-                    if (newPrompt !== undefined) found.prompt = newPrompt;
-                    await dbInstance.moduleLocationNav.put(found);
-                  }
-                }
-              } catch (e) {}
+          if (!chat.settings) chat.settings = {};
+
+          if (useModule && chat && chat.activeModuleId) {
+            // 不污染模组库数据，所有群聊私有修改记录于 customLocations
+            if (!Array.isArray(chat.settings.customLocations)) {
+              chat.settings.customLocations = [];
             }
-            if (dbInstance.modules) {
-              try {
-                let mod = await dbInstance.modules.get(chat.activeModuleId);
-                if (!mod && !isNaN(Number(chat.activeModuleId))) mod = await dbInstance.modules.get(Number(chat.activeModuleId));
-                if (!mod) mod = await dbInstance.modules.get(String(chat.activeModuleId));
-                if (mod && Array.isArray(mod.mapNodes)) {
-                  const target = mod.mapNodes.find(m => m.name === node.name);
-                  if (target) {
-                    target.imageUrl = b64;
-                    if (newPrompt !== undefined) target.prompt = newPrompt;
-                  }
-                  await dbInstance.modules.update(mod.id, { mapNodes: mod.mapNodes });
-                }
-              } catch (e) {}
-            }
-            if (node.isTemp && Array.isArray(chat.settings?.temporaryLocations)) {
+            if (node.isTemp && Array.isArray(chat.settings.temporaryLocations)) {
               const t = chat.settings.temporaryLocations.find(l => l.id === node.id || l.name === node.name);
               if (t) {
                 t.imageUrl = b64;
                 if (newPrompt !== undefined) t.prompt = newPrompt;
               }
-            }
-            if (Array.isArray(chat.settings?.customLocations)) {
-              const c = chat.settings.customLocations.find(l => l.name === node.name);
+            } else {
+              const c = chat.settings.customLocations.find(l => l.name === node.name || l.id === node.id);
               if (c) {
                 c.imageUrl = b64;
                 if (newPrompt !== undefined) c.prompt = newPrompt;
+              } else {
+                chat.settings.customLocations.push({
+                  id: node.id || "custom_loc_" + Date.now(),
+                  name: node.name,
+                  level: node.level || 1,
+                  parent: node.parent || "",
+                  desc: node.desc || "",
+                  prompt: newPrompt !== undefined ? newPrompt : (node.prompt || ""),
+                  imageUrl: b64,
+                  originalName: node.name
+                });
               }
-            }
-            // 同步给所有使用该模组的群聊，全局仅保留并调用同一份图片
-            if (typeof state !== "undefined" && state.chats) {
-              Object.values(state.chats).forEach(otherChat => {
-                if (otherChat && otherChat.id !== chat.id && String(otherChat.activeModuleId) === String(chat.activeModuleId)) {
-                  if (Array.isArray(otherChat.settings?.customLocations)) {
-                    const oc = otherChat.settings.customLocations.find(l => l.name === node.name);
-                    if (oc) oc.imageUrl = b64;
-                  }
-                  if (dbInstance && dbInstance.chats) {
-                    dbInstance.chats.put(otherChat).catch(() => {});
-                  }
-                }
-              });
             }
             if (dbInstance && chat.id) {
               await dbInstance.chats.put(chat);
             }
+            if (typeof state !== 'undefined' && state?.chats) {
+              state.chats[chat.id] = chat;
+            }
             return;
           }
 
-          if (!chat.settings) chat.settings = {};
           if (node.isTemp) {
             if (Array.isArray(chat.settings.temporaryLocations)) {
               const t = chat.settings.temporaryLocations.find(l => l.id === node.id || l.name === node.name);
@@ -34723,6 +34744,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           if (dbInstance && chat.id) {
             await dbInstance.chats.put(chat);
+          }
+          if (typeof state !== 'undefined' && state?.chats) {
+            state.chats[chat.id] = chat;
           }
         }
 
@@ -35276,33 +35300,38 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (!ok) return;
               }
               if (!chat.settings) chat.settings = {};
-              const deletedNames = new Set(chat.settings.deletedLocationNames || []);
-              deletedNames.add(loc.name);
+              const toggleEl = document.getElementById("chat-map-use-module-toggle");
+              const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
 
-              // 递归搜集所有子孙地点并级联删除
               const toDeleteParents = [loc.name];
+              const deletedSet = new Set([loc.name]);
               while (toDeleteParents.length > 0) {
                 const pName = toDeleteParents.shift();
                 const children = allLocs.filter(l => l.parent === pName);
                 children.forEach(c => {
-                  deletedNames.add(c.name);
+                  deletedSet.add(c.name);
                   toDeleteParents.push(c.name);
                 });
               }
 
-              chat.settings.deletedLocationNames = Array.from(deletedNames);
+              if (isModMode) {
+                const deletedNames = new Set(chat.settings.deletedLocationNames || []);
+                deletedSet.forEach(n => deletedNames.add(n));
+                chat.settings.deletedLocationNames = Array.from(deletedNames);
 
-              if (Array.isArray(chat.settings.temporaryLocations)) {
-                chat.settings.temporaryLocations = chat.settings.temporaryLocations.filter(t => !deletedNames.has(t.name));
-              }
-              if (Array.isArray(chat.settings.customLocations)) {
-                chat.settings.customLocations = chat.settings.customLocations.filter(t => !deletedNames.has(t.name));
-              }
-              if (Array.isArray(chat.settings.contextMapData)) {
-                chat.settings.contextMapData = chat.settings.contextMapData.filter(t => !deletedNames.has(t.name));
+                if (Array.isArray(chat.settings.temporaryLocations)) {
+                  chat.settings.temporaryLocations = chat.settings.temporaryLocations.filter(t => !deletedSet.has(t.name));
+                }
+                if (Array.isArray(chat.settings.customLocations)) {
+                  chat.settings.customLocations = chat.settings.customLocations.filter(t => !deletedSet.has(t.name));
+                }
+              } else {
+                if (Array.isArray(chat.settings.contextMapData)) {
+                  chat.settings.contextMapData = chat.settings.contextMapData.filter(t => !deletedSet.has(t.name));
+                }
               }
 
-              if (chat.settings.currentLocation && deletedNames.has(chat.settings.currentLocation)) {
+              if (chat.settings.currentLocation && deletedSet.has(chat.settings.currentLocation)) {
                 delete chat.settings.currentLocation;
               }
 
@@ -35327,67 +35356,95 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const desc = descInput.value.trim();
 
               if (!chat.settings) chat.settings = {};
-              if (!Array.isArray(chat.settings.temporaryLocations)) {
-                chat.settings.temporaryLocations = [];
-              }
-              if (!Array.isArray(chat.settings.customLocations)) {
-                chat.settings.customLocations = [];
-              }
+              const toggleEl = document.getElementById("chat-map-use-module-toggle");
+              const isModMode = toggleEl ? (toggleEl.checked && !!chat?.activeModuleId) : (chat?.settings?.useModuleMap === true && !!chat?.activeModuleId);
 
-              if (isEditing) {
-                const oldName = loc.name;
-                // 如果改名，更新依赖其为 parent 的子项
-                if (oldName && oldName !== name) {
-                  if (Array.isArray(chat.settings.temporaryLocations)) {
-                    chat.settings.temporaryLocations.forEach(t => { if (t.parent === oldName) t.parent = name; });
-                  }
-                  if (Array.isArray(chat.settings.customLocations)) {
-                    chat.settings.customLocations.forEach(t => { if (t.parent === oldName) t.parent = name; });
-                  }
-                  if (chat.settings.currentLocation === oldName) {
-                    chat.settings.currentLocation = name;
-                  }
+              if (isModMode) {
+                if (!Array.isArray(chat.settings.temporaryLocations)) {
+                  chat.settings.temporaryLocations = [];
+                }
+                if (!Array.isArray(chat.settings.customLocations)) {
+                  chat.settings.customLocations = [];
                 }
 
-                let updated = false;
-                const tempItem = chat.settings.temporaryLocations.find(t => t.id === loc.id || t.name === oldName);
-                if (tempItem) {
-                  tempItem.name = name;
-                  tempItem.level = lvl;
-                  tempItem.parent = parent;
-                  tempItem.desc = desc;
-                  updated = true;
-                }
+                if (isEditing) {
+                  const oldName = loc.name;
+                  if (oldName && oldName !== name) {
+                    if (Array.isArray(chat.settings.temporaryLocations)) {
+                      chat.settings.temporaryLocations.forEach(t => { if (t.parent === oldName) t.parent = name; });
+                    }
+                    if (Array.isArray(chat.settings.customLocations)) {
+                      chat.settings.customLocations.forEach(t => { if (t.parent === oldName) t.parent = name; });
+                    }
+                    if (chat.settings.currentLocation === oldName) {
+                      chat.settings.currentLocation = name;
+                    }
+                  }
 
-                const customItem = chat.settings.customLocations.find(t => t.id === loc.id || t.name === oldName);
-                if (customItem) {
-                  customItem.name = name;
-                  customItem.level = lvl;
-                  customItem.parent = parent;
-                  customItem.desc = desc;
-                  updated = true;
-                }
+                  let updated = false;
+                  const tempItem = chat.settings.temporaryLocations.find(t => t.id === loc.id || t.name === oldName);
+                  if (tempItem) {
+                    tempItem.name = name;
+                    tempItem.level = lvl;
+                    tempItem.parent = parent;
+                    tempItem.desc = desc;
+                    updated = true;
+                  }
 
-                if (!updated) {
-                  chat.settings.customLocations.push({
-                    id: loc.id || "custom_loc_" + Date.now(),
+                  const customItem = chat.settings.customLocations.find(t => t.id === loc.id || t.name === oldName);
+                  if (customItem) {
+                    customItem.name = name;
+                    customItem.level = lvl;
+                    customItem.parent = parent;
+                    customItem.desc = desc;
+                    updated = true;
+                  }
+
+                  if (!updated) {
+                    chat.settings.customLocations.push({
+                      id: loc.id || "custom_loc_" + Date.now(),
+                      name: name,
+                      level: lvl,
+                      parent: parent,
+                      desc: desc,
+                      prompt: loc.prompt || "",
+                      imageUrl: loc.imageUrl || "",
+                      originalName: oldName
+                    });
+                  }
+                } else {
+                  chat.settings.temporaryLocations.push({
+                    id: "temp_loc_" + Date.now(),
                     name: name,
-                    level: lvl,
                     parent: parent,
                     desc: desc,
-                    prompt: loc.prompt || "",
-                    imageUrl: loc.imageUrl || "",
-                    originalName: oldName
+                    level: lvl
                   });
                 }
               } else {
-                chat.settings.temporaryLocations.push({
-                  id: "temp_loc_" + Date.now(),
-                  name: name,
-                  parent: parent,
-                  desc: desc,
-                  level: lvl
-                });
+                if (!Array.isArray(chat.settings.contextMapData)) {
+                  chat.settings.contextMapData = [];
+                }
+                if (isEditing) {
+                  const oldName = loc.name;
+                  const cItem = chat.settings.contextMapData.find(t => t.id === loc.id || t.name === oldName);
+                  if (cItem) {
+                    cItem.name = name;
+                    cItem.level = lvl;
+                    cItem.parent = parent;
+                    cItem.desc = desc;
+                  }
+                } else {
+                  chat.settings.contextMapData.push({
+                    id: "ctx_loc_" + Date.now(),
+                    name: name,
+                    parent: parent,
+                    desc: desc,
+                    level: lvl,
+                    prompt: "",
+                    imageUrl: ""
+                  });
+                }
               }
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
@@ -65416,6 +65473,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const categories = {
             images: { key: "images", name: "图片", bytes: 0, count: 0, unit: "张", color: "var(--accent-color, #ff6b8b)" },
             maps: { key: "maps", name: "地图", bytes: 0, count: 0, unit: "处", color: "var(--tukey-teal, #50e3c2)" },
+            html: { key: "html", name: "HTML", bytes: 0, count: 0, unit: "份", color: "var(--tukey-cyan, #00d2d3)" },
             modules: { key: "modules", name: "模组", bytes: 0, count: 0, unit: "个", color: "var(--tukey-orange, #f5a623)" },
             inventory: { key: "inventory", name: "道具", bytes: 0, count: 0, unit: "件", color: "var(--tukey-gold, #ffb300)" },
             combat: { key: "combat", name: "战斗", bytes: 0, count: 0, unit: "项", color: "var(--danger-color, #e53935)" },
@@ -65468,7 +65526,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }
             } catch(e) {}
 
-            // 2. 地图数据（包含地图节点图片与导航数据）
+            // 2. 地图数据与HTML地图代码细分
             try {
               if (dbInstance.moduleLocationNav) {
                 const locs = await dbInstance.moduleLocationNav.toArray();
@@ -65495,9 +65553,34 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     categories.maps.count += c.settings.temporaryLocations.length;
                     c.settings.temporaryLocations.forEach(loc => { categories.maps.bytes += getStrBytes(loc); });
                   }
+                  const countedSvgs = new Set();
                   if (c.settings?.miniMapSvg) {
-                    categories.maps.bytes += getStrBytes(c.settings.miniMapSvg);
-                    categories.maps.count++;
+                    categories.html.bytes += getStrBytes(c.settings.miniMapSvg);
+                    categories.html.count++;
+                    countedSvgs.add(c.settings.miniMapSvg);
+                  }
+                  if (c.settings?.contextMiniMapSvg && !countedSvgs.has(c.settings.contextMiniMapSvg)) {
+                    categories.html.bytes += getStrBytes(c.settings.contextMiniMapSvg);
+                    categories.html.count++;
+                    countedSvgs.add(c.settings.contextMiniMapSvg);
+                  }
+                  if (c.settings?.moduleMiniMaps && typeof c.settings.moduleMiniMaps === "object") {
+                    Object.values(c.settings.moduleMiniMaps).forEach(mObj => {
+                      if (mObj?.svg && !countedSvgs.has(mObj.svg)) {
+                        categories.html.bytes += getStrBytes(mObj.svg);
+                        categories.html.count++;
+                        countedSvgs.add(mObj.svg);
+                      }
+                    });
+                  }
+                });
+              }
+              if (dbInstance.favorites) {
+                const favs = await dbInstance.favorites.toArray();
+                favs.forEach(f => {
+                  if (f.type === "map_html" || f.mapSvg) {
+                    categories.html.bytes += getStrBytes(f.mapSvg || f.content?.content || "");
+                    categories.html.count++;
                   }
                 });
               }
@@ -65851,6 +65934,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const catNameMap = {
             images: "图片",
             maps: "地图",
+            html: "HTML",
             modules: "模组",
             inventory: "道具",
             combat: "战斗",
@@ -66185,6 +66269,40 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }
             } else if (item.action === "deleteLocalStorage" && item.recordId) {
               localStorage.removeItem(item.recordId);
+            } else if (item.action === "deleteMiniMapSvg" && item.recordId && dbInstance?.chats) {
+              const chat = (typeof state !== "undefined" && state?.chats && state.chats[item.recordId]) ? state.chats[item.recordId] : await dbInstance.chats.get(item.recordId);
+              if (chat && chat.settings) {
+                delete chat.settings.miniMapSvg;
+                delete chat.settings.miniMapStyle;
+                await dbInstance.chats.put(chat);
+                if (typeof state !== "undefined" && state?.chats) state.chats[item.recordId] = chat;
+              }
+            } else if (item.action === "deleteContextMiniMapSvg" && item.recordId && dbInstance?.chats) {
+              const chat = (typeof state !== "undefined" && state?.chats && state.chats[item.recordId]) ? state.chats[item.recordId] : await dbInstance.chats.get(item.recordId);
+              if (chat && chat.settings) {
+                delete chat.settings.contextMiniMapSvg;
+                delete chat.settings.contextMiniMapStyle;
+                if (chat.settings.miniMapSvg === item.htmlContent) {
+                  delete chat.settings.miniMapSvg;
+                  delete chat.settings.miniMapStyle;
+                }
+                await dbInstance.chats.put(chat);
+                if (typeof state !== "undefined" && state?.chats) state.chats[item.recordId] = chat;
+              }
+            } else if (item.action === "deleteModuleMiniMapSvg" && item.recordId && dbInstance?.chats) {
+              const chat = (typeof state !== "undefined" && state?.chats && state.chats[item.recordId]) ? state.chats[item.recordId] : await dbInstance.chats.get(item.recordId);
+              if (chat && chat.settings?.moduleMiniMaps) {
+                delete chat.settings.moduleMiniMaps[item.modId];
+                delete chat.settings.moduleMiniMaps[String(item.modId)];
+                if (chat.settings.miniMapSvg === item.htmlContent) {
+                  delete chat.settings.miniMapSvg;
+                  delete chat.settings.miniMapStyle;
+                }
+                await dbInstance.chats.put(chat);
+                if (typeof state !== "undefined" && state?.chats) state.chats[item.recordId] = chat;
+              }
+            } else if (item.action === "deleteFavorite" && item.recordId && dbInstance?.favorites) {
+              await dbInstance.favorites.delete(item.recordId);
             } else if (item.table === "moduleLocationNav" && item.recordId && dbInstance?.moduleLocationNav) {
               await dbInstance.moduleLocationNav.delete(item.recordId);
             } else if (item.table === "moduleImages" && item.recordId && dbInstance?.moduleImages) {
@@ -66435,24 +66553,101 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                       });
                     });
                   }
+                });
+              }
+            } catch(e) {
+              console.warn("扫描地图数据出错:", e);
+            }
+          }
+
+          // 地图HTML分类专属扫描
+          if (currentStorageCategory === "html" || currentStorageCategory === "all") {
+            try {
+              if (dbInstance.chats) {
+                const chats = await dbInstance.chats.toArray();
+                chats.forEach(chat => {
+                  const countedSvgs = new Set();
                   if (chat.settings?.miniMapSvg) {
                     loadedStorageImagesList.push({
                       id: "chat_mini_map_" + chat.id,
-                      type: "map",
+                      type: "html",
                       table: "chats",
                       recordId: chat.id,
                       field: "miniMapSvg",
-                      name: "小地图",
-                      origin: `聊天《${chat.name}》小地图SVG`,
+                      action: "deleteMiniMapSvg",
+                      name: "小地图HTML",
+                      origin: `《${chat.name || '未命名'}》小地图HTML`,
                       size: getStrBytes(chat.settings.miniMapSvg),
                       dataUrl: "",
+                      htmlContent: chat.settings.miniMapSvg,
+                      selected: false
+                    });
+                    countedSvgs.add(chat.settings.miniMapSvg);
+                  }
+                  if (chat.settings?.contextMiniMapSvg && !countedSvgs.has(chat.settings.contextMiniMapSvg)) {
+                    loadedStorageImagesList.push({
+                      id: "chat_ctx_mini_map_" + chat.id,
+                      type: "html",
+                      table: "chats",
+                      recordId: chat.id,
+                      field: "contextMiniMapSvg",
+                      action: "deleteContextMiniMapSvg",
+                      name: "上下文地图HTML",
+                      origin: `《${chat.name || '未命名'}》上下文地图HTML`,
+                      size: getStrBytes(chat.settings.contextMiniMapSvg),
+                      dataUrl: "",
+                      htmlContent: chat.settings.contextMiniMapSvg,
+                      selected: false
+                    });
+                    countedSvgs.add(chat.settings.contextMiniMapSvg);
+                  }
+                  if (chat.settings?.moduleMiniMaps && typeof chat.settings.moduleMiniMaps === "object") {
+                    Object.entries(chat.settings.moduleMiniMaps).forEach(([mId, mObj]) => {
+                      if (mObj?.svg && !countedSvgs.has(mObj.svg)) {
+                        loadedStorageImagesList.push({
+                          id: "chat_mod_mini_map_" + chat.id + "_" + mId,
+                          type: "html",
+                          table: "chats",
+                          recordId: chat.id,
+                          modId: mId,
+                          field: "moduleMiniMaps",
+                          action: "deleteModuleMiniMapSvg",
+                          name: "模组地图HTML",
+                          origin: `《${chat.name || '未命名'}》模组地图HTML`,
+                          size: getStrBytes(mObj.svg),
+                          dataUrl: "",
+                          htmlContent: mObj.svg,
+                          selected: false
+                        });
+                        countedSvgs.add(mObj.svg);
+                      }
+                    });
+                  }
+                });
+              }
+              if (dbInstance.favorites) {
+                const favs = await dbInstance.favorites.toArray();
+                favs.forEach(f => {
+                  if (f.type === "map_html" || f.mapSvg) {
+                    const svgStr = f.mapSvg || f.content?.content || "";
+                    loadedStorageImagesList.push({
+                      id: "fav_map_html_" + f.id,
+                      type: "html",
+                      table: "favorites",
+                      recordId: f.id,
+                      action: "deleteFavorite",
+                      name: f.title || "收藏地图HTML",
+                      origin: `收藏《${f.title || '地图'}》HTML`,
+                      size: getStrBytes(svgStr),
+                      dataUrl: "",
+                      htmlContent: svgStr,
                       selected: false
                     });
                   }
                 });
               }
             } catch(e) {
-              console.warn("扫描地图数据出错:", e);
+              console.warn("扫描地图HTML数据出错:", e);
             }
           }
 
@@ -67051,6 +67246,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           // 依据分类精准筛选
           if (currentStorageCategory !== "all") {
             loadedStorageImagesList = loadedStorageImagesList.filter(item => {
+              if (currentStorageCategory === "html") return item.type === "html";
               if (currentStorageCategory === "maps") return item.type === "map";
               if (currentStorageCategory === "images") return item.type === "image";
               if (currentStorageCategory === "inventory") return item.type === "inventory";
@@ -67200,6 +67396,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               previewHtml = `<img src="${item.dataUrl}" loading="lazy" decoding="async" style="width: 36px; height: 36px; aspect-ratio: 1 / 1; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color); pointer-events: none;" />`;
             } else if (item.type === "audio") {
               previewHtml = `<div style="width: 36px; height: 36px; border-radius: 6px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color); pointer-events: none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg></div>`;
+            } else if (item.type === "html") {
+              previewHtml = `<div style="width: 36px; height: 36px; border-radius: 6px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color); pointer-events: none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg></div>`;
             } else {
               previewHtml = `<div style="width: 36px; height: 36px; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color); pointer-events: none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></div>`;
             }
@@ -76018,9 +76216,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                       msg.role === "user"
                         ? '<span style="color:#007bff">[我]</span>'
                         : '<span style="color:#28a745">[AI]</span>';
-                    // 添加 onclick 调用我们刚刚暴露的 window.jumpToMessage
                     htmlContent += `
-                    <div onclick="window.jumpToMessage(${msg.timestamp})" 
+                    <div onclick="window.jumpToMessage && window.jumpToMessage('${msg.timestamp}')" 
                          style="display:flex; justify-content:space-between; align-items:center; padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 12px;">
                         <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                             ${roleTag} ${msg.preview}
