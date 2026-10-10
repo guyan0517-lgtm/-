@@ -22058,8 +22058,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         async function saveThoughtChainBind() {
           if (!state.activeChatId) return;
-          const chat = state.chats[state.activeChatId];
+          let chat = state.chats[state.activeChatId];
           if (!chat) return;
+
+          // 若 IndexedDB 中有更新的历史记录，先进行合并，确保任何新增消息绝不丢失
+          if (typeof db !== "undefined" && db.chats) {
+            try {
+              const dbChat = await db.chats.get(chat.id);
+              if (dbChat && Array.isArray(dbChat.history)) {
+                if (!Array.isArray(chat.history)) chat.history = [];
+                if (dbChat.history.length > chat.history.length) {
+                  chat.history = dbChat.history;
+                }
+              }
+            } catch (_) {}
+          }
 
           const masterSwitch = document.getElementById("tc-enable-master-switch");
           chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
@@ -22073,6 +22086,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           await db.chats.put(chat);
+          if (state.chats) {
+            state.chats[chat.id] = chat;
+            state.chats[String(chat.id)] = chat;
+          }
           document.getElementById("thought-chain-bind-modal").classList.remove("visible");
         }
 
