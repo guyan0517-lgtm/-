@@ -89,6 +89,83 @@
     }
     return null;
   };
+  window.findExistingItemAvatar = findExistingItemAvatar;
+
+  // 全局道具与线索头像单图同步：确保所有群聊调用的都是同一张图片，不重复保存
+  const syncItemAvatarGlobally = async (name, newAvatar) => {
+    if (!name || typeof name !== "string" || !newAvatar) return;
+    const targetName = name.trim();
+    if (!targetName) return;
+    const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+    if (typeof state !== "undefined" && state.chats) {
+      for (const chat of Object.values(state.chats)) {
+        if (!chat) continue;
+        let chatChanged = false;
+        const syncList = (list) => {
+          if (!Array.isArray(list)) return;
+          list.forEach(i => {
+            if (i && i.name && i.name.trim() === targetName && i.avatar !== newAvatar) {
+              i.avatar = newAvatar;
+              chatChanged = true;
+            }
+          });
+        };
+        syncList(chat.inventory);
+        syncList(chat.aiInventory);
+        if (Array.isArray(chat.members)) {
+          chat.members.forEach(m => syncList(m.inventory));
+        }
+        if (Array.isArray(chat.history)) {
+          chat.history.forEach(m => {
+            if (m && m.type === "inventory_card" && m.item && m.item.name && m.item.name.trim() === targetName && m.item.avatar !== newAvatar) {
+              m.item.avatar = newAvatar;
+              chatChanged = true;
+            }
+          });
+        }
+        if (chatChanged && dbInstance && dbInstance.chats) {
+          await dbInstance.chats.put(chat).catch(() => {});
+        }
+      }
+    }
+    if (dbInstance && dbInstance.chats) {
+      try {
+        const allChats = await dbInstance.chats.toArray();
+        for (const chat of allChats) {
+          let chatChanged = false;
+          const syncList = (list) => {
+            if (!Array.isArray(list)) return;
+            list.forEach(i => {
+              if (i && i.name && i.name.trim() === targetName && i.avatar !== newAvatar) {
+                i.avatar = newAvatar;
+                chatChanged = true;
+              }
+            });
+          };
+          syncList(chat.inventory);
+          syncList(chat.aiInventory);
+          if (Array.isArray(chat.members)) {
+            chat.members.forEach(m => syncList(m.inventory));
+          }
+          if (Array.isArray(chat.history)) {
+            chat.history.forEach(m => {
+              if (m && m.type === "inventory_card" && m.item && m.item.name && m.item.name.trim() === targetName && m.item.avatar !== newAvatar) {
+                m.item.avatar = newAvatar;
+                chatChanged = true;
+              }
+            });
+          }
+          if (chatChanged) {
+            await dbInstance.chats.put(chat).catch(() => {});
+            if (typeof state !== "undefined" && state?.chats && state.chats[chat.id]) {
+              state.chats[chat.id] = chat;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+  };
+  window.syncItemAvatarGlobally = syncItemAvatarGlobally;
 
   // 计算骰子或数值表达式（如 1D6, 2D4+1, 5, -2）
   function rollDiceExpression(expr) {
@@ -737,6 +814,9 @@
       reader.onload = async (event) => {
         const b64 = event.target.result;
         item.avatar = b64;
+        if (typeof syncItemAvatarGlobally === "function") {
+          await syncItemAvatarGlobally(item.name, b64);
+        }
         if (typeof onSaveCallback === "function") {
           await onSaveCallback(item);
         }
@@ -2063,6 +2143,8 @@ HTML设计与排版核心规范：
       targetInventory = getEditingTargetInventory();
     }
 
+    const effectiveAvatar = pendingAvatarBase64 || (typeof findExistingItemAvatar === "function" ? findExistingItemAvatar(name) : "") || "";
+
     if (editingInventoryItemId) {
       const item = targetInventory.find(it => it.id === editingInventoryItemId);
       if (item) {
@@ -2071,10 +2153,13 @@ HTML设计与排版核心规范：
         item.effect = effect;
         item.category = category;
         item.weaponType = weaponType;
-        item.avatar = pendingAvatarBase64;
+        item.avatar = effectiveAvatar;
         item.damageBonus = damageBonus;
         item.dbBonus = dbBonus;
         item.content = content;
+        if (effectiveAvatar && typeof syncItemAvatarGlobally === "function") {
+          await syncItemAvatarGlobally(name, effectiveAvatar);
+        }
       }
     } else {
       const newItem = {
@@ -2084,7 +2169,7 @@ HTML设计与排版核心规范：
         effect: effect,
         category: category,
         weaponType: weaponType,
-        avatar: pendingAvatarBase64,
+        avatar: effectiveAvatar,
         content: content,
         damageBonus: damageBonus,
         dbBonus: dbBonus,
@@ -2093,6 +2178,9 @@ HTML设计与排版核心规范：
         createdAt: Date.now(),
       };
       targetInventory.push(newItem);
+      if (effectiveAvatar && typeof syncItemAvatarGlobally === "function") {
+        await syncItemAvatarGlobally(name, effectiveAvatar);
+      }
     }
 
     const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
@@ -2726,6 +2814,9 @@ HTML设计与排版核心规范：
         const cachedClueAvatar = findExistingItemAvatar(newClueItem.name);
         if (cachedClueAvatar) {
           newClueItem.avatar = cachedClueAvatar;
+          if (typeof syncItemAvatarGlobally === "function") {
+            await syncItemAvatarGlobally(newClueItem.name, cachedClueAvatar);
+          }
           await saveCurrentChatInventory(inventory);
           renderInventoryList();
           if (typeof renderGlobalInventoryList === "function") renderGlobalInventoryList();
@@ -2740,6 +2831,9 @@ HTML设计与排版核心规范：
                 if (typeof compressImage === "function") compB64 = await compressImage(b64, 0.4, 640, true);
               } catch (e) {}
               newClueItem.avatar = compB64;
+              if (typeof syncItemAvatarGlobally === "function") {
+                await syncItemAvatarGlobally(newClueItem.name, compB64);
+              }
               await saveCurrentChatInventory(inventory);
               renderInventoryList();
               if (typeof renderGlobalInventoryList === "function") renderGlobalInventoryList();

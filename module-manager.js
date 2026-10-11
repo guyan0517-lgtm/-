@@ -6168,17 +6168,27 @@ ${chap.content}
                 }
               } catch (e) {}
             }
-            // 同步给所有使用该模组的群聊，全局仅保留并调用同一份图片
+            // 同步给所有使用该模组或同名地点的群聊，全局调用同一张图片
             if (typeof state !== 'undefined' && state.chats) {
               Object.values(state.chats).forEach(c => {
-                if (c && String(c.activeModuleId) === String(moduleId)) {
-                  if (Array.isArray(c.settings?.customLocations)) {
-                    const match = c.settings.customLocations.find(cl => cl.name === loc.name);
-                    if (match) match.imageUrl = imgDataUrl;
+                if (!c || !c.settings) return;
+                let cChanged = false;
+                if (Array.isArray(c.settings.customLocations)) {
+                  const match = c.settings.customLocations.find(cl => cl.name === loc.name);
+                  if (match && match.imageUrl !== imgDataUrl) {
+                    match.imageUrl = imgDataUrl;
+                    cChanged = true;
                   }
-                  if (dbInstance && dbInstance.chats) {
-                    dbInstance.chats.put(c).catch(() => {});
+                }
+                if (Array.isArray(c.settings.contextMapData)) {
+                  const match = c.settings.contextMapData.find(ctx => ctx.name === loc.name);
+                  if (match && match.imageUrl !== imgDataUrl) {
+                    match.imageUrl = imgDataUrl;
+                    cChanged = true;
                   }
+                }
+                if (cChanged && dbInstance && dbInstance.chats) {
+                  dbInstance.chats.put(c).catch(() => {});
                 }
               });
             }
@@ -6405,14 +6415,24 @@ ${chap.content}
             }
             if (typeof state !== 'undefined' && state.chats) {
               Object.values(state.chats).forEach(c => {
-                if (c && String(c.activeModuleId) === String(moduleId)) {
-                  if (Array.isArray(c.settings?.customLocations)) {
-                    const match = c.settings.customLocations.find(cl => cl.name === loc.name);
-                    if (match) match.imageUrl = imgDataUrl;
+                if (!c || !c.settings) return;
+                let cChanged = false;
+                if (Array.isArray(c.settings.customLocations)) {
+                  const match = c.settings.customLocations.find(cl => cl.name === loc.name);
+                  if (match && match.imageUrl !== imgDataUrl) {
+                    match.imageUrl = imgDataUrl;
+                    cChanged = true;
                   }
-                  if (dbInstance && dbInstance.chats) {
-                    dbInstance.chats.put(c).catch(() => {});
+                }
+                if (Array.isArray(c.settings.contextMapData)) {
+                  const match = c.settings.contextMapData.find(ctx => ctx.name === loc.name);
+                  if (match && match.imageUrl !== imgDataUrl) {
+                    match.imageUrl = imgDataUrl;
+                    cChanged = true;
                   }
+                }
+                if (cChanged && dbInstance && dbInstance.chats) {
+                  dbInstance.chats.put(c).catch(() => {});
                 }
               });
             }

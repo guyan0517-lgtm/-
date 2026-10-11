@@ -22123,7 +22123,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "5. 标准填写代码结构示例：\n" +
               "```json\n" +
               "{\n" +
-              "  \"thinking\": \"1. 意图分析：对方在向我询问情况...\\n2. 心理推演：感到关切与在意...\\n3. 策略拟定：以温和自然的语气回复对方...\",\n" +
+              "  \"thinking\": \"在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。\",\n" +
               "  \"chatResponse\": [\n" +
               "    {\n" +
               "      \"type\": \"text\",\n" +
@@ -28022,35 +28022,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   try {
                     const jsonData = JSON.parse(dataContent);
 
-                    // V4.5 流式端点：event_type 为 "final" 时包含最终图片
-                    if (jsonData.event_type === "final" && jsonData.image) {
-                      base64Data = jsonData.image;
-                      console.log("✅ 找到 final 事件的图片数据");
+                    // V4/V4.5/V5 流式端点：必须严格要求 event_type 为 "final" 的完整成品图像，严禁提取未去噪的预览噪点图
+                    if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
+                      base64Data = jsonData.image || jsonData.data;
+                      console.log("✅ 找到 final 事件的最终成品图片数据");
                       break;
                     }
-
-                    // 兼容其他格式
-                    if (jsonData.data) {
-                      base64Data = jsonData.data;
-                      console.log("从 JSON.data 中提取图片数据");
-                      break;
-                    }
-                    if (jsonData.image) {
-                      base64Data = jsonData.image;
-                      console.log("从 JSON.image 中提取图片数据");
-                      break;
-                    }
-                  } catch (e) {
-                    // 如果不是 JSON，直接作为 base64 数据
-                    base64Data = dataContent;
-                    console.log("直接使用 base64 数据");
-                    break;
-                  }
+                  } catch (e) {}
                 }
               }
 
               if (!base64Data) {
-                throw new Error("无法从 SSE 响应中提取图片数据");
+                throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
               }
 
               // V4.5 流式端点返回的是 PNG base64，不是 ZIP
@@ -28298,19 +28281,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const dataContent = line.substring(6);
                 try {
                   const jsonData = JSON.parse(dataContent);
-                  if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                  if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
                     const base64Data = jsonData.image || jsonData.data;
                     const isPNG = base64Data.startsWith("iVBORw0KGgo");
                     imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
                     break;
                   }
-                } catch (e) {
-                  if (dataContent.startsWith("iVBORw0KGgo")) {
-                    imageDataUrl = "data:image/png;base64," + dataContent;
-                    break;
-                  }
-                }
+                } catch (e) {}
               }
+            }
+            if (!imageDataUrl) {
+              throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
             }
           } else {
             const arrayBuffer = await response.arrayBuffer();
@@ -34816,6 +34797,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               });
             }
 
+            // 全局地点单图调用：确保所有群聊与模组调用同一张图片，不重复生图与多重复制
+            locations.forEach((l) => {
+              if (!l.imageUrl && typeof state !== "undefined" && state.chats) {
+                for (const otherC of Object.values(state.chats)) {
+                  if (!otherC || !otherC.settings) continue;
+                  const m1 = (otherC.settings.customLocations || []).find((x) => x.name === l.name && x.imageUrl);
+                  if (m1) { l.imageUrl = m1.imageUrl; break; }
+                  const m2 = (otherC.settings.contextMapData || []).find((x) => x.name === l.name && x.imageUrl);
+                  if (m2) { l.imageUrl = m2.imageUrl; break; }
+                }
+              }
+            });
+
             return locations;
           }
 
@@ -34823,6 +34817,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (chat?.settings && Array.isArray(chat.settings.contextMapData) && chat.settings.contextMapData.length > 0) {
             chat.settings.contextMapData.forEach((loc) => {
               if (loc.isModule || (loc.id && String(loc.id).startsWith("mod_"))) return;
+              let locImg = loc.imageUrl || "";
+              if (!locImg && typeof state !== "undefined" && state.chats) {
+                for (const otherC of Object.values(state.chats)) {
+                  if (!otherC || !otherC.settings) continue;
+                  const m1 = (otherC.settings.contextMapData || []).find((x) => x.name === loc.name && x.imageUrl);
+                  if (m1) { locImg = m1.imageUrl; break; }
+                  const m2 = (otherC.settings.customLocations || []).find((x) => x.name === loc.name && x.imageUrl);
+                  if (m2) { locImg = m2.imageUrl; break; }
+                }
+              }
               locations.push({
                 id: loc.id || "ctx_" + loc.name,
                 name: loc.name,
@@ -34830,7 +34834,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 level: loc.level || 1,
                 desc: loc.desc || loc.description || "",
                 prompt: loc.prompt || "",
-                imageUrl: loc.imageUrl || "",
+                imageUrl: locImg,
                 isTemp: false,
                 isModule: false,
               });
@@ -34840,6 +34844,65 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return locations;
         }
 
+        async function syncLocationImageGlobally(locName, newUrl, dbInstance) {
+          if (!locName || typeof locName !== "string" || !dbInstance) return;
+          const targetName = locName.trim();
+          if (!targetName) return;
+          try {
+            if (dbInstance.moduleLocationNav) {
+              const navs = await dbInstance.moduleLocationNav.where("name").equals(targetName).toArray();
+              for (const nav of navs) {
+                if (nav.imageUrl !== newUrl) {
+                  nav.imageUrl = newUrl;
+                  await dbInstance.moduleLocationNav.put(nav);
+                }
+              }
+            }
+            if (dbInstance.modules) {
+              const mods = await dbInstance.modules.toArray();
+              for (const m of mods) {
+                if (Array.isArray(m.mapNodes)) {
+                  let mChanged = false;
+                  m.mapNodes.forEach((node) => {
+                    if (node && node.name === targetName && node.imageUrl !== newUrl) {
+                      node.imageUrl = newUrl;
+                      mChanged = true;
+                    }
+                  });
+                  if (mChanged) {
+                    await dbInstance.modules.update(m.id, { mapNodes: m.mapNodes });
+                  }
+                }
+              }
+            }
+            if (dbInstance.chats) {
+              const allChats = await dbInstance.chats.toArray();
+              for (const c of allChats) {
+                let cChanged = false;
+                ["contextMapData", "customLocations", "temporaryLocations"].forEach((field) => {
+                  if (Array.isArray(c.settings?.[field])) {
+                    c.settings[field].forEach((node) => {
+                      if (node && node.name === targetName && node.imageUrl !== newUrl) {
+                        node.imageUrl = newUrl;
+                        cChanged = true;
+                      }
+                    });
+                  }
+                });
+                if (cChanged) {
+                  await dbInstance.chats.put(c);
+                  if (typeof state !== "undefined" && state?.chats && state.chats[c.id]) {
+                    state.chats[c.id] = c;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("全局同步地点图片失败:", e);
+          }
+        }
+        window.syncLocationImageGlobally = syncLocationImageGlobally;
+
         async function saveLocationImage(chat, node, b64, newPrompt) {
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           const useModule = isChatModuleMapMode(chat);
@@ -34847,18 +34910,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!chat.settings) chat.settings = {};
 
           if (useModule && chat && chat.activeModuleId) {
-            // 不污染模组库数据，所有群聊私有修改记录于 customLocations
             if (!Array.isArray(chat.settings.customLocations)) {
               chat.settings.customLocations = [];
             }
             if (node.isTemp && Array.isArray(chat.settings.temporaryLocations)) {
-              const t = chat.settings.temporaryLocations.find(l => l.id === node.id || l.name === node.name);
+              const t = chat.settings.temporaryLocations.find((l) => l.id === node.id || l.name === node.name);
               if (t) {
                 t.imageUrl = b64;
                 if (newPrompt !== undefined) t.prompt = newPrompt;
               }
             } else {
-              const c = chat.settings.customLocations.find(l => l.name === node.name || l.id === node.id);
+              const c = chat.settings.customLocations.find((l) => l.name === node.name || l.id === node.id);
               if (c) {
                 c.imageUrl = b64;
                 if (newPrompt !== undefined) c.prompt = newPrompt;
@@ -34871,22 +34933,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   desc: node.desc || "",
                   prompt: newPrompt !== undefined ? newPrompt : (node.prompt || ""),
                   imageUrl: b64,
-                  originalName: node.name
+                  originalName: node.name,
                 });
               }
             }
+
             if (dbInstance && chat.id) {
               await dbInstance.chats.put(chat);
             }
-            if (typeof state !== 'undefined' && state?.chats) {
+            if (typeof state !== "undefined" && state?.chats) {
               state.chats[chat.id] = chat;
+            }
+
+            // 单图全局同步：同步更新当前模组库主档案与导航库，使所有导入同一模组的群聊全部调用同一张图片
+            if (node.name) {
+              await syncLocationImageGlobally(node.name, b64, dbInstance);
             }
             return;
           }
 
           if (node.isTemp) {
             if (Array.isArray(chat.settings.temporaryLocations)) {
-              const t = chat.settings.temporaryLocations.find(l => l.id === node.id || l.name === node.name);
+              const t = chat.settings.temporaryLocations.find((l) => l.id === node.id || l.name === node.name);
               if (t) {
                 t.imageUrl = b64;
                 if (newPrompt !== undefined) t.prompt = newPrompt;
@@ -34896,7 +34964,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (!Array.isArray(chat.settings.contextMapData)) {
               chat.settings.contextMapData = [];
             }
-            const t = chat.settings.contextMapData.find(l => l.id === node.id || l.name === node.name);
+            const t = chat.settings.contextMapData.find((l) => l.id === node.id || l.name === node.name);
             if (t) {
               t.imageUrl = b64;
               if (newPrompt !== undefined) t.prompt = newPrompt;
@@ -34907,8 +34975,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (dbInstance && chat.id) {
             await dbInstance.chats.put(chat);
           }
-          if (typeof state !== 'undefined' && state?.chats) {
+          if (typeof state !== "undefined" && state?.chats) {
             state.chats[chat.id] = chat;
+          }
+          if (node.name) {
+            await syncLocationImageGlobally(node.name, b64, dbInstance);
           }
         }
 
@@ -37637,24 +37708,16 @@ ${recentHistoryText}
                               const jsonData = JSON.parse(dataContent);
                               if (
                                 jsonData.event_type === "final" &&
-                                jsonData.image
+                                (jsonData.image || jsonData.data)
                               ) {
-                                base64Data = jsonData.image;
+                                base64Data = jsonData.image || jsonData.data;
                                 break;
                               }
-                              if (jsonData.data) {
-                                base64Data = jsonData.data;
-                                break;
-                              }
-                              if (jsonData.image) {
-                                base64Data = jsonData.image;
-                                break;
-                              }
-                            } catch (e) {
-                              base64Data = dataContent;
-                              break;
-                            }
+                            } catch (e) {}
                           }
+                        }
+                        if (!base64Data) {
+                          throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
                         }
                         if (base64Data) {
                           const isPNG = base64Data.startsWith("iVBORw0KGgo");
@@ -38552,7 +38615,7 @@ ${recentHistoryText}
 ${isGroupThinkingActive ? `\n# 【思维链填写规范与顶级字段定义】\n1. 字段代码定义：在最外层根JSON对象中，必须且只能有一个顶级的 "thinking" 键，其值必须为纯文本字符串。\n2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将所有思考推演集中完整写入顶层唯一的 "thinking" 字段中。\n3. 绝对禁止在具体对象内部包含 thinking 字段：下方的 chatResponse 数组中各个动作、道具、状态栏或文本消息对象内部绝不允许夹带 thinking 字段！\n4. 绝对禁止外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字，必须严格包裹在顶层 "thinking" 字段中。\n` : ""}
 ## 标准输出格式示例:
 ${isGroupThinkingActive ? `{
-  "thinking": "1. 意图分析... 2. 心理推演... 3. 拟定语气与回复策略...",
+  "thinking": "在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。",
   "chatResponse": [
 ${statusMember ? `    {
       "type": "system_status",
@@ -38668,20 +38731,36 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                     } else if (isImageMsg) {
                       assistantMsgObject.type = "naiimag";
                     } else {
+                      let cleanedEffectiveContent = effectiveContent;
+                      if (typeof cleanedEffectiveContent === "string" && /<thinking>[\s\S]*?<\/thinking>/i.test(cleanedEffectiveContent)) {
+                        cleanedEffectiveContent = cleanedEffectiveContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
+                      }
                       if (msg.quote) {
                         const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
                         assistantMsgObject.quote_reply = {
                           target_sender: msg.quote.senderName,
                           target_content: targetQuoteText,
-                          reply_content: effectiveContent,
+                          reply_content: cleanedEffectiveContent,
                         };
                       } else {
-                        assistantMsgObject.content = effectiveContent;
+                        assistantMsgObject.content = cleanedEffectiveContent;
                       }
                     }
-                    const assistantContent = JSON.stringify([
-                      assistantMsgObject,
-                    ]);
+                    let assistantPayload;
+                    const hasThinkingChain = Boolean(msg.thinking && String(msg.thinking).trim()) || (typeof effectiveContent === "string" && /<thinking>[\s\S]*?<\/thinking>/i.test(effectiveContent));
+                    if (hasThinkingChain) {
+                      assistantPayload = {
+                        thinking: "在此处渲染了完整思维链，仅用户可见",
+                        chatResponse: [
+                          assistantMsgObject,
+                        ],
+                      };
+                    } else {
+                      assistantPayload = [
+                        assistantMsgObject,
+                      ];
+                    }
+                    const assistantContent = JSON.stringify(assistantPayload);
                     return {
                       role: "assistant",
                       content: `${tsPrefix}${assistantContent}`,
@@ -39035,7 +39114,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
 			**5. 标准输出格式示例:**
 			{
-			  "thinking": "1. 意图分析：对方在向我询问情况...\\n2. 心理推演：感到有些关切与在意...\\n3. 策略拟定：以温和自然的语气回复对方...",
+			  "thinking": "在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。",
 			  "chatResponse": [
 			    {
 			      "type": "text",
@@ -39144,20 +39223,36 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     } else if (isImageMsg) {
                       assistantMsgObject.type = "naiimag";
                     } else {
+                      let cleanedEffectiveContent = effectiveContent;
+                      if (typeof cleanedEffectiveContent === "string" && /<thinking>[\s\S]*?<\/thinking>/i.test(cleanedEffectiveContent)) {
+                        cleanedEffectiveContent = cleanedEffectiveContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
+                      }
                       if (msg.quote) {
                         const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
                         assistantMsgObject.quote_reply = {
                           target_sender: msg.quote.senderName,
                           target_content: targetQuoteText,
-                          reply_content: effectiveContent,
+                          reply_content: cleanedEffectiveContent,
                         };
                       } else {
-                        assistantMsgObject.content = effectiveContent;
+                        assistantMsgObject.content = cleanedEffectiveContent;
                       }
                     }
-                    const assistantContent = JSON.stringify([
-                      assistantMsgObject,
-                    ]);
+                    let assistantPayload;
+                    const hasThinkingChain = Boolean(msg.thinking && String(msg.thinking).trim()) || (typeof effectiveContent === "string" && /<thinking>[\s\S]*?<\/thinking>/i.test(effectiveContent));
+                    if (hasThinkingChain) {
+                      assistantPayload = {
+                        thinking: "在此处渲染了完整思维链，仅用户可见",
+                        chatResponse: [
+                          assistantMsgObject,
+                        ],
+                      };
+                    } else {
+                      assistantPayload = [
+                        assistantMsgObject,
+                      ];
+                    }
+                    const assistantContent = JSON.stringify(assistantPayload);
                     return {
                       role: "assistant",
                       content: `${tsPrefix}${assistantContent}`,
@@ -42051,38 +42146,21 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                               try {
                                 const jsonData = JSON.parse(dataContent);
 
-                                // V4.5 流式端点：event_type 为 "final" 时包含最终图片
+                                // V4/V4.5/V5 流式端点：必须严格要求 event_type 为 "final" 的完整成品图像，严禁提取未去噪的预览噪点图
                                 if (
                                   jsonData.event_type === "final" &&
-                                  jsonData.image
+                                  (jsonData.image || jsonData.data)
                                 ) {
-                                  base64Data = jsonData.image;
-                                  console.log("✅ 找到 final 事件的图片数据");
+                                  base64Data = jsonData.image || jsonData.data;
+                                  console.log("✅ 找到 final 事件的最终成品图片数据");
                                   break;
                                 }
-
-                                // 兼容其他格式
-                                if (jsonData.data) {
-                                  base64Data = jsonData.data;
-                                  console.log("从 JSON.data 中提取图片数据");
-                                  break;
-                                }
-                                if (jsonData.image) {
-                                  base64Data = jsonData.image;
-                                  console.log("从 JSON.image 中提取图片数据");
-                                  break;
-                                }
-                              } catch (e) {
-                                // 如果不是 JSON，直接作为 base64 数据
-                                base64Data = dataContent;
-                                console.log("直接使用 base64 数据");
-                                break;
-                              }
+                              } catch (e) {}
                             }
                           }
 
                           if (!base64Data) {
-                            throw new Error("无法从 SSE 响应中提取图片数据");
+                            throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
                           }
 
                           // V4.5 流式端点返回的是 PNG base64，不是 ZIP
@@ -42476,38 +42554,21 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                           try {
                             const jsonData = JSON.parse(dataContent);
 
-                            // V4.5 流式端点：event_type 为 "final" 时包含最终图片
+                            // V4/V4.5/V5 流式端点：必须严格要求 event_type 为 "final" 的完整成品图像，严禁提取未去噪的预览噪点图
                             if (
                               jsonData.event_type === "final" &&
-                              jsonData.image
+                              (jsonData.image || jsonData.data)
                             ) {
-                              base64Data = jsonData.image;
-                              console.log("✅ 找到 final 事件的图片数据");
+                              base64Data = jsonData.image || jsonData.data;
+                              console.log("✅ 找到 final 事件的最终成品图片数据");
                               break;
                             }
-
-                            // 兼容其他格式
-                            if (jsonData.data) {
-                              base64Data = jsonData.data;
-                              console.log("从 JSON.data 中提取图片数据");
-                              break;
-                            }
-                            if (jsonData.image) {
-                              base64Data = jsonData.image;
-                              console.log("从 JSON.image 中提取图片数据");
-                              break;
-                            }
-                          } catch (e) {
-                            // 如果不是 JSON，直接作为 base64 数据
-                            base64Data = dataContent;
-                            console.log("直接使用 base64 数据");
-                            break;
-                          }
+                          } catch (e) {}
                         }
                       }
 
                       if (!base64Data) {
-                        throw new Error("无法从 SSE 响应中提取图片数据");
+                        throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
                       }
 
                       // V4.5 流式端点返回的是 PNG base64，不是 ZIP
@@ -46949,9 +47010,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   try {
                     const jsonData = JSON.parse(dataContent);
                     if (
-                      (jsonData.event_type === "final" && jsonData.image) ||
-                      jsonData.data ||
-                      jsonData.image
+                      jsonData.event_type === "final" &&
+                      (jsonData.image || jsonData.data)
                     ) {
                       const base64Data = jsonData.image || jsonData.data;
                       const isPNG = base64Data.startsWith("iVBORw0KGgo");
@@ -46970,6 +47030,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     }
                   } catch (e) {}
                 }
+              }
+              if (!imageDataUrl) {
+                throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
               }
             } else {
               zipBlob = await res.blob();
@@ -61149,7 +61212,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   const dataContent = line.substring(6);
                   try {
                     const jsonData = JSON.parse(dataContent);
-                    if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                    if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
                       const base64Data = jsonData.image || jsonData.data;
                       const isPNG = base64Data.startsWith("iVBORw0KGgo");
                       imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
@@ -61158,6 +61221,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   } catch (e) {}
                 }
               }
+              if (!imageDataUrl) throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
             } else {
               const arrayBuffer = await res.arrayBuffer();
               const zip = await JSZip.loadAsync(arrayBuffer);
@@ -61513,7 +61577,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   const dataContent = line.substring(6);
                   try {
                     const jsonData = JSON.parse(dataContent);
-                    if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                    if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
                       const base64Data = jsonData.image || jsonData.data;
                       const isPNG = base64Data.startsWith("iVBORw0KGgo");
                       imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
@@ -61522,6 +61586,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   } catch (e) {}
                 }
               }
+              if (!imageDataUrl) throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
             } else {
               const arrayBuffer = await res.arrayBuffer();
               const zip = await JSZip.loadAsync(arrayBuffer);
@@ -62088,7 +62153,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   const dataContent = line.substring(6);
                   try {
                     const jsonData = JSON.parse(dataContent);
-                    if ((jsonData.event_type === "final" && jsonData.image) || jsonData.data || jsonData.image) {
+                    if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
                       const base64Data = jsonData.image || jsonData.data;
                       const isPNG = base64Data.startsWith("iVBORw0KGgo");
                       imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
@@ -62097,6 +62162,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   } catch (e) {}
                 }
               }
+              if (!imageDataUrl) throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
             } else {
               const arrayBuffer = await res.arrayBuffer();
               const zip = await JSZip.loadAsync(arrayBuffer);
@@ -66710,6 +66776,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               if (rec) {
                 rec.imageUrl = newUrl;
                 await dbInstance.moduleLocationNav.put(rec);
+                if (rec.name) {
+                  await syncLocationImageGlobally(rec.name, newUrl, dbInstance);
+                }
               }
             } else if (item.table === "modules" && item.recordId && item.nodeName) {
               const mod = await dbInstance.modules.get(item.recordId);
@@ -66717,6 +66786,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 const node = mod.mapNodes.find(n => n.name === item.nodeName);
                 if (node) node.imageUrl = newUrl;
                 await dbInstance.modules.update(item.recordId, { mapNodes: mod.mapNodes });
+              }
+              if (item.nodeName) {
+                await syncLocationImageGlobally(item.nodeName, newUrl, dbInstance);
               }
             } else if (item.table === "chats" && item.recordId) {
               const chat = await dbInstance.chats.get(item.recordId);
@@ -66750,9 +66822,15 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 } else if (item.field === "contextMapData" && chat.settings?.contextMapData) {
                   const node = chat.settings.contextMapData.find(n => n.id === item.subId || n.name === item.nodeName);
                   if (node) node.imageUrl = newUrl;
+                  if (item.nodeName) await syncLocationImageGlobally(item.nodeName, newUrl, dbInstance);
                 } else if (item.field === "temporaryLocations" && chat.settings?.temporaryLocations) {
                   const node = chat.settings.temporaryLocations.find(n => n.id === item.subId || n.name === item.nodeName);
                   if (node) node.imageUrl = newUrl;
+                  if (item.nodeName) await syncLocationImageGlobally(item.nodeName, newUrl, dbInstance);
+                } else if (item.field === "customLocations" && chat.settings?.customLocations) {
+                  const node = chat.settings.customLocations.find(n => n.id === item.subId || n.name === item.nodeName);
+                  if (node) node.imageUrl = newUrl;
+                  if (item.nodeName) await syncLocationImageGlobally(item.nodeName, newUrl, dbInstance);
                 } else if (item.field === "miniMapSvg" && chat.settings) {
                   chat.settings.miniMapSvg = newUrl;
                 }
@@ -66791,33 +66869,44 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 prod.image = newUrl;
                 await dbInstance.taobaoProducts.put(prod);
               }
-            } else if (item.table === "inventory_items" && item.recordId) {
-              const chat = await dbInstance.chats.get(item.recordId);
-              if (chat) {
-                const updateItemInList = (list) => {
-                  if (!Array.isArray(list)) return;
-                  list.forEach(it => {
-                    if (it && it.id === item.itemId) {
-                      it.avatar = newUrl;
+            } else if (item.table === "inventory_items") {
+              const targetItemName = (item.name || "").replace(/^(?:对方)?道具配图[:：]\s*/, "").replace(/^《[^》]+》.*[:：]\s*/, "").trim();
+              if (dbInstance.chats) {
+                const allChats = await dbInstance.chats.toArray();
+                for (const c of allChats) {
+                  let cChanged = false;
+                  const updateItemInList = (list) => {
+                    if (!Array.isArray(list)) return;
+                    list.forEach(it => {
+                      if (it && (it.id === item.itemId || (targetItemName && it.name && it.name.trim() === targetItemName))) {
+                        it.avatar = newUrl;
+                        cChanged = true;
+                      }
+                    });
+                  };
+                  updateItemInList(c.inventory);
+                  updateItemInList(c.aiInventory);
+                  if (Array.isArray(c.members)) {
+                    c.members.forEach(m => updateItemInList(m.inventory));
+                  }
+                  if (Array.isArray(c.history)) {
+                    c.history.forEach(m => {
+                      if (m && m.type === "inventory_card" && m.item && (m.item.id === item.itemId || (targetItemName && m.item.name && m.item.name.trim() === targetItemName))) {
+                        m.item.avatar = newUrl;
+                        cChanged = true;
+                      }
+                    });
+                  }
+                  if (cChanged) {
+                    await dbInstance.chats.put(c);
+                    if (typeof state !== "undefined" && state?.chats && state.chats[c.id]) {
+                      state.chats[c.id] = c;
                     }
-                  });
-                };
-                updateItemInList(chat.inventory);
-                updateItemInList(chat.aiInventory);
-                if (Array.isArray(chat.members)) {
-                  chat.members.forEach(m => updateItemInList(m.inventory));
+                  }
                 }
-                if (Array.isArray(chat.history)) {
-                  chat.history.forEach(m => {
-                    if (m && m.type === "inventory_card" && m.item && m.item.id === item.itemId) {
-                      m.item.avatar = newUrl;
-                    }
-                  });
-                }
-                await dbInstance.chats.put(chat);
-                if (typeof state !== "undefined" && state?.chats && state.chats[item.recordId]) {
-                  state.chats[item.recordId] = chat;
-                }
+              }
+              if (targetItemName && typeof syncItemAvatarGlobally === "function") {
+                await syncItemAvatarGlobally(targetItemName, newUrl);
               }
             } else if (item.table === "datingSprites" && item.recordId) {
               const sp = await dbInstance.datingSprites.get(item.recordId);
