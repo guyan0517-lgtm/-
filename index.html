@@ -22115,9 +22115,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (e) {}
             }
             let block = "\n# 【角色思维链与深度思考规范】\n" +
-              "【思维链格式与渲染规范】：\n" +
-              "1. 渲染机制：系统会在聊天界面将你的思维链独立提取并渲染为“思考过程”可折叠面板，展示给用户查看你的内心推演与心路历程，与正文消息气泡分开渲染。\n" +
-              "2. 填写格式：你必须在最终回复前，按照以下预设要求的全部内容，将你的思考逐一写入顶层 \"thinking\" 字段中。格式要求清晰有层次。\n" +
+              "【思维链格式与唯一性铁律】：\n" +
+              "1. 字段定位：思维链字段名固定为 \"thinking\"，值为纯文本字符串。系统会在聊天界面将此字段独立提取并渲染为“思考过程”可折叠面板供用户查看。\n" +
+              "2. 全局唯一完整性：从头到尾的思维链必须且只能有这一整条，绝不能被拆碎分散！你必须将所有心理推演、意图分析、环境观察与行动策略合并完整写在这一条全局思维链中。\n" +
+              "3. 严禁混入具体消息内部：严禁在具体的消息指令或道具对象（例如 give_item、text、system_status 等）内部各自包含 thinking 字段！任何具体消息对象内部都不允许出现 thinking 字段。\n" +
+              "4. 标准输出位置：在单聊中，\"thinking\" 必须填写在最外层根对象的顶级字段；在群聊中，整条思维链既可放在根对象顶级 \"thinking\" 字段，也可以作为第1条独立对象 `{\"type\": \"thinking\", \"content\": \"一整条完整的思考过程...\"}` 输出。\n" +
               (preset ? "\n预设名称：" + preset.name + "\n" : "");
             if (preset && preset.generalContent) {
               block += "【思维链规则设定】：\n" + preset.generalContent + "\n";
@@ -27455,51 +27457,102 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
          * @returns {Array} - 一个标准化的消息对象数组
          */
         function parseAiResponse(content) {
-          const trimmedContent = content.trim();
+          let trimmedContent = (content || "").trim();
+          // 移除思维链标签
+          trimmedContent = trimmedContent.replace(/<(?:think|thought|thinking)>[\s\S]*?<\/(?:think|thought|thinking)>/gi, "").trim();
 
-          // 方案1：【最优先】尝试作为标准的、单一的JSON数组解析
-          // 这是最理想、最高效的情况
+          // 方案1：整体包裹在markdown代码块中时，提取内部内容
+          const codeBlockMatch = trimmedContent.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+          if (codeBlockMatch && codeBlockMatch[1]) {
+            trimmedContent = codeBlockMatch[1].trim();
+          }
+
+          // 方案2：尝试作为标准的单一JSON数组解析
           if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
             try {
               const parsed = JSON.parse(trimmedContent);
-              if (Array.isArray(parsed)) {
-                console.log("解析成功：标准JSON数组格式。");
+              if (Array.isArray(parsed) && parsed.length > 0) {
                 return parsed;
               }
-            } catch (e) {
-              // 如果解析失败，说明它虽然看起来像个数组，但内部格式有问题。
-              // 此时我们不报错，而是继续尝试下面的“强力解析”方案。
-              console.warn("标准JSON数组解析失败，将尝试强力解析...");
-            }
+            } catch (e) {}
           }
 
-          // 方案2：【强力解析】使用正则表达式，从混乱的字符串中提取出所有独立的JSON对象
-          // 这能完美解决您遇到的 "(Timestamp: ...)[{...}](Timestamp: ...)[{...}]" 这种格式
-          const jsonMatches = trimmedContent.match(/{[^{}]*}/g);
+          // 尝试查找第一个 '[' 到最后一个 ']'
+          const firstBracket = trimmedContent.indexOf('[');
+          const lastBracket = trimmedContent.lastIndexOf(']');
+          if (firstBracket !== -1 && lastBracket > firstBracket) {
+            try {
+              const arr = JSON.parse(trimmedContent.substring(firstBracket, lastBracket + 1));
+              if (Array.isArray(arr) && arr.length > 0) {
+                return arr;
+              }
+            } catch (e) {}
+          }
 
-          if (jsonMatches) {
-            const results = [];
-            for (const match of jsonMatches) {
-              try {
-                // 尝试解析每一个被我们“揪”出来的JSON字符串
-                const parsedObject = JSON.parse(match);
-                results.push(parsedObject);
-              } catch (e) {
-                // 如果某个片段不是有效的JSON，就忽略它，继续处理下一个
-                console.warn("跳过一个无效的JSON片段:", match);
+          // 方案3：深度括号匹配提取所有独立的JSON对象，并保留前后伴随的正文文本
+          const results = [];
+          let depth = 0;
+          let startIdx = -1;
+          let inString = false;
+          let escape = false;
+
+          for (let i = 0; i < trimmedContent.length; i++) {
+            const ch = trimmedContent[i];
+            if (escape) {
+              escape = false;
+              continue;
+            }
+            if (ch === '\\' && inString) {
+              escape = true;
+              continue;
+            }
+            if (ch === '"') {
+              inString = !inString;
+              continue;
+            }
+            if (!inString) {
+              if (ch === '{') {
+                if (depth === 0) startIdx = i;
+                depth++;
+              } else if (ch === '}') {
+                depth--;
+                if (depth === 0 && startIdx !== -1) {
+                  const candidate = trimmedContent.substring(startIdx, i + 1);
+                  try {
+                    const parsed = JSON.parse(candidate);
+                    if (parsed && typeof parsed === "object") {
+                      results.push({ item: parsed, start: startIdx, end: i + 1 });
+                    }
+                  } catch (err) {}
+                  startIdx = -1;
+                }
               }
             }
-
-            // 如果我们成功提取出了至少一个有效的JSON对象，就返回这个结果
-            if (results.length > 0) {
-              console.log("解析成功：通过强力提取模式。");
-              return results;
-            }
           }
 
-          // 方案3：【最终备用】如果以上所有方法都失败了，说明AI返回的可能就是纯文本
-          // 我们将原始的、未处理的内容，包装成一个标准的文本消息对象返回，确保程序不会崩溃
-          console.error("所有解析方案均失败！将返回原始文本。");
+          if (results.length > 0) {
+            const finalItems = [];
+            let lastPos = 0;
+            for (const r of results) {
+              const textBefore = trimmedContent.substring(lastPos, r.start)
+                .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+              const cleanBefore = textBefore.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
+              if (cleanBefore) {
+                finalItems.push({ type: "text", content: cleanBefore });
+              }
+              finalItems.push(r.item);
+              lastPos = r.end;
+            }
+            const textAfter = trimmedContent.substring(lastPos)
+                .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+            const cleanAfter = textAfter.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
+            if (cleanAfter) {
+              finalItems.push({ type: "text", content: cleanAfter });
+            }
+            return finalItems;
+          }
+
+          // 方案4：最终备用文本消息
           return [{ type: "text", content: content }];
         }
         /**
@@ -30240,12 +30293,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             wrapper.style.width = "100%";
             wrapper.style.display = "flex";
             wrapper.style.justifyContent = "center";
-            wrapper.style.margin = "6px auto";
+            wrapper.style.margin = "8px auto";
 
             const bubble = document.createElement("div");
             bubble.className = "message-bubble system-bubble";
             bubble.dataset.timestamp = msg.timestamp;
-            bubble.style.cssText = "max-width: 88%; padding: 5px 14px; border-radius: 12px; text-align: center; line-height: 1.5; font-size: 12px; color: var(--text-secondary); word-break: break-word; overflow-wrap: break-word; white-space: normal; display: inline-block; margin: 0 auto;";
+            bubble.style.cssText = "max-width: 88%; padding: 6px 16px; border-radius: 12px; text-align: center; line-height: 1.5; font-size: 12px; color: var(--text-secondary); background: var(--secondary-bg); border: 1px solid var(--border-color); word-break: break-word; overflow-wrap: break-word; white-space: normal; display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin: 0 auto;";
             bubble.innerHTML = `<span style="display: inline-block; text-align: center; word-break: break-word; overflow-wrap: break-word;">${msg.content}</span>`;
             wrapper.appendChild(bubble);
             addLongPressListener(wrapper, () =>
@@ -30315,13 +30368,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   continueBtn.style.background = 'var(--border-color)';
                   continueBtn.style.color = 'var(--text-secondary)';
                   continueBtn.style.cursor = 'default';
-                  if (pData.openChapterIds || pData.closeChapterIds) {
+                  if ((pData.openChapterIds && pData.openChapterIds.length > 0) || (pData.closeChapterIds && pData.closeChapterIds.length > 0)) {
                     if (typeof window.executeChapterManage === 'function') {
-                      await window.executeChapterManage(pData.openChapterIds || [], pData.closeChapterIds || [], '', false);
+                      await window.executeChapterManage(pData.openChapterIds || [], pData.closeChapterIds || [], '', true);
                     }
-                  } else if (pData.nextChapterId) {
+                  } else if (pData.nextChapterId || pData.nextChapterTitle) {
                     if (typeof window.executeChapterSwitch === 'function') {
-                      await window.executeChapterSwitch(pData.nextChapterId, pData.nextChapterTitle, false);
+                      await window.executeChapterSwitch(pData.nextChapterId, pData.nextChapterTitle, true);
                     }
                   }
                 };
@@ -30609,13 +30662,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 tagsContainer.appendChild(titleTag);
               }
             } else {
-              // 如果是其他成员 (AI/NPC/Dice)，这部分逻辑保持不变
               const member = (chat.members || []).find(
                 (m) => m.originalName === msg.senderName || m.originalName === msg.sender || m.groupNickname === msg.senderName || m.groupNickname === msg.sender,
               );
+              const statusMem = (msg.type === "system_status") ? (chat.members || []).find(
+                (m) => m.roleType === "system_status" || (state.chats && state.chats[m.id] && state.chats[m.id].roleType === "system_status") || m.originalName === "系统状态" || m.groupNickname === "系统状态" || m.originalName === "系统状态栏" || m.groupNickname === "系统状态栏"
+              ) : null;
               senderDisplayName = member
-                ? member.groupNickname
-                : msg.senderName || msg.sender || "未知成员";
+                ? (member.groupNickname || member.originalName)
+                : (statusMem ? (statusMem.groupNickname || statusMem.originalName) : (msg.senderName || msg.sender || (msg.type === "system_status" ? "系统状态" : "未知成员")));
 
               // 如果该成员被禁言了，就添加一个禁言标签
               if (member && member.isMuted) {
@@ -30681,8 +30736,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const member = (chat.members || []).find(
                 (m) => m.originalName === msg.senderName || m.originalName === msg.sender || m.groupNickname === msg.senderName || m.groupNickname === msg.sender,
               );
-              avatarSrc = member ? member.avatar : (msg.senderAvatar || defaultGroupMemberAvatar);
-              avatarFrameSrc = member ? member.avatarFrame || "" : ""; // <--- 获取成员的头像框
+              const statusMem = (msg.type === "system_status") ? (chat.members || []).find(
+                (m) => m.roleType === "system_status" || (state.chats && state.chats[m.id] && state.chats[m.id].roleType === "system_status") || m.originalName === "系统状态" || m.groupNickname === "系统状态" || m.originalName === "系统状态栏" || m.groupNickname === "系统状态栏"
+              ) : null;
+              avatarSrc = member ? member.avatar : (statusMem ? statusMem.avatar : (msg.senderAvatar || defaultGroupMemberAvatar));
+              avatarFrameSrc = member ? member.avatarFrame || "" : (statusMem ? statusMem.avatarFrame || "" : "");
             }
           } else {
             if (isUser) {
@@ -31525,6 +31583,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }">`;
           } else {
             let rawContentText = String(msg.content || "");
+            if (rawContentText === "undefined" || rawContentText === "null" || rawContentText === "[object Object]") {
+              rawContentText = "";
+            }
+
+            if (msg.type === "system_status" || msg.fields) {
+              if (msg.fields && typeof msg.fields === "object" && Object.keys(msg.fields).length > 0) {
+                if (!rawContentText.trim() || rawContentText.includes("{") || rawContentText.includes("```") || !rawContentText.includes("]：")) {
+                  rawContentText = Object.entries(msg.fields).map(([k, v]) => `[${k}]：${v}`).join("\n");
+                }
+              } else {
+                let cleanJsonStr = rawContentText.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
+                if ((cleanJsonStr.startsWith("{") && cleanJsonStr.endsWith("}")) || (cleanJsonStr.startsWith("[") && cleanJsonStr.endsWith("]"))) {
+                  try {
+                    const parsedSt = JSON.parse(cleanJsonStr);
+                    const targetObj = Array.isArray(parsedSt) ? parsedSt.find(item => item && (item.type === "system_status" || item.fields || item.values)) : parsedSt;
+                    if (targetObj && typeof targetObj === "object") {
+                      const fObj = targetObj.fields || targetObj.values || (targetObj.type === "system_status" ? targetObj : null);
+                      if (fObj && typeof fObj === "object") {
+                        const entries = Object.entries(fObj).filter(([k]) => k !== "type" && k !== "name" && k !== "sender" && k !== "role");
+                        if (entries.length > 0) {
+                          rawContentText = entries.map(([k, v]) => `[${k}]：${v}`).join("\n");
+                        }
+                      }
+                    }
+                  } catch (e) {}
+                }
+              }
+            }
+
             const hasThinkingModule = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : Boolean(chat && chat.thoughtChainEnabled !== false && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
             extractedThinkingText = hasThinkingModule ? (msg.thinking || null) : null;
             if (hasThinkingModule) {
@@ -31538,16 +31625,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
-            // 自动模式换章与多章节管理指令解析（独立生成通知气泡）
-            if (rawContentText.includes('"type": "manage_chapters"') || rawContentText.includes('"type":"manage_chapters"')) {
+            // 自动模式换章与多章节管理指令解析（独立生成通知气泡或切换卡片）
+            if (rawContentText.includes('"manage_chapters"') || rawContentText.includes('"suggest_manage_chapters"')) {
               try {
-                const manageMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"manage_chapters"[\s\S]*?\}/);
+                const manageMatch = rawContentText.match(/```(?:json)?\s*(\{[\s\S]*?"type"\s*:\s*"(?:manage_chapters|suggest_manage_chapters)"[\s\S]*?\})\s*```/) || rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"(?:manage_chapters|suggest_manage_chapters)"[\s\S]*?\}/);
                 if (manageMatch) {
-                  const manageObj = JSON.parse(manageMatch[0]);
-                  rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"manage_chapters"[\s\S]*?\}\s*```/g, "").replace(manageMatch[0], "").trim();
-                  if (chat && chat.activeModuleId && !msg._chapterManaged) {
+                  const manageObj = JSON.parse(manageMatch[1] || manageMatch[0]);
+                  rawContentText = rawContentText.replace(manageMatch[0], "").trim();
+                  if (chat && !msg._chapterManaged) {
                     msg._chapterManaged = true;
-                    if (chat.moduleSwitchMode === 'semi') {
+                    if (chat.moduleSwitchMode === 'auto' && manageObj.type === 'manage_chapters') {
+                      setTimeout(async () => {
+                        if (typeof window.executeChapterManage === 'function') {
+                          await window.executeChapterManage(manageObj.openChapterIds || [], manageObj.closeChapterIds || [], manageObj.summary || '', true);
+                        }
+                      }, 50);
+                    } else {
                       chat.pendingChapterManage = {
                         openChapterIds: manageObj.openChapterIds || [],
                         closeChapterIds: manageObj.closeChapterIds || [],
@@ -31588,117 +31681,47 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                         if (dbInstance) await dbInstance.chats.put(chat);
                         appendMessage(cardMsg, chat);
                       }, 50);
-                    } else if (chat.moduleSwitchMode === 'auto') {
-                      setTimeout(async () => {
-                        if (typeof window.executeChapterManage === 'function') {
-                          await window.executeChapterManage(manageObj.openChapterIds || [], manageObj.closeChapterIds || [], manageObj.summary || '', true);
-                        }
-                      }, 50);
                     }
                   }
                 }
-              } catch (e) {}
-            } else if (rawContentText.includes('"type": "switch_chapter"') || rawContentText.includes('"type":"switch_chapter"')) {
-              try {
-                const switchMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"switch_chapter"[\s\S]*?\}/);
-                if (switchMatch) {
-                  const switchObj = JSON.parse(switchMatch[0]);
-                  rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"switch_chapter"[\s\S]*?\}\s*```/g, "").replace(switchMatch[0], "").trim();
-                  if (chat && chat.activeModuleId && switchObj.chapterId && !msg._chapterSwitched) {
-                    msg._chapterSwitched = true;
-                    if (chat.moduleSwitchMode === 'semi') {
-                      chat.pendingChapterSwitch = { nextChapterId: switchObj.chapterId, nextChapterTitle: switchObj.chapterTitle || "下一章" };
-                      setTimeout(async () => {
-                        const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
-                        const cardMsg = {
-                          id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
-                          role: "system",
-                          type: "module_semi_switch_card",
-                          content: "本章已带完，是否切换下一章？",
-                          pendingData: {
-                            nextChapterId: switchObj.chapterId,
-                            nextChapterTitle: switchObj.chapterTitle || "下一章"
-                          },
-                          timestamp: Date.now()
-                        };
-                        chat.history.push(cardMsg);
-                        if (dbInstance) await dbInstance.chats.put(chat);
-                        appendMessage(cardMsg, chat);
-                      }, 50);
-                    } else if (chat.moduleSwitchMode === 'auto') {
-                      setTimeout(async () => {
-                        if (typeof window.executeChapterSwitch === 'function') {
-                          await window.executeChapterSwitch(switchObj.chapterId, switchObj.chapterTitle, true);
-                        }
-                      }, 50);
-                    }
-                  }
-                }
-              } catch (e) {}
+              } catch (e) {
+                rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"(?:manage_chapters|suggest_manage_chapters)"[\s\S]*?\}\s*```/g, "").replace(/\{[\s\S]*?"type"\s*:\s*"(?:manage_chapters|suggest_manage_chapters)"[\s\S]*?\}/g, "").trim();
+              }
             }
 
-            // 半自动模式换章建议解析（独立渲染成确认卡片气泡）
-            if (rawContentText.includes('"type": "suggest_manage_chapters"') || rawContentText.includes('"type":"suggest_manage_chapters"')) {
+            if (rawContentText.includes('"switch_chapter"') || rawContentText.includes('"suggest_switch_chapter"') || /(?:\[|【)(?:进入下一章|切换章节|推进到下一章|下一章|推进剧情|下一章节)(?:[：:]([^\]】]+))?(?:\]|】)/i.test(rawContentText)) {
               try {
-                const suggestMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"suggest_manage_chapters"[\s\S]*?\}/);
-                if (suggestMatch) {
-                  const suggestObj = JSON.parse(suggestMatch[0]);
-                  rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"suggest_manage_chapters"[\s\S]*?\}\s*```/g, "").replace(suggestMatch[0], "").trim();
-                  if (chat && !msg._chapterSuggested) {
-                    msg._chapterSuggested = true;
-                    chat.pendingChapterManage = {
-                      openChapterIds: suggestObj.openChapterIds || [],
-                      closeChapterIds: suggestObj.closeChapterIds || [],
-                      openChapterTitles: suggestObj.openChapterTitles || [],
-                      closeChapterTitles: suggestObj.closeChapterTitles || [],
-                      summary: suggestObj.summary || '本章已带完，是否切换下一章？'
-                    };
-                    setTimeout(async () => {
-                      const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
-                      let openTitles = suggestObj.openChapterTitles || [];
-                      let closeTitles = suggestObj.closeChapterTitles || [];
-                      if ((!openTitles.length || !closeTitles.length) && dbInstance && dbInstance.moduleChapters && chat.activeModuleId) {
-                        try {
-                          const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
-                          if (!openTitles.length && suggestObj.openChapterIds) {
-                            openTitles = allChaps.filter(c => (suggestObj.openChapterIds || []).includes(c.id) || (suggestObj.openChapterIds || []).includes(String(c.id))).map(c => c.title);
-                          }
-                          if (!closeTitles.length && suggestObj.closeChapterIds) {
-                            closeTitles = allChaps.filter(c => (suggestObj.closeChapterIds || []).includes(c.id) || (suggestObj.closeChapterIds || []).includes(String(c.id))).map(c => c.title);
-                          }
-                        } catch (e) {}
-                      }
-                      const cardMsg = {
-                        id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
-                        role: "system",
-                        type: "module_semi_switch_card",
-                        content: suggestObj.summary || "本章已带完，是否切换下一章？",
-                        pendingData: {
-                          openChapterIds: suggestObj.openChapterIds || [],
-                          closeChapterIds: suggestObj.closeChapterIds || [],
-                          openChapterTitles: openTitles,
-                          closeChapterTitles: closeTitles,
-                          summary: suggestObj.summary || "本章已带完，是否切换下一章？"
-                        },
-                        timestamp: Date.now()
-                      };
-                      chat.history.push(cardMsg);
-                      if (dbInstance) await dbInstance.chats.put(chat);
-                      appendMessage(cardMsg, chat);
-                    }, 50);
+                const switchMatch = rawContentText.match(/```(?:json)?\s*(\{[\s\S]*?"type"\s*:\s*"(?:switch_chapter|suggest_switch_chapter)"[\s\S]*?\})\s*```/i) || rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"(?:switch_chapter|suggest_switch_chapter)"[\s\S]*?\}/i) || rawContentText.match(/```(?:json)?\s*(\[\s*\{[\s\S]*?"type"\s*:\s*"(?:switch_chapter|suggest_switch_chapter)"[\s\S]*?\}\s*\])\s*```/i);
+                let targetId = null;
+                let targetTitle = "下一章";
+                let summaryText = "本章已带完，是否切换下一章？";
+                let isAutoSwitch = (chat && chat.moduleSwitchMode === 'auto');
+
+                if (switchMatch) {
+                  let switchObj = JSON.parse(switchMatch[1] || switchMatch[0]);
+                  if (Array.isArray(switchObj)) switchObj = switchObj[0] || {};
+                  rawContentText = rawContentText.replace(switchMatch[0], "").trim();
+                  targetId = switchObj.nextChapterId || switchObj.chapterId || switchObj.targetId;
+                  targetTitle = switchObj.nextChapterTitle || switchObj.chapterTitle || switchObj.title || targetTitle;
+                  summaryText = switchObj.summary || summaryText;
+                  isAutoSwitch = (chat && chat.moduleSwitchMode === 'auto' && switchObj.type === 'switch_chapter');
+                } else {
+                  const tagMatch = rawContentText.match(/(?:\[|【)(?:进入下一章|切换章节|推进到下一章|下一章|推进剧情|下一章节)(?:[：:]([^\]】]+))?(?:\]|】)/i);
+                  if (tagMatch) {
+                    rawContentText = rawContentText.replace(tagMatch[0], "").trim();
+                    targetTitle = (tagMatch[1] || "下一章").trim();
                   }
                 }
-              } catch (e) {}
-            } else if (rawContentText.includes('"type": "suggest_switch_chapter"') || rawContentText.includes('"type":"suggest_switch_chapter"')) {
-              try {
-                const suggestMatch = rawContentText.match(/\{[\s\S]*?"type"\s*:\s*"suggest_switch_chapter"[\s\S]*?\}/);
-                if (suggestMatch) {
-                  const suggestObj = JSON.parse(suggestMatch[0]);
-                  rawContentText = rawContentText.replace(suggestMatch[0], "").trim();
-                  const targetId = suggestObj.nextChapterId || suggestObj.chapterId;
-                  const targetTitle = suggestObj.nextChapterTitle || suggestObj.chapterTitle || "下一章";
-                  if (targetId && chat && !msg._chapterSuggested) {
-                    msg._chapterSuggested = true;
+
+                if (chat && !msg._chapterSwitched) {
+                  msg._chapterSwitched = true;
+                  if (isAutoSwitch) {
+                    setTimeout(async () => {
+                      if (typeof window.executeChapterSwitch === 'function') {
+                        await window.executeChapterSwitch(targetId, targetTitle, true);
+                      }
+                    }, 50);
+                  } else {
                     chat.pendingChapterSwitch = { nextChapterId: targetId, nextChapterTitle: targetTitle };
                     setTimeout(async () => {
                       const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
@@ -31706,10 +31729,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                         id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
                         role: "system",
                         type: "module_semi_switch_card",
-                        content: "本章已带完，是否切换下一章？",
+                        content: summaryText,
                         pendingData: {
                           nextChapterId: targetId,
-                          nextChapterTitle: targetTitle
+                          nextChapterTitle: targetTitle,
+                          summary: summaryText
                         },
                         timestamp: Date.now()
                       };
@@ -31719,7 +31743,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     }, 50);
                   }
                 }
-              } catch (e) {}
+              } catch (e) {
+                rawContentText = rawContentText.replace(/```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"(?:switch_chapter|suggest_switch_chapter)"[\s\S]*?\}\s*```/gi, "").replace(/\{[\s\S]*?"type"\s*:\s*"(?:switch_chapter|suggest_switch_chapter)"[\s\S]*?\}/gi, "").trim();
+              }
             } else if (rawContentText.includes('"suggest_combat"') || /(?:\[|【)(?:遭遇战斗|进入战斗|开启战斗)(?:\]|】)/.test(rawContentText)) {
               try {
                 let combatSummary = "遭遇战斗，是否进入战斗？";
@@ -31906,6 +31932,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             quoteHtml = "";
             thinkingHtml = "";
             bubble.classList.remove("has-image", "is-realimag", "is-card-like", "is-sticker", "is-red-packet", "is-ls-disconnect", "is-ls-diary-notification", "is-waimai-request");
+          } else if ((msg._chapterSwitched || msg._chapterManaged) && (!contentHtml || !contentHtml.trim() || contentHtml === "<span></span>") && !thinkingHtml) {
+            return null;
           } else if (!contentHtml.trim() && !quoteHtml && !msg.imageUrl && !msg.image && !msg.payload && !bubble.classList.contains("is-link-share") && !bubble.classList.contains("is-dating-summary") && !bubble.classList.contains("is-sticker") && !bubble.classList.contains("has-image") && !bubble.classList.contains("is-realimag") && !bubble.classList.contains("is-gift-notification")) {
             contentHtml = "<span></span>";
           }
@@ -32197,7 +32225,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (shouldNotify) {
             let notifyText = summary || '';
-            if (!notifyText) {
+            if (!notifyText || notifyText === '简述调整' || notifyText === '本章已带完，是否切换下一章？') {
               let allChaps = [];
               try {
                 allChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
@@ -32207,7 +32235,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               let parts = [];
               if (openedTitles.length > 0) parts.push(`开启 ${openedTitles.join('、')}`);
               if (closedTitles.length > 0) parts.push(`关闭 ${closedTitles.join('、')}`);
-              notifyText = parts.length > 0 ? `已更新章节：${parts.join('，')}` : '已更新模组章节';
+              notifyText = openedTitles.length > 0 ? `已进入下一章：${openedTitles.join('、')}` : (parts.length > 0 ? `已更新章节：${parts.join('，')}` : '已进入下一章');
             }
 
             const sysMsg = {
@@ -32235,6 +32263,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
           if (!dbInstance) return;
 
+          let resolvedTitle = targetChapterTitle;
+          if (!resolvedTitle || resolvedTitle === '下一章' || resolvedTitle === '下一章节') {
+            try {
+              const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(chat.activeModuleId).toArray();
+              const found = allChaps.find(c => String(c.id) === String(targetChapterId));
+              if (found && found.title) resolvedTitle = found.title;
+            } catch (e) {}
+          }
+
           let currentSelected = (chat.selectedModuleChapterIds || []).slice();
           if (!currentSelected.includes(targetChapterId) && !currentSelected.includes(String(targetChapterId))) {
             currentSelected.push(targetChapterId);
@@ -32249,7 +32286,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               id: "msg_" + Date.now(),
               role: "system",
               type: "module_switch_notice",
-              content: `已进入下一章：${targetChapterTitle || '下一章节'}`,
+              content: `已进入下一章：${resolvedTitle || '下一章节'}`,
               timestamp: Date.now()
             };
             chat.history.push(sysMsg);
@@ -38498,10 +38535,25 @@ ${recentHistoryText}
               // updated by lrq 251027
               systemPrompt = `
 # 【第一大类】你可以使用的操作指令
-你的回复必须且只能是一个严格的JSON数组格式的字符串。数组中的每一个元素都必须是一个JSON对象。每一个JSON对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段${isGroupThinkingActive ? `，以及 "thinking" 字段。开启思维链状态下，系统会在界面将 "thinking" 字段独立渲染为对应角色的“思考过程”面板，你必须在其中详细写下该角色的心理推演与意图分析` : ""}。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
-
+你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
+${isGroupThinkingActive ? `\n# 【思维链唯一性铁律】\n从头到尾的思维链必须且只能有这一整条，绝对禁止在各个动作、道具或文本对象中各自夹带零散的 thinking 字段！\n你必须将整条思维链完整填写在顶层的 "thinking" 字段中，下方的具体消息对象（如 text、give_item、system_status 等）内部绝不能包含 thinking 字段！\n` : ""}
 ## 标准输出格式示例:
-[
+${isGroupThinkingActive ? `{
+  "thinking": "1. 意图分析... 2. 心理推演... 3. 拟定语气与回复策略...",
+  "chatResponse": [
+${statusMember ? `    {
+      "type": "system_status",
+      "name": "${statusSenderName}",
+      "fields": {
+${templateFieldLines || '        "状态": "正常"'}
+      }
+    },\n` : ""}    {
+      "type": "text",
+      "name": "角色名",
+      "content": "对话内容"
+    }
+  ]
+}` : `[
 ${statusMember ? `  {
     "type": "system_status",
     "name": "${statusSenderName}",
@@ -38510,11 +38562,11 @@ ${templateFieldLines || '      "状态": "正常"'}
     }
   },
 ` : ""}  {
-${isGroupThinkingActive ? `    "thinking": "1. 意图分析... 2. 心理推演... 3. 拟定语气与回复策略...",\n` : ""}    "type": "text",
+    "type": "text",
     "name": "角色名",
     "content": "对话内容"
   }
-]
+]`}
 
 ## 你可以使用的操作指令列表:
 ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
@@ -38585,7 +38637,21 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
 
                     if (isStatusMsg) {
                       assistantMsgObject.type = "system_status";
-                      assistantMsgObject.content = effectiveContent;
+                      if (msg.fields && typeof msg.fields === "object") {
+                        assistantMsgObject.fields = msg.fields;
+                      } else {
+                        const parsedFields = {};
+                        const lines = String(effectiveContent || "").split(/\r?\n/);
+                        lines.forEach(l => {
+                          const m = l.match(/^(?:\[?([^\]：:\n\r]+)\]?)[：:]\s*(.*)$/);
+                          if (m) parsedFields[m[1].trim()] = m[2].trim();
+                        });
+                        if (Object.keys(parsedFields).length > 0) {
+                          assistantMsgObject.fields = parsedFields;
+                        } else {
+                          assistantMsgObject.content = effectiveContent;
+                        }
+                      }
                     } else if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
@@ -38945,6 +39011,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
 			**2. "thinking" 键:**
 			- **类型**: 字符串。系统会在聊天界面将此字段独立渲染为“思考过程”可折叠面板供用户查看。你必须在此字段中写下完整的深度推理与思考过程，格式需分点清晰展开（包括意图分析、角色心理推演、语气与策略拟定），绝对禁止填写 null。
+			- **全局唯一铁律**: 从头到尾的思维链必须且只能有这一整条，统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象（如 text、give_item 等）内部绝对禁止包含 thinking 字段，严禁分散填写！
 
 			**3. "chatResponse" 键:**
 			- **类型**: JSON数组 []。
@@ -39048,7 +39115,21 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
                     if (isStatusMsg) {
                       assistantMsgObject.type = "system_status";
-                      assistantMsgObject.content = effectiveContent;
+                      if (msg.fields && typeof msg.fields === "object") {
+                        assistantMsgObject.fields = msg.fields;
+                      } else {
+                        const parsedFields = {};
+                        const lines = String(effectiveContent || "").split(/\r?\n/);
+                        lines.forEach(l => {
+                          const m = l.match(/^(?:\[?([^\]：:\n\r]+)\]?)[：:]\s*(.*)$/);
+                          if (m) parsedFields[m[1].trim()] = m[2].trim();
+                        });
+                        if (Object.keys(parsedFields).length > 0) {
+                          assistantMsgObject.fields = parsedFields;
+                        } else {
+                          assistantMsgObject.content = effectiveContent;
+                        }
+                      }
                     } else if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
@@ -39538,14 +39619,25 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 sanitizedContent = sanitizedContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
               }
 
-              // 再次净化，强行提取第一个 { 和最后一个 } 之间的内容
+              // 再次净化：如果首个结构符号是 [，按数组提取；如果是 {，按对象提取
+              const firstBracket = sanitizedContent.indexOf("[");
               const firstBrace = sanitizedContent.indexOf("{");
-              const lastBrace = sanitizedContent.lastIndexOf("}");
-              if (firstBrace !== -1 && lastBrace > firstBrace) {
-                sanitizedContent = sanitizedContent.substring(
-                  firstBrace,
-                  lastBrace + 1,
-                );
+              if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+                const lastBracket = sanitizedContent.lastIndexOf("]");
+                if (lastBracket > firstBracket) {
+                  sanitizedContent = sanitizedContent.substring(
+                    firstBracket,
+                    lastBracket + 1,
+                  );
+                }
+              } else if (firstBrace !== -1) {
+                const lastBrace = sanitizedContent.lastIndexOf("}");
+                if (lastBrace > firstBrace) {
+                  sanitizedContent = sanitizedContent.substring(
+                    firstBrace,
+                    lastBrace + 1,
+                  );
+                }
               }
 
               const fullResponse = JSON.parse(sanitizedContent);
@@ -39833,7 +39925,19 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 chat._statusBarOmissionStreak = 0;
               }
 
+              if (formattedLines.length === 0 && Object.keys(extractedFields).length > 0) {
+                Object.entries(extractedFields).forEach(([k, v]) => {
+                  if (v !== undefined && v !== null && String(v).trim()) {
+                    const cleanK = String(k).replace(/^[\[【]|[\]】]$/g, "").trim();
+                    formattedLines.push(`[${cleanK}]：${v}`);
+                  }
+                });
+              }
+
               let mergedText = formattedLines.join("\n");
+              if (!mergedText && Object.keys(extractedFields).length > 0) {
+                mergedText = Object.entries(extractedFields).map(([k, v]) => `[${k}]：${v}`).join("\n");
+              }
               if (mergedText) {
                 mergedText = await postProcessStatusReply(mergedText, chat, statusSettings || chat.settings);
                 const statusMsgObj = {
@@ -39842,7 +39946,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   sender: "ai",
                   role: "assistant",
                   content: mergedText,
-                  message: mergedText
+                  message: mergedText,
+                  fields: Object.keys(extractedFields).length > 0 ? extractedFields : undefined
                 };
                 messagesArray.unshift(statusMsgObj);
               }
@@ -40072,6 +40177,26 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }
 
               switch (msgData.type) {
+                case "system_status": {
+                  let statusContent = msgData.content || msgData.message || "";
+                  if (!statusContent && msgData.fields && typeof msgData.fields === "object") {
+                    statusContent = Object.entries(msgData.fields).map(([k, v]) => `[${k}]：${v}`).join("\n");
+                  }
+                  aiMessage = {
+                    ...baseMessage,
+                    type: "system_status",
+                    senderName: msgData.name || (statusMember ? (statusMember.groupNickname || statusMember.originalName) : (chat.name || "系统状态")),
+                    content: statusContent,
+                    message: statusContent,
+                    fields: (msgData.fields && typeof msgData.fields === "object") ? msgData.fields : undefined,
+                  };
+                  if (statusMember && statusMember.avatar) {
+                    aiMessage.senderAvatar = statusMember.avatar;
+                  } else if (!chat.isGroup && chat.roleType === "system_status" && chat.settings?.aiAvatar) {
+                    aiMessage.senderAvatar = chat.settings.aiAvatar;
+                  }
+                  break;
+                }
                 case "give_item":
                 case "gift_item":
                 case "obtain_item": {
@@ -40098,9 +40223,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   continue;
                 }
                 case "suggest_switch_chapter": {
-                  const targetId = msgData.nextChapterId || msgData.chapterId;
-                  const targetTitle = msgData.nextChapterTitle || msgData.chapterTitle || "下一章";
-                  if (targetId && chat) {
+                  let targetId = msgData.nextChapterId || msgData.chapterId || msgData.targetId;
+                  const targetTitle = msgData.nextChapterTitle || msgData.chapterTitle || msgData.title || msgData.summary || "下一章";
+                  if ((targetId || targetTitle) && chat) {
                     chat.pendingChapterSwitch = { nextChapterId: targetId, nextChapterTitle: targetTitle };
                     const cardMsg = {
                       id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
@@ -40122,10 +40247,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   continue;
                 }
                 case "switch_chapter": {
-                  const targetId = msgData.nextChapterId || msgData.chapterId;
-                  const targetTitle = msgData.nextChapterTitle || msgData.chapterTitle || "下一章";
-                  if (targetId && chat && chat.activeModuleId) {
-                    if (chat.moduleSwitchMode === 'semi') {
+                  let targetId = msgData.nextChapterId || msgData.chapterId || msgData.targetId;
+                  const targetTitle = msgData.nextChapterTitle || msgData.chapterTitle || msgData.title || msgData.summary || "下一章";
+                  if ((targetId || targetTitle) && chat) {
+                    if (chat.moduleSwitchMode === 'auto') {
+                      setTimeout(async () => {
+                        if (typeof window.executeChapterSwitch === 'function') {
+                          await window.executeChapterSwitch(targetId, targetTitle, true);
+                        }
+                      }, 50);
+                    } else {
                       chat.pendingChapterSwitch = { nextChapterId: targetId, nextChapterTitle: targetTitle };
                       const cardMsg = {
                         id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
@@ -40143,12 +40274,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                       if (isViewingThisChat) {
                         appendMessage(cardMsg, chat);
                       }
-                    } else if (chat.moduleSwitchMode === 'auto') {
-                      setTimeout(async () => {
-                        if (typeof window.executeChapterSwitch === 'function') {
-                          await window.executeChapterSwitch(targetId, targetTitle, true);
-                        }
-                      }, 50);
                     }
                   }
                   continue;
@@ -40200,7 +40325,13 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 }
                 case "manage_chapters": {
                   if (chat && chat.activeModuleId) {
-                    if (chat.moduleSwitchMode === 'semi') {
+                    if (chat.moduleSwitchMode === 'auto') {
+                      setTimeout(async () => {
+                        if (typeof window.executeChapterManage === 'function') {
+                          await window.executeChapterManage(msgData.openChapterIds || [], msgData.closeChapterIds || [], msgData.summary || '', true);
+                        }
+                      }, 50);
+                    } else {
                       const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
                       let openTitles = msgData.openChapterTitles || [];
                       let closeTitles = msgData.closeChapterTitles || [];
@@ -40241,12 +40372,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                       if (isViewingThisChat) {
                         appendMessage(cardMsg, chat);
                       }
-                    } else if (chat.moduleSwitchMode === 'auto') {
-                      setTimeout(async () => {
-                        if (typeof window.executeChapterManage === 'function') {
-                          await window.executeChapterManage(msgData.openChapterIds || [], msgData.closeChapterIds || [], msgData.summary || '', true);
-                        }
-                      }, 50);
                     }
                   }
                   continue;
@@ -43261,6 +43386,73 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                             appendMessage(cardMsg, chat);
                           }
                         }
+                      }
+                      const chMatch = textWithoutThoughts.match(/```(?:json)?\s*(\{[\s\S]*?"type"\s*:\s*"(?:switch_chapter|suggest_switch_chapter|manage_chapters|suggest_manage_chapters)"[\s\S]*?\})\s*```/i) || textWithoutThoughts.match(/\{[\s\S]*?"type"\s*:\s*"(?:switch_chapter|suggest_switch_chapter|manage_chapters|suggest_manage_chapters)"[\s\S]*?\}/i);
+                      if (chMatch) {
+                        try {
+                          const chObj = JSON.parse(chMatch[1] || chMatch[0]);
+                          cleanMsgText = cleanMsgText.replace(chMatch[0], "").trim();
+                          if (chObj.type === "switch_chapter" || chObj.type === "suggest_switch_chapter") {
+                            const tId = chObj.nextChapterId || chObj.chapterId || chObj.targetId;
+                            const tTitle = chObj.nextChapterTitle || chObj.chapterTitle || chObj.title || chObj.summary || "下一章";
+                            if (chat && chat.moduleSwitchMode === 'auto' && chObj.type === "switch_chapter") {
+                              setTimeout(async () => {
+                                if (typeof window.executeChapterSwitch === 'function') {
+                                  await window.executeChapterSwitch(tId, tTitle, true);
+                                }
+                              }, 50);
+                            } else {
+                              const cardMsg = {
+                                id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                                role: "system",
+                                type: "module_semi_switch_card",
+                                content: chObj.summary || "本章已带完，是否切换下一章？",
+                                pendingData: { nextChapterId: tId, nextChapterTitle: tTitle },
+                                timestamp: messageTimestamp++
+                              };
+                              chat.history.push(cardMsg);
+                              if (isViewingThisChat) appendMessage(cardMsg, chat);
+                            }
+                          } else if (chObj.type === "manage_chapters" || chObj.type === "suggest_manage_chapters") {
+                            if (chat && chat.moduleSwitchMode === 'auto' && chObj.type === "manage_chapters") {
+                              setTimeout(async () => {
+                                if (typeof window.executeChapterManage === 'function') {
+                                  await window.executeChapterManage(chObj.openChapterIds || [], chObj.closeChapterIds || [], chObj.summary || '', true);
+                                }
+                              }, 50);
+                            } else {
+                              const cardMsg = {
+                                id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                                role: "system",
+                                type: "module_semi_switch_card",
+                                content: chObj.summary || "本章已带完，是否切换下一章？",
+                                pendingData: { openChapterIds: chObj.openChapterIds || [], closeChapterIds: chObj.closeChapterIds || [], summary: chObj.summary || "本章已带完，是否切换下一章？" },
+                                timestamp: messageTimestamp++
+                              };
+                              chat.history.push(cardMsg);
+                              if (isViewingThisChat) appendMessage(cardMsg, chat);
+                            }
+                          }
+                        } catch (e) {}
+                      } else {
+                        const chTagMatch = textWithoutThoughts.match(/(?:\[|【)(?:进入下一章|切换章节|推进到下一章|下一章|推进剧情|下一章节)(?:[：:]([^\]】]+))?(?:\]|】)/i);
+                        if (chTagMatch) {
+                          cleanMsgText = cleanMsgText.replace(chTagMatch[0], "").trim();
+                          const tTitle = (chTagMatch[1] || "下一章").trim();
+                          const cardMsg = {
+                            id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                            role: "system",
+                            type: "module_semi_switch_card",
+                            content: "本章已带完，是否切换下一章？",
+                            pendingData: { nextChapterTitle: tTitle },
+                            timestamp: messageTimestamp++
+                          };
+                          chat.history.push(cardMsg);
+                          if (isViewingThisChat) appendMessage(cardMsg, chat);
+                        }
+                      }
+                      if (!cleanMsgText.trim()) {
+                        continue;
                       }
                       aiMessage = { ...baseMessage, content: cleanMsgText };
                     }
