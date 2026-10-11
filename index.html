@@ -37048,6 +37048,7 @@ ${recentHistoryText}
                   id: "msg_" + Date.now(),
                   sender: "ai",
                   role: "assistant",
+                  type: "system_status",
                   name: chat.name || "系统状态",
                   avatar: chat.settings?.aiAvatar || DEFAULT_STATUS_AVATAR,
                   content: statusContent,
@@ -37297,18 +37298,19 @@ ${recentHistoryText}
 
             # 对话历史
             ${chat.history
+              .filter((m) => !m.isKeeperForcedDraw && !m.isForcedDraw && !m.isSystemDraw)
               .slice(-chat.settings.maxMemory)
               .map(
                 (m) =>
-                  `${m.role === "user" ? "用户" : chat.name}: ${m.content}`,
+                  `${m.role === "user" ? "用户" : chat.name}: ${m.type === "naiimag" ? "[生图]" : m.content}`,
               )
               .join("\n")}
 
             现在，请根据用户的最后一句话，开始你的表演。`;
 
-            const messagesForOfflineMode = chat.history.slice(
-              -chat.settings.maxMemory,
-            );
+            const messagesForOfflineMode = chat.history
+              .filter((m) => !m.isKeeperForcedDraw && !m.isForcedDraw && !m.isSystemDraw)
+              .slice(-chat.settings.maxMemory);
 
             // UI 状态更新
             const chatHeaderTitle =
@@ -37340,7 +37342,7 @@ ${recentHistoryText}
                 requestBody = {
                   contents: messagesForOfflineMode.map((item) => ({
                     role: item.role === "assistant" ? "model" : "user",
-                    parts: [{ text: item.content }],
+                    parts: [{ text: item.type === "naiimag" ? "[生图]" : (item.content || "") }],
                   })),
                   generationConfig: {
                     temperature: parseFloat(state.apiConfig.temperature) || 0.8,
@@ -37352,7 +37354,10 @@ ${recentHistoryText}
                   model: model,
                   messages: [
                     { role: "system", content: offlineSystemPrompt },
-                    ...messagesForOfflineMode,
+                    ...messagesForOfflineMode.map((item) => ({
+                      role: item.role === "assistant" ? "assistant" : "user",
+                      content: item.type === "naiimag" ? "[生图]" : (item.content || ""),
+                    })),
                   ],
                   temperature: parseFloat(state.apiConfig.temperature) || 0.8,
                   stream: false,
@@ -37443,7 +37448,7 @@ ${recentHistoryText}
                         chatHeaderTitle.textContent = "正在绘制插图...";
 
                       const naiPrompts = getCharacterNAIPrompts(chat.id);
-                      const aiPrompt = msgData.prompt || "a beautiful scene";
+                      const aiPrompt = msgData.prompt || msgData.content || msgData.image_prompt || msgData.imagePrompt || msgData.description || "a beautiful scene";
                       const finalPositivePrompt = `${aiPrompt}, ${naiPrompts.positive}`;
                       const finalNegativePrompt = naiPrompts.negative;
 
@@ -38399,7 +38404,7 @@ ${recentHistoryText}
                   else if (msg.type === "realimag")
                     contentText = `[RealImag真实图片]`;
                   else if (msg.type === "naiimag")
-                    contentText = `[NovelAI图片: ${msg.prompt}]`;
+                    contentText = `[NovelAI图片]`;
                   else contentText = String(msg.content);
                   return `${sender}: ${contentText}`;
                 })
@@ -38575,15 +38580,17 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                     if (isGroupThinkingActive && msg.thinking) {
                       assistantMsgObject.thinking = "在此处渲染了思维链";
                     }
-                    if (msg.type === "sticker") {
+                    const isStatusMsg = msg.type === "system_status" || msg.type === "status_bar" || msg.roleType === "system_status" || msg.name === "系统状态" || msg.senderName === "系统状态" || (statusSenderName && (msg.name === statusSenderName || msg.senderName === statusSenderName)) || (typeof effectiveContent === "string" && (effectiveContent.includes("[日期]：") || effectiveContent.includes("【日期】")));
+                    const isImageMsg = msg.type === "naiimag" || msg.type === "nov" || msg.type === "ai_image" || msg.type === "image" || msg.type === "realimag" || msg.type === "novelai" || msg.type === "nai_image" || Boolean(msg.imageUrl);
+
+                    if (isStatusMsg) {
+                      assistantMsgObject.type = "system_status";
+                      assistantMsgObject.content = effectiveContent;
+                    } else if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
-                    } else if (msg.type === "naiimag" || msg.type === "nov") {
-                      if (msg.prompt) {
-                        assistantMsgObject.prompt = msg.prompt;
-                      } else if (effectiveContent) {
-                        assistantMsgObject.content = effectiveContent;
-                      }
+                    } else if (isImageMsg) {
+                      assistantMsgObject.type = "naiimag";
                     } else {
                       if (msg.quote) {
                         const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
@@ -39036,15 +39043,17 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     if (isSingleThinkingActive && msg.thinking) {
                       assistantMsgObject.thinking = "在此处渲染了思维链";
                     }
-                    if (msg.type === "sticker") {
+                    const isStatusMsg = msg.type === "system_status" || msg.type === "status_bar" || msg.roleType === "system_status" || msg.name === "系统状态" || msg.senderName === "系统状态" || (typeof effectiveContent === "string" && (effectiveContent.includes("[日期]：") || effectiveContent.includes("【日期】")));
+                    const isImageMsg = msg.type === "naiimag" || msg.type === "nov" || msg.type === "ai_image" || msg.type === "image" || msg.type === "realimag" || msg.type === "novelai" || msg.type === "nai_image" || Boolean(msg.imageUrl);
+
+                    if (isStatusMsg) {
+                      assistantMsgObject.type = "system_status";
+                      assistantMsgObject.content = effectiveContent;
+                    } else if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
-                    } else if (msg.type === "naiimag" || msg.type === "nov") {
-                      if (msg.prompt) {
-                        assistantMsgObject.prompt = msg.prompt;
-                      } else if (effectiveContent) {
-                        assistantMsgObject.content = effectiveContent;
-                      }
+                    } else if (isImageMsg) {
+                      assistantMsgObject.type = "naiimag";
                     } else {
                       if (msg.quote) {
                         const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
@@ -39828,7 +39837,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               if (mergedText) {
                 mergedText = await postProcessStatusReply(mergedText, chat, statusSettings || chat.settings);
                 const statusMsgObj = {
-                  type: "text",
+                  type: "system_status",
                   name: statusSender,
                   sender: "ai",
                   role: "assistant",
@@ -42132,7 +42141,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     const naiPrompts = getCharacterNAIPrompts(chat.id);
 
                     // 构建最终的提示词：AI的prompt + 配置的提示词
-                    const aiPrompt = msgData.prompt || "a beautiful scene";
+                    const aiPrompt = msgData.prompt || msgData.content || msgData.image_prompt || msgData.imagePrompt || msgData.description || "a beautiful scene";
                     const finalPositivePrompt =
                       aiPrompt + ", " + naiPrompts.positive;
                     const finalNegativePrompt = naiPrompts.negative;
@@ -42478,9 +42487,11 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     };
                   } catch (error) {
                     console.warn("❌ NAI图片生成失败:", error);
-                    // 失败时降级为文本消息
                     aiMessage = {
                       ...baseMessage,
+                      type: "naiimag",
+                      prompt: aiPrompt,
+                      fullPrompt: finalPositivePrompt,
                       content: `[图片生成失败: ${error.message}]`,
                     };
                   }
