@@ -37990,7 +37990,7 @@ ${recentHistoryText}
             }
             // 1. 获取最近的历史记录
             let historySlice = chat.history
-              .filter((msg) => !msg.isTemporary && !msg.noAi)
+              .filter((msg) => !msg.isTemporary && !msg.noAi && !msg.isKeeperForcedDraw && !msg.isForcedDraw && !msg.isSystemDraw && !(typeof msg.content === "string" && (msg.content.includes("强制生图调用失败") || msg.content.includes("NovelAI生图提示词") || msg.content.includes("系统生图") || msg.content.includes("图片生成异常"))))
               .slice(-chat.settings.maxMemory);
 
             // ======================= [修复开始] =======================
@@ -38495,7 +38495,8 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                     return { role: "system", content: effectiveContent };
                   }
 
-                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly) return null;
+                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly || msg.isKeeperForcedDraw || msg.isForcedDraw || msg.isSystemDraw) return null;
+                  if (typeof effectiveContent === "string" && (effectiveContent.includes("强制生图调用失败") || effectiveContent.includes("NovelAI生图提示词") || effectiveContent.includes("系统生图") || effectiveContent.includes("图片生成异常"))) return null;
                   if (msg.type === "narrative") {
                     // 将旁白包装成系统指令发送给AI，强调这是剧情/环境描述
                     return {
@@ -38513,6 +38514,12 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                     if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
+                    } else if (msg.type === "naiimag" || msg.type === "nov") {
+                      if (msg.prompt) {
+                        assistantMsgObject.prompt = msg.prompt;
+                      } else if (effectiveContent) {
+                        assistantMsgObject.content = effectiveContent;
+                      }
                     } else {
                       if (msg.quote) {
                         const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
@@ -38957,7 +38964,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     return { role: "system", content: effectiveContent };
                   }
 
-                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly) return null;
+                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly || msg.isKeeperForcedDraw || msg.isForcedDraw || msg.isSystemDraw) return null;
+                  if (typeof effectiveContent === "string" && (effectiveContent.includes("强制生图调用失败") || effectiveContent.includes("NovelAI生图提示词") || effectiveContent.includes("系统生图") || effectiveContent.includes("图片生成异常"))) return null;
 
                   if (msg.role === "assistant") {
                     let assistantMsgObject = { type: msg.type || "text" };
@@ -38967,6 +38975,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     if (msg.type === "sticker") {
                       assistantMsgObject.url = msg.content;
                       assistantMsgObject.meaning = msg.meaning;
+                    } else if (msg.type === "naiimag" || msg.type === "nov") {
+                      if (msg.prompt) {
+                        assistantMsgObject.prompt = msg.prompt;
+                      } else if (effectiveContent) {
+                        assistantMsgObject.content = effectiveContent;
+                      }
                     } else {
                       if (msg.quote) {
                         const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
@@ -39335,13 +39349,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             // 守秘人前置提示词注入逻辑
             const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
             if (isKeeperAssigned) {
-              const isForcedDrawActive = !!(chat.settings && chat.settings.keeperForcedDraw === true);
-              let keeperPrefixInstruction = "";
-              if (isForcedDrawActive) {
-                keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百字，二百五十到三百五十为最佳，宁少毋多；需要分四个及以上气泡时，说明一回合带团内容太多，必须删减后续剧情。\n·上下文消息中所有生图都由末尾强制系统生图进行，尽管你能看到，但那并不是你发的，是系统自动进行的，因此你无需进行任何nov生图，除非玩家要求或提示词中要求。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
-              } else {
-                keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百字，二百五十到三百五十为最佳，宁少毋多；需要分四个及以上气泡时，说明一回合带团内容太多，必须删减后续剧情。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
-              }
+              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百五十字，三百到四百五十为最佳；需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
               systemPrompt = keeperPrefixInstruction + systemPrompt;
             }
 
@@ -45720,7 +45728,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           // updated by lrq 251027 当前聊天获取用户设置的记忆条数作为上下文
           const maxMemory = chat.settings.maxMemory || 10;
           const historySlice = chat.history
-            .filter((msg) => !msg.isHidden)
+            .filter((msg) => !msg.isHidden && !msg.isKeeperForcedDraw && !msg.isForcedDraw && !msg.isSystemDraw)
             .slice(-maxMemory);
 
           // 2. 格式化这些记录，让AI能看懂
@@ -50778,7 +50786,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           // added by lrq 251027
           const maxMemory = chat.settings.maxMemory || 10;
           const historySlice = chat.history
-            .filter((msg) => !msg.isHidden)
+            .filter((msg) => !msg.isHidden && !msg.isKeeperForcedDraw && !msg.isForcedDraw && !msg.isSystemDraw)
             .slice(-maxMemory);
 
           // 2. 格式化这些记录，让AI能看懂
@@ -61589,6 +61597,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               avatar: chat.isGroup ? defaultGroupAvatar : chat.avatar,
               senderAvatar: chat.isGroup ? defaultGroupAvatar : chat.avatar,
               content: `[强制生图调用失败: ${err.message}]`,
+              isKeeperForcedDraw: true,
+              isForcedDraw: true,
               timestamp: Date.now(),
             };
             if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
@@ -61660,6 +61670,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               prompt: aiPrompt,
               fullPrompt: finalPositivePrompt,
               content: `[NovelAI生图提示词: ${aiPrompt}]`,
+              isKeeperForcedDraw: true,
+              isForcedDraw: true,
               timestamp: Date.now(),
             };
             if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
@@ -61812,6 +61824,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               imageUrl: imageDataUrl,
               prompt: aiPrompt,
               fullPrompt: finalPositivePrompt,
+              isKeeperForcedDraw: true,
+              isForcedDraw: true,
               timestamp: Date.now(),
             };
 
@@ -61846,6 +61860,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               prompt: aiPrompt,
               fullPrompt: finalPositivePrompt,
               content: `[图片生成异常: ${err.message || "请求失败"}]`,
+              isKeeperForcedDraw: true,
+              isForcedDraw: true,
               timestamp: Date.now(),
             };
             if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
