@@ -20791,8 +20791,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             cover: songData.cover,
             isLocal: false,
             lrcContent: lrcContent,
-            isTemporary: true,
+            isTemporary: false,
             addedTimestamp: Date.now(),
+            musicId: songData.id,
+            musicSource: songData.source,
           };
 
           // 检查播放列表里是不是已经有这首歌了
@@ -20805,6 +20807,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           } else {
             // 如果没有，就添加到列表末尾再播放
             state.musicState.playlist.push(newSong);
+            await saveGlobalPlaylist();
             updatePlaylistUI(); // 刷新播放列表界面
             playSong(state.musicState.playlist.length - 1);
           }
@@ -21145,8 +21148,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "https://i.postimg.cc/pT2xKzPz/album-cover-placeholder.png",
             isLocal: false,
             lrcContent: lrcContent,
-            isTemporary: true,
+            isTemporary: false,
             addedTimestamp: Date.now(),
+            musicId: songData.id,
+            musicSource: songData.source || songData.originalSource || "netease",
           };
 
           const existingIndex = state.musicState.playlist.findIndex(
@@ -21161,6 +21166,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             targetIndex = existingIndex;
           } else {
             state.musicState.playlist.push(newSong);
+            await saveGlobalPlaylist();
             if (typeof updatePlaylistUI === "function") updatePlaylistUI();
             targetIndex = state.musicState.playlist.length - 1;
           }
@@ -22109,14 +22115,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (e) {}
             }
             let block = "\n# 【角色思维链与深度思考规范】\n" +
-              (preset ? "预设名称：" + preset.name + "\n" : "") +
               "【思维链格式与渲染规范】：\n" +
               "1. 渲染机制：系统会在聊天界面将你的思维链独立提取并渲染为“思考过程”可折叠面板，展示给用户查看你的内心推演与心路历程，与正文消息气泡分开渲染。\n" +
-              "2. 填写格式：你必须在最终回复前，将你的完整思考过程、环境与意图分析、角色心理推演、语气策略写入顶层 \"thinking\" 字段中。格式要求清晰有层次：\n" +
-              "   - 意图分析：深入分析对话者当前的真实意图、情绪潜台词与行动诉求。\n" +
-              "   - 心理推演：结合自身角色性格、经历、好感度与当前情境，推演内心情感反应与深层动机。\n" +
-              "   - 策略拟定：规划本次回复的发言口吻、微表情、肢体动作与核心观点。\n" +
-              "3. 严禁混淆：绝对禁止将思考过程写在正文文本中，思考推演必须且只能写入 \"thinking\" 字段。\n";
+              "2. 填写格式：你必须在最终回复前，按照以下预设要求的全部内容，将你的思考逐一写入顶层 \"thinking\" 字段中。格式要求清晰有层次。\n" +
+              (preset ? "\n预设名称：" + preset.name + "\n" : "");
             if (preset && preset.generalContent) {
               block += "【思维链规则设定】：\n" + preset.generalContent + "\n";
             }
@@ -26983,16 +26985,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           state.charStickers = charStickers || [];
           state.worldBooks = worldBooks || [];
           currentDatingScenes = datingScenes || [];
-          // 加载播放列表并清理保活与保护音轨
+          // 加载播放列表并清理保活与保护音轨，恢复上次播放的曲目索引
           const keepAliveUrl = "https://files.catbox.moe/7jn7bp.mp3";
-          window.state.musicState.playlist = (musicLib?.playlist || []).filter(
+          let loadedPlaylist = (musicLib?.playlist && musicLib.playlist.length > 0) ? musicLib.playlist : [];
+          if (loadedPlaylist.length === 0) {
+            try {
+              const backup = JSON.parse(localStorage.getItem("music_playlist_backup") || "[]");
+              if (Array.isArray(backup) && backup.length > 0) loadedPlaylist = backup;
+            } catch (e) {}
+          }
+          window.state.musicState.playlist = loadedPlaylist.filter(
             (t) => t && !t.isKeepAlive && t.src !== keepAliveUrl && !String(t.name || "").includes("保活") && !String(t.name || "").includes("保护")
           );
-          if (typeof db !== "undefined" && db.musicLibrary) {
-            try {
-              const cleanPerm = window.state.musicState.playlist.filter((t) => !t.isTemporary);
-              db.musicLibrary.put({ id: "main", playlist: cleanPerm }).catch(() => {});
-            } catch (e) {}
+
+          const rawSavedIdx = (typeof musicLib?.currentIndex === "number" && musicLib.currentIndex >= 0)
+            ? musicLib.currentIndex
+            : parseInt(localStorage.getItem("music_current_index") || "0", 10);
+          const validInitialIdx = (rawSavedIdx >= 0 && rawSavedIdx < window.state.musicState.playlist.length) ? rawSavedIdx : 0;
+          if (window.state.musicState.playlist.length > 0) {
+            window.state.musicState.currentIndex = validInitialIdx;
+            loadSong(validInitialIdx);
+          } else {
+            window.state.musicState.currentIndex = -1;
           }
 
           state.personaPresets = personaPresets || [];
@@ -27072,18 +27086,76 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.getEffectiveApiConfig = getEffectiveApiConfig;
 
-        async function saveGlobalPlaylist() {
-          // 1. 在保存前，先从当前播放列表中过滤掉所有临时歌曲与保活保护歌曲
-          const permanentPlaylist = state.musicState.playlist.filter(
-            (track) => track && !track.isTemporary && !track.isKeepAlive && track.src !== "https://files.catbox.moe/7jn7bp.mp3" && !String(track.name || "").includes("保活") && !String(track.name || "").includes("保护"),
-          );
+        function saveCurrentMusicIndex(idx) {
+          if (typeof idx !== "number" || isNaN(idx)) return;
+          state.musicState.currentIndex = idx;
+          try {
+            localStorage.setItem("music_current_index", String(idx));
+          } catch (_) {}
+          try {
+            if (typeof db !== "undefined" && db.musicLibrary) {
+              db.musicLibrary.update("main", { currentIndex: idx }).catch(() => {
+                saveGlobalPlaylist();
+              });
+            }
+          } catch (_) {}
+        }
+        window.saveCurrentMusicIndex = saveCurrentMusicIndex;
 
-          // 2. 只将这个“永久播放列表”保存到数据库中
-          await db.musicLibrary.put({
-            id: "main",
-            playlist: permanentPlaylist,
-          });
-          console.log("已将永久播放列表保存到数据库。");
+        function sanitizeMusicPlaylist(list) {
+          if (!Array.isArray(list)) return [];
+          const keepAliveUrl = "https://files.catbox.moe/7jn7bp.mp3";
+          return list.filter(
+            (track) => track && !track.isKeepAlive && track.src !== keepAliveUrl && !String(track.name || "").includes("保活") && !String(track.name || "").includes("保护")
+          ).map(t => ({
+            name: String(t.name || "").trim(),
+            artist: String(t.artist || "").trim(),
+            src: typeof t.src === "string" ? t.src : (t.src && typeof t.src.name === "string" ? t.src.name : ""),
+            cover: typeof t.cover === "string" ? t.cover : "",
+            isLocal: Boolean(t.isLocal),
+            lrcContent: typeof t.lrcContent === "string" ? t.lrcContent : "",
+            lrcUrl: typeof t.lrcUrl === "string" ? t.lrcUrl : "",
+            musicId: t.musicId || "",
+            musicSource: t.musicSource || "",
+            apiProvider: t.apiProvider || "",
+            isTemporary: false,
+            addedTimestamp: t.addedTimestamp || Date.now()
+          })).filter(t => t.name && t.src);
+        }
+        window.sanitizeMusicPlaylist = sanitizeMusicPlaylist;
+
+        async function saveGlobalPlaylist() {
+          const curIdx = (typeof state.musicState.currentIndex === "number" && !isNaN(state.musicState.currentIndex))
+            ? state.musicState.currentIndex
+            : -1;
+          try {
+            localStorage.setItem("music_current_index", String(curIdx));
+          } catch (_) {}
+
+          const cleanList = sanitizeMusicPlaylist(state.musicState.playlist);
+          state.musicState.playlist = cleanList;
+
+          try {
+            localStorage.setItem("music_playlist_backup", JSON.stringify(cleanList));
+          } catch (e) {
+            try {
+              const minimalList = cleanList.map(t => ({ ...t, lrcContent: "" }));
+              localStorage.setItem("music_playlist_backup", JSON.stringify(minimalList));
+            } catch (_) {}
+          }
+
+          try {
+            if (typeof db !== "undefined" && db.musicLibrary) {
+              await db.musicLibrary.put({
+                id: "main",
+                playlist: cleanList,
+                currentIndex: curIdx,
+              });
+            }
+          } catch (dbErr) {
+            console.warn("保存音乐到数据库失败:", dbErr);
+          }
+          console.log("已将永久播放列表与当前播放索引保存到数据库。");
         }
 
         function formatTimestamp(timestamp) {
@@ -38192,12 +38264,6 @@ ${recentHistoryText}
               if (currentTrack && currentTrack.isKeepAlive) {
                 musicContext = ""; // AI 此时什么都不知道，就像没听歌一样
               } else {
-                // 只有是正常歌曲时，才告诉 AI
-                const playlistInfo = state.musicState.playlist
-                  .filter((t) => !t.isKeepAlive) // 甚至在列表里也不要让 AI 看到保活音频
-                  .map((t) => `"${t.name}"`)
-                  .join(", ");
-
                 // 获取歌词上下文 (保持原有逻辑)
                 let lyricsContext = "";
                 if (
@@ -38223,8 +38289,6 @@ ${recentHistoryText}
                 musicContext = `\n\n# 当前音乐情景
                     -   **当前状态**: 你正在和用户一起听歌。
                     -   **正在播放**: ${currentTrack ? `《${currentTrack.name}》 - ${currentTrack.artist}` : "无"}
-                    -   **可用播放列表**: [${playlistInfo}]
-                    -   **你的任务**: 你可以根据对话内容和氛围，使用 "change_music" 指令切换到播放列表中的任何一首歌，以增强互动体验。
                     ${lyricsContext}`;
               }
             }
@@ -44284,6 +44348,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
         async function loadSong(index) {
           if (index < 0 || index >= state.musicState.playlist.length) return;
           state.musicState.currentIndex = index;
+          if (typeof saveCurrentMusicIndex === "function") {
+            saveCurrentMusicIndex(index);
+          }
           let track = state.musicState.playlist[index];
 
           if (!track.isLocal && track.musicId && track.musicSource) {

@@ -58,6 +58,38 @@
     }
   }
 
+  // 道具图片去重检索：优先检索当前会话、其他所有群聊或全局道具库中是否已有同名道具图片
+  const findExistingItemAvatar = (name) => {
+    if (!name || typeof name !== "string") return null;
+    const targetName = name.trim();
+    if (!targetName) return null;
+    if (typeof state !== "undefined" && state.chats) {
+      for (const otherChat of Object.values(state.chats)) {
+        if (!otherChat) continue;
+        const pools = [otherChat.inventory, otherChat.aiInventory];
+        if (Array.isArray(otherChat.members)) {
+          otherChat.members.forEach((m) => {
+            if (Array.isArray(m.inventory)) pools.push(m.inventory);
+          });
+        }
+        for (const list of pools) {
+          if (!Array.isArray(list)) continue;
+          const match = list.find(
+            (i) =>
+              i &&
+              i.name &&
+              i.name.trim() === targetName &&
+              i.avatar &&
+              typeof i.avatar === "string" &&
+              i.avatar.trim()
+          );
+          if (match) return match.avatar;
+        }
+      }
+    }
+    return null;
+  };
+
   // 计算骰子或数值表达式（如 1D6, 2D4+1, 5, -2）
   function rollDiceExpression(expr) {
     if (!expr && expr !== 0) return 0;
@@ -2585,6 +2617,7 @@ HTML设计与排版核心规范：
 
     isConvertingMessageToClue = true;
     showClueToast("正在提取线索，请稍候");
+    let clueCreated = false;
 
     try {
       let moduleContext = "";
@@ -2683,37 +2716,43 @@ HTML设计与排版核心规范：
         createdAt: Date.now(),
       };
       inventory.push(newClueItem);
+      clueCreated = true;
       await saveCurrentChatInventory(inventory);
       renderInventoryList();
       showClueToast("线索转化完成");
       openClueReaderModal(newClueItem);
 
-      const cachedClueAvatar = findExistingItemAvatar(newClueItem.name);
-      if (cachedClueAvatar) {
-        newClueItem.avatar = cachedClueAvatar;
-        await saveCurrentChatInventory(inventory);
-        renderInventoryList();
-        if (typeof renderGlobalInventoryList === "function") renderGlobalInventoryList();
-      } else if (cluePrompt && typeof window.callNovelAiDirect === "function") {
-        window.callNovelAiDirect(cluePrompt, {
-          resolution: "640x640",
-          seed: Math.floor(Math.random() * 4294967295),
-        }).then(async (b64) => {
-          if (b64) {
-            let compB64 = b64;
-            try {
-              if (typeof compressImage === "function") compB64 = await compressImage(b64, 0.4, 640, true);
-            } catch (e) {}
-            newClueItem.avatar = compB64;
-            await saveCurrentChatInventory(inventory);
-            renderInventoryList();
-            if (typeof renderGlobalInventoryList === "function") renderGlobalInventoryList();
-          }
-        }).catch(e => {
-          console.warn("线索自动生图跳过:", e);
-        });
+      try {
+        const cachedClueAvatar = findExistingItemAvatar(newClueItem.name);
+        if (cachedClueAvatar) {
+          newClueItem.avatar = cachedClueAvatar;
+          await saveCurrentChatInventory(inventory);
+          renderInventoryList();
+          if (typeof renderGlobalInventoryList === "function") renderGlobalInventoryList();
+        } else if (cluePrompt && typeof window.callNovelAiDirect === "function") {
+          window.callNovelAiDirect(cluePrompt, {
+            resolution: "640x640",
+            seed: Math.floor(Math.random() * 4294967295),
+          }).then(async (b64) => {
+            if (b64) {
+              let compB64 = b64;
+              try {
+                if (typeof compressImage === "function") compB64 = await compressImage(b64, 0.4, 640, true);
+              } catch (e) {}
+              newClueItem.avatar = compB64;
+              await saveCurrentChatInventory(inventory);
+              renderInventoryList();
+              if (typeof renderGlobalInventoryList === "function") renderGlobalInventoryList();
+            }
+          }).catch(e => {
+            console.warn("线索自动生图跳过:", e);
+          });
+        }
+      } catch (avatarErr) {
+        console.warn("线索头像配置跳过:", avatarErr);
       }
     } catch (err) {
+      if (clueCreated) return;
       console.error("转化线索降级:", err);
       const inventory = getCurrentChatInventory();
       const fallbackClue = {
