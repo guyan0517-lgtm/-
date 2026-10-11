@@ -22114,12 +22114,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 preset = await db.thoughtChainPresets.get(presetId);
               } catch (e) {}
             }
-            let block = "\n# 【角色思维链与深度思考规范】\n" +
-              "【思维链格式与唯一性铁律】：\n" +
-              "1. 字段定位：思维链字段名固定为 \"thinking\"，值为纯文本字符串。系统会在聊天界面将此字段独立提取并渲染为“思考过程”可折叠面板供用户查看。\n" +
-              "2. 全局唯一完整性：从头到尾的思维链必须且只能有这一整条，绝不能被拆碎分散！你必须将所有心理推演、意图分析、环境观察与行动策略合并完整写在这一条全局思维链中。\n" +
-              "3. 严禁混入具体消息内部：严禁在具体的消息指令或道具对象（例如 give_item、text、system_status 等）内部各自包含 thinking 字段！任何具体消息对象内部都不允许出现 thinking 字段。\n" +
-              "4. 标准输出位置：在单聊中，\"thinking\" 必须填写在最外层根对象的顶级字段；在群聊中，整条思维链既可放在根对象顶级 \"thinking\" 字段，也可以作为第1条独立对象 `{\"type\": \"thinking\", \"content\": \"一整条完整的思考过程...\"}` 输出。\n" +
+            let block = "\n# 【思维链填写规范与顶级字段代码定义】\n" +
+              "【思维链代码结构与全局唯一性规则】：\n" +
+              "1. 字段代码定义：思维链必须且只能填写在最外层根JSON对象的顶级 \"thinking\" 字段中，其值必须为纯文本字符串。聊天系统会将此字段独立提取并渲染为“思考过程”折叠卡片展示给用户。\n" +
+              "2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将意图分析、环境观察、角色心理推演、回复策略规划等所有思考内容，完整合并写入这一条全局顶级的 \"thinking\" 字段中。\n" +
+              "3. 绝对禁止在具体对象内部包含 thinking 字段：绝对禁止在各个动作、道具、状态栏或文本消息对象内部各自夹带 thinking 字段！下方的 chatResponse 数组中，每一个具体消息对象只保留其自身字段，内部绝对不能出现 thinking 键。\n" +
+              "4. 绝对禁止在外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格作为 \"thinking\" 字段的值包裹在 JSON 根对象内部。\n" +
+              "5. 标准填写代码结构示例：\n" +
+              "```json\n" +
+              "{\n" +
+              "  \"thinking\": \"1. 意图分析：对方在向我询问情况...\\n2. 心理推演：感到关切与在意...\\n3. 策略拟定：以温和自然的语气回复对方...\",\n" +
+              "  \"chatResponse\": [\n" +
+              "    {\n" +
+              "      \"type\": \"text\",\n" +
+              "      \"name\": \"角色名\",\n" +
+              "      \"content\": \"对话内容\"\n" +
+              "    }\n" +
+              "  ]\n" +
+              "}\n" +
+              "```\n" +
               (preset ? "\n预设名称：" + preset.name + "\n" : "");
             if (preset && preset.generalContent) {
               block += "【思维链规则设定】：\n" + preset.generalContent + "\n";
@@ -38536,7 +38549,7 @@ ${recentHistoryText}
               systemPrompt = `
 # 【第一大类】你可以使用的操作指令
 你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
-${isGroupThinkingActive ? `\n# 【思维链唯一性铁律】\n从头到尾的思维链必须且只能有这一整条，绝对禁止在各个动作、道具或文本对象中各自夹带零散的 thinking 字段！\n你必须将整条思维链完整填写在顶层的 "thinking" 字段中，下方的具体消息对象（如 text、give_item、system_status 等）内部绝不能包含 thinking 字段！\n` : ""}
+${isGroupThinkingActive ? `\n# 【思维链填写规范与顶级字段定义】\n1. 字段代码定义：在最外层根JSON对象中，必须且只能有一个顶级的 "thinking" 键，其值必须为纯文本字符串。\n2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将所有思考推演集中完整写入顶层唯一的 "thinking" 字段中。\n3. 绝对禁止在具体对象内部包含 thinking 字段：下方的 chatResponse 数组中各个动作、道具、状态栏或文本消息对象内部绝不允许夹带 thinking 字段！\n4. 绝对禁止外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字，必须严格包裹在顶层 "thinking" 字段中。\n` : ""}
 ## 标准输出格式示例:
 ${isGroupThinkingActive ? `{
   "thinking": "1. 意图分析... 2. 心理推演... 3. 拟定语气与回复策略...",
@@ -38629,9 +38642,6 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                     // AI消息的处理逻辑保持不变...
                     let assistantMsgObject = { type: msg.type || "text" };
                     assistantMsgObject.name = msg.senderName;
-                    if (isGroupThinkingActive && msg.thinking) {
-                      assistantMsgObject.thinking = "在此处渲染了思维链";
-                    }
                     const isStatusMsg = msg.type === "system_status" || msg.type === "status_bar" || msg.roleType === "system_status" || msg.name === "系统状态" || msg.senderName === "系统状态" || (statusSenderName && (msg.name === statusSenderName || msg.senderName === statusSenderName)) || (typeof effectiveContent === "string" && (effectiveContent.includes("[日期]：") || effectiveContent.includes("【日期】")));
                     const isImageMsg = msg.type === "naiimag" || msg.type === "nov" || msg.type === "ai_image" || msg.type === "image" || msg.type === "realimag" || msg.type === "novelai" || msg.type === "nai_image" || Boolean(msg.imageUrl);
 
@@ -39010,8 +39020,9 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			该JSON对象【**必须**】包含三个顶级键: "thinking"、"chatResponse" 和 "innerVoice"。
 
 			**2. "thinking" 键:**
-			- **类型**: 字符串。系统会在聊天界面将此字段独立渲染为“思考过程”可折叠面板供用户查看。你必须在此字段中写下完整的深度推理与思考过程，格式需分点清晰展开（包括意图分析、角色心理推演、语气与策略拟定），绝对禁止填写 null。
-			- **全局唯一铁律**: 从头到尾的思维链必须且只能有这一整条，统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象（如 text、give_item 等）内部绝对禁止包含 thinking 字段，严禁分散填写！
+			- **字段代码定义**: 顶级纯文本字符串。思维链必须且只能填写在最外层根JSON对象的顶级 "thinking" 字段中，系统会在聊天界面将此字段独立提取并渲染为“思考过程”折叠卡片展示给用户。你必须在此字段中写下一整条完整的深度推理思考过程，分点清晰展开（包含意图分析、角色心理推演、语气与策略拟定），绝对禁止填写 null。
+			- **从头到尾唯一一整条**: 从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！必须统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象（如 text、give_item、system_status 等）内部绝对禁止包含 thinking 字段，严禁分散填写！
+			- **绝对禁止外围裸露输出**: 绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格写入顶级 "thinking" 字段之中。
 
 			**3. "chatResponse" 键:**
 			- **类型**: JSON数组 []。
@@ -39107,9 +39118,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
                   if (msg.role === "assistant") {
                     let assistantMsgObject = { type: msg.type || "text" };
-                    if (isSingleThinkingActive && msg.thinking) {
-                      assistantMsgObject.thinking = "在此处渲染了思维链";
-                    }
                     const isStatusMsg = msg.type === "system_status" || msg.type === "status_bar" || msg.roleType === "system_status" || msg.name === "系统状态" || msg.senderName === "系统状态" || (typeof effectiveContent === "string" && (effectiveContent.includes("[日期]：") || effectiveContent.includes("【日期】")));
                     const isImageMsg = msg.type === "naiimag" || msg.type === "nov" || msg.type === "ai_image" || msg.type === "image" || msg.type === "realimag" || msg.type === "novelai" || msg.type === "nai_image" || Boolean(msg.imageUrl);
 
@@ -48364,6 +48372,27 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             renderMemberManagementList(); // 刷新列表
           }
         }
+
+        function renderGroupMemberSettings(members) {
+          if (typeof window.renderGroupMemberSettings === "function" && window.renderGroupMemberSettings !== renderGroupMemberSettings) {
+            return window.renderGroupMemberSettings(members);
+          }
+          const container = document.getElementById("group-members-settings");
+          if (!container) return;
+          container.innerHTML = "";
+          (members || []).forEach((member) => {
+            const div = document.createElement("div");
+            div.className = "member-editor";
+            div.dataset.memberId = member.id;
+            div.innerHTML = `<img src="${member.avatar || ''}" alt="${member.groupNickname || ''}"><div class="member-name">${member.groupNickname || ''}</div>`;
+            div.addEventListener("click", () => {
+              if (typeof openMemberEditor === "function") openMemberEditor(member.id);
+              else if (typeof window.openMemberEditor === "function") window.openMemberEditor(member.id);
+            });
+            container.appendChild(div);
+          });
+        }
+        window.renderGroupMemberSettings = renderGroupMemberSettings;
 
         /**
          * 处理拉人入群的逻辑（已添加系统消息）
@@ -77502,6 +77531,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             });
 
           function renderGroupMemberSettings(members) {
+            window.renderGroupMemberSettings = renderGroupMemberSettings;
             const container = document.getElementById("group-members-settings");
             container.innerHTML = "";
             members.forEach((member) => {
