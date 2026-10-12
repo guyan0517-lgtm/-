@@ -20824,6 +20824,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         window.formatAiMusicInstruction = function(prefVal) {
+          const curChat = (typeof state !== 'undefined' && state.activeChatId && state.chats) ? state.chats[state.activeChatId] : null;
+          const isAllowed = ((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (curChat?.settings?.aiMusicEnabled !== false);
+          if (!isAllowed) return "";
           const pStr = (prefVal && prefVal !== "全部") ? prefVal : "全部";
           const tags = pStr === "全部" ? ["纯乐", "人声"] : pStr.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean);
           const hasPure = tags.includes("纯乐") || tags.includes("纯音乐");
@@ -20945,6 +20948,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         window.playAutoSceneMusic = async function (keyword) {
           if (!keyword || typeof keyword !== "string") return;
+          const curChat = (typeof state !== 'undefined' && state.activeChatId && state.chats) ? state.chats[state.activeChatId] : null;
+          const isAllowed = ((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (curChat?.settings?.aiMusicEnabled !== false);
+          if (!isAllowed) return;
           let cleanKeyword = keyword.trim().replace(/^《|》$/g, "").replace(/^\[|\]$/g, "").replace(/^【|】$/g, "");
           cleanKeyword = cleanKeyword.replace(/^(?:音乐|BGM|背景音乐|音效|bgm|music|标签)[:：]\s*/i, "").trim();
           cleanKeyword = cleanKeyword.replace(/^\[|\]$/g, "").replace(/^【|】$/g, "").replace(/^《|》$/g, "").trim();
@@ -22240,7 +22246,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             // 模组剧情配乐规则
-            if (Array.isArray(mod.musicList) && mod.musicList.length > 0) {
+            const isModuleMusicAllowed = (((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false));
+            if (isModuleMusicAllowed && Array.isArray(mod.musicList) && mod.musicList.length > 0) {
               block += `## 模组剧情配乐规则\n` +
                 `当前模组配置了特定情景配乐。当带团推进到对应剧情、气氛或场景时，在叙述中原样附带对应的音乐标签，系统会自动为玩家播放应景音乐。\n` +
                 `模组配乐清单：\n`;
@@ -28532,6 +28539,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const globalMusicSwitch = document.getElementById("global-ai-music-switch");
           if (globalMusicSwitch) {
             globalMusicSwitch.checked = state.apiConfig.globalAiMusicEnabled !== false && localStorage.getItem("global_ai_music_enabled") !== "false";
+            globalMusicSwitch.onchange = () => {
+              state.apiConfig.globalAiMusicEnabled = globalMusicSwitch.checked;
+              localStorage.setItem("global_ai_music_enabled", globalMusicSwitch.checked ? "true" : "false");
+              if (typeof db !== "undefined" && db.apiConfig) {
+                db.apiConfig.put(state.apiConfig);
+              }
+            };
           }
 
           const musicFadeSlider = document.getElementById("music-fade-duration-slider");
@@ -38369,7 +38383,9 @@ ${recentHistoryText}
             const countdownContext = await getCountdownContext(chatId); // <--- 把chatId传进去
             const streakContext = await getStreakContext(chat);
             // 音乐上下文生成（增加保活屏蔽逻辑）
+            const isMusicContextAllowed = ((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false);
             if (
+              isMusicContextAllowed &&
               state.musicState.isActive &&
               state.musicState.activeChatId === chatId
             ) {
@@ -77420,6 +77436,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 const chatMusicSwitch = document.getElementById("chat-ai-music-switch");
                 if (chatMusicSwitch) {
                   chatMusicSwitch.checked = chat.settings?.aiMusicEnabled !== false;
+                  chatMusicSwitch.onchange = () => {
+                    if (chat && chat.settings) {
+                      chat.settings.aiMusicEnabled = chatMusicSwitch.checked;
+                      if (typeof db !== "undefined" && db.chats) {
+                        db.chats.put(chat);
+                      }
+                    }
+                  };
                 }
                 const chatMusicPrefBtn = document.getElementById("chat-music-preference-btn");
                 if (chatMusicPrefBtn) {
@@ -78709,8 +78733,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                   .getElementById("minimax-voice-id-input")
                   .value.trim();
                 const chatMusicSwitch = document.getElementById("chat-ai-music-switch");
-                if (chatMusicSwitch) {
-                  chatMusicSwitch.checked = chat.settings?.aiMusicEnabled !== false;
+                if (chatMusicSwitch && chat.settings) {
+                  chat.settings.aiMusicEnabled = chatMusicSwitch.checked;
                 }
                 const chatMusicPrefBtn = document.getElementById("chat-music-preference-btn");
                 if (chatMusicPrefBtn && chat.settings) {
