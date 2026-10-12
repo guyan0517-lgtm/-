@@ -1,8 +1,10 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PDFDocument } from 'pdf-lib';
 import { isEncrypted, decryptPDF } from '@pdfsmaller/pdf-decrypt';
+import { WebSocketServer } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -159,7 +161,112 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const httpServer = http.createServer(app);
+const wss = new WebSocketServer({ server: httpServer });
+
+// Peer connections map: peerId -> Set of ws
+const peers = new Map();
+// Room connections map: roomId -> Set of ws
+const rooms = new Map();
+
+wss.on('connection', (ws) => {
+  let boundPeerId = null;
+  const boundRooms = new Set();
+
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      if (!msg || !msg.type) return;
+
+      if (msg.type === 'register') {
+        const { peerId } = msg;
+        if (!peerId) return;
+        boundPeerId = peerId;
+        if (!peers.has(peerId)) {
+          peers.set(peerId, new Set());
+        }
+        peers.get(peerId).add(ws);
+        ws.send(JSON.stringify({ type: 'registered', peerId, success: true }));
+      } else if (msg.type === 'join_room') {
+        const { roomId, peerId } = msg;
+        if (!roomId) return;
+        boundRooms.add(roomId);
+        if (!rooms.has(roomId)) {
+          rooms.set(roomId, new Set());
+        }
+        rooms.get(roomId).add(ws);
+        ws.send(JSON.stringify({ type: 'room_joined', roomId, success: true }));
+      } else if (msg.type === 'send_peer') {
+        const { targetPeerId, payload } = msg;
+        if (!targetPeerId) return;
+        const targetSockets = peers.get(targetPeerId);
+        if (targetSockets && targetSockets.size > 0) {
+          const packet = JSON.stringify({
+            type: 'receive_peer',
+            fromPeerId: boundPeerId,
+            payload
+          });
+          targetSockets.forEach((s) => {
+            if (s.readyState === 1) s.send(packet);
+          });
+        }
+      } else if (msg.type === 'send_room') {
+        const { roomId, payload } = msg;
+        if (!roomId) return;
+        const roomSockets = rooms.get(roomId);
+        if (roomSockets && roomSockets.size > 0) {
+          const packet = JSON.stringify({
+            type: 'receive_room',
+            roomId,
+            fromPeerId: boundPeerId,
+            payload
+          });
+          roomSockets.forEach((s) => {
+            if (s !== ws && s.readyState === 1) {
+              s.send(packet);
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[WS] 消息解析异常:', err.message);
+    }
+  });
+
+  ws.on('close', () => {
+    if (boundPeerId && peers.has(boundPeerId)) {
+      const set = peers.get(boundPeerId);
+      set.delete(ws);
+      if (set.size === 0) peers.delete(boundPeerId);
+    }
+    boundRooms.forEach((rId) => {
+      if (rooms.has(rId)) {
+        const set = rooms.get(rId);
+        set.delete(ws);
+        if (set.size === 0) rooms.delete(rId);
+      }
+    });
+  });
+});
+
+const heartbeatInterval = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+
+wss.on('close', () => {
+  clearInterval(heartbeatInterval);
+});
+
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
 

@@ -716,12 +716,19 @@ ${innerVoiceRule}
         Object.keys(groupMap).forEach(key => {
           text = text.split(key).join(groupMap[key]);
         });
+        if (context.prohibitedNamesList && text.includes(`name 为 "${myNickname}"`)) {
+          text = text.replace(`name 为 "${myNickname}"`, `name 为 ${context.prohibitedNamesList}`);
+        }
         text = text.replace(/\{\{[^}]+\}\}/g, "").trim();
         if (text) {
           renderedParts.push(text);
         }
       }
     });
+
+    if (context.multiPlayerPromptBlock) {
+      renderedParts.splice(1, 0, context.multiPlayerPromptBlock.trim());
+    }
 
     return renderedParts.length > 0 ? renderedParts.join("\n\n") : context.defaultPrompt;
   }
