@@ -154,6 +154,81 @@ app.post('/api/proxy', async (req, res) => {
   }
 });
 
+// Mailbox for peer messages: peerId -> Array of { id, time, packet }
+const peerMailbox = new Map();
+
+function enqueuePeerMessage(targetPeerId, packet) {
+  if (!peerMailbox.has(targetPeerId)) {
+    peerMailbox.set(targetPeerId, []);
+  }
+  const queue = peerMailbox.get(targetPeerId);
+  const msgObj = {
+    id: 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    time: Date.now(),
+    packet
+  };
+  queue.push(msgObj);
+  if (queue.length > 100) queue.shift();
+  return msgObj;
+}
+
+function deliverToPeerSockets(targetPeerId, packet) {
+  const targetSockets = peers.get(targetPeerId);
+  let delivered = false;
+  if (targetSockets && targetSockets.size > 0) {
+    targetSockets.forEach((s) => {
+      if (s.readyState === 1) {
+        s.send(packet);
+        delivered = true;
+      }
+    });
+  }
+  return delivered;
+}
+
+// HTTP Sync endpoints for fallback and robust polling
+app.post('/api/sync/register', (req, res) => {
+  const { peerId: rawPeerId } = req.body || {};
+  if (!rawPeerId) {
+    return res.status(400).json({ error: 'Missing peerId' });
+  }
+  const peerId = String(rawPeerId).trim().toUpperCase();
+  const queued = peerMailbox.get(peerId) || [];
+  const messages = queued.map(item => item.packet);
+  peerMailbox.delete(peerId);
+  return res.json({ success: true, peerId, messages });
+});
+
+app.post('/api/sync/send', (req, res) => {
+  const { targetPeerId: rawTarget, fromPeerId: rawFrom, payload } = req.body || {};
+  if (!rawTarget || !payload) {
+    return res.status(400).json({ error: 'Missing targetPeerId or payload' });
+  }
+  const targetPeerId = String(rawTarget).trim().toUpperCase();
+  const fromPeerId = String(rawFrom || '').trim().toUpperCase();
+  const packet = JSON.stringify({
+    type: 'receive_peer',
+    fromPeerId,
+    payload
+  });
+
+  enqueuePeerMessage(targetPeerId, packet);
+  const delivered = deliverToPeerSockets(targetPeerId, packet);
+  return res.json({ success: true, targetPeerId, delivered });
+});
+
+app.get('/api/sync/poll', (req, res) => {
+  const rawPeerId = req.query.peerId;
+  if (!rawPeerId) {
+    return res.status(400).json({ error: 'Missing peerId' });
+  }
+  const peerId = String(rawPeerId).trim().toUpperCase();
+  const queued = peerMailbox.get(peerId) || [];
+  const messages = queued.map(item => item.packet);
+  peerMailbox.delete(peerId);
+  return res.json({ success: true, peerId, messages });
+});
+
 app.use(express.static(__dirname));
 
 // Client-side fallback to index.html
@@ -168,7 +243,6 @@ const wss = new WebSocketServer({ server: httpServer });
 const peers = new Map();
 // Room connections map: roomId -> Set of ws
 const rooms = new Map();
-const offlinePeerMessages = new Map();
 
 wss.on('connection', (ws) => {
   let boundPeerId = null;
@@ -196,14 +270,14 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'registered', peerId, success: true }));
 
         // 投递离线暂存给该用户的消息
-        if (offlinePeerMessages.has(peerId)) {
-          const queued = offlinePeerMessages.get(peerId) || [];
-          queued.forEach((packet) => {
+        if (peerMailbox.has(peerId)) {
+          const queued = peerMailbox.get(peerId) || [];
+          queued.forEach((item) => {
             if (ws.readyState === 1) {
-              ws.send(packet);
+              ws.send(item.packet);
             }
           });
-          offlinePeerMessages.delete(peerId);
+          peerMailbox.delete(peerId);
         }
       } else if (msg.type === 'join_room') {
         const { roomId, peerId } = msg;
@@ -224,24 +298,10 @@ wss.on('connection', (ws) => {
           fromPeerId,
           payload
         });
-        const targetSockets = peers.get(targetPeerId);
-        let delivered = false;
-        if (targetSockets && targetSockets.size > 0) {
-          targetSockets.forEach((s) => {
-            if (s.readyState === 1) {
-              s.send(packet);
-              delivered = true;
-            }
-          });
-        }
-        if (!delivered) {
-          if (!offlinePeerMessages.has(targetPeerId)) {
-            offlinePeerMessages.set(targetPeerId, []);
-          }
-          const list = offlinePeerMessages.get(targetPeerId);
-          list.push(packet);
-          if (list.length > 50) list.shift();
-        }
+
+        enqueuePeerMessage(targetPeerId, packet);
+        const delivered = deliverToPeerSockets(targetPeerId, packet);
+
         if (ws.readyState === 1) {
           ws.send(JSON.stringify({
             type: 'peer_sent_ack',

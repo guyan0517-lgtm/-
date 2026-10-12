@@ -1,13 +1,20 @@
 // 密友与多人跑团实时通信同步引擎
 (function() {
+  const SESSION_PEER_KEY = "session_peer_id_code";
   const PEER_ID_KEY = "my_peer_id_code";
   const PEER_FRIENDS_KEY = "my_peer_friends_list";
   const PENDING_REQUESTS_KEY = "pending_peer_outgoing";
 
-  let myPeerId = localStorage.getItem(PEER_ID_KEY);
+  let myPeerId = sessionStorage.getItem(SESSION_PEER_KEY);
   if (!myPeerId) {
-    myPeerId = generateRandomPeerCode();
-    localStorage.setItem(PEER_ID_KEY, myPeerId);
+    const savedLocal = localStorage.getItem(PEER_ID_KEY);
+    if (savedLocal) {
+      myPeerId = savedLocal;
+    } else {
+      myPeerId = generateRandomPeerCode();
+      localStorage.setItem(PEER_ID_KEY, myPeerId);
+    }
+    sessionStorage.setItem(SESSION_PEER_KEY, myPeerId);
   }
 
   function generateRandomPeerCode() {
@@ -21,16 +28,24 @@
 
   function regenerateMyPeerId() {
     myPeerId = generateRandomPeerCode();
+    sessionStorage.setItem(SESSION_PEER_KEY, myPeerId);
     localStorage.setItem(PEER_ID_KEY, myPeerId);
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "register", peerId: myPeerId }));
     }
+    fetch('/api/sync/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peerId: myPeerId })
+    }).catch(() => {});
     return myPeerId;
   }
 
   let ws = null;
   let isConnecting = false;
   let activeRooms = new Set();
+  const processedMessageKeys = new Set();
+  let pollIntervalTimer = null;
 
   function getMyNickname() {
     try {
@@ -54,7 +69,32 @@
     return "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg";
   }
 
+  function startHttpPolling() {
+    if (pollIntervalTimer) return;
+    pollHttpMessages();
+    pollIntervalTimer = setInterval(pollHttpMessages, 1500);
+  }
+
+  async function pollHttpMessages() {
+    if (!myPeerId) return;
+    try {
+      const res = await fetch(`/api/sync/poll?peerId=${encodeURIComponent(myPeerId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.messages)) {
+          for (const rawPacket of data.messages) {
+            try {
+              const parsed = typeof rawPacket === 'string' ? JSON.parse(rawPacket) : rawPacket;
+              handleIncoming(parsed);
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   function connect() {
+    startHttpPolling();
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
@@ -119,22 +159,36 @@
 
   function sendPeer(targetPeerId, payload) {
     if (!targetPeerId) return;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      connect();
-    }
     const cleanTarget = String(targetPeerId).trim().toUpperCase();
+    if (!payload.time) payload.time = Date.now();
     const packet = {
       type: "send_peer",
       targetPeerId: cleanTarget,
       fromPeerId: myPeerId,
       payload
     };
+
+    let sentViaWs = false;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(packet));
-    } else {
-      setTimeout(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(packet));
-      }, 1000);
+      try {
+        ws.send(JSON.stringify(packet));
+        sentViaWs = true;
+      } catch (_) {}
+    }
+
+    // 同时使用 HTTP 接口双重保底投递，确保不漏掉任何一条申请或消息
+    fetch('/api/sync/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetPeerId: cleanTarget,
+        fromPeerId: myPeerId,
+        payload
+      })
+    }).catch(() => {});
+
+    if (!sentViaWs) {
+      connect();
     }
   }
 
@@ -189,6 +243,14 @@
       const { fromPeerId, payload } = data;
       if (!payload) return;
 
+      const dedupeKey = `${fromPeerId}_${payload.action}_${payload.time || payload.message?.id || ''}_${payload.message?.timestamp || ''}`;
+      if (processedMessageKeys.has(dedupeKey)) return;
+      processedMessageKeys.add(dedupeKey);
+      if (processedMessageKeys.size > 200) {
+        const first = processedMessageKeys.values().next().value;
+        processedMessageKeys.delete(first);
+      }
+
       if (payload.action === "friend_request") {
         // 收到密友申请，弹出确认弹窗
         showPeerRequestModal(fromPeerId, payload.senderName, payload.senderAvatar);
@@ -229,6 +291,14 @@
       const { roomId, fromPeerId, payload } = data;
       if (!payload) return;
 
+      const dedupeKey = `room_${roomId}_${fromPeerId}_${payload.action}_${payload.time || payload.message?.id || ''}_${payload.message?.timestamp || ''}`;
+      if (processedMessageKeys.has(dedupeKey)) return;
+      processedMessageKeys.add(dedupeKey);
+      if (processedMessageKeys.size > 200) {
+        const first = processedMessageKeys.values().next().value;
+        processedMessageKeys.delete(first);
+      }
+
       if (payload.action === "room_chat_msg") {
         const { message, senderName, senderAvatar } = payload;
         await receiveRoomChatMessage(roomId, message, senderName, senderAvatar, fromPeerId);
@@ -237,6 +307,7 @@
   }
 
   async function showPeerRequestModal(fromPeerId, senderName, senderAvatar) {
+    showPeerNotice("收到来自 " + (senderName || fromPeerId) + " 的密友申请");
     const modal = document.getElementById("peer-request-modal");
     if (!modal) {
       const autoConfirm = confirm("收到来自 " + (senderName || fromPeerId) + " 的密友申请，是否同意连线？");

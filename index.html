@@ -3076,70 +3076,6 @@
           </div>
         </div>
 
-        <!-- 密友联机弹窗 -->
-        <div class="modal" id="contact-peer-modal" style="display: none; z-index: 10000;">
-          <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">添加密友</span>
-              <button type="button" id="contact-peer-close-btn" onclick="closeContactModal('contact-peer-modal')" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
-            </div>
-            <div style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px;">
-              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px; background: var(--secondary-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;" onclick="copyMyPeerCode()">
-                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">我的专属密友码</label>
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                  <span id="my-peer-code-display" style="font-size: 18px; font-weight: 700; color: var(--accent-color); letter-spacing: 2px;">------</span>
-                  <div style="display: flex; gap: 6px;">
-                    <button type="button" class="moe-btn" id="refresh-my-peer-code-btn" onclick="event.stopPropagation(); refreshMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">换码</button>
-                    <button type="button" class="moe-btn" id="copy-my-peer-code-btn" onclick="event.stopPropagation(); copyMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">复制</button>
-                  </div>
-                </div>
-              </div>
-              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">对方密友码</label>
-                <input type="text" id="peer-target-code-input" class="moe-input" placeholder="输入对方6位密友码..." style="height: 34px; font-size: 13px; text-transform: uppercase; border-radius: 6px;" />
-              </div>
-              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">备注昵称</label>
-                <input type="text" id="peer-target-name-input" class="moe-input" placeholder="输入密友昵称..." style="height: 32px; font-size: 12.5px; border-radius: 6px;" />
-              </div>
-              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
-                <select id="peer-target-group-select" class="moe-input" style="height: 34px; font-size: 12.5px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);"></select>
-              </div>
-            </div>
-            <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-              <button type="button" class="moe-btn" onclick="closeContactModal('contact-peer-modal')" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
-              <button type="button" class="moe-btn" id="confirm-add-peer-btn" onclick="confirmAddPeerFriend()" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">申请</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 密友申请确认弹窗 -->
-        <div class="modal" id="peer-request-modal" style="display: none; z-index: 10001;">
-          <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">好友申请</span>
-              <button type="button" id="peer-request-close-btn" onclick="closeContactModal('peer-request-modal')" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
-            </div>
-            <div style="flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-              <img id="peer-request-avatar" src="https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color);" />
-              <div style="text-align: center;">
-                <div id="peer-request-name" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">密友</div>
-                <div id="peer-request-code" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">密友码: ------</div>
-              </div>
-              <div style="font-size: 12.5px; color: var(--text-secondary); text-align: center; line-height: 1.4;">对方请求添加你为密友，是否同意建立连线？</div>
-              <div class="form-group" style="width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
-                <select id="peer-request-group-select" class="moe-input" style="height: 34px; font-size: 12.5px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);"></select>
-              </div>
-            </div>
-            <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-              <button type="button" class="moe-btn" id="peer-request-reject-btn" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">拒绝</button>
-              <button type="button" class="moe-btn" id="peer-request-accept-btn" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">确定</button>
-            </div>
-          </div>
-        </div>
-
         <!-- 底部导航栏 -->
         <div id="chat-list-bottom-nav">
           <div class="nav-item active" data-view="messages-view">
@@ -3155,6 +3091,70 @@
 
           <div class="nav-item" data-view="favorites-view">
             <span>收藏</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 密友联机弹窗 -->
+      <div class="modal" id="contact-peer-modal" style="display: none; z-index: 10000;">
+        <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+            <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">添加密友</span>
+            <button type="button" id="contact-peer-close-btn" onclick="closeContactModal('contact-peer-modal')" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
+          </div>
+          <div style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px;">
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px; background: var(--secondary-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;" onclick="copyMyPeerCode()">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">我的专属密友码</label>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <span id="my-peer-code-display" style="font-size: 18px; font-weight: 700; color: var(--accent-color); letter-spacing: 2px;">------</span>
+                <div style="display: flex; gap: 6px;">
+                  <button type="button" class="moe-btn" id="refresh-my-peer-code-btn" onclick="event.stopPropagation(); refreshMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">换码</button>
+                  <button type="button" class="moe-btn" id="copy-my-peer-code-btn" onclick="event.stopPropagation(); copyMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">复制</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">对方密友码</label>
+              <input type="text" id="peer-target-code-input" class="moe-input" placeholder="输入对方6位密友码..." style="height: 34px; font-size: 13px; text-transform: uppercase; border-radius: 6px;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">备注昵称</label>
+              <input type="text" id="peer-target-name-input" class="moe-input" placeholder="输入密友昵称..." style="height: 32px; font-size: 12.5px; border-radius: 6px;" />
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
+              <select id="peer-target-group-select" class="moe-input" style="height: 34px; font-size: 12.5px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);"></select>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+            <button type="button" class="moe-btn" onclick="closeContactModal('contact-peer-modal')" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
+            <button type="button" class="moe-btn" id="confirm-add-peer-btn" onclick="confirmAddPeerFriend()" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">申请</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 密友申请确认弹窗 -->
+      <div class="modal" id="peer-request-modal" style="display: none; z-index: 10001;">
+        <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+            <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">好友申请</span>
+            <button type="button" id="peer-request-close-btn" onclick="closeContactModal('peer-request-modal')" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
+          </div>
+          <div style="flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+            <img id="peer-request-avatar" src="https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color);" />
+            <div style="text-align: center;">
+              <div id="peer-request-name" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">密友</div>
+              <div id="peer-request-code" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">密友码: ------</div>
+            </div>
+            <div style="font-size: 12.5px; color: var(--text-secondary); text-align: center; line-height: 1.4;">对方请求添加你为密友，是否同意建立连线？</div>
+            <div class="form-group" style="width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
+              <select id="peer-request-group-select" class="moe-input" style="height: 34px; font-size: 12.5px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);"></select>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+            <button type="button" class="moe-btn" id="peer-request-reject-btn" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">拒绝</button>
+            <button type="button" class="moe-btn" id="peer-request-accept-btn" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">确定</button>
           </div>
         </div>
       </div>
@@ -24265,7 +24265,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (!code) {
-            alert("请输入对方的密友码");
+            if (window.syncManager && window.syncManager.showPeerNotice) {
+              window.syncManager.showPeerNotice("请输入对方的密友码");
+            } else {
+              alert("请输入对方的密友码");
+            }
             return;
           }
 
@@ -24276,12 +24280,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const res = await window.syncManager.sendFriendRequest(code, name, selectedGroupId);
           if (!res.success) {
-            alert(res.error || "发送申请失败");
+            if (window.syncManager && window.syncManager.showPeerNotice) {
+              window.syncManager.showPeerNotice(res.error || "发送申请失败");
+            } else {
+              alert(res.error || "发送申请失败");
+            }
             return;
           }
 
           closeContactModal("contact-peer-modal");
-          alert("好友申请已发送，等待对方确认");
+          if (window.syncManager && window.syncManager.showPeerNotice) {
+            window.syncManager.showPeerNotice("好友申请已发送，等待对方确认");
+          }
         };
 
         window.confirmAddNewFriend = async function() {
