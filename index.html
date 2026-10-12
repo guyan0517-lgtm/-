@@ -75,8 +75,6 @@
     <script src="module-manager.js" defer></script>
     <script src="inventory-manager.js" defer></script>
     <script src="combat-engine.js" defer></script>
-    <script src="prompt-manager.js" defer></script>
-    <script src="sync-manager.js" defer></script>
 
     <style></style>
 
@@ -1970,19 +1968,6 @@
               >
                 🧨 初始化 (清空全部数据)
               </button>
-              <div class="moe-divider"></div>
-              <button
-                type="button"
-                class="moe-btn-secondary"
-                id="open-prompt-manager-btn"
-                style="
-                  margin-top: 10px;
-                  width: 100%;
-                  font-weight: bold;
-                "
-              >
-                提示
-              </button>
             </div>
           </div>
 
@@ -2049,36 +2034,6 @@
           accept=".json,application/json,text/plain,application/octet-stream,*/*"
           hidden
         />
-      </div>
-
-      <div id="prompt-manager-modal" class="modal">
-        <div class="modal-content" style="max-width: 680px; width: 94%; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; background: var(--card-bg, #fff); border-radius: 16px; border: 1px solid var(--border-color);">
-          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-color); background: var(--secondary-bg);">
-            <span style="font-weight: 700; font-size: 15px; color: var(--text-primary);">提示</span>
-            <button type="button" class="moe-btn-small" id="prompt-manager-close-btn" style="width: 28px; height: 28px; padding: 0; min-height: 28px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; border-radius: 50%;">×</button>
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--border-color); background: var(--card-bg);">
-            <div style="display: flex; gap: 8px;">
-              <button type="button" class="moe-btn-small" id="prompt-tab-single-btn" style="height: 30px; padding: 0 14px; font-weight: 600;">私聊</button>
-              <button type="button" class="moe-btn-small moe-btn-secondary" id="prompt-tab-group-btn" style="height: 30px; padding: 0 14px; font-weight: 600;">群聊</button>
-            </div>
-            <button type="button" class="moe-btn-small" id="prompt-add-block-btn" style="height: 30px; padding: 0 12px; font-weight: 600;">添加</button>
-          </div>
-          <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px;">
-            <div id="prompt-blocks-container" style="display: flex; flex-direction: column; gap: 10px;"></div>
-            <div class="form-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-weight: 600; font-size: 13px; color: var(--text-primary);">预览</span>
-                <button type="button" class="moe-btn-small" id="prompt-copy-preview-btn" style="height: 26px; padding: 0 10px; font-size: 12px;">复制</button>
-              </div>
-              <textarea id="prompt-full-preview-box" class="moe-input" style="width: 100%; height: 200px; font-size: 11.5px; font-family: monospace; resize: vertical; line-height: 1.5; white-space: pre-wrap; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px;" readonly></textarea>
-            </div>
-          </div>
-          <div style="display: flex; justify-content: flex-end; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border-color); background: var(--secondary-bg);">
-            <button type="button" class="moe-btn-secondary" id="prompt-reset-btn" style="height: 34px; padding: 0 16px; font-size: 13px;">重置</button>
-            <button type="button" class="moe-btn" id="prompt-save-btn" style="height: 34px; padding: 0 20px; font-size: 13px; font-weight: 600;">保存</button>
-          </div>
-        </div>
       </div>
 
       <div id="chat-list-screen" class="screen">
@@ -2154,7 +2109,6 @@
                 <button type="button" id="add-choice-friend-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加好友</button>
                 <button type="button" id="add-choice-dice-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加骰子</button>
                 <button type="button" id="add-choice-status-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加系统状态栏</button>
-                <button type="button" id="add-choice-peer-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加密友</button>
               </div>
             </div>
           </div>
@@ -3091,70 +3045,6 @@
 
           <div class="nav-item" data-view="favorites-view">
             <span>收藏</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 密友联机弹窗 -->
-      <div class="modal" id="contact-peer-modal" style="display: none; z-index: 10000;">
-        <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-            <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">添加密友</span>
-            <button type="button" id="contact-peer-close-btn" onclick="closeContactModal('contact-peer-modal')" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
-          </div>
-          <div style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px;">
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px; background: var(--secondary-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;" onclick="copyMyPeerCode()">
-              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">我的专属密友码</label>
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                <span id="my-peer-code-display" style="font-size: 18px; font-weight: 700; color: var(--accent-color); letter-spacing: 2px;">------</span>
-                <div style="display: flex; gap: 6px;">
-                  <button type="button" class="moe-btn" id="refresh-my-peer-code-btn" onclick="event.stopPropagation(); refreshMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">换码</button>
-                  <button type="button" class="moe-btn" id="copy-my-peer-code-btn" onclick="event.stopPropagation(); copyMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">复制</button>
-                </div>
-              </div>
-            </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
-              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">对方密友码</label>
-              <input type="text" id="peer-target-code-input" class="moe-input" placeholder="输入对方6位密友码..." style="height: 34px; font-size: 13px; text-transform: uppercase; border-radius: 6px;" />
-            </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
-              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">备注昵称</label>
-              <input type="text" id="peer-target-name-input" class="moe-input" placeholder="输入密友昵称..." style="height: 32px; font-size: 12.5px; border-radius: 6px;" />
-            </div>
-            <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
-              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
-              <select id="peer-target-group-select" class="moe-input" style="height: 34px; font-size: 12.5px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);"></select>
-            </div>
-          </div>
-          <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-            <button type="button" class="moe-btn" onclick="closeContactModal('contact-peer-modal')" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
-            <button type="button" class="moe-btn" id="confirm-add-peer-btn" onclick="confirmAddPeerFriend()" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">申请</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 密友申请确认弹窗 -->
-      <div class="modal" id="peer-request-modal" style="display: none; z-index: 10001;">
-        <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-            <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">好友申请</span>
-            <button type="button" id="peer-request-close-btn" onclick="closeContactModal('peer-request-modal')" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
-          </div>
-          <div style="flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-            <img id="peer-request-avatar" src="https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color);" />
-            <div style="text-align: center;">
-              <div id="peer-request-name" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">密友</div>
-              <div id="peer-request-code" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">密友码: ------</div>
-            </div>
-            <div style="font-size: 12.5px; color: var(--text-secondary); text-align: center; line-height: 1.4;">对方请求添加你为密友，是否同意建立连线？</div>
-            <div class="form-group" style="width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
-              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
-              <select id="peer-request-group-select" class="moe-input" style="height: 34px; font-size: 12.5px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);"></select>
-            </div>
-          </div>
-          <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-            <button type="button" class="moe-btn" id="peer-request-reject-btn" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">拒绝</button>
-            <button type="button" class="moe-btn" id="peer-request-accept-btn" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">确定</button>
           </div>
         </div>
       </div>
@@ -8368,7 +8258,6 @@
           <button type="button" class="moe-btn" id="add-choice-friend-btn" style="width: 100%;">好友</button>
           <button type="button" class="moe-btn-secondary" id="add-choice-dice-btn" style="width: 100%;">骰子</button>
           <button type="button" class="moe-btn-secondary" id="add-choice-status-btn" style="width: 100%;">系统状态栏</button>
-          <button type="button" class="moe-btn-secondary" id="add-choice-peer-modal-btn" style="width: 100%;">添加密友</button>
         </div>
         <div class="modal-footer" style="padding: 8px;">
           <button type="button" class="cancel" id="cancel-add-choice-btn" style="width: 100%; height: 32px; padding: 4px; font-size: 13px;">取消</button>
@@ -22398,10 +22287,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   `2. 真相与全局背景的判断：整个模组的全局核心真相与总纲带团全程有用，应当保持开启；而如果是某个特定小章节、小故事的局部真相，带完该小故事并进入下一个小故事后如果已经没有用处，可以关闭。\n` +
                   `3. 角色与猫人设的动态判断：当前场景若无猫或某NPC出现、模组本章节内容也无需该角色出场，可以将其人设章节关闭；后续章节若发现有猫或该角色出场互动，应在进入新章节时及时开启。\n` +
                   `4. 已探索完的旧章节处理：当某个小章节或场景已带完且后续完全不再需要其线索时，可将其放入 closeChapterIds 中关闭。若尚不确定是否还有用，则保留开启。\n` +
-                  `5. 输出管理指令对象：若当前回合需要调整章节，请将其作为与对话文本平级的独立对象放入顶层 "chatResponse" 数组中：\n` +
-                  `   {"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\n` +
-                  `   普通对话与描写仍使用 {"type": "text", "content": "剧情正文"} 气泡输出，切勿将指令代码混入普通气泡文本中。\n` +
-                  `6. 换章触发点：当当前章节剧情已真正进行到末尾，并且玩家明确表示同意推进时输出。\n` +
+                  `5. 显式输出管理指令代码：在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
+                  `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\`\n` +
+                  `6. 换章触发点：当当前章节剧情已真正进行到末尾，并且玩家明确表示同意推进时，输出上述指令代码。\n` +
                   `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其开关权限，绝不可关闭或覆盖它们。\n\n`;
               } else if (switchMode === 'semi') {
                 block += `## 模组章节半自动切换与信息按需管理规则\n` +
@@ -22412,9 +22300,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   `2. 真相与全局背景的判断：整个模组的全局核心真相与总纲带团全程有用，应提请保持开启；如果是特定小章节的局部真相，带完并进入下一小故事后不再有用，可提请关闭。\n` +
                   `3. 角色与猫人设的动态判断：当前场景若无猫或NPC出现且无需出场，可提请关闭；后续章节若有猫或角色出现，应在新章节提请开启。\n` +
                   `4. 已探索完的旧章节处理：微观小事件或场景探索完毕且后续不再需要时，可提请关闭。\n` +
-                  `5. 输出提请指令对象：若当前章节剧情带完并提请换章，请将其作为与对话文本平级的独立对象放入顶层 "chatResponse" 数组中：\n` +
-                  `   {"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\n` +
-                  `   普通对话与描写仍使用 {"type": "text", "content": "剧情正文"} 气泡输出，切勿将指令代码混入普通气泡文本中。\n` +
+                  `5. 显式输出提请指令代码：在回复正文最后完整输出以下JSON指令代码：\n` +
+                  `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\`\n` +
                   `6. 换章触发点：当当前章节剧情已带完，并且玩家明确表示同意推进时提请切换。系统会展示继续按钮供玩家确认。\n` +
                   `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其提请关闭权限，不可覆盖。\n\n`;
               }
@@ -24190,110 +24077,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (personaInput) personaInput.value = "";
           if (avatarInput) avatarInput.value = "";
           openContactModal("contact-add-friend-modal");
-        };
-
-        window.openPeerModal = async function() {
-          const codeDisplay = document.getElementById("my-peer-code-display");
-          if (codeDisplay && window.syncManager) {
-            codeDisplay.textContent = window.syncManager.myPeerId || "------";
-          }
-          const targetCodeInput = document.getElementById("peer-target-code-input");
-          const targetNameInput = document.getElementById("peer-target-name-input");
-          if (targetCodeInput) targetCodeInput.value = "";
-          if (targetNameInput) targetNameInput.value = "";
-
-          const groupSelect = document.getElementById("peer-target-group-select");
-          if (groupSelect && window.db && window.db.qzoneGroups) {
-            groupSelect.innerHTML = "";
-            try {
-              const groups = await window.db.qzoneGroups.toArray();
-              groups.sort((a, b) => (a.order || 0) - (b.order || 0));
-              groups.forEach(g => {
-                const opt = document.createElement("option");
-                opt.value = g.id;
-                opt.textContent = g.name;
-                groupSelect.appendChild(opt);
-              });
-            } catch (e) {}
-          }
-
-          openContactModal("contact-peer-modal");
-          copyMyPeerCode(false);
-        };
-
-        window.copyMyPeerCode = async function(showFeedback = true) {
-          const code = (window.syncManager && window.syncManager.myPeerId) ? window.syncManager.myPeerId : "";
-          if (!code) return;
-          try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              await navigator.clipboard.writeText(code);
-            } else {
-              const ta = document.createElement("textarea");
-              ta.value = code;
-              ta.style.position = "fixed";
-              ta.style.opacity = "0";
-              document.body.appendChild(ta);
-              ta.select();
-              document.execCommand("copy");
-              ta.remove();
-            }
-            const btn = document.getElementById("copy-my-peer-code-btn");
-            if (btn && showFeedback) {
-              const prev = btn.textContent;
-              btn.textContent = "已复制";
-              setTimeout(() => { btn.textContent = prev; }, 1500);
-            }
-          } catch (e) {}
-        };
-
-        window.refreshMyPeerCode = function() {
-          if (window.syncManager && typeof window.syncManager.regenerateMyPeerId === "function") {
-            const newCode = window.syncManager.regenerateMyPeerId();
-            const codeDisplay = document.getElementById("my-peer-code-display");
-            if (codeDisplay) codeDisplay.textContent = newCode;
-            copyMyPeerCode(true);
-          }
-        };
-
-        window.confirmAddPeerFriend = async function() {
-          const targetCodeInput = document.getElementById("peer-target-code-input");
-          const targetNameInput = document.getElementById("peer-target-name-input");
-          const groupSelect = document.getElementById("peer-target-group-select");
-          const code = targetCodeInput ? targetCodeInput.value.trim().toUpperCase() : "";
-          const name = targetNameInput ? targetNameInput.value.trim() : "";
-          let selectedGroupId = groupSelect ? groupSelect.value : null;
-          if (selectedGroupId && !isNaN(selectedGroupId)) {
-            selectedGroupId = Number(selectedGroupId);
-          }
-
-          if (!code) {
-            if (window.syncManager && window.syncManager.showPeerNotice) {
-              window.syncManager.showPeerNotice("请输入对方的密友码");
-            } else {
-              alert("请输入对方的密友码");
-            }
-            return;
-          }
-
-          if (!window.syncManager) {
-            alert("同步引擎初始化中，请稍后再试");
-            return;
-          }
-
-          const res = await window.syncManager.sendFriendRequest(code, name, selectedGroupId);
-          if (!res.success) {
-            if (window.syncManager && window.syncManager.showPeerNotice) {
-              window.syncManager.showPeerNotice(res.error || "发送申请失败");
-            } else {
-              alert(res.error || "发送申请失败");
-            }
-            return;
-          }
-
-          closeContactModal("contact-peer-modal");
-          if (window.syncManager && window.syncManager.showPeerNotice) {
-            window.syncManager.showPeerNotice("好友申请已发送，等待对方确认");
-          }
         };
 
         window.confirmAddNewFriend = async function() {
@@ -27773,9 +27556,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             for (const r of results) {
               const textBefore = trimmedContent.substring(lastPos, r.start)
                 .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-              const cleanBefore = textBefore.replace(/^[\[\]\{\}",:\s]+|[\[\]\{\}",:\s]+$/g, "").trim();
-              const isJunkJson = /^[\s\[\]\{\}",:;\\]+$/.test(cleanBefore) || /^(?:\}\s*\]\s*\}|\]\s*\}|\}\s*\]|\]|\}|\{\s*"chatResponse"\s*:?|chatResponse\s*:?)+$/i.test(cleanBefore);
-              if (cleanBefore && !isJunkJson) {
+              const cleanBefore = textBefore.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
+              if (cleanBefore) {
                 finalItems.push({ type: "text", content: cleanBefore });
               }
               finalItems.push(r.item);
@@ -27783,9 +27565,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
             const textAfter = trimmedContent.substring(lastPos)
                 .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-            const cleanAfter = textAfter.replace(/^[\[\]\{\}",:\s]+|[\[\]\{\}",:\s]+$/g, "").trim();
-            const isJunkJsonAfter = /^[\s\[\]\{\}",:;\\]+$/.test(cleanAfter) || /^(?:\}\s*\]\s*\}|\]\s*\}|\}\s*\]|\]|\}|\{\s*"chatResponse"\s*:?|chatResponse\s*:?)+$/i.test(cleanAfter);
-            if (cleanAfter && !isJunkJsonAfter) {
+            const cleanAfter = textAfter.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
+            if (cleanAfter) {
               finalItems.push({ type: "text", content: cleanAfter });
             }
             return finalItems;
@@ -32631,15 +32412,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 把 openChat 函数挂载到全局 window 对象上
           window.openChat = openChat;
 
-          if (chat.isGroup && window.syncManager) {
-            window.syncManager.joinRoom(chat.id);
-          }
-
           renderChatInterface(chat.id);
           showScreen("chat-interface-screen");
-          if (window.syncManager && typeof window.syncManager.applyPeerChatInterfaceConstraints === "function") {
-            window.syncManager.applyPeerChatInterfaceConstraints(chat);
-          }
           if (typeof window.updateListenTogetherIconProxy === "function") {
             window.updateListenTogetherIconProxy(state.activeChatId);
           }
@@ -37371,11 +37145,6 @@ ${recentHistoryText}
           state.chats[String(chat.id)] = chat;
           state.chats[chatId] = chat;
 
-          // 密友聊天为真人联机，绝对不调用 AI 接口
-          if (chat.isPeerChat || (chat.id && String(chat.id).startsWith("peer_"))) {
-            return;
-          }
-
           // 骰子角色的消息由本地规则生成，不调用 AI 接口
           if (!chat.isGroup && chat.roleType === "dice") {
             return;
@@ -38841,23 +38610,6 @@ ${recentHistoryText}
                 : membersList;
 
               const myNickname = chat.settings.myNickname || "我";
-
-              // 识别群内的密友真人玩家
-              const peerMembers = (chat.members || []).filter(
-                (m) => m.isPeerChat || (m.id && String(m.id).startsWith("peer_")) || (state.chats[m.id] && state.chats[m.id].isPeerChat)
-              );
-              let multiPlayerPromptBlock = "";
-              let prohibitedNamesList = `"${myNickname}"`;
-              if (peerMembers.length > 0) {
-                const peerNames = peerMembers.map(p => p.groupNickname || p.originalName || p.name).join("、");
-                prohibitedNamesList += `以及密友真人玩家【${peerNames}】`;
-                multiPlayerPromptBlock = `
-# 【多人跑团真人玩家特别规范】
-1. 本群聊由两名真实人类玩家共同参与：玩家一【${myNickname}】，玩家二密友【${peerNames}】。
-2. 绝对禁令：AI守秘人KP以及NPC角色绝对禁止扮演或代发两名真实人类玩家（${myNickname} 与 ${peerNames}）的任何发言或动作，你必须且只能以守秘人KP或NPC身份进行主持、描写与回应！
-`;
-              }
-
               // 1. 获取群公告内容
               const announcement = chat.settings.groupAnnouncement || "";
               let announcementContext = "";
@@ -38875,8 +38627,8 @@ ${recentHistoryText}
               // updated by lrq 251027
               systemPrompt = `
 # 【第一大类】你可以使用的操作指令
-你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 ${prohibitedNamesList} 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。${multiPlayerPromptBlock}
-
+你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
+${isGroupThinkingActive ? `\n# 【思维链填写规范与顶级字段定义】\n1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将所有思考推演集中完整写入顶层唯一的 "thinking" 字段中。\n3. 绝对禁止在具体对象内部包含 thinking 字段：下方的 chatResponse 数组中各个动作、道具、状态栏或文本消息对象内部绝不允许夹带 thinking 字段！\n4. 绝对禁止外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字，必须严格包裹在顶层 "thinking" 字段中。\n` : ""}
 ## 标准输出格式示例:
 ${isGroupThinkingActive ? `{
   "thinking": "在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。",
@@ -38944,38 +38696,6 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
 
 现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`;
 
-              if (window.promptManager && typeof window.promptManager.renderGroupPrompt === "function") {
-                systemPrompt = window.promptManager.renderGroupPrompt(chat, {
-                  myNickname,
-                  fullMembersList,
-                  systemStatusContext,
-                  statusSenderName,
-                  templateFieldLines,
-                  announcementContext,
-                  summaryContext,
-                  thoughtChainPromptBlock,
-                  sharedContext,
-                  stickerContext,
-                  linkedMemoryContext,
-                  moduleChaptersPromptBlock,
-                  worldBookContent,
-                  mapPromptBlock,
-                  dicePromptBlock,
-                  inventoryPromptBlock,
-                  combatPromptBlock: (typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""),
-                  currentTime,
-                  isCognitionEnabled,
-                  isGroupThinkingActive,
-                  isGroupMusicAllowed,
-                  musicInstruction: (isGroupMusicAllowed && typeof window.formatAiMusicInstruction === "function") ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "",
-                  moduleImageInstruction: (chat.loadModuleImages && chat.activeModuleId) ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : "",
-                  novelAiInstruction: (localStorage.getItem("novelai-enabled") === "true") ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : "",
-                  prohibitedNamesList,
-                  multiPlayerPromptBlock,
-                  defaultPrompt: systemPrompt
-                });
-              }
-
               messagesPayload = historySlice
                 .map((msg, index) => {
                   const effectiveContent = (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") ? msg.optimizedContent : msg.content;
@@ -38988,14 +38708,8 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                     return { role: "system", content: effectiveContent };
                   }
 
-                  // 中文括号场外对白过滤：当真人玩家消息仅且仅有最外层被中文括号包裹时，AI不可见
-                  if (msg.role !== "assistant" && typeof effectiveContent === "string") {
-                    const trimmed = effectiveContent.trim();
-                    if (trimmed.startsWith("（") && trimmed.endsWith("）") && trimmed.length >= 2) {
-                      return null;
-                    }
-                  }
-
+                  if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly || msg.isKeeperForcedDraw || msg.isForcedDraw || msg.isSystemDraw) return null;
+                  if (typeof effectiveContent === "string" && (effectiveContent.includes("强制生图调用失败") || effectiveContent.includes("NovelAI生图提示词") || effectiveContent.includes("系统生图") || effectiveContent.includes("图片生成异常"))) return null;
                   if (msg.type === "narrative") {
                     // 将旁白包装成系统指令发送给AI，强调这是剧情/环境描述
                     return {
@@ -39481,29 +39195,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			- **可用表情包**:
 			${stickerContext || ""}
 			现在，请根据以上所有规则和下方的对话历史，继续进行对话。`;
-
-              if (window.promptManager && typeof window.promptManager.renderSinglePrompt === "function") {
-                const isSingleMusicAllowed = (((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false));
-                systemPrompt = window.promptManager.renderSinglePrompt(chat, {
-                  summaryContext,
-                  npcContext,
-                  systemStatusPromptBlock,
-                  dicePromptBlock,
-                  inventoryPromptBlock,
-                  worldBookContent,
-                  moduleChaptersPromptBlock,
-                  mapPromptBlock,
-                  thoughtChainPromptBlock,
-                  linkedMemoryContext,
-                  stickerContext,
-                  isSingleThinkingActive,
-                  isMusicAllowed: isSingleMusicAllowed,
-                  musicInstruction: (isSingleMusicAllowed && typeof window.formatAiMusicInstruction === "function") ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "",
-                  moduleImageInstruction: (chat.loadModuleImages && chat.activeModuleId) ? `- **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : "",
-                  novelAiInstruction: (localStorage.getItem("novelai-enabled") === "true") ? `- **【NovelAI真实图片分享】**: \`{"type": "naiimag", "prompt": "详细的英文描述词..."}\`` : "",
-                  defaultPrompt: systemPrompt
-                });
-              }
               // 构建单人聊天的messagesPayload
               messagesPayload = historySlice
                 .map((msg) => {
@@ -39519,14 +39210,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
                   if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly || msg.isKeeperForcedDraw || msg.isForcedDraw || msg.isSystemDraw) return null;
                   if (typeof effectiveContent === "string" && (effectiveContent.includes("强制生图调用失败") || effectiveContent.includes("NovelAI生图提示词") || effectiveContent.includes("系统生图") || effectiveContent.includes("图片生成异常"))) return null;
-
-                  // 中文括号场外对白过滤：当真人玩家消息仅且仅有最外层被中文括号包裹时，AI不可见
-                  if (msg.role !== "assistant" && typeof effectiveContent === "string") {
-                    const trimmed = effectiveContent.trim();
-                    if (trimmed.startsWith("（") && trimmed.endsWith("）") && trimmed.length >= 2) {
-                      return null;
-                    }
-                  }
 
                   if (msg.role === "assistant") {
                     let assistantMsgObject = { type: msg.type || "text" };
@@ -39939,7 +39622,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             // 守秘人前置提示词注入逻辑
             const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
             if (isKeeperAssigned) {
-              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是渲染气氛，让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来，详细具体的用**场景描写，细节描写，渲染气氛**，允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。你应确保一条气泡显示的内容最多不超过用户的一个屏幕。长度为2/3~3/4屏幕为最佳。\n需要分五个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。\n·每回合必须先进行完整思维链自检，填写到thinking代码格式中，若缺失视为严重违规，禁止生成。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
+              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百五十字，三百到四百五十为最佳；需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
               systemPrompt = keeperPrefixInstruction + systemPrompt;
             }
 
@@ -40010,21 +39693,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
             // 记录调试台日志（记录单次API调用的完整发送字段与完整返回字段）
             if (typeof recordChatDebugLog === "function") {
-              const curTrackSnap = (state.musicState && state.musicState.currentIndex > -1 && state.musicState.playlist)
-                ? state.musicState.playlist[state.musicState.currentIndex]
-                : null;
-              const aPlayerEl = document.getElementById("audio-player");
-              const isPlayingLive = !!(state.musicState && state.musicState.isPlaying && aPlayerEl && !aPlayerEl.paused && !curTrackSnap?.isKeepAlive);
               recordChatDebugLog(chatId, {
-                chatId: chatId,
                 systemPrompt: systemPrompt,
                 messages: messagesPayload,
                 allSentMessages: openAiMessages,
                 model: model,
                 temperature: state.apiConfig?.temperature || 0.8,
-                aiMusicEnabled: chat?.settings?.aiMusicEnabled !== false,
-                musicPlaying: isPlayingLive,
-                musicTrack: curTrackSnap ? { name: curTrackSnap.name, artist: curTrackSnap.artist } : null,
               }, {
                 rawContent: aiResponseContent,
                 reasoningContent: data?.choices?.[0]?.message?.reasoning_content || null,
@@ -40218,16 +39892,14 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               : ((chat.roleType === "system_status" || (chat.settings?.columns && Array.isArray(chat.settings.columns) && chat.settings.columns.length > 0)) && statusTriggerMode !== "none");
 
             if (hasStatusConfig) {
-              const statusSender = chat.isGroup
-                ? (statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : "系统状态")
-                : (chat.roleType === "system_status" ? chat.name : "系统状态");
+              const statusSender = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : (chat.name || "系统状态");
               let extractedFields = {};
               let removeIndices = [];
 
               for (let i = 0; i < messagesArray.length; i++) {
                 const item = messagesArray[i];
                 if (!item) continue;
-                const isExplicitStatusSender = (item.type === "system_status" || item.type === "status_bar" || item.name === "系统状态" || (chat.isGroup && statusMember && item.name === statusSender));
+                const isExplicitStatusSender = (item.name === statusSender || item.name === "系统状态" || item.type === "system_status" || item.type === "status_bar");
                 const txt = String(item.content || item.message || "").trim();
 
                 if (item.fields && typeof item.fields === "object") {
@@ -40246,25 +39918,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                       }
                     } catch (e) {}
                     const lines = txt.split(/\r?\n/);
-                    const nonStatusLines = [];
                     lines.forEach(l => {
                       const m = l.match(/^(?:\[?([^\]：:\n\r]+)\]?)[：:]\s*(.*)$/);
-                      if (m && (statusPrefixes.some(p => p && (m[1].includes(p) || p.includes(m[1]))) || /^(?:日期|时间|天气|幸运|好感度|地点)/.test(m[1]))) {
-                        extractedFields[m[1].trim()] = m[2].trim();
-                      } else if (l.trim()) {
-                        nonStatusLines.push(l);
-                      }
+                      if (m) extractedFields[m[1].trim()] = m[2].trim();
                     });
-                    if (nonStatusLines.length > 0 && item.type === "text") {
-                      const remainingText = nonStatusLines.join("\n").trim();
-                      item.content = remainingText;
-                      item.message = remainingText;
-                    } else {
-                      removeIndices.push(i);
-                    }
-                  } else {
-                    removeIndices.push(i);
                   }
+                  removeIndices.push(i);
                 } else if (isStatusBubble(item)) {
                   const lines = txt.split(/\r?\n/);
                   const nonStatusLines = [];
@@ -61008,23 +60667,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             return cleanDebugNewlines(JSON.stringify(sent, null, 2));
           }
 
-          const currentChatId = sent?.chatId || state.activeChatId;
-          const currentChat = (state.chats && currentChatId) ? state.chats[currentChatId] : null;
-          const isMusicSwitchOn = (sent && sent.aiMusicEnabled !== undefined)
-            ? (sent.aiMusicEnabled !== false)
-            : (currentChat ? (currentChat.settings?.aiMusicEnabled !== false) : true);
-
-          let targetUserIdx = -1;
-          for (let i = allMsgs.length - 1; i >= 0; i--) {
-            if (allMsgs[i].role === "user") {
-              targetUserIdx = i;
-              break;
-            }
-          }
-          if (targetUserIdx === -1 && allMsgs.length > 0) {
-            targetUserIdx = allMsgs.length - 1;
-          }
-
           let textBlocks = [];
           allMsgs.forEach((msg, idx) => {
             const role = msg.role || "user";
@@ -61037,37 +60679,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               roleTitle = "助手历史回复";
             } else {
               roleTitle = role;
-            }
-
-            let musicSuffix = "";
-            if (isMusicSwitchOn && idx === targetUserIdx) {
-              let isPlaying = false;
-              let track = null;
-              if (sent && typeof sent.musicPlaying === "boolean") {
-                isPlaying = sent.musicPlaying;
-                track = sent.musicTrack || null;
-              } else if (window.state && window.state.musicState) {
-                const mState = window.state.musicState;
-                const aPlayer = document.getElementById("audio-player");
-                const isPlayingLive = !!((aPlayer && !aPlayer.paused) || mState.isPlaying);
-                const curTrack = (mState.currentIndex > -1 && mState.playlist) ? mState.playlist[mState.currentIndex] : null;
-                if (curTrack && !curTrack.isKeepAlive && isPlayingLive) {
-                  isPlaying = true;
-                  track = curTrack;
-                }
-              }
-
-              if (isPlaying && track) {
-                const songName = (track.name || "").trim() || "未知歌曲";
-                let rawArtist = (track.artist || "").trim();
-                let artistName = rawArtist;
-                if (!artistName || artistName === "未知" || artistName === "未知歌手" || artistName === "未知艺术家" || artistName.toLowerCase() === "unknown") {
-                  artistName = "纯音乐";
-                }
-                musicSuffix = ` ▷正在播放音乐：${songName} ${artistName}`;
-              } else {
-                musicSuffix = ` ▷当前正在播放音乐:无`;
-              }
             }
 
             let rawContent = "";
@@ -61085,7 +60696,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               rawContent = String(msg.content || "");
             }
 
-            textBlocks.push(`=== 第 ${idx + 1} 块消息 · ${roleTitle}${musicSuffix} ===\n${cleanDebugNewlines(rawContent)}`);
+            textBlocks.push(`=== 第 ${idx + 1} 块消息 · ${roleTitle} ===\n${cleanDebugNewlines(rawContent)}`);
           });
 
           return textBlocks.join("\n\n");
@@ -61135,22 +60746,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               state.chatDebugLogs[chatId] = saved ? JSON.parse(saved) : [];
             } catch (_) {
               state.chatDebugLogs[chatId] = [];
-            }
-          }
-          if (sentPayload && typeof sentPayload === "object") {
-            if (!sentPayload.chatId) sentPayload.chatId = chatId;
-            const chatObj = state.chats?.[chatId];
-            if (sentPayload.aiMusicEnabled === undefined && chatObj) {
-              sentPayload.aiMusicEnabled = chatObj.settings?.aiMusicEnabled !== false;
-            }
-            if (sentPayload.musicPlaying === undefined) {
-              const curTrack = (state.musicState && state.musicState.currentIndex > -1 && state.musicState.playlist)
-                ? state.musicState.playlist[state.musicState.currentIndex]
-                : null;
-              const aPlayer = document.getElementById("audio-player");
-              const isPlaying = !!(state.musicState && state.musicState.isPlaying && aPlayer && !aPlayer.paused && !curTrack?.isKeepAlive);
-              sentPayload.musicPlaying = isPlaying;
-              sentPayload.musicTrack = curTrack ? { name: curTrack.name, artist: curTrack.artist } : null;
             }
           }
           state.chatDebugLogs[chatId].push({
@@ -74870,18 +74465,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             });
           }
 
-          const addChoicePeerBtn = document.getElementById("add-choice-peer-btn");
-          const addChoicePeerModalBtn = document.getElementById("add-choice-peer-modal-btn");
-          const handleOpenPeer = () => {
-            if (addContactDropdown) addContactDropdown.style.display = "none";
-            if (addContactChoiceModal) addContactChoiceModal.classList.remove("visible");
-            if (typeof window.openPeerModal === "function") {
-              window.openPeerModal();
-            }
-          };
-          if (addChoicePeerBtn) addChoicePeerBtn.addEventListener("click", handleOpenPeer);
-          if (addChoicePeerModalBtn) addChoicePeerModalBtn.addEventListener("click", handleOpenPeer);
-
           if (addChoiceDiceBtn) {
             addChoiceDiceBtn.addEventListener("click", () => {
               if (addContactDropdown) addContactDropdown.style.display = "none";
@@ -75843,49 +75426,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               await incrementMessageCount(state.activeChatId);
               await db.chats.put(chat);
               appendMessage(msg, chat);
-
-              // 密友与多人跑团实时通信同步广播
-              if (window.syncManager) {
-                if (chat.isPeerChat && chat.peerId) {
-                  window.syncManager.sendPeer(chat.peerId, {
-                    action: "peer_chat_msg",
-                    message: {
-                      id: msg.id || Date.now(),
-                      content: msg.content,
-                      timestamp: msg.timestamp,
-                      quote_reply: msg.quote || null
-                    },
-                    senderName: window.syncManager.getMyNickname(),
-                    senderAvatar: window.syncManager.getMyAvatar()
-                  });
-                  renderChatList();
-                  chatInput.value = "";
-                  chatInput.style.height = "auto";
-                  if (state.activeChatId !== null && state.activeChatId !== undefined) {
-                    window.chatDrafts = window.chatDrafts || {};
-                    window.chatDrafts[state.activeChatId] = "";
-                  }
-                  chatInput.focus();
-                  cancelReplyMode();
-                  return;
-                } else if (chat.isGroup) {
-                  window.syncManager.sendRoom(chat.id, {
-                    action: "room_chat_msg",
-                    message: {
-                      id: msg.id || Date.now(),
-                      role: "user",
-                      senderName: chat.settings?.myNickname || window.syncManager.getMyNickname(),
-                      senderAvatar: chat.settings?.myAvatar || window.syncManager.getMyAvatar(),
-                      content: msg.content,
-                      timestamp: msg.timestamp,
-                      quote_reply: msg.quote || null
-                    },
-                    senderName: chat.settings?.myNickname || window.syncManager.getMyNickname(),
-                    senderAvatar: chat.settings?.myAvatar || window.syncManager.getMyAvatar()
-                  });
-                }
-              }
-
               renderChatList();
               chatInput.value = "";
               chatInput.style.height = "auto";
@@ -77108,10 +76648,6 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               const aiInvBtn = document.getElementById("manage-ai-inventory-btn");
               if (aiInvBtn) {
                 aiInvBtn.style.display = (isGroup || isDiceOrStatus) ? "none" : "";
-              }
-
-              if (window.syncManager && typeof window.syncManager.applyPeerSettingsModalConstraints === "function") {
-                window.syncManager.applyPeerSettingsModalConstraints(chat);
               }
 
               // 计算总消息条数并更新显示

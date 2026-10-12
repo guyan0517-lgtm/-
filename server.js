@@ -1,10 +1,8 @@
 import express from 'express';
-import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PDFDocument } from 'pdf-lib';
 import { isEncrypted, decryptPDF } from '@pdfsmaller/pdf-decrypt';
-import { WebSocketServer } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -154,85 +152,6 @@ app.post('/api/proxy', async (req, res) => {
   }
 });
 
-// Peer connections map: peerId -> Set of ws
-const peers = new Map();
-// Room connections map: roomId -> Set of ws
-const rooms = new Map();
-// Mailbox for peer messages: peerId -> Array of { id, time, packet }
-const peerMailbox = new Map();
-
-function enqueuePeerMessage(targetPeerId, packet) {
-  if (!peerMailbox.has(targetPeerId)) {
-    peerMailbox.set(targetPeerId, []);
-  }
-  const queue = peerMailbox.get(targetPeerId);
-  const msgObj = {
-    id: 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
-    time: Date.now(),
-    packet
-  };
-  queue.push(msgObj);
-  if (queue.length > 100) queue.shift();
-  return msgObj;
-}
-
-function deliverToPeerSockets(targetPeerId, packet) {
-  const targetSockets = peers.get(targetPeerId);
-  let delivered = false;
-  if (targetSockets && targetSockets.size > 0) {
-    targetSockets.forEach((s) => {
-      if (s.readyState === 1) {
-        s.send(packet);
-        delivered = true;
-      }
-    });
-  }
-  return delivered;
-}
-
-// HTTP Sync endpoints for fallback and robust polling
-app.post('/api/sync/register', (req, res) => {
-  const { peerId: rawPeerId } = req.body || {};
-  if (!rawPeerId) {
-    return res.status(400).json({ error: 'Missing peerId' });
-  }
-  const peerId = String(rawPeerId).trim().toUpperCase();
-  const queued = peerMailbox.get(peerId) || [];
-  const messages = queued.map(item => item.packet);
-  peerMailbox.delete(peerId);
-  return res.json({ success: true, peerId, messages });
-});
-
-app.post('/api/sync/send', (req, res) => {
-  const { targetPeerId: rawTarget, fromPeerId: rawFrom, payload } = req.body || {};
-  if (!rawTarget || !payload) {
-    return res.status(400).json({ error: 'Missing targetPeerId or payload' });
-  }
-  const targetPeerId = String(rawTarget).trim().toUpperCase();
-  const fromPeerId = String(rawFrom || '').trim().toUpperCase();
-  const packet = JSON.stringify({
-    type: 'receive_peer',
-    fromPeerId,
-    payload
-  });
-
-  enqueuePeerMessage(targetPeerId, packet);
-  const delivered = deliverToPeerSockets(targetPeerId, packet);
-  return res.json({ success: true, targetPeerId, delivered });
-});
-
-app.get('/api/sync/poll', (req, res) => {
-  const rawPeerId = req.query.peerId;
-  if (!rawPeerId) {
-    return res.status(400).json({ error: 'Missing peerId' });
-  }
-  const peerId = String(rawPeerId).trim().toUpperCase();
-  const queued = peerMailbox.get(peerId) || [];
-  const messages = queued.map(item => item.packet);
-  peerMailbox.delete(peerId);
-  return res.json({ success: true, peerId, messages });
-});
-
 app.use(express.static(__dirname));
 
 // Client-side fallback to index.html
@@ -240,128 +159,7 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-const httpServer = http.createServer(app);
-const wss = new WebSocketServer({ server: httpServer });
-
-
-wss.on('connection', (ws) => {
-  let boundPeerId = null;
-  const boundRooms = new Set();
-
-  ws.isAlive = true;
-  ws.on('pong', () => {
-    ws.isAlive = true;
-  });
-
-  ws.on('message', (data) => {
-    try {
-      const msg = JSON.parse(data.toString());
-      if (!msg || !msg.type) return;
-
-      if (msg.type === 'register') {
-        const rawPeerId = msg.peerId;
-        if (!rawPeerId) return;
-        const peerId = String(rawPeerId).trim().toUpperCase();
-        boundPeerId = peerId;
-        if (!peers.has(peerId)) {
-          peers.set(peerId, new Set());
-        }
-        peers.get(peerId).add(ws);
-        ws.send(JSON.stringify({ type: 'registered', peerId, success: true }));
-
-        // 投递离线暂存给该用户的消息
-        if (peerMailbox.has(peerId)) {
-          const queued = peerMailbox.get(peerId) || [];
-          queued.forEach((item) => {
-            if (ws.readyState === 1) {
-              ws.send(item.packet);
-            }
-          });
-          peerMailbox.delete(peerId);
-        }
-      } else if (msg.type === 'join_room') {
-        const { roomId, peerId } = msg;
-        if (!roomId) return;
-        boundRooms.add(roomId);
-        if (!rooms.has(roomId)) {
-          rooms.set(roomId, new Set());
-        }
-        rooms.get(roomId).add(ws);
-        ws.send(JSON.stringify({ type: 'room_joined', roomId, success: true }));
-      } else if (msg.type === 'send_peer') {
-        const { targetPeerId: rawTarget, payload } = msg;
-        if (!rawTarget) return;
-        const targetPeerId = String(rawTarget).trim().toUpperCase();
-        const fromPeerId = String(boundPeerId || msg.fromPeerId || msg.peerId || '').trim().toUpperCase();
-        const packet = JSON.stringify({
-          type: 'receive_peer',
-          fromPeerId,
-          payload
-        });
-
-        enqueuePeerMessage(targetPeerId, packet);
-        const delivered = deliverToPeerSockets(targetPeerId, packet);
-
-        if (ws.readyState === 1) {
-          ws.send(JSON.stringify({
-            type: 'peer_sent_ack',
-            targetPeerId,
-            delivered,
-            action: payload && payload.action ? payload.action : ''
-          }));
-        }
-      } else if (msg.type === 'send_room') {
-        const { roomId, payload } = msg;
-        if (!roomId) return;
-        const roomSockets = rooms.get(roomId);
-        if (roomSockets && roomSockets.size > 0) {
-          const packet = JSON.stringify({
-            type: 'receive_room',
-            roomId,
-            fromPeerId: boundPeerId,
-            payload
-          });
-          roomSockets.forEach((s) => {
-            if (s !== ws && s.readyState === 1) {
-              s.send(packet);
-            }
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('[WS] 消息解析异常:', err.message);
-    }
-  });
-
-  ws.on('close', () => {
-    if (boundPeerId && peers.has(boundPeerId)) {
-      const set = peers.get(boundPeerId);
-      set.delete(ws);
-      if (set.size === 0) peers.delete(boundPeerId);
-    }
-    boundRooms.forEach((rId) => {
-      if (rooms.has(rId)) {
-        const set = rooms.get(rId);
-        set.delete(ws);
-        if (set.size === 0) rooms.delete(rId);
-      }
-    });
-  });
-});
-
-const heartbeatInterval = setInterval(() => {
-  wss.clients.forEach((ws) => {
-    if (ws.isAlive === false) return ws.terminate();
-    ws.isAlive = false;
-    ws.ping();
-  });
-}, 30000);
-
-wss.on('close', () => {
-  clearInterval(heartbeatInterval);
-});
-
-httpServer.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
 
