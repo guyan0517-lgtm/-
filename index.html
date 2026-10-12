@@ -22398,9 +22398,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   `2. 真相与全局背景的判断：整个模组的全局核心真相与总纲带团全程有用，应当保持开启；而如果是某个特定小章节、小故事的局部真相，带完该小故事并进入下一个小故事后如果已经没有用处，可以关闭。\n` +
                   `3. 角色与猫人设的动态判断：当前场景若无猫或某NPC出现、模组本章节内容也无需该角色出场，可以将其人设章节关闭；后续章节若发现有猫或该角色出场互动，应在进入新章节时及时开启。\n` +
                   `4. 已探索完的旧章节处理：当某个小章节或场景已带完且后续完全不再需要其线索时，可将其放入 closeChapterIds 中关闭。若尚不确定是否还有用，则保留开启。\n` +
-                  `5. 显式输出管理指令代码：在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
-                  `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\`\n` +
-                  `6. 换章触发点：当当前章节剧情已真正进行到末尾，并且玩家明确表示同意推进时，输出上述指令代码。\n` +
+                  `5. 输出管理指令对象：若当前回合需要调整章节，请将其作为与对话文本平级的独立对象放入顶层 "chatResponse" 数组中：\n` +
+                  `   {"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\n` +
+                  `   普通对话与描写仍使用 {"type": "text", "content": "剧情正文"} 气泡输出，切勿将指令代码混入普通气泡文本中。\n` +
+                  `6. 换章触发点：当当前章节剧情已真正进行到末尾，并且玩家明确表示同意推进时输出。\n` +
                   `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其开关权限，绝不可关闭或覆盖它们。\n\n`;
               } else if (switchMode === 'semi') {
                 block += `## 模组章节半自动切换与信息按需管理规则\n` +
@@ -22411,8 +22412,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   `2. 真相与全局背景的判断：整个模组的全局核心真相与总纲带团全程有用，应提请保持开启；如果是特定小章节的局部真相，带完并进入下一小故事后不再有用，可提请关闭。\n` +
                   `3. 角色与猫人设的动态判断：当前场景若无猫或NPC出现且无需出场，可提请关闭；后续章节若有猫或角色出现，应在新章节提请开启。\n` +
                   `4. 已探索完的旧章节处理：微观小事件或场景探索完毕且后续不再需要时，可提请关闭。\n` +
-                  `5. 显式输出提请指令代码：在回复正文最后完整输出以下JSON指令代码：\n` +
-                  `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\`\n` +
+                  `5. 输出提请指令对象：若当前章节剧情带完并提请换章，请将其作为与对话文本平级的独立对象放入顶层 "chatResponse" 数组中：\n` +
+                  `   {"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\n` +
+                  `   普通对话与描写仍使用 {"type": "text", "content": "剧情正文"} 气泡输出，切勿将指令代码混入普通气泡文本中。\n` +
                   `6. 换章触发点：当当前章节剧情已带完，并且玩家明确表示同意推进时提请切换。系统会展示继续按钮供玩家确认。\n` +
                   `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其提请关闭权限，不可覆盖。\n\n`;
               }
@@ -27771,8 +27773,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             for (const r of results) {
               const textBefore = trimmedContent.substring(lastPos, r.start)
                 .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-              const cleanBefore = textBefore.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
-              if (cleanBefore) {
+              const cleanBefore = textBefore.replace(/^[\[\]\{\}",:\s]+|[\[\]\{\}",:\s]+$/g, "").trim();
+              const isJunkJson = /^[\s\[\]\{\}",:;\\]+$/.test(cleanBefore) || /^(?:\}\s*\]\s*\}|\]\s*\}|\}\s*\]|\]|\}|\{\s*"chatResponse"\s*:?|chatResponse\s*:?)+$/i.test(cleanBefore);
+              if (cleanBefore && !isJunkJson) {
                 finalItems.push({ type: "text", content: cleanBefore });
               }
               finalItems.push(r.item);
@@ -27780,8 +27783,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
             const textAfter = trimmedContent.substring(lastPos)
                 .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-            const cleanAfter = textAfter.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
-            if (cleanAfter) {
+            const cleanAfter = textAfter.replace(/^[\[\]\{\}",:\s]+|[\[\]\{\}",:\s]+$/g, "").trim();
+            const isJunkJsonAfter = /^[\s\[\]\{\}",:;\\]+$/.test(cleanAfter) || /^(?:\}\s*\]\s*\}|\]\s*\}|\}\s*\]|\]|\}|\{\s*"chatResponse"\s*:?|chatResponse\s*:?)+$/i.test(cleanAfter);
+            if (cleanAfter && !isJunkJsonAfter) {
               finalItems.push({ type: "text", content: cleanAfter });
             }
             return finalItems;
@@ -38872,7 +38876,7 @@ ${recentHistoryText}
               systemPrompt = `
 # 【第一大类】你可以使用的操作指令
 你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 ${prohibitedNamesList} 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。${multiPlayerPromptBlock}
-${isGroupThinkingActive ? `\n# 【思维链填写规范与顶级字段定义】\n1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将所有思考推演集中完整写入顶层唯一的 "thinking" 字段中。\n3. 绝对禁止在具体对象内部包含 thinking 字段：下方的 chatResponse 数组中各个动作、道具、状态栏或文本消息对象内部绝不允许夹带 thinking 字段！\n4. 绝对禁止外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字，必须严格包裹在顶层 "thinking" 字段中。\n` : ""}
+
 ## 标准输出格式示例:
 ${isGroupThinkingActive ? `{
   "thinking": "在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。",
@@ -40214,14 +40218,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               : ((chat.roleType === "system_status" || (chat.settings?.columns && Array.isArray(chat.settings.columns) && chat.settings.columns.length > 0)) && statusTriggerMode !== "none");
 
             if (hasStatusConfig) {
-              const statusSender = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : (chat.name || "系统状态");
+              const statusSender = chat.isGroup
+                ? (statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : "系统状态")
+                : (chat.roleType === "system_status" ? chat.name : "系统状态");
               let extractedFields = {};
               let removeIndices = [];
 
               for (let i = 0; i < messagesArray.length; i++) {
                 const item = messagesArray[i];
                 if (!item) continue;
-                const isExplicitStatusSender = (item.name === statusSender || item.name === "系统状态" || item.type === "system_status" || item.type === "status_bar");
+                const isExplicitStatusSender = (item.type === "system_status" || item.type === "status_bar" || item.name === "系统状态" || (chat.isGroup && statusMember && item.name === statusSender));
                 const txt = String(item.content || item.message || "").trim();
 
                 if (item.fields && typeof item.fields === "object") {
@@ -40240,12 +40246,25 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                       }
                     } catch (e) {}
                     const lines = txt.split(/\r?\n/);
+                    const nonStatusLines = [];
                     lines.forEach(l => {
                       const m = l.match(/^(?:\[?([^\]：:\n\r]+)\]?)[：:]\s*(.*)$/);
-                      if (m) extractedFields[m[1].trim()] = m[2].trim();
+                      if (m && (statusPrefixes.some(p => p && (m[1].includes(p) || p.includes(m[1]))) || /^(?:日期|时间|天气|幸运|好感度|地点)/.test(m[1]))) {
+                        extractedFields[m[1].trim()] = m[2].trim();
+                      } else if (l.trim()) {
+                        nonStatusLines.push(l);
+                      }
                     });
+                    if (nonStatusLines.length > 0 && item.type === "text") {
+                      const remainingText = nonStatusLines.join("\n").trim();
+                      item.content = remainingText;
+                      item.message = remainingText;
+                    } else {
+                      removeIndices.push(i);
+                    }
+                  } else {
+                    removeIndices.push(i);
                   }
-                  removeIndices.push(i);
                 } else if (isStatusBubble(item)) {
                   const lines = txt.split(/\r?\n/);
                   const nonStatusLines = [];

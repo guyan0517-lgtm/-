@@ -1,19 +1,13 @@
 // 密友与多人跑团实时通信同步引擎
 (function() {
   const SESSION_PEER_KEY = "session_peer_id_code";
-  const PEER_ID_KEY = "my_peer_id_code";
   const PEER_FRIENDS_KEY = "my_peer_friends_list";
   const PENDING_REQUESTS_KEY = "pending_peer_outgoing";
+  const INCOMING_REQUESTS_KEY = "my_peer_incoming_requests";
 
   let myPeerId = sessionStorage.getItem(SESSION_PEER_KEY);
   if (!myPeerId) {
-    const savedLocal = localStorage.getItem(PEER_ID_KEY);
-    if (savedLocal) {
-      myPeerId = savedLocal;
-    } else {
-      myPeerId = generateRandomPeerCode();
-      localStorage.setItem(PEER_ID_KEY, myPeerId);
-    }
+    myPeerId = generateRandomPeerCode();
     sessionStorage.setItem(SESSION_PEER_KEY, myPeerId);
   }
 
@@ -29,7 +23,6 @@
   function regenerateMyPeerId() {
     myPeerId = generateRandomPeerCode();
     sessionStorage.setItem(SESSION_PEER_KEY, myPeerId);
-    localStorage.setItem(PEER_ID_KEY, myPeerId);
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "register", peerId: myPeerId }));
     }
@@ -39,6 +32,60 @@
       body: JSON.stringify({ peerId: myPeerId })
     }).catch(() => {});
     return myPeerId;
+  }
+
+  function getIncomingRequests() {
+    try {
+      const raw = localStorage.getItem(INCOMING_REQUESTS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveIncomingRequest(fromPeerId, senderName, senderAvatar) {
+    const list = getIncomingRequests();
+    const existingIdx = list.findIndex(r => r.peerId === fromPeerId);
+    const item = {
+      peerId: fromPeerId,
+      senderName: senderName || ("密友 " + fromPeerId),
+      senderAvatar: senderAvatar || "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg",
+      time: Date.now()
+    };
+    if (existingIdx >= 0) {
+      list[existingIdx] = item;
+    } else {
+      list.unshift(item);
+    }
+    localStorage.setItem(INCOMING_REQUESTS_KEY, JSON.stringify(list));
+    updatePeerInvitationBadge();
+    if (typeof renderPeerInvitationsList === "function") {
+      renderPeerInvitationsList();
+    }
+  }
+
+  function removeIncomingRequest(peerId) {
+    let list = getIncomingRequests();
+    list = list.filter(r => r.peerId !== peerId);
+    localStorage.setItem(INCOMING_REQUESTS_KEY, JSON.stringify(list));
+    updatePeerInvitationBadge();
+    if (typeof renderPeerInvitationsList === "function") {
+      renderPeerInvitationsList();
+    }
+  }
+
+  function updatePeerInvitationBadge() {
+    const list = getIncomingRequests();
+    const count = list.length;
+    const badges = document.querySelectorAll(".peer-invitation-badge-el");
+    badges.forEach(b => {
+      if (count > 0) {
+        b.textContent = String(count);
+        b.style.display = "flex";
+      } else {
+        b.style.display = "none";
+      }
+    });
   }
 
   let ws = null;

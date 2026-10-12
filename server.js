@@ -154,6 +154,10 @@ app.post('/api/proxy', async (req, res) => {
   }
 });
 
+// Peer connections map: peerId -> Set of ws
+const peers = new Map();
+// Room connections map: roomId -> Set of ws
+const rooms = new Map();
 // Mailbox for peer messages: peerId -> Array of { id, time, packet }
 const peerMailbox = new Map();
 
@@ -239,10 +243,6 @@ app.get('*', (req, res) => {
 const httpServer = http.createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
 
-// Peer connections map: peerId -> Set of ws
-const peers = new Map();
-// Room connections map: roomId -> Set of ws
-const rooms = new Map();
 
 wss.on('connection', (ws) => {
   let boundPeerId = null;
