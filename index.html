@@ -3088,7 +3088,10 @@
                 <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">我的专属密友码</label>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                   <span id="my-peer-code-display" style="font-size: 18px; font-weight: 700; color: var(--accent-color); letter-spacing: 2px;">------</span>
-                  <button type="button" class="moe-btn" id="copy-my-peer-code-btn" onclick="event.stopPropagation(); copyMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">复制</button>
+                  <div style="display: flex; gap: 6px;">
+                    <button type="button" class="moe-btn" id="refresh-my-peer-code-btn" onclick="event.stopPropagation(); refreshMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">换码</button>
+                    <button type="button" class="moe-btn" id="copy-my-peer-code-btn" onclick="event.stopPropagation(); copyMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">复制</button>
+                  </div>
                 </div>
               </div>
               <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
@@ -3106,7 +3109,33 @@
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
               <button type="button" class="moe-btn" onclick="closeContactModal('contact-peer-modal')" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
-              <button type="button" class="moe-btn" id="confirm-add-peer-btn" onclick="confirmAddPeerFriend()" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">连接</button>
+              <button type="button" class="moe-btn" id="confirm-add-peer-btn" onclick="confirmAddPeerFriend()" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">申请</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 密友申请确认弹窗 -->
+        <div class="modal" id="peer-request-modal" style="display: none; z-index: 10001;">
+          <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">好友申请</span>
+              <button type="button" id="peer-request-close-btn" onclick="closeContactModal('peer-request-modal')" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+              <img id="peer-request-avatar" src="https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color);" />
+              <div style="text-align: center;">
+                <div id="peer-request-name" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">密友</div>
+                <div id="peer-request-code" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">密友码: ------</div>
+              </div>
+              <div style="font-size: 12.5px; color: var(--text-secondary); text-align: center; line-height: 1.4;">对方请求添加你为密友，是否同意建立连线？</div>
+              <div class="form-group" style="width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
+                <select id="peer-request-group-select" class="moe-input" style="height: 34px; font-size: 12.5px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);"></select>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+              <button type="button" class="moe-btn" id="peer-request-reject-btn" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">拒绝</button>
+              <button type="button" class="moe-btn" id="peer-request-accept-btn" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">确定</button>
             </div>
           </div>
         </div>
@@ -24215,6 +24244,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           } catch (e) {}
         };
 
+        window.refreshMyPeerCode = function() {
+          if (window.syncManager && typeof window.syncManager.regenerateMyPeerId === "function") {
+            const newCode = window.syncManager.regenerateMyPeerId();
+            const codeDisplay = document.getElementById("my-peer-code-display");
+            if (codeDisplay) codeDisplay.textContent = newCode;
+            copyMyPeerCode(true);
+          }
+        };
+
         window.confirmAddPeerFriend = async function() {
           const targetCodeInput = document.getElementById("peer-target-code-input");
           const targetNameInput = document.getElementById("peer-target-name-input");
@@ -24236,19 +24274,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
 
-          const res = await window.syncManager.addFriendByCode(code, name, selectedGroupId);
+          const res = await window.syncManager.sendFriendRequest(code, name, selectedGroupId);
           if (!res.success) {
-            alert(res.error || "添加密友失败");
+            alert(res.error || "发送申请失败");
             return;
           }
 
           closeContactModal("contact-peer-modal");
-          await renderContactsScreen();
-          if (typeof renderChatList === "function") {
-            await renderChatList();
-          }
-          const tip = "已成功发起密友连接 " + (res.friend.nickname || code);
-          alert(tip);
+          alert("好友申请已发送，等待对方确认");
         };
 
         window.confirmAddNewFriend = async function() {
@@ -32590,6 +32623,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           renderChatInterface(chat.id);
           showScreen("chat-interface-screen");
+          if (window.syncManager && typeof window.syncManager.applyPeerChatInterfaceConstraints === "function") {
+            window.syncManager.applyPeerChatInterfaceConstraints(chat);
+          }
           if (typeof window.updateListenTogetherIconProxy === "function") {
             window.updateListenTogetherIconProxy(state.activeChatId);
           }
@@ -37320,6 +37356,11 @@ ${recentHistoryText}
           state.chats[chat.id] = chat;
           state.chats[String(chat.id)] = chat;
           state.chats[chatId] = chat;
+
+          // 密友聊天为真人联机，绝对不调用 AI 接口
+          if (chat.isPeerChat || (chat.id && String(chat.id).startsWith("peer_"))) {
+            return;
+          }
 
           // 骰子角色的消息由本地规则生成，不调用 AI 接口
           if (!chat.isGroup && chat.roleType === "dice") {
@@ -75788,6 +75829,16 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     senderName: window.syncManager.getMyNickname(),
                     senderAvatar: window.syncManager.getMyAvatar()
                   });
+                  renderChatList();
+                  chatInput.value = "";
+                  chatInput.style.height = "auto";
+                  if (state.activeChatId !== null && state.activeChatId !== undefined) {
+                    window.chatDrafts = window.chatDrafts || {};
+                    window.chatDrafts[state.activeChatId] = "";
+                  }
+                  chatInput.focus();
+                  cancelReplyMode();
+                  return;
                 } else if (chat.isGroup) {
                   window.syncManager.sendRoom(chat.id, {
                     action: "room_chat_msg",
@@ -77028,6 +77079,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               const aiInvBtn = document.getElementById("manage-ai-inventory-btn");
               if (aiInvBtn) {
                 aiInvBtn.style.display = (isGroup || isDiceOrStatus) ? "none" : "";
+              }
+
+              if (window.syncManager && typeof window.syncManager.applyPeerSettingsModalConstraints === "function") {
+                window.syncManager.applyPeerSettingsModalConstraints(chat);
               }
 
               // 计算总消息条数并更新显示
