@@ -22116,7 +22116,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
             let block = "\n# 【思维链填写规范与顶级字段代码定义】\n" +
               "【思维链代码结构与全局唯一性规则】：\n" +
-              "1. 字段代码定义：思维链必须且只能填写在最外层根JSON对象的顶级 \"thinking\" 字段中，其值必须为纯文本字符串。聊天系统会将此字段独立提取并渲染为“思考过程”折叠卡片展示给用户。\n" +
+              "1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 \"thinking\" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n" +
               "2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将意图分析、环境观察、角色心理推演、回复策略规划等所有思考内容，完整合并写入这一条全局顶级的 \"thinking\" 字段中。\n" +
               "3. 绝对禁止在具体对象内部包含 thinking 字段：绝对禁止在各个动作、道具、状态栏或文本消息对象内部各自夹带 thinking 字段！下方的 chatResponse 数组中，每一个具体消息对象只保留其自身字段，内部绝对不能出现 thinking 键。\n" +
               "4. 绝对禁止在外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格作为 \"thinking\" 字段的值包裹在 JSON 根对象内部。\n" +
@@ -38612,7 +38612,7 @@ ${recentHistoryText}
               systemPrompt = `
 # 【第一大类】你可以使用的操作指令
 你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
-${isGroupThinkingActive ? `\n# 【思维链填写规范与顶级字段定义】\n1. 字段代码定义：在最外层根JSON对象中，必须且只能有一个顶级的 "thinking" 键，其值必须为纯文本字符串。\n2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将所有思考推演集中完整写入顶层唯一的 "thinking" 字段中。\n3. 绝对禁止在具体对象内部包含 thinking 字段：下方的 chatResponse 数组中各个动作、道具、状态栏或文本消息对象内部绝不允许夹带 thinking 字段！\n4. 绝对禁止外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字，必须严格包裹在顶层 "thinking" 字段中。\n` : ""}
+${isGroupThinkingActive ? `\n# 【思维链填写规范与顶级字段定义】\n1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将所有思考推演集中完整写入顶层唯一的 "thinking" 字段中。\n3. 绝对禁止在具体对象内部包含 thinking 字段：下方的 chatResponse 数组中各个动作、道具、状态栏或文本消息对象内部绝不允许夹带 thinking 字段！\n4. 绝对禁止外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字，必须严格包裹在顶层 "thinking" 字段中。\n` : ""}
 ## 标准输出格式示例:
 ${isGroupThinkingActive ? `{
   "thinking": "在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。",
@@ -39099,7 +39099,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			该JSON对象【**必须**】包含三个顶级键: "thinking"、"chatResponse" 和 "innerVoice"。
 
 			**2. "thinking" 键:**
-			- **字段代码定义**: 顶级纯文本字符串。思维链必须且只能填写在最外层根JSON对象的顶级 "thinking" 字段中，系统会在聊天界面将此字段独立提取并渲染为“思考过程”折叠卡片展示给用户。你必须在此字段中写下一整条完整的深度推理思考过程，分点清晰展开（包含意图分析、角色心理推演、语气与策略拟定），绝对禁止填写 null。
+			- **字段位置与格式定义**: 根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡，绝对禁止填写 null。
 			- **从头到尾唯一一整条**: 从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！必须统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象（如 text、give_item、system_status 等）内部绝对禁止包含 thinking 字段，严禁分散填写！
 			- **绝对禁止外围裸露输出**: 绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格写入顶级 "thinking" 字段之中。
 
@@ -60724,33 +60724,60 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
         function recordChatDebugLog(chatId, sentPayload, receivedPayload) {
           if (!state.chatDebugLogs) state.chatDebugLogs = {};
-          if (!state.chatDebugLogs[chatId]) state.chatDebugLogs[chatId] = [];
+          if (!state.chatDebugLogs[chatId]) {
+            try {
+              const saved = localStorage.getItem("chat_debug_logs_" + chatId);
+              state.chatDebugLogs[chatId] = saved ? JSON.parse(saved) : [];
+            } catch (_) {
+              state.chatDebugLogs[chatId] = [];
+            }
+          }
           state.chatDebugLogs[chatId].push({
             timestamp: Date.now(),
             sent: sentPayload,
             received: receivedPayload,
           });
-          if (state.chatDebugLogs[chatId].length > 15) {
+          while (state.chatDebugLogs[chatId].length > 5) {
             state.chatDebugLogs[chatId].shift();
+          }
+          try {
+            localStorage.setItem("chat_debug_logs_" + chatId, JSON.stringify(state.chatDebugLogs[chatId]));
+          } catch (_) {}
+
+          const modal = document.getElementById("debug-console-modal");
+          if (modal && modal.classList.contains("visible") && state.chats[state.activeChatId] && state.chats[state.activeChatId].id === chatId) {
+            renderDebugConsoleLogs();
           }
         }
 
-        function openDebugConsoleModal() {
-          const modal = document.getElementById("debug-console-modal");
+        function renderDebugConsoleLogs() {
           const body = document.getElementById("debug-console-body");
-          if (!modal || !body) return;
+          if (!body) return;
 
           const chat = state.chats[state.activeChatId];
-          const logs = (state.chatDebugLogs && chat && state.chatDebugLogs[chat.id]) || [];
+          let logs = [];
+          if (chat) {
+            if (state.chatDebugLogs && Array.isArray(state.chatDebugLogs[chat.id])) {
+              logs = state.chatDebugLogs[chat.id];
+            } else {
+              try {
+                const saved = localStorage.getItem("chat_debug_logs_" + chat.id);
+                if (saved) {
+                  logs = JSON.parse(saved) || [];
+                  if (!state.chatDebugLogs) state.chatDebugLogs = {};
+                  state.chatDebugLogs[chat.id] = logs;
+                }
+              } catch (_) {}
+            }
+          }
 
           body.innerHTML = "";
 
           const listEl = document.createElement("div");
           listEl.style.cssText = "display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px;";
 
-          if (logs.length === 0) {
+          if (!logs || logs.length === 0) {
             body.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 40px 10px; font-size: 13px;">暂无调试数据，请在当前聊天中发送消息并等待AI回复后查看。</div>`;
-            modal.classList.add("visible");
             return;
           }
 
@@ -60810,11 +60837,20 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           });
 
           body.appendChild(listEl);
+        }
+
+        function openDebugConsoleModal() {
+          const modal = document.getElementById("debug-console-modal");
+          const body = document.getElementById("debug-console-body");
+          if (!modal || !body) return;
+
+          renderDebugConsoleLogs();
           modal.classList.add("visible");
           setTimeout(() => {
             body.scrollTop = body.scrollHeight;
           }, 50);
         }
+
 
         // ==========================================
         // 守密人 (Keeper) 模块与末尾强制生图逻辑
@@ -61343,6 +61379,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const expandBtn = document.getElementById("avatar-gen-expand-btn");
           if (expandBtn) expandBtn.style.display = "none";
 
+          const chatSettingsModal = document.getElementById("chat-settings-modal");
+          if (chatSettingsModal && chatSettingsModal.classList.contains("visible")) {
+            chatSettingsModal.classList.remove("visible");
+            chatSettingsModal.setAttribute("data-reopen-after-avatar-gen", "true");
+          }
+
           document.getElementById("avatar-gen-modal").classList.add("visible");
         }
 
@@ -61709,6 +61751,11 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             }
 
             document.getElementById("avatar-gen-modal").classList.remove("visible");
+            const chatSettingsModal = document.getElementById("chat-settings-modal");
+            if (chatSettingsModal && chatSettingsModal.getAttribute("data-reopen-after-avatar-gen") === "true") {
+              chatSettingsModal.removeAttribute("data-reopen-after-avatar-gen");
+              chatSettingsModal.classList.add("visible");
+            }
             if (typeof showCustomAlert === "function") await showCustomAlert("成功", "头像已保存");
           };
 
@@ -73656,15 +73703,20 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
           const genMemberAvatarBtn = document.getElementById("gen-member-avatar-btn");
           if (genMemberAvatarBtn) genMemberAvatarBtn.addEventListener("click", () => openAvatarGenModal("member"));
 
-          const closeAvatarGenX = document.getElementById("close-avatar-gen-modal-x");
-          if (closeAvatarGenX) closeAvatarGenX.addEventListener("click", () => {
+          const closeAvatarGenModalSafe = () => {
             document.getElementById("avatar-gen-modal").classList.remove("visible");
-          });
+            const chatSettingsModal = document.getElementById("chat-settings-modal");
+            if (chatSettingsModal && chatSettingsModal.getAttribute("data-reopen-after-avatar-gen") === "true") {
+              chatSettingsModal.removeAttribute("data-reopen-after-avatar-gen");
+              chatSettingsModal.classList.add("visible");
+            }
+          };
+
+          const closeAvatarGenX = document.getElementById("close-avatar-gen-modal-x");
+          if (closeAvatarGenX) closeAvatarGenX.addEventListener("click", closeAvatarGenModalSafe);
 
           const cancelAvatarGenBtn = document.getElementById("cancel-avatar-gen-btn");
-          if (cancelAvatarGenBtn) cancelAvatarGenBtn.addEventListener("click", () => {
-            document.getElementById("avatar-gen-modal").classList.remove("visible");
-          });
+          if (cancelAvatarGenBtn) cancelAvatarGenBtn.addEventListener("click", closeAvatarGenModalSafe);
 
           const saveAvatarGenBtn = document.getElementById("save-avatar-gen-btn");
           if (saveAvatarGenBtn) saveAvatarGenBtn.addEventListener("click", saveGeneratedAvatar);
