@@ -39884,7 +39884,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             // 守秘人前置提示词注入逻辑
             const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
             if (isKeeperAssigned) {
-              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百五十字，三百到四百五十为最佳；需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
+              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百五十字，三百到四百五十为最佳；一次回复二到四的气泡最佳，如需渲染情绪氛围，则可以增加更多描写。切勿为了缩减字数而删去场景描写的内容。\n需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。【注意，此处规则的含义为剧情不可跳跃过多，而并非缩减剧情的细节描写或场景细节描写。细节描写，宁多勿少。】\n·每回合必须先进行完整思维链自检，填写到thinking代码格式中，若缺失视为严重违规，禁止生成。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
               systemPrompt = keeperPrefixInstruction + systemPrompt;
             }
 
@@ -39955,12 +39955,21 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
             // 记录调试台日志（记录单次API调用的完整发送字段与完整返回字段）
             if (typeof recordChatDebugLog === "function") {
+              const curTrackSnap = (state.musicState && state.musicState.currentIndex > -1 && state.musicState.playlist)
+                ? state.musicState.playlist[state.musicState.currentIndex]
+                : null;
+              const aPlayerEl = document.getElementById("audio-player");
+              const isPlayingLive = !!(state.musicState && state.musicState.isPlaying && aPlayerEl && !aPlayerEl.paused && !curTrackSnap?.isKeepAlive);
               recordChatDebugLog(chatId, {
+                chatId: chatId,
                 systemPrompt: systemPrompt,
                 messages: messagesPayload,
                 allSentMessages: openAiMessages,
                 model: model,
                 temperature: state.apiConfig?.temperature || 0.8,
+                aiMusicEnabled: chat?.settings?.aiMusicEnabled !== false,
+                musicPlaying: isPlayingLive,
+                musicTrack: curTrackSnap ? { name: curTrackSnap.name, artist: curTrackSnap.artist } : null,
               }, {
                 rawContent: aiResponseContent,
                 reasoningContent: data?.choices?.[0]?.message?.reasoning_content || null,
@@ -60929,6 +60938,23 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             return cleanDebugNewlines(JSON.stringify(sent, null, 2));
           }
 
+          const currentChatId = sent?.chatId || state.activeChatId;
+          const currentChat = (state.chats && currentChatId) ? state.chats[currentChatId] : null;
+          const isMusicSwitchOn = (sent && sent.aiMusicEnabled !== undefined)
+            ? (sent.aiMusicEnabled !== false)
+            : (currentChat ? (currentChat.settings?.aiMusicEnabled !== false) : true);
+
+          let targetUserIdx = -1;
+          for (let i = allMsgs.length - 1; i >= 0; i--) {
+            if (allMsgs[i].role === "user") {
+              targetUserIdx = i;
+              break;
+            }
+          }
+          if (targetUserIdx === -1 && allMsgs.length > 0) {
+            targetUserIdx = allMsgs.length - 1;
+          }
+
           let textBlocks = [];
           allMsgs.forEach((msg, idx) => {
             const role = msg.role || "user";
@@ -60941,6 +60967,37 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               roleTitle = "助手历史回复";
             } else {
               roleTitle = role;
+            }
+
+            let musicSuffix = "";
+            if (isMusicSwitchOn && idx === targetUserIdx) {
+              let isPlaying = false;
+              let track = null;
+              if (sent && typeof sent.musicPlaying === "boolean") {
+                isPlaying = sent.musicPlaying;
+                track = sent.musicTrack || null;
+              } else if (window.state && window.state.musicState) {
+                const mState = window.state.musicState;
+                const aPlayer = document.getElementById("audio-player");
+                const isPlayingLive = !!((aPlayer && !aPlayer.paused) || mState.isPlaying);
+                const curTrack = (mState.currentIndex > -1 && mState.playlist) ? mState.playlist[mState.currentIndex] : null;
+                if (curTrack && !curTrack.isKeepAlive && isPlayingLive) {
+                  isPlaying = true;
+                  track = curTrack;
+                }
+              }
+
+              if (isPlaying && track) {
+                const songName = (track.name || "").trim() || "未知歌曲";
+                let rawArtist = (track.artist || "").trim();
+                let artistName = rawArtist;
+                if (!artistName || artistName === "未知" || artistName === "未知歌手" || artistName === "未知艺术家" || artistName.toLowerCase() === "unknown") {
+                  artistName = "纯音乐";
+                }
+                musicSuffix = ` ▷正在播放音乐：${songName} ${artistName}`;
+              } else {
+                musicSuffix = ` ▷当前正在播放音乐:无`;
+              }
             }
 
             let rawContent = "";
@@ -60958,7 +61015,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               rawContent = String(msg.content || "");
             }
 
-            textBlocks.push(`=== 第 ${idx + 1} 块消息 · ${roleTitle} ===\n${cleanDebugNewlines(rawContent)}`);
+            textBlocks.push(`=== 第 ${idx + 1} 块消息 · ${roleTitle}${musicSuffix} ===\n${cleanDebugNewlines(rawContent)}`);
           });
 
           return textBlocks.join("\n\n");
@@ -61008,6 +61065,22 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               state.chatDebugLogs[chatId] = saved ? JSON.parse(saved) : [];
             } catch (_) {
               state.chatDebugLogs[chatId] = [];
+            }
+          }
+          if (sentPayload && typeof sentPayload === "object") {
+            if (!sentPayload.chatId) sentPayload.chatId = chatId;
+            const chatObj = state.chats?.[chatId];
+            if (sentPayload.aiMusicEnabled === undefined && chatObj) {
+              sentPayload.aiMusicEnabled = chatObj.settings?.aiMusicEnabled !== false;
+            }
+            if (sentPayload.musicPlaying === undefined) {
+              const curTrack = (state.musicState && state.musicState.currentIndex > -1 && state.musicState.playlist)
+                ? state.musicState.playlist[state.musicState.currentIndex]
+                : null;
+              const aPlayer = document.getElementById("audio-player");
+              const isPlaying = !!(state.musicState && state.musicState.isPlaying && aPlayer && !aPlayer.paused && !curTrack?.isKeepAlive);
+              sentPayload.musicPlaying = isPlaying;
+              sentPayload.musicTrack = curTrack ? { name: curTrack.name, artist: curTrack.artist } : null;
             }
           }
           state.chatDebugLogs[chatId].push({
