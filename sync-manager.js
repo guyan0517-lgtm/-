@@ -56,6 +56,7 @@
       ws.onopen = () => {
         isConnecting = false;
         ws.send(JSON.stringify({ type: "register", peerId: myPeerId }));
+        syncAllGroupRooms();
         // 重新加入所有活跃房间
         activeRooms.forEach((rId) => {
           ws.send(JSON.stringify({ type: "join_room", roomId: rId, peerId: myPeerId }));
@@ -86,6 +87,16 @@
     }
   }
 
+  async function syncAllGroupRooms() {
+    try {
+      if (!window.db || !window.db.chats) return;
+      const allChats = await window.db.chats.toArray();
+      allChats.filter((c) => c.isGroup).forEach((c) => {
+        joinRoom(c.id);
+      });
+    } catch (e) {}
+  }
+
   function joinRoom(roomId) {
     if (!roomId) return;
     activeRooms.add(String(roomId));
@@ -99,9 +110,11 @@
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       connect();
     }
+    const cleanTarget = String(targetPeerId).trim().toUpperCase();
     const packet = {
       type: "send_peer",
-      targetPeerId,
+      targetPeerId: cleanTarget,
+      fromPeerId: myPeerId,
       payload
     };
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -153,6 +166,33 @@
     }
   }
 
+  function showPeerNotice(text) {
+    try {
+      let box = document.getElementById("peer-global-notice-box");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "peer-global-notice-box";
+        box.style.cssText = "position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 99999; display: flex; flex-direction: column; gap: 8px; pointer-events: none;";
+        document.body.appendChild(box);
+      }
+      const item = document.createElement("div");
+      item.style.cssText = "background: var(--card-bg, #ffffff); color: var(--text-primary, #333333); border: 1px solid var(--border-color, #e0e0e0); box-shadow: 0 4px 16px rgba(0,0,0,0.18); border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 500; pointer-events: auto; display: flex; align-items: center; gap: 8px; transition: all 0.3s ease; opacity: 0; transform: translateY(-10px);";
+      item.textContent = text;
+      box.appendChild(item);
+      requestAnimationFrame(() => {
+        item.style.opacity = "1";
+        item.style.transform = "translateY(0)";
+      });
+      setTimeout(() => {
+        item.style.opacity = "0";
+        item.style.transform = "translateY(-10px)";
+        setTimeout(() => item.remove(), 300);
+      }, 3500);
+    } catch (e) {
+      console.warn("通知渲染异常", e);
+    }
+  }
+
   async function handleIncoming(data) {
     if (!data || !data.type) return;
 
@@ -163,7 +203,28 @@
       if (payload.action === "friend_handshake") {
         // 收到密友握手请求
         await savePeerFriend(fromPeerId, payload.senderName, payload.senderAvatar);
-        notifyExternal("新密友", `${payload.senderName || fromPeerId} 添加了你为密友`, payload.senderAvatar);
+        // 自动回传握手确认
+        sendPeer(fromPeerId, {
+          action: "friend_handshake_ack",
+          senderName: getMyNickname(),
+          senderAvatar: getMyAvatar()
+        });
+        showPeerNotice("收到来自 " + (payload.senderName || fromPeerId) + " 的密友连接请求并已自动通过");
+        if (typeof window.renderContactsScreen === "function") {
+          window.renderContactsScreen();
+        }
+        if (typeof window.renderChatList === "function") {
+          window.renderChatList();
+        }
+      } else if (payload.action === "friend_handshake_ack") {
+        await savePeerFriend(fromPeerId, payload.senderName, payload.senderAvatar);
+        showPeerNotice("密友 " + (payload.senderName || fromPeerId) + " 已建立双向连接");
+        if (typeof window.renderContactsScreen === "function") {
+          window.renderContactsScreen();
+        }
+        if (typeof window.renderChatList === "function") {
+          window.renderChatList();
+        }
       } else if (payload.action === "peer_chat_msg") {
         // 收到密友单聊消息
         const { message, senderName, senderAvatar } = payload;
@@ -181,57 +242,67 @@
     }
   }
 
-  async function savePeerFriend(peerId, nickname, avatar) {
+  async function savePeerFriend(peerId, nickname, avatar, targetGroupId) {
     if (!peerId) return null;
+    const cleanPeerId = String(peerId).trim().toUpperCase();
     let friends = [];
     try {
       const raw = localStorage.getItem(PEER_FRIENDS_KEY);
       if (raw) friends = JSON.parse(raw);
     } catch (e) {}
 
-    let existing = friends.find((f) => f.peerId === peerId);
+    let existing = friends.find((f) => f.peerId === cleanPeerId);
     if (!existing) {
       existing = {
-        peerId,
-        nickname: nickname || `密友 ${peerId}`,
+        peerId: cleanPeerId,
+        nickname: nickname || ("密友 " + cleanPeerId),
         avatar: avatar || "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg",
+        groupId: targetGroupId || null,
         addedAt: Date.now()
       };
       friends.push(existing);
-      localStorage.setItem(PEER_FRIENDS_KEY, JSON.stringify(friends));
+    } else {
+      if (nickname) existing.nickname = nickname;
+      if (avatar) existing.avatar = avatar;
+      if (targetGroupId) existing.groupId = targetGroupId;
     }
+    localStorage.setItem(PEER_FRIENDS_KEY, JSON.stringify(friends));
 
     // 确保存在对应单聊会话
-    await ensurePeerChatSession(existing);
+    await ensurePeerChatSession(existing, targetGroupId);
     return existing;
   }
 
-  async function ensurePeerChatSession(friend) {
+  async function ensurePeerChatSession(friend, targetGroupId) {
     if (!window.db || !window.db.chats) return null;
     try {
       const allChats = await window.db.chats.toArray();
       let chat = allChats.find((c) => c.isPeerChat && c.peerId === friend.peerId);
-      if (!chat) {
-        let defGroupId = 1;
+      let chosenGroupId = targetGroupId || friend.groupId;
+      if (!chosenGroupId) {
         try {
           if (typeof window.ensureDefaultContactGroup === "function") {
-            defGroupId = await window.ensureDefaultContactGroup();
+            chosenGroupId = await window.ensureDefaultContactGroup();
           }
-        } catch (e) {}
+        } catch (e) {
+          chosenGroupId = 1;
+        }
+      }
+      if (!chat) {
         const newChat = {
           id: "peer_" + friend.peerId,
-          name: friend.nickname || `密友 ${friend.peerId}`,
+          name: friend.nickname || ("密友 " + friend.peerId),
           avatar: friend.avatar || "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg",
           isPeerChat: true,
           peerId: friend.peerId,
           roleType: "character",
-          groupId: defGroupId,
+          groupId: chosenGroupId,
           inMessageList: true,
           history: [],
           settings: {
             aiPersona: "密友真人交流，无需提示词",
             myName: getMyNickname(),
-            remarkName: friend.nickname || `密友 ${friend.peerId}`,
+            remarkName: friend.nickname || ("密友 " + friend.peerId),
             aiAvatar: friend.avatar || "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg"
           }
         };
@@ -246,8 +317,19 @@
           window.renderContactsScreen();
         }
         return newChat;
+      } else {
+        if (targetGroupId && chat.groupId !== targetGroupId) {
+          chat.groupId = targetGroupId;
+          await window.db.chats.put(chat);
+          if (window.state && window.state.chats) {
+            window.state.chats[chat.id] = chat;
+          }
+          if (typeof window.renderContactsScreen === "function") {
+            window.renderContactsScreen();
+          }
+        }
+        return chat;
       }
-      return chat;
     } catch (e) {
       console.warn("确保密友会话异常", e);
     }
@@ -269,8 +351,8 @@
       if (!chat) return;
 
       const incomingMsg = {
-        id: message.id || Date.now() + Math.random(),
-        role: "user",
+        id: message.id || (Date.now() + Math.random()),
+        role: "assistant",
         senderName: senderName || chat.name,
         senderAvatar: senderAvatar || chat.avatar,
         content: message.content || "",
@@ -287,10 +369,10 @@
       // 如果当前正处于该聊天，实时渲染气泡
       if (window.state && String(window.state.activeChatId) === String(chat.id)) {
         if (typeof window.appendMessage === "function") {
-          window.appendMessage(incomingMsg, false);
+          window.appendMessage(incomingMsg, chat, false);
         }
       } else {
-        notifyExternal(chat.name, incomingMsg.content, chat.avatar);
+        showPeerNotice("收到来自 " + chat.name + " 的新消息");
       }
 
       if (typeof window.renderChatList === "function") {
@@ -314,8 +396,8 @@
       if (!chat) return;
 
       const incomingMsg = {
-        id: message.id || Date.now() + Math.random(),
-        role: message.role || "user",
+        id: message.id || (Date.now() + Math.random()),
+        role: "user_peer",
         name: message.name || senderName || "密友",
         senderName: message.senderName || senderName || "密友",
         senderAvatar: message.senderAvatar || senderAvatar || chat.avatar,
@@ -334,10 +416,10 @@
 
       if (window.state && String(window.state.activeChatId) === String(chat.id)) {
         if (typeof window.appendMessage === "function") {
-          window.appendMessage(incomingMsg, false);
+          window.appendMessage(incomingMsg, chat, false);
         }
       } else {
-        notifyExternal(chat.name, incomingMsg.content, chat.avatar);
+        showPeerNotice(chat.name + " 收到来自 " + incomingMsg.senderName + " 的消息");
       }
 
       if (typeof window.renderChatList === "function") {
@@ -349,12 +431,12 @@
   }
 
   // 根据密友码主动发起添加
-  async function addFriendByCode(code, friendNickname) {
+  async function addFriendByCode(code, friendNickname, targetGroupId) {
     if (!code) return { success: false, error: "密友码不能为空" };
     const cleanCode = code.trim().toUpperCase();
     if (cleanCode === myPeerId) return { success: false, error: "不能添加自己的密友码" };
 
-    const friend = await savePeerFriend(cleanCode, friendNickname || `密友 ${cleanCode}`);
+    const friend = await savePeerFriend(cleanCode, friendNickname || ("密友 " + cleanCode), null, targetGroupId);
     sendPeer(cleanCode, {
       action: "friend_handshake",
       senderName: getMyNickname(),
@@ -384,7 +466,8 @@
     addFriendByCode,
     getFriends,
     isOocBubble,
-    notifyExternal
+    notifyExternal,
+    showPeerNotice
   };
 
   // 请求通知权限

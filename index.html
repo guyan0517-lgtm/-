@@ -2189,9 +2189,9 @@
             <input type="search" id="contacts-search-input" class="moe-input" placeholder="搜索联系人..." style="height: 32px; font-size: 12.5px; width: 100%; border-radius: 8px;" />
           </div>
 
-          <!-- 顶部快捷入口卡片 (新朋友、特别关心、密友) -->
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 4px 12px 8px 12px;">
-            <div class="contact-quick-entry" onclick="openAddFriendModal()" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 4px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; text-align: center;">
+          <!-- 顶部快捷入口卡片 (新朋友、特别关心) -->
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 4px 12px 8px 12px;">
+            <div class="contact-quick-entry" onclick="openAddFriendModal()" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 6px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; text-align: center;">
               <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent-color); display: flex; align-items: center; justify-content: center; color: #ffffff; margin-bottom: 4px;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -2200,29 +2200,18 @@
                   <line x1="23" y1="11" x2="17" y2="11"></line>
                 </svg>
               </div>
-              <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.2;">新朋友</span>
-              <span style="font-size: 10px; color: var(--text-secondary); margin-top: 1px;">添加好友</span>
+              <span style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); line-height: 1.2;">新朋友</span>
+              <span style="font-size: 10.5px; color: var(--text-secondary); margin-top: 1px;">添加好友</span>
             </div>
 
-            <div class="contact-quick-entry" onclick="openPeerModal()" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 4px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; text-align: center;">
-              <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; color: var(--accent-color); margin-bottom: 4px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                </svg>
-              </div>
-              <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.2;">密友</span>
-              <span style="font-size: 10px; color: var(--text-secondary); margin-top: 1px;">联机同步</span>
-            </div>
-
-            <div class="contact-quick-entry" onclick="switchContactsSubTab('special')" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 4px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; text-align: center;">
+            <div class="contact-quick-entry" onclick="switchContactsSubTab('special')" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 6px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; text-align: center;">
               <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; color: var(--accent-color); margin-bottom: 4px;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent-color)" stroke="var(--accent-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                 </svg>
               </div>
-              <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.2;">特别关心</span>
-              <span style="font-size: 10px; color: var(--text-secondary); margin-top: 1px;">星标好友</span>
+              <span style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); line-height: 1.2;">特别关心</span>
+              <span style="font-size: 10.5px; color: var(--text-secondary); margin-top: 1px;">星标好友</span>
             </div>
           </div>
 
@@ -3091,15 +3080,15 @@
         <div class="modal" id="contact-peer-modal" style="display: none; z-index: 10000;">
           <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">密友</span>
+              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">添加密友</span>
               <button type="button" id="contact-peer-close-btn" onclick="closeContactModal('contact-peer-modal')" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
             </div>
             <div style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px;">
-              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px; background: var(--secondary-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px; background: var(--secondary-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer;" onclick="copyMyPeerCode()">
                 <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">我的专属密友码</label>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                   <span id="my-peer-code-display" style="font-size: 18px; font-weight: 700; color: var(--accent-color); letter-spacing: 2px;">------</span>
-                  <button type="button" class="moe-btn" id="copy-my-peer-code-btn" onclick="copyMyPeerCode()" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">复制</button>
+                  <button type="button" class="moe-btn" id="copy-my-peer-code-btn" onclick="event.stopPropagation(); copyMyPeerCode();" style="height: 28px; padding: 0 10px; font-size: 11px; background: var(--secondary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px;">复制</button>
                 </div>
               </div>
               <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
@@ -3109,6 +3098,10 @@
               <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
                 <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">备注昵称</label>
                 <input type="text" id="peer-target-name-input" class="moe-input" placeholder="输入密友昵称..." style="height: 32px; font-size: 12.5px; border-radius: 6px;" />
+              </div>
+              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
+                <select id="peer-target-group-select" class="moe-input" style="height: 34px; font-size: 12.5px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);"></select>
               </div>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
@@ -8346,7 +8339,7 @@
           <button type="button" class="moe-btn" id="add-choice-friend-btn" style="width: 100%;">好友</button>
           <button type="button" class="moe-btn-secondary" id="add-choice-dice-btn" style="width: 100%;">骰子</button>
           <button type="button" class="moe-btn-secondary" id="add-choice-status-btn" style="width: 100%;">系统状态栏</button>
-          <button type="button" class="moe-btn-secondary" id="add-choice-peer-modal-btn" style="width: 100%;">密友</button>
+          <button type="button" class="moe-btn-secondary" id="add-choice-peer-modal-btn" style="width: 100%;">添加密友</button>
         </div>
         <div class="modal-footer" style="padding: 8px;">
           <button type="button" class="cancel" id="cancel-add-choice-btn" style="width: 100%; height: 32px; padding: 4px; font-size: 13px;">取消</button>
@@ -24168,7 +24161,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           openContactModal("contact-add-friend-modal");
         };
 
-        window.openPeerModal = function() {
+        window.openPeerModal = async function() {
           const codeDisplay = document.getElementById("my-peer-code-display");
           if (codeDisplay && window.syncManager) {
             codeDisplay.textContent = window.syncManager.myPeerId || "------";
@@ -24177,36 +24170,64 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const targetNameInput = document.getElementById("peer-target-name-input");
           if (targetCodeInput) targetCodeInput.value = "";
           if (targetNameInput) targetNameInput.value = "";
+
+          const groupSelect = document.getElementById("peer-target-group-select");
+          if (groupSelect && window.db && window.db.qzoneGroups) {
+            groupSelect.innerHTML = "";
+            try {
+              const groups = await window.db.qzoneGroups.toArray();
+              groups.sort((a, b) => (a.order || 0) - (b.order || 0));
+              groups.forEach(g => {
+                const opt = document.createElement("option");
+                opt.value = g.id;
+                opt.textContent = g.name;
+                groupSelect.appendChild(opt);
+              });
+            } catch (e) {}
+          }
+
           openContactModal("contact-peer-modal");
+          copyMyPeerCode(false);
         };
 
-        window.copyMyPeerCode = async function() {
+        window.copyMyPeerCode = async function(showFeedback = true) {
           const code = (window.syncManager && window.syncManager.myPeerId) ? window.syncManager.myPeerId : "";
           if (!code) return;
           try {
-            await navigator.clipboard.writeText(code);
-            if (typeof window.showCustomAlert === "function") {
-              await window.showCustomAlert("提示", "密友码已复制到剪贴板: " + code);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(code);
             } else {
-              alert("密友码已复制: " + code);
+              const ta = document.createElement("textarea");
+              ta.value = code;
+              ta.style.position = "fixed";
+              ta.style.opacity = "0";
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand("copy");
+              ta.remove();
             }
-          } catch (e) {
-            prompt("请手动复制密友码:", code);
-          }
+            const btn = document.getElementById("copy-my-peer-code-btn");
+            if (btn && showFeedback) {
+              const prev = btn.textContent;
+              btn.textContent = "已复制";
+              setTimeout(() => { btn.textContent = prev; }, 1500);
+            }
+          } catch (e) {}
         };
 
         window.confirmAddPeerFriend = async function() {
           const targetCodeInput = document.getElementById("peer-target-code-input");
           const targetNameInput = document.getElementById("peer-target-name-input");
+          const groupSelect = document.getElementById("peer-target-group-select");
           const code = targetCodeInput ? targetCodeInput.value.trim().toUpperCase() : "";
           const name = targetNameInput ? targetNameInput.value.trim() : "";
+          let selectedGroupId = groupSelect ? groupSelect.value : null;
+          if (selectedGroupId && !isNaN(selectedGroupId)) {
+            selectedGroupId = Number(selectedGroupId);
+          }
 
           if (!code) {
-            if (typeof window.showCustomAlert === "function") {
-              await window.showCustomAlert("提示", "请输入对方的密友码");
-            } else {
-              alert("请输入对方的密友码");
-            }
+            alert("请输入对方的密友码");
             return;
           }
 
@@ -24215,13 +24236,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
 
-          const res = await window.syncManager.addFriendByCode(code, name);
+          const res = await window.syncManager.addFriendByCode(code, name, selectedGroupId);
           if (!res.success) {
-            if (typeof window.showCustomAlert === "function") {
-              await window.showCustomAlert("提示", res.error || "添加密友失败");
-            } else {
-              alert(res.error || "添加密友失败");
-            }
+            alert(res.error || "添加密友失败");
             return;
           }
 
@@ -24230,12 +24247,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (typeof renderChatList === "function") {
             await renderChatList();
           }
-          const tip = `已成功连接密友 ${res.friend.nickname || code}`;
-          if (typeof window.showCustomAlert === "function") {
-            await window.showCustomAlert("提示", tip);
-          } else {
-            alert(tip);
-          }
+          const tip = "已成功发起密友连接 " + (res.friend.nickname || code);
+          alert(tip);
         };
 
         window.confirmAddNewFriend = async function() {

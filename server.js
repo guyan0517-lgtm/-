@@ -168,6 +168,7 @@ const wss = new WebSocketServer({ server: httpServer });
 const peers = new Map();
 // Room connections map: roomId -> Set of ws
 const rooms = new Map();
+const offlinePeerMessages = new Map();
 
 wss.on('connection', (ws) => {
   let boundPeerId = null;
@@ -184,14 +185,26 @@ wss.on('connection', (ws) => {
       if (!msg || !msg.type) return;
 
       if (msg.type === 'register') {
-        const { peerId } = msg;
-        if (!peerId) return;
+        const rawPeerId = msg.peerId;
+        if (!rawPeerId) return;
+        const peerId = String(rawPeerId).trim().toUpperCase();
         boundPeerId = peerId;
         if (!peers.has(peerId)) {
           peers.set(peerId, new Set());
         }
         peers.get(peerId).add(ws);
         ws.send(JSON.stringify({ type: 'registered', peerId, success: true }));
+
+        // 投递离线暂存给该用户的消息
+        if (offlinePeerMessages.has(peerId)) {
+          const queued = offlinePeerMessages.get(peerId) || [];
+          queued.forEach((packet) => {
+            if (ws.readyState === 1) {
+              ws.send(packet);
+            }
+          });
+          offlinePeerMessages.delete(peerId);
+        }
       } else if (msg.type === 'join_room') {
         const { roomId, peerId } = msg;
         if (!roomId) return;
@@ -202,18 +215,40 @@ wss.on('connection', (ws) => {
         rooms.get(roomId).add(ws);
         ws.send(JSON.stringify({ type: 'room_joined', roomId, success: true }));
       } else if (msg.type === 'send_peer') {
-        const { targetPeerId, payload } = msg;
-        if (!targetPeerId) return;
+        const { targetPeerId: rawTarget, payload } = msg;
+        if (!rawTarget) return;
+        const targetPeerId = String(rawTarget).trim().toUpperCase();
+        const fromPeerId = String(boundPeerId || msg.fromPeerId || msg.peerId || '').trim().toUpperCase();
+        const packet = JSON.stringify({
+          type: 'receive_peer',
+          fromPeerId,
+          payload
+        });
         const targetSockets = peers.get(targetPeerId);
+        let delivered = false;
         if (targetSockets && targetSockets.size > 0) {
-          const packet = JSON.stringify({
-            type: 'receive_peer',
-            fromPeerId: boundPeerId,
-            payload
-          });
           targetSockets.forEach((s) => {
-            if (s.readyState === 1) s.send(packet);
+            if (s.readyState === 1) {
+              s.send(packet);
+              delivered = true;
+            }
           });
+        }
+        if (!delivered) {
+          if (!offlinePeerMessages.has(targetPeerId)) {
+            offlinePeerMessages.set(targetPeerId, []);
+          }
+          const list = offlinePeerMessages.get(targetPeerId);
+          list.push(packet);
+          if (list.length > 50) list.shift();
+        }
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: 'peer_sent_ack',
+            targetPeerId,
+            delivered,
+            action: payload && payload.action ? payload.action : ''
+          }));
         }
       } else if (msg.type === 'send_room') {
         const { roomId, payload } = msg;
