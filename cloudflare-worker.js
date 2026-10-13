@@ -3,6 +3,7 @@
 
 const peerMailboxes = new Map();
 const peerProfiles = new Map();
+const peerLastPoll = new Map();
 
 function getCorsHeaders() {
   return {
@@ -79,6 +80,16 @@ export default {
             timestamp: Date.now()
           };
           pushToWorkerMailbox(toCode, ackEvt);
+          return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
+        }
+        if (type === "online_ping" || type === "online_pong" || type === "offline_ping") {
+          if (fromCode) {
+            if (type === "offline_ping") {
+              peerLastPoll.delete(fromCode);
+            } else {
+              peerLastPoll.set(fromCode, Date.now());
+            }
+          }
           return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
         }
         if (type !== "message") {
@@ -189,9 +200,21 @@ export default {
       if (!code) {
         return new Response(JSON.stringify({ error: "Missing code" }), { status: 400, headers: getCorsHeaders() });
       }
+      peerLastPoll.set(code, Date.now());
       const events = peerMailboxes.get(code) || [];
       const profile = peerProfiles.get(code) || null;
-      return new Response(JSON.stringify({ success: true, events, profile }), { headers: getCorsHeaders() });
+      const onlinePeers = {};
+      const peersParam = url.searchParams.get("peers");
+      if (peersParam) {
+        const now = Date.now();
+        peersParam.split(",").forEach((p) => {
+          const pCode = p.trim();
+          if (!pCode) return;
+          const lastSeen = peerLastPoll.get(pCode) || 0;
+          onlinePeers[pCode] = Boolean(lastSeen > 0 && now - lastSeen < 12000);
+        });
+      }
+      return new Response(JSON.stringify({ success: true, events, profile, onlinePeers }), { headers: getCorsHeaders() });
     }
 
     return new Response(JSON.stringify({ status: "running" }), { headers: getCorsHeaders() });

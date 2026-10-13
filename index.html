@@ -75,7 +75,7 @@
     <script src="module-manager.js" defer></script>
     <script src="inventory-manager.js" defer></script>
     <script src="combat-engine.js" defer></script>
-    <script src="peer-manager.js?v=10" defer></script>
+    <script src="peer-manager.js?v=12" defer></script>
 
     <style></style>
 
@@ -29436,6 +29436,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           updateGlobalChatUnreadBadge();
         }
+        window.renderChatList = renderChatList;
+        window.renderChatListProxy = renderChatList;
 
         function createChatListItem(chat) {
           const lastMsgObj =
@@ -29455,6 +29457,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           ) {
             lastMsgDisplay = `<span style="color: #dc3545;">[你已被对方拉黑]</span>`;
           } else if (chat.isGroup) {
+            const isStickerMsg =
+              lastMsgObj.type === "sticker" ||
+              (!lastMsgObj.imageUrl &&
+                !lastMsgObj.image &&
+                typeof lastMsgObj.content === "string" &&
+                STICKER_REGEX.test(lastMsgObj.content.trim()));
+            const isImageMsg =
+              !isStickerMsg &&
+              (Array.isArray(lastMsgObj.content) ||
+                lastMsgObj.type === "naiimag" ||
+                lastMsgObj.type === "nov" ||
+                lastMsgObj.type === "sd" ||
+                lastMsgObj.type === "image" ||
+                lastMsgObj.type === "realimag" ||
+                lastMsgObj.type === "novelai" ||
+                lastMsgObj.type === "nai_image" ||
+                lastMsgObj.type === "module_pure_image" ||
+                lastMsgObj.isModuleImageOnly ||
+                Boolean(lastMsgObj.imageUrl) ||
+                Boolean(lastMsgObj.image) ||
+                (typeof lastMsgObj.content === "string" &&
+                  (/^<img\b/i.test(lastMsgObj.content.trim()) ||
+                    (/<img\b/i.test(lastMsgObj.content) &&
+                      !lastMsgObj.content.replace(/<[^>]+>/g, "").trim()) ||
+                    /^!\[.*?\]\(.+\)$/.test(lastMsgObj.content.trim()) ||
+                    /^(?:【|\[)图\s*\d+(?:[：:][^】\]]*)?(?:】|\])\s*$/.test(
+                      lastMsgObj.content.trim(),
+                    ))));
+
             if (lastMsgObj.type === "pat_message") {
               lastMsgDisplay = `[系统消息] ${lastMsgObj.content}`;
             } else if (lastMsgObj.type === "transfer") {
@@ -29466,14 +29497,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               lastMsgDisplay = "[照片]";
             } else if (lastMsgObj.type === "voice_message") {
               lastMsgDisplay = "[语音]";
-            } else if (
-              typeof lastMsgObj.content === "string" &&
-              STICKER_REGEX.test(lastMsgObj.content)
-            ) {
+            } else if (isStickerMsg) {
               lastMsgDisplay = lastMsgObj.meaning
                 ? `[表情: ${lastMsgObj.meaning}]`
                 : "[表情]";
-            } else if (Array.isArray(lastMsgObj.content)) {
+            } else if (isImageMsg) {
               lastMsgDisplay = `[图片]`;
             } else {
               lastMsgDisplay = lastMsgObj.content
@@ -29495,7 +29523,42 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           } else {
             let singlePreview = "";
-            if (lastMsgObj && (lastMsgObj.content || lastMsgObj.type)) {
+            if (
+              lastMsgObj &&
+              (lastMsgObj.content ||
+                lastMsgObj.type ||
+                lastMsgObj.imageUrl ||
+                lastMsgObj.image)
+            ) {
+              const isStickerMsg =
+                lastMsgObj.type === "sticker" ||
+                (!lastMsgObj.imageUrl &&
+                  !lastMsgObj.image &&
+                  typeof lastMsgObj.content === "string" &&
+                  STICKER_REGEX.test(lastMsgObj.content.trim()));
+              const isImageMsg =
+                !isStickerMsg &&
+                (Array.isArray(lastMsgObj.content) ||
+                  lastMsgObj.type === "naiimag" ||
+                  lastMsgObj.type === "nov" ||
+                  lastMsgObj.type === "sd" ||
+                  lastMsgObj.type === "image" ||
+                  lastMsgObj.type === "realimag" ||
+                  lastMsgObj.type === "novelai" ||
+                  lastMsgObj.type === "nai_image" ||
+                  lastMsgObj.type === "module_pure_image" ||
+                  lastMsgObj.isModuleImageOnly ||
+                  Boolean(lastMsgObj.imageUrl) ||
+                  Boolean(lastMsgObj.image) ||
+                  (typeof lastMsgObj.content === "string" &&
+                    (/^<img\b/i.test(lastMsgObj.content.trim()) ||
+                      (/<img\b/i.test(lastMsgObj.content) &&
+                        !lastMsgObj.content.replace(/<[^>]+>/g, "").trim()) ||
+                      /^!\[.*?\]\(.+\)$/.test(lastMsgObj.content.trim()) ||
+                      /^(?:【|\[)图\s*\d+(?:[：:][^】\]]*)?(?:】|\])\s*$/.test(
+                        lastMsgObj.content.trim(),
+                      ))));
+
               if (lastMsgObj.type === "pat_message") {
                 singlePreview = `[系统消息] ${lastMsgObj.content || ""}`;
               } else if (lastMsgObj.type === "transfer") {
@@ -29507,14 +29570,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 singlePreview = "[照片]";
               } else if (lastMsgObj.type === "voice_message") {
                 singlePreview = "[语音]";
-              } else if (
-                typeof lastMsgObj.content === "string" &&
-                STICKER_REGEX.test(lastMsgObj.content)
-              ) {
+              } else if (isStickerMsg) {
                 singlePreview = lastMsgObj.meaning
                   ? `[表情: ${lastMsgObj.meaning}]`
                   : "[表情]";
-              } else if (Array.isArray(lastMsgObj.content)) {
+              } else if (isImageMsg) {
                 singlePreview = "[图片]";
               } else if (lastMsgObj.content) {
                 singlePreview = String(lastMsgObj.content).substring(0, 20);
@@ -29738,11 +29798,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               statusContainer.style.display = "none";
             } else {
               statusContainer.style.display = "flex";
-              statusTextEl.textContent = chat.status?.text || "在线";
-              statusContainer.classList.toggle(
-                "busy",
-                chat.status?.isBusy || false,
-              );
+              if (chat.roleType === "peer" && window.PeerManager && typeof window.PeerManager.isPeerOnline === "function") {
+                const isPeerOn = window.PeerManager.isPeerOnline(chat.peerCode);
+                statusTextEl.textContent = isPeerOn ? "在线" : "离线";
+                statusContainer.classList.toggle("busy", !isPeerOn);
+              } else {
+                statusTextEl.textContent = chat.status?.text || "在线";
+                statusContainer.classList.toggle(
+                  "busy",
+                  chat.status?.isBusy || false,
+                );
+              }
             }
           }
 
@@ -38975,8 +39041,7 @@ ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${
 - 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
 ${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
-${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}- 发送系统消息: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
-${statusMember ? systemStatusContext : ""}`);
+${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}${statusMember ? systemStatusContext : ""}`);
 
               const groupMembersBlock = window.formatPromptSection("成员", `
 群成员列表及COC角色档案:
@@ -44313,6 +44378,14 @@ ${stickerContext || "无"}
                       notificationText = `[收到一个外卖代付请求]`;
                       break;
                     case "ai_image":
+                    case "naiimag":
+                    case "nov":
+                    case "sd":
+                    case "image":
+                    case "realimag":
+                    case "novelai":
+                    case "nai_image":
+                    case "module_pure_image":
                       notificationText = `[图片]`;
                       break;
                     case "voice_message":
@@ -44324,7 +44397,16 @@ ${stickerContext || "无"}
                         : "[表情]";
                       break;
                     default:
-                      notificationText = String(aiMessage.content || "");
+                      if (
+                        aiMessage.imageUrl ||
+                        aiMessage.image ||
+                        aiMessage.isModuleImageOnly ||
+                        Array.isArray(aiMessage.content)
+                      ) {
+                        notificationText = `[图片]`;
+                      } else {
+                        notificationText = String(aiMessage.content || "");
+                      }
                   }
                   const finalNotifText = chat.isGroup
                     ? `${aiMessage.senderName}: ${notificationText}`
@@ -52660,6 +52742,9 @@ ${stickerContext || "无"}
             return;
           }
           const chat = state.chats[state.activeChatId];
+          if (chat && chat.roleType === "peer") {
+            return;
+          }
 
           // 2. 弹出输入框，让用户输入新的状态，并将当前状态作为默认值
           const newStatusText = await showCustomPrompt(
@@ -56276,11 +56361,30 @@ ${stickerContext || "无"}
           myChatItem.dataset.isUserChat = "true";
           const myAvatar =
             characterChat.settings.myAvatar || defaultMyGroupAvatar;
+          const isLastMsgImage =
+            lastMsg &&
+            (Array.isArray(lastMsg.content) ||
+              lastMsg.type === "naiimag" ||
+              lastMsg.type === "nov" ||
+              lastMsg.type === "sd" ||
+              lastMsg.type === "image" ||
+              lastMsg.type === "realimag" ||
+              lastMsg.type === "novelai" ||
+              lastMsg.type === "nai_image" ||
+              lastMsg.type === "module_pure_image" ||
+              lastMsg.type === "ai_image" ||
+              lastMsg.type === "user_photo" ||
+              lastMsg.isModuleImageOnly ||
+              Boolean(lastMsg.imageUrl) ||
+              Boolean(lastMsg.image));
+          const myChatPreviewText = isLastMsgImage
+            ? "[图片]"
+            : stripHtmlAndCode(String(lastMsg.content || "")).substring(0, 30);
           myChatItem.innerHTML = `
 			                        <img src="${myAvatar}" class="avatar" style="border-radius: 6px;">
 			                        <div class="info">
 			                            <span class="name">${remarkNameForMe}</span>
-			                            <div class="last-msg">${stripHtmlAndCode(String(lastMsg.content)).substring(0, 30)}</div>
+			                            <div class="last-msg">${myChatPreviewText}</div>
 			                        </div>
 			                    `;
           listEl.appendChild(myChatItem);
@@ -62777,6 +62881,9 @@ ${stickerContext || "无"}
               state.chats[String(chat.id)] = chat;
             }
             await db.chats.put(chat);
+            if (typeof renderChatList === "function") {
+              renderChatList();
+            }
             const msgContainer = document.getElementById("chat-messages");
             const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${aiMessage.timestamp}"]`);
             if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
@@ -73673,6 +73780,7 @@ ${stickerContext || "无"}
 
           window.showScreen = showScreen;
           window.openLoversSpaceFromCard = openLoversSpaceFromCard;
+          window.renderChatList = renderChatList;
           window.renderChatListProxy = renderChatList;
           window.renderApiSettingsProxy = renderApiSettings;
           window.renderWallpaperScreenProxy = renderWallpaperScreen;

@@ -28,6 +28,7 @@
     heartbeatTimer: null,
     outboxTimer: null,
     noticeTimer: null,
+    peerLastSeen: {},
     seenEventIds: new Set(),
     pendingIncomingQueue: [],
     isFlushingQueue: false,
@@ -543,6 +544,13 @@
           this.retryOutboxPackets();
         }, 5000);
       }
+
+      if (!this.heartbeatTimer) {
+        this.heartbeatTimer = setInterval(() => {
+          this.sendOnlinePingToFriends();
+          this.refreshActivePeerHeaderStatus();
+        }, 8000);
+      }
     },
 
     wakeUpAndSyncNow: function () {
@@ -558,14 +566,15 @@
       }
       this.retryOutboxPackets();
       this.sendOnlinePingToFriends();
+      this.refreshActivePeerHeaderStatus();
     },
 
-    sendOnlinePingToFriends: function () {
+    getAllKnownPeerCodes: function () {
       const myCode = this.getOrCreateMyPeerCode();
       const codes = new Set();
       if (window.state && window.state.chats) {
         for (const chat of Object.values(window.state.chats)) {
-          if (chat && chat.roleType === "peer" && chat.peerCode) {
+          if (chat && chat.roleType === "peer" && chat.peerCode && chat.peerCode !== myCode) {
             codes.add(chat.peerCode);
           }
           if (chat && chat.isGroup && chat.isPeerGroup && Array.isArray(chat.members)) {
@@ -575,15 +584,142 @@
           }
         }
       }
+      return Array.from(codes);
+    },
+
+    isPeerOnline: function (peerCode) {
+      if (!peerCode || !this.peerLastSeen) return false;
+      const last = this.peerLastSeen[peerCode] || 0;
+      return last > 0 && Date.now() - last < 26000;
+    },
+
+    markPeerOnline: function (peerCode) {
+      if (!peerCode) return;
+      if (!this.peerLastSeen) this.peerLastSeen = {};
+      this.peerLastSeen[peerCode] = Date.now();
+      if (window.state && window.state.chats) {
+        for (const chat of Object.values(window.state.chats)) {
+          if (chat && chat.roleType === "peer" && !chat.isGroup && chat.peerCode === peerCode) {
+            chat.status = { text: "在线", isBusy: false };
+          }
+        }
+      }
+      this.refreshActivePeerHeaderStatus();
+    },
+
+    markPeerOffline: function (peerCode) {
+      if (!peerCode) return;
+      if (!this.peerLastSeen) this.peerLastSeen = {};
+      this.peerLastSeen[peerCode] = 0;
+      if (window.state && window.state.chats) {
+        for (const chat of Object.values(window.state.chats)) {
+          if (chat && chat.roleType === "peer" && !chat.isGroup && chat.peerCode === peerCode) {
+            chat.status = { text: "离线", isBusy: true };
+          }
+        }
+      }
+      this.refreshActivePeerHeaderStatus();
+    },
+
+    refreshActivePeerHeaderStatus: function () {
+      if (!window.state || !window.state.activeChatId || !window.state.chats) return;
+      const activeChat = window.state.chats[window.state.activeChatId];
+      if (!activeChat || activeChat.roleType !== "peer" || activeChat.isGroup) return;
+      const online = this.isPeerOnline(activeChat.peerCode);
+      activeChat.status = { text: online ? "在线" : "离线", isBusy: !online };
+      const statusContainer = document.getElementById("chat-header-status");
+      if (statusContainer) {
+        const statusTextEl = statusContainer.querySelector(".status-text");
+        if (statusTextEl) {
+          statusTextEl.textContent = online ? "在线" : "离线";
+        }
+        statusContainer.classList.toggle("busy", !online);
+      }
+    },
+
+    transmitPresencePacket: function (targetCode, payload) {
+      if (!targetCode || !payload) return;
+      const jsonStr = JSON.stringify(payload);
+      if (this.bc) {
+        try {
+          this.bc.postMessage(payload);
+        } catch (e) {}
+      }
+      try {
+        localStorage.setItem("tukey_peer_local_bus_pkt", jsonStr);
+      } catch (e) {}
+      if (this.mqttClients && this.mqttClients.length > 0) {
+        this.mqttClients.forEach((c) => {
+          if (c) {
+            try {
+              c.publish(TOPIC_PREFIX + "inbox/" + targetCode, jsonStr, {
+                qos: 0,
+                retain: false
+              });
+            } catch (e) {}
+          }
+        });
+      }
+      if (this.ws && this.ws.readyState === 1) {
+        try {
+          this.ws.send(jsonStr);
+        } catch (e) {}
+      }
+      fetch(this.getApiUrl("/api/peer/send"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: jsonStr,
+        keepalive: payload.type === "offline_ping"
+      }).catch(() => {});
+    },
+
+    sendOnlinePingToPeer: function (friendCode) {
+      if (!friendCode) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      if (friendCode === myCode) return;
+      const pingPkt = {
+        type: "online_ping",
+        eventId: "ping_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+        fromCode: myCode,
+        toCode: friendCode,
+        timestamp: Date.now()
+      };
+      this.transmitPresencePacket(friendCode, pingPkt);
+    },
+
+    sendOnlinePongToPeer: function (friendCode) {
+      if (!friendCode) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      if (friendCode === myCode) return;
+      const pongPkt = {
+        type: "online_pong",
+        eventId: "pong_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+        fromCode: myCode,
+        toCode: friendCode,
+        timestamp: Date.now()
+      };
+      this.transmitPresencePacket(friendCode, pongPkt);
+    },
+
+    sendOfflinePingToFriends: function () {
+      const myCode = this.getOrCreateMyPeerCode();
+      const codes = this.getAllKnownPeerCodes();
       codes.forEach((friendCode) => {
-        const pingPkt = {
-          type: "online_ping",
-          eventId: "ping_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+        const offPkt = {
+          type: "offline_ping",
+          eventId: "off_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
           fromCode: myCode,
           toCode: friendCode,
           timestamp: Date.now()
         };
-        this.transmitPacketRaw(friendCode, pingPkt, "/api/peer/send", false);
+        this.transmitPresencePacket(friendCode, offPkt);
+      });
+    },
+
+    sendOnlinePingToFriends: function () {
+      const codes = this.getAllKnownPeerCodes();
+      codes.forEach((friendCode) => {
+        this.sendOnlinePingToPeer(friendCode);
       });
     },
 
@@ -852,9 +988,18 @@
 
     pollOnce: function () {
       const myCode = this.getOrCreateMyPeerCode();
-      fetch(this.getApiUrl("/api/peer/poll?code=" + encodeURIComponent(myCode)))
+      const peersList = this.getAllKnownPeerCodes();
+      const peersQuery = peersList.length > 0 ? "&peers=" + encodeURIComponent(peersList.join(",")) : "";
+      fetch(this.getApiUrl("/api/peer/poll?code=" + encodeURIComponent(myCode) + peersQuery))
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
+          if (data && data.onlinePeers && typeof data.onlinePeers === "object") {
+            for (const [pCode, isOn] of Object.entries(data.onlinePeers)) {
+              if (isOn) {
+                this.markPeerOnline(pCode);
+              }
+            }
+          }
           if (data && Array.isArray(data.events) && data.events.length > 0) {
             data.events.forEach((evt) => this.enqueueIncomingEvent(evt));
           }
@@ -929,13 +1074,32 @@
 
       if (data.type === "online_ping") {
         if (data.fromCode && data.fromCode !== myCode) {
+          this.markPeerOnline(data.fromCode);
+          this.sendOnlinePongToPeer(data.fromCode);
           this.retryOutboxPackets(data.fromCode);
           this.publishRetainedMailboxForTarget(data.fromCode);
         }
         return;
       }
 
+      if (data.type === "online_pong") {
+        if (data.fromCode && data.fromCode !== myCode) {
+          this.markPeerOnline(data.fromCode);
+        }
+        return;
+      }
+
+      if (data.type === "offline_ping") {
+        if (data.fromCode && data.fromCode !== myCode) {
+          this.markPeerOffline(data.fromCode);
+        }
+        return;
+      }
+
       if (data.type === "peer_ack") {
+        if (data.fromCode && data.fromCode !== myCode) {
+          this.markPeerOnline(data.fromCode);
+        }
         if (data.ackEventId) {
           this.removeFromOutboxQueue(data.ackEventId);
         }
@@ -1197,13 +1361,13 @@
     },
 
     refreshAppChatAndContactsUI: async function () {
-      if (typeof window.renderChatList === "function") {
-        try {
-          await window.renderChatList();
-        } catch (e) {}
-      } else if (typeof window.renderChatListProxy === "function") {
+      if (typeof window.renderChatListProxy === "function") {
         try {
           await window.renderChatListProxy();
+        } catch (e) {}
+      } else if (typeof window.renderChatList === "function") {
+        try {
+          await window.renderChatList();
         } catch (e) {}
       }
       if (typeof window.renderContactsScreen === "function") {
@@ -2417,10 +2581,32 @@
         }
       }
 
+      const isGroupSticker =
+        msgToInsert.type === "sticker" ||
+        Boolean(msgToInsert.isPeerOnlySticker) ||
+        Boolean(msgToInsert.meaning);
+      const isGroupImage =
+        !isGroupSticker &&
+        (Array.isArray(msgToInsert.content) ||
+          msgToInsert.type === "naiimag" ||
+          msgToInsert.type === "nov" ||
+          msgToInsert.type === "sd" ||
+          msgToInsert.type === "image" ||
+          msgToInsert.type === "realimag" ||
+          msgToInsert.type === "novelai" ||
+          msgToInsert.type === "nai_image" ||
+          msgToInsert.type === "module_pure_image" ||
+          msgToInsert.isModuleImageOnly ||
+          Boolean(msgToInsert.imageUrl) ||
+          Boolean(msgToInsert.image));
       const previewText =
         msgToInsert.type === "voice_message"
           ? "[语音]"
-          : String(msgToInsert.content || "");
+          : isGroupSticker
+            ? `[表情: ${msgToInsert.meaning || "表情"}]`
+            : isGroupImage
+              ? "[图片]"
+              : String(msgToInsert.content || "");
 
       this.showPeerNotice(
         `${msgToInsert.senderName}: ${previewText}`,
@@ -3391,6 +3577,10 @@
           waitReplyBtn.title = "录音";
         }
         this.ensureVoiceRecordPanel();
+        this.refreshActivePeerHeaderStatus();
+        if (chat.peerCode) {
+          this.sendOnlinePingToPeer(chat.peerCode);
+        }
       } else {
         if (rerollBtn) rerollBtn.style.display = "";
         if (actionsTop) {
@@ -3807,6 +3997,12 @@
       });
       window.addEventListener("online", () => {
         this.wakeUpAndSyncNow();
+      });
+      window.addEventListener("pagehide", () => {
+        this.sendOfflinePingToFriends();
+      });
+      window.addEventListener("beforeunload", () => {
+        this.sendOfflinePingToFriends();
       });
 
       window.addEventListener("storage", (ev) => {

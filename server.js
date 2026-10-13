@@ -160,6 +160,7 @@ const MAILBOX_STORE_PATH = path.join(__dirname, '.peer-mailbox-store.json');
 const peerClients = new Map();
 const peerMailboxes = new Map();
 const peerProfiles = new Map();
+const peerLastPoll = new Map();
 
 function loadMailboxStoreFromDisk() {
   try {
@@ -291,9 +292,16 @@ app.post('/api/peer/send', (req, res) => {
     return res.json({ success: true });
   }
 
-  if (type === 'online_ping') {
+  if (type === 'online_ping' || type === 'online_pong' || type === 'offline_ping') {
+    if (fromCode) {
+      if (type === 'offline_ping') {
+        peerLastPoll.delete(fromCode);
+      } else {
+        peerLastPoll.set(fromCode, Date.now());
+      }
+    }
     const pingEvt = {
-      type: 'online_ping',
+      type,
       eventId: eventId || ('ping_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
       fromCode,
       toCode,
@@ -391,9 +399,22 @@ app.post('/api/peer/ack', (req, res) => {
 app.get('/api/peer/poll', (req, res) => {
   const code = req.query.code;
   if (!code) return res.status(400).json({ error: 'Missing code' });
+  peerLastPoll.set(code, Date.now());
   const events = peerMailboxes.get(code) || [];
   const profile = peerProfiles.get(code) || null;
-  return res.json({ success: true, events, profile });
+  const onlinePeers = {};
+  if (typeof req.query.peers === 'string' && req.query.peers.trim()) {
+    const now = Date.now();
+    req.query.peers.split(',').forEach((p) => {
+      const pCode = p.trim();
+      if (!pCode) return;
+      const wsSet = peerClients.get(pCode);
+      const hasWs = Boolean(wsSet && wsSet.size > 0);
+      const lastSeen = peerLastPoll.get(pCode) || 0;
+      onlinePeers[pCode] = Boolean(hasWs || (lastSeen > 0 && now - lastSeen < 12000));
+    });
+  }
+  return res.json({ success: true, events, profile, onlinePeers });
 });
 
 app.use(express.static(__dirname));
@@ -520,6 +541,23 @@ wss.on('connection', (ws) => {
         };
         sendToPeerWs(toCode, event);
         pushToMailbox(toCode, event);
+      } else if (data.type === 'online_ping' || data.type === 'online_pong' || data.type === 'offline_ping') {
+        if (data.fromCode) {
+          if (data.type === 'offline_ping') {
+            peerLastPoll.delete(data.fromCode);
+          } else {
+            peerLastPoll.set(data.fromCode, Date.now());
+          }
+        }
+        if (data.toCode) {
+          sendToPeerWs(data.toCode, {
+            type: data.type,
+            eventId: data.eventId || ('ping_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+            fromCode: data.fromCode || boundCode,
+            toCode: data.toCode,
+            timestamp: Date.now()
+          });
+        }
       } else if (data.toCode) {
         const customEvent = {
           ...data,
@@ -539,6 +577,7 @@ wss.on('connection', (ws) => {
       peerClients.get(boundCode).delete(ws);
       if (peerClients.get(boundCode).size === 0) {
         peerClients.delete(boundCode);
+        peerLastPoll.delete(boundCode);
       }
     }
   });
