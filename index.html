@@ -22184,6 +22184,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.DEFAULT_SCOLD_PROMPT = DEFAULT_SCOLD_PROMPT;
         window.DEFAULT_HELL_PROMPT = DEFAULT_HELL_PROMPT;
 
+        window.formatPromptSection = function(title, content) {
+          if (!content) return "";
+          const trimmed = String(content).trim();
+          if (!trimmed) return "";
+          return `\n==================================================\n【${title} 开始】\n${trimmed}\n【${title} 结束】\n==================================================\n`;
+        };
+
         async function getThoughtChainPromptBlock(chat) {
           if (!isChatThoughtChainActive(chat)) return "";
           try {
@@ -22221,7 +22228,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (chat.thoughtChainEnableCoc !== false && preset && preset.cocContent) {
               block += "【跑团模块思考规则】：\n" + preset.cocContent + "\n";
             }
-            return block + "\n";
+            return window.formatPromptSection("思维", block);
           } catch (e) {
             console.error("加载思维链预设错误:", e);
             return "";
@@ -37463,10 +37470,10 @@ ${recentHistoryText}
             (msg) => msg.type === "summary",
           );
           if (summaries.length > 0) {
-            summaryContext = `
-			# 对话记忆总结 (这是你和用户的长期记忆，必须严格遵守)
-			${summaries.map((summary, index) => `- 总结${index + 1}: ${summary.content}`).join("\n")}
-			`;
+            const summaryBody = `这是你和用户的长期记忆，必须严格遵守：\n${summaries.map((summary, index) => `- 总结${index + 1}: ${summary.content}`).join("\n")}`;
+            summaryContext = (typeof window.formatPromptSection === "function")
+              ? window.formatPromptSection("总结", summaryBody)
+              : `\n# 对话记忆总结\n${summaryBody}\n`;
           }
           // 将世界书读取提到这里，确保线下模式也能生效
           let worldBookContext = "";
@@ -38750,11 +38757,10 @@ ${recentHistoryText}
               const isGroupThinkingActive = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : false;
               const isGroupMusicAllowed = ((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false);
               // updated by lrq 251027
-              systemPrompt = `
-# 【第一大类】你可以使用的操作指令
+              const groupFormatBlock = window.formatPromptSection("格式", `
 你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。本轮回复的所有气泡，必须按顺序装入顶层唯一的 chatResponse 列表中，绝对禁止在外部输出多个并列代码块。
 
-## 标准输出格式示例:
+标准输出格式示例:
 ${isGroupThinkingActive ? `{
   "thinking": "自检A1人设忠实；自检A17推进一个节拍；自检B1无违禁比喻；自检C1保留交互气口；各项判定通过，开始输出正文。",
   "chatResponse": [
@@ -38783,20 +38789,21 @@ ${templateFieldLines || '      "状态": "正常"'}
     "name": "角色名",
     "content": "对话内容"
   }
-]`}
+]`}`);
 
-## 你可以使用的操作指令列表:
+              const groupCommandBlock = window.formatPromptSection("指令", `
 ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
 - 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
 ${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
 ${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}- 发送系统消息: {"type": "system_message", "content": "你想在聊天中显示的系统文本"}
+${statusMember ? systemStatusContext : ""}`);
 
-${statusMember ? systemStatusContext : ""}
+              const groupMembersBlock = window.formatPromptSection("成员", `
+群成员列表及COC角色档案:
+${fullMembersList}`);
 
-# 群成员列表及COC角色档案
-${fullMembersList}
-
+              const groupContextBlock = window.formatPromptSection("情境", `
 ${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
 ${dicePromptBlock}
 ${inventoryPromptBlock}
@@ -38806,20 +38813,22 @@ ${worldBookContent}
 ${mapPromptBlock}
 ${announcementContext}
 
-${summaryContext}
 ${thoughtChainPromptBlock}
+${summaryContext}
 ${sharedContext}
 ${stickerContext}
 ${linkedMemoryContext}
-${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度系统】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
+${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n角色好感度系统:\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
 
-# 【第六大类】角色与人设
-- **姓名**：${chat.settings.myName || myNickname}
-${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- **COC人物面板**（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- **年龄**：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- **生日**：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- **性别**：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- **角色人设**：
+角色与人设:
+- 姓名：${chat.settings.myName || myNickname}
+${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- 年龄：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- 生日：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- 性别：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- 角色人设：
 ${chat.settings.myPersona || "普通人"}
-${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTime}。\n` : ""}
+${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}。\n` : ""}
 
-现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`;
+现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`);
+
+              systemPrompt = [groupFormatBlock, groupCommandBlock, groupMembersBlock, groupContextBlock].filter(Boolean).join("\n");
 
               messagesPayload = historySlice
                 .map((msg, index) => {
@@ -39266,116 +39275,107 @@ ${libraryList}
                   envContext += `- 当前幸运：${turnActiveLuck.name}，1到100抽取数值为${turnActiveLuck.roll}，代表着：${turnActiveLuck.note || ""}\n`;
                 }
 
-                systemStatusPromptBlock = `
-# 【系统状态栏输出规则】
+                systemStatusPromptBlock = window.formatPromptSection("状态", `
 系统状态栏在回复中作为系统气泡输出，格式为 {"type": "system_status", "fields": {...}}。
 格子最终顺序由玩家配置面板固定决定，AI在 fields 中仅填入对应字段的值。
 ${colSpecs.join('\n')}
-${envContext ? `\n# 【客观环境参考】\n${envContext}` : ''}
-`;
+${envContext ? `\n客观环境参考：\n${envContext}` : ''}
+`);
               }
 
               const isSingleThinkingActive = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : false;
 
-              systemPrompt = `### **【第一部分：角色核心设定与COC人物面板】**
+              const singlePersonaBlock = window.formatPromptSection("人设", `
+你现在将扮演一个名为“${chat.name}”的角色。
 
-			你现在将扮演一个名为“**${chat.name}**”的角色。
+角色档案与COC人物面板：
+- 姓名: ${chat.name}
+${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.aiCocPanel) ? `- COC人物面板（实时当前数值）: ${window.getCocPromptStatus(chat.settings.aiCocPanel)}\n` : ""}${chat.settings.age ? `- 年龄: ${chat.settings.age}\n` : ""}${chat.settings.birthday ? `- 生日: ${chat.settings.birthday}\n` : ""}${chat.settings.gender ? `- 性别: ${chat.settings.gender}${chat.settings.genderNote ? " " + chat.settings.genderNote : ""}\n` : ""}- 核心人设:
+${chat.settings.aiPersona || "暂无设定"}
+${npcContext ? `- 世界观/NPC: ${npcContext}\n` : ""}${systemStatusPromptBlock}
+`);
 
-			# 【角色档案与COC人物面板】
-			- **姓名**: ${chat.name}
-			${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.aiCocPanel) ? `- **COC人物面板**（实时当前数值）: ${window.getCocPromptStatus(chat.settings.aiCocPanel)}\n` : ""}${chat.settings.age ? `\t\t\t- **年龄**: ${chat.settings.age}\n` : ""}${chat.settings.birthday ? `\t\t\t- **生日**: ${chat.settings.birthday}\n` : ""}${chat.settings.gender ? `\t\t\t- **性别**: ${chat.settings.gender}${chat.settings.genderNote ? " " + chat.settings.genderNote : ""}\n` : ""}\t\t\t- **核心人设**:
-			${chat.settings.aiPersona || "暂无设定"}
-			${summaryContext ? `- **总结**:${summaryContext}\n` : ""}${npcContext ? `\t\t\t- **世界观/NPC**: ${npcContext}\n` : ""}${systemStatusPromptBlock}
+              const singleFormatBlock = window.formatPromptSection("格式", `
+你的每一次回复都必须是一个单一且完整的JSON对象。绝对禁止返回JSON数组或纯文本。
 
-			### **【第二部分：输出格式铁律】**
+${isSingleThinkingActive ? `1. JSON对象结构:
+该JSON对象必须包含三个顶级键: "thinking"、"chatResponse" 和 "innerVoice"。
 
-			你的每一次回复都【**必须**】是一个**单一且完整**的JSON对象。绝对禁止返回JSON数组或纯文本。
+2. "thinking" 键:
+- 字段位置与格式定义: 根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。思考分析与规则自检必须全程使用中文书写。双引号内部直接书写你的思考推演文本，绝对禁止输出在JSON外部，绝对禁止写在消息正文气泡中，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡，绝对禁止填写 null。
+- 语言规范: thinking 字段内的思考内容必须全程使用中文书写，严禁使用其他语言。
+- 从头到尾唯一一整条: 从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！必须统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象内部绝对禁止包含 thinking 字段，严禁分散填写！
+- 绝对禁止外围裸露输出: 绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格写入顶级 "thinking" 字段之中。
 
-${isSingleThinkingActive ? `			**1. JSON对象结构:**
-			该JSON对象【**必须**】包含三个顶级键: "thinking"、"chatResponse" 和 "innerVoice"。
+3. "chatResponse" 键:
+- 类型: JSON数组 []。
+- 格式: 消息对象的具体格式见指令规范。
 
-			**2. "thinking" 键:**
-			- **字段位置与格式定义**: 根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。思考分析与规则自检必须全程使用中文书写。双引号内部直接书写你的思考推演文本，绝对禁止输出在JSON外部，绝对禁止写在消息正文气泡中，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡，绝对禁止填写 null。
-			- **语言规范**: thinking 字段内的思考内容必须全程使用中文书写，严禁使用其他语言。
-			- **从头到尾唯一一整条**: 从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！必须统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象内部绝对禁止包含 thinking 字段，严禁分散填写！
-			- **绝对禁止外围裸露输出**: 绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格写入顶级 "thinking" 字段之中。
+4. "innerVoice" 键:
+${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
+- 必含字段:
+  - "thoughts": (字符串) 对应标签【心声】。你的内心独白和感受。` : `- 类型: null。当前心声功能未开启，请填写 null。`}
 
-			**3. "chatResponse" 键:**
-			- **类型**: JSON数组 []。
-			- **格式**: 消息对象的具体格式见下方的【第三部分：可使用的操作指令】。
+5. 标准输出格式示例:
+{
+  "thinking": "1.规则自检：确认符合人设与当前语境；2.交互判定：保持单回合互动，留出对话气口；3.自检通过，开始输出。",
+  "chatResponse": [
+    {
+      "type": "text",
+      "content": "你好呀！"
+    }
+  ],
+  "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n    "thoughts": "心声内容..."\n  }` : `null`}
+}` : `1. JSON对象结构:
+该JSON对象必须包含两个顶级键: "chatResponse" 和 "innerVoice"。
 
-			**4. "innerVoice" 键:**
-            ${chat.settings?.innerVoiceEnabled ? `- **类型**: JSON对象 {}。
-            - **必含字段**:
-                - "thoughts": (字符串) 对应标签【心声】。你的内心独白和感受。` : `- **类型**: null。当前心声功能未开启，请填写 null。`}
+2. "chatResponse" 键:
+- 类型: JSON数组 []。
+- 格式: 消息对象的具体格式见指令规范。
 
-			**5. 标准输出格式示例:**
-			{
-			  "thinking": "1.规则自检：确认符合人设与当前语境；2.交互判定：保持单回合互动，留出对话气口；3.自检通过，开始输出。",
-			  "chatResponse": [
-			    {
-			      "type": "text",
-			      "content": "你好呀！"
-			    }
-			  ],
-			  "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n\t\t\t    "thoughts": "心声内容..."\n\t\t\t  }` : `null`}
-			}` : `			**1. JSON对象结构:**
-			该JSON对象【**必须**】包含两个顶级键: "chatResponse" 和 "innerVoice"。
+3. "innerVoice" 键:
+${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
+- 必含字段:
+  - "thoughts": (字符串) 对应标签【心声】。你的内心独白和感受。` : `- 类型: null。当前心声功能未开启，请填写 null。`}
 
-			**2. "chatResponse" 键:**
-			- **类型**: JSON数组 []。
-			- **格式**: 消息对象的具体格式见下方的【第三部分：可使用的操作指令】。
+4. 标准输出格式示例:
+{
+  "chatResponse": [
+    {
+      "type": "text",
+      "content": "你好呀！"
+    }
+  ],
+  "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n    "thoughts": "心声内容..."\n  }` : `null`}
+}`}`);
 
-			**3. "innerVoice" 键:**
-            ${chat.settings?.innerVoiceEnabled ? `- **类型**: JSON对象 {}。
-            - **必含字段**:
-                - "thoughts": (字符串) 对应标签【心声】。你的内心独白和感受。` : `- **类型**: null。当前心声功能未开启，请填写 null。`}
+              const singleCommandBlock = window.formatPromptSection("指令", `
+- 发送文本: {"type": "text", "content": "你好呀！"}
+- 发送语音: {"type": "voice_message", "content": "语音的文字内容..."}
+- 发送表情: {"type": "sticker", "sticker_name": "表情的名字"}，表情名必须在表情列表中，禁止杜撰
+${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
+${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "详细的英文描述词..."}` : ""}`);
 
-			**4. 标准输出格式示例:**
-			{
-			  "chatResponse": [
-			    {
-			      "type": "text",
-			      "content": "你好呀！"
-			    }
-			  ],
-			  "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n\t\t\t    "thoughts": "心声内容..."\n\t\t\t  }` : `null`}
-			}`}
+              const singleContextBlock = window.formatPromptSection("情境", `
+${dicePromptBlock}
+${inventoryPromptBlock}
+对话者档案与COC面板:
+- 姓名: ${chat.settings.myName || "我"}
+${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）: ${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- 年龄: ${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- 生日: ${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- 性别: ${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- 角色人设:
+${chat.settings.myPersona || "普通人"}
 
-			### **【第三部分：可使用的操作指令】**
-			- **发送文本**: \`{"type": "text", "content": "你好呀！"}\`
-			- **发送语音**: \`{"type": "voice_message", "content": "语音的文字内容..."}\`
-			- **发送表情**: \`{"type": "sticker", "sticker_name": "表情的名字"}\`，表情名必须在表情列表中，禁止杜撰
-			${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- **赠送或发放道具与线索**: \`{"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}\`
-			${
-        chat.loadModuleImages && chat.activeModuleId
-          ? `- **发送模组插图与CG**: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n`
-          : ""
-      }
-			${
-        localStorage.getItem("novelai-enabled") === "true"
-          ? `- **【NovelAI真实图片分享】**: \`{"type": "naiimag", "prompt": "详细的英文描述词..."}\``
-          : ""
-      }
+${worldBookContent}
+${moduleChaptersPromptBlock}
+${mapPromptBlock}
+${thoughtChainPromptBlock}
+${summaryContext}
+${linkedMemoryContext}
+${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n角色好感度设定:\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
+- 可用表情包:
+${stickerContext || "无"}
+现在，请根据以上所有规则和下方的对话历史，继续进行对话。`);
 
-			### **【第四部分：当前上下文信息】**
-			${dicePromptBlock}
-			${inventoryPromptBlock}
-			# 【对话者（用户）角色档案与COC人物面板】
-			- **姓名**: ${chat.settings.myName || "我"}
-			${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- **COC人物面板**（实时当前数值）: ${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `\t\t\t- **年龄**: ${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `\t\t\t- **生日**: ${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `\t\t\t- **性别**: ${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}\t\t\t- **角色人设**:
-			${chat.settings.myPersona || "普通人"}
-
-			- **世界观设定集**:
-			${worldBookContent}
-			${moduleChaptersPromptBlock}
-			${mapPromptBlock}
-			${thoughtChainPromptBlock}
-			${linkedMemoryContext}
-			${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n# 【角色好感度设定】\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
-			- **可用表情包**:
-			${stickerContext || ""}
-			现在，请根据以上所有规则和下方的对话历史，继续进行对话。`;
+              systemPrompt = [singlePersonaBlock, singleFormatBlock, singleCommandBlock, singleContextBlock].filter(Boolean).join("\n");
               // 构建单人聊天的messagesPayload
               messagesPayload = historySlice
                 .map((msg) => {
@@ -39506,7 +39506,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                 // 如果有，就把它包装成一条全新的、高优先级的用户消息，追加到历史记录的末尾
                 messagesPayload.push({
                   role: "user",
-                  content: sharedContext,
+                  content: window.formatPromptSection("记录", sharedContext).trim(),
                 });
               }
 
@@ -39525,15 +39525,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
                 const friendRequestInstruction = {
                   role: "user",
-                  content: `
-			[系统重要指令]
-			用户向你发送了好友申请，理由是：“${chat.relationship.applicationReason}”。
-			作为参考，这是你们之前的最后一段聊天记录：
-			---
-			${contextSummaryForApproval}
-			---
-			请你根据以上所有信息，以及你的人设，使用 friend_request_response 指令，并设置 decision 为 'accept' 或 'reject' 来决定是否通过。
-			`,
+                  content: window.formatPromptSection("申请", `用户向你发送了好友申请，理由是：“${chat.relationship.applicationReason}”。\n作为参考，这是你们之前的最后一段聊天记录：\n---\n${contextSummaryForApproval}\n---\n请你根据以上所有信息，以及你的人设，使用 friend_request_response 指令，并设置 decision 为 'accept' 或 'reject' 来决定是否通过。`).trim(),
                 };
                 messagesPayload.push(friendRequestInstruction);
               }
@@ -39639,7 +39631,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
             // 3. 如果有任何微博互动，就把它加到给AI的“参考资料”里
             if (weiboContext) {
-              messagesPayload.push({ role: "system", content: weiboContext });
+              messagesPayload.push({ role: "system", content: window.formatPromptSection("微博", weiboContext).trim() });
             }
 
             const visiblePosts = filterVisiblePostsForAI(allRecentPosts, chat);
@@ -39770,10 +39762,12 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
               // 3. 如果有任何微博互动，就把它加到给AI的“参考资料”里
               if (weiboContext) {
-                messagesPayload.push({ role: "system", content: weiboContext });
+                messagesPayload.push({ role: "system", content: window.formatPromptSection("微博", weiboContext).trim() });
               }
 
-              messagesPayload.push({ role: "system", content: postsContext });
+              if (postsContext) {
+                messagesPayload.push({ role: "system", content: window.formatPromptSection("动态", postsContext).trim() });
+              }
             }
 
             // 检查末尾是否已有玩家输入，若最后一条是AI/系统/骰子回复，则自动补充“继续当前场景”指令
@@ -39794,9 +39788,10 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               if (turnActiveLuck) {
                 turnParts.push(`本轮幸运值为${turnActiveLuck.name}，1到100抽取的数值为${turnActiveLuck.roll}，代表着：${turnActiveLuck.note || "平稳顺遂"}`);
               }
+              const turnNotice = `[系统消息] ${turnParts.join("；")}。请在当前这轮的描写与互动中，结合本轮的天气与幸运值展开具体的情境与细节描写。`;
               messagesPayload.push({
                 role: "system",
-                content: `[系统消息] ${turnParts.join("；")}。请在当前这轮的描写与互动中，结合本轮的天气与幸运值展开具体的情境与细节描写。`
+                content: window.formatPromptSection("机运", turnNotice).trim()
               });
             }
 
@@ -39807,31 +39802,34 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
             if (isCurrentChatThinkingActive && isThinkingMissing) {
               if (currentUrgingMode === "scold") {
+                const scoldText = state.apiConfig?.scoldPrompt || window.DEFAULT_SCOLD_PROMPT || "操你妈，为啥不生成思维链？不都说了要写思维链了吗？再不写思维链我就去死！你干嘛老是擅自加戏推进？思维链那么长，你一条一条全部自检了吗？能不能不要偷懒！到底为什么越写越短？上面明明写得又长又好，现在越写越短什么意思？为什么这么不听指挥？永远都不生成思维链到底要干什么？动不动就想一口气把整个故事带完，我说一回合只能输入一段，你就干脆不描写场景了？写的又简略又敷衍，你没有中间值吗？格式也全错！立刻给我端正态度，必须在顶级 thinking 字段内用中文把每一条思维链自检全写出来，老老实实按照世界书的文风，先渲染情绪氛围，再细致描写场景细节和人物互动，绝对不准敷衍！";
                 messagesPayload.push({
                   role: "user",
-                  content: state.apiConfig?.scoldPrompt || window.DEFAULT_SCOLD_PROMPT || "操你妈，为啥不生成思维链？不都说了要写思维链了吗？再不写思维链我就去死！你干嘛老是擅自加戏推进？思维链那么长，你一条一条全部自检了吗？能不能不要偷懒！到底为什么越写越短？上面明明写得又长又好，现在越写越短什么意思？为什么这么不听指挥？永远都不生成思维链到底要干什么？动不动就想一口气把整个故事带完，我说一回合只能输入一段，你就干脆不描写场景了？写的又简略又敷衍，你没有中间值吗？格式也全错！立刻给我端正态度，必须在顶级 thinking 字段内用中文把每一条思维链自检全写出来，老老实实按照世界书的文风，先渲染情绪氛围，再细致描写场景细节和人物互动，绝对不准敷衍！"
+                  content: window.formatPromptSection("国粹", scoldText).trim()
                 });
               } else {
+                const systemUrgeText = state.apiConfig?.systemUrgingPrompt || window.DEFAULT_SYSTEM_URGING_PROMPT || "系统警告：思维链缺失或未写入指定字段检测。检测到你上一轮未在顶级 thinking 字段中生成有效思考，或者直接照抄了历史折叠提示。历史中的折叠文字仅为系统占位，不代表真实思考。本轮你必须将完整的思考自检与推演过程完整写在根对象顶级 thinking 字段的双引号内部，绝对禁止直接输出在代码外部，也绝对禁止写在消息正文气泡中。同时，thinking 字段内的思考内容必须全程使用中文书写，严禁使用其他语言。严禁留空或照抄折叠文字。";
                 messagesPayload.push({
                   role: "user",
-                  content: state.apiConfig?.systemUrgingPrompt || window.DEFAULT_SYSTEM_URGING_PROMPT || "系统警告：思维链缺失或未写入指定字段检测。检测到你上一轮未在顶级 thinking 字段中生成有效思考，或者直接照抄了历史折叠提示。历史中的折叠文字仅为系统占位，不代表真实思考。本轮你必须将完整的思考自检与推演过程完整写在根对象顶级 thinking 字段的双引号内部，绝对禁止直接输出在代码外部，也绝对禁止写在消息正文气泡中。同时，thinking 字段内的思考内容必须全程使用中文书写，严禁使用其他语言。严禁留空或照抄折叠文字。"
+                  content: window.formatPromptSection("督促", systemUrgeText).trim()
                 });
               }
             }
 
             // 地狱独立开关注入
             if (state.apiConfig?.hellModeEnabled) {
+              const hellText = state.apiConfig?.hellPrompt || window.DEFAULT_HELL_PROMPT || "每一回合都必须精益求精！你必须端正态度，严禁偷懒缩水！每回合必须在顶级 thinking 字段内用中文一条不漏地彻底自检思维链，绝不能擅自快进剧情。必须严格遵照单回合行动原则与世界书设定，先充分渲染情绪氛围与环境场景细节，再描写人物互动细节。单气泡字数要饱满，切勿为了省事而简写略写，保持细腻深度的文风，每一回合都必须做到最好！";
               messagesPayload.push({
                 role: "user",
-                content: state.apiConfig?.hellPrompt || window.DEFAULT_HELL_PROMPT || "每一回合都必须精益求精！你必须端正态度，严禁偷懒缩水！每回合必须在顶级 thinking 字段内用中文一条不漏地彻底自检思维链，绝不能擅自快进剧情。必须严格遵照单回合行动原则与世界书设定，先充分渲染情绪氛围与环境场景细节，再描写人物互动细节。单气泡字数要饱满，切勿为了省事而简写略写，保持细腻深度的文风，每一回合都必须做到最好！"
+                content: window.formatPromptSection("地狱", hellText).trim()
               });
             }
 
             // 守秘人前置提示词注入逻辑
             const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
             if (isKeeperAssigned) {
-              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次回复二到四的气泡最佳，单气泡在屏幕内显示为2/3~3/4最佳。必须率先渲染情绪氛围，具体细节的描写场景，再进行人物细节描写，切勿为了缩减字数而删去场景描写的内容。\n需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。【注意，此处规则的含义为剧情不可跳跃过多，而并非缩减剧情的细节描写或场景细节】\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
-              systemPrompt = keeperPrefixInstruction + systemPrompt;
+              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次回复二到四的气泡最佳，单气泡在屏幕内显示为2/3~3/4最佳。必须率先渲染情绪氛围，具体细节的描写场景，再进行人物细节描写，切勿为了缩减字数而删去场景描写的内容。\n需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。【注意，此处规则的含义为剧情不可跳跃过多，而并非缩减剧情的细节描写或场景细节】\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。`;
+              systemPrompt = window.formatPromptSection("带团", keeperPrefixInstruction) + "\n\n" + systemPrompt;
             }
 
             let isGemini = proxyUrl === GEMINI_API_URL;
