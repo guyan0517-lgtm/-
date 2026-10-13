@@ -94,12 +94,13 @@ export default {
     if (url.pathname === "/api/peer/request" && request.method === "POST") {
       try {
         const body = await request.json();
-        const { fromCode, toCode, fromName, fromAvatar } = body;
+        const { type = "friend_request", eventId, fromCode, toCode, fromName, fromAvatar } = body;
         if (!toCode) {
           return new Response(JSON.stringify({ error: "Missing target" }), { status: 400, headers: getCorsHeaders() });
         }
         const event = {
-          type: "friend_request",
+          type: type === "friend_accept" ? "friend_accept" : "friend_request",
+          eventId: eventId || ("evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8)),
           fromCode,
           toCode,
           fromName,

@@ -194,10 +194,11 @@ app.post('/api/peer/register', (req, res) => {
 });
 
 app.post('/api/peer/send', (req, res) => {
-  const { fromCode, toCode, content, senderName, senderAvatar, timestamp } = req.body;
+  const { eventId, fromCode, toCode, content, senderName, senderAvatar, timestamp } = req.body;
   if (!toCode || !content) return res.status(400).json({ error: 'Missing target or content' });
   const event = {
     type: 'message',
+    eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
     fromCode,
     toCode,
     content,
@@ -211,11 +212,12 @@ app.post('/api/peer/send', (req, res) => {
 });
 
 app.post('/api/peer/profile', (req, res) => {
-  const { peerCode, name, avatar, targetCodes = [] } = req.body;
+  const { eventId, peerCode, name, avatar, targetCodes = [] } = req.body;
   if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
   peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
   const event = {
     type: 'profile_update',
+    eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
     peerCode,
     name,
     avatar,
@@ -231,10 +233,11 @@ app.post('/api/peer/profile', (req, res) => {
 });
 
 app.post('/api/peer/request', (req, res) => {
-  const { fromCode, toCode, fromName, fromAvatar } = req.body;
+  const { type = 'friend_request', eventId, fromCode, toCode, fromName, fromAvatar } = req.body;
   if (!toCode) return res.status(400).json({ error: 'Missing target' });
   const event = {
-    type: 'friend_request',
+    type: type === 'friend_accept' ? 'friend_accept' : 'friend_request',
+    eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
     fromCode,
     toCode,
     fromName,
@@ -288,10 +291,11 @@ wss.on('connection', (ws) => {
           }
         }
       } else if (data.type === 'message') {
-        const { fromCode, toCode, content, senderName, senderAvatar, timestamp } = data;
+        const { eventId, fromCode, toCode, content, senderName, senderAvatar, timestamp } = data;
         if (toCode) {
           const event = {
             type: 'message',
+            eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
             fromCode,
             toCode,
             content,
@@ -303,18 +307,33 @@ wss.on('connection', (ws) => {
           pushToMailbox(toCode, event);
         }
       } else if (data.type === 'profile_update') {
-        const { peerCode, name, avatar, targetCodes = [] } = data;
+        const { eventId, peerCode, name, avatar, targetCodes = [] } = data;
         peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
-        const event = { type: 'profile_update', peerCode, name, avatar, timestamp: Date.now() };
+        const event = {
+          type: 'profile_update',
+          eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+          peerCode,
+          name,
+          avatar,
+          timestamp: Date.now()
+        };
         if (Array.isArray(targetCodes)) {
           targetCodes.forEach(target => {
             sendToPeerWs(target, event);
             pushToMailbox(target, event);
           });
         }
-      } else if (data.type === 'friend_request') {
-        const { fromCode, toCode, fromName, fromAvatar } = data;
-        const event = { type: 'friend_request', fromCode, toCode, fromName, fromAvatar, timestamp: Date.now() };
+      } else if (data.type === 'friend_request' || data.type === 'friend_accept') {
+        const { eventId, fromCode, toCode, fromName, fromAvatar } = data;
+        const event = {
+          type: data.type,
+          eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+          fromCode,
+          toCode,
+          fromName,
+          fromAvatar,
+          timestamp: Date.now()
+        };
         sendToPeerWs(toCode, event);
         pushToMailbox(toCode, event);
       }
