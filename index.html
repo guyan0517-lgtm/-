@@ -1284,8 +1284,16 @@
                 <select id="urging-mode-select" class="moe-input" style="width: 100%; height: 38px; line-height: 38px; font-size: 13px; box-sizing: border-box; padding: 0 10px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
                   <option value="system">系统</option>
                   <option value="scold">国粹</option>
-                  <option value="hell">地狱</option>
                 </select>
+              </div>
+              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
+                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
+                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">地狱</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="hell-mode-switch" />
+                    <span class="slider"></span>
+                  </label>
+                </label>
               </div>
               <div class="form-group" style="margin-top: 12px;">
                 <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">国粹</label>
@@ -28855,9 +28863,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 督促设置回显与实时持久化
           const urgingModeSelect = document.getElementById("urging-mode-select");
           if (urgingModeSelect) {
-            urgingModeSelect.value = state.apiConfig.urgingMode || "system";
+            urgingModeSelect.value = (state.apiConfig.urgingMode === "scold") ? "scold" : "system";
             urgingModeSelect.onchange = async () => {
               state.apiConfig.urgingMode = urgingModeSelect.value;
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance && dbInstance.apiConfig) {
+                await dbInstance.apiConfig.put(state.apiConfig);
+              }
+            };
+          }
+
+          const hellModeSwitch = document.getElementById("hell-mode-switch");
+          if (hellModeSwitch) {
+            hellModeSwitch.checked = !!state.apiConfig.hellModeEnabled;
+            hellModeSwitch.onchange = async () => {
+              state.apiConfig.hellModeEnabled = hellModeSwitch.checked;
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance && dbInstance.apiConfig) {
                 await dbInstance.apiConfig.put(state.apiConfig);
@@ -39785,27 +39805,22 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             const isThinkingMissing = isCurrentChatThinkingActive && typeof checkPreviousTurnThinkingValid === "function" && !checkPreviousTurnThinkingValid(historySlice, isCurrentChatThinkingActive);
             const currentUrgingMode = state.apiConfig?.urgingMode || "system";
 
-            if (currentUrgingMode === "system") {
-              if (isThinkingMissing) {
+            if (isCurrentChatThinkingActive && isThinkingMissing) {
+              if (currentUrgingMode === "scold") {
+                messagesPayload.push({
+                  role: "user",
+                  content: state.apiConfig?.scoldPrompt || window.DEFAULT_SCOLD_PROMPT || "操你妈，为啥不生成思维链？不都说了要写思维链了吗？再不写思维链我就去死！你干嘛老是擅自加戏推进？思维链那么长，你一条一条全部自检了吗？能不能不要偷懒！到底为什么越写越短？上面明明写得又长又好，现在越写越短什么意思？为什么这么不听指挥？永远都不生成思维链到底要干什么？动不动就想一口气把整个故事带完，我说一回合只能输入一段，你就干脆不描写场景了？写的又简略又敷衍，你没有中间值吗？格式也全错！立刻给我端正态度，必须在顶级 thinking 字段内用中文把每一条思维链自检全写出来，老老实实按照世界书的文风，先渲染情绪氛围，再细致描写场景细节和人物互动，绝对不准敷衍！"
+                });
+              } else {
                 messagesPayload.push({
                   role: "user",
                   content: state.apiConfig?.systemUrgingPrompt || window.DEFAULT_SYSTEM_URGING_PROMPT || "系统警告：思维链缺失或未写入指定字段检测。检测到你上一轮未在顶级 thinking 字段中生成有效思考，或者直接照抄了历史折叠提示。历史中的折叠文字仅为系统占位，不代表真实思考。本轮你必须将完整的思考自检与推演过程完整写在根对象顶级 thinking 字段的双引号内部，绝对禁止直接输出在代码外部，也绝对禁止写在消息正文气泡中。同时，thinking 字段内的思考内容必须全程使用中文书写，严禁使用其他语言。严禁留空或照抄折叠文字。"
                 });
               }
-            } else if (currentUrgingMode === "scold") {
-              if (isThinkingMissing) {
-                messagesPayload.push({
-                  role: "user",
-                  content: state.apiConfig?.scoldPrompt || window.DEFAULT_SCOLD_PROMPT || "操你妈，为啥不生成思维链？不都说了要写思维链了吗？再不写思维链我就去死！你干嘛老是擅自加戏推进？思维链那么长，你一条一条全部自检了吗？能不能不要偷懒！到底为什么越写越短？上面明明写得又长又好，现在越写越短什么意思？为什么这么不听指挥？永远都不生成思维链到底要干什么？动不动就想一口气把整个故事带完，我说一回合只能输入一段，你就干脆不描写场景了？写的又简略又敷衍，你没有中间值吗？格式也全错！立刻给我端正态度，必须在顶级 thinking 字段内用中文把每一条思维链自检全写出来，老老实实按照世界书的文风，先渲染情绪氛围，再细致描写场景细节和人物互动，绝对不准敷衍！"
-                });
-              }
-            } else if (currentUrgingMode === "hell") {
-              if (isThinkingMissing) {
-                messagesPayload.push({
-                  role: "user",
-                  content: state.apiConfig?.scoldPrompt || window.DEFAULT_SCOLD_PROMPT || "操你妈，为啥不生成思维链？不都说了要写思维链了吗？再不写思维链我就去死！你干嘛老是擅自加戏推进？思维链那么长，你一条一条全部自检了吗？能不能不要偷懒！到底为什么越写越短？上面明明写得又长又好，现在越写越短什么意思？为什么这么不听指挥？永远都不生成思维链到底要干什么？动不动就想一口气把整个故事带完，我说一回合只能输入一段，你就干脆不描写场景了？写的又简略又敷衍，你没有中间值吗？格式也全错！立刻给我端正态度，必须在顶级 thinking 字段内用中文把每一条思维链自检全写出来，老老实实按照世界书的文风，先渲染情绪氛围，再细致描写场景细节和人物互动，绝对不准敷衍！"
-                });
-              }
+            }
+
+            // 地狱独立开关注入
+            if (state.apiConfig?.hellModeEnabled) {
               messagesPayload.push({
                 role: "user",
                 content: state.apiConfig?.hellPrompt || window.DEFAULT_HELL_PROMPT || "每一回合都必须精益求精！你必须端正态度，严禁偷懒缩水！每回合必须在顶级 thinking 字段内用中文一条不漏地彻底自检思维链，绝不能擅自快进剧情。必须严格遵照单回合行动原则与世界书设定，先充分渲染情绪氛围与环境场景细节，再描写人物互动细节。单气泡字数要饱满，切勿为了省事而简写略写，保持细腻深度的文风，每一回合都必须做到最好！"
@@ -75949,6 +75964,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
               const urgingModeEl = document.getElementById("urging-mode-select");
               if (urgingModeEl) state.apiConfig.urgingMode = urgingModeEl.value || "system";
+              const hellSwitchEl = document.getElementById("hell-mode-switch");
+              if (hellSwitchEl) state.apiConfig.hellModeEnabled = hellSwitchEl.checked;
               const scoldPromptEl = document.getElementById("scold-prompt-input");
               if (scoldPromptEl) state.apiConfig.scoldPrompt = scoldPromptEl.value;
               const hellPromptEl = document.getElementById("hell-prompt-input");
