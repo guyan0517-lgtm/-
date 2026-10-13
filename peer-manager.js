@@ -1119,16 +1119,32 @@
     },
 
     showPeerNotice: function (titleOrText, onClick, options) {
-      if (!document.hidden) return;
-
       const opts = options || {};
       const title = opts.title || "密友通知";
       const message = opts.message || titleOrText || "";
       const defaultAva = window.defaultAvatar || "https://api.iconify.design/lucide:user.svg?color=%23888888";
       const avatarUrl = opts.avatar || defaultAva;
 
+      const isViewingThisChat =
+        Boolean(
+          opts.chatId &&
+            document.getElementById("chat-interface-screen") &&
+            document.getElementById("chat-interface-screen").classList.contains("active") &&
+            window.state &&
+            String(window.state.activeChatId) === String(opts.chatId)
+        );
+
+      if (document.hidden) {
+        this.playNoticeAlertSound();
+        this.triggerMobileSystemNotification(title, message, avatarUrl, opts);
+        return;
+      }
+
+      if (isViewingThisChat) {
+        return;
+      }
+
       this.playNoticeAlertSound();
-      this.triggerMobileSystemNotification(title, message, avatarUrl, opts);
 
       const bar = document.getElementById("notification-bar");
       const avatarImg = document.getElementById("notification-avatar");
@@ -1217,9 +1233,20 @@
           if (c.roleType === "peer" && !c.isGroup && c.peerCode) {
             if (!byPeerCode.has(c.peerCode)) byPeerCode.set(c.peerCode, []);
             byPeerCode.get(c.peerCode).push(c);
-          } else if (c.isGroup && c.isPeerGroup && c.peerGroupId) {
-            if (!byGroupId.has(c.peerGroupId)) byGroupId.set(c.peerGroupId, []);
-            byGroupId.get(c.peerGroupId).push(c);
+          } else if (c.isGroup) {
+            const hasRealPeer = Array.isArray(c.members) && c.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)));
+            if (!hasRealPeer && c.isPeerGroup) {
+              c.isPeerGroup = false;
+              if (window.state && window.state.chats && window.state.chats[c.id]) {
+                window.state.chats[c.id].isPeerGroup = false;
+              }
+              try {
+                await window.db.chats.put(c);
+              } catch (e) {}
+            } else if (hasRealPeer && c.isPeerGroup && c.peerGroupId) {
+              if (!byGroupId.has(c.peerGroupId)) byGroupId.set(c.peerGroupId, []);
+              byGroupId.get(c.peerGroupId).push(c);
+            }
           }
         }
 
@@ -3317,6 +3344,8 @@
     applyPeerChatInputUI: function (chat) {
       const actionsTop = document.getElementById("chat-input-actions-top");
       const stickerBtn = document.getElementById("open-sticker-panel-btn");
+      const rerollBtn = document.getElementById("reroll-btn");
+      const timelineBtn = document.getElementById("timeline-branch-btn");
       const affectionBtn = document.getElementById("chat-affection-bottom-btn");
       const mapBtn = document.getElementById("chat-map-btn");
       const waitReplyBtn = document.getElementById("wait-reply-btn");
@@ -3324,16 +3353,30 @@
       const stickerPanel = document.getElementById("sticker-panel");
 
       const isPeer = Boolean(chat && chat.roleType === "peer" && !chat.isGroup);
-      const isGroup = Boolean(chat && chat.isGroup);
+      const isPeerGroup = Boolean(
+        chat &&
+        chat.isGroup &&
+        Array.isArray(chat.members) &&
+        chat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))
+      );
+
+      if (chat && chat.isGroup && !isPeerGroup && chat.isPeerGroup) {
+        chat.isPeerGroup = false;
+      }
 
       if (stickerBtn) {
-        stickerBtn.style.display = (isPeer || isGroup) ? "inline-flex" : "none";
+        stickerBtn.style.display = (isPeer || isPeerGroup) ? "inline-flex" : "none";
       }
-      if (!isPeer && !isGroup && stickerPanel) {
+      if (!isPeer && !isPeerGroup && stickerPanel) {
         stickerPanel.classList.remove("visible");
       }
 
+      if (timelineBtn) {
+        timelineBtn.style.display = isPeerGroup ? "none" : "";
+      }
+
       if (isPeer) {
+        if (rerollBtn) rerollBtn.style.display = "none";
         if (actionsTop) {
           actionsTop.style.justifyContent = "flex-start";
           actionsTop.style.gap = "8px";
@@ -3349,6 +3392,7 @@
         }
         this.ensureVoiceRecordPanel();
       } else {
+        if (rerollBtn) rerollBtn.style.display = "";
         if (actionsTop) {
           actionsTop.style.justifyContent = "";
           actionsTop.style.gap = "";
@@ -3669,11 +3713,14 @@
       if (visualBeautifySwitch) visualBeautifySwitch.checked = true;
     },
 
-    resetPeerChatSettingsUI: function () {
+    resetPeerChatSettingsUI: function (currentChat) {
+      const myPersonaCard = document.getElementById("my-persona-card");
+      if (myPersonaCard) myPersonaCard.style.display = "block";
+
       const chatNameGroup = document.getElementById("chat-name-group");
       if (chatNameGroup) {
         const lbl = chatNameGroup.querySelector("label");
-        if (lbl) lbl.textContent = "角色真名 /群聊名称";
+        if (lbl) lbl.textContent = "角色真名 /群聊名称(AI只认这个，修改会影响记忆)";
         const inp = document.getElementById("chat-name-input");
         if (inp) inp.readOnly = false;
       }
@@ -3710,8 +3757,17 @@
       const groupKeeperBtn = document.getElementById("open-keeper-panel-btn-group");
       if (groupKeeperBtn) groupKeeperBtn.style.display = "";
 
+      const isDiceOrStatus = Boolean(
+        currentChat &&
+        (currentChat.isDiceBot ||
+          currentChat.roleType === "system_status" ||
+          currentChat.roleType === "dice" ||
+          currentChat.isDice)
+      );
       const invBtn = document.getElementById("manage-ai-inventory-btn");
-      if (invBtn) invBtn.style.display = "";
+      if (invBtn) {
+        invBtn.style.display = currentChat && (currentChat.isGroup || isDiceOrStatus) ? "none" : "";
+      }
 
       const offlineSection = document.getElementById("offline-mode-section");
       if (offlineSection) {
@@ -3810,7 +3866,7 @@
             if (currentChat && currentChat.roleType === "peer" && !currentChat.isGroup) {
               PeerManager.applyPeerChatSettingsUI(currentChat);
             } else {
-              PeerManager.resetPeerChatSettingsUI();
+              PeerManager.resetPeerChatSettingsUI(currentChat);
             }
           }, 50);
         });

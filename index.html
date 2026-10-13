@@ -75,7 +75,7 @@
     <script src="module-manager.js" defer></script>
     <script src="inventory-manager.js" defer></script>
     <script src="combat-engine.js" defer></script>
-    <script src="peer-manager.js?v=8" defer></script>
+    <script src="peer-manager.js?v=10" defer></script>
 
     <style></style>
 
@@ -3351,6 +3351,24 @@
           </div>
 
           <div id="chat-input-actions-top">
+            <!-- “重新生成回复”按钮的新家 -->
+            <button id="reroll-btn" class="action-button" title="重新生成回复" onclick="if(typeof handleRerollClick==='function')handleRerollClick();">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+            </button>
+
             <button
               id="open-sticker-panel-btn"
               class="chat-action-icon-btn action-button"
@@ -3373,23 +3391,6 @@
                 <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
                 <line x1="9" y1="9" x2="9.01" y2="9"></line>
                 <line x1="15" y1="9" x2="15.01" y2="9"></line>
-              </svg>
-            </button>
-            <!-- “重新生成回复”按钮的新家 -->
-            <button id="reroll-btn" class="action-button" title="重新生成回复" onclick="if(typeof handleRerollClick==='function')handleRerollClick();">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="23 4 23 10 17 10"></polyline>
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
               </svg>
             </button>
 
@@ -27351,18 +27352,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           messageContent,
           specificAvatarUrl = null,
         ) {
-          // 播放音效
-          playNotificationSound();
-
-          // 清除旧的应用内顶部横幅计时器
-          clearTimeout(notificationTimeout);
-
           const chat = state.chats[chatId];
           if (!chat) return;
-          if (!document.hidden) return;
 
           // 1. 准备通知数据
-          // 逻辑修改：如果传入了 specificAvatarUrl，就直接用；否则按原逻辑（群用群头像，单聊用AI头像）
           let avatarUrl = specificAvatarUrl;
 
           if (!avatarUrl) {
@@ -27376,54 +27369,87 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               ? chat.settings.remarkName
               : chat.name;
 
-          // 2. 检测是否需要发送系统弹窗 (原生通知)
-          const isSystemNotifyEnabled =
-            state.globalSettings.enableSystemNotifications === true;
-          const hasPermission =
-            "Notification" in window && Notification.permission === "granted";
-
-          if (isSystemNotifyEnabled && hasPermission) {
-            const isChatActive =
+          const isChatActive =
+            Boolean(
               document.getElementById("chat-interface-screen") &&
-              document
-                .getElementById("chat-interface-screen")
-                .classList.contains("active") &&
-              state.activeChatId === chatId;
+                document
+                  .getElementById("chat-interface-screen")
+                  .classList.contains("active") &&
+                String(state.activeChatId) === String(chatId),
+            );
 
-            if (document.hidden || !isChatActive) {
-              const options = {
-                body: messageContent,
-                icon: avatarUrl, // 这里也会自动使用正确的头像
-                tag: chatId,
-                renotify: true,
-                silent: false,
-                vibrate: [200, 100, 200],
-                badge:
-                  "https://i.postimg.cc/Kj8JnRcp/267611-CC01-F8-A3-B4910-A2-C2-FFDE479-DC.jpg",
-              };
+          // 2. 当处于后台时，发送外置系统弹窗通知
+          if (document.hidden) {
+            playNotificationSound();
+            const isSystemNotifyEnabled =
+              state.globalSettings.enableSystemNotifications !== false;
 
-              try {
-                if ("serviceWorker" in navigator) {
-                  const reg = await navigator.serviceWorker.getRegistration();
-                  if (reg) {
-                    await reg.showNotification(notifName, options);
+            if (isSystemNotifyEnabled) {
+              if (
+                window.PeerManager &&
+                typeof window.PeerManager.triggerMobileSystemNotification ===
+                  "function"
+              ) {
+                await window.PeerManager.triggerMobileSystemNotification(
+                  notifName,
+                  messageContent,
+                  avatarUrl,
+                  {
+                    chatId: String(chatId),
+                    tag: "ai_msg_" + chatId + "_" + Date.now(),
+                  },
+                );
+                return;
+              }
+
+              const hasPermission =
+                "Notification" in window &&
+                Notification.permission === "granted";
+              if (hasPermission) {
+                const safeIcon =
+                  avatarUrl && !avatarUrl.startsWith("data:")
+                    ? avatarUrl
+                    : "./icon-192.png";
+                const options = {
+                  body: messageContent,
+                  icon: safeIcon,
+                  tag: "ai_msg_" + chatId + "_" + Date.now(),
+                  renotify: true,
+                  silent: false,
+                  vibrate: [200, 100, 200],
+                  badge: "./icon-192.png",
+                  data: { chatId: String(chatId) },
+                };
+
+                try {
+                  if ("serviceWorker" in navigator) {
+                    const reg =
+                      await navigator.serviceWorker.getRegistration();
+                    if (reg && typeof reg.showNotification === "function") {
+                      await reg.showNotification(notifName, options);
+                    } else {
+                      new Notification(notifName, options);
+                    }
                   } else {
                     new Notification(notifName, options);
                   }
-                } else {
-                  new Notification(notifName, options);
+                } catch (e) {
+                  console.error("系统通知发送失败:", e.message);
                 }
-              } catch (e) {
-                console.error("系统通知发送失败:", e.message);
               }
             }
+            return;
           }
 
-          // 3. 应用内顶部横幅 (网页内弹窗)
+          // 3. 当处于前台时，不显示外置弹窗，仅在未打开当前聊天框时显示内置顶部横幅弹窗
+          if (isChatActive) return;
+
+          playNotificationSound();
+          clearTimeout(notificationTimeout);
+
           const bar = document.getElementById("notification-bar");
           const avatarImg = document.getElementById("notification-avatar");
 
-          // 这里设置图片
           if (avatarImg) avatarImg.src = avatarUrl;
 
           const contentDiv = document.getElementById("notification-content");
@@ -29450,12 +29476,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } else if (Array.isArray(lastMsgObj.content)) {
               lastMsgDisplay = `[图片]`;
             } else {
-              lastMsgDisplay = String(lastMsgObj.content || "...").substring(
-                0,
-                20,
-              );
+              lastMsgDisplay = lastMsgObj.content
+                ? String(lastMsgObj.content).substring(0, 20)
+                : "";
             }
-            if (lastMsgObj.senderName && lastMsgObj.type !== "pat_message") {
+            if (
+              lastMsgDisplay &&
+              lastMsgObj.senderName &&
+              lastMsgObj.type !== "pat_message"
+            ) {
               const member = (chat.members || []).find(
                 (m) => m.originalName === lastMsgObj.senderName,
               );
@@ -29497,7 +29526,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? `[${statusText}] ${singlePreview}`
                 : `[${statusText}]`;
             } else {
-              lastMsgDisplay = singlePreview || "...";
+              lastMsgDisplay = singlePreview;
             }
           }
 
@@ -32726,6 +32755,32 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const curMode = (chat.settings?.voiceMode === "auto") ? "默认" : "手动";
             voiceModeBtn.textContent = curMode;
             voiceModeBtn.title = curMode;
+          }
+          const isPeerSingle = Boolean(chat && chat.roleType === "peer" && !chat.isGroup);
+          const isRealPeerGroup = Boolean(
+            chat &&
+            chat.isGroup &&
+            Array.isArray(chat.members) &&
+            chat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))
+          );
+          if (chat && chat.isGroup && !isRealPeerGroup && chat.isPeerGroup) {
+            chat.isPeerGroup = false;
+          }
+          const stickerBtnEl = document.getElementById("open-sticker-panel-btn");
+          if (stickerBtnEl) {
+            stickerBtnEl.style.display = (isPeerSingle || isRealPeerGroup) ? "inline-flex" : "none";
+          }
+          const rerollBtnEl = document.getElementById("reroll-btn");
+          if (rerollBtnEl) {
+            rerollBtnEl.style.display = isPeerSingle ? "none" : "";
+          }
+          const timelineBranchBtnEl = document.getElementById("timeline-branch-btn");
+          if (timelineBranchBtnEl) {
+            timelineBranchBtnEl.style.display = isRealPeerGroup ? "none" : "";
+          }
+          if (!isPeerSingle && !isRealPeerGroup) {
+            const stickerPanelEl = document.getElementById("sticker-panel");
+            if (stickerPanelEl) stickerPanelEl.classList.remove("visible");
           }
           if (window.PeerManager && typeof window.PeerManager.applyPeerChatInputUI === "function") {
             window.PeerManager.applyPeerChatInputUI(chat);
@@ -38079,6 +38134,9 @@ ${recentHistoryText}
                 };
                 chat.history.push(aiMessage);
                 await incrementMessageCount(chatId);
+                if (!isViewingThisChat || document.hidden) {
+                  showNotification(chatId, aiMessage.content);
+                }
                 if (isViewingThisChat) {
                   appendMessage(aiMessage, chat);
                 }
@@ -48464,7 +48522,7 @@ ${stickerContext || "无"}
 
           const newChatId = "group_" + Date.now();
           const members = [];
-          let hasPeerMember = Boolean(window.__isCreatingPeerGroup);
+          let hasPeerMember = false;
 
           for (const contactId of selectedContacts) {
             const contactChat = state.chats[contactId];
@@ -79917,6 +79975,15 @@ ${stickerContext || "无"}
           const openStickerBtn = document.getElementById("open-sticker-panel-btn");
           if (openStickerBtn) {
             openStickerBtn.addEventListener("click", () => {
+              const activeChat = state.chats && state.activeChatId ? state.chats[state.activeChatId] : null;
+              const isPeer = Boolean(activeChat && activeChat.roleType === "peer" && !activeChat.isGroup);
+              const isPeerGroup = Boolean(
+                activeChat &&
+                activeChat.isGroup &&
+                Array.isArray(activeChat.members) &&
+                activeChat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))
+              );
+              if (!isPeer && !isPeerGroup) return;
               renderStickerPanel();
               if (stickerPanel) stickerPanel.classList.add("visible");
             });
