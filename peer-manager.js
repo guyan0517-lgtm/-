@@ -1140,6 +1140,10 @@
         await this.receiveMessageEdit(data);
       } else if (data.type === "msg_delete") {
         await this.receiveMessageDelete(data);
+      } else if (data.type === "group_typing_status") {
+        await this.receiveTypingStatus(data);
+      } else if (data.type === "group_module_image") {
+        await this.receiveGroupModuleImage(data);
       }
 
       if (data.eventId) {
@@ -1945,18 +1949,56 @@
             genderNote: m.genderNote || "",
             roleType: m.roleType || "",
             triggerMode: m.triggerMode || "always",
+            addedByPeerCode: m.addedByPeerCode || groupChat.ownerPeerCode || myCode,
+            isPrivate: Boolean(m.isPrivate),
             settings: m.settings ? JSON.parse(JSON.stringify(m.settings)) : undefined,
             cocPanel: m.cocPanel ? JSON.parse(JSON.stringify(m.cocPanel)) : null
           });
         }
       }
 
+      const summaries = Array.isArray(groupChat.history)
+        ? groupChat.history.filter((msg) => msg && msg.type === "summary")
+        : [];
+
+      const sharedModulesSanitized = Array.isArray(groupChat.settings?.sharedModules)
+        ? groupChat.settings.sharedModules.map((sm) => ({
+            module: sm.module,
+            chapters: sm.chapters || [],
+            items: sm.items || []
+          }))
+        : [];
+
       return {
         sharedGroupId: sharedGroupId,
         groupName: groupChat.name || "我们的群聊",
         groupAvatar: grpAva,
         humanPeers: humanPeers,
-        aiMembers: aiMembers
+        aiMembers: aiMembers,
+        aiMemberIds: aiMembers.map((a) => a.id),
+        summarySettings: groupChat.settings?.summary
+          ? JSON.parse(JSON.stringify(groupChat.settings.summary))
+          : null,
+        maxMemory: groupChat.settings?.maxMemory || 10,
+        summaries: summaries,
+        sharedWorldBooks: Array.isArray(groupChat.settings?.sharedWorldBooks)
+          ? groupChat.settings.sharedWorldBooks
+          : [],
+        linkedWorldBookIds: Array.isArray(groupChat.settings?.linkedWorldBookIds)
+          ? groupChat.settings.linkedWorldBookIds
+          : [],
+        sharedModules: sharedModulesSanitized,
+        activeModuleId: groupChat.activeModuleId || null,
+        activeModuleChapterIds: Array.isArray(groupChat.activeModuleChapterIds)
+          ? groupChat.activeModuleChapterIds
+          : [],
+        moduleSwitchMode: groupChat.moduleSwitchMode || "semi",
+        sharedThoughtChains: Array.isArray(groupChat.settings?.sharedThoughtChains)
+          ? groupChat.settings.sharedThoughtChains
+          : [],
+        thoughtChainEnabled: groupChat.thoughtChainEnabled !== false,
+        thoughtChainId: groupChat.thoughtChainId || null,
+        thoughtChainEnableCoc: groupChat.thoughtChainEnableCoc !== false
       };
     },
 
@@ -2133,6 +2175,8 @@
           genderNote: am.genderNote || "",
           roleType: am.roleType || "",
           triggerMode: am.triggerMode || "always",
+          addedByPeerCode: am.addedByPeerCode || invite.fromCode || "",
+          isPrivate: Boolean(am.isPrivate),
           settings: am.settings ? JSON.parse(JSON.stringify(am.settings)) : undefined,
           cocPanel: am.cocPanel || (typeof window.getDefaultCocData === "function" ? window.getDefaultCocData() : null),
           isAdmin: false,
@@ -2338,11 +2382,68 @@
             groupAvatar: snap.groupAvatar,
             humanPeers: snap.humanPeers,
             aiMembers: snap.aiMembers,
+            aiMemberIds: snap.aiMemberIds,
+            syncMemberRemovals: true,
             peerMemberFrames: peerMemberFrames,
+            summarySettings: snap.summarySettings,
+            maxMemory: snap.maxMemory,
+            summaries: snap.summaries,
+            sharedWorldBooks: snap.sharedWorldBooks,
+            linkedWorldBookIds: snap.linkedWorldBookIds,
+            sharedModules: snap.sharedModules,
+            activeModuleId: snap.activeModuleId,
+            activeModuleChapterIds: snap.activeModuleChapterIds,
+            moduleSwitchMode: snap.moduleSwitchMode,
+            sharedThoughtChains: snap.sharedThoughtChains,
+            thoughtChainEnabled: snap.thoughtChainEnabled,
+            thoughtChainId: snap.thoughtChainId,
+            thoughtChainEnableCoc: snap.thoughtChainEnableCoc,
             timestamp: Date.now()
           };
           this.dispatchPacketToNetwork(m.peerCode, pkt, "/api/peer/send", false);
         }
+      }
+    },
+
+    syncGroupUpdateToPeers: async function (groupChat) {
+      return this.syncGroupSettingsToPeers(groupChat);
+    },
+
+    syncModuleImagesToPeers: async function (groupChat, moduleId, images) {
+      if (!groupChat || !groupChat.isGroup || !groupChat.isPeerGroup || !Array.isArray(images)) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const sharedGroupId = groupChat.peerGroupId || groupChat.id;
+      const peerTargets = (groupChat.members || []).filter(
+        (m) => (m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode
+      );
+      for (const img of images) {
+        if (!img || !img.dataUrl) continue;
+        const compressedUrl = await this.compressAvatarForWire(img.dataUrl, 640, 0.75);
+        for (const pm of peerTargets) {
+          const pkt = {
+            type: "group_module_image",
+            eventId: "gmodimg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+            fromCode: myCode,
+            toCode: pm.peerCode,
+            groupId: sharedGroupId,
+            moduleId: moduleId,
+            imageObj: {
+              ...img,
+              dataUrl: compressedUrl || img.dataUrl
+            },
+            timestamp: Date.now()
+          };
+          this.dispatchPacketToNetwork(pm.peerCode, pkt, "/api/peer/send", false);
+        }
+      }
+    },
+
+    receiveGroupModuleImage: async function (data) {
+      if (!data || !data.imageObj || !data.moduleId) return;
+      if (window.db && window.db.moduleImages) {
+        try {
+          await window.db.moduleImages.put(data.imageObj);
+        } catch (e) {}
       }
     },
 
@@ -2363,6 +2464,24 @@
       }
 
       if (!Array.isArray(groupChat.members)) groupChat.members = [];
+
+      if (data.syncMemberRemovals && Array.isArray(data.aiMemberIds)) {
+        const validAiIds = new Set(data.aiMemberIds.map((id) => String(id)));
+        const validAiNames = new Set((data.aiMembers || []).map((am) => am && am.originalName).filter(Boolean));
+        groupChat.members = groupChat.members.filter((m) => {
+          if (m.isPeerMember || m.roleType === "peer" || m.peerCode) return true;
+          return validAiIds.has(String(m.id)) || validAiNames.has(m.originalName);
+        });
+      }
+
+      if (data.syncMemberRemovals && Array.isArray(data.humanPeers)) {
+        const validPeerCodes = new Set(data.humanPeers.map((hp) => hp && hp.peerCode).filter(Boolean));
+        groupChat.members = groupChat.members.filter((m) => {
+          if (!(m.isPeerMember || m.roleType === "peer" || m.peerCode)) return true;
+          if (m.peerCode === myCode) return true;
+          return validPeerCodes.has(m.peerCode);
+        });
+      }
 
       for (const hp of data.humanPeers || []) {
         if (!hp || !hp.peerCode || hp.peerCode === myCode) continue;
@@ -2425,6 +2544,8 @@
             genderNote: am.genderNote || "",
             roleType: am.roleType || "",
             triggerMode: am.triggerMode || "always",
+            addedByPeerCode: am.addedByPeerCode || data.fromCode || "",
+            isPrivate: Boolean(am.isPrivate),
             settings: am.settings ? JSON.parse(JSON.stringify(am.settings)) : undefined,
             cocPanel: am.cocPanel || (typeof window.getDefaultCocData === "function" ? window.getDefaultCocData() : null),
             isAdmin: false,
@@ -2435,9 +2556,112 @@
           if (am.avatar) existingAi.avatar = am.avatar;
           if (am.avatarFrame !== undefined) existingAi.avatarFrame = am.avatarFrame;
           if (am.persona !== undefined) existingAi.persona = am.persona;
+          if (am.addedByPeerCode !== undefined) existingAi.addedByPeerCode = am.addedByPeerCode;
+          if (am.isPrivate !== undefined) existingAi.isPrivate = Boolean(am.isPrivate);
           if (am.cocPanel) existingAi.cocPanel = am.cocPanel;
           if (am.settings) existingAi.settings = am.settings;
         }
+      }
+
+      if (data.summarySettings) {
+        groupChat.settings.summary = {
+          ...(groupChat.settings.summary || {}),
+          ...data.summarySettings
+        };
+      }
+      if (data.maxMemory !== undefined) {
+        groupChat.settings.maxMemory = data.maxMemory;
+      }
+
+      if (Array.isArray(data.summaries)) {
+        if (!Array.isArray(groupChat.history)) groupChat.history = [];
+        const nonSummaries = groupChat.history.filter((m) => !m || m.type !== "summary");
+        const combined = [...nonSummaries, ...data.summaries].sort(
+          (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
+        );
+        groupChat.history = combined;
+        const lastSum = [...data.summaries].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).pop();
+        if (groupChat.settings.summary) {
+          if (lastSum) {
+            const idxInHist = groupChat.history.findIndex((m) => m.timestamp === lastSum.timestamp);
+            groupChat.settings.summary.lastSummaryIndex = idxInHist > 0 ? idxInHist - 1 : -1;
+          } else {
+            groupChat.settings.summary.lastSummaryIndex = -1;
+          }
+        }
+      }
+
+      if (Array.isArray(data.sharedWorldBooks)) {
+        groupChat.settings.sharedWorldBooks = data.sharedWorldBooks;
+        if (window.state && Array.isArray(window.state.worldBooks)) {
+          for (const wb of data.sharedWorldBooks) {
+            if (!wb || !wb.id) continue;
+            const existingWbIdx = window.state.worldBooks.findIndex((b) => String(b.id) === String(wb.id));
+            if (existingWbIdx === -1) {
+              window.state.worldBooks.push(wb);
+              if (window.db && window.db.worldBooks) {
+                try {
+                  await window.db.worldBooks.put(wb);
+                } catch (e) {}
+              }
+            }
+          }
+        }
+      }
+      if (Array.isArray(data.linkedWorldBookIds)) {
+        groupChat.settings.linkedWorldBookIds = data.linkedWorldBookIds;
+      }
+
+      if (Array.isArray(data.sharedModules)) {
+        groupChat.settings.sharedModules = data.sharedModules;
+        if (window.db) {
+          for (const sm of data.sharedModules) {
+            if (!sm || !sm.module) continue;
+            try {
+              if (window.db.modules) await window.db.modules.put(sm.module);
+              if (Array.isArray(sm.chapters) && window.db.moduleChapters) {
+                for (const ch of sm.chapters) {
+                  await window.db.moduleChapters.put(ch);
+                }
+              }
+              if (Array.isArray(sm.items) && window.db.moduleItems) {
+                for (const it of sm.items) {
+                  await window.db.moduleItems.put(it);
+                }
+              }
+            } catch (e) {}
+          }
+        }
+      }
+      if (data.activeModuleId !== undefined) {
+        groupChat.activeModuleId = data.activeModuleId;
+      }
+      if (Array.isArray(data.activeModuleChapterIds)) {
+        groupChat.activeModuleChapterIds = data.activeModuleChapterIds;
+      }
+      if (data.moduleSwitchMode !== undefined) {
+        groupChat.moduleSwitchMode = data.moduleSwitchMode;
+      }
+
+      if (Array.isArray(data.sharedThoughtChains)) {
+        groupChat.settings.sharedThoughtChains = data.sharedThoughtChains;
+        if (window.db && window.db.thoughtChainPresets) {
+          for (const tc of data.sharedThoughtChains) {
+            if (!tc || !tc.id) continue;
+            try {
+              await window.db.thoughtChainPresets.put(tc);
+            } catch (e) {}
+          }
+        }
+      }
+      if (data.thoughtChainEnabled !== undefined) {
+        groupChat.thoughtChainEnabled = data.thoughtChainEnabled;
+      }
+      if (data.thoughtChainId !== undefined) {
+        groupChat.thoughtChainId = data.thoughtChainId;
+      }
+      if (data.thoughtChainEnableCoc !== undefined) {
+        groupChat.thoughtChainEnableCoc = data.thoughtChainEnableCoc;
       }
 
       if (window.db && window.db.chats) {
@@ -2445,7 +2669,16 @@
       }
       if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
         const titleEl = document.getElementById("chat-header-title");
-        if (titleEl) titleEl.textContent = groupChat.name;
+        if (titleEl && !titleEl.classList.contains("typing-status")) {
+          titleEl.textContent = groupChat.name;
+        }
+        if (typeof window.renderGroupMemberSettings === "function") {
+          window.renderGroupMemberSettings(groupChat.members);
+        }
+        const sumModal = document.getElementById("summary-viewer-modal");
+        if (sumModal && sumModal.classList.contains("visible") && typeof window.openSummaryViewer === "function") {
+          window.openSummaryViewer();
+        }
         if (typeof window.renderChatInterfaceProxy === "function") {
           window.renderChatInterfaceProxy(groupChat.id);
         }
@@ -2565,7 +2798,12 @@
         chatScreen.classList.contains("active") &&
         !document.hidden;
 
-      if (!isCurrentActive) {
+      const isVisibleToMe =
+        typeof window.isMessageVisibleToCurrentUser === "function"
+          ? window.isMessageVisibleToCurrentUser(msgToInsert, groupChat)
+          : true;
+
+      if (!isCurrentActive && isVisibleToMe) {
         groupChat.unreadCount = (groupChat.unreadCount || 0) + 1;
       }
 
@@ -2581,48 +2819,50 @@
         }
       }
 
-      const isGroupSticker =
-        msgToInsert.type === "sticker" ||
-        Boolean(msgToInsert.isPeerOnlySticker) ||
-        Boolean(msgToInsert.meaning);
-      const isGroupImage =
-        !isGroupSticker &&
-        (Array.isArray(msgToInsert.content) ||
-          msgToInsert.type === "naiimag" ||
-          msgToInsert.type === "nov" ||
-          msgToInsert.type === "sd" ||
-          msgToInsert.type === "image" ||
-          msgToInsert.type === "realimag" ||
-          msgToInsert.type === "novelai" ||
-          msgToInsert.type === "nai_image" ||
-          msgToInsert.type === "module_pure_image" ||
-          msgToInsert.isModuleImageOnly ||
-          Boolean(msgToInsert.imageUrl) ||
-          Boolean(msgToInsert.image));
-      const previewText =
-        msgToInsert.type === "voice_message"
-          ? "[语音]"
-          : isGroupSticker
-            ? `[表情: ${msgToInsert.meaning || "表情"}]`
-            : isGroupImage
-              ? "[图片]"
-              : String(msgToInsert.content || "");
+      if (isVisibleToMe) {
+        const isGroupSticker =
+          msgToInsert.type === "sticker" ||
+          Boolean(msgToInsert.isPeerOnlySticker) ||
+          Boolean(msgToInsert.meaning);
+        const isGroupImage =
+          !isGroupSticker &&
+          (Array.isArray(msgToInsert.content) ||
+            msgToInsert.type === "naiimag" ||
+            msgToInsert.type === "nov" ||
+            msgToInsert.type === "sd" ||
+            msgToInsert.type === "image" ||
+            msgToInsert.type === "realimag" ||
+            msgToInsert.type === "novelai" ||
+            msgToInsert.type === "nai_image" ||
+            msgToInsert.type === "module_pure_image" ||
+            msgToInsert.isModuleImageOnly ||
+            Boolean(msgToInsert.imageUrl) ||
+            Boolean(msgToInsert.image));
+        const previewText =
+          msgToInsert.type === "voice_message"
+            ? "[语音]"
+            : isGroupSticker
+              ? `[表情: ${msgToInsert.meaning || "表情"}]`
+              : isGroupImage
+                ? "[图片]"
+                : String(msgToInsert.content || "");
 
-      this.showPeerNotice(
-        `${msgToInsert.senderName}: ${previewText}`,
-        () => {
-          if (typeof window.openChat === "function") {
-            window.openChat(groupChat.id);
+        this.showPeerNotice(
+          `${msgToInsert.senderName}: ${previewText}`,
+          () => {
+            if (typeof window.openChat === "function") {
+              window.openChat(groupChat.id);
+            }
+          },
+          {
+            title: groupChat.name || "群聊",
+            message: `${msgToInsert.senderName}: ${previewText}`,
+            avatar: groupChat.settings?.groupAvatar || msgToInsert.senderAvatar,
+            chatId: groupChat.id,
+            tag: "peer_gmsg_" + groupChat.id
           }
-        },
-        {
-          title: groupChat.name || "群聊",
-          message: `${msgToInsert.senderName}: ${previewText}`,
-          avatar: groupChat.settings?.groupAvatar || msgToInsert.senderAvatar,
-          chatId: groupChat.id,
-          tag: "peer_gmsg_" + groupChat.id
-        }
-      );
+        );
+      }
 
       await this.refreshAppChatAndContactsUI();
     },
@@ -2698,8 +2938,68 @@
       await this.refreshAppChatAndContactsUI();
     },
 
-    broadcastMessageDelete: function (chat, deletedTimestamps) {
-      if (!chat || !Array.isArray(deletedTimestamps) || deletedTimestamps.length === 0) return;
+    broadcastTypingStatus: function (chat, isTyping) {
+      if (!chat) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const targets = [];
+
+      if (chat.isGroup && chat.isPeerGroup) {
+        (chat.members || []).forEach((m) => {
+          if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
+            targets.push(m.peerCode);
+          }
+        });
+      } else if (chat.roleType === "peer" && chat.peerCode) {
+        targets.push(chat.peerCode);
+      }
+
+      const sharedGroupId = chat.isGroup ? (chat.peerGroupId || chat.id) : "";
+      for (const peerCode of targets) {
+        const pkt = {
+          type: "group_typing_status",
+          eventId: "gtyp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+          fromCode: myCode,
+          toCode: peerCode,
+          isGroup: Boolean(chat.isGroup),
+          groupId: sharedGroupId,
+          isTyping: Boolean(isTyping),
+          timestamp: Date.now()
+        };
+        this.dispatchPacketToNetwork(peerCode, pkt, "/api/peer/send", false);
+      }
+    },
+
+    receiveTypingStatus: async function (data) {
+      if (!data) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      if (data.fromCode === myCode) return;
+
+      const chat = data.isGroup
+        ? await this.findPeerGroupChatByIdAsync(data.groupId)
+        : await this.findPeerChatByCodeAsync(data.fromCode);
+      if (!chat) return;
+
+      if (window.state && String(window.state.activeChatId) === String(chat.id)) {
+        const typingInd = document.getElementById("typing-indicator");
+        const chatHeaderTitle = document.getElementById("chat-header-title");
+        if (typingInd) {
+          typingInd.style.display = data.isTyping ? "block" : "none";
+        }
+        if (chatHeaderTitle) {
+          if (data.isTyping) {
+            chatHeaderTitle.textContent = chat.isGroup ? "群成员正在输入中..." : "对方正在输入中...";
+            chatHeaderTitle.classList.add("typing-status");
+          } else {
+            chatHeaderTitle.textContent = chat.name;
+            chatHeaderTitle.classList.remove("typing-status");
+          }
+        }
+      }
+    },
+
+    broadcastMessageDelete: function (chat, deletedTimestamps, rerollAfterTimestamp) {
+      if (!chat) return;
+      if ((!Array.isArray(deletedTimestamps) || deletedTimestamps.length === 0) && !rerollAfterTimestamp) return;
       const myCode = this.getOrCreateMyPeerCode();
       const targets = [];
 
@@ -2722,7 +3022,8 @@
           toCode: peerCode,
           isGroup: Boolean(chat.isGroup),
           groupId: sharedGroupId,
-          deletedTimestamps: deletedTimestamps,
+          deletedTimestamps: Array.isArray(deletedTimestamps) ? deletedTimestamps : [],
+          rerollAfterTimestamp: rerollAfterTimestamp || null,
           timestamp: Date.now()
         };
         this.dispatchPacketToNetwork(peerCode, pkt, "/api/peer/send", false);
@@ -2730,7 +3031,7 @@
     },
 
     receiveMessageDelete: async function (data) {
-      if (!data || !Array.isArray(data.deletedTimestamps)) return;
+      if (!data) return;
       const myCode = this.getOrCreateMyPeerCode();
       if (data.fromCode === myCode) return;
 
@@ -2739,8 +3040,17 @@
         : await this.findPeerChatByCodeAsync(data.fromCode);
       if (!chat || !Array.isArray(chat.history)) return;
 
-      const delSet = new Set(data.deletedTimestamps);
-      chat.history = chat.history.filter((m) => !delSet.has(m.timestamp));
+      const delSet = new Set(Array.isArray(data.deletedTimestamps) ? data.deletedTimestamps : []);
+      const rerollAfterTs = data.rerollAfterTimestamp ? Number(data.rerollAfterTimestamp) : null;
+
+      chat.history = chat.history.filter((m) => {
+        if (!m) return false;
+        if (delSet.has(m.timestamp)) return false;
+        if (rerollAfterTs && m.timestamp > rerollAfterTs && m.type !== "summary" && !m.isPeerUserMessage && m.role === "assistant") {
+          return false;
+        }
+        return true;
+      });
 
       if (window.db && window.db.chats) {
         await window.db.chats.put(chat);

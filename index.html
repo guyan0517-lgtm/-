@@ -22517,6 +22517,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const modal = document.getElementById("chat-module-picker-modal");
           if (!modal) return;
 
+          const importModBtn = document.getElementById("import-shared-module-btn");
+          if (importModBtn) {
+            const isPeerGrp = Boolean(chat.isGroup && chat.isPeerGroup);
+            importModBtn.style.display = isPeerGrp ? "inline-flex" : "none";
+            importModBtn.onclick = () => {
+              if (typeof window.openSharedResourceImportModal === "function") {
+                window.openSharedResourceImportModal("module");
+              }
+            };
+          }
+
           modal.classList.add("visible");
           modal.style.display = "flex";
           await renderChatModulePickerList(currentModulePickerFilter);
@@ -22577,6 +22588,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             let modules = await dbInstance.modules.toArray();
+            if (chat && chat.isGroup && chat.isPeerGroup) {
+              const sharedModIds = new Set(
+                Array.isArray(chat.settings?.sharedModuleIds)
+                  ? chat.settings.sharedModuleIds.map(String)
+                  : []
+              );
+              if (chat.activeModuleId) sharedModIds.add(String(chat.activeModuleId));
+              modules = modules.filter(m => sharedModIds.has(String(m.id)));
+            }
             modules.sort((a, b) => {
               const orderA = (a.sortOrder !== undefined && a.sortOrder !== null) ? a.sortOrder : ((a.order !== undefined && a.order !== null) ? a.order : 0);
               const orderB = (b.sortOrder !== undefined && b.sortOrder !== null) ? b.sortOrder : ((b.order !== undefined && b.order !== null) ? b.order : 0);
@@ -22754,6 +22774,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (typeof state !== 'undefined' && state?.chats) {
                       state.chats[chat.id] = chat;
                     }
+                    if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                      window.PeerManager.syncGroupSettingsToPeers(chat);
+                    }
                     await renderChatModulePickerList(currentModulePickerFilter);
                     if (typeof updateChatModuleMapBar === 'function') {
                       updateChatModuleMapBar(chat);
@@ -22917,6 +22940,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 });
                 if (modeDropdown) modeDropdown.style.display = "none";
                 await db.chats.put(chat);
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
               };
             });
 
@@ -22935,6 +22961,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
                 chat.loadModuleToc = tocCheckbox.checked;
                 await db.chats.put(chat);
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
               };
             }
 
@@ -22947,6 +22976,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
                 chat.loadModuleImages = imagesCheckbox.checked;
                 await db.chats.put(chat);
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
               };
             }
 
@@ -23093,6 +23125,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   cb.checked = shouldCheck;
                 });
                 await db.chats.put(chat);
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
               });
 
               groupActiveCb?.addEventListener("click", (e) => e.stopPropagation());
@@ -23117,6 +23152,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   cb.checked = shouldCheck;
                 });
                 await db.chats.put(chat);
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
                 updateSelectedCountDisplay();
                 if (typeof updateChatModuleMapBar === 'function') {
                   updateChatModuleMapBar(chat);
@@ -23155,6 +23193,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       chat.moduleAiScopeChapterIds = chat.moduleAiScopeChapterIds.filter(id => id !== chap.id);
                     }
                     await db.chats.put(chat);
+                    if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                      window.PeerManager.syncGroupSettingsToPeers(chat);
+                    }
                     updateGroupCheckboxesState();
                   });
                 }
@@ -23173,6 +23214,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     chat.selectedModuleChapterIds = chat.selectedModuleChapterIds.filter(id => id !== chap.id);
                   }
                   await db.chats.put(chat);
+                  if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                    window.PeerManager.syncGroupSettingsToPeers(chat);
+                  }
                   updateSelectedCountDisplay();
                   updateGroupCheckboxesState();
                   if (typeof updateChatModuleMapBar === 'function') {
@@ -23204,6 +23248,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 chat.activeModuleId = mod.id;
                 chat.selectedModuleChapterIds = allChaps.map(c => c.id);
                 await db.chats.put(chat);
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
                 document.querySelectorAll(".chat-mod-chap-checkbox").forEach(c => c.checked = true);
                 updateSelectedCountDisplay();
                 if (typeof updateChatModuleMapBar === 'function') {
@@ -23217,6 +23264,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               clearAllBtn.onclick = async () => {
                 chat.selectedModuleChapterIds = [];
                 await db.chats.put(chat);
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
                 document.querySelectorAll(".chat-mod-chap-checkbox").forEach(c => c.checked = false);
                 updateSelectedCountDisplay();
                 if (typeof updateChatModuleMapBar === 'function') {
@@ -38403,6 +38453,9 @@ ${recentHistoryText}
           const typingIndicator = document.getElementById("typing-indicator");
 
           // 根据聊天类型，决定显示哪种“正在输入”
+          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
+            window.PeerManager.broadcastTypingStatus(chat, true);
+          }
           const chatScreenElForTyping = document.getElementById("chat-interface-screen");
           if (state.activeChatId === chatId && chatScreenElForTyping && chatScreenElForTyping.classList.contains("active")) {
             if (chat.isGroup) {
@@ -38410,6 +38463,10 @@ ${recentHistoryText}
                 typingIndicator.textContent = "群成员正在回复中...";
                 typingIndicator.style.display = "block";
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
+              }
+              if (chat.isPeerGroup && chatHeaderTitle) {
+                chatHeaderTitle.textContent = "群成员正在输入中...";
+                chatHeaderTitle.classList.add("typing-status");
               }
             } else if (chat.settings.offlineMode?.enabled) {
               if (chatHeaderTitle) {
@@ -39038,6 +39095,8 @@ ${templateFieldLines || '      "状态": "正常"'}
 
               const groupCommandBlock = window.formatPromptSection("指令", `
 ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
+- 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_timestamp": 消息时间戳数字, "reply_content": "回复文本内容"}
+- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}，或在文本开头写 #私密 目标玩家名: 内容
 - 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
 ${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
@@ -40704,11 +40763,17 @@ ${stickerContext || "无"}
               }
 
               let aiMessage = null;
+              let parsedVisibleTo = Array.isArray(msgData.visibleTo)
+                ? msgData.visibleTo.map(v => String(v).trim()).filter(Boolean)
+                : (typeof msgData.visibleTo === "string" && msgData.visibleTo.trim()
+                  ? msgData.visibleTo.split(/[,，、]/).map(v => v.trim()).filter(Boolean)
+                  : null);
               const baseMessage = {
                 role: "assistant",
                 senderName: msgData.name || chat.name,
                 timestamp: messageTimestamp++,
                 thinking: msgData.thinking || null,
+                ...(parsedVisibleTo && parsedVisibleTo.length > 0 ? { visibleTo: parsedVisibleTo } : {}),
               };
               // 定位指令侦测与解析器
               // 我们在处理所有消息类型之前，优先检查它是否是我们的新定位指令
@@ -43750,10 +43815,18 @@ ${stickerContext || "无"}
                   };
                   break;
 
-                case "quote_reply":
-                  const originalMessage = (chat.history || []).find(
-                    (m) => m.timestamp === msgData.target_timestamp,
-                  );
+                case "quote_reply": {
+                  let originalMessage = null;
+                  if (msgData.target_timestamp) {
+                    originalMessage = (chat.history || []).find(
+                      (m) => m.timestamp == msgData.target_timestamp,
+                    );
+                  }
+                  if (!originalMessage && msgData.target_content) {
+                    originalMessage = (chat.history || []).slice().reverse().find(
+                      (m) => typeof m.content === "string" && m.content.includes(msgData.target_content)
+                    );
+                  }
                   if (originalMessage) {
                     const quoteContext = {
                       timestamp: originalMessage.timestamp,
@@ -43766,16 +43839,30 @@ ${stickerContext || "无"}
                     };
                     aiMessage = {
                       ...baseMessage,
-                      content: msgData.reply_content,
+                      type: "text",
+                      content: msgData.reply_content || msgData.content || "",
                       quote: quoteContext,
+                    };
+                  } else if (msgData.target_sender && msgData.target_content) {
+                    aiMessage = {
+                      ...baseMessage,
+                      type: "text",
+                      content: msgData.reply_content || msgData.content || "",
+                      quote: {
+                        timestamp: Date.now(),
+                        senderName: msgData.target_sender,
+                        content: String(msgData.target_content),
+                      },
                     };
                   } else {
                     aiMessage = {
                       ...baseMessage,
-                      content: msgData.reply_content,
+                      type: "text",
+                      content: msgData.reply_content || msgData.content || "",
                     };
                   }
                   break;
+                }
 
                 case "location":
                   aiMessage = {
@@ -44033,7 +44120,26 @@ ${stickerContext || "无"}
                       if (!cleanMsgText.trim()) {
                         continue;
                       }
+                      const inlineWhisperMatch = cleanMsgText.match(/^(?:#私密|\[私密[:：]\s*([^\]\s]+)\])\s*([^:：]+)?[:：]?\s*([\s\S]+)$/);
+                      if (inlineWhisperMatch && (cleanMsgText.startsWith("#私密") || cleanMsgText.startsWith("[私密"))) {
+                        const targetStr = (inlineWhisperMatch[1] || inlineWhisperMatch[2] || "").trim();
+                        const bodyStr = (inlineWhisperMatch[3] || "").trim();
+                        if (targetStr && bodyStr) {
+                          cleanMsgText = bodyStr;
+                          baseMessage.visibleTo = targetStr.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+                        }
+                      }
                       aiMessage = { ...baseMessage, content: cleanMsgText };
+                      if (msgData.quote_reply && typeof msgData.quote_reply === "object" && !aiMessage.quote) {
+                        aiMessage.quote = {
+                          timestamp: msgData.quote_reply.target_timestamp || Date.now(),
+                          senderName: msgData.quote_reply.target_sender || "群成员",
+                          content: String(msgData.quote_reply.target_content || ""),
+                        };
+                        if (msgData.quote_reply.reply_content) {
+                          aiMessage.content = msgData.quote_reply.reply_content;
+                        }
+                      }
                     }
                   }
                   break;
@@ -44689,6 +44795,9 @@ ${stickerContext || "无"}
               }
             }
           } finally {
+            if (chat && chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
+              window.PeerManager.broadcastTypingStatus(chat, false);
+            }
             if (window.activeGeneratingChats) {
               delete window.activeGeneratingChats[chat.id];
               delete window.activeGeneratingChats[String(chat.id)];
@@ -47359,10 +47468,15 @@ ${stickerContext || "无"}
 
           const recallBtn = document.getElementById("recall-message-btn");
           if (recallBtn) {
-            if (message && message.isPlayerHidden) {
-              recallBtn.innerHTML = "<span>显</span><span>示</span>";
+            if (chat && chat.isGroup) {
+              recallBtn.style.display = "none";
             } else {
-              recallBtn.innerHTML = "<span>隐</span><span>藏</span>";
+              recallBtn.style.display = "";
+              if (message && message.isPlayerHidden) {
+                recallBtn.innerHTML = "<span>显</span><span>示</span>";
+              } else {
+                recallBtn.innerHTML = "<span>隐</span><span>藏</span>";
+              }
             }
           }
           // --- 新增逻辑结束 ---
@@ -48611,6 +48725,7 @@ ${stickerContext || "无"}
             if (contactChat) {
               const isPeerContact = contactChat.roleType === "peer" && Boolean(contactChat.peerCode);
               if (isPeerContact) hasPeerMember = true;
+              const myPeerCodeNow = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
               const memObj = {
                 id: contactId,
                 originalName: contactChat.name,
@@ -48625,6 +48740,8 @@ ${stickerContext || "无"}
                 cocPanel: contactChat.settings.aiCocPanel ? JSON.parse(JSON.stringify(contactChat.settings.aiCocPanel)) : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
                 isAdmin: false,
                 groupTitle: "",
+                addedByPeerCode: myPeerCodeNow,
+                isPrivate: false,
               };
               if (contactChat.roleType) memObj.roleType = contactChat.roleType;
               if (isPeerContact) {
@@ -48821,8 +48938,8 @@ ${stickerContext || "无"}
           item.className = "member-management-item";
 
           // --- 权限判断 ---
-          const isCurrentUserOwner = chat.ownerId === "user";
-          const isCurrentUserAdmin = chat.settings.isUserAdmin;
+          const isCurrentUserOwner = chat.ownerId === "user" || Boolean(chat.isPeerGroup);
+          const isCurrentUserAdmin = chat.settings.isUserAdmin || Boolean(chat.isPeerGroup);
           const isThisMemberOwner = member.id === chat.ownerId;
           const isThisMemberAdmin =
             (member.id === "user" && chat.settings.isUserAdmin) ||
@@ -49049,6 +49166,7 @@ ${stickerContext || "无"}
             if (contactChat) {
               const isPeerContact = contactChat.roleType === "peer" && Boolean(contactChat.peerCode);
               if (isPeerContact) chat.isPeerGroup = true;
+              const myPeerCodeNow = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
               const memObj = {
                 id: contactId,
                 originalName: contactChat.name,
@@ -49063,6 +49181,8 @@ ${stickerContext || "无"}
                 cocPanel: contactChat.settings.aiCocPanel ? JSON.parse(JSON.stringify(contactChat.settings.aiCocPanel)) : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
                 isAdmin: false,
                 groupTitle: "",
+                addedByPeerCode: myPeerCodeNow,
+                isPrivate: false,
               };
               if (contactChat.roleType) memObj.roleType = contactChat.roleType;
               if (isPeerContact) {
@@ -49141,6 +49261,10 @@ ${stickerContext || "无"}
             chat.settings.myNickname = newNickname.trim();
             await db.chats.put(chat);
 
+            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+              window.PeerManager.syncGroupSettingsToPeers(chat);
+            }
+
             // 发送一条系统消息通知群友
             await logSystemMessage(
               chat.id,
@@ -49186,8 +49310,8 @@ ${stickerContext || "无"}
          */
         async function removeMemberFromGroup(memberId) {
           const chat = state.chats[state.activeChatId];
-          const isOwner = chat.ownerId === "user";
-          const isAdmin = chat.settings.isUserAdmin;
+          const isOwner = chat.ownerId === "user" || Boolean(chat.isPeerGroup);
+          const isAdmin = chat.settings.isUserAdmin || Boolean(chat.isPeerGroup);
           const memberToRemove = (chat.members || []).find((m) => m.id === memberId);
 
           // 权限检查
@@ -49219,6 +49343,10 @@ ${stickerContext || "无"}
             chat.members.splice(memberIndex, 1);
             await db.chats.put(chat);
 
+            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+              window.PeerManager.syncGroupSettingsToPeers(chat);
+            }
+
             const myNickname = chat.settings.myNickname || "我";
             await logSystemMessage(
               chat.id,
@@ -49226,6 +49354,7 @@ ${stickerContext || "无"}
             );
 
             renderMemberManagementList();
+            renderGroupMemberSettings(chat.members);
           }
         }
 
@@ -49336,6 +49465,7 @@ ${stickerContext || "无"}
           if (persona === null) return;
 
           // 为新创建的NPC也建立双重命名机制
+          const myPeerCodeNow = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
           const newMember = {
             id: "npc_" + Date.now(),
             originalName: name.trim(), // 新成员的“本名”
@@ -49343,10 +49473,16 @@ ${stickerContext || "无"}
             avatar: defaultGroupMemberAvatar,
             persona: persona,
             avatarFrame: "",
+            addedByPeerCode: myPeerCodeNow,
+            isPrivate: false,
           };
 
           chat.members.push(newMember);
           await db.chats.put(chat);
+
+          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
 
           renderMemberManagementList();
           renderGroupMemberSettings(chat.members);
@@ -54914,15 +55050,25 @@ ${stickerContext || "无"}
           }
 
           // 2. 将玩家最后一次回复之后的所有内容全部删除
+          let removedMessages = [];
           if (lastUserIndex !== -1) {
+            removedMessages = chat.history.slice(lastUserIndex + 1);
             chat.history = chat.history.slice(0, lastUserIndex + 1);
           } else {
             // 如果玩家尚未发言过，保留首条开场白，清除后续内容
+            removedMessages = chat.history.slice(1);
             chat.history = chat.history.slice(0, 1);
           }
 
           // 3. 保存更新后的聊天记录到数据库
           await db.chats.put(chat);
+
+          if (chat.isGroup && chat.isPeerGroup && removedMessages.length > 0 && window.PeerManager && typeof window.PeerManager.broadcastMessageDelete === "function") {
+            const removedTsList = removedMessages.map(m => m.timestamp).filter(Boolean);
+            if (removedTsList.length > 0) {
+              window.PeerManager.broadcastMessageDelete(chat, removedTsList);
+            }
+          }
 
           // 4. 刷新聊天界面，消除被删除的消息
           if (state.activeChatId === targetId) {
@@ -60861,9 +61007,22 @@ ${stickerContext || "无"}
         function renderSummaryPresetsUI() {
           const select = document.getElementById("summary-preset-select");
           if (!select) return;
-          const presets = getSummaryPresets();
+          let presets = getSummaryPresets();
+          const activeChat = state.activeChatId ? state.chats[state.activeChatId] : null;
+          if (activeChat && activeChat.isGroup && activeChat.isPeerGroup && Array.isArray(activeChat.settings?.summary?.sharedPresets)) {
+            const existingIds = new Set(presets.map(p => String(p.id)));
+            activeChat.settings.summary.sharedPresets.forEach(sp => {
+              if (sp && sp.id && !existingIds.has(String(sp.id))) {
+                presets.push(sp);
+                existingIds.add(String(sp.id));
+              }
+            });
+          }
           const defaultId = getDefaultSummaryPresetId();
-          const currentVal = select.value || defaultId;
+          const sharedActiveId = (activeChat && activeChat.isGroup && activeChat.isPeerGroup)
+            ? (activeChat.settings?.summary?.activePresetId || "")
+            : "";
+          const currentVal = sharedActiveId || select.value || defaultId;
           let optionsHtml = '<option value="">选择预设</option>';
           optionsHtml += presets
             .map((p) => {
@@ -78369,13 +78528,43 @@ ${stickerContext || "无"}
             window.renderGroupMemberSettings = renderGroupMemberSettings;
             const container = document.getElementById("group-members-settings");
             container.innerHTML = "";
+            const chat = state.chats[state.activeChatId];
+            const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? String(window.PeerManager.getOrCreateMyPeerCode()) : "";
             members.forEach((member) => {
               const div = document.createElement("div");
               div.className = "member-editor";
               div.dataset.memberId = member.id;
+              div.style.position = "relative";
+
+              const isPeerHuman = Boolean(member.isPeerMember || member.roleType === "peer" || Boolean(member.peerCode));
+              const isAddedByMe = !member.addedByPeerCode || member.addedByPeerCode === "user" || (myCode && String(member.addedByPeerCode) === myCode);
+
+              let privacyBtnHtml = "";
+              if (chat && chat.isGroup && chat.isPeerGroup && !isPeerHuman) {
+                if (isAddedByMe) {
+                  const btnText = member.isPrivate ? "私密" : "公开";
+                  const btnBg = member.isPrivate ? "var(--accent-color)" : "var(--secondary-bg)";
+                  const btnColor = member.isPrivate ? "#ffffff" : "var(--text-secondary)";
+                  privacyBtnHtml = `<button type="button" class="member-privacy-toggle-btn" style="margin-top: 4px; height: 20px; line-height: 18px; padding: 0 6px; font-size: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: ${btnBg}; color: ${btnColor}; cursor: pointer; width: auto !important; flex-shrink: 0;">${btnText}</button>`;
+                } else if (member.isPrivate) {
+                  privacyBtnHtml = `<span style="margin-top: 4px; height: 20px; line-height: 18px; padding: 0 6px; font-size: 10px; border-radius: 4px; background: var(--secondary-bg); color: var(--text-secondary); display: inline-block;">私密</span>`;
+                }
+              }
 
               // 显示的是 groupNickname
-              div.innerHTML = `<img src="${member.avatar}" alt="${member.groupNickname}"><div class="member-name">${member.groupNickname}</div>`;
+              div.innerHTML = `<img src="${member.avatar}" alt="${member.groupNickname}"><div class="member-name">${member.groupNickname}</div>${privacyBtnHtml}`;
+              const privBtn = div.querySelector(".member-privacy-toggle-btn");
+              if (privBtn) {
+                privBtn.addEventListener("click", async (e) => {
+                  e.stopPropagation();
+                  member.isPrivate = !member.isPrivate;
+                  await db.chats.put(chat);
+                  if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                    window.PeerManager.syncGroupSettingsToPeers(chat);
+                  }
+                  renderGroupMemberSettings(chat.members);
+                });
+              }
               div.addEventListener("click", () => openMemberEditor(member.id));
               container.appendChild(div);
             });
@@ -78405,9 +78594,12 @@ ${stickerContext || "无"}
             document.getElementById("member-name-input").value =
               member.groupNickname || member.originalName || (sourceChat && sourceChat.name) || "";
             const isPeerHuman = Boolean(member.isPeerMember || member.roleType === "peer" || (sourceChat && sourceChat.roleType === "peer"));
-            const isMemberLocked = Boolean(isPeerHuman || member.isInvestigatorLocked || (sourceChat && sourceChat.settings?.isInvestigatorLocked));
+            const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? String(window.PeerManager.getOrCreateMyPeerCode()) : "";
+            const isAddedByOtherPeer = Boolean(member.addedByPeerCode && member.addedByPeerCode !== "user" && (!myCode || String(member.addedByPeerCode) !== myCode));
+            const isPrivateToMe = Boolean(member.isPrivate && isAddedByOtherPeer);
+            const isMemberLocked = Boolean(isPeerHuman || isPrivateToMe || member.isInvestigatorLocked || (sourceChat && sourceChat.settings?.isInvestigatorLocked));
             const memberPersonaTextarea = document.getElementById("member-persona-input");
-            if (isPeerHuman) {
+            if (isPeerHuman || isPrivateToMe) {
               memberPersonaTextarea.value = "保密";
               memberPersonaTextarea.setAttribute("readonly", "true");
               memberPersonaTextarea.style.opacity = "0.7";
@@ -84592,9 +84784,19 @@ ${stickerContext || "无"}
                 if (chat && chat.settings) {
                   if (!chat.settings.summary) chat.settings.summary = {};
                   chat.settings.summary.prompt = found.prompt;
+                  chat.settings.summary.activePresetId = found.id;
+                  chat.settings.summary.activePresetName = found.name;
                   if (found.count !== undefined) chat.settings.summary.count = found.count;
                   if (found.contextCount !== undefined) chat.settings.summary.contextCount = found.contextCount;
                   if (found.contextCount !== undefined) chat.settings.maxMemory = found.contextCount;
+                  if (chat.isGroup && chat.isPeerGroup) {
+                    if (!Array.isArray(chat.settings.summary.sharedPresets)) {
+                      chat.settings.summary.sharedPresets = [];
+                    }
+                    const exIdx = chat.settings.summary.sharedPresets.findIndex(p => String(p.id) === String(found.id));
+                    if (exIdx >= 0) chat.settings.summary.sharedPresets[exIdx] = found;
+                    else chat.settings.summary.sharedPresets.push(found);
+                  }
                 }
               }
             });
