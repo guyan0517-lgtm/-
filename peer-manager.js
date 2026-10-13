@@ -41,56 +41,13 @@
     currentPlayingAudio: null,
     currentPlayingBubble: null,
 
-    getTabId: function () {
-      if (this.tabId) return this.tabId;
-      let tid = sessionStorage.getItem("tukey_peer_tab_id");
-      if (!tid) {
-        tid = "tab_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
-        sessionStorage.setItem("tukey_peer_tab_id", tid);
+    getDeviceClientSuffix: function () {
+      let devId = localStorage.getItem("tukey_mqtt_device_id");
+      if (!devId) {
+        devId = Math.random().toString(36).slice(2, 9);
+        localStorage.setItem("tukey_mqtt_device_id", devId);
       }
-      this.tabId = tid;
-      return tid;
-    },
-
-    isCodeUsedByAnotherTab: function (code) {
-      if (!code) return false;
-      try {
-        const raw = localStorage.getItem("tukey_peer_active_tabs");
-        if (!raw) return false;
-        const map = JSON.parse(raw);
-        const now = Date.now();
-        const myTab = this.getTabId();
-        for (const [tId, info] of Object.entries(map)) {
-          if (tId !== myTab && info && info.code === code && now - info.ts < 12000) {
-            return true;
-          }
-        }
-      } catch (e) {}
-      return false;
-    },
-
-    updateTabLease: function (code) {
-      if (!code) return;
-      try {
-        const myTab = this.getTabId();
-        const now = Date.now();
-        let map = {};
-        const raw = localStorage.getItem("tukey_peer_active_tabs");
-        if (raw) {
-          try {
-            map = JSON.parse(raw) || {};
-          } catch (e) {
-            map = {};
-          }
-        }
-        for (const [tId, info] of Object.entries(map)) {
-          if (!info || now - info.ts > 15000) {
-            delete map[tId];
-          }
-        }
-        map[myTab] = { code: code, ts: now };
-        localStorage.setItem("tukey_peer_active_tabs", JSON.stringify(map));
-      } catch (e) {}
+      return devId;
     },
 
     generateRandomCode: function () {
@@ -106,32 +63,28 @@
 
     getOrCreateMyPeerCode: function () {
       if (this.myPeerCode) {
-        this.updateTabLease(this.myPeerCode);
         return this.myPeerCode;
       }
 
-      let tabCode = sessionStorage.getItem("tukey_my_peer_code_tab");
-      if (tabCode && !this.isCodeUsedByAnotherTab(tabCode)) {
-        this.myPeerCode = tabCode;
-        this.updateTabLease(tabCode);
-        return tabCode;
+      let savedCode = localStorage.getItem("tukey_my_peer_code");
+      if (
+        !savedCode &&
+        window.state &&
+        window.state.globalSettings &&
+        window.state.globalSettings.myPeerCode
+      ) {
+        savedCode = window.state.globalSettings.myPeerCode;
+        localStorage.setItem("tukey_my_peer_code", savedCode);
       }
 
-      let savedCode = localStorage.getItem("tukey_my_peer_code");
-      if (savedCode && !this.isCodeUsedByAnotherTab(savedCode)) {
+      if (savedCode) {
         this.myPeerCode = savedCode;
-        sessionStorage.setItem("tukey_my_peer_code_tab", savedCode);
-        this.updateTabLease(savedCode);
         return savedCode;
       }
 
       const newCode = this.generateRandomCode();
       this.myPeerCode = newCode;
-      sessionStorage.setItem("tukey_my_peer_code_tab", newCode);
-      if (!savedCode) {
-        localStorage.setItem("tukey_my_peer_code", newCode);
-      }
-      this.updateTabLease(newCode);
+      localStorage.setItem("tukey_my_peer_code", newCode);
       return newCode;
     },
 
@@ -153,7 +106,7 @@
       this.seenEventIds.add(eventId);
       const myCode = this.getOrCreateMyPeerCode();
       try {
-        const arr = Array.from(this.seenEventIds).slice(-600);
+        const arr = Array.from(this.seenEventIds).slice(-800);
         localStorage.setItem("tukey_peer_seen_evts_" + myCode, JSON.stringify(arr));
       } catch (e) {}
     },
@@ -178,6 +131,50 @@
       } catch (e) {}
     },
 
+    publishRetainedMailboxForTarget: function (targetCode, specificClient) {
+      if (!targetCode) return;
+      const clients = specificClient ? [specificClient] : this.mqttClients || [];
+      if (clients.length === 0) return;
+
+      const myCode = this.getOrCreateMyPeerCode();
+      const list = this.getOutboxQueue();
+      const targetItems = list
+        .filter((item) => item && item.targetCode === targetCode && item.payload)
+        .slice(-20)
+        .map((item) => item.payload);
+
+      const topic = TOPIC_PREFIX + "mailbox/" + targetCode + "/" + myCode;
+      const pktStr =
+        targetItems.length > 0
+          ? JSON.stringify({
+              type: "mailbox_bundle",
+              fromCode: myCode,
+              toCode: targetCode,
+              events: targetItems,
+              timestamp: Date.now()
+            })
+          : "";
+
+      clients.forEach((c) => {
+        if (c && c.connected) {
+          try {
+            c.publish(topic, pktStr, { qos: 1, retain: true });
+          } catch (e) {}
+        }
+      });
+    },
+
+    publishAllRetainedMailboxes: function (specificClient) {
+      const list = this.getOutboxQueue();
+      const targets = new Set();
+      list.forEach((item) => {
+        if (item && item.targetCode) targets.add(item.targetCode);
+      });
+      targets.forEach((targetCode) => {
+        this.publishRetainedMailboxForTarget(targetCode, specificClient);
+      });
+    },
+
     addToOutboxQueue: function (targetCode, payload, apiPath) {
       if (!targetCode || !payload || !payload.eventId) return;
       const list = this.getOutboxQueue();
@@ -191,14 +188,25 @@
         lastTriedAt: Date.now()
       });
       this.saveOutboxQueue(list);
+      this.publishRetainedMailboxForTarget(targetCode);
     },
 
     removeFromOutboxQueue: function (eventId) {
       if (!eventId) return;
       const list = this.getOutboxQueue();
-      const next = list.filter((item) => item && item.eventId !== eventId);
+      const removedTargets = new Set();
+      const next = list.filter((item) => {
+        if (item && item.eventId === eventId) {
+          if (item.targetCode) removedTargets.add(item.targetCode);
+          return false;
+        }
+        return true;
+      });
       if (next.length !== list.length) {
         this.saveOutboxQueue(next);
+        removedTargets.forEach((tCode) => {
+          this.publishRetainedMailboxForTarget(tCode);
+        });
       }
     },
 
@@ -211,13 +219,13 @@
 
       for (const item of list) {
         if (!item || !item.eventId || !item.payload) continue;
-        if (now - (item.createdAt || 0) > 5 * 24 * 3600 * 1000) {
+        if (now - (item.createdAt || 0) > 7 * 24 * 3600 * 1000) {
           changed = true;
           continue;
         }
         const shouldSend =
           (specificTargetCode && item.targetCode === specificTargetCode) ||
-          now - (item.lastTriedAt || 0) >= 8000;
+          now - (item.lastTriedAt || 0) >= 4500;
         if (shouldSend) {
           item.lastTriedAt = now;
           changed = true;
@@ -452,26 +460,59 @@
     },
 
     connectNetwork: function () {
-      const myCode = this.getOrCreateMyPeerCode();
-      this.updateTabLease(myCode);
+      this.getOrCreateMyPeerCode();
 
       this.initBroadcastChannel();
       this.connectMqttBroker();
       this.connectWebSocket();
 
-      if (!this.heartbeatTimer) {
-        this.heartbeatTimer = setInterval(() => {
-          if (this.myPeerCode) {
-            this.updateTabLease(this.myPeerCode);
-          }
-        }, 4000);
-      }
-
       if (!this.outboxTimer) {
         this.outboxTimer = setInterval(() => {
           this.retryOutboxPackets();
-        }, 8000);
+        }, 5000);
       }
+    },
+
+    wakeUpAndSyncNow: function () {
+      this.pollOnce();
+      if (!this.ws || this.ws.readyState > 1) {
+        this.connectWebSocket();
+      }
+      if (!this.mqttClients || this.mqttClients.length === 0) {
+        this.connectMqttBroker();
+      } else {
+        this.subscribeAllKnownFriendsMqtt();
+        this.publishAllRetainedMailboxes();
+      }
+      this.retryOutboxPackets();
+      this.sendOnlinePingToFriends();
+    },
+
+    sendOnlinePingToFriends: function () {
+      const myCode = this.getOrCreateMyPeerCode();
+      const codes = new Set();
+      if (window.state && window.state.chats) {
+        for (const chat of Object.values(window.state.chats)) {
+          if (chat && chat.roleType === "peer" && chat.peerCode) {
+            codes.add(chat.peerCode);
+          }
+          if (chat && chat.isGroup && chat.isPeerGroup && Array.isArray(chat.members)) {
+            chat.members.forEach((m) => {
+              if (m && m.peerCode && m.peerCode !== myCode) codes.add(m.peerCode);
+            });
+          }
+        }
+      }
+      codes.forEach((friendCode) => {
+        const pingPkt = {
+          type: "online_ping",
+          eventId: "ping_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+          fromCode: myCode,
+          toCode: friendCode,
+          timestamp: Date.now()
+        };
+        this.transmitPacketRaw(friendCode, pingPkt, "/api/peer/send", false);
+      });
     },
 
     initBroadcastChannel: function () {
@@ -490,10 +531,14 @@
 
     subscribePeerTopicsOnClient: function (client, peerCode, isSelf) {
       if (!client || !peerCode) return;
+      const myCode = this.getOrCreateMyPeerCode();
       try {
         client.subscribe(TOPIC_PREFIX + "inbox/" + peerCode, { qos: 1 });
-        if (!isSelf) {
+        if (isSelf) {
+          client.subscribe(TOPIC_PREFIX + "mailbox/" + peerCode + "/+", { qos: 1 });
+        } else {
           client.subscribe(TOPIC_PREFIX + "profile/" + peerCode, { qos: 1 });
+          client.subscribe(TOPIC_PREFIX + "mailbox/" + myCode + "/" + peerCode, { qos: 1 });
         }
       } catch (e) {}
     },
@@ -536,6 +581,7 @@
       if (!mqttLib || typeof mqttLib.connect !== "function") return;
 
       const myCode = this.getOrCreateMyPeerCode();
+      const devSuffix = this.getDeviceClientSuffix();
       this.mqttClients = [];
 
       CLOUD_MQTT_BROKERS.forEach((brokerUrl, idx) => {
@@ -546,19 +592,20 @@
             "_" +
             idx +
             "_" +
-            Math.random().toString(36).slice(2, 7);
+            devSuffix;
 
           const client = mqttLib.connect(brokerUrl, {
             clientId: clientId,
             clean: false,
-            keepalive: 45,
-            reconnectPeriod: 4000,
-            connectTimeout: 12000
+            keepalive: 30,
+            reconnectPeriod: 2500,
+            connectTimeout: 10000
           });
 
           client.on("connect", () => {
             this.subscribeAllKnownFriendsMqtt(client);
             this.publishMyRetainedProfile(client);
+            this.publishAllRetainedMailboxes(client);
             this.retryOutboxPackets();
           });
 
@@ -622,7 +669,7 @@
             try {
               c.publish(TOPIC_PREFIX + "inbox/" + targetCode, jsonStr, {
                 qos: 1,
-                retain: Boolean(retainOnInbox)
+                retain: false
               });
             } catch (e) {}
           }
@@ -646,10 +693,10 @@
 
     dispatchPacketToNetwork: function (targetCode, payload, apiPath, retainOnInbox) {
       if (!targetCode || !payload) return;
-      if (payload.type !== "peer_ack" && payload.eventId) {
+      if (payload.type !== "peer_ack" && payload.type !== "online_ping" && payload.eventId) {
         this.addToOutboxQueue(targetCode, payload, apiPath);
       }
-      this.transmitPacketRaw(targetCode, payload, apiPath, retainOnInbox);
+      this.transmitPacketRaw(targetCode, payload, apiPath, false);
     },
 
     connectWebSocket: function () {
@@ -683,6 +730,7 @@
             })
           );
           this.retryOutboxPackets();
+          this.sendOnlinePingToFriends();
         };
 
         ws.onmessage = (event) => {
@@ -697,7 +745,7 @@
           if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
           this.reconnectTimer = setTimeout(() => {
             this.connectWebSocket();
-          }, 6000);
+          }, 3000);
         };
 
         ws.onerror = () => {};
@@ -725,7 +773,7 @@
       this.pollOnce();
       this.pollTimer = setInterval(() => {
         this.pollOnce();
-      }, 3500);
+      }, 2500);
     },
 
     pollOnce: function () {
@@ -750,17 +798,32 @@
       );
     },
 
-    onAppDbLoaded: function () {
-      this.filterOtherTabPeerChats();
+    onAppDbLoaded: async function () {
+      const myCode = this.getOrCreateMyPeerCode();
+      if (window.state && window.state.globalSettings) {
+        if (!window.state.globalSettings.myPeerCode) {
+          window.state.globalSettings.myPeerCode = myCode;
+        }
+      }
+      await this.deduplicatePeerChatsInDb();
       this.subscribeAllKnownFriendsMqtt();
       this.flushIncomingQueue();
       this.retryOutboxPackets();
       this.pollOnce();
+      this.sendOnlinePingToFriends();
     },
 
     enqueueIncomingEvent: function (data) {
       if (!data || !data.type) return;
-      this.pendingIncomingQueue.push(data);
+      if (data.type === "mailbox_bundle" && Array.isArray(data.events)) {
+        data.events.forEach((evt) => {
+          if (evt && evt.type) {
+            this.pendingIncomingQueue.push(evt);
+          }
+        });
+      } else {
+        this.pendingIncomingQueue.push(data);
+      }
       if (this.isAppDbReady()) {
         this.flushIncomingQueue();
       }
@@ -788,6 +851,14 @@
 
       if (data.toCode && data.toCode !== myCode) return;
       if (Array.isArray(data.targetCodes) && !data.targetCodes.includes(myCode)) return;
+
+      if (data.type === "online_ping") {
+        if (data.fromCode && data.fromCode !== myCode) {
+          this.retryOutboxPackets(data.fromCode);
+          this.publishRetainedMailboxForTarget(data.fromCode);
+        }
+        return;
+      }
 
       if (data.type === "peer_ack") {
         if (data.ackEventId) {
@@ -1035,7 +1106,6 @@
     },
 
     refreshAppChatAndContactsUI: async function () {
-      this.filterOtherTabPeerChats();
       if (typeof window.renderChatList === "function") {
         try {
           await window.renderChatList();
@@ -1059,46 +1129,151 @@
       }
     },
 
-    filterOtherTabPeerChats: function () {
-      if (!window.state || !window.state.chats) return;
-      const myCode = this.getOrCreateMyPeerCode();
-      for (const [id, chat] of Object.entries(window.state.chats)) {
-        if (chat && (chat.roleType === "peer" || chat.isPeerGroup) && chat.myPeerCode && chat.myPeerCode !== myCode) {
-          if (this.isCodeUsedByAnotherTab(chat.myPeerCode)) {
-            delete window.state.chats[id];
+    deduplicatePeerChatsInDb: async function () {
+      if (!window.db || !window.db.chats) return;
+      try {
+        const myCode = this.getOrCreateMyPeerCode();
+        const allChats = await window.db.chats.toArray();
+        const byPeerCode = new Map();
+        const byGroupId = new Map();
+
+        for (const c of allChats) {
+          if (!c) continue;
+          if (c.roleType === "peer" && !c.isGroup && c.peerCode) {
+            if (!byPeerCode.has(c.peerCode)) byPeerCode.set(c.peerCode, []);
+            byPeerCode.get(c.peerCode).push(c);
+          } else if (c.isGroup && c.isPeerGroup && c.peerGroupId) {
+            if (!byGroupId.has(c.peerGroupId)) byGroupId.set(c.peerGroupId, []);
+            byGroupId.get(c.peerGroupId).push(c);
           }
         }
-      }
+
+        let changed = false;
+
+        for (const [peerCode, list] of byPeerCode.entries()) {
+          if (list.length <= 1) {
+            const only = list[0];
+            if (only && only.myPeerCode !== myCode) {
+              only.myPeerCode = myCode;
+              await window.db.chats.put(only);
+              if (window.state && window.state.chats) {
+                window.state.chats[only.id] = only;
+              }
+            }
+            continue;
+          }
+
+          changed = true;
+          list.sort((a, b) => {
+            const lenA = Array.isArray(a.history) ? a.history.length : 0;
+            const lenB = Array.isArray(b.history) ? b.history.length : 0;
+            if (lenA !== lenB) return lenB - lenA;
+            return (a.createdAt || 0) - (b.createdAt || 0);
+          });
+
+          const primary = list[0];
+          primary.myPeerCode = myCode;
+          primary.inMessageList = true;
+          const mergedHistory = [];
+          const seenKeys = new Set();
+
+          for (const chatItem of list) {
+            for (const msg of chatItem.history || []) {
+              if (!msg) continue;
+              const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
+              if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                mergedHistory.push(msg);
+              }
+            }
+          }
+          mergedHistory.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          primary.history = mergedHistory;
+
+          await window.db.chats.put(primary);
+          if (window.state && window.state.chats) {
+            window.state.chats[primary.id] = primary;
+          }
+
+          for (let i = 1; i < list.length; i++) {
+            const dup = list[i];
+            if (dup && dup.id !== primary.id) {
+              await window.db.chats.delete(dup.id);
+              if (window.state && window.state.chats) {
+                delete window.state.chats[dup.id];
+              }
+            }
+          }
+        }
+
+        for (const [pGroupId, list] of byGroupId.entries()) {
+          if (list.length <= 1) continue;
+          changed = true;
+          list.sort((a, b) => {
+            const lenA = Array.isArray(a.history) ? a.history.length : 0;
+            const lenB = Array.isArray(b.history) ? b.history.length : 0;
+            return lenB - lenA;
+          });
+          const primary = list[0];
+          primary.myPeerCode = myCode;
+          const mergedHistory = [];
+          const seenKeys = new Set();
+          for (const chatItem of list) {
+            for (const msg of chatItem.history || []) {
+              if (!msg) continue;
+              const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
+              if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                mergedHistory.push(msg);
+              }
+            }
+          }
+          mergedHistory.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          primary.history = mergedHistory;
+          await window.db.chats.put(primary);
+          if (window.state && window.state.chats) {
+            window.state.chats[primary.id] = primary;
+          }
+          for (let i = 1; i < list.length; i++) {
+            const dup = list[i];
+            if (dup && dup.id !== primary.id) {
+              await window.db.chats.delete(dup.id);
+              if (window.state && window.state.chats) {
+                delete window.state.chats[dup.id];
+              }
+            }
+          }
+        }
+
+        if (changed) {
+          await this.refreshAppChatAndContactsUI();
+        }
+      } catch (e) {}
     },
 
     findPeerChatByCodeAsync: async function (peerCode) {
       if (!peerCode) return null;
-      const myCode = this.getOrCreateMyPeerCode();
+      const matches = [];
       if (window.state && window.state.chats) {
         for (const chat of Object.values(window.state.chats)) {
-          if (
-            chat &&
-            chat.roleType === "peer" &&
-            !chat.isGroup &&
-            chat.peerCode === peerCode &&
-            (!chat.myPeerCode || chat.myPeerCode === myCode)
-          ) {
-            return chat;
+          if (chat && chat.roleType === "peer" && !chat.isGroup && chat.peerCode === peerCode) {
+            matches.push(chat);
           }
         }
+      }
+      if (matches.length > 0) {
+        matches.sort((a, b) => ((b.history || []).length - (a.history || []).length));
+        return matches[0];
       }
       if (window.db && window.db.chats) {
         try {
           const allDbChats = await window.db.chats.toArray();
-          const found = allDbChats.find(
-            (c) =>
-              c &&
-              c.roleType === "peer" &&
-              !c.isGroup &&
-              c.peerCode === peerCode &&
-              (!c.myPeerCode || c.myPeerCode === myCode)
+          const dbMatches = allDbChats.filter(
+            (c) => c && c.roleType === "peer" && !c.isGroup && c.peerCode === peerCode
           );
-          if (found) {
+          if (dbMatches.length > 0) {
+            dbMatches.sort((a, b) => ((b.history || []).length - (a.history || []).length));
+            const found = dbMatches[0];
             if (!window.state) window.state = {};
             if (!window.state.chats) window.state.chats = {};
             window.state.chats[found.id] = found;
@@ -1111,7 +1286,6 @@
 
     findPeerGroupChatByIdAsync: async function (groupId) {
       if (!groupId) return null;
-      const myCode = this.getOrCreateMyPeerCode();
       const localId = this.getLocalGroupChatId(groupId);
       if (window.state && window.state.chats) {
         if (window.state.chats[localId]) return window.state.chats[localId];
@@ -1120,8 +1294,7 @@
           if (
             chat &&
             chat.isGroup &&
-            (chat.peerGroupId === groupId || chat.id === groupId || chat.id === localId) &&
-            (!chat.myPeerCode || chat.myPeerCode === myCode)
+            (chat.peerGroupId === groupId || chat.id === groupId || chat.id === localId)
           ) {
             return chat;
           }
@@ -1134,8 +1307,7 @@
             (c) =>
               c &&
               c.isGroup &&
-              (c.peerGroupId === groupId || c.id === groupId || c.id === localId) &&
-              (!c.myPeerCode || c.myPeerCode === myCode)
+              (c.peerGroupId === groupId || c.id === groupId || c.id === localId)
           );
           if (found) {
             if (!window.state) window.state = {};
@@ -1149,9 +1321,7 @@
     },
 
     getLocalGroupChatId: function (sharedGroupId) {
-      const myCode = this.getOrCreateMyPeerCode().replace(/[^a-zA-Z0-9]/g, "");
-      if (String(sharedGroupId).includes("_" + myCode)) return sharedGroupId;
-      return sharedGroupId + "_" + myCode;
+      return String(sharedGroupId);
     },
 
     createOrUpdatePeerChatSession: async function (
@@ -1186,6 +1356,9 @@
         if (groupId) existing.groupId = groupId;
         existing.myPeerCode = myCode;
         existing.inMessageList = true;
+        if (!window.state) window.state = {};
+        if (!window.state.chats) window.state.chats = {};
+        window.state.chats[existing.id] = existing;
         if (window.db && window.db.chats) {
           await window.db.chats.put(existing);
         }
@@ -1193,9 +1366,8 @@
         return existing;
       }
 
-      const safeMy = myCode.replace(/[^a-zA-Z0-9]/g, "");
       const safeTarget = peerCode.replace(/[^a-zA-Z0-9]/g, "");
-      const newId = "chat_peer_" + safeMy + "_" + safeTarget;
+      const newId = "chat_peer_" + safeTarget;
 
       const newPeerChat = {
         id: newId,
@@ -2037,8 +2209,28 @@
       if (isDup) return;
 
       if (data.isFromHumanPeer && data.fromCode) {
-        const peerMem = (groupChat.members || []).find((m) => m.peerCode === data.fromCode);
-        if (peerMem) {
+        if (!Array.isArray(groupChat.members)) groupChat.members = [];
+        let peerMem = groupChat.members.find((m) => m.peerCode === data.fromCode);
+        if (!peerMem) {
+          peerMem = {
+            id: "peer_mem_" + data.fromCode.replace(/[^a-zA-Z0-9]/g, ""),
+            peerCode: data.fromCode,
+            isPeerMember: true,
+            roleType: "peer",
+            isInvestigatorLocked: true,
+            originalName: data.senderName || "密友",
+            groupNickname: data.senderName || "密友",
+            avatar: data.senderAvatar || window.defaultAvatar,
+            avatarFrame: data.senderAvatarFrame || "",
+            persona: "",
+            secretPersona: "",
+            cocPanel: this.sanitizeCocPanelForPeerUI(null),
+            isAdmin: false,
+            groupTitle: ""
+          };
+          groupChat.members.push(peerMem);
+          this.subscribeAllKnownFriendsMqtt();
+        } else {
           if (data.senderName) peerMem.groupNickname = data.senderName;
           if (data.senderAvatar) peerMem.avatar = data.senderAvatar;
           if (data.senderAvatarFrame !== undefined) peerMem.avatarFrame = data.senderAvatarFrame;
@@ -2523,9 +2715,10 @@
       if (isDup) return;
 
       const isVoice = data.msgType === "voice_message" || Boolean(data.audioData);
+      const isSticker = data.msgType === "sticker" || Boolean(data.isPeerOnlySticker) || Boolean(data.meaning);
       const incomingMsg = {
         role: "assistant",
-        type: isVoice ? "voice_message" : undefined,
+        type: isVoice ? "voice_message" : (isSticker ? "sticker" : undefined),
         eventId: data.eventId || "",
         sender: peerChat.name,
         senderName: peerChat.name,
@@ -2534,6 +2727,8 @@
           window.defaultAvatar ||
           "https://api.iconify.design/lucide:user.svg?color=%23888888",
         content: content,
+        meaning: data.meaning || "",
+        isPeerOnlySticker: isSticker,
         audioData: data.audioData || "",
         audioDuration: data.audioDuration || 0,
         timestamp: data.timestamp || Date.now()
@@ -2569,7 +2764,7 @@
       }
 
       const displayTitle = peerChat.settings?.remarkName || peerChat.name || "密友";
-      const previewText = isVoice ? "[语音]" : content;
+      const previewText = isVoice ? "[语音]" : (isSticker ? `[表情: ${data.meaning || "表情"}]` : content);
 
       this.showPeerNotice(
         previewText,
@@ -2648,6 +2843,7 @@
       const smallAva = await this.compressAvatarForWire(rawAva);
       const eventId = msg.eventId || "evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
       msg.eventId = eventId;
+      const isSticker = msg.type === "sticker" || Boolean(msg.isPeerOnlySticker) || Boolean(msg.meaning);
 
       const payload = {
         type: "message",
@@ -2655,7 +2851,9 @@
         fromCode: myCode,
         toCode: chat.peerCode,
         content: msg.content || "[语音消息]",
-        msgType: msg.type === "voice_message" ? "voice_message" : "text",
+        msgType: msg.type === "voice_message" ? "voice_message" : (isSticker ? "sticker" : "text"),
+        meaning: msg.meaning || "",
+        isPeerOnlySticker: isSticker,
         audioData: msg.audioData || "",
         audioDuration: msg.audioDuration || 0,
         senderName: chat.settings?.myName || myProfile.name,
@@ -2988,12 +3186,22 @@
 
     applyPeerChatInputUI: function (chat) {
       const actionsTop = document.getElementById("chat-input-actions-top");
+      const stickerBtn = document.getElementById("open-sticker-panel-btn");
       const affectionBtn = document.getElementById("chat-affection-bottom-btn");
       const mapBtn = document.getElementById("chat-map-btn");
       const waitReplyBtn = document.getElementById("wait-reply-btn");
       const recordPanel = document.getElementById("peer-voice-record-panel");
+      const stickerPanel = document.getElementById("sticker-panel");
 
       const isPeer = Boolean(chat && chat.roleType === "peer" && !chat.isGroup);
+      const isGroup = Boolean(chat && chat.isGroup);
+
+      if (stickerBtn) {
+        stickerBtn.style.display = (isPeer || isGroup) ? "inline-flex" : "none";
+      }
+      if (!isPeer && !isGroup && stickerPanel) {
+        stickerPanel.classList.remove("visible");
+      }
 
       if (isPeer) {
         if (actionsTop) {
@@ -3399,6 +3607,21 @@
       if (this.isAppDbReady()) {
         this.onAppDbLoaded();
       }
+
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) {
+          this.wakeUpAndSyncNow();
+        }
+      });
+      window.addEventListener("focus", () => {
+        this.wakeUpAndSyncNow();
+      });
+      window.addEventListener("pageshow", () => {
+        this.wakeUpAndSyncNow();
+      });
+      window.addEventListener("online", () => {
+        this.wakeUpAndSyncNow();
+      });
 
       window.addEventListener("storage", (ev) => {
         if (ev.key === "tukey_peer_local_bus_pkt" && ev.newValue) {

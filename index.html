@@ -3351,6 +3351,30 @@
           </div>
 
           <div id="chat-input-actions-top">
+            <button
+              id="open-sticker-panel-btn"
+              class="chat-action-icon-btn action-button"
+              title="表情"
+              type="button"
+              style="display: none;"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                <line x1="15" y1="9" x2="15.01" y2="9"></line>
+              </svg>
+            </button>
             <!-- “重新生成回复”按钮的新家 -->
             <button id="reroll-btn" class="action-button" title="重新生成回复" onclick="if(typeof handleRerollClick==='function')handleRerollClick();">
               <svg
@@ -39066,31 +39090,13 @@ ${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}�
                   }
 
                   if (
+                    msg.isPeerOnlySticker ||
                     msg.type === "sticker" ||
                     msg.meaning ||
                     (typeof msg.content === "string" &&
                       STICKER_REGEX.test(msg.content))
                   ) {
-                    let stickerMeaning = msg.meaning;
-
-                    if (!stickerMeaning && typeof msg.content === "string") {
-                      const allStickers = [
-                        ...(state.userStickers || []),
-                        ...(state.charStickers || []),
-                        ...(chat.settings.stickerLibrary || []),
-                      ];
-                      const found = allStickers.find(
-                        (s) => s.url === msg.content,
-                      );
-                      if (found) stickerMeaning = found.name;
-                    }
-
-                    if (!stickerMeaning) stickerMeaning = "表情包";
-
-                    return {
-                      role: "user",
-                      content: `${tsPrefix}[用户发送了一个表情: ${stickerMeaning}]`,
-                    };
+                    return null;
                   }
 
                   if (msg.isPeerUserMessage) {
@@ -39596,11 +39602,15 @@ ${stickerContext || "无"}
                     };
                   }
 
-                  if (msg.meaning)
-                    return {
-                      role: "user",
-                      content: `${tsPrefix}[用户发送了一个表情，意思是：'${msg.meaning}']`,
-                    };
+                  if (
+                    msg.isPeerOnlySticker ||
+                    msg.type === "sticker" ||
+                    msg.meaning ||
+                    (typeof msg.content === "string" &&
+                      STICKER_REGEX.test(msg.content))
+                  ) {
+                    return null;
+                  }
 
                   return { role: msg.role, content: contentStr };
                 })
@@ -44580,15 +44590,23 @@ ${stickerContext || "无"}
           if (!chat) return;
           const msg = {
             role: "user",
+            type: "sticker",
             content: sticker.url,
             meaning: sticker.name,
+            isPeerOnlySticker: true,
             timestamp: Date.now(),
           };
           chat.history.push(msg);
           await db.chats.put(chat);
-          checkAndTriggerSummary(state.activeChatId);
           appendMessage(msg, chat);
           renderChatList();
+          if (window.PeerManager) {
+            if (chat.isGroup && chat.isPeerGroup && typeof window.PeerManager.broadcastGroupMessage === "function") {
+              window.PeerManager.broadcastGroupMessage(chat, msg, true);
+            } else if (chat.roleType === "peer" && !chat.isGroup && typeof window.PeerManager.sendDirectPeerMessage === "function") {
+              window.PeerManager.sendDirectPeerMessage(chat, msg);
+            }
+          }
           document.getElementById("sticker-panel").classList.remove("visible");
         }
 
@@ -46455,6 +46473,15 @@ ${stickerContext || "无"}
               // 处理不同类型的消息内容
               let contentText = "";
               if (
+                msg.isPeerOnlySticker ||
+                ((msg.role === "user" || msg.isPeerUserMessage) &&
+                  (msg.type === "sticker" ||
+                    msg.meaning ||
+                    (typeof msg.content === "string" && STICKER_REGEX.test(msg.content))))
+              ) {
+                return null;
+              }
+              if (
                 typeof msg.content === "string" &&
                 STICKER_REGEX.test(msg.content)
               ) {
@@ -46476,6 +46503,7 @@ ${stickerContext || "无"}
 
               return `[${formattedDate}] ${sender}: ${contentText}`;
             })
+            .filter(Boolean)
             .join("\n");
 
           // added by lrq 251027 获取记忆互通的聊天记录
@@ -54508,13 +54536,22 @@ ${stickerContext || "无"}
         }
 
         async function openBulkAddStickersModal() {
-          const placeholder = `在这里粘贴表情包，每行一个，格式如下：\n\n猫猫喝水：https://..../cat.gif\n狗狗摇头：https://..../dog.png\n\n(支持用中文冒号“：”、英文冒号“:”或空格分隔)`;
+          const urlSiteHelperHtml = `
+            <div style="margin-bottom: 10px; padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--text-primary); text-align: left;">
+              <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">图片生成URL官网直达：</div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <a href="https://postimages.org/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); text-decoration: underline; font-weight: 600;">Postimages官网 https://postimages.org</a>
+                <a href="https://catbox.moe/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); text-decoration: underline; font-weight: 600;">Catbox官网 https://catbox.moe</a>
+              </div>
+            </div>
+          `;
 
           const textInput = await showCustomPrompt(
-            "批量添加表情(URL)",
+            "批量添加表情",
             "一行一个，名称和链接用冒号或空格隔开",
             "",
             "textarea",
+            urlSiteHelperHtml,
           );
 
           if (!textInput || !textInput.trim()) {
@@ -58826,11 +58863,21 @@ ${stickerContext || "无"}
          * 批量添加表情包到指定库
          */
         async function bulkAddCharStickers(type) {
+          const urlSiteHelperHtml = `
+            <div style="margin-bottom: 10px; padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--text-primary); text-align: left;">
+              <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">图片生成URL官网直达：</div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <a href="https://postimages.org/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); text-decoration: underline; font-weight: 600;">Postimages官网 https://postimages.org</a>
+                <a href="https://catbox.moe/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); text-decoration: underline; font-weight: 600;">Catbox官网 https://catbox.moe</a>
+              </div>
+            </div>
+          `;
           const textInput = await showCustomPrompt(
             `批量添加${type === "exclusive" ? "专属" : "通用"}表情`,
             "一行一个，格式：\n猫猫喝水 https://..../cat.gif",
             "",
             "textarea",
+            urlSiteHelperHtml,
           );
           if (!textInput || !textInput.trim()) return;
 

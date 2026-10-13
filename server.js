@@ -267,6 +267,8 @@ app.post('/api/peer/send', (req, res) => {
     msgType,
     audioData,
     audioDuration,
+    meaning,
+    isPeerOnlySticker,
     senderName,
     senderAvatar,
     senderAvatarFrame,
@@ -289,6 +291,18 @@ app.post('/api/peer/send', (req, res) => {
     return res.json({ success: true });
   }
 
+  if (type === 'online_ping') {
+    const pingEvt = {
+      type: 'online_ping',
+      eventId: eventId || ('ping_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+      fromCode,
+      toCode,
+      timestamp: Date.now()
+    };
+    sendToPeerWs(toCode, pingEvt);
+    return res.json({ success: true });
+  }
+
   if (type !== 'message') {
     const customEvent = {
       ...body,
@@ -303,12 +317,15 @@ app.post('/api/peer/send', (req, res) => {
 
   if (!content && !audioData) return res.status(400).json({ error: 'Missing content' });
   const event = {
+    ...body,
     type: 'message',
     eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
     fromCode,
     toCode,
     content: content || '[语音消息]',
     msgType: msgType || 'text',
+    meaning: meaning || '',
+    isPeerOnlySticker: Boolean(isPeerOnlySticker),
     audioData: audioData || '',
     audioDuration: audioDuration || 0,
     senderName,
