@@ -75,6 +75,7 @@
     <script src="module-manager.js" defer></script>
     <script src="inventory-manager.js" defer></script>
     <script src="combat-engine.js" defer></script>
+    <script src="peer-manager.js" defer></script>
 
     <style></style>
 
@@ -2143,6 +2144,7 @@
                 <button type="button" id="add-choice-friend-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加好友</button>
                 <button type="button" id="add-choice-dice-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加骰子</button>
                 <button type="button" id="add-choice-status-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加系统状态栏</button>
+                <button type="button" id="dropdown-choice-peer-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加密友</button>
               </div>
             </div>
           </div>
@@ -3060,6 +3062,41 @@
             <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
               <button type="button" class="moe-btn" onclick="closeContactModal('contact-add-friend-modal')" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
               <button type="button" class="moe-btn" id="add-friend-confirm-btn" onclick="confirmAddNewFriend()" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 6px;">确定</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 密友添加弹窗 -->
+        <div class="modal" id="contact-peer-modal" style="display: none; z-index: 10000;">
+          <div class="modal-content" style="width: 320px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">添加密友</span>
+              <button type="button" id="contact-peer-close-btn" onclick="if(window.PeerManager)window.PeerManager.closePeerModal();" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
+              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">我的密友码</label>
+                <div style="display: flex; gap: 8px; align-items: center; width: 100%; box-sizing: border-box;">
+                  <input type="text" id="my-peer-code-display" class="moe-input" readonly style="flex: 1 1 auto; width: 0; min-width: 0; height: 36px; padding: 0 10px; font-size: 13px; border-radius: 8px; cursor: pointer; background: var(--secondary-bg); font-family: monospace; box-sizing: border-box;" onclick="if(window.PeerManager)window.PeerManager.copyMyPeerCode();" />
+                  <button type="button" id="copy-my-peer-code-btn" class="moe-btn" style="flex: 0 0 68px; width: 68px; min-width: 68px; max-width: 68px; height: 36px; padding: 0; font-size: 13px; font-weight: 600; border-radius: 8px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer; white-space: nowrap;" onclick="if(window.PeerManager)window.PeerManager.copyMyPeerCode();">复制</button>
+                </div>
+              </div>
+              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">对方密友码</label>
+                <input type="text" id="peer-target-code-input" class="moe-input" placeholder="输入对方密友码" style="height: 36px; font-size: 13px; border-radius: 8px; padding: 0 10px; box-sizing: border-box;" />
+              </div>
+              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">昵称</label>
+                <input type="text" id="peer-friend-name-input" class="moe-input" placeholder="输入密友昵称" style="height: 36px; font-size: 13px; border-radius: 8px; padding: 0 10px; box-sizing: border-box;" />
+              </div>
+              <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">所属栏目</label>
+                <select id="peer-friend-group-select" class="moe-input" style="height: 36px; line-height: 24px; font-size: 13px; border-radius: 8px; padding: 4px 10px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer; box-sizing: border-box;"></select>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+              <button type="button" class="moe-btn" onclick="if(window.PeerManager)window.PeerManager.closePeerModal();" style="height: 34px; padding: 0 16px; font-size: 13px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 8px;">取消</button>
+              <button type="button" class="moe-btn" id="confirm-add-peer-btn" onclick="if(window.PeerManager)window.PeerManager.confirmAddPeerFriend();" style="height: 34px; padding: 0 18px; font-size: 13px; background: var(--accent-color); color: #ffffff; border: none; border-radius: 8px;">连接</button>
             </div>
           </div>
         </div>
@@ -8292,6 +8329,7 @@
           <button type="button" class="moe-btn" id="add-choice-friend-btn" style="width: 100%;">好友</button>
           <button type="button" class="moe-btn-secondary" id="add-choice-dice-btn" style="width: 100%;">骰子</button>
           <button type="button" class="moe-btn-secondary" id="add-choice-status-btn" style="width: 100%;">系统状态栏</button>
+          <button type="button" class="moe-btn-secondary" id="add-choice-peer-btn" style="width: 100%;">密友</button>
         </div>
         <div class="modal-footer" style="padding: 8px;">
           <button type="button" class="cancel" id="cancel-add-choice-btn" style="width: 100%; height: 32px; padding: 4px; font-size: 13px;">取消</button>
@@ -37277,8 +37315,8 @@ ${recentHistoryText}
           state.chats[String(chat.id)] = chat;
           state.chats[chatId] = chat;
 
-          // 骰子角色的消息由本地规则生成，不调用 AI 接口
-          if (!chat.isGroup && chat.roleType === "dice") {
+          // 骰子角色的消息由本地规则生成，密友为真人对话，均不调用 AI 接口
+          if (!chat.isGroup && (chat.roleType === "dice" || chat.roleType === "peer")) {
             return;
           }
 
@@ -75684,6 +75722,13 @@ ${stickerContext || "无"}
 
               cancelReplyMode();
 
+              if (chat.roleType === "peer") {
+                if (window.PeerManager && typeof window.PeerManager.sendDirectPeerMessage === "function") {
+                  window.PeerManager.sendDirectPeerMessage(chat, msg);
+                }
+                return;
+              }
+
               // 检查当前聊天中是否存在骰子角色
               let diceRole = null;
               if (!chat.isGroup) {
@@ -82515,7 +82560,7 @@ ${stickerContext || "无"}
           });
 
           // 弹窗背景遮罩点击自动关闭
-          ["contact-picker-modal", "contact-groups-sort-modal", "contact-card-modal", "group-card-modal", "contact-add-friend-modal"].forEach((modalId) => {
+          ["contact-picker-modal", "contact-groups-sort-modal", "contact-card-modal", "group-card-modal", "contact-add-friend-modal", "contact-peer-modal"].forEach((modalId) => {
             const el = document.getElementById(modalId);
             if (el) {
               el.addEventListener("click", (e) => {

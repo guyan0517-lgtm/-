@@ -1,6 +1,8 @@
+import http from 'http';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { WebSocketServer } from 'ws';
 import { PDFDocument } from 'pdf-lib';
 import { isEncrypted, decryptPDF } from '@pdfsmaller/pdf-decrypt';
 
@@ -152,6 +154,107 @@ app.post('/api/proxy', async (req, res) => {
   }
 });
 
+// Peer communication hub and offline mailbox
+const peerClients = new Map();
+const peerMailboxes = new Map();
+const peerProfiles = new Map();
+
+function pushToMailbox(code, event) {
+  if (!code) return;
+  if (!peerMailboxes.has(code)) {
+    peerMailboxes.set(code, []);
+  }
+  const box = peerMailboxes.get(code);
+  box.push(event);
+  if (box.length > 50) {
+    box.shift();
+  }
+}
+
+function sendToPeerWs(code, event) {
+  const clients = peerClients.get(code);
+  let delivered = false;
+  if (clients && clients.size > 0) {
+    const payload = JSON.stringify(event);
+    for (const ws of clients) {
+      if (ws.readyState === 1) {
+        ws.send(payload);
+        delivered = true;
+      }
+    }
+  }
+  return delivered;
+}
+
+app.post('/api/peer/register', (req, res) => {
+  const { peerCode, name, avatar } = req.body;
+  if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
+  peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
+  return res.json({ success: true });
+});
+
+app.post('/api/peer/send', (req, res) => {
+  const { fromCode, toCode, content, senderName, senderAvatar, timestamp } = req.body;
+  if (!toCode || !content) return res.status(400).json({ error: 'Missing target or content' });
+  const event = {
+    type: 'message',
+    fromCode,
+    toCode,
+    content,
+    senderName,
+    senderAvatar,
+    timestamp: timestamp || Date.now()
+  };
+  const delivered = sendToPeerWs(toCode, event);
+  pushToMailbox(toCode, event);
+  return res.json({ success: true, delivered });
+});
+
+app.post('/api/peer/profile', (req, res) => {
+  const { peerCode, name, avatar, targetCodes = [] } = req.body;
+  if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
+  peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
+  const event = {
+    type: 'profile_update',
+    peerCode,
+    name,
+    avatar,
+    timestamp: Date.now()
+  };
+  if (Array.isArray(targetCodes)) {
+    for (const target of targetCodes) {
+      sendToPeerWs(target, event);
+      pushToMailbox(target, event);
+    }
+  }
+  return res.json({ success: true });
+});
+
+app.post('/api/peer/request', (req, res) => {
+  const { fromCode, toCode, fromName, fromAvatar } = req.body;
+  if (!toCode) return res.status(400).json({ error: 'Missing target' });
+  const event = {
+    type: 'friend_request',
+    fromCode,
+    toCode,
+    fromName,
+    fromAvatar,
+    timestamp: Date.now()
+  };
+  sendToPeerWs(toCode, event);
+  pushToMailbox(toCode, event);
+  return res.json({ success: true });
+});
+
+app.get('/api/peer/poll', (req, res) => {
+  const code = req.query.code;
+  if (!code) return res.status(400).json({ error: 'Missing code' });
+  const events = peerMailboxes.get(code) || [];
+  peerMailboxes.set(code, []);
+  const profile = peerProfiles.get(code) || null;
+  return res.json({ success: true, events, profile });
+});
+
 app.use(express.static(__dirname));
 
 // Client-side fallback to index.html
@@ -159,7 +262,78 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+  let boundCode = null;
+
+  ws.on('message', (raw) => {
+    try {
+      const data = JSON.parse(raw);
+      if (data.type === 'register') {
+        boundCode = data.peerCode;
+        if (boundCode) {
+          if (!peerClients.has(boundCode)) {
+            peerClients.set(boundCode, new Set());
+          }
+          peerClients.get(boundCode).add(ws);
+          if (data.name || data.avatar) {
+            peerProfiles.set(boundCode, { name: data.name, avatar: data.avatar, lastSeen: Date.now() });
+          }
+          const box = peerMailboxes.get(boundCode) || [];
+          if (box.length > 0) {
+            box.forEach(evt => ws.send(JSON.stringify(evt)));
+            peerMailboxes.set(boundCode, []);
+          }
+        }
+      } else if (data.type === 'message') {
+        const { fromCode, toCode, content, senderName, senderAvatar, timestamp } = data;
+        if (toCode) {
+          const event = {
+            type: 'message',
+            fromCode,
+            toCode,
+            content,
+            senderName,
+            senderAvatar,
+            timestamp: timestamp || Date.now()
+          };
+          sendToPeerWs(toCode, event);
+          pushToMailbox(toCode, event);
+        }
+      } else if (data.type === 'profile_update') {
+        const { peerCode, name, avatar, targetCodes = [] } = data;
+        peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
+        const event = { type: 'profile_update', peerCode, name, avatar, timestamp: Date.now() };
+        if (Array.isArray(targetCodes)) {
+          targetCodes.forEach(target => {
+            sendToPeerWs(target, event);
+            pushToMailbox(target, event);
+          });
+        }
+      } else if (data.type === 'friend_request') {
+        const { fromCode, toCode, fromName, fromAvatar } = data;
+        const event = { type: 'friend_request', fromCode, toCode, fromName, fromAvatar, timestamp: Date.now() };
+        sendToPeerWs(toCode, event);
+        pushToMailbox(toCode, event);
+      }
+    } catch (e) {
+      console.warn('[WS] Parse error:', e.message);
+    }
+  });
+
+  ws.on('close', () => {
+    if (boundCode && peerClients.has(boundCode)) {
+      peerClients.get(boundCode).delete(ws);
+      if (peerClients.get(boundCode).size === 0) {
+        peerClients.delete(boundCode);
+      }
+    }
+  });
+});
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
 
