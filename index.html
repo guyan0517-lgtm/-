@@ -75,7 +75,7 @@
     <script src="module-manager.js" defer></script>
     <script src="inventory-manager.js" defer></script>
     <script src="combat-engine.js" defer></script>
-    <script src="peer-manager.js" defer></script>
+    <script src="peer-manager.js?v=8" defer></script>
 
     <style></style>
 
@@ -25012,6 +25012,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (state.musicState && state.musicState.isActive && state.musicState.activeChatId === chat.id) {
                 await endListenTogetherSession(false);
               }
+              if (chat.roleType === "peer" && chat.peerCode && window.PeerManager && typeof window.PeerManager.markPeerDeletedByUser === "function") {
+                window.PeerManager.markPeerDeletedByUser(chat.peerCode);
+              }
               delete state.chats[chat.id];
               if (state.activeChatId === chat.id) state.activeChatId = null;
               await db.chats.delete(chat.id);
@@ -29462,7 +29465,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               lastMsgDisplay = `${displayName}: ${lastMsgDisplay}`;
             }
           } else {
-            const statusText = chat.status?.text || "在线";
             let singlePreview = "";
             if (lastMsgObj && (lastMsgObj.content || lastMsgObj.type)) {
               if (lastMsgObj.type === "pat_message") {
@@ -29489,9 +29491,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 singlePreview = String(lastMsgObj.content).substring(0, 20);
               }
             }
-            lastMsgDisplay = singlePreview
-              ? `[${statusText}] ${singlePreview}`
-              : `[${statusText}]`;
+            if (chat.roleType === "peer") {
+              const statusText = chat.status?.text || "在线";
+              lastMsgDisplay = singlePreview
+                ? `[${statusText}] ${singlePreview}`
+                : `[${statusText}]`;
+            } else {
+              lastMsgDisplay = singlePreview || "...";
+            }
           }
 
           const lastMsgTimestamp = lastMsgObj?.timestamp;
@@ -29576,9 +29583,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 			                    ${streakHtml}
 			                    ${selectedBadgeHtml} <!-- 把徽章放在火花后面 -->
 			                </div>
-			                <div class="last-msg" style="color: ${
-                        chat.isGroup ? "var(--text-secondary)" : "#b5b5b5"
-                      }; font-style: italic;">${lastMsgDisplay}</div>
+			                <div class="last-msg" style="${
+                        !chat.isGroup && chat.roleType === "peer"
+                          ? "color: #b5b5b5; font-style: italic;"
+                          : "color: var(--text-secondary);"
+                      }">${lastMsgDisplay}</div>
 			            </div>
 			            <div class="chat-list-right-column">
 			                <div class="chat-list-time">${timeDisplay}</div>
@@ -73568,6 +73577,7 @@ ${stickerContext || "无"}
               // 这一行变了：直接加载根目录的 sw.js
               const registration =
                 await navigator.serviceWorker.register("sw.js");
+              registration.update().catch(() => {});
               console.log(
                 "ServiceWorker 注册成功 (File Mode), Scope:",
                 registration.scope,

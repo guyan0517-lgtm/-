@@ -1,4 +1,4 @@
-const CACHE_NAME = "ephone-tuk-cache-v4";
+const CACHE_NAME = "ephone-tuk-cache-v8";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -9,7 +9,8 @@ const ASSETS_TO_CACHE = [
   "./icon-512.png",
   "./apple-touch-icon.png",
   "./icon.svg",
-  "./main-app.js"
+  "./main-app.js",
+  "./peer-manager.js"
 ];
 
 self.addEventListener("install", event => {
@@ -46,12 +47,39 @@ self.addEventListener("fetch", event => {
     return;
   }
 
+  const isCodeOrDoc =
+    event.request.mode === "navigate" ||
+    url.pathname === "/" ||
+    url.pathname.endsWith(".html") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css");
+
+  if (isCodeOrDoc) {
+    event.respondWith(
+      fetch(event.request, { cache: "no-cache" })
+        .then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request).then(cached => cached || caches.match("./index.html"));
+        })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       if (cachedResponse) {
         fetch(event.request).then(networkResponse => {
-          if (networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse));
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
           }
         }).catch(() => {});
         return cachedResponse;

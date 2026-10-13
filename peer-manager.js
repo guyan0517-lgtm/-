@@ -66,6 +66,10 @@
         return this.myPeerCode;
       }
 
+      try {
+        sessionStorage.removeItem("tukey_tab_peer_code");
+      } catch (e) {}
+
       let savedCode = localStorage.getItem("tukey_my_peer_code");
       if (
         !savedCode &&
@@ -86,6 +90,74 @@
       this.myPeerCode = newCode;
       localStorage.setItem("tukey_my_peer_code", newCode);
       return newCode;
+    },
+
+    getDeletedPeerCodes: function () {
+      try {
+        const raw = localStorage.getItem("tukey_deleted_peer_codes");
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        return [];
+      }
+    },
+
+    isPeerDeletedByUser: function (peerCode) {
+      if (!peerCode) return false;
+      return this.getDeletedPeerCodes().includes(peerCode);
+    },
+
+    markPeerDeletedByUser: function (peerCode) {
+      if (!peerCode) return;
+      try {
+        const list = this.getDeletedPeerCodes();
+        if (!list.includes(peerCode)) {
+          list.push(peerCode);
+          localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(list));
+        }
+        const backup = this.getSavedFriendsBackup();
+        if (backup[peerCode]) {
+          delete backup[peerCode];
+          localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(backup));
+        }
+      } catch (e) {}
+    },
+
+    unmarkPeerDeletedByUser: function (peerCode) {
+      if (!peerCode) return;
+      try {
+        const list = this.getDeletedPeerCodes().filter((c) => c !== peerCode);
+        localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(list));
+      } catch (e) {}
+    },
+
+    getSavedFriendsBackup: function () {
+      try {
+        const raw = localStorage.getItem("tukey_peer_friends_backup");
+        if (!raw) return {};
+        const map = JSON.parse(raw);
+        return map && typeof map === "object" ? map : {};
+      } catch (e) {
+        return {};
+      }
+    },
+
+    saveFriendToBackup: function (chat) {
+      if (!chat || chat.roleType !== "peer" || chat.isGroup || !chat.peerCode) return;
+      try {
+        const map = this.getSavedFriendsBackup();
+        const prev = map[chat.peerCode] || {};
+        map[chat.peerCode] = {
+          peerCode: chat.peerCode,
+          name: chat.name || prev.name || "密友",
+          remarkName: (chat.settings && chat.settings.remarkName) || prev.remarkName || chat.name || "密友",
+          avatar: (chat.settings && chat.settings.aiAvatar) || prev.avatar || "",
+          avatarFrame: (chat.settings && chat.settings.aiAvatarFrame) || prev.avatarFrame || "",
+          groupId: chat.groupId || prev.groupId || null
+        };
+        localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(map));
+      } catch (e) {}
     },
 
     loadSeenEventIds: function () {
@@ -565,6 +637,8 @@
 
       const outMap = this.getOutgoingRequests();
       Object.keys(outMap).forEach((c) => codes.add(c));
+      const backupMap = this.getSavedFriendsBackup();
+      Object.keys(backupMap).forEach((c) => codes.add(c));
 
       clients.forEach((c) => {
         if (!c) return;
@@ -806,6 +880,7 @@
         }
       }
       await this.deduplicatePeerChatsInDb();
+      await this.refreshAppChatAndContactsUI();
       this.subscribeAllKnownFriendsMqtt();
       this.flushIncomingQueue();
       this.retryOutboxPackets();
@@ -1153,11 +1228,23 @@
         for (const [peerCode, list] of byPeerCode.entries()) {
           if (list.length <= 1) {
             const only = list[0];
-            if (only && only.myPeerCode !== myCode) {
-              only.myPeerCode = myCode;
-              await window.db.chats.put(only);
+            if (only) {
+              let itemChanged = false;
+              if (only.myPeerCode !== myCode) {
+                only.myPeerCode = myCode;
+                itemChanged = true;
+              }
+              if (only.inMessageList === undefined) {
+                only.inMessageList = true;
+                itemChanged = true;
+              }
               if (window.state && window.state.chats) {
                 window.state.chats[only.id] = only;
+              }
+              this.saveFriendToBackup(only);
+              if (itemChanged) {
+                changed = true;
+                await window.db.chats.put(only);
               }
             }
             continue;
@@ -1194,6 +1281,7 @@
           if (window.state && window.state.chats) {
             window.state.chats[primary.id] = primary;
           }
+          this.saveFriendToBackup(primary);
 
           for (let i = 1; i < list.length; i++) {
             const dup = list[i];
@@ -1206,8 +1294,30 @@
           }
         }
 
+        const backupFriends = this.getSavedFriendsBackup();
+        for (const [peerCode, info] of Object.entries(backupFriends)) {
+          if (!peerCode || peerCode === myCode || this.isPeerDeletedByUser(peerCode)) continue;
+          if (!byPeerCode.has(peerCode)) {
+            await this.createOrUpdatePeerChatSession(
+              peerCode,
+              info.name || "密友",
+              info.avatar || "",
+              info.groupId || null,
+              info.remarkName || info.name || "密友",
+              info.avatarFrame || ""
+            );
+            changed = true;
+          }
+        }
+
         for (const [pGroupId, list] of byGroupId.entries()) {
-          if (list.length <= 1) continue;
+          if (list.length <= 1) {
+            const onlyGrp = list[0];
+            if (onlyGrp && window.state && window.state.chats) {
+              window.state.chats[onlyGrp.id] = onlyGrp;
+            }
+            continue;
+          }
           changed = true;
           list.sort((a, b) => {
             const lenA = Array.isArray(a.history) ? a.history.length : 0;
@@ -1341,6 +1451,8 @@
       const finalAva = peerAvatar || defaultAva;
       const finalGroupId = groupId || (await this.ensureDefaultGroupId());
 
+      this.unmarkPeerDeletedByUser(peerCode);
+
       if (existing) {
         if (peerName) existing.name = peerName;
         if (!existing.settings) existing.settings = {};
@@ -1362,6 +1474,7 @@
         if (window.db && window.db.chats) {
           await window.db.chats.put(existing);
         }
+        this.saveFriendToBackup(existing);
         await this.refreshAppChatAndContactsUI();
         return existing;
       }
@@ -1405,6 +1518,7 @@
         await window.db.chats.put(newPeerChat);
       }
 
+      this.saveFriendToBackup(newPeerChat);
       await this.refreshAppChatAndContactsUI();
       return newPeerChat;
     },
@@ -2794,7 +2908,22 @@
       const myCode = this.getOrCreateMyPeerCode();
       if (!peerCode || peerCode === myCode) return;
 
-      const chat = await this.findPeerChatByCodeAsync(peerCode);
+      let chat = await this.findPeerChatByCodeAsync(peerCode);
+      if (!chat) {
+        if (this.isPeerDeletedByUser(peerCode)) return;
+        const outMap = this.getOutgoingRequests();
+        const backupMap = this.getSavedFriendsBackup();
+        const savedInfo = backupMap[peerCode] || outMap[peerCode];
+        if (!savedInfo) return;
+        chat = await this.createOrUpdatePeerChatSession(
+          peerCode,
+          newName || savedInfo.name || savedInfo.remarkName || "密友",
+          newAvatar || savedInfo.avatar || "",
+          savedInfo.groupId || null,
+          savedInfo.remarkName || newName || "密友",
+          newPeerOwnFrame || savedInfo.avatarFrame || ""
+        );
+      }
       if (!chat) return;
 
       if (!chat.settings) chat.settings = {};
@@ -2818,6 +2947,7 @@
       if (window.db && window.db.chats) {
         await window.db.chats.put(chat);
       }
+      this.saveFriendToBackup(chat);
 
       if (window.state && String(window.state.activeChatId) === String(chat.id)) {
         const titleEl = document.getElementById("chat-header-title");
