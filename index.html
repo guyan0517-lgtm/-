@@ -22150,13 +22150,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 preset = await db.thoughtChainPresets.get(presetId);
               } catch (e) {}
             }
-            let block = "\n# 【思维链填写规范与顶级字段代码定义】\n" +
-              "【思维链代码结构与全局唯一性规则】：\n" +
-              "1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 \"thinking\" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n" +
-              "2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将意图分析、环境观察、角色心理推演、回复策略规划等所有思考内容，完整合并写入这一条全局顶级的 \"thinking\" 字段中。\n" +
-              "3. 绝对禁止在具体对象内部包含 thinking 字段：绝对禁止在各个动作、道具、状态栏或文本消息对象内部各自夹带 thinking 字段！下方的 chatResponse 数组中，每一个具体消息对象只保留其自身字段，所有气泡按顺序装入同一个 chatResponse 数组，严禁拆分成多个并列代码块。\n" +
-              "4. 绝对禁止在外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格作为 \"thinking\" 字段的值包裹在 JSON 根对象内部。\n" +
-              "5. 标准填写代码结构示例：\n" +
+            let block = "\n# 思维链填写规范与顶级字段代码定义\n" +
+              "思维链代码结构与全局唯一性规则：\n" +
+              "1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 \"thinking\" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，绝对禁止直接输出在JSON代码外部，绝对禁止写在消息正文气泡中，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n" +
+              "2. 语言规范：thinking 字段内部的思考内容必须全程使用中文书写，严禁使用其他语言。\n" +
+              "3. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将意图分析、环境观察、角色心理推演、回复策略规划等所有思考内容，完整合并写入这一条全局顶级的 \"thinking\" 字段中。\n" +
+              "4. 绝对禁止在具体对象内部包含 thinking 字段：绝对禁止在各个动作、道具、状态栏或文本消息对象内部各自夹带 thinking 字段！下方的 chatResponse 数组中，每一个具体消息对象只保留其自身字段，所有气泡按顺序装入同一个 chatResponse 数组，严禁拆分成多个并列代码块。\n" +
+              "5. 绝对禁止在外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格作为 \"thinking\" 字段的值包裹在 JSON 根对象内部。\n" +
+              "6. 标准填写代码结构示例：\n" +
               "```json\n" +
               "{\n" +
               "  \"thinking\": \"1.最高协议核对：确认无规则冲突；2.场景流速判定：当前处于交互场景，保持驻留不主动结算；3.回复规划：渲染场景氛围并推进当前动作；4.自检完毕，开始生成。\",\n" +
@@ -22171,7 +22172,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "```\n" +
               (preset ? "\n预设名称：" + preset.name + "\n" : "");
             if (preset && preset.generalContent) {
-              block += "【思维链规则设定】：\n" + preset.generalContent + "\n";
+              block += "思维链规则设定：\n" + preset.generalContent + "\n";
             }
             if (chat.thoughtChainEnableCoc !== false && preset && preset.cocContent) {
               block += "【跑团模块思考规则】：\n" + preset.cocContent + "\n";
@@ -38897,6 +38898,61 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                 })
                 .filter(Boolean);
 
+              // 合并连续的assistant气泡为单个标准轮次，防止模型学习碎片化拼接输出
+              const consolidatedGroupPayload = [];
+              let pendingGroupTurn = null;
+              for (const pItem of messagesPayload) {
+                if (pItem.role === "assistant") {
+                  try {
+                    let parsedContent = JSON.parse(pItem.content.replace(/^\(Timestamp: [^)]+\)\s*/, ""));
+                    let items = [];
+                    let hasThinking = false;
+                    if (parsedContent && typeof parsedContent === "object") {
+                      if (parsedContent.thinking) hasThinking = true;
+                      if (Array.isArray(parsedContent.chatResponse)) {
+                        items.push(...parsedContent.chatResponse);
+                      } else if (Array.isArray(parsedContent)) {
+                        items.push(...parsedContent);
+                      } else {
+                        items.push(parsedContent);
+                      }
+                    }
+                    if (!pendingGroupTurn) {
+                      pendingGroupTurn = { items, hasThinking };
+                    } else {
+                      if (hasThinking) pendingGroupTurn.hasThinking = true;
+                      pendingGroupTurn.items.push(...items);
+                    }
+                  } catch (e) {
+                    if (pendingGroupTurn) {
+                      const payload = pendingGroupTurn.hasThinking
+                        ? { thinking: THOUGHT_CHAIN_FOLDED_NOTICE, chatResponse: pendingGroupTurn.items }
+                        : pendingGroupTurn.items;
+                      consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload) });
+                      pendingGroupTurn = null;
+                    }
+                    consolidatedGroupPayload.push(pItem);
+                  }
+                } else {
+                  if (pendingGroupTurn) {
+                    const payload = pendingGroupTurn.hasThinking
+                      ? { thinking: THOUGHT_CHAIN_FOLDED_NOTICE, chatResponse: pendingGroupTurn.items }
+                      : pendingGroupTurn.items;
+                    consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload) });
+                    pendingGroupTurn = null;
+                  }
+                  consolidatedGroupPayload.push(pItem);
+                }
+              }
+              if (pendingGroupTurn) {
+                const payload = pendingGroupTurn.hasThinking
+                  ? { thinking: THOUGHT_CHAIN_FOLDED_NOTICE, chatResponse: pendingGroupTurn.items }
+                  : pendingGroupTurn.items;
+                consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload) });
+                pendingGroupTurn = null;
+              }
+              messagesPayload = consolidatedGroupPayload;
+
               console.log(messagesPayload);
             } else {
               const npcLibrary = chat.npcLibrary || [];
@@ -39146,7 +39202,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 			该JSON对象【**必须**】包含三个顶级键: "thinking"、"chatResponse" 和 "innerVoice"。
 
 			**2. "thinking" 键:**
-			- **字段位置与格式定义**: 根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡，绝对禁止填写 null。
+			- **字段位置与格式定义**: 根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。思考分析与规则自检必须全程使用中文书写。双引号内部直接书写你的思考推演文本，绝对禁止输出在JSON外部，绝对禁止写在消息正文气泡中，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡，绝对禁止填写 null。
+			- **语言规范**: thinking 字段内的思考内容必须全程使用中文书写，严禁使用其他语言。
 			- **从头到尾唯一一整条**: 从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！必须统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象内部绝对禁止包含 thinking 字段，严禁分散填写！
 			- **绝对禁止外围裸露输出**: 绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格写入顶级 "thinking" 字段之中。
 
@@ -39655,7 +39712,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
             if (isCurrentChatThinkingActive && typeof checkPreviousTurnThinkingValid === "function" && !checkPreviousTurnThinkingValid(historySlice, isCurrentChatThinkingActive)) {
               messagesPayload.push({
                 role: "system",
-                content: "【系统警告：思维链缺失或照抄检测】检测到上一轮未生成有效思维链或照抄了历史折叠提示。历史中的折叠文字仅为系统占位，不代表真实思考。本轮必须在顶级 thinking 字段中根据当前规则逐条进行思考自检推演，严禁留空或照抄折叠文字。"
+                content: "系统警告：思维链缺失或未写入指定字段检测。检测到你上一轮未在顶级 thinking 字段中生成有效思考，或者直接照抄了历史折叠提示。历史中的折叠文字仅为系统占位，不代表真实思考。本轮你必须将完整的思考自检与推演过程完整写在根对象顶级 thinking 字段的双引号内部，绝对禁止直接输出在JSON代码外部，也绝对禁止写在消息正文气泡中。同时，thinking 字段内的思考内容必须全程使用中文书写，严禁使用其他语言。严禁留空或照抄折叠文字。"
               });
             }
 
@@ -39847,6 +39904,47 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
             // 提取并聚合所有思维链内容，消除独立思考气泡
             let collectedThinking = extractedThinking || "";
+
+            // 扁平化解压：如果返回的数组中混入了嵌套有 chatResponse 或 messages 的父对象，将所有子气泡完整解压出来
+            const unnestedItems = [];
+            for (let i = 0; i < messagesArray.length; i++) {
+              const it = messagesArray[i];
+              if (!it) continue;
+              if (it.thinking && typeof it.thinking === "string") {
+                const itTh = it.thinking.trim();
+                if (itTh) {
+                  collectedThinking = (collectedThinking ? collectedThinking + "\n" : "") + itTh;
+                }
+              }
+              if (it.chatResponse && Array.isArray(it.chatResponse)) {
+                for (const sub of it.chatResponse) {
+                  if (sub) unnestedItems.push(sub);
+                }
+              } else if (it.messages && Array.isArray(it.messages)) {
+                for (const sub of it.messages) {
+                  if (sub) unnestedItems.push(sub);
+                }
+              } else {
+                unnestedItems.push(it);
+              }
+            }
+            messagesArray = unnestedItems;
+
+            // 过滤照抄折叠字样的假思维链，防止在界面渲染出包含折叠提示的空思考框
+            const copyKeywordsForRender = [
+              "已折叠历史思考",
+              "在此处渲染了完整思维链",
+              "仅用户可见",
+              "完整深度思维链",
+              "因历史上下文长度限制",
+              "自动折叠隐藏",
+              "本段折叠提示",
+              "系统记录：此处为上一轮"
+            ];
+            if (collectedThinking && copyKeywordsForRender.some(kw => collectedThinking.includes(kw))) {
+              collectedThinking = "";
+            }
+
             const filteredMessages = [];
 
             const activeStatusCols = chat.isGroup ? statusColumns : (chat.settings?.columns || []);
