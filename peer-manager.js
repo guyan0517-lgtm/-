@@ -1,115 +1,36 @@
-/* 密友专属独立模块 - 仅针对密友生效，不影响普通好友、群聊、骰子或系统状态栏 */
+/* 密友与联机群聊专属独立模块 */
 
 (function () {
   const CLOUD_MQTT_BROKERS = [
     "wss://broker.emqx.io:8084/mqtt",
     "wss://broker.hivemq.com:8884/mqtt"
   ];
+  const TOPIC_PREFIX = "tukey_ephone_peer_v2/";
 
-  function encodeMqttVarInt(len) {
-    const bytes = [];
-    do {
-      let encodedByte = len % 128;
-      len = Math.floor(len / 128);
-      if (len > 0) encodedByte = encodedByte | 128;
-      bytes.push(encodedByte);
-    } while (len > 0);
-    return bytes;
-  }
-
-  function encodeMqttUtf8(str) {
-    const utf8 = new TextEncoder().encode(str);
-    const out = new Uint8Array(2 + utf8.length);
-    out[0] = (utf8.length >> 8) & 0xff;
-    out[1] = utf8.length & 0xff;
-    out.set(utf8, 2);
-    return out;
-  }
-
-  function buildMqttConnectPacket(clientId) {
-    const varHeader = new Uint8Array([0x00, 0x04, 0x4d, 0x51, 0x54, 0x54, 0x04, 0x02, 0x00, 0x3c]);
-    const payload = encodeMqttUtf8(clientId);
-    const remLen = encodeMqttVarInt(varHeader.length + payload.length);
-    const pkt = new Uint8Array(1 + remLen.length + varHeader.length + payload.length);
-    pkt[0] = 0x10;
-    pkt.set(remLen, 1);
-    pkt.set(varHeader, 1 + remLen.length);
-    pkt.set(payload, 1 + remLen.length + varHeader.length);
-    return pkt;
-  }
-
-  function buildMqttSubscribePacket(topic, packetId) {
-    const topicBytes = encodeMqttUtf8(topic);
-    const remLen = encodeMqttVarInt(2 + topicBytes.length + 1);
-    const pkt = new Uint8Array(1 + remLen.length + 2 + topicBytes.length + 1);
-    pkt[0] = 0x82;
-    pkt.set(remLen, 1);
-    const vhStart = 1 + remLen.length;
-    pkt[vhStart] = (packetId >> 8) & 0xff;
-    pkt[vhStart + 1] = packetId & 0xff;
-    pkt.set(topicBytes, vhStart + 2);
-    pkt[pkt.length - 1] = 0x00;
-    return pkt;
-  }
-
-  function buildMqttPublishPacket(topic, jsonStr, retain) {
-    const topicBytes = encodeMqttUtf8(topic);
-    const payloadBytes = new TextEncoder().encode(jsonStr);
-    const remLen = encodeMqttVarInt(topicBytes.length + payloadBytes.length);
-    const pkt = new Uint8Array(1 + remLen.length + topicBytes.length + payloadBytes.length);
-    pkt[0] = retain ? 0x31 : 0x30;
-    pkt.set(remLen, 1);
-    pkt.set(topicBytes, 1 + remLen.length);
-    pkt.set(payloadBytes, 1 + remLen.length + topicBytes.length);
-    return pkt;
-  }
-
-  function parseMqttPublishPacket(buf) {
-    if (!buf || buf.length < 4) return null;
-    if ((buf[0] & 0xf0) !== 0x30) return null;
-    let multiplier = 1;
-    let remLen = 0;
-    let idx = 1;
-    let encodedByte = 0;
-    do {
-      if (idx >= buf.length) return null;
-      encodedByte = buf[idx++];
-      remLen += (encodedByte & 127) * multiplier;
-      multiplier *= 128;
-    } while ((encodedByte & 128) !== 0);
-
-    if (idx + 2 > buf.length) return null;
-    const topicLen = (buf[idx] << 8) | buf[idx + 1];
-    idx += 2 + topicLen;
-    const qos = (buf[0] >> 1) & 0x03;
-    if (qos > 0) idx += 2;
-    if (idx > buf.length) return null;
-    try {
-      return new TextDecoder().decode(buf.subarray(idx));
-    } catch (e) {
-      return null;
-    }
-  }
-
-  const MIC_BTN_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;color:var(--text-primary);"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`;
+  const MIC_BTN_SVG = `
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+      <line x1="12" y1="19" x2="12" y2="23"></line>
+      <line x1="8" y1="23" x2="16" y2="23"></line>
+    </svg>
+  `;
 
   const PeerManager = {
-    myPeerCodeKey: "tukey_my_peer_code",
-    activeTabsKey: "tukey_peer_active_tabs_v2",
-    tabId: null,
-    currentPeerCode: null,
     ws: null,
-    mqttSockets: [],
-    mqttPingTimer: null,
-    ntfySocket: null,
+    mqttClient: null,
+    mqttClients: [],
     bc: null,
+    myPeerCode: null,
+    tabId: null,
+    reconnectTimer: null,
     pollTimer: null,
-    outboxTimer: null,
     heartbeatTimer: null,
-    seenEventIds: new Set(),
-    pendingRawEvents: [],
-    isProcessingQueue: false,
+    outboxTimer: null,
     noticeTimer: null,
+    seenEventIds: new Set(),
+    pendingIncomingQueue: [],
+    isFlushingQueue: false,
     mediaRecorder: null,
     recordedChunks: [],
     recordStartTime: 0,
@@ -119,152 +40,105 @@
     isRecording: false,
     currentPlayingAudio: null,
     currentPlayingBubble: null,
-    isSyncingHomeProfile: false,
 
-    isAppDbReady: function () {
-      return Boolean(
-        window.__tukeyDbLoaded &&
-        window.db &&
-        window.db.chats &&
-        window.state &&
-        window.state.chats &&
-        typeof window.state.chats === "object"
-      );
-    },
-
-    onAppDbLoaded: async function () {
-      this.loadSeenEventIds();
-      this.filterOtherTabPeerChats();
-      this.observeHomeProfileChanges();
-      await this.flushPendingEvents();
-      await this.pollOfflineMailbox();
-      await this.retryOutboxPackets();
-      if (window.state && window.state.activeChatId && window.state.chats) {
-        const activeChat = window.state.chats[window.state.activeChatId];
-        if (activeChat) {
-          this.applyPeerChatInputUI(activeChat);
-        }
-      }
-    },
-
-    generateRandomCode: function () {
-      const arr = new Uint32Array(2);
-      if (window.crypto && window.crypto.getRandomValues) {
-        window.crypto.getRandomValues(arr);
-      } else {
-        arr[0] = Math.floor(Math.random() * 1000000);
-        arr[1] = Math.floor(Math.random() * 1000000) ^ Date.now();
-      }
-      const randA = 1000 + (arr[0] % 9000);
-      const randB = 1000 + (arr[1] % 9000);
-      return "PEER-" + randA + "-" + randB;
-    },
-
-    ensureTabId: function () {
+    getTabId: function () {
       if (this.tabId) return this.tabId;
-      let winTabId = "";
-      try {
-        if (window.name && window.name.startsWith("tukey_tab_")) {
-          winTabId = window.name;
-        }
-      } catch (e) {}
-      if (!winTabId) {
-        const rnd = Math.random().toString(36).slice(2, 10);
-        winTabId = "tukey_tab_" + Date.now() + "_" + rnd;
-        try {
-          window.name = winTabId;
-        } catch (e) {}
+      let tid = sessionStorage.getItem("tukey_peer_tab_id");
+      if (!tid) {
+        tid = "tab_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        sessionStorage.setItem("tukey_peer_tab_id", tid);
       }
-      this.tabId = winTabId;
-      return this.tabId;
-    },
-
-    getActiveTabsMap: function () {
-      try {
-        const raw = localStorage.getItem(this.activeTabsKey);
-        if (!raw) return {};
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === "object" ? parsed : {};
-      } catch (e) {
-        return {};
-      }
-    },
-
-    updateTabHeartbeat: function () {
-      const tabId = this.ensureTabId();
-      const myCode = this.currentPeerCode;
-      if (!myCode) return;
-      try {
-        const now = Date.now();
-        const map = this.getActiveTabsMap();
-        for (const k of Object.keys(map)) {
-          if (!map[k] || now - (map[k].ts || 0) > 7000) {
-            delete map[k];
-          }
-        }
-        map[tabId] = { code: myCode, ts: now };
-        localStorage.setItem(this.activeTabsKey, JSON.stringify(map));
-      } catch (e) {}
+      this.tabId = tid;
+      return tid;
     },
 
     isCodeUsedByAnotherTab: function (code) {
       if (!code) return false;
-      const tabId = this.ensureTabId();
-      const now = Date.now();
-      const map = this.getActiveTabsMap();
-      for (const [k, info] of Object.entries(map)) {
-        if (k !== tabId && info && info.code === code && now - (info.ts || 0) <= 6000) {
-          return true;
+      try {
+        const raw = localStorage.getItem("tukey_peer_active_tabs");
+        if (!raw) return false;
+        const map = JSON.parse(raw);
+        const now = Date.now();
+        const myTab = this.getTabId();
+        for (const [tId, info] of Object.entries(map)) {
+          if (tId !== myTab && info && info.code === code && now - info.ts < 12000) {
+            return true;
+          }
         }
-      }
+      } catch (e) {}
       return false;
     },
 
-    getOrCreateMyPeerCode: function () {
-      this.ensureTabId();
-      if (this.currentPeerCode) {
-        return this.currentPeerCode;
-      }
-
-      let sessionCode = "";
+    updateTabLease: function (code) {
+      if (!code) return;
       try {
-        sessionCode = sessionStorage.getItem("tukey_tab_peer_code_" + this.tabId) || "";
-      } catch (e) {}
-
-      if (sessionCode && !this.isCodeUsedByAnotherTab(sessionCode)) {
-        this.currentPeerCode = sessionCode;
-        this.updateTabHeartbeat();
-        return this.currentPeerCode;
-      }
-
-      let savedPrimary = "";
-      try {
-        savedPrimary = localStorage.getItem(this.myPeerCodeKey) || "";
-      } catch (e) {}
-
-      if (savedPrimary && !this.isCodeUsedByAnotherTab(savedPrimary)) {
-        this.currentPeerCode = savedPrimary;
-      } else {
-        const newCode = this.generateRandomCode();
-        this.currentPeerCode = newCode;
-        if (!savedPrimary) {
+        const myTab = this.getTabId();
+        const now = Date.now();
+        let map = {};
+        const raw = localStorage.getItem("tukey_peer_active_tabs");
+        if (raw) {
           try {
-            localStorage.setItem(this.myPeerCodeKey, newCode);
-          } catch (e) {}
+            map = JSON.parse(raw) || {};
+          } catch (e) {
+            map = {};
+          }
         }
+        for (const [tId, info] of Object.entries(map)) {
+          if (!info || now - info.ts > 15000) {
+            delete map[tId];
+          }
+        }
+        map[myTab] = { code: code, ts: now };
+        localStorage.setItem("tukey_peer_active_tabs", JSON.stringify(map));
+      } catch (e) {}
+    },
+
+    generateRandomCode: function () {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let part1 = "";
+      let part2 = "";
+      for (let i = 0; i < 4; i++) {
+        part1 += chars.charAt(Math.floor(Math.random() * chars.length));
+        part2 += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return "TK-" + part1 + "-" + part2;
+    },
+
+    getOrCreateMyPeerCode: function () {
+      if (this.myPeerCode) {
+        this.updateTabLease(this.myPeerCode);
+        return this.myPeerCode;
       }
 
-      try {
-        sessionStorage.setItem("tukey_tab_peer_code_" + this.tabId, this.currentPeerCode);
-      } catch (e) {}
-      this.updateTabHeartbeat();
-      return this.currentPeerCode;
+      let tabCode = sessionStorage.getItem("tukey_my_peer_code_tab");
+      if (tabCode && !this.isCodeUsedByAnotherTab(tabCode)) {
+        this.myPeerCode = tabCode;
+        this.updateTabLease(tabCode);
+        return tabCode;
+      }
+
+      let savedCode = localStorage.getItem("tukey_my_peer_code");
+      if (savedCode && !this.isCodeUsedByAnotherTab(savedCode)) {
+        this.myPeerCode = savedCode;
+        sessionStorage.setItem("tukey_my_peer_code_tab", savedCode);
+        this.updateTabLease(savedCode);
+        return savedCode;
+      }
+
+      const newCode = this.generateRandomCode();
+      this.myPeerCode = newCode;
+      sessionStorage.setItem("tukey_my_peer_code_tab", newCode);
+      if (!savedCode) {
+        localStorage.setItem("tukey_my_peer_code", newCode);
+      }
+      this.updateTabLease(newCode);
+      return newCode;
     },
 
     loadSeenEventIds: function () {
       const myCode = this.getOrCreateMyPeerCode();
       try {
-        const raw = localStorage.getItem("tukey_peer_seen_ids_" + myCode);
+        const raw = localStorage.getItem("tukey_peer_seen_evts_" + myCode);
         if (raw) {
           const arr = JSON.parse(raw);
           if (Array.isArray(arr)) {
@@ -277,20 +151,14 @@
     markEventIdSeen: function (eventId) {
       if (!eventId) return;
       this.seenEventIds.add(eventId);
-      if (this.seenEventIds.size > 500) {
-        const first = this.seenEventIds.values().next().value;
-        this.seenEventIds.delete(first);
-      }
       const myCode = this.getOrCreateMyPeerCode();
       try {
-        localStorage.setItem(
-          "tukey_peer_seen_ids_" + myCode,
-          JSON.stringify(Array.from(this.seenEventIds).slice(-400))
-        );
+        const arr = Array.from(this.seenEventIds).slice(-600);
+        localStorage.setItem("tukey_peer_seen_evts_" + myCode, JSON.stringify(arr));
       } catch (e) {}
     },
 
-    getOutboxList: function () {
+    getOutboxQueue: function () {
       const myCode = this.getOrCreateMyPeerCode();
       try {
         const raw = localStorage.getItem("tukey_peer_outbox_" + myCode);
@@ -302,259 +170,222 @@
       }
     },
 
-    saveOutboxList: function (list) {
+    saveOutboxQueue: function (list) {
       const myCode = this.getOrCreateMyPeerCode();
       try {
-        const trimmed = (list || []).slice(-80);
+        const trimmed = (list || []).slice(-120);
         localStorage.setItem("tukey_peer_outbox_" + myCode, JSON.stringify(trimmed));
       } catch (e) {}
     },
 
-    enqueueOutboxPacket: function (targetCode, payload, httpPath, retainOnMqtt) {
+    addToOutboxQueue: function (targetCode, payload, apiPath) {
       if (!targetCode || !payload || !payload.eventId) return;
-      const list = this.getOutboxList().filter((item) => item && item.eventId !== payload.eventId);
+      const list = this.getOutboxQueue();
+      if (list.some((item) => item && item.eventId === payload.eventId)) return;
       list.push({
         eventId: payload.eventId,
         targetCode: targetCode,
         payload: payload,
-        httpPath: httpPath,
-        retainOnMqtt: !!retainOnMqtt,
+        apiPath: apiPath || "/api/peer/send",
         createdAt: Date.now(),
-        lastSentAt: Date.now()
+        lastTriedAt: Date.now()
       });
-      this.saveOutboxList(list);
+      this.saveOutboxQueue(list);
     },
 
-    removeOutboxPacket: function (ackEventId) {
-      if (!ackEventId) return;
-      const list = this.getOutboxList();
-      const next = list.filter((item) => item && item.eventId !== ackEventId);
+    removeFromOutboxQueue: function (eventId) {
+      if (!eventId) return;
+      const list = this.getOutboxQueue();
+      const next = list.filter((item) => item && item.eventId !== eventId);
       if (next.length !== list.length) {
-        this.saveOutboxList(next);
+        this.saveOutboxQueue(next);
       }
     },
 
-    retryOutboxPackets: async function (specificPeerCode) {
-      const now = Date.now();
-      const list = this.getOutboxList();
+    retryOutboxPackets: function (specificTargetCode) {
+      const list = this.getOutboxQueue();
       if (list.length === 0) return;
+      const now = Date.now();
       let changed = false;
-      const kept = [];
+      const remaining = [];
 
       for (const item of list) {
-        if (!item || !item.payload || !item.targetCode) continue;
-        if (now - (item.createdAt || 0) > 24 * 3600 * 1000) {
+        if (!item || !item.eventId || !item.payload) continue;
+        if (now - (item.createdAt || 0) > 5 * 24 * 3600 * 1000) {
           changed = true;
           continue;
         }
-        const shouldSend = specificPeerCode
-          ? item.targetCode === specificPeerCode
-          : now - (item.lastSentAt || 0) >= 8000;
+        const shouldSend =
+          (specificTargetCode && item.targetCode === specificTargetCode) ||
+          now - (item.lastTriedAt || 0) >= 8000;
         if (shouldSend) {
-          item.lastSentAt = now;
+          item.lastTriedAt = now;
           changed = true;
-          this.dispatchPacketToNetwork(item.targetCode, item.payload, item.httpPath, item.retainOnMqtt, true);
+          this.transmitPacketRaw(item.targetCode, item.payload, item.apiPath || "/api/peer/send", false);
         }
-        kept.push(item);
+        remaining.push(item);
       }
 
       if (changed) {
-        this.saveOutboxList(kept);
+        this.saveOutboxQueue(remaining);
       }
     },
 
     ackEventsToServer: function (eventIds) {
       if (!Array.isArray(eventIds) || eventIds.length === 0) return;
       const myCode = this.getOrCreateMyPeerCode();
-      const ackPayload = {
-        type: "ack",
-        peerCode: myCode,
-        eventIds: eventIds
-      };
       if (this.ws && this.ws.readyState === 1) {
         try {
-          this.ws.send(JSON.stringify(ackPayload));
+          this.ws.send(JSON.stringify({ type: "ack", peerCode: myCode, eventIds: eventIds }));
         } catch (e) {}
       }
-      const baseUrl = this.getRelayBaseUrl();
-      if (baseUrl) {
-        fetch(baseUrl + "/api/peer/ack", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(ackPayload)
-        }).catch(() => {});
-      }
+      fetch(this.getApiUrl("/api/peer/ack"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ peerCode: myCode, eventIds: eventIds })
+      }).catch(() => {});
     },
 
     sendPeerAck: function (toCode, ackEventId) {
       if (!toCode || !ackEventId) return;
       const myCode = this.getOrCreateMyPeerCode();
-      if (toCode === myCode) return;
       const ackPacket = {
         type: "peer_ack",
-        eventId: "ack_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+        eventId: "ack_" + ackEventId + "_" + myCode,
         ackEventId: ackEventId,
         fromCode: myCode,
         toCode: toCode,
         timestamp: Date.now()
       };
-      this.dispatchPacketToNetwork(toCode, ackPacket, "/api/peer/send", false, true);
-    },
-
-    regenerateMyPeerCode: async function () {
-      const oldCode = this.getOrCreateMyPeerCode();
-      let newCode = this.generateRandomCode();
-      while (newCode === oldCode) {
-        newCode = this.generateRandomCode();
-      }
-      this.currentPeerCode = newCode;
-      try {
-        localStorage.setItem(this.myPeerCodeKey, newCode);
-        sessionStorage.setItem("tukey_tab_peer_code_" + this.ensureTabId(), newCode);
-      } catch (e) {}
-      this.updateTabHeartbeat();
-      this.loadSeenEventIds();
-
-      if (window.state && window.state.chats) {
-        for (const chat of Object.values(window.state.chats)) {
-          if (chat.roleType === "peer" && (!chat.myPeerCode || chat.myPeerCode === oldCode)) {
-            chat.myPeerCode = newCode;
-            if (window.db && window.db.chats) {
-              try {
-                await window.db.chats.put(chat);
-              } catch (e) {}
-            }
-          }
-        }
-      }
-
-      const codeDisplay = document.getElementById("my-peer-code-display");
-      if (codeDisplay) {
-        codeDisplay.value = newCode;
-      }
-      const regenBtn = document.getElementById("regen-my-peer-code-btn");
-      if (regenBtn) {
-        regenBtn.textContent = "已换";
-        setTimeout(() => {
-          if (regenBtn) regenBtn.textContent = "换码";
-        }, 1200);
-      }
-
-      this.copyMyPeerCode();
-      this.reconnectAllChannels();
-    },
-
-    getRelayBaseUrl: function () {
-      const custom = localStorage.getItem("tukey_peer_relay_url");
-      if (custom && custom.trim()) {
-        return custom.trim().replace(/\/+$/, "");
-      }
-      if (window.location.protocol === "http:" || window.location.protocol === "https:") {
-        return window.location.origin;
-      }
-      return "";
-    },
-
-    getWsUrl: function () {
-      const base = this.getRelayBaseUrl();
-      if (!base) return "";
-      if (base.startsWith("https://")) {
-        return base.replace(/^https:\/\//, "wss://");
-      }
-      if (base.startsWith("http://")) {
-        return base.replace(/^http:\/\//, "ws://");
-      }
-      return "";
+      this.transmitPacketRaw(toCode, ackPacket, "/api/peer/send", false);
     },
 
     getMyProfile: function () {
-      const defaultAva = window.defaultAvatar || "https://api.iconify.design/lucide:user.svg?color=%23888888";
+      const profileAvatarEl = document.getElementById("profile-avatar-img");
+      const profileNameEl = document.getElementById("profile-username");
+      const profileFrameEl = document.getElementById("profile-avatar-frame");
+      const defaultAva =
+        window.defaultAvatar ||
+        "https://api.iconify.design/lucide:user.svg?color=%23888888";
+
       let name = "我";
       let avatar = defaultAva;
       let myAvatarFrame = "";
 
-      const profileNameEl = document.getElementById("profile-username");
-      if (profileNameEl && profileNameEl.textContent) {
-        const txt = profileNameEl.textContent.trim();
-        if (txt && txt !== "你的昵称") {
-          name = txt;
+      if (window.state && window.state.globalSettings) {
+        const gs = window.state.globalSettings;
+        if (gs.widgetData) {
+          if (gs.widgetData["profile-username"] && gs.widgetData["profile-username"] !== "你的昵称") {
+            name = gs.widgetData["profile-username"].trim();
+          }
+          if (gs.widgetData["profile-avatar-img"]) {
+            avatar = gs.widgetData["profile-avatar-img"];
+          }
+        }
+        if (gs.homeAvatarFrame) {
+          myAvatarFrame = gs.homeAvatarFrame;
         }
       }
-      const profileAvatarEl = document.getElementById("profile-avatar-img");
+
+      if (
+        profileNameEl &&
+        profileNameEl.textContent &&
+        profileNameEl.textContent.trim() &&
+        profileNameEl.textContent.trim() !== "你的昵称"
+      ) {
+        name = profileNameEl.textContent.trim();
+      }
       if (profileAvatarEl && profileAvatarEl.src) {
         avatar = profileAvatarEl.src;
       }
-      const profileFrameEl = document.getElementById("profile-avatar-frame");
       if (profileFrameEl && profileFrameEl.style.display !== "none" && profileFrameEl.getAttribute("src")) {
-        myAvatarFrame = profileFrameEl.getAttribute("src") || "";
+        myAvatarFrame = profileFrameEl.getAttribute("src");
       }
 
-      if (window.state && window.state.globalSettings) {
-        if (window.state.globalSettings.homeAvatarFrame) {
-          myAvatarFrame = window.state.globalSettings.homeAvatarFrame;
-        }
-        if (window.state.globalSettings.widgetData) {
-          const wd = window.state.globalSettings.widgetData;
-          if (wd["profile-username"] && wd["profile-username"] !== "你的昵称") {
-            name = wd["profile-username"];
-          }
-          if (wd["profile-avatar-img"]) {
-            avatar = wd["profile-avatar-img"];
-          }
-        }
-      }
-
-      if (window.state && window.state.activeChatId && window.state.chats) {
-        const activeChat = window.state.chats[window.state.activeChatId];
-        if (activeChat && activeChat.roleType === "peer" && activeChat.settings) {
-          if (activeChat.settings.myName && activeChat.settings.myName !== "我") {
-            name = activeChat.settings.myName;
-          }
-          if (activeChat.settings.myAvatar) {
-            avatar = activeChat.settings.myAvatar;
-          }
-          if (activeChat.settings.myAvatarFrame !== undefined) {
-            myAvatarFrame = activeChat.settings.myAvatarFrame || "";
-          }
-        }
-      }
       return { name, avatar, myAvatarFrame };
     },
 
-    compressAvatarForWire: function (avatarUrl) {
+    compressAvatarForWire: function (src) {
       return new Promise((resolve) => {
-        if (!avatarUrl || typeof avatarUrl !== "string") {
+        if (!src || typeof src !== "string") {
           resolve("");
           return;
         }
-        if (!avatarUrl.startsWith("data:image/") || avatarUrl.length < 12000) {
-          resolve(avatarUrl);
+        if (!src.startsWith("data:image")) {
+          resolve(src);
           return;
         }
-        try {
-          const img = new Image();
-          img.onload = function () {
-            try {
-              const canvas = document.createElement("canvas");
-              const size = 96;
-              canvas.width = size;
-              canvas.height = size;
-              const ctx = canvas.getContext("2d");
-              ctx.drawImage(img, 0, 0, size, size);
-              const compressed = canvas.toDataURL("image/jpeg", 0.72);
-              resolve(compressed);
-            } catch (err) {
-              resolve("");
+        if (src.length < 32000) {
+          resolve(src);
+          return;
+        }
+        const img = new Image();
+        img.onload = function () {
+          try {
+            const canvas = document.createElement("canvas");
+            const maxDim = 96;
+            let w = img.width || 96;
+            let h = img.height || 96;
+            if (w > h) {
+              if (w > maxDim) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              }
+            } else {
+              if (h > maxDim) {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
             }
-          };
-          img.onerror = function () {
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", 0.72));
+          } catch (e) {
             resolve("");
-          };
-          img.src = avatarUrl;
-        } catch (e) {
+          }
+        };
+        img.onerror = function () {
           resolve("");
-        }
+        };
+        img.src = src;
       });
+    },
+
+    sanitizeCocPanelForPeerUI: function (cocPanel) {
+      const def = typeof window.getDefaultCocData === "function"
+        ? window.getDefaultCocData()
+        : {
+            stats: { str: 50, dex: 50, con: 50, pow: 50, siz: 50, edu: 50, app: 50, int: 50, luk: 50 },
+            calculated: { hp: 10, maxHp: 10, mp: 10, maxMp: 10, san: 50, maxSan: 99, db: "0", build: 0 },
+            skills: {},
+            customSkills: [],
+            totalPoints: 0,
+            rulebook: "coc7"
+          };
+      if (!cocPanel || typeof cocPanel !== "object") {
+        return {
+          stats: { ...def.stats },
+          calculated: { ...def.calculated },
+          skills: {},
+          customSkills: [],
+          totalPoints: 0,
+          rulebook: "coc7"
+        };
+      }
+      const stats = cocPanel.stats ? { ...def.stats, ...cocPanel.stats } : { ...def.stats };
+      const calculated = typeof window.calculateCocStats === "function"
+        ? window.calculateCocStats(stats, cocPanel.calculated || {})
+        : (cocPanel.calculated ? { ...def.calculated, ...cocPanel.calculated } : { ...def.calculated });
+      return {
+        stats: stats,
+        calculated: calculated,
+        skills: {},
+        customSkills: [],
+        totalPoints: 0,
+        rulebook: cocPanel.rulebook || "coc7"
+      };
     },
 
     ensureNotificationPermission: function () {
@@ -565,235 +396,215 @@
       } catch (e) {}
     },
 
-    reconnectAllChannels: function () {
-      if (this.ws) {
-        try {
-          this.ws.onclose = null;
-          this.ws.close();
-        } catch (e) {}
-        this.ws = null;
+    getApiBase: function () {
+      if (typeof window.API_BASE_URL === "string" && window.API_BASE_URL.trim()) {
+        return window.API_BASE_URL.trim().replace(/\/+$/, "");
       }
-      if (this.mqttSockets && this.mqttSockets.length > 0) {
-        this.mqttSockets.forEach((s) => {
-          try {
-            s.onclose = null;
-            s.close();
-          } catch (e) {}
-        });
-        this.mqttSockets = [];
+      return "";
+    },
+
+    getApiUrl: function (path) {
+      const base = this.getApiBase();
+      return base ? base + path : path;
+    },
+
+    ensureMqttScriptLoaded: function () {
+      if (typeof window.mqtt !== "undefined") {
+        return Promise.resolve(window.mqtt);
       }
-      if (this.ntfySocket) {
-        try {
-          this.ntfySocket.onclose = null;
-          this.ntfySocket.close();
-        } catch (e) {}
-        this.ntfySocket = null;
+      if (this._mqttLoadingPromise) {
+        return this._mqttLoadingPromise;
       }
-      this.connectNetwork();
+      const urls = [
+        "https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js",
+        "https://cdn.jsdelivr.net/npm/mqtt@5.3.5/dist/mqtt.min.js",
+        "https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.5/mqtt.min.js"
+      ];
+      this._mqttLoadingPromise = new Promise((resolve) => {
+        let idx = 0;
+        const tryNext = () => {
+          if (typeof window.mqtt !== "undefined") {
+            resolve(window.mqtt);
+            return;
+          }
+          if (idx >= urls.length) {
+            resolve(null);
+            return;
+          }
+          const script = document.createElement("script");
+          script.src = urls[idx++];
+          script.async = true;
+          script.onload = () => {
+            if (typeof window.mqtt !== "undefined") {
+              resolve(window.mqtt);
+            } else {
+              tryNext();
+            }
+          };
+          script.onerror = () => {
+            tryNext();
+          };
+          document.head.appendChild(script);
+        };
+        tryNext();
+      });
+      return this._mqttLoadingPromise;
     },
 
     connectNetwork: function () {
       const myCode = this.getOrCreateMyPeerCode();
-      const profile = this.getMyProfile();
+      this.updateTabLease(myCode);
 
-      if (!this.bc && typeof BroadcastChannel !== "undefined") {
-        try {
-          this.bc = new BroadcastChannel("tukey_peer_bus_v2");
+      this.initBroadcastChannel();
+      this.connectMqttBroker();
+      this.connectWebSocket();
+
+      if (!this.heartbeatTimer) {
+        this.heartbeatTimer = setInterval(() => {
+          if (this.myPeerCode) {
+            this.updateTabLease(this.myPeerCode);
+          }
+        }, 4000);
+      }
+
+      if (!this.outboxTimer) {
+        this.outboxTimer = setInterval(() => {
+          this.retryOutboxPackets();
+        }, 8000);
+      }
+    },
+
+    initBroadcastChannel: function () {
+      if (this.bc) return;
+      try {
+        if (typeof BroadcastChannel !== "undefined") {
+          this.bc = new BroadcastChannel("tukey_peer_local_bus");
           this.bc.onmessage = (ev) => {
             if (ev && ev.data) {
               this.enqueueIncomingEvent(ev.data);
             }
           };
-        } catch (e) {}
-      }
-
-      const wsUrl = this.getWsUrl();
-      if (wsUrl && !this.ws) {
-        try {
-          const sock = new WebSocket(wsUrl);
-          this.ws = sock;
-
-          sock.onopen = async () => {
-            const smallAva = await this.compressAvatarForWire(profile.avatar);
-            if (sock.readyState === 1) {
-              sock.send(
-                JSON.stringify({
-                  type: "register",
-                  peerCode: this.getOrCreateMyPeerCode(),
-                  name: profile.name,
-                  avatar: smallAva,
-                  myAvatarFrame: profile.myAvatarFrame || ""
-                })
-              );
-            }
-          };
-
-          sock.onmessage = (event) => {
-            try {
-              const data = JSON.parse(event.data);
-              this.enqueueIncomingEvent(data);
-            } catch (e) {}
-          };
-
-          sock.onclose = () => {
-            if (this.ws === sock) {
-              this.ws = null;
-              setTimeout(() => {
-                this.connectNetwork();
-              }, 3500);
-            }
-          };
-
-          sock.onerror = () => {};
-        } catch (err) {}
-      }
-
-      this.connectCloudMqtt(myCode);
-      this.connectNtfyCloud(myCode);
-
-      const baseUrl = this.getRelayBaseUrl();
-      if (baseUrl) {
-        this.compressAvatarForWire(profile.avatar).then((smallAva) => {
-          fetch(baseUrl + "/api/peer/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              peerCode: myCode,
-              name: profile.name,
-              avatar: smallAva,
-              myAvatarFrame: profile.myAvatarFrame || ""
-            })
-          }).catch(() => {});
-        });
-      }
-
-      if (!this.pollTimer) {
-        this.pollTimer = setInterval(() => {
-          this.pollOfflineMailbox();
-        }, 2500);
-      }
-
-      if (!this.outboxTimer) {
-        this.outboxTimer = setInterval(() => {
-          if (this.isAppDbReady()) {
-            this.retryOutboxPackets();
-          }
-        }, 6000);
-      }
-
-      if (!this.heartbeatTimer) {
-        this.heartbeatTimer = setInterval(() => {
-          this.updateTabHeartbeat();
-        }, 2000);
-      }
-    },
-
-    connectCloudMqtt: function (myCode) {
-      if (!myCode) return;
-      if (!this.mqttSockets) this.mqttSockets = [];
-      if (this.mqttSockets.length > 0) return;
-
-      CLOUD_MQTT_BROKERS.forEach((brokerUrl, idx) => {
-        try {
-          const sock = new WebSocket(brokerUrl, "mqtt");
-          sock.binaryType = "arraybuffer";
-          sock._isMqttReady = false;
-
-          sock.onopen = () => {
-            try {
-              const clientId =
-                "tk_" +
-                myCode.replace(/[^a-zA-Z0-9]/g, "") +
-                "_" +
-                idx +
-                "_" +
-                Math.random().toString(36).slice(2, 6);
-              sock.send(buildMqttConnectPacket(clientId));
-            } catch (e) {}
-          };
-
-          sock.onmessage = (ev) => {
-            if (!(ev.data instanceof ArrayBuffer)) return;
-            const buf = new Uint8Array(ev.data);
-            if (buf.length >= 4 && buf[0] === 0x20 && buf[3] === 0x00) {
-              sock._isMqttReady = true;
-              const codeNow = this.getOrCreateMyPeerCode();
-              sock.send(buildMqttSubscribePacket("tukey_peer_v2/inbox/" + codeNow, 1));
-              sock.send(buildMqttSubscribePacket("tukey_peer_v2/req/" + codeNow, 2));
-              return;
-            }
-            if ((buf[0] & 0xf0) === 0x30) {
-              const jsonStr = parseMqttPublishPacket(buf);
-              if (jsonStr) {
-                try {
-                  const data = JSON.parse(jsonStr);
-                  this.enqueueIncomingEvent(data);
-                } catch (e) {}
-              }
-            }
-          };
-
-          sock.onclose = () => {
-            sock._isMqttReady = false;
-            this.mqttSockets = (this.mqttSockets || []).filter((s) => s !== sock);
-            setTimeout(() => {
-              if (this.mqttSockets.length === 0) {
-                this.connectCloudMqtt(this.getOrCreateMyPeerCode());
-              }
-            }, 5000);
-          };
-
-          sock.onerror = () => {};
-          this.mqttSockets.push(sock);
-        } catch (e) {}
-      });
-
-      if (!this.mqttPingTimer) {
-        this.mqttPingTimer = setInterval(() => {
-          (this.mqttSockets || []).forEach((s) => {
-            if (s && s.readyState === 1 && s._isMqttReady) {
-              try {
-                s.send(new Uint8Array([0xc0, 0x00]));
-              } catch (e) {}
-            }
-          });
-        }, 25000);
-      }
-    },
-
-    connectNtfyCloud: function (myCode) {
-      if (!myCode || this.ntfySocket) return;
-      const safeTopic = "tukey_peer_v2_" + myCode.replace(/[^a-zA-Z0-9_-]/g, "_");
-      try {
-        const ws = new WebSocket("wss://ntfy.sh/" + safeTopic + "/ws?since=24h");
-        this.ntfySocket = ws;
-        ws.onmessage = (ev) => {
-          try {
-            const wrapper = JSON.parse(ev.data);
-            if (wrapper && wrapper.event === "message" && wrapper.message) {
-              const inner = JSON.parse(wrapper.message);
-              this.enqueueIncomingEvent(inner);
-            }
-          } catch (e) {}
-        };
-        ws.onclose = () => {
-          if (this.ntfySocket === ws) {
-            this.ntfySocket = null;
-          }
-        };
-        ws.onerror = () => {};
+        }
       } catch (e) {}
     },
 
-    dispatchPacketToNetwork: function (targetCode, payload, httpPath, retainOnMqtt, skipOutbox) {
-      if (!targetCode || !payload) return;
-      if (!payload.eventId) {
-        payload.eventId = "evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
-      }
-      if (!skipOutbox && payload.type !== "peer_ack" && payload.type !== "ack") {
-        this.enqueueOutboxPacket(targetCode, payload, httpPath, retainOnMqtt);
+    subscribePeerTopicsOnClient: function (client, peerCode, isSelf) {
+      if (!client || !peerCode) return;
+      try {
+        client.subscribe(TOPIC_PREFIX + "inbox/" + peerCode, { qos: 1 });
+        if (!isSelf) {
+          client.subscribe(TOPIC_PREFIX + "profile/" + peerCode, { qos: 1 });
+        }
+      } catch (e) {}
+    },
+
+    subscribeAllKnownFriendsMqtt: function (targetClient) {
+      const clients = targetClient ? [targetClient] : this.mqttClients || [];
+      if (clients.length === 0) return;
+
+      const myCode = this.getOrCreateMyPeerCode();
+      const codes = new Set();
+
+      if (window.state && window.state.chats) {
+        for (const chat of Object.values(window.state.chats)) {
+          if (chat && chat.roleType === "peer" && chat.peerCode) {
+            codes.add(chat.peerCode);
+          }
+          if (chat && chat.isGroup && chat.isPeerGroup && Array.isArray(chat.members)) {
+            chat.members.forEach((m) => {
+              if (m && m.peerCode && m.peerCode !== myCode) codes.add(m.peerCode);
+            });
+          }
+        }
       }
 
+      const outMap = this.getOutgoingRequests();
+      Object.keys(outMap).forEach((c) => codes.add(c));
+
+      clients.forEach((c) => {
+        if (!c) return;
+        this.subscribePeerTopicsOnClient(c, myCode, true);
+        codes.forEach((peerCode) => {
+          this.subscribePeerTopicsOnClient(c, peerCode, false);
+        });
+      });
+    },
+
+    connectMqttBroker: async function () {
+      if (this.mqttClients && this.mqttClients.length > 0) return;
+      const mqttLib = await this.ensureMqttScriptLoaded();
+      if (!mqttLib || typeof mqttLib.connect !== "function") return;
+
+      const myCode = this.getOrCreateMyPeerCode();
+      this.mqttClients = [];
+
+      CLOUD_MQTT_BROKERS.forEach((brokerUrl, idx) => {
+        try {
+          const clientId =
+            "tukey_" +
+            myCode.replace(/[^a-zA-Z0-9]/g, "") +
+            "_" +
+            idx +
+            "_" +
+            Math.random().toString(36).slice(2, 7);
+
+          const client = mqttLib.connect(brokerUrl, {
+            clientId: clientId,
+            clean: false,
+            keepalive: 45,
+            reconnectPeriod: 4000,
+            connectTimeout: 12000
+          });
+
+          client.on("connect", () => {
+            this.subscribeAllKnownFriendsMqtt(client);
+            this.publishMyRetainedProfile(client);
+            this.retryOutboxPackets();
+          });
+
+          client.on("message", (topic, messageBuffer) => {
+            try {
+              const rawStr = messageBuffer.toString();
+              if (!rawStr) return;
+              const data = JSON.parse(rawStr);
+              this.enqueueIncomingEvent(data);
+            } catch (e) {}
+          });
+
+          client.on("error", () => {});
+          this.mqttClients.push(client);
+          if (idx === 0) this.mqttClient = client;
+        } catch (e) {}
+      });
+    },
+
+    publishMyRetainedProfile: async function (specificClient) {
+      const clients = specificClient ? [specificClient] : this.mqttClients || [];
+      if (clients.length === 0) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const profile = this.getMyProfile();
+      const smallAva = await this.compressAvatarForWire(profile.avatar);
+      const pkt = JSON.stringify({
+        type: "profile_update",
+        eventId: "prof_ret_" + myCode + "_" + Date.now(),
+        peerCode: myCode,
+        name: profile.name,
+        avatar: smallAva,
+        myAvatarFrame: profile.myAvatarFrame || "",
+        timestamp: Date.now()
+      });
+
+      clients.forEach((c) => {
+        if (c && c.connected) {
+          try {
+            c.publish(TOPIC_PREFIX + "profile/" + myCode, pkt, { qos: 1, retain: true });
+          } catch (e) {}
+        }
+      });
+    },
+
+    transmitPacketRaw: function (targetCode, payload, apiPath, retainOnInbox) {
+      if (!targetCode || !payload) return;
       const jsonStr = JSON.stringify(payload);
 
       if (this.bc) {
@@ -805,77 +616,169 @@
         localStorage.setItem("tukey_peer_local_bus_pkt", jsonStr);
       } catch (e) {}
 
+      if (this.mqttClients && this.mqttClients.length > 0) {
+        this.mqttClients.forEach((c) => {
+          if (c) {
+            try {
+              c.publish(TOPIC_PREFIX + "inbox/" + targetCode, jsonStr, {
+                qos: 1,
+                retain: Boolean(retainOnInbox)
+              });
+            } catch (e) {}
+          }
+        });
+      }
+
       if (this.ws && this.ws.readyState === 1) {
         try {
           this.ws.send(jsonStr);
         } catch (e) {}
       }
 
-      const baseUrl = this.getRelayBaseUrl();
-      if (baseUrl && httpPath) {
-        fetch(baseUrl + httpPath, {
+      if (apiPath) {
+        fetch(this.getApiUrl(apiPath), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: jsonStr
         }).catch(() => {});
       }
-
-      const mqttTopic = retainOnMqtt
-        ? "tukey_peer_v2/req/" + targetCode
-        : "tukey_peer_v2/inbox/" + targetCode;
-      (this.mqttSockets || []).forEach((s) => {
-        if (s && s.readyState === 1 && s._isMqttReady) {
-          try {
-            s.send(buildMqttPublishPacket(mqttTopic, jsonStr, !!retainOnMqtt));
-          } catch (e) {}
-        }
-      });
-
-      if (jsonStr.length < 3800) {
-        const safeTopic = "tukey_peer_v2_" + targetCode.replace(/[^a-zA-Z0-9_-]/g, "_");
-        fetch("https://ntfy.sh/" + safeTopic, {
-          method: "POST",
-          body: jsonStr
-        }).catch(() => {});
-      }
     },
 
-    pollOfflineMailbox: async function () {
-      if (!this.isAppDbReady()) return;
+    dispatchPacketToNetwork: function (targetCode, payload, apiPath, retainOnInbox) {
+      if (!targetCode || !payload) return;
+      if (payload.type !== "peer_ack" && payload.eventId) {
+        this.addToOutboxQueue(targetCode, payload, apiPath);
+      }
+      this.transmitPacketRaw(targetCode, payload, apiPath, retainOnInbox);
+    },
+
+    connectWebSocket: function () {
       const myCode = this.getOrCreateMyPeerCode();
-      const baseUrl = this.getRelayBaseUrl();
-      if (!baseUrl) return;
+      const profile = this.getMyProfile();
+
+      this.registerViaHttp();
+      this.startPollingFallback();
+
       try {
-        const res = await fetch(baseUrl + "/api/peer/poll?code=" + encodeURIComponent(myCode));
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data && Array.isArray(data.events) && data.events.length > 0) {
-          for (const evt of data.events) {
-            this.enqueueIncomingEvent(evt);
-          }
-          await this.flushPendingEvents();
+        const base = this.getApiBase();
+        let wsUrl;
+        if (base && base.startsWith("http")) {
+          wsUrl = base.replace(/^http/, "ws");
+        } else {
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          wsUrl = protocol + "//" + window.location.host;
         }
+        const ws = new WebSocket(wsUrl);
+        this.ws = ws;
+
+        ws.onopen = async () => {
+          const smallAva = await this.compressAvatarForWire(profile.avatar);
+          ws.send(
+            JSON.stringify({
+              type: "register",
+              peerCode: myCode,
+              name: profile.name,
+              avatar: smallAva,
+              myAvatarFrame: profile.myAvatarFrame || ""
+            })
+          );
+          this.retryOutboxPackets();
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            this.enqueueIncomingEvent(data);
+          } catch (e) {}
+        };
+
+        ws.onclose = () => {
+          this.ws = null;
+          if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = setTimeout(() => {
+            this.connectWebSocket();
+          }, 6000);
+        };
+
+        ws.onerror = () => {};
       } catch (e) {}
+    },
+
+    registerViaHttp: async function () {
+      const myCode = this.getOrCreateMyPeerCode();
+      const profile = this.getMyProfile();
+      const smallAva = await this.compressAvatarForWire(profile.avatar);
+      fetch(this.getApiUrl("/api/peer/register"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          peerCode: myCode,
+          name: profile.name,
+          avatar: smallAva,
+          myAvatarFrame: profile.myAvatarFrame || ""
+        })
+      }).catch(() => {});
+    },
+
+    startPollingFallback: function () {
+      if (this.pollTimer) return;
+      this.pollOnce();
+      this.pollTimer = setInterval(() => {
+        this.pollOnce();
+      }, 3500);
+    },
+
+    pollOnce: function () {
+      const myCode = this.getOrCreateMyPeerCode();
+      fetch(this.getApiUrl("/api/peer/poll?code=" + encodeURIComponent(myCode)))
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && Array.isArray(data.events) && data.events.length > 0) {
+            data.events.forEach((evt) => this.enqueueIncomingEvent(evt));
+          }
+        })
+        .catch(() => {});
+    },
+
+    isAppDbReady: function () {
+      return Boolean(
+        window.__tukeyDbLoaded &&
+          window.state &&
+          window.state.chats &&
+          window.db &&
+          window.db.chats
+      );
+    },
+
+    onAppDbLoaded: function () {
+      this.filterOtherTabPeerChats();
+      this.subscribeAllKnownFriendsMqtt();
+      this.flushIncomingQueue();
+      this.retryOutboxPackets();
+      this.pollOnce();
     },
 
     enqueueIncomingEvent: function (data) {
       if (!data || !data.type) return;
-      this.pendingRawEvents.push(data);
+      this.pendingIncomingQueue.push(data);
       if (this.isAppDbReady()) {
-        this.flushPendingEvents();
+        this.flushIncomingQueue();
       }
     },
 
-    flushPendingEvents: async function () {
-      if (this.isProcessingQueue || !this.isAppDbReady()) return;
-      this.isProcessingQueue = true;
+    flushIncomingQueue: async function () {
+      if (this.isFlushingQueue) return;
+      if (!this.isAppDbReady()) return;
+      this.isFlushingQueue = true;
       try {
-        while (this.pendingRawEvents.length > 0) {
-          const evt = this.pendingRawEvents.shift();
+        while (this.pendingIncomingQueue.length > 0) {
+          const evt = this.pendingIncomingQueue.shift();
           await this.handleIncomingEvent(evt);
         }
+      } catch (e) {
+        console.error("处理联机事件异常:", e);
       } finally {
-        this.isProcessingQueue = false;
+        this.isFlushingQueue = false;
       }
     },
 
@@ -883,16 +786,12 @@
       if (!data || !data.type) return;
       const myCode = this.getOrCreateMyPeerCode();
 
-      if (data.toCode && data.toCode !== myCode) {
-        return;
-      }
-      if (data.type === "profile_update" && Array.isArray(data.targetCodes) && data.targetCodes.length > 0) {
-        if (!data.targetCodes.includes(myCode)) return;
-      }
+      if (data.toCode && data.toCode !== myCode) return;
+      if (Array.isArray(data.targetCodes) && !data.targetCodes.includes(myCode)) return;
 
       if (data.type === "peer_ack") {
         if (data.ackEventId) {
-          this.removeOutboxPacket(data.ackEventId);
+          this.removeFromOutboxQueue(data.ackEventId);
         }
         if (data.eventId) {
           this.ackEventsToServer([data.eventId]);
@@ -919,6 +818,18 @@
         await this.receiveFriendRequest(data);
       } else if (data.type === "friend_accept") {
         await this.receiveFriendAccept(data);
+      } else if (data.type === "group_invite") {
+        await this.receiveGroupInvite(data);
+      } else if (data.type === "group_join_accept") {
+        await this.receiveGroupJoinAccept(data);
+      } else if (data.type === "group_member_update") {
+        await this.receiveGroupMemberUpdate(data);
+      } else if (data.type === "group_message") {
+        await this.receiveGroupMessage(data);
+      } else if (data.type === "msg_edit") {
+        await this.receiveMessageEdit(data);
+      } else if (data.type === "msg_delete") {
+        await this.receiveMessageDelete(data);
       }
 
       if (data.eventId) {
@@ -950,6 +861,25 @@
       const myCode = this.getOrCreateMyPeerCode();
       try {
         localStorage.setItem("tukey_peer_in_reqs_" + myCode, JSON.stringify(list || []));
+      } catch (e) {}
+    },
+
+    getIncomingGroupInvites: function () {
+      const myCode = this.getOrCreateMyPeerCode();
+      try {
+        const raw = localStorage.getItem("tukey_peer_grp_invs_" + myCode);
+        if (!raw) return [];
+        const list = JSON.parse(raw);
+        return Array.isArray(list) ? list : [];
+      } catch (e) {
+        return [];
+      }
+    },
+
+    saveIncomingGroupInvites: function (list) {
+      const myCode = this.getOrCreateMyPeerCode();
+      try {
+        localStorage.setItem("tukey_peer_grp_invs_" + myCode, JSON.stringify(list || []));
       } catch (e) {}
     },
 
@@ -1043,6 +973,8 @@
     },
 
     showPeerNotice: function (titleOrText, onClick, options) {
+      if (!document.hidden) return;
+
       const opts = options || {};
       const title = opts.title || "密友通知";
       const message = opts.message || titleOrText || "";
@@ -1131,7 +1063,7 @@
       if (!window.state || !window.state.chats) return;
       const myCode = this.getOrCreateMyPeerCode();
       for (const [id, chat] of Object.entries(window.state.chats)) {
-        if (chat && chat.roleType === "peer" && chat.myPeerCode && chat.myPeerCode !== myCode) {
+        if (chat && (chat.roleType === "peer" || chat.isPeerGroup) && chat.myPeerCode && chat.myPeerCode !== myCode) {
           if (this.isCodeUsedByAnotherTab(chat.myPeerCode)) {
             delete window.state.chats[id];
           }
@@ -1147,6 +1079,7 @@
           if (
             chat &&
             chat.roleType === "peer" &&
+            !chat.isGroup &&
             chat.peerCode === peerCode &&
             (!chat.myPeerCode || chat.myPeerCode === myCode)
           ) {
@@ -1161,6 +1094,7 @@
             (c) =>
               c &&
               c.roleType === "peer" &&
+              !c.isGroup &&
               c.peerCode === peerCode &&
               (!c.myPeerCode || c.myPeerCode === myCode)
           );
@@ -1173,6 +1107,51 @@
         } catch (e) {}
       }
       return null;
+    },
+
+    findPeerGroupChatByIdAsync: async function (groupId) {
+      if (!groupId) return null;
+      const myCode = this.getOrCreateMyPeerCode();
+      const localId = this.getLocalGroupChatId(groupId);
+      if (window.state && window.state.chats) {
+        if (window.state.chats[localId]) return window.state.chats[localId];
+        if (window.state.chats[groupId]) return window.state.chats[groupId];
+        for (const chat of Object.values(window.state.chats)) {
+          if (
+            chat &&
+            chat.isGroup &&
+            (chat.peerGroupId === groupId || chat.id === groupId || chat.id === localId) &&
+            (!chat.myPeerCode || chat.myPeerCode === myCode)
+          ) {
+            return chat;
+          }
+        }
+      }
+      if (window.db && window.db.chats) {
+        try {
+          const allDbChats = await window.db.chats.toArray();
+          const found = allDbChats.find(
+            (c) =>
+              c &&
+              c.isGroup &&
+              (c.peerGroupId === groupId || c.id === groupId || c.id === localId) &&
+              (!c.myPeerCode || c.myPeerCode === myCode)
+          );
+          if (found) {
+            if (!window.state) window.state = {};
+            if (!window.state.chats) window.state.chats = {};
+            window.state.chats[found.id] = found;
+            return found;
+          }
+        } catch (e) {}
+      }
+      return null;
+    },
+
+    getLocalGroupChatId: function (sharedGroupId) {
+      const myCode = this.getOrCreateMyPeerCode().replace(/[^a-zA-Z0-9]/g, "");
+      if (String(sharedGroupId).includes("_" + myCode)) return sharedGroupId;
+      return sharedGroupId + "_" + myCode;
     },
 
     createOrUpdatePeerChatSession: async function (
@@ -1235,6 +1214,7 @@
           remarkName: finalRemark,
           aiAvatar: finalAva,
           aiAvatarFrame: peerAvatarFrame || "",
+          aiCocPanel: this.sanitizeCocPanelForPeerUI(null),
           myName: myProfile.name,
           myAvatar: myProfile.avatar,
           myAvatarFrame: myProfile.myAvatarFrame || "",
@@ -1354,7 +1334,7 @@
 
       this.dispatchPacketToNetwork(fromCode, acceptPayload, "/api/peer/request", true);
 
-      if (remaining.length === 0) {
+      if (remaining.length === 0 && this.getIncomingGroupInvites().length === 0) {
         this.closePeerModal();
       }
       this.showPeerNotice(
@@ -1417,21 +1397,971 @@
       );
     },
 
+    openPeerGroupCreator: function () {
+      if (typeof window.openContactPickerForGroupCreate === "function") {
+        window.openContactPickerForGroupCreate(true);
+      }
+    },
+
+    buildGroupSyncSnapshot: async function (groupChat) {
+      const myCode = this.getOrCreateMyPeerCode();
+      const sharedGroupId = groupChat.peerGroupId || groupChat.id;
+      groupChat.peerGroupId = sharedGroupId;
+      groupChat.myPeerCode = myCode;
+      groupChat.isPeerGroup = true;
+
+      const myNick = (groupChat.settings && (groupChat.settings.myNickname || groupChat.settings.myName)) || "我";
+      const myAva = await this.compressAvatarForWire(
+        (groupChat.settings && groupChat.settings.myAvatar) || window.defaultMyGroupAvatar || window.defaultAvatar
+      );
+      const grpAva = await this.compressAvatarForWire(
+        (groupChat.settings && groupChat.settings.groupAvatar) || window.defaultGroupAvatar || window.defaultAvatar
+      );
+
+      const humanPeers = [
+        {
+          peerCode: myCode,
+          originalName: myNick,
+          groupNickname: myNick,
+          avatar: myAva,
+          avatarFrame: (groupChat.settings && groupChat.settings.myAvatarFrame) || "",
+          age: (groupChat.settings && groupChat.settings.myAge) || "",
+          birthday: (groupChat.settings && groupChat.settings.myBirthday) || "",
+          gender: (groupChat.settings && groupChat.settings.myGender) || "",
+          genderNote: (groupChat.settings && groupChat.settings.myGenderNote) || "",
+          cocPanel: this.sanitizeCocPanelForPeerUI(groupChat.settings && groupChat.settings.myCocPanel),
+          secretPersona: (groupChat.settings && groupChat.settings.myPersona) || ""
+        }
+      ];
+
+      const aiMembers = [];
+      for (const m of groupChat.members || []) {
+        if (m.isPeerMember || m.roleType === "peer" || m.peerCode) {
+          if (m.peerCode && m.peerCode !== myCode) {
+            const cAva = await this.compressAvatarForWire(m.avatar);
+            humanPeers.push({
+              peerCode: m.peerCode,
+              originalName: m.originalName || m.groupNickname || "密友",
+              groupNickname: m.groupNickname || m.originalName || "密友",
+              avatar: cAva,
+              avatarFrame: m.avatarFrame || "",
+              age: m.age || "",
+              birthday: m.birthday || "",
+              gender: m.gender || "",
+              genderNote: m.genderNote || "",
+              cocPanel: this.sanitizeCocPanelForPeerUI(m.cocPanel),
+              secretPersona: m.secretPersona || ""
+            });
+          }
+        } else {
+          const cAiAva = await this.compressAvatarForWire(m.avatar);
+          aiMembers.push({
+            id: m.id,
+            originalName: m.originalName || m.groupNickname || "角色",
+            groupNickname: m.groupNickname || m.originalName || "角色",
+            avatar: cAiAva,
+            avatarFrame: m.avatarFrame || "",
+            persona: m.persona || "",
+            age: m.age || "",
+            birthday: m.birthday || "",
+            gender: m.gender || "",
+            genderNote: m.genderNote || "",
+            roleType: m.roleType || "",
+            triggerMode: m.triggerMode || "always",
+            settings: m.settings ? JSON.parse(JSON.stringify(m.settings)) : undefined,
+            cocPanel: m.cocPanel ? JSON.parse(JSON.stringify(m.cocPanel)) : null
+          });
+        }
+      }
+
+      return {
+        sharedGroupId: sharedGroupId,
+        groupName: groupChat.name || "我们的群聊",
+        groupAvatar: grpAva,
+        humanPeers: humanPeers,
+        aiMembers: aiMembers
+      };
+    },
+
+    onPeerGroupCreated: async function (groupChat) {
+      if (!groupChat || !groupChat.isGroup) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const snap = await this.buildGroupSyncSnapshot(groupChat);
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(groupChat);
+      }
+      this.subscribeAllKnownFriendsMqtt();
+
+      const peerTargets = (groupChat.members || []).filter(
+        (m) => (m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode
+      );
+      const myNick = (groupChat.settings && (groupChat.settings.myNickname || groupChat.settings.myName)) || "我";
+      const myAva = await this.compressAvatarForWire(groupChat.settings && groupChat.settings.myAvatar);
+
+      for (const pm of peerTargets) {
+        const invitePayload = {
+          type: "group_invite",
+          eventId: "ginv_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+          fromCode: myCode,
+          toCode: pm.peerCode,
+          fromName: myNick,
+          fromAvatar: myAva,
+          groupId: snap.sharedGroupId,
+          groupName: snap.groupName,
+          groupAvatar: snap.groupAvatar,
+          humanPeers: snap.humanPeers,
+          aiMembers: snap.aiMembers,
+          timestamp: Date.now()
+        };
+        this.dispatchPacketToNetwork(pm.peerCode, invitePayload, "/api/peer/send", false);
+      }
+    },
+
+    onMembersAddedToPeerGroup: async function (groupChat, newlyAddedMembers) {
+      if (!groupChat || !groupChat.isGroup) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const snap = await this.buildGroupSyncSnapshot(groupChat);
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(groupChat);
+      }
+      this.subscribeAllKnownFriendsMqtt();
+
+      const myNick = (groupChat.settings && (groupChat.settings.myNickname || groupChat.settings.myName)) || "我";
+      const myAva = await this.compressAvatarForWire(groupChat.settings && groupChat.settings.myAvatar);
+
+      for (const m of newlyAddedMembers || []) {
+        if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
+          const invitePayload = {
+            type: "group_invite",
+            eventId: "ginv_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+            fromCode: myCode,
+            toCode: m.peerCode,
+            fromName: myNick,
+            fromAvatar: myAva,
+            groupId: snap.sharedGroupId,
+            groupName: snap.groupName,
+            groupAvatar: snap.groupAvatar,
+            humanPeers: snap.humanPeers,
+            aiMembers: snap.aiMembers,
+            timestamp: Date.now()
+          };
+          this.dispatchPacketToNetwork(m.peerCode, invitePayload, "/api/peer/send", false);
+        }
+      }
+
+      await this.syncGroupSettingsToPeers(groupChat);
+    },
+
+    receiveGroupInvite: async function (data) {
+      const myCode = this.getOrCreateMyPeerCode();
+      if (!data || !data.groupId || data.fromCode === myCode) return;
+
+      const list = this.getIncomingGroupInvites();
+      const idx = list.findIndex((item) => item.groupId === data.groupId);
+      const inviteItem = {
+        groupId: data.groupId,
+        groupName: data.groupName || "联机群聊",
+        groupAvatar: data.groupAvatar || window.defaultGroupAvatar || window.defaultAvatar,
+        fromCode: data.fromCode,
+        fromName: data.fromName || "密友",
+        fromAvatar: data.fromAvatar || window.defaultAvatar,
+        humanPeers: Array.isArray(data.humanPeers) ? data.humanPeers : [],
+        aiMembers: Array.isArray(data.aiMembers) ? data.aiMembers : [],
+        timestamp: data.timestamp || Date.now()
+      };
+      if (idx >= 0) {
+        list[idx] = inviteItem;
+      } else {
+        list.unshift(inviteItem);
+      }
+      this.saveIncomingGroupInvites(list);
+      this.renderFriendRequestsUI();
+
+      this.showPeerNotice(
+        "邀请你加入群聊 " + inviteItem.groupName,
+        () => {
+          this.openPeerModal();
+        },
+        {
+          title: inviteItem.fromName,
+          message: "邀请你加入群聊 " + inviteItem.groupName,
+          avatar: inviteItem.fromAvatar,
+          openRequests: true,
+          tag: "peer_ginv_" + inviteItem.groupId
+        }
+      );
+
+      if (typeof window.showCustomConfirm === "function") {
+        const ok = await window.showCustomConfirm(
+          "群聊通知",
+          `“${inviteItem.fromName}”邀请你加入群聊“${inviteItem.groupName}”，是否加入？`
+        );
+        if (ok) {
+          await this.acceptGroupInvite(inviteItem.groupId);
+        }
+      }
+    },
+
+    acceptGroupInvite: async function (sharedGroupId) {
+      if (!sharedGroupId) return;
+      const list = this.getIncomingGroupInvites();
+      const invite = list.find((item) => item.groupId === sharedGroupId);
+      const remaining = list.filter((item) => item.groupId !== sharedGroupId);
+      this.saveIncomingGroupInvites(remaining);
+      this.renderFriendRequestsUI();
+      if (!invite) return;
+
+      const myCode = this.getOrCreateMyPeerCode();
+      const myProfile = this.getMyProfile();
+      const localChatId = this.getLocalGroupChatId(sharedGroupId);
+      let groupChat = await this.findPeerGroupChatByIdAsync(sharedGroupId);
+
+      const builtMembers = [];
+      for (const hp of invite.humanPeers || []) {
+        if (!hp || !hp.peerCode || hp.peerCode === myCode) continue;
+        builtMembers.push({
+          id: "peer_mem_" + hp.peerCode.replace(/[^a-zA-Z0-9]/g, ""),
+          peerCode: hp.peerCode,
+          isPeerMember: true,
+          roleType: "peer",
+          isInvestigatorLocked: true,
+          originalName: hp.originalName || hp.groupNickname || "密友",
+          groupNickname: hp.groupNickname || hp.originalName || "密友",
+          avatar: hp.avatar || window.defaultAvatar,
+          avatarFrame: hp.avatarFrame || "",
+          persona: "",
+          secretPersona: hp.secretPersona || "",
+          age: hp.age || "",
+          birthday: hp.birthday || "",
+          gender: hp.gender || "",
+          genderNote: hp.genderNote || "",
+          cocPanel: this.sanitizeCocPanelForPeerUI(hp.cocPanel),
+          isAdmin: false,
+          groupTitle: ""
+        });
+      }
+
+      for (const am of invite.aiMembers || []) {
+        if (!am) continue;
+        builtMembers.push({
+          id: am.id || "ai_mem_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+          originalName: am.originalName || am.groupNickname || "角色",
+          groupNickname: am.groupNickname || am.originalName || "角色",
+          avatar: am.avatar || window.defaultAvatar,
+          avatarFrame: am.avatarFrame || "",
+          persona: am.persona || "",
+          age: am.age || "",
+          birthday: am.birthday || "",
+          gender: am.gender || "",
+          genderNote: am.genderNote || "",
+          roleType: am.roleType || "",
+          triggerMode: am.triggerMode || "always",
+          settings: am.settings ? JSON.parse(JSON.stringify(am.settings)) : undefined,
+          cocPanel: am.cocPanel || (typeof window.getDefaultCocData === "function" ? window.getDefaultCocData() : null),
+          isAdmin: false,
+          groupTitle: ""
+        });
+      }
+
+      if (groupChat) {
+        groupChat.name = invite.groupName || groupChat.name;
+        groupChat.isPeerGroup = true;
+        groupChat.peerGroupId = sharedGroupId;
+        groupChat.myPeerCode = myCode;
+        groupChat.members = builtMembers;
+      } else {
+        const defaultCoc = typeof window.getDefaultCocData === "function" ? window.getDefaultCocData() : null;
+        groupChat = {
+          id: localChatId,
+          peerGroupId: sharedGroupId,
+          myPeerCode: myCode,
+          name: invite.groupName || "联机群聊",
+          isGroup: true,
+          isPeerGroup: true,
+          ownerId: "peer_owner",
+          members: builtMembers,
+          unreadCount: 0,
+          history: [
+            {
+              role: "system",
+              type: "pat_message",
+              content: `你已加入群聊“${invite.groupName || "联机群聊"}”`,
+              timestamp: Date.now()
+            }
+          ],
+          musicData: { totalTime: 0 },
+          settings: {
+            myPersona: "",
+            myNickname: myProfile.name || "我",
+            myName: myProfile.name || "我",
+            myCocPanel: defaultCoc,
+            maxMemory: 10,
+            groupAvatar: invite.groupAvatar || window.defaultGroupAvatar || window.defaultAvatar,
+            myAvatar: myProfile.avatar || window.defaultMyGroupAvatar || window.defaultAvatar,
+            myAvatarFrame: myProfile.myAvatarFrame || "",
+            background: "",
+            theme: "default",
+            fontSize: 13,
+            customCss: "",
+            linkedWorldBookIds: [],
+            stickerLibrary: [],
+            linkedMemories: [],
+            isUserAdmin: false,
+            myGroupTitle: "",
+            affectionEnabled: false,
+            voiceMode: "manual",
+            summary: {
+              enabled: true,
+              mode: "auto",
+              count: 20,
+              prompt: "请你以第三人称的视角，客观、冷静、不带任何感情色彩地总结以下对话的核心事件和信息。禁止进行任何角色扮演或添加主观评论。",
+              lastSummaryIndex: -1
+            }
+          }
+        };
+      }
+
+      if (!window.state) window.state = {};
+      if (!window.state.chats) window.state.chats = {};
+      window.state.chats[groupChat.id] = groupChat;
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(groupChat);
+      }
+
+      this.subscribeAllKnownFriendsMqtt();
+      await this.refreshAppChatAndContactsUI();
+
+      const smallMyAva = await this.compressAvatarForWire(groupChat.settings.myAvatar);
+      for (const m of builtMembers) {
+        if (m.peerCode && m.peerCode !== myCode) {
+          const joinPkt = {
+            type: "group_join_accept",
+            eventId: "gjoin_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+            fromCode: myCode,
+            toCode: m.peerCode,
+            groupId: sharedGroupId,
+            memberProfile: {
+              peerCode: myCode,
+              originalName: groupChat.settings.myNickname || "我",
+              groupNickname: groupChat.settings.myNickname || "我",
+              avatar: smallMyAva,
+              avatarFrame: groupChat.settings.myAvatarFrame || "",
+              age: groupChat.settings.myAge || "",
+              birthday: groupChat.settings.myBirthday || "",
+              gender: groupChat.settings.myGender || "",
+              genderNote: groupChat.settings.myGenderNote || "",
+              cocPanel: this.sanitizeCocPanelForPeerUI(groupChat.settings.myCocPanel),
+              secretPersona: groupChat.settings.myPersona || ""
+            },
+            timestamp: Date.now()
+          };
+          this.dispatchPacketToNetwork(m.peerCode, joinPkt, "/api/peer/send", false);
+        }
+      }
+
+      if (remaining.length === 0 && this.getIncomingRequests().length === 0) {
+        this.closePeerModal();
+      }
+      if (typeof window.openChat === "function") {
+        window.openChat(groupChat.id);
+      }
+    },
+
+    rejectGroupInvite: function (sharedGroupId) {
+      if (!sharedGroupId) return;
+      const remaining = this.getIncomingGroupInvites().filter((i) => i.groupId !== sharedGroupId);
+      this.saveIncomingGroupInvites(remaining);
+      this.renderFriendRequestsUI();
+    },
+
+    receiveGroupJoinAccept: async function (data) {
+      if (!data || !data.groupId || !data.memberProfile) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const mp = data.memberProfile;
+      if (!mp.peerCode || mp.peerCode === myCode) return;
+
+      const groupChat = await this.findPeerGroupChatByIdAsync(data.groupId);
+      if (!groupChat) return;
+
+      if (!Array.isArray(groupChat.members)) groupChat.members = [];
+      let member = groupChat.members.find((m) => m.peerCode === mp.peerCode);
+      if (!member) {
+        member = {
+          id: "peer_mem_" + mp.peerCode.replace(/[^a-zA-Z0-9]/g, ""),
+          peerCode: mp.peerCode,
+          isPeerMember: true,
+          roleType: "peer",
+          isInvestigatorLocked: true,
+          originalName: mp.originalName || mp.groupNickname || "密友",
+          groupNickname: mp.groupNickname || mp.originalName || "密友",
+          avatar: mp.avatar || window.defaultAvatar,
+          avatarFrame: mp.avatarFrame || "",
+          persona: "",
+          secretPersona: mp.secretPersona || "",
+          age: mp.age || "",
+          birthday: mp.birthday || "",
+          gender: mp.gender || "",
+          genderNote: mp.genderNote || "",
+          cocPanel: this.sanitizeCocPanelForPeerUI(mp.cocPanel),
+          isAdmin: false,
+          groupTitle: ""
+        };
+        groupChat.members.push(member);
+      } else {
+        member.isPeerMember = true;
+        member.roleType = "peer";
+        member.isInvestigatorLocked = true;
+        member.groupNickname = mp.groupNickname || member.groupNickname;
+        if (mp.avatar) member.avatar = mp.avatar;
+        if (mp.avatarFrame !== undefined) member.avatarFrame = mp.avatarFrame;
+        member.cocPanel = this.sanitizeCocPanelForPeerUI(mp.cocPanel);
+        member.secretPersona = mp.secretPersona || "";
+      }
+
+      const sysMsg = {
+        role: "system",
+        type: "pat_message",
+        content: `“${member.groupNickname || "密友"}”已确认加入群聊`,
+        timestamp: Date.now()
+      };
+      groupChat.history.push(sysMsg);
+
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(groupChat);
+      }
+      if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
+        if (typeof window.appendMessage === "function") {
+          window.appendMessage(sysMsg, groupChat);
+        }
+      }
+      await this.refreshAppChatAndContactsUI();
+    },
+
+    syncGroupSettingsToPeers: async function (groupChat) {
+      if (!groupChat || !groupChat.isGroup || !groupChat.isPeerGroup) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const snap = await this.buildGroupSyncSnapshot(groupChat);
+
+      const peerMemberFrames = {};
+      for (const m of groupChat.members || []) {
+        if (m.peerCode) {
+          peerMemberFrames[m.peerCode] = m.avatarFrame || "";
+        }
+      }
+
+      for (const m of groupChat.members || []) {
+        if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
+          const pkt = {
+            type: "group_member_update",
+            eventId: "gmup_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+            fromCode: myCode,
+            toCode: m.peerCode,
+            groupId: snap.sharedGroupId,
+            groupName: snap.groupName,
+            groupAvatar: snap.groupAvatar,
+            humanPeers: snap.humanPeers,
+            aiMembers: snap.aiMembers,
+            peerMemberFrames: peerMemberFrames,
+            timestamp: Date.now()
+          };
+          this.dispatchPacketToNetwork(m.peerCode, pkt, "/api/peer/send", false);
+        }
+      }
+    },
+
+    receiveGroupMemberUpdate: async function (data) {
+      if (!data || !data.groupId) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      if (data.fromCode === myCode) return;
+
+      const groupChat = await this.findPeerGroupChatByIdAsync(data.groupId);
+      if (!groupChat) return;
+
+      if (data.groupName) groupChat.name = data.groupName;
+      if (!groupChat.settings) groupChat.settings = {};
+      if (data.groupAvatar) groupChat.settings.groupAvatar = data.groupAvatar;
+
+      if (data.peerMemberFrames && data.peerMemberFrames[myCode] !== undefined) {
+        groupChat.settings.myAvatarFrame = data.peerMemberFrames[myCode] || "";
+      }
+
+      if (!Array.isArray(groupChat.members)) groupChat.members = [];
+
+      for (const hp of data.humanPeers || []) {
+        if (!hp || !hp.peerCode || hp.peerCode === myCode) continue;
+        let existing = groupChat.members.find((m) => m.peerCode === hp.peerCode);
+        if (!existing) {
+          existing = {
+            id: "peer_mem_" + hp.peerCode.replace(/[^a-zA-Z0-9]/g, ""),
+            peerCode: hp.peerCode,
+            isPeerMember: true,
+            roleType: "peer",
+            isInvestigatorLocked: true,
+            originalName: hp.originalName || hp.groupNickname || "密友",
+            groupNickname: hp.groupNickname || hp.originalName || "密友",
+            avatar: hp.avatar || window.defaultAvatar,
+            avatarFrame: hp.avatarFrame || "",
+            persona: "",
+            secretPersona: hp.secretPersona || "",
+            age: hp.age || "",
+            birthday: hp.birthday || "",
+            gender: hp.gender || "",
+            genderNote: hp.genderNote || "",
+            cocPanel: this.sanitizeCocPanelForPeerUI(hp.cocPanel),
+            isAdmin: false,
+            groupTitle: ""
+          };
+          groupChat.members.push(existing);
+        } else {
+          existing.isPeerMember = true;
+          existing.roleType = "peer";
+          existing.isInvestigatorLocked = true;
+          if (hp.groupNickname) existing.groupNickname = hp.groupNickname;
+          if (hp.avatar) existing.avatar = hp.avatar;
+          if (hp.avatarFrame !== undefined) existing.avatarFrame = hp.avatarFrame;
+          if (hp.age !== undefined) existing.age = hp.age;
+          if (hp.birthday !== undefined) existing.birthday = hp.birthday;
+          if (hp.gender !== undefined) existing.gender = hp.gender;
+          if (hp.genderNote !== undefined) existing.genderNote = hp.genderNote;
+          existing.cocPanel = this.sanitizeCocPanelForPeerUI(hp.cocPanel);
+          existing.secretPersona = hp.secretPersona || "";
+          existing.persona = "";
+        }
+      }
+
+      for (const am of data.aiMembers || []) {
+        if (!am) continue;
+        let existingAi = groupChat.members.find(
+          (m) => !m.isPeerMember && (m.id === am.id || m.originalName === am.originalName)
+        );
+        if (!existingAi) {
+          groupChat.members.push({
+            id: am.id || "ai_mem_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            originalName: am.originalName || am.groupNickname || "角色",
+            groupNickname: am.groupNickname || am.originalName || "角色",
+            avatar: am.avatar || window.defaultAvatar,
+            avatarFrame: am.avatarFrame || "",
+            persona: am.persona || "",
+            age: am.age || "",
+            birthday: am.birthday || "",
+            gender: am.gender || "",
+            genderNote: am.genderNote || "",
+            roleType: am.roleType || "",
+            triggerMode: am.triggerMode || "always",
+            settings: am.settings ? JSON.parse(JSON.stringify(am.settings)) : undefined,
+            cocPanel: am.cocPanel || (typeof window.getDefaultCocData === "function" ? window.getDefaultCocData() : null),
+            isAdmin: false,
+            groupTitle: ""
+          });
+        } else {
+          if (am.groupNickname) existingAi.groupNickname = am.groupNickname;
+          if (am.avatar) existingAi.avatar = am.avatar;
+          if (am.avatarFrame !== undefined) existingAi.avatarFrame = am.avatarFrame;
+          if (am.persona !== undefined) existingAi.persona = am.persona;
+          if (am.cocPanel) existingAi.cocPanel = am.cocPanel;
+          if (am.settings) existingAi.settings = am.settings;
+        }
+      }
+
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(groupChat);
+      }
+      if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
+        const titleEl = document.getElementById("chat-header-title");
+        if (titleEl) titleEl.textContent = groupChat.name;
+        if (typeof window.renderChatInterfaceProxy === "function") {
+          window.renderChatInterfaceProxy(groupChat.id);
+        }
+      }
+      await this.refreshAppChatAndContactsUI();
+    },
+
+    broadcastGroupMessage: async function (groupChat, msg, isFromLocalUser) {
+      if (!groupChat || !groupChat.isGroup || !groupChat.isPeerGroup || !msg) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const sharedGroupId = groupChat.peerGroupId || groupChat.id;
+      groupChat.peerGroupId = sharedGroupId;
+
+      const myNick = (groupChat.settings && (groupChat.settings.myNickname || groupChat.settings.myName)) || "我";
+      const myAva = await this.compressAvatarForWire(
+        (groupChat.settings && groupChat.settings.myAvatar) || window.defaultMyGroupAvatar || window.defaultAvatar
+      );
+      const myFrame = (groupChat.settings && groupChat.settings.myAvatarFrame) || "";
+
+      const baseEventId = msg.eventId || "gmsg_" + (msg.timestamp || Date.now()) + "_" + Math.random().toString(36).slice(2, 7);
+      msg.eventId = baseEventId;
+
+      const peerTargets = (groupChat.members || []).filter(
+        (m) => (m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode
+      );
+
+      for (const pm of peerTargets) {
+        const pkt = {
+          type: "group_message",
+          eventId: baseEventId + "_" + pm.peerCode,
+          msgEventId: baseEventId,
+          fromCode: myCode,
+          toCode: pm.peerCode,
+          groupId: sharedGroupId,
+          isFromHumanPeer: Boolean(isFromLocalUser),
+          senderName: isFromLocalUser ? myNick : (msg.senderName || msg.sender || "角色"),
+          senderAvatar: isFromLocalUser ? myAva : (msg.senderAvatar || ""),
+          senderAvatarFrame: isFromLocalUser ? myFrame : (msg.senderAvatarFrame || ""),
+          msgPayload: {
+            ...msg,
+            eventId: baseEventId
+          },
+          timestamp: msg.timestamp || Date.now()
+        };
+        this.dispatchPacketToNetwork(pm.peerCode, pkt, "/api/peer/send", false);
+      }
+    },
+
+    receiveGroupMessage: async function (data) {
+      if (!data || !data.groupId || !data.msgPayload) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      if (data.fromCode === myCode) return;
+
+      const groupChat = await this.findPeerGroupChatByIdAsync(data.groupId);
+      if (!groupChat) return;
+
+      if (!Array.isArray(groupChat.history)) groupChat.history = [];
+      const incomingRaw = data.msgPayload;
+      const msgEvtId = data.msgEventId || incomingRaw.eventId || "";
+
+      const isDup = groupChat.history.some(
+        (m) =>
+          (msgEvtId && m.eventId === msgEvtId) ||
+          (m.timestamp === incomingRaw.timestamp && m.content === incomingRaw.content)
+      );
+      if (isDup) return;
+
+      if (data.isFromHumanPeer && data.fromCode) {
+        const peerMem = (groupChat.members || []).find((m) => m.peerCode === data.fromCode);
+        if (peerMem) {
+          if (data.senderName) peerMem.groupNickname = data.senderName;
+          if (data.senderAvatar) peerMem.avatar = data.senderAvatar;
+          if (data.senderAvatarFrame !== undefined) peerMem.avatarFrame = data.senderAvatarFrame;
+        }
+      }
+
+      const msgToInsert = {
+        ...incomingRaw,
+        eventId: msgEvtId,
+        role: "assistant",
+        isPeerUserMessage: Boolean(data.isFromHumanPeer),
+        senderPeerCode: data.isFromHumanPeer ? data.fromCode : undefined,
+        sender: data.senderName || incomingRaw.senderName || incomingRaw.sender || "成员",
+        senderName: data.senderName || incomingRaw.senderName || incomingRaw.sender || "成员",
+        senderAvatar: data.senderAvatar || incomingRaw.senderAvatar || window.defaultAvatar,
+        senderAvatarFrame: data.senderAvatarFrame || incomingRaw.senderAvatarFrame || "",
+        timestamp: incomingRaw.timestamp || data.timestamp || Date.now()
+      };
+
+      groupChat.history.push(msgToInsert);
+
+      const chatScreen = document.getElementById("chat-interface-screen");
+      const isCurrentActive =
+        window.state &&
+        String(window.state.activeChatId) === String(groupChat.id) &&
+        chatScreen &&
+        chatScreen.classList.contains("active") &&
+        !document.hidden;
+
+      if (!isCurrentActive) {
+        groupChat.unreadCount = (groupChat.unreadCount || 0) + 1;
+      }
+
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(groupChat);
+      }
+
+      if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
+        if (typeof window.appendMessage === "function") {
+          window.appendMessage(msgToInsert, groupChat);
+        } else if (typeof window.renderChatInterfaceProxy === "function") {
+          window.renderChatInterfaceProxy(groupChat.id);
+        }
+      }
+
+      const previewText =
+        msgToInsert.type === "voice_message"
+          ? "[语音]"
+          : String(msgToInsert.content || "");
+
+      this.showPeerNotice(
+        `${msgToInsert.senderName}: ${previewText}`,
+        () => {
+          if (typeof window.openChat === "function") {
+            window.openChat(groupChat.id);
+          }
+        },
+        {
+          title: groupChat.name || "群聊",
+          message: `${msgToInsert.senderName}: ${previewText}`,
+          avatar: groupChat.settings?.groupAvatar || msgToInsert.senderAvatar,
+          chatId: groupChat.id,
+          tag: "peer_gmsg_" + groupChat.id
+        }
+      );
+
+      await this.refreshAppChatAndContactsUI();
+    },
+
+    broadcastMessageEdit: function (chat, originalTimestamp, messagesToInsert) {
+      if (!chat || !originalTimestamp || !Array.isArray(messagesToInsert)) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const targets = [];
+
+      if (chat.isGroup && chat.isPeerGroup) {
+        (chat.members || []).forEach((m) => {
+          if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
+            targets.push(m.peerCode);
+          }
+        });
+      } else if (chat.roleType === "peer" && chat.peerCode) {
+        targets.push(chat.peerCode);
+      }
+
+      const sharedGroupId = chat.isGroup ? (chat.peerGroupId || chat.id) : "";
+      for (const peerCode of targets) {
+        const pkt = {
+          type: "msg_edit",
+          eventId: "medit_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+          fromCode: myCode,
+          toCode: peerCode,
+          isGroup: Boolean(chat.isGroup),
+          groupId: sharedGroupId,
+          originalTimestamp: originalTimestamp,
+          messagesToInsert: messagesToInsert,
+          timestamp: Date.now()
+        };
+        this.dispatchPacketToNetwork(peerCode, pkt, "/api/peer/send", false);
+      }
+    },
+
+    receiveMessageEdit: async function (data) {
+      if (!data || !data.originalTimestamp || !Array.isArray(data.messagesToInsert)) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      if (data.fromCode === myCode) return;
+
+      const chat = data.isGroup
+        ? await this.findPeerGroupChatByIdAsync(data.groupId)
+        : await this.findPeerChatByCodeAsync(data.fromCode);
+      if (!chat || !Array.isArray(chat.history)) return;
+
+      const idx = chat.history.findIndex((m) => m.timestamp === data.originalTimestamp);
+      if (idx === -1) return;
+
+      const origMsg = chat.history[idx];
+      const mapped = data.messagesToInsert.map((nm) => ({
+        ...origMsg,
+        ...nm,
+        role: origMsg.role,
+        isPeerUserMessage: origMsg.isPeerUserMessage,
+        senderPeerCode: origMsg.senderPeerCode
+      }));
+
+      chat.history.splice(idx, 1, ...mapped);
+      let reassignTs = data.originalTimestamp;
+      for (let i = idx; i < chat.history.length; i++) {
+        chat.history[i].timestamp = reassignTs++;
+      }
+
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(chat);
+      }
+      if (window.state && String(window.state.activeChatId) === String(chat.id)) {
+        if (typeof window.renderChatInterfaceProxy === "function") {
+          window.renderChatInterfaceProxy(chat.id);
+        }
+      }
+      await this.refreshAppChatAndContactsUI();
+    },
+
+    broadcastMessageDelete: function (chat, deletedTimestamps) {
+      if (!chat || !Array.isArray(deletedTimestamps) || deletedTimestamps.length === 0) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      const targets = [];
+
+      if (chat.isGroup && chat.isPeerGroup) {
+        (chat.members || []).forEach((m) => {
+          if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
+            targets.push(m.peerCode);
+          }
+        });
+      } else if (chat.roleType === "peer" && chat.peerCode) {
+        targets.push(chat.peerCode);
+      }
+
+      const sharedGroupId = chat.isGroup ? (chat.peerGroupId || chat.id) : "";
+      for (const peerCode of targets) {
+        const pkt = {
+          type: "msg_delete",
+          eventId: "mdel_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+          fromCode: myCode,
+          toCode: peerCode,
+          isGroup: Boolean(chat.isGroup),
+          groupId: sharedGroupId,
+          deletedTimestamps: deletedTimestamps,
+          timestamp: Date.now()
+        };
+        this.dispatchPacketToNetwork(peerCode, pkt, "/api/peer/send", false);
+      }
+    },
+
+    receiveMessageDelete: async function (data) {
+      if (!data || !Array.isArray(data.deletedTimestamps)) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      if (data.fromCode === myCode) return;
+
+      const chat = data.isGroup
+        ? await this.findPeerGroupChatByIdAsync(data.groupId)
+        : await this.findPeerChatByCodeAsync(data.fromCode);
+      if (!chat || !Array.isArray(chat.history)) return;
+
+      const delSet = new Set(data.deletedTimestamps);
+      chat.history = chat.history.filter((m) => !delSet.has(m.timestamp));
+
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(chat);
+      }
+      if (window.state && String(window.state.activeChatId) === String(chat.id)) {
+        if (typeof window.renderChatInterfaceProxy === "function") {
+          window.renderChatInterfaceProxy(chat.id);
+        }
+      }
+      await this.refreshAppChatAndContactsUI();
+    },
+
     renderFriendRequestsUI: function () {
       const section = document.getElementById("peer-requests-section");
       const listEl = document.getElementById("peer-requests-list");
       if (!section || !listEl) return;
 
       const reqs = this.getIncomingRequests();
+      const groupInvs = this.getIncomingGroupInvites();
       listEl.innerHTML = "";
 
-      if (reqs.length === 0) {
+      if (reqs.length === 0 && groupInvs.length === 0) {
         section.style.display = "none";
         return;
       }
 
       section.style.display = "flex";
       const defaultAva = window.defaultAvatar || "https://api.iconify.design/lucide:user.svg?color=%23888888";
+
+      groupInvs.forEach((inv) => {
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.gap = "8px";
+        row.style.padding = "8px";
+        row.style.background = "var(--secondary-bg)";
+        row.style.border = "1px solid var(--border-color)";
+        row.style.borderRadius = "8px";
+        row.style.boxSizing = "border-box";
+        row.style.width = "100%";
+
+        const img = document.createElement("img");
+        img.src = inv.fromAvatar || defaultAva;
+        img.style.width = "34px";
+        img.style.height = "34px";
+        img.style.minWidth = "34px";
+        img.style.flex = "0 0 34px";
+        img.style.borderRadius = "50%";
+        img.style.objectFit = "cover";
+        img.style.border = "1px solid var(--border-color)";
+
+        const infoCol = document.createElement("div");
+        infoCol.style.flex = "1 1 auto";
+        infoCol.style.minWidth = "0";
+        infoCol.style.overflow = "hidden";
+        infoCol.style.display = "flex";
+        infoCol.style.flexDirection = "column";
+        infoCol.style.gap = "2px";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = "群聊邀请: " + (inv.groupName || "联机群聊");
+        nameSpan.style.fontSize = "12.5px";
+        nameSpan.style.fontWeight = "600";
+        nameSpan.style.color = "var(--text-primary)";
+        nameSpan.style.whiteSpace = "nowrap";
+        nameSpan.style.overflow = "hidden";
+        nameSpan.style.textOverflow = "ellipsis";
+
+        const subSpan = document.createElement("span");
+        subSpan.textContent = "来自: " + (inv.fromName || "密友");
+        subSpan.style.fontSize = "11px";
+        subSpan.style.color = "var(--text-secondary)";
+        subSpan.style.whiteSpace = "nowrap";
+        subSpan.style.overflow = "hidden";
+        subSpan.style.textOverflow = "ellipsis";
+
+        infoCol.appendChild(nameSpan);
+        infoCol.appendChild(subSpan);
+
+        const btnBox = document.createElement("div");
+        btnBox.style.display = "flex";
+        btnBox.style.gap = "6px";
+        btnBox.style.flexShrink = "0";
+        btnBox.style.marginLeft = "auto";
+        btnBox.style.alignItems = "center";
+
+        const acceptBtn = document.createElement("button");
+        acceptBtn.type = "button";
+        acceptBtn.className = "moe-btn";
+        acceptBtn.textContent = "加入";
+        acceptBtn.style.flex = "0 0 44px";
+        acceptBtn.style.width = "44px";
+        acceptBtn.style.minWidth = "44px";
+        acceptBtn.style.maxWidth = "44px";
+        acceptBtn.style.height = "28px";
+        acceptBtn.style.padding = "0";
+        acceptBtn.style.fontSize = "12px";
+        acceptBtn.style.borderRadius = "6px";
+        acceptBtn.style.background = "var(--accent-color)";
+        acceptBtn.style.color = "var(--card-bg)";
+        acceptBtn.style.border = "none";
+        acceptBtn.style.display = "inline-flex";
+        acceptBtn.style.alignItems = "center";
+        acceptBtn.style.justifyContent = "center";
+        acceptBtn.style.cursor = "pointer";
+        acceptBtn.onclick = () => {
+          this.acceptGroupInvite(inv.groupId);
+        };
+
+        const rejectBtn = document.createElement("button");
+        rejectBtn.type = "button";
+        rejectBtn.className = "moe-btn";
+        rejectBtn.textContent = "忽略";
+        rejectBtn.style.flex = "0 0 44px";
+        rejectBtn.style.width = "44px";
+        rejectBtn.style.minWidth = "44px";
+        rejectBtn.style.maxWidth = "44px";
+        rejectBtn.style.height = "28px";
+        rejectBtn.style.padding = "0";
+        rejectBtn.style.fontSize = "12px";
+        rejectBtn.style.borderRadius = "6px";
+        rejectBtn.style.background = "var(--card-bg)";
+        rejectBtn.style.color = "var(--text-secondary)";
+        rejectBtn.style.border = "1px solid var(--border-color)";
+        rejectBtn.style.display = "inline-flex";
+        rejectBtn.style.alignItems = "center";
+        rejectBtn.style.justifyContent = "center";
+        rejectBtn.style.cursor = "pointer";
+        rejectBtn.onclick = () => {
+          this.rejectGroupInvite(inv.groupId);
+        };
+
+        btnBox.appendChild(acceptBtn);
+        btnBox.appendChild(rejectBtn);
+
+        row.appendChild(img);
+        row.appendChild(infoCol);
+        row.appendChild(btnBox);
+        listEl.appendChild(row);
+      });
 
       reqs.forEach((req) => {
         const row = document.createElement("div");
@@ -1639,7 +2569,7 @@
       }
 
       const displayTitle = peerChat.settings?.remarkName || peerChat.name || "密友";
-      const previewText = isVoice ? "[语音消息]" : content;
+      const previewText = isVoice ? "[语音]" : content;
 
       this.showPeerNotice(
         previewText,
@@ -1688,7 +2618,6 @@
       }
       if (newFrameForMe !== undefined) {
         chat.settings.myAvatarFrame = newFrameForMe || "";
-        this.applyFrameToHomeScreen(newFrameForMe || "");
       }
 
       if (window.db && window.db.chats) {
@@ -1731,7 +2660,7 @@
         audioDuration: msg.audioDuration || 0,
         senderName: chat.settings?.myName || myProfile.name,
         senderAvatar: smallAva,
-        senderAvatarFrame: chat.settings?.myAvatarFrame || myProfile.myAvatarFrame || "",
+        senderAvatarFrame: chat.settings?.myAvatarFrame || "",
         peerAvatarFrame: chat.settings?.aiAvatarFrame || "",
         timestamp: msg.timestamp || Date.now()
       };
@@ -1739,172 +2668,28 @@
       this.dispatchPacketToNetwork(chat.peerCode, payload, "/api/peer/send", false);
     },
 
-    applyFrameToHomeScreen: async function (frameUrl) {
-      this.isSyncingHomeProfile = true;
-      try {
-        const frameImg = document.getElementById("profile-avatar-frame");
-        if (frameImg) {
-          if (frameUrl) {
-            frameImg.src = frameUrl;
-            frameImg.style.display = "block";
-          } else {
-            frameImg.src = "";
-            frameImg.style.display = "none";
-          }
-        }
-        if (window.state && window.state.globalSettings) {
-          window.state.globalSettings.homeAvatarFrame = frameUrl || "";
-          if (window.db && window.db.globalSettings) {
-            await window.db.globalSettings.put(window.state.globalSettings);
-          }
-        }
-      } catch (e) {}
-      setTimeout(() => {
-        this.isSyncingHomeProfile = false;
-      }, 150);
-    },
-
-    syncMyProfileToHomeAndPeers: async function (newName, newAvatar, newMyFrame, newPeerFrame, sourceChat) {
-      this.isSyncingHomeProfile = true;
-      try {
-        const profileAvatarEl = document.getElementById("profile-avatar-img");
-        const profileNameEl = document.getElementById("profile-username");
-
-        if (newAvatar && profileAvatarEl) {
-          profileAvatarEl.src = newAvatar;
-        }
-        if (newName && newName !== "我" && profileNameEl) {
-          profileNameEl.textContent = newName;
-        }
-        if (newMyFrame !== undefined) {
-          const frameImg = document.getElementById("profile-avatar-frame");
-          if (frameImg) {
-            if (newMyFrame) {
-              frameImg.src = newMyFrame;
-              frameImg.style.display = "block";
-            } else {
-              frameImg.src = "";
-              frameImg.style.display = "none";
-            }
-          }
-        }
-
-        if (window.state && window.state.globalSettings) {
-          if (!window.state.globalSettings.widgetData) {
-            window.state.globalSettings.widgetData = {};
-          }
-          if (newAvatar) {
-            window.state.globalSettings.widgetData["profile-avatar-img"] = newAvatar;
-          }
-          if (newName && newName !== "我") {
-            window.state.globalSettings.widgetData["profile-username"] = newName;
-          }
-          if (newMyFrame !== undefined) {
-            window.state.globalSettings.homeAvatarFrame = newMyFrame || "";
-          }
-          if (window.db && window.db.globalSettings) {
-            await window.db.globalSettings.put(window.state.globalSettings);
-          }
-        }
-      } catch (e) {}
-
-      setTimeout(() => {
-        this.isSyncingHomeProfile = false;
-      }, 200);
-
-      await this.syncMyProfileToPeers(newName, newAvatar, newMyFrame, newPeerFrame, sourceChat);
-    },
-
-    syncMyProfileToPeers: async function (newName, newAvatar, newMyFrame, newPeerFrame, sourceChat) {
+    syncSinglePeerChatProfile: async function (chat) {
+      if (!chat || chat.roleType !== "peer" || !chat.peerCode) return;
       const myCode = this.getOrCreateMyPeerCode();
-      const profile = this.getMyProfile();
-      const name = newName || profile.name;
-      const avatar = newAvatar || profile.avatar;
-      const myFrame = newMyFrame !== undefined ? newMyFrame : profile.myAvatarFrame || "";
+      const name = (chat.settings && chat.settings.myName) || "我";
+      const avatar = (chat.settings && chat.settings.myAvatar) || "";
+      const myFrame = (chat.settings && chat.settings.myAvatarFrame) || "";
+      const peerFrame = (chat.settings && chat.settings.aiAvatarFrame) || "";
       const smallAva = await this.compressAvatarForWire(avatar);
 
-      const targetPeers = [];
-      if (window.state && window.state.chats) {
-        for (const chat of Object.values(window.state.chats)) {
-          if (
-            chat &&
-            chat.roleType === "peer" &&
-            chat.peerCode &&
-            (!chat.myPeerCode || chat.myPeerCode === myCode)
-          ) {
-            if (!chat.settings) chat.settings = {};
-            if (name) chat.settings.myName = name;
-            if (avatar) chat.settings.myAvatar = avatar;
-            if (newMyFrame !== undefined) chat.settings.myAvatarFrame = myFrame;
-            if (window.db && window.db.chats) {
-              try {
-                await window.db.chats.put(chat);
-              } catch (e) {}
-            }
-            const peerFrameToSend =
-              sourceChat && sourceChat.id === chat.id && newPeerFrame !== undefined
-                ? newPeerFrame
-                : undefined;
-            targetPeers.push({
-              peerCode: chat.peerCode,
-              peerFrame: peerFrameToSend
-            });
-          }
-        }
-      }
-
-      const eventId = "evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
-      for (const item of targetPeers) {
-        const payload = {
-          type: "profile_update",
-          eventId: eventId + "_" + item.peerCode,
-          peerCode: myCode,
-          toCode: item.peerCode,
-          name: name,
-          avatar: smallAva,
-          myAvatarFrame: myFrame,
-          peerAvatarFrame: item.peerFrame,
-          targetCodes: [item.peerCode],
-          timestamp: Date.now()
-        };
-        this.dispatchPacketToNetwork(item.peerCode, payload, "/api/peer/profile", false);
-      }
-    },
-
-    observeHomeProfileChanges: function () {
-      if (this._homeObserverAttached) return;
-      this._homeObserverAttached = true;
-
-      const profileAva = document.getElementById("profile-avatar-img");
-      const profileName = document.getElementById("profile-username");
-      const profileFrame = document.getElementById("profile-avatar-frame");
-
-      let debounceTimer = null;
-      const triggerHomeSync = () => {
-        if (this.isSyncingHomeProfile) return;
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          if (this.isSyncingHomeProfile) return;
-          const curAva = profileAva ? profileAva.src : "";
-          const curName = profileName ? profileName.textContent.trim() : "";
-          const curFrame =
-            profileFrame && profileFrame.style.display !== "none"
-              ? profileFrame.getAttribute("src") || ""
-              : "";
-          this.syncMyProfileToPeers(
-            curName && curName !== "你的昵称" ? curName : undefined,
-            curAva || undefined,
-            curFrame
-          );
-        }, 400);
+      const payload = {
+        type: "profile_update",
+        eventId: "evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9) + "_" + chat.peerCode,
+        peerCode: myCode,
+        toCode: chat.peerCode,
+        name: name,
+        avatar: smallAva,
+        myAvatarFrame: myFrame,
+        peerAvatarFrame: peerFrame,
+        targetCodes: [chat.peerCode],
+        timestamp: Date.now()
       };
-
-      if (typeof MutationObserver !== "undefined") {
-        const obs = new MutationObserver(triggerHomeSync);
-        if (profileAva) obs.observe(profileAva, { attributes: true, attributeFilter: ["src"] });
-        if (profileName) obs.observe(profileName, { childList: true, characterData: true, subtree: true });
-        if (profileFrame) obs.observe(profileFrame, { attributes: true, attributeFilter: ["src", "style"] });
-      }
+      this.dispatchPacketToNetwork(chat.peerCode, payload, "/api/peer/profile", false);
     },
 
     ensureVoiceRecordPanel: function () {
@@ -2202,14 +2987,19 @@
     },
 
     applyPeerChatInputUI: function (chat) {
+      const actionsTop = document.getElementById("chat-input-actions-top");
       const affectionBtn = document.getElementById("chat-affection-bottom-btn");
       const mapBtn = document.getElementById("chat-map-btn");
       const waitReplyBtn = document.getElementById("wait-reply-btn");
       const recordPanel = document.getElementById("peer-voice-record-panel");
 
-      const isPeer = Boolean(chat && chat.roleType === "peer");
+      const isPeer = Boolean(chat && chat.roleType === "peer" && !chat.isGroup);
 
       if (isPeer) {
+        if (actionsTop) {
+          actionsTop.style.justifyContent = "flex-start";
+          actionsTop.style.gap = "8px";
+        }
         if (affectionBtn) affectionBtn.style.display = "none";
         if (mapBtn) mapBtn.style.display = "none";
         if (waitReplyBtn) {
@@ -2221,6 +3011,10 @@
         }
         this.ensureVoiceRecordPanel();
       } else {
+        if (actionsTop) {
+          actionsTop.style.justifyContent = "";
+          actionsTop.style.gap = "";
+        }
         if (mapBtn) mapBtn.style.display = "";
         if (affectionBtn) {
           affectionBtn.style.display = chat && chat.isGroup ? "none" : "inline-flex";
@@ -2418,7 +3212,7 @@
     },
 
     applyPeerChatSettingsUI: function (chat) {
-      if (!chat || chat.roleType !== "peer") return;
+      if (!chat || chat.roleType !== "peer" || chat.isGroup) return;
 
       const aiPersonaCard = document.getElementById("ai-persona-card");
       if (aiPersonaCard) aiPersonaCard.style.display = "none";
@@ -2660,7 +3454,7 @@
           setTimeout(() => {
             if (!window.state || !window.state.activeChatId) return;
             const currentChat = window.state.chats[window.state.activeChatId];
-            if (currentChat && currentChat.roleType === "peer") {
+            if (currentChat && currentChat.roleType === "peer" && !currentChat.isGroup) {
               PeerManager.applyPeerChatSettingsUI(currentChat);
             } else {
               PeerManager.resetPeerChatSettingsUI();
@@ -2674,7 +3468,9 @@
         saveSettingsBtn.addEventListener("click", async () => {
           if (!window.state || !window.state.activeChatId) return;
           const currentChat = window.state.chats[window.state.activeChatId];
-          if (currentChat && currentChat.roleType === "peer") {
+          if (!currentChat) return;
+
+          if (currentChat.roleType === "peer" && !currentChat.isGroup) {
             const assignSelect = document.getElementById("assign-group-select");
             if (assignSelect) {
               currentChat.groupId = parseInt(assignSelect.value, 10) || null;
@@ -2694,20 +3490,15 @@
             currentChat.settings.myAvatar = newAva;
             if (myNameEl) myNameEl.value = newName;
 
-            const newMyFrame = currentChat.settings.myAvatarFrame || "";
-            const newPeerFrame = currentChat.settings.aiAvatarFrame || "";
-
             if (window.db && window.db.chats) {
               await window.db.chats.put(currentChat);
             }
             await PeerManager.refreshAppChatAndContactsUI();
-            await PeerManager.syncMyProfileToHomeAndPeers(
-              newName,
-              newAva,
-              newMyFrame,
-              newPeerFrame,
-              currentChat
-            );
+            await PeerManager.syncSinglePeerChatProfile(currentChat);
+          } else if (currentChat.isGroup && currentChat.isPeerGroup) {
+            setTimeout(async () => {
+              await PeerManager.syncGroupSettingsToPeers(currentChat);
+            }, 80);
           }
         });
       }
@@ -2728,11 +3519,11 @@
           const attrTitle = statsGrid ? statsGrid.previousElementSibling : null;
 
           if (currentChat && currentChat.roleType === "peer") {
-            if (statsGrid) statsGrid.style.display = "none";
-            if (valuesGrid) valuesGrid.style.display = "none";
+            if (statsGrid) statsGrid.style.display = "grid";
+            if (valuesGrid) valuesGrid.style.display = "grid";
+            if (attrTitle) attrTitle.style.display = "flex";
             if (skillsBtn) skillsBtn.style.display = "none";
             if (skillsContainer) skillsContainer.style.display = "none";
-            if (attrTitle) attrTitle.style.display = "none";
           } else {
             if (statsGrid) statsGrid.style.display = "grid";
             if (valuesGrid) valuesGrid.style.display = "grid";

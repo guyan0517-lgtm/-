@@ -256,6 +256,7 @@ app.post('/api/peer/register', (req, res) => {
 });
 
 app.post('/api/peer/send', (req, res) => {
+  const body = req.body || {};
   const {
     type = 'message',
     eventId,
@@ -271,7 +272,7 @@ app.post('/api/peer/send', (req, res) => {
     senderAvatarFrame,
     peerAvatarFrame,
     timestamp
-  } = req.body;
+  } = body;
   if (!toCode) return res.status(400).json({ error: 'Missing target' });
 
   if (type === 'peer_ack') {
@@ -286,6 +287,18 @@ app.post('/api/peer/send', (req, res) => {
     sendToPeerWs(toCode, ackEvt);
     pushToMailbox(toCode, ackEvt);
     return res.json({ success: true });
+  }
+
+  if (type !== 'message') {
+    const customEvent = {
+      ...body,
+      type,
+      eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+      timestamp: timestamp || Date.now()
+    };
+    const delivered = sendToPeerWs(toCode, customEvent);
+    pushToMailbox(toCode, customEvent);
+    return res.json({ success: true, delivered });
   }
 
   if (!content && !audioData) return res.status(400).json({ error: 'Missing content' });
@@ -490,6 +503,14 @@ wss.on('connection', (ws) => {
         };
         sendToPeerWs(toCode, event);
         pushToMailbox(toCode, event);
+      } else if (data.toCode) {
+        const customEvent = {
+          ...data,
+          eventId: data.eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+          timestamp: data.timestamp || Date.now()
+        };
+        sendToPeerWs(data.toCode, customEvent);
+        pushToMailbox(data.toCode, customEvent);
       }
     } catch (e) {
       console.warn('[WS] Parse error:', e.message);

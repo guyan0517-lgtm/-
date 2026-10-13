@@ -81,6 +81,16 @@ export default {
           pushToWorkerMailbox(toCode, ackEvt);
           return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
         }
+        if (type !== "message") {
+          const customEvt = {
+            ...body,
+            type,
+            eventId: eventId || ("evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8)),
+            timestamp: timestamp || Date.now()
+          };
+          pushToWorkerMailbox(toCode, customEvt);
+          return new Response(JSON.stringify({ success: true, delivered: true }), { headers: getCorsHeaders() });
+        }
         if (!content && !audioData) {
           return new Response(JSON.stringify({ error: "Missing content" }), { status: 400, headers: getCorsHeaders() });
         }
