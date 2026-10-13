@@ -22110,6 +22110,36 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return Boolean(chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId) || chat.thoughtChainEnabled === true);
         }
 
+        const THOUGHT_CHAIN_FOLDED_NOTICE = "已折叠历史思考";
+
+        function checkPreviousTurnThinkingValid(historySlice, isThinkingActive) {
+          if (!isThinkingActive || !Array.isArray(historySlice)) return true;
+          const lastAssistant = [...historySlice].reverse().find((m) => m && m.role === "assistant");
+          if (!lastAssistant) return true;
+          const thinkingRaw = typeof lastAssistant.thinking === "string" ? lastAssistant.thinking.trim() : "";
+          if (!thinkingRaw) return false;
+          const copyKeywords = [
+            "已折叠历史思考",
+            "在此处渲染了完整思维链",
+            "仅用户可见",
+            "完整深度思维链",
+            "因历史上下文长度限制",
+            "自动折叠隐藏",
+            "本段折叠提示",
+            "系统记录：此处为上一轮"
+          ];
+          if (copyKeywords.some((kw) => thinkingRaw.includes(kw))) {
+            return false;
+          }
+          if (thinkingRaw.length < 10) {
+            return false;
+          }
+          return true;
+        }
+
+        window.THOUGHT_CHAIN_FOLDED_NOTICE = THOUGHT_CHAIN_FOLDED_NOTICE;
+        window.checkPreviousTurnThinkingValid = checkPreviousTurnThinkingValid;
+
         async function getThoughtChainPromptBlock(chat) {
           if (!isChatThoughtChainActive(chat)) return "";
           try {
@@ -22124,12 +22154,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "【思维链代码结构与全局唯一性规则】：\n" +
               "1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 \"thinking\" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n" +
               "2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将意图分析、环境观察、角色心理推演、回复策略规划等所有思考内容，完整合并写入这一条全局顶级的 \"thinking\" 字段中。\n" +
-              "3. 绝对禁止在具体对象内部包含 thinking 字段：绝对禁止在各个动作、道具、状态栏或文本消息对象内部各自夹带 thinking 字段！下方的 chatResponse 数组中，每一个具体消息对象只保留其自身字段，内部绝对不能出现 thinking 键。\n" +
+              "3. 绝对禁止在具体对象内部包含 thinking 字段：绝对禁止在各个动作、道具、状态栏或文本消息对象内部各自夹带 thinking 字段！下方的 chatResponse 数组中，每一个具体消息对象只保留其自身字段，所有气泡按顺序装入同一个 chatResponse 数组，严禁拆分成多个并列代码块。\n" +
               "4. 绝对禁止在外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格作为 \"thinking\" 字段的值包裹在 JSON 根对象内部。\n" +
               "5. 标准填写代码结构示例：\n" +
               "```json\n" +
               "{\n" +
-              "  \"thinking\": \"在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。\",\n" +
+              "  \"thinking\": \"1.最高协议核对：确认无规则冲突；2.场景流速判定：当前处于交互场景，保持驻留不主动结算；3.回复规划：渲染场景氛围并推进当前动作；4.自检完毕，开始生成。\",\n" +
               "  \"chatResponse\": [\n" +
               "    {\n" +
               "      \"type\": \"text\",\n" +
@@ -37111,6 +37141,7 @@ ${recentHistoryText}
         }
 
         async function triggerAiResponse(targetChatId) {
+          let finishTurnRender = null;
           const chatId = (typeof targetChatId === "string" || typeof targetChatId === "number") ? targetChatId : state.activeChatId;
           if (!chatId && chatId !== 0) return;
           let chat = (state.chats && state.chats[chatId]) ||
@@ -38627,11 +38658,11 @@ ${recentHistoryText}
               // updated by lrq 251027
               systemPrompt = `
 # 【第一大类】你可以使用的操作指令
-你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。
-${isGroupThinkingActive ? `\n# 【思维链填写规范与顶级字段定义】\n1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n2. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将所有思考推演集中完整写入顶层唯一的 "thinking" 字段中。\n3. 绝对禁止在具体对象内部包含 thinking 字段：下方的 chatResponse 数组中各个动作、道具、状态栏或文本消息对象内部绝不允许夹带 thinking 字段！\n4. 绝对禁止外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字，必须严格包裹在顶层 "thinking" 字段中。\n` : ""}
+你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。本轮回复的所有气泡，必须按顺序装入顶层唯一的 chatResponse 列表中，绝对禁止在外部输出多个并列代码块。
+
 ## 标准输出格式示例:
 ${isGroupThinkingActive ? `{
-  "thinking": "在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。",
+  "thinking": "自检A1人设忠实；自检A17推进一个节拍；自检B1无违禁比喻；自检C1保留交互气口；各项判定通过，开始输出正文。",
   "chatResponse": [
 ${statusMember ? `    {
       "type": "system_status",
@@ -38766,7 +38797,7 @@ ${isCognitionEnabled ? `\n- **情景感知**: 注意当前时间是 ${currentTim
                     const hasThinkingChain = Boolean(msg.thinking && String(msg.thinking).trim()) || (typeof effectiveContent === "string" && /<thinking>[\s\S]*?<\/thinking>/i.test(effectiveContent));
                     if (hasThinkingChain) {
                       assistantPayload = {
-                        thinking: "在此处渲染了完整思维链，仅用户可见",
+                        thinking: THOUGHT_CHAIN_FOLDED_NOTICE,
                         chatResponse: [
                           assistantMsgObject,
                         ],
@@ -39116,7 +39147,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
 			**2. "thinking" 键:**
 			- **字段位置与格式定义**: 根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡，绝对禁止填写 null。
-			- **从头到尾唯一一整条**: 从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！必须统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象（如 text、give_item、system_status 等）内部绝对禁止包含 thinking 字段，严禁分散填写！
+			- **从头到尾唯一一整条**: 从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！必须统一完整填写在此顶级 "thinking" 字段中。下方的 chatResponse 数组中各具体消息对象内部绝对禁止包含 thinking 字段，严禁分散填写！
 			- **绝对禁止外围裸露输出**: 绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格写入顶级 "thinking" 字段之中。
 
 			**3. "chatResponse" 键:**
@@ -39130,7 +39161,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
 			**5. 标准输出格式示例:**
 			{
-			  "thinking": "在此处进行思维链要求中每一个要求的自检，禁止遗漏偷懒行为，必须完整输出。",
+			  "thinking": "1.规则自检：确认符合人设与当前语境；2.交互判定：保持单回合互动，留出对话气口；3.自检通过，开始输出。",
 			  "chatResponse": [
 			    {
 			      "type": "text",
@@ -39258,7 +39289,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
                     const hasThinkingChain = Boolean(msg.thinking && String(msg.thinking).trim()) || (typeof effectiveContent === "string" && /<thinking>[\s\S]*?<\/thinking>/i.test(effectiveContent));
                     if (hasThinkingChain) {
                       assistantPayload = {
-                        thinking: "在此处渲染了完整思维链，仅用户可见",
+                        thinking: THOUGHT_CHAIN_FOLDED_NOTICE,
                         chatResponse: [
                           assistantMsgObject,
                         ],
@@ -39619,10 +39650,19 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               });
             }
 
+            // 思维链历史合规性检测与末尾警告注入
+            const isCurrentChatThinkingActive = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : false;
+            if (isCurrentChatThinkingActive && typeof checkPreviousTurnThinkingValid === "function" && !checkPreviousTurnThinkingValid(historySlice, isCurrentChatThinkingActive)) {
+              messagesPayload.push({
+                role: "system",
+                content: "【系统警告：思维链缺失或照抄检测】检测到上一轮未生成有效思维链或照抄了历史折叠提示。历史中的折叠文字仅为系统占位，不代表真实思考。本轮必须在顶级 thinking 字段中根据当前规则逐条进行思考自检推演，严禁留空或照抄折叠文字。"
+              });
+            }
+
             // 守秘人前置提示词注入逻辑
             const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
             if (isKeeperAssigned) {
-              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次只能生成一个行动回合，严格遵循 PC行动一次→KP回应一次。一个气泡最多四百五十字，三百到四百五十为最佳；需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
+              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n.·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次回复二到四的气泡最佳，单气泡在屏幕内显示为2/3~3/4最佳。必须率先渲染情绪氛围，具体细节的描写场景，再进行人物细节描写，切勿为了缩减字数而删去场景描写的内容。\n需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。【注意，此处规则的含义为剧情不可跳跃过多，而并非缩减剧情的细节描写或场景细节】\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。\n\n`;
               systemPrompt = keeperPrefixInstruction + systemPrompt;
             }
 
@@ -40122,7 +40162,7 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
 
             // 守密人末尾强制生图：立即在后台并发启动生图任务，不阻塞前端文字逐条延迟播放，且后台切换切走切回不中断
             window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
-            let finishTurnRender = null;
+            finishTurnRender = null;
             window.chatTurnRenderPromise[String(chat.id)] = new Promise((resolve) => {
               finishTurnRender = resolve;
             });
@@ -43945,8 +43985,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               }
             }
 
-            if (finishTurnRender) {
-              finishTurnRender();
+            if (typeof finishTurnRender === "function") {
+              try { finishTurnRender(); } catch (e) {}
               finishTurnRender = null;
             }
             delete window.chatTurnRenderPromise[String(chat.id)];
@@ -44123,8 +44163,8 @@ ${isSingleThinkingActive ? `			**1. JSON对象结构:**
               });
             }
           } catch (error) {
-            if (finishTurnRender) {
-              finishTurnRender();
+            if (typeof finishTurnRender === "function") {
+              try { finishTurnRender(); } catch (e) {}
               finishTurnRender = null;
             }
             if (chat && chat.id) {
