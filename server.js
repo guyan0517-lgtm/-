@@ -1,3 +1,4 @@
+import fs from 'fs';
 import http from 'http';
 import express from 'express';
 import path from 'path';
@@ -155,20 +156,80 @@ app.post('/api/proxy', async (req, res) => {
 });
 
 // Peer communication hub and offline mailbox
+const MAILBOX_STORE_PATH = path.join(__dirname, '.peer-mailbox-store.json');
 const peerClients = new Map();
 const peerMailboxes = new Map();
 const peerProfiles = new Map();
 
+function loadMailboxStoreFromDisk() {
+  try {
+    if (fs.existsSync(MAILBOX_STORE_PATH)) {
+      const raw = fs.readFileSync(MAILBOX_STORE_PATH, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.mailboxes && typeof parsed.mailboxes === 'object') {
+        for (const [k, v] of Object.entries(parsed.mailboxes)) {
+          if (Array.isArray(v)) peerMailboxes.set(k, v);
+        }
+      }
+      if (parsed && parsed.profiles && typeof parsed.profiles === 'object') {
+        for (const [k, v] of Object.entries(parsed.profiles)) {
+          if (v && typeof v === 'object') peerProfiles.set(k, v);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[PeerStore] Load warning:', e.message);
+  }
+}
+
+let saveStoreTimer = null;
+function scheduleSaveMailboxStore() {
+  if (saveStoreTimer) clearTimeout(saveStoreTimer);
+  saveStoreTimer = setTimeout(() => {
+    try {
+      const mailboxesObj = {};
+      for (const [k, v] of peerMailboxes.entries()) {
+        if (Array.isArray(v) && v.length > 0) {
+          mailboxesObj[k] = v;
+        }
+      }
+      const profilesObj = {};
+      for (const [k, v] of peerProfiles.entries()) {
+        profilesObj[k] = v;
+      }
+      fs.writeFileSync(MAILBOX_STORE_PATH, JSON.stringify({ mailboxes: mailboxesObj, profiles: profilesObj }), 'utf8');
+    } catch (e) {
+      console.warn('[PeerStore] Save warning:', e.message);
+    }
+  }, 200);
+}
+
+loadMailboxStoreFromDisk();
+
 function pushToMailbox(code, event) {
-  if (!code) return;
+  if (!code || !event) return;
   if (!peerMailboxes.has(code)) {
     peerMailboxes.set(code, []);
   }
   const box = peerMailboxes.get(code);
+  if (event.eventId && box.some(item => item && item.eventId === event.eventId)) {
+    return;
+  }
   box.push(event);
-  if (box.length > 50) {
+  if (box.length > 200) {
     box.shift();
   }
+  scheduleSaveMailboxStore();
+}
+
+function ackFromMailbox(code, eventIds) {
+  if (!code || !Array.isArray(eventIds) || eventIds.length === 0) return;
+  if (!peerMailboxes.has(code)) return;
+  const idSet = new Set(eventIds);
+  const box = peerMailboxes.get(code) || [];
+  const filtered = box.filter(item => !item || !item.eventId || !idSet.has(item.eventId));
+  peerMailboxes.set(code, filtered);
+  scheduleSaveMailboxStore();
 }
 
 function sendToPeerWs(code, event) {
@@ -187,23 +248,60 @@ function sendToPeerWs(code, event) {
 }
 
 app.post('/api/peer/register', (req, res) => {
-  const { peerCode, name, avatar } = req.body;
+  const { peerCode, name, avatar, myAvatarFrame } = req.body;
   if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
-  peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
+  peerProfiles.set(peerCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
+  scheduleSaveMailboxStore();
   return res.json({ success: true });
 });
 
 app.post('/api/peer/send', (req, res) => {
-  const { eventId, fromCode, toCode, content, senderName, senderAvatar, timestamp } = req.body;
-  if (!toCode || !content) return res.status(400).json({ error: 'Missing target or content' });
+  const {
+    type = 'message',
+    eventId,
+    ackEventId,
+    fromCode,
+    toCode,
+    content,
+    msgType,
+    audioData,
+    audioDuration,
+    senderName,
+    senderAvatar,
+    senderAvatarFrame,
+    peerAvatarFrame,
+    timestamp
+  } = req.body;
+  if (!toCode) return res.status(400).json({ error: 'Missing target' });
+
+  if (type === 'peer_ack') {
+    const ackEvt = {
+      type: 'peer_ack',
+      eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+      ackEventId,
+      fromCode,
+      toCode,
+      timestamp: Date.now()
+    };
+    sendToPeerWs(toCode, ackEvt);
+    pushToMailbox(toCode, ackEvt);
+    return res.json({ success: true });
+  }
+
+  if (!content && !audioData) return res.status(400).json({ error: 'Missing content' });
   const event = {
     type: 'message',
     eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
     fromCode,
     toCode,
-    content,
+    content: content || '[语音消息]',
+    msgType: msgType || 'text',
+    audioData: audioData || '',
+    audioDuration: audioDuration || 0,
     senderName,
     senderAvatar,
+    senderAvatarFrame: senderAvatarFrame || '',
+    peerAvatarFrame: peerAvatarFrame || '',
     timestamp: timestamp || Date.now()
   };
   const delivered = sendToPeerWs(toCode, event);
@@ -212,15 +310,18 @@ app.post('/api/peer/send', (req, res) => {
 });
 
 app.post('/api/peer/profile', (req, res) => {
-  const { eventId, peerCode, name, avatar, targetCodes = [] } = req.body;
+  const { eventId, peerCode, name, avatar, myAvatarFrame, peerAvatarFrame, targetCodes = [] } = req.body;
   if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
-  peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
+  peerProfiles.set(peerCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
+  scheduleSaveMailboxStore();
   const event = {
     type: 'profile_update',
     eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
     peerCode,
     name,
     avatar,
+    myAvatarFrame: myAvatarFrame !== undefined ? myAvatarFrame : undefined,
+    peerAvatarFrame: peerAvatarFrame !== undefined ? peerAvatarFrame : undefined,
     timestamp: Date.now()
   };
   if (Array.isArray(targetCodes)) {
@@ -233,7 +334,7 @@ app.post('/api/peer/profile', (req, res) => {
 });
 
 app.post('/api/peer/request', (req, res) => {
-  const { type = 'friend_request', eventId, fromCode, toCode, fromName, fromAvatar } = req.body;
+  const { type = 'friend_request', eventId, fromCode, toCode, fromName, fromAvatar, fromAvatarFrame } = req.body;
   if (!toCode) return res.status(400).json({ error: 'Missing target' });
   const event = {
     type: type === 'friend_accept' ? 'friend_accept' : 'friend_request',
@@ -242,6 +343,7 @@ app.post('/api/peer/request', (req, res) => {
     toCode,
     fromName,
     fromAvatar,
+    fromAvatarFrame: fromAvatarFrame || '',
     timestamp: Date.now()
   };
   sendToPeerWs(toCode, event);
@@ -249,11 +351,17 @@ app.post('/api/peer/request', (req, res) => {
   return res.json({ success: true });
 });
 
+app.post('/api/peer/ack', (req, res) => {
+  const { peerCode, eventIds = [] } = req.body;
+  if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
+  ackFromMailbox(peerCode, eventIds);
+  return res.json({ success: true });
+});
+
 app.get('/api/peer/poll', (req, res) => {
   const code = req.query.code;
   if (!code) return res.status(400).json({ error: 'Missing code' });
   const events = peerMailboxes.get(code) || [];
-  peerMailboxes.set(code, []);
   const profile = peerProfiles.get(code) || null;
   return res.json({ success: true, events, profile });
 });
@@ -282,39 +390,84 @@ wss.on('connection', (ws) => {
           }
           peerClients.get(boundCode).add(ws);
           if (data.name || data.avatar) {
-            peerProfiles.set(boundCode, { name: data.name, avatar: data.avatar, lastSeen: Date.now() });
+            peerProfiles.set(boundCode, {
+              name: data.name,
+              avatar: data.avatar,
+              myAvatarFrame: data.myAvatarFrame || '',
+              lastSeen: Date.now()
+            });
+            scheduleSaveMailboxStore();
           }
           const box = peerMailboxes.get(boundCode) || [];
           if (box.length > 0) {
             box.forEach(evt => ws.send(JSON.stringify(evt)));
-            peerMailboxes.set(boundCode, []);
           }
         }
+      } else if (data.type === 'ack') {
+        const targetCode = data.peerCode || boundCode;
+        if (targetCode && Array.isArray(data.eventIds)) {
+          ackFromMailbox(targetCode, data.eventIds);
+        }
+      } else if (data.type === 'peer_ack') {
+        const { eventId, ackEventId, fromCode, toCode } = data;
+        if (toCode) {
+          const ackEvt = {
+            type: 'peer_ack',
+            eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+            ackEventId,
+            fromCode,
+            toCode,
+            timestamp: Date.now()
+          };
+          sendToPeerWs(toCode, ackEvt);
+          pushToMailbox(toCode, ackEvt);
+        }
       } else if (data.type === 'message') {
-        const { eventId, fromCode, toCode, content, senderName, senderAvatar, timestamp } = data;
+        const {
+          eventId,
+          fromCode,
+          toCode,
+          content,
+          msgType,
+          audioData,
+          audioDuration,
+          senderName,
+          senderAvatar,
+          senderAvatarFrame,
+          peerAvatarFrame,
+          timestamp
+        } = data;
         if (toCode) {
           const event = {
             type: 'message',
             eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
             fromCode,
             toCode,
-            content,
+            content: content || '[语音消息]',
+            msgType: msgType || 'text',
+            audioData: audioData || '',
+            audioDuration: audioDuration || 0,
             senderName,
             senderAvatar,
+            senderAvatarFrame: senderAvatarFrame || '',
+            peerAvatarFrame: peerAvatarFrame || '',
             timestamp: timestamp || Date.now()
           };
           sendToPeerWs(toCode, event);
           pushToMailbox(toCode, event);
         }
       } else if (data.type === 'profile_update') {
-        const { eventId, peerCode, name, avatar, targetCodes = [] } = data;
-        peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
+        const { eventId, peerCode, name, avatar, myAvatarFrame, peerAvatarFrame, targetCodes = [] } = data;
+        peerProfiles.set(peerCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
+        scheduleSaveMailboxStore();
         const event = {
           type: 'profile_update',
           eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
           peerCode,
           name,
           avatar,
+          myAvatarFrame: myAvatarFrame !== undefined ? myAvatarFrame : undefined,
+          peerAvatarFrame: peerAvatarFrame !== undefined ? peerAvatarFrame : undefined,
           timestamp: Date.now()
         };
         if (Array.isArray(targetCodes)) {
@@ -324,7 +477,7 @@ wss.on('connection', (ws) => {
           });
         }
       } else if (data.type === 'friend_request' || data.type === 'friend_accept') {
-        const { eventId, fromCode, toCode, fromName, fromAvatar } = data;
+        const { eventId, fromCode, toCode, fromName, fromAvatar, fromAvatarFrame } = data;
         const event = {
           type: data.type,
           eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
@@ -332,6 +485,7 @@ wss.on('connection', (ws) => {
           toCode,
           fromName,
           fromAvatar,
+          fromAvatarFrame: fromAvatarFrame || '',
           timestamp: Date.now()
         };
         sendToPeerWs(toCode, event);

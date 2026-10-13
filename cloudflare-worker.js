@@ -12,6 +12,19 @@ function getCorsHeaders() {
   };
 }
 
+function pushToWorkerMailbox(code, event) {
+  if (!code || !event) return;
+  if (!peerMailboxes.has(code)) {
+    peerMailboxes.set(code, []);
+  }
+  const box = peerMailboxes.get(code);
+  if (event.eventId && box.some(item => item && item.eventId === event.eventId)) {
+    return;
+  }
+  box.push(event);
+  if (box.length > 200) box.shift();
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -23,11 +36,11 @@ export default {
     if (url.pathname === "/api/peer/register" && request.method === "POST") {
       try {
         const body = await request.json();
-        const { peerCode, name, avatar } = body;
+        const { peerCode, name, avatar, myAvatarFrame } = body;
         if (!peerCode) {
           return new Response(JSON.stringify({ error: "Missing peerCode" }), { status: 400, headers: getCorsHeaders() });
         }
-        peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
+        peerProfiles.set(peerCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
         return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
       } catch (e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: getCorsHeaders() });
@@ -37,25 +50,56 @@ export default {
     if (url.pathname === "/api/peer/send" && request.method === "POST") {
       try {
         const body = await request.json();
-        const { fromCode, toCode, content, senderName, senderAvatar, timestamp } = body;
-        if (!toCode || !content) {
-          return new Response(JSON.stringify({ error: "Missing target or content" }), { status: 400, headers: getCorsHeaders() });
-        }
-        const event = {
-          type: "message",
+        const {
+          type = "message",
+          eventId,
+          ackEventId,
           fromCode,
           toCode,
           content,
+          msgType,
+          audioData,
+          audioDuration,
           senderName,
           senderAvatar,
+          senderAvatarFrame,
+          peerAvatarFrame,
+          timestamp
+        } = body;
+        if (!toCode) {
+          return new Response(JSON.stringify({ error: "Missing target" }), { status: 400, headers: getCorsHeaders() });
+        }
+        if (type === "peer_ack") {
+          const ackEvt = {
+            type: "peer_ack",
+            eventId: eventId || ("evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8)),
+            ackEventId,
+            fromCode,
+            toCode,
+            timestamp: Date.now()
+          };
+          pushToWorkerMailbox(toCode, ackEvt);
+          return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
+        }
+        if (!content && !audioData) {
+          return new Response(JSON.stringify({ error: "Missing content" }), { status: 400, headers: getCorsHeaders() });
+        }
+        const event = {
+          type: "message",
+          eventId: eventId || ("evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8)),
+          fromCode,
+          toCode,
+          content: content || "[语音消息]",
+          msgType: msgType || "text",
+          audioData: audioData || "",
+          audioDuration: audioDuration || 0,
+          senderName,
+          senderAvatar,
+          senderAvatarFrame: senderAvatarFrame || "",
+          peerAvatarFrame: peerAvatarFrame || "",
           timestamp: timestamp || Date.now()
         };
-        if (!peerMailboxes.has(toCode)) {
-          peerMailboxes.set(toCode, []);
-        }
-        const box = peerMailboxes.get(toCode);
-        box.push(event);
-        if (box.length > 50) box.shift();
+        pushToWorkerMailbox(toCode, event);
         return new Response(JSON.stringify({ success: true, delivered: true }), { headers: getCorsHeaders() });
       } catch (e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: getCorsHeaders() });
@@ -65,24 +109,24 @@ export default {
     if (url.pathname === "/api/peer/profile" && request.method === "POST") {
       try {
         const body = await request.json();
-        const { peerCode, name, avatar, targetCodes = [] } = body;
+        const { eventId, peerCode, name, avatar, myAvatarFrame, peerAvatarFrame, targetCodes = [] } = body;
         if (!peerCode) {
           return new Response(JSON.stringify({ error: "Missing peerCode" }), { status: 400, headers: getCorsHeaders() });
         }
-        peerProfiles.set(peerCode, { name, avatar, lastSeen: Date.now() });
+        peerProfiles.set(peerCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
         const event = {
           type: "profile_update",
+          eventId: eventId || ("evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8)),
           peerCode,
           name,
           avatar,
+          myAvatarFrame: myAvatarFrame !== undefined ? myAvatarFrame : undefined,
+          peerAvatarFrame: peerAvatarFrame !== undefined ? peerAvatarFrame : undefined,
           timestamp: Date.now()
         };
         if (Array.isArray(targetCodes)) {
           for (const target of targetCodes) {
-            if (!peerMailboxes.has(target)) peerMailboxes.set(target, []);
-            const box = peerMailboxes.get(target);
-            box.push(event);
-            if (box.length > 50) box.shift();
+            pushToWorkerMailbox(target, event);
           }
         }
         return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
@@ -94,7 +138,7 @@ export default {
     if (url.pathname === "/api/peer/request" && request.method === "POST") {
       try {
         const body = await request.json();
-        const { type = "friend_request", eventId, fromCode, toCode, fromName, fromAvatar } = body;
+        const { type = "friend_request", eventId, fromCode, toCode, fromName, fromAvatar, fromAvatarFrame } = body;
         if (!toCode) {
           return new Response(JSON.stringify({ error: "Missing target" }), { status: 400, headers: getCorsHeaders() });
         }
@@ -105,12 +149,25 @@ export default {
           toCode,
           fromName,
           fromAvatar,
+          fromAvatarFrame: fromAvatarFrame || "",
           timestamp: Date.now()
         };
-        if (!peerMailboxes.has(toCode)) peerMailboxes.set(toCode, []);
-        const box = peerMailboxes.get(toCode);
-        box.push(event);
-        if (box.length > 50) box.shift();
+        pushToWorkerMailbox(toCode, event);
+        return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: getCorsHeaders() });
+      }
+    }
+
+    if (url.pathname === "/api/peer/ack" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        const { peerCode, eventIds = [] } = body;
+        if (peerCode && Array.isArray(eventIds) && peerMailboxes.has(peerCode)) {
+          const idSet = new Set(eventIds);
+          const filtered = (peerMailboxes.get(peerCode) || []).filter(item => !item || !item.eventId || !idSet.has(item.eventId));
+          peerMailboxes.set(peerCode, filtered);
+        }
         return new Response(JSON.stringify({ success: true }), { headers: getCorsHeaders() });
       } catch (e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: getCorsHeaders() });
@@ -123,7 +180,6 @@ export default {
         return new Response(JSON.stringify({ error: "Missing code" }), { status: 400, headers: getCorsHeaders() });
       }
       const events = peerMailboxes.get(code) || [];
-      peerMailboxes.set(code, []);
       const profile = peerProfiles.get(code) || null;
       return new Response(JSON.stringify({ success: true, events, profile }), { headers: getCorsHeaders() });
     }

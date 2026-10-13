@@ -27367,7 +27367,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 icon: avatarUrl, // 这里也会自动使用正确的头像
                 tag: chatId,
                 renotify: true,
-                silent: true,
+                silent: false,
+                vibrate: [200, 100, 200],
                 badge:
                   "https://i.postimg.cc/Kj8JnRcp/267611-CC01-F8-A3-B4910-A2-C2-FFDE479-DC.jpg",
               };
@@ -27403,17 +27404,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (bar) {
+            bar.classList.remove("visible", "notif-anim-replay");
             const newBar = bar.cloneNode(true);
+            newBar.classList.remove("visible", "notif-anim-replay");
             bar.parentNode.replaceChild(newBar, bar);
 
             newBar.addEventListener("click", () => {
               openChat(chatId);
-              newBar.classList.remove("visible");
+              newBar.classList.remove("visible", "notif-anim-replay");
             });
 
-            newBar.classList.add("visible");
+            void newBar.offsetWidth;
+            newBar.classList.add("visible", "notif-anim-replay");
             notificationTimeout = setTimeout(() => {
-              newBar.classList.remove("visible");
+              newBar.classList.remove("visible", "notif-anim-replay");
             }, 4000);
           }
         }
@@ -31304,11 +31308,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             // 将语音原文存储在父级气泡的 data-* 属性中，方便事件处理器获取
             bubble.dataset.voiceText = msg.content;
+            if (msg.audioData) {
+              bubble.dataset.hasRealAudio = "true";
+            }
 
-            const duration = Math.max(
-              1,
-              Math.round((msg.content || "").length / 5),
-            );
+            const duration = msg.audioDuration
+              ? Math.max(1, Math.round(Number(msg.audioDuration) || 1))
+              : Math.max(1, Math.round((msg.content || "").length / 5));
             const durationFormatted = `0:${String(duration).padStart(2, "0")}''`;
             const waveformHTML =
               "<div></div><div></div><div></div><div></div><div></div>";
@@ -32657,6 +32663,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const curMode = (chat.settings?.voiceMode === "auto") ? "默认" : "手动";
             voiceModeBtn.textContent = curMode;
             voiceModeBtn.title = curMode;
+          }
+          if (window.PeerManager && typeof window.PeerManager.applyPeerChatInputUI === "function") {
+            window.PeerManager.applyPeerChatInputUI(chat);
           }
           startPetDecayTimer();
         }
@@ -73477,7 +73486,13 @@ ${stickerContext || "无"}
           document.addEventListener("click", keepAliveUnlocker);
           document.addEventListener("touchstart", keepAliveUnlocker);
 
+          window.appendMessage = appendMessage;
+          window.renderChatInterfaceProxy = renderChatInterface;
           await loadAllDataFromDB();
+          window.__tukeyDbLoaded = true;
+          if (window.PeerManager && typeof window.PeerManager.onAppDbLoaded === "function") {
+            window.PeerManager.onAppDbLoaded();
+          }
           // 添加启动时加载CSS的逻辑
           // 优先应用保存在 activeCustomCss 里的代码
           if (state.globalSettings.activeCustomCss) {
@@ -75812,6 +75827,13 @@ ${stickerContext || "无"}
           const waitReplyBtnEl = document.getElementById("wait-reply-btn");
           if (waitReplyBtnEl) {
             waitReplyBtnEl.addEventListener("click", () => {
+              const activeChat = state.chats && state.activeChatId ? state.chats[state.activeChatId] : null;
+              if (activeChat && activeChat.roleType === "peer") {
+                if (window.PeerManager && typeof window.PeerManager.toggleVoiceRecordPanel === "function") {
+                  window.PeerManager.toggleVoiceRecordPanel();
+                }
+                return;
+              }
               triggerAiResponse();
             });
           }
@@ -76575,6 +76597,16 @@ ${stickerContext || "无"}
                 const bubble = voiceBody.closest(".message-bubble");
                 if (!bubble) return;
 
+                const chat = state.chats[state.activeChatId];
+                if (
+                  bubble.dataset.hasRealAudio === "true" &&
+                  window.PeerManager &&
+                  typeof window.PeerManager.playRecordedVoiceBubble === "function"
+                ) {
+                  window.PeerManager.playRecordedVoiceBubble(bubble, chat);
+                  return;
+                }
+
                 // 如果是用户自己的语音，只切换文字显示，不播放
                 if (bubble.classList.contains("user")) {
                   toggleVoiceTranscript(bubble);
@@ -76582,7 +76614,6 @@ ${stickerContext || "无"}
                 }
 
                 // 如果是AI的语音消息
-                const chat = state.chats[state.activeChatId];
                 if (!chat) return;
 
                 // --- 核心逻辑开始 ---

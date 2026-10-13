@@ -26959,9 +26959,117 @@ input:checked + .slider::after {
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+@keyframes notifBannerSlideBounceIn {
+  0% {
+    transform: translateX(-50%) translateY(-180%) scale(0.94);
+    opacity: 0;
+  }
+  70% {
+    transform: translateX(-50%) translateY(4px) scale(1.01);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
 /* 弹窗激活时的状态 */
 #notification-bar.visible {
   transform: translateX(-50%) translateY(0); /* 滑入屏幕 */
+  visibility: visible;
+  animation: notifBannerSlideBounceIn 0.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+#notification-bar.notif-anim-replay {
+  animation: notifBannerSlideBounceIn 0.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes peerMicPulseRing {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.38);
+    opacity: 0;
+  }
+}
+
+#peer-voice-record-panel {
+  width: 100%;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border-color);
+  padding: 14px 16px 16px;
+  box-sizing: border-box;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+#peer-voice-record-panel.visible {
+  display: flex;
+}
+
+.peer-record-status-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  text-align: center;
+}
+
+.peer-record-mic-wrap {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.peer-record-mic-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--accent-color);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#peer-voice-record-panel.recording .peer-record-mic-ring {
+  animation: peerMicPulseRing 1.2s ease-out infinite;
+}
+
+.peer-record-mic-btn {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  max-width: 64px;
+  flex: 0 0 64px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: var(--card-bg);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease;
+}
+
+.peer-record-mic-btn:active {
+  transform: scale(0.93);
+}
+
+.peer-record-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
 }
 
 /* 弹窗头像样式 */

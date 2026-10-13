@@ -74,6 +74,7 @@ self.addEventListener("fetch", event => {
 });
 
 self.addEventListener("notificationclick", event => {
+  const notifData = (event.notification && event.notification.data) || {};
   event.notification.close();
 
   event.waitUntil(
@@ -85,6 +86,13 @@ self.addEventListener("notificationclick", event => {
       .then(clientList => {
         for (let i = 0; i < clientList.length; i++) {
           const client = clientList[i];
+          if (client && typeof client.postMessage === "function") {
+            client.postMessage({
+              type: "PEER_NOTIFICATION_CLICK",
+              chatId: notifData.chatId || "",
+              openRequests: !!notifData.openRequests
+            });
+          }
           if ("focus" in client) {
             return client.focus();
           }
@@ -95,6 +103,26 @@ self.addEventListener("notificationclick", event => {
         }
       })
   );
+});
+
+self.addEventListener("message", event => {
+  const data = event.data;
+  if (!data || data.type !== "SHOW_PEER_NOTIFICATION") return;
+  const title = data.title || "新消息";
+  const options = {
+    body: data.body || "",
+    icon: data.icon || "./icon-192.png",
+    badge: "./icon-192.png",
+    tag: data.tag || ("peer_notif_" + Date.now()),
+    renotify: true,
+    silent: false,
+    vibrate: [200, 100, 200],
+    data: {
+      chatId: data.chatId || "",
+      openRequests: !!data.openRequests
+    }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("push", event => {
@@ -112,6 +140,9 @@ self.addEventListener("push", event => {
     body: data.body,
     icon: "icon.png",
     badge: "icon.png",
+    renotify: true,
+    silent: false,
+    vibrate: [200, 100, 200],
     data: data.data || {}
   };
 
