@@ -7133,7 +7133,17 @@
 
             <!-- 关联设定 -->
             <div class="form-group" id="world-book-link-group">
-              <label>关联世界书 (多选)</label>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <label style="margin-bottom: 0;">关联世界书</label>
+                <button
+                  type="button"
+                  id="import-shared-wb-btn"
+                  class="moe-btn-mini"
+                  style="display: none; height: 26px; padding: 0 8px; font-size: 11px; white-space: nowrap;"
+                >
+                  导入
+                </button>
+              </div>
               <div class="custom-multiselect">
                 <div class="select-box moe-input">
                   <span class="selected-options-text">-- 点击选择 --</span>
@@ -8194,7 +8204,10 @@
           <div class="form-group">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
               <label for="member-persona-input" style="margin-bottom: 0;">人设</label>
-              <button type="button" id="sync-member-persona-btn" class="moe-btn-mini" style="font-size: 11px; width: 40px; min-width: 40px; max-width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; line-height: 1; height: 20px; box-sizing: border-box;">同步</button>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" id="member-privacy-toggle-btn" class="moe-btn-mini" style="display: none; font-size: 11px; width: 40px; min-width: 40px; max-width: 44px; padding: 0; align-items: center; justify-content: center; line-height: 1; height: 20px; box-sizing: border-box;">公开</button>
+                <button type="button" id="sync-member-persona-btn" class="moe-btn-mini" style="font-size: 11px; width: 40px; min-width: 40px; max-width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; line-height: 1; height: 20px; box-sizing: border-box;">同步</button>
+              </div>
             </div>
             <textarea id="member-persona-input" rows="4"></textarea>
           </div>
@@ -8267,6 +8280,14 @@
                   style="height: 28px; padding: 0 10px; font-size: 12px; white-space: nowrap;"
                 >
                   道具
+                </button>
+                <button
+                  type="button"
+                  id="member-privacy-btn"
+                  class="moe-btn-mini"
+                  style="height: 28px; padding: 0 10px; font-size: 12px; white-space: nowrap; display: none;"
+                >
+                  公开
                 </button>
               </div>
               <input
@@ -22270,7 +22291,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 preset = await db.thoughtChainPresets.get(presetId);
               } catch (e) {}
             }
-            let block = "\n# 思维链填写规范与顶级字段代码定义\n" +
+            let block = "---------- 【思维链填写规范与顶级字段代码定义】 ----------\n" +
               "思维链代码结构与全局唯一性规则：\n" +
               "1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 \"thinking\" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，绝对禁止直接输出在JSON代码外部，绝对禁止写在消息正文气泡中，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n" +
               "2. 语言规范：thinking 字段内部的思考内容必须全程使用中文书写，严禁使用其他语言。\n" +
@@ -22292,12 +22313,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "```\n" +
               (preset ? "\n预设名称：" + preset.name + "\n" : "");
             if (preset && preset.generalContent) {
-              block += "思维链规则设定：\n" + preset.generalContent + "\n";
+              block += "\n---------- 【思维链通用规则设定开始】 ----------\n" + preset.generalContent + "\n---------- 【思维链通用规则设定结束】 ----------\n";
             }
             if (chat.thoughtChainEnableCoc !== false && preset && preset.cocContent) {
-              block += "【跑团模块思考规则】：\n" + preset.cocContent + "\n";
+              block += "\n---------- 【跑团模块思考规则开始】 ----------\n" + preset.cocContent + "\n---------- 【跑团模块思考规则结束】 ----------\n";
             }
-            return window.formatPromptSection("思维", block);
+            return window.formatPromptSection("思维链", block);
           } catch (e) {
             console.error("加载思维链预设错误:", e);
             return "";
@@ -22326,19 +22347,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
             allChaps.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
-            let block = `\n# 【第四大类】模组信息\n` +
+            let block = `---------- 【模组保密总则】 ----------\n` +
               `以下为守秘人（KP）限定信息：包含模组真相、幕后真相、事件真正成因、NPC 的真实身份与真实动机、尚未发生的剧情走向。\n` +
               `【保密规则】\n` +
               `1. 上述信息【严禁直接告知玩家】，不得在叙述、台词、旁白中泄露；\n` +
               `2. 只有当剧情推进到【正文中已经写到】该信息时，才允许以玩家可见的方式呈现；\n` +
               `3. 玩家尚未在正文中接触到真相之前，任何形式的提前透露（直接输出、暗示、铺垫性剧透、以'你注意到'引出真相）一律视为严重剧透，必须避免；\n` +
               `4. 若不确定某信息是否已在正文中出现，按'未出现'处理，宁可不提；\n` +
-              `5. KP 的引导只能通过场景线索、NPC 言行间接实现，不得输出真相原文。\n\n` +
+              `5. KP 的引导只能通过场景线索、NPC 言行间接实现，不得输出真相原文。\n` +
               `当前加载模组：《${mod.name}》\n\n`;
 
             // 目录注入最高优先级：若勾选加载目录，置于最顶层
             if (chat.loadModuleToc) {
-              block += `## 模组总目录与章节导航\n`;
+              block += `---------- 【模组总目录与章节导航开始】 ----------\n`;
               if (Array.isArray(mod.toc) && mod.toc.length > 0) {
                 mod.toc.forEach((item, idx) => {
                   const tTitle = typeof item === 'string' ? item : (item.title || item.name || `第${idx + 1}节`);
@@ -22349,7 +22370,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   block += `${idx + 1}. ${c.title} 【${c.category || '正文'}】\n`;
                 });
               }
-              block += `\n`;
+              block += `---------- 【模组总目录与章节导航结束】 ----------\n\n`;
             }
 
             const selectedIds = chat.selectedModuleChapterIds || [];
@@ -22358,7 +22379,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (loadedChaps.length > 0) {
                 block += `以下为守秘人当前激活加载的模组章节内容：\n\n`;
                 loadedChaps.forEach((chap, idx) => {
-                  block += `## 章节 ${idx + 1}：${chap.title} 【分类：${chap.category || '正文'}】\n${chap.content}\n\n`;
+                  block += `---------- 【模组章节 ${idx + 1}：${chap.title}（分类：${chap.category || '正文'}）开始】 ----------\n${chap.content}\n---------- 【模组章节 ${idx + 1}：${chap.title} 结束】 ----------\n\n`;
                 });
               }
             }
@@ -22378,7 +22399,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 modImages = mod.gallery;
               }
               if (modImages && modImages.length > 0) {
-                block += `## 模组插图原位注入规则\n` +
+                block += `---------- 【模组插图原位注入规则开始】 ----------\n` +
                   `当前模组已启用插图联动功能。模组正文与章节内容在排版与切割时，已经在对应剧情段落中明确标注了插图节点，例如【图1】、【图2】等。\n\n` +
                   `【核心执行规则】：\n` +
                   `1. 原位节点原样输出：插图的注入位置由模组正文中的标记节点严格固定，严禁由你自行主观猜测、随意推迟或判断时机。只要你的剧情带团推进到了模组文本中标记有【图N】的位置，你必须在你的回复中对应的句段处原样输出该【图N】标记（例如【图1】、【图2】），绝对不得遗漏、跳过或自行改动位置。\n` +
@@ -22392,14 +22413,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   const horrorWarning = (img.isHorror || img.isSensitive) ? '【剧透】' : '';
                   block += `- 【图${num}】${name}：${desc} ${horrorWarning}\n`;
                 });
-                block += `\n`;
+                block += `---------- 【模组插图原位注入规则结束】 ----------\n\n`;
               }
             }
 
             // 模组剧情配乐规则
             const isModuleMusicAllowed = (((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false));
             if (isModuleMusicAllowed && Array.isArray(mod.musicList) && mod.musicList.length > 0) {
-              block += `## 模组剧情配乐规则\n` +
+              block += `---------- 【模组剧情配乐规则开始】 ----------\n` +
                 `当前模组配置了特定情景配乐。当带团推进到对应剧情、气氛或场景时，在叙述中原样附带对应的音乐标签，系统会自动为玩家播放应景音乐。\n` +
                 `模组配乐清单：\n`;
               mod.musicList.forEach((m) => {
@@ -22413,7 +22434,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const sScene = m.scene || '剧情气氛';
                 block += `- 标签 ${sTag}：用于 ${sScene}，曲目 ${sName}\n`;
               });
-              block += `\n`;
+              block += `---------- 【模组剧情配乐规则结束】 ----------\n\n`;
             }
 
             // 章节切换模式提示词注入（自动模式与半自动模式）
@@ -22430,7 +22451,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }).join('\n');
 
               if (switchMode === 'auto') {
-                block += `## 模组章节自动切换与信息按需管理规则\n` +
+                block += `---------- 【模组章节自动切换与按需管理规则开始】 ----------\n` +
                   `当前处于自动模式。你拥有在AI管辖章节范围内根据剧情进展自动改勾选的权限。\n` +
                   `AI管辖章节列表与当前开启状态：\n${activeScopeList}\n\n` +
                   `信息按需判断与章节开关核心准则：\n` +
@@ -22441,9 +22462,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   `5. 显式输出管理指令代码：在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
                   `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\`\n` +
                   `6. 换章触发点：当当前章节剧情已真正进行到末尾，并且玩家明确表示同意推进时，输出上述指令代码。\n` +
-                  `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其开关权限，绝不可关闭或覆盖它们。\n\n`;
+                  `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其开关权限，绝不可关闭或覆盖它们。\n` +
+                  `---------- 【模组章节自动切换与按需管理规则结束】 ----------\n\n`;
               } else if (switchMode === 'semi') {
-                block += `## 模组章节半自动切换与信息按需管理规则\n` +
+                block += `---------- 【模组章节半自动切换与按需管理规则开始】 ----------\n` +
                   `当前处于半自动模式。你拥有在AI管辖章节范围内判断剧情完结并提请换章的权限。\n` +
                   `AI管辖章节列表与当前开启状态：\n${activeScopeList}\n\n` +
                   `信息按需判断与章节开关核心准则：\n` +
@@ -22454,11 +22476,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   `5. 显式输出提请指令代码：在回复正文最后完整输出以下JSON指令代码：\n` +
                   `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\`\n` +
                   `6. 换章触发点：当当前章节剧情已带完，并且玩家明确表示同意推进时提请切换。系统会展示继续按钮供玩家确认。\n` +
-                  `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其提请关闭权限，不可覆盖。\n\n`;
+                  `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其提请关闭权限，不可覆盖。\n` +
+                  `---------- 【模组章节半自动切换与按需管理规则结束】 ----------\n\n`;
               }
             }
 
-            return block + "\n";
+            return window.formatPromptSection("模组", block);
           } catch (e) {
             console.error("加载模组章节错误:", e);
             return "";
@@ -22473,30 +22496,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const locations = (typeof getAllChatLocations === "function") ? await getAllChatLocations(chat) : [];
             if (!locations || locations.length === 0) return { prompt: "", tokenCount: 0 };
 
-            let locListText = "";
-            if (useModule) {
-              locListText = locations.map(l => {
-                const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
-                const descPart = l.desc ? ` - 简介: ${l.desc}` : "";
-                const condPart = (l.condition || l.entryCondition) ? ` - 进入条件: ${l.condition || l.entryCondition}` : "";
-                const itemsPart = (l.items || l.clues || l.clue || l.yields) ? ` - 可产出道具与线索: ${l.items || l.clues || l.clue || l.yields}` : "";
-                return `- 层级${l.level}【${l.name}】(${hierarchy})${descPart}${condPart}${itemsPart}`;
-              }).join("\n");
-            } else {
-              locListText = locations.map(l => {
-                const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
-                const descPart = l.desc ? ` - 简介: ${l.desc}` : "";
-                const condPart = (l.condition || l.entryCondition) ? ` - 进入条件: ${l.condition || l.entryCondition}` : "";
-                const itemsPart = (l.items || l.clues || l.clue || l.yields) ? ` - 可产出道具与线索: ${l.items || l.clues || l.clue || l.yields}` : "";
-                return `- 层级${l.level}【${l.name}】(${hierarchy})${descPart}${condPart}${itemsPart}`;
-              }).join("\n");
-            }
+            const locListText = locations.map((l, idx) => {
+              const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
+              const descPart = l.desc ? `\n  简介: ${l.desc}` : "";
+              const condPart = (l.condition || l.entryCondition) ? `\n  进入条件: ${l.condition || l.entryCondition}` : "";
+              const itemsPart = (l.items || l.clues || l.clue || l.yields) ? `\n  可产出道具与线索: ${l.items || l.clues || l.clue || l.yields}` : "";
+              return `---------- 【地点 ${idx + 1}：层级${l.level} - ${l.name}（${hierarchy}）开始】 ----------${descPart}${condPart}${itemsPart}\n---------- 【地点 ${idx + 1}：${l.name} 结束】 ----------`;
+            }).join("\n");
 
-            const prompt = `\n# 【当前探索地点库与地图信息】\n${locListText}\n` +
-              `带团与地点探索准则：\n` +
+            const rawMapPrompt = `当前探索地点库与地图信息：\n${locListText}\n\n` +
+              `---------- 【带团与地点探索准则】 ----------\n` +
               `1. 【地点进入条件】：若地点设定了进入条件（如需要特定房间钥匙、特定道具或通过检定），只有当玩家持有对应道具或达成条件时才允许其进入该地点；若未达成条件，应自然描述门锁/阻碍并提示玩家寻找道具。\n` +
               `2. 【道具与线索探索获得】：当玩家在对应地点展开深入探索调查时，根据该地点的产出设定适时给出对应道具与线索。\n` +
-              `3. AI带团推进剧情进入新地点时，请自动在系统状态栏更新[地点]为完整层级路径（如：一级地点-二级地点-具体地点），接下来去哪里的指向由AI结合剧情自行判断并填写，无需玩家手动干预。\n\n`;
+              `3. AI带团推进剧情进入新地点时，请自动在系统状态栏更新[地点]为完整层级路径（如：一级地点-二级地点-具体地点），接下来去哪里的指向由AI结合剧情自行判断并填写，无需玩家手动干预。`;
+            const prompt = window.formatPromptSection("地点与地图", rawMapPrompt);
             const tokenCount = Math.ceil(prompt.length * 0.7);
             return { prompt, tokenCount };
           } catch(err) {
@@ -24459,7 +24472,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const avatar = char.settings?.aiAvatar || defaultAvatar;
               const displayName = char.settings?.remarkName || char.name;
-              const status = char.status?.text || "在线";
+              let status = char.status?.text || "在线";
+              if (char.roleType === "peer" && window.PeerManager && typeof window.PeerManager.isPeerOnline === "function") {
+                const isPeerOn = window.PeerManager.isPeerOnline(char.peerCode);
+                status = isPeerOn ? "在线" : "离线";
+                char.status = { text: status, isBusy: !isPeerOn };
+              }
 
               row.innerHTML = `
                 <img src="${avatar}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
@@ -24467,7 +24485,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   <div style="display: flex; align-items: center; gap: 4px;">
                     <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
                   </div>
-                  <span style="font-size: 11px; color: var(--text-secondary);">${status}</span>
+                  <span data-peer-status-chat-id="${char.id}" style="font-size: 11px; color: var(--text-secondary);">${status}</span>
                 </div>
               `;
 
@@ -24574,7 +24592,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
                 const avatar = char.settings?.aiAvatar || defaultAvatar;
                 const displayName = char.settings?.remarkName || char.name;
-                const status = char.status?.text || "在线";
+                let status = char.status?.text || "在线";
+                if (char.roleType === "peer" && window.PeerManager && typeof window.PeerManager.isPeerOnline === "function") {
+                  const isPeerOn = window.PeerManager.isPeerOnline(char.peerCode);
+                  status = isPeerOn ? "在线" : "离线";
+                  char.status = { text: status, isBusy: !isPeerOn };
+                }
 
                 row.innerHTML = `
                   <img src="${avatar}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
@@ -24582,7 +24605,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     <div style="display: flex; align-items: center; gap: 4px;">
                       <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
                     </div>
-                    <span style="font-size: 11px; color: var(--text-secondary);">${status}</span>
+                    <span data-peer-status-chat-id="${char.id}" style="font-size: 11px; color: var(--text-secondary);">${status}</span>
                   </div>
                 `;
 
@@ -29631,7 +29654,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
             if (chat.roleType === "peer") {
-              const statusText = chat.status?.text || "在线";
+              const isPeerOn =
+                window.PeerManager && typeof window.PeerManager.isPeerOnline === "function"
+                  ? window.PeerManager.isPeerOnline(chat.peerCode)
+                  : chat.status?.text !== "离线";
+              const statusText = isPeerOn ? "在线" : "离线";
+              chat.status = { text: statusText, isBusy: !isPeerOn };
               lastMsgDisplay = singlePreview
                 ? `[${statusText}] ${singlePreview}`
                 : `[${statusText}]`;
@@ -37768,17 +37796,20 @@ ${recentHistoryText}
             chat.settings.linkedWorldBookIds.length > 0
           ) {
             const linkedContents = chat.settings.linkedWorldBookIds
-              .map((id) => {
+              .map((id, idx) => {
                 const book = (state.worldBooks || []).find((b) => b.id === id);
-                // 这里使用了 stripHtmlAndCode 清理函数，确保纯文本
-                return book && book.content
-                  ? `\n\n## 世界书条目: ${book.name}\n${stripHtmlAndCode(book.content)}`
-                  : "";
+                if (!book || !book.content) return "";
+                const catObj = (state.worldBookCategories || []).find((c) => String(c.id) === String(book.categoryId));
+                const catLabel = catObj && catObj.name ? `【分类：${catObj.name}】` : "";
+                return `---------- 【世界书条目 ${idx + 1}：${book.name}${catLabel} 开始】 ----------\n${stripHtmlAndCode(book.content)}\n---------- 【世界书条目 ${idx + 1}：${book.name} 结束】 ----------`;
               })
               .filter(Boolean)
-              .join("");
+              .join("\n\n");
             if (linkedContents) {
-              worldBookContext = `\n\n# 核心世界观设定 (必须严格遵守以下所有设定)\n${linkedContents}\n`;
+              worldBookContext = window.formatPromptSection(
+                "世界书",
+                `核心世界观设定（必须严格遵守以下所有设定）：\n\n${linkedContents}`
+              );
             }
           }
           // --- 线下模式核心拦截逻辑 ---
@@ -38792,19 +38823,22 @@ ${recentHistoryText}
               chat.settings.linkedWorldBookIds.length > 0
             ) {
               const linkedContents = chat.settings.linkedWorldBookIds
-                .map((bookId) => {
+                .map((bookId, idx) => {
                   const worldBook = (state.worldBooks || []).find(
                     (wb) => wb.id === bookId,
                   );
-
-                  return worldBook && worldBook.content
-                    ? `\n\n## 世界书: ${worldBook.name}\n${stripHtmlAndCode(worldBook.content)}`
-                    : "";
+                  if (!worldBook || !worldBook.content) return "";
+                  const catObj = (state.worldBookCategories || []).find((c) => String(c.id) === String(worldBook.categoryId));
+                  const catLabel = catObj && catObj.name ? `【分类：${catObj.name}】` : "";
+                  return `---------- 【世界书条目 ${idx + 1}：${worldBook.name}${catLabel} 开始】 ----------\n${stripHtmlAndCode(worldBook.content)}\n---------- 【世界书条目 ${idx + 1}：${worldBook.name} 结束】 ----------`;
                 })
                 .filter(Boolean)
-                .join("");
+                .join("\n\n");
               if (linkedContents) {
-                worldBookContent = `\n\n# 核心世界观设定 (必须严格遵守以下所有设定)，里面可能会包含HTML小剧场，在捕获到关键词后输出\n${linkedContents}\n`;
+                worldBookContent = window.formatPromptSection(
+                  "世界书",
+                  `核心世界观设定（必须严格遵守以下所有设定，里面可能会包含HTML小剧场，在捕获到关键词后输出）：\n\n${linkedContents}`
+                );
               }
             }
             let musicContext = "";
@@ -38860,8 +38894,7 @@ ${recentHistoryText}
             const mapPromptObj = await getChatMapPromptBlock(chat);
             const mapPromptBlock = typeof mapPromptObj === "object" ? (mapPromptObj.prompt || "") : (mapPromptObj || "");
             const inventoryPromptBlock = (typeof getChatInventoryPromptBlock === "function") ? getChatInventoryPromptBlock(chat) : "";
-            const dicePromptBlock = `
-# 跑团掷骰与属性指令
+            const dicePromptBlock = window.formatPromptSection("掷骰与属性指令", `
 当前对话框内置骰娘系统，你在发言或叙事文本中直接写出以点号开头的指令即可触发，系统会自动执行并给出掷骰反馈与面板更新：
 1. 自身掷骰与检定：
 - .ra 技能名：进行技能检定，例如 .ra 侦查
@@ -38878,8 +38911,7 @@ ${recentHistoryText}
 - 代对方录入：.st 角色全名 力量 60 敏捷 70 hp 12
 - 增减数值：.st hp-5 或 .st 角色全名 hp-5
 4. 嵌入规则：
-指令可直接自然嵌入在剧情叙事或角色台词中，单次回复支持包含多条指令。
-`;
+指令可直接自然嵌入在剧情叙事或角色台词中，单次回复支持包含多条指令。`);
 
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
@@ -39021,7 +39053,7 @@ ${recentHistoryText}
                 (m) => m.isPeerMember || m.roleType === "peer"
               );
               const membersList = roleplayMembers
-                .map((m) => {
+                .map((m, idx) => {
                   const muteStatus = m.isMuted
                     ? " 【状态：已被禁言，禁止让他发言】"
                     : "";
@@ -39031,13 +39063,15 @@ ${recentHistoryText}
                   if (m.birthday) metaLines.push(`  - **生日**：${m.birthday}`);
                   if (m.gender) metaLines.push(`  - **性别**：${m.gender}${m.genderNote ? " " + m.genderNote : ""}`);
                   const metaBlock = metaLines.length > 0 ? "\n" + metaLines.join("\n") : "";
-                  return `- **姓名**：${m.groupNickname || m.originalName || m.name}（本名：${m.originalName || m.name || m.groupNickname}）${cocStatus}${metaBlock}\n  - **角色人设**：${m.persona || "暂无人设"}${muteStatus}`;
+                  const mDisplayName = m.groupNickname || m.originalName || m.name;
+                  const mOrigName = m.originalName || m.name || m.groupNickname;
+                  return `---------- 【群AI角色 ${idx + 1}：${mDisplayName}（本名：${mOrigName}）开始】 ----------\n- **姓名**：${mDisplayName}（本名：${mOrigName}）${cocStatus}${metaBlock}\n- **角色人设**：${m.persona || "暂无人设"}${muteStatus}\n---------- 【群AI角色 ${idx + 1}：${mDisplayName} 结束】 ----------`;
                 })
                 .join("\n\n");
 
               const statusSenderName = statusMember ? (statusMember.groupNickname || statusMember.originalName || "系统状态") : "系统状态";
               const fullMembersList = statusMember
-                ? `- **姓名**：${statusSenderName}（本名：${statusSenderName}）\n  - **角色人设**：系统专属状态栏广播员，负责在每一轮回复的第一项准确输出状态栏各项指标，不可或缺，绝对禁止遗漏。\n\n` + membersList
+                ? `---------- 【系统状态栏广播员：${statusSenderName} 开始】 ----------\n- **姓名**：${statusSenderName}（本名：${statusSenderName}）\n- **角色人设**：系统专属状态栏广播员，负责在每一轮回复的第一项准确输出状态栏各项指标，不可或缺，绝对禁止遗漏。\n---------- 【系统状态栏广播员：${statusSenderName} 结束】 ----------\n\n` + membersList
                 : membersList;
 
               const myNickname = chat.settings.myNickname || "我";
@@ -39050,11 +39084,10 @@ ${recentHistoryText}
 
               // 2. 如果公告内容不为空，就构建要插入到 Prompt 里的上下文
               if (announcement.trim()) {
-                announcementContext = `
-			# 群公告 (【最高优先级规则，必须严格遵守】)
-			- 以下是本群的群公告，所有角色在接下来的对话中都必须严格遵守其中的规则和设定：
-			- "${announcement}"
-			`;
+                announcementContext = window.formatPromptSection(
+                  "群公告",
+                  `以下是本群的群公告，所有角色在接下来的对话中都必须严格遵守其中的规则和设定：\n"${announcement}"`
+                );
               }
               const isGroupThinkingActive = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : false;
               const isGroupMusicAllowed = ((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false);
@@ -39102,45 +39135,54 @@ ${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ?
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
 ${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}${statusMember ? systemStatusContext : ""}`);
 
-              const groupMembersBlock = window.formatPromptSection("成员", `
-群成员列表及COC角色档案:
+              const groupMembersBlock = window.formatPromptSection("群成员人设", `
+群AI成员列表及COC角色档案（各角色已用分隔符独立隔开）:
+
 ${fullMembersList}`);
 
+              const groupMyPersonaBlock = window.formatPromptSection("我的人设", `
+- 姓名：${chat.settings.myName || myNickname}
+${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- 年龄：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- 生日：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- 性别：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- 角色人设：
+${chat.settings.myPersona || "普通人"}`);
+
+              const groupPeerPlayersPersonaBlock = peerHumanMembers.length > 0
+                ? window.formatPromptSection("同群玩家人设", peerHumanMembers.map((pm, idx) => {
+                    const pmName = pm.groupNickname || pm.originalName || "密友";
+                    const pmCoc = window.getCocPromptStatus && window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)}\n` : "";
+                    const pmAge = pm.age ? `- 年龄：${pm.age}\n` : "";
+                    const pmBirth = pm.birthday ? `- 生日：${pm.birthday}\n` : "";
+                    const pmGen = pm.gender ? `- 性别：${pm.gender}${pm.genderNote ? " " + pm.genderNote : ""}\n` : "";
+                    const pmPersona = pm.secretPersona || pm.persona || "普通人";
+                    return `---------- 【同群真人玩家 ${idx + 1}：${pmName} 开始】 ----------\n- 姓名：${pmName}\n${pmCoc}${pmAge}${pmBirth}${pmGen}- 角色人设：\n${pmPersona}\n---------- 【同群真人玩家 ${idx + 1}：${pmName} 结束】 ----------`;
+                  }).join("\n\n"))
+                : "";
+
+              const combatPromptStr = typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : "";
               const groupContextBlock = window.formatPromptSection("情境", `
-${typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : ""}
-${dicePromptBlock}
-${inventoryPromptBlock}
-
-${moduleChaptersPromptBlock}
-${worldBookContent}
-${mapPromptBlock}
-${announcementContext}
-
-${thoughtChainPromptBlock}
-${summaryContext}
 ${sharedContext}
 ${stickerContext}
 ${linkedMemoryContext}
 ${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n角色好感度系统:\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
-
-角色与人设:
-- 姓名：${chat.settings.myName || myNickname}
-${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- 年龄：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- 生日：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- 性别：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- 角色人设：
-${chat.settings.myPersona || "普通人"}
-${peerHumanMembers.length > 0 ? peerHumanMembers.map((pm) => {
-  const pmName = pm.groupNickname || pm.originalName || "密友";
-  const pmCoc = window.getCocPromptStatus && window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)}\n` : "";
-  const pmAge = pm.age ? `- 年龄：${pm.age}\n` : "";
-  const pmBirth = pm.birthday ? `- 生日：${pm.birthday}\n` : "";
-  const pmGen = pm.gender ? `- 性别：${pm.gender}${pm.genderNote ? " " + pm.genderNote : ""}\n` : "";
-  const pmPersona = pm.secretPersona || pm.persona || "普通人";
-  return `\n- 同群真人玩家姓名：${pmName}\n${pmCoc}${pmAge}${pmBirth}${pmGen}- 角色人设：\n${pmPersona}`;
-}).join("\n") : ""}
 ${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}。\n` : ""}
-
 现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`);
 
-              systemPrompt = [groupFormatBlock, groupCommandBlock, groupMembersBlock, groupContextBlock].filter(Boolean).join("\n");
+              systemPrompt = [
+                groupFormatBlock,
+                groupCommandBlock,
+                groupMembersBlock,
+                groupMyPersonaBlock,
+                groupPeerPlayersPersonaBlock,
+                thoughtChainPromptBlock,
+                worldBookContent,
+                moduleChaptersPromptBlock,
+                mapPromptBlock,
+                dicePromptBlock,
+                inventoryPromptBlock,
+                combatPromptStr,
+                announcementContext,
+                summaryContext,
+                groupContextBlock
+              ].filter(Boolean).join("\n");
 
               messagesPayload = historySlice
                 .map((msg, index) => {
@@ -39658,26 +39700,33 @@ ${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
 ${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 ${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "详细的英文描述词..."}` : ""}`);
 
-              const singleContextBlock = window.formatPromptSection("情境", `
-${dicePromptBlock}
-${inventoryPromptBlock}
+              const singleMyPersonaBlock = window.formatPromptSection("我的人设", `
 对话者档案与COC面板:
 - 姓名: ${chat.settings.myName || "我"}
 ${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）: ${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- 年龄: ${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- 生日: ${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- 性别: ${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- 角色人设:
-${chat.settings.myPersona || "普通人"}
+${chat.settings.myPersona || "普通人"}`);
 
-${worldBookContent}
-${moduleChaptersPromptBlock}
-${mapPromptBlock}
-${thoughtChainPromptBlock}
-${summaryContext}
+              const singleContextBlock = window.formatPromptSection("情境", `
 ${linkedMemoryContext}
 ${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n角色好感度设定:\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
 - 可用表情包:
 ${stickerContext || "无"}
 现在，请根据以上所有规则和下方的对话历史，继续进行对话。`);
 
-              systemPrompt = [singlePersonaBlock, singleFormatBlock, singleCommandBlock, singleContextBlock].filter(Boolean).join("\n");
+              systemPrompt = [
+                singlePersonaBlock,
+                singleMyPersonaBlock,
+                singleFormatBlock,
+                singleCommandBlock,
+                thoughtChainPromptBlock,
+                worldBookContent,
+                moduleChaptersPromptBlock,
+                mapPromptBlock,
+                dicePromptBlock,
+                inventoryPromptBlock,
+                summaryContext,
+                singleContextBlock
+              ].filter(Boolean).join("\n");
               // 构建单人聊天的messagesPayload
               messagesPayload = historySlice
                 .map((msg) => {
@@ -44682,6 +44731,9 @@ ${stickerContext || "无"}
                       const diceMsg = {
                         id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
                         role: "assistant",
+                        type: "dice",
+                        roleType: "dice",
+                        isDiceMessage: true,
                         sender: diceRole.name,
                         senderName: diceRole.name,
                         name: diceRole.name,
@@ -47468,10 +47520,16 @@ ${stickerContext || "无"}
 
           const recallBtn = document.getElementById("recall-message-btn");
           if (recallBtn) {
-            if (chat && chat.isGroup) {
-              recallBtn.style.display = "none";
+            recallBtn.style.display = "";
+            const isPeerChat = Boolean(
+              chat && (
+                (!chat.isGroup && chat.roleType === "peer") ||
+                (chat.isGroup && (chat.isPeerGroup || (Array.isArray(chat.members) && chat.members.some(m => m && (m.isPeerMember || m.roleType === "peer")))))
+              )
+            );
+            if (isPeerChat) {
+              recallBtn.innerHTML = "<span>引</span><span>用</span>";
             } else {
-              recallBtn.style.display = "";
               if (message && message.isPlayerHidden) {
                 recallBtn.innerHTML = "<span>显</span><span>示</span>";
               } else {
@@ -48646,17 +48704,19 @@ ${stickerContext || "无"}
             } catch (e) {}
           }
 
-          const allAvailablePeople = [];
+          const isPeerGroupContext = Boolean(window.__isCreatingPeerGroup || (isContactPickerForAddMember && state.chats[state.activeChatId]?.isPeerGroup));
           // 1. 添加主要角色
           Object.values(state.chats)
             .filter((c) => !c.isGroup)
             .forEach((c) => {
+              const isPeer = c.roleType === "peer" || Boolean(c.peerCode);
+              if (isPeer && !isPeerGroupContext) return;
               allAvailablePeople.push({
                 id: c.id,
                 name: c.settings?.remarkName || c.name || "未命名角色",
                 avatar: c.settings?.aiAvatar || defaultAvatar,
                 isNpc: false, // 标记为非NPC
-                type: "角色",
+                type: isPeer ? "密友" : "角色",
                 chat: c,
                 isSpecialAttention: !!(c.isSpecialAttention || c.settings?.isSpecialAttention || c.isPinned || c.settings?.isPinned)
               });
@@ -53074,6 +53134,17 @@ ${stickerContext || "无"}
         async function handleRecallClick() {
           if (!activeMessageTimestamp || !state.activeChatId) return;
           const chat = state.chats[state.activeChatId];
+          const isPeerChat = Boolean(
+            chat && (
+              (!chat.isGroup && chat.roleType === "peer") ||
+              (chat.isGroup && (chat.isPeerGroup || (Array.isArray(chat.members) && chat.members.some(m => m && (m.isPeerMember || m.roleType === "peer")))))
+            )
+          );
+          if (isPeerChat) {
+            startReplyToMessage();
+            return;
+          }
+
           const message = (chat.history || []).find(
             (m) => m.timestamp === activeMessageTimestamp,
           );
@@ -55040,24 +55111,30 @@ ${stickerContext || "无"}
           const chat = state.chats[targetId];
           if (!chat || !chat.history || chat.history.length === 0) return;
 
-          // 1. 查找玩家最后一条消息的位置
-          let lastUserIndex = -1;
+          const isDiceMsg = (m) => Boolean(m && (m.isDiceMessage || m.type === "dice" || m.roleType === "dice" || (m.htmlContent && m.htmlContent.includes("dice-result"))));
+
+          // 1. 查找玩家最后一条消息或最后一次骰子检定的位置作为锚点
+          let anchorIndex = -1;
           for (let i = chat.history.length - 1; i >= 0; i--) {
-            if (chat.history[i].role === "user") {
-              lastUserIndex = i;
+            const m = chat.history[i];
+            if (m.role === "user" || isDiceMsg(m)) {
+              anchorIndex = i;
               break;
             }
           }
 
-          // 2. 将玩家最后一次回复之后的所有内容全部删除
+          // 2. 将锚点之后的非骰子消息全部删除，保留历史中的骰子判定
           let removedMessages = [];
-          if (lastUserIndex !== -1) {
-            removedMessages = chat.history.slice(lastUserIndex + 1);
-            chat.history = chat.history.slice(0, lastUserIndex + 1);
+          if (anchorIndex !== -1) {
+            const afterMessages = chat.history.slice(anchorIndex + 1);
+            removedMessages = afterMessages.filter((m) => !isDiceMsg(m));
+            const keptAfterMessages = afterMessages.filter((m) => isDiceMsg(m));
+            chat.history = chat.history.slice(0, anchorIndex + 1).concat(keptAfterMessages);
           } else {
-            // 如果玩家尚未发言过，保留首条开场白，清除后续内容
-            removedMessages = chat.history.slice(1);
-            chat.history = chat.history.slice(0, 1);
+            const afterMessages = chat.history.slice(1);
+            removedMessages = afterMessages.filter((m) => !isDiceMsg(m));
+            const keptAfterMessages = afterMessages.filter((m) => isDiceMsg(m));
+            chat.history = [chat.history[0], ...keptAfterMessages];
           }
 
           // 3. 保存更新后的聊天记录到数据库
@@ -76296,6 +76373,9 @@ ${stickerContext || "无"}
                 if (diceRes && diceRes.handled) {
                   const diceMsg = {
                     role: "assistant",
+                    type: "dice",
+                    roleType: "dice",
+                    isDiceMessage: true,
                     sender: diceRole.name,
                     senderName: diceRole.name,
                     senderAvatar: diceRole.avatar,
@@ -78358,86 +78438,114 @@ ${stickerContext || "无"}
                 });
               }
 
-              const worldBookCheckboxesContainer = document.getElementById(
-                "world-book-checkboxes-container",
+              const importSharedWbBtn = document.getElementById("import-shared-wb-btn");
+              const hasSharedWbs = Boolean(
+                chat && chat.isGroup && chat.isPeerGroup &&
+                Array.isArray(chat.settings?.sharedWorldBooks) &&
+                chat.settings.sharedWorldBooks.length > 0
               );
-              worldBookCheckboxesContainer.innerHTML = "";
-              const linkedIds = new Set(chat.settings.linkedWorldBookIds || []);
-
-              // 1. 获取所有分类和世界书
-              const categories = await db.worldBookCategories.toArray();
-              const books = state.worldBooks;
-
-              // 如果存在未分类的书籍，就创建一个“虚拟分类”
-              const hasUncategorized = books.some((book) => !book.categoryId);
-              if (hasUncategorized) {
-                categories.push({ id: "uncategorized", name: "未分类" });
+              if (importSharedWbBtn) {
+                importSharedWbBtn.style.display = hasSharedWbs ? "inline-flex" : "none";
+                importSharedWbBtn.onclick = async () => {
+                  const sharedList = chat.settings.sharedWorldBooks || [];
+                  let count = 0;
+                  for (const book of sharedList) {
+                    if (!book || !book.id) continue;
+                    const exists = (state.worldBooks || []).some(b => String(b.id) === String(book.id));
+                    if (!exists) {
+                      state.worldBooks.push(book);
+                      if (window.db && window.db.worldBooks) {
+                        await window.db.worldBooks.put(book);
+                      }
+                      count++;
+                    }
+                  }
+                  if (typeof window.showCustomAlert === "function") {
+                    await window.showCustomAlert("提示", count > 0 ? `成功导入 ${count} 本世界书` : "所有世界书已在本地");
+                  }
+                  await reloadWorldBookCheckboxes();
+                };
               }
 
-              // 2. 将书籍按分类ID进行分组
-              const booksByCategoryId = books.reduce((acc, book) => {
-                const categoryId = book.categoryId || "uncategorized";
-                if (!acc[categoryId]) {
-                  acc[categoryId] = [];
+              const reloadWorldBookCheckboxes = async () => {
+                const worldBookCheckboxesContainer = document.getElementById(
+                  "world-book-checkboxes-container",
+                );
+                if (!worldBookCheckboxesContainer) return;
+                worldBookCheckboxesContainer.innerHTML = "";
+                const linkedIds = new Set(chat.settings.linkedWorldBookIds || []);
+
+                const categories = await db.worldBookCategories.toArray();
+                const books = state.worldBooks;
+
+                const hasUncategorized = books.some((book) => !book.categoryId);
+                if (hasUncategorized) {
+                  categories.push({ id: "uncategorized", name: "未分类" });
                 }
-                acc[categoryId].push(book);
-                return acc;
-              }, {});
 
-              // 3. 遍历分类，创建带折叠功能的列表
-              categories.forEach((category) => {
-                const booksInCategory = booksByCategoryId[category.id] || [];
-                if (booksInCategory.length > 0) {
-                  const allInCategoryChecked = booksInCategory.every((book) =>
-                    linkedIds.has(book.id),
-                  );
+                const booksByCategoryId = books.reduce((acc, book) => {
+                  const categoryId = book.categoryId || "uncategorized";
+                  if (!acc[categoryId]) {
+                    acc[categoryId] = [];
+                  }
+                  acc[categoryId].push(book);
+                  return acc;
+                }, {});
 
-                  const header = document.createElement("div");
-                  header.className = "wb-category-header";
-                  header.innerHTML = `
+                categories.forEach((category) => {
+                  const booksInCategory = booksByCategoryId[category.id] || [];
+                  if (booksInCategory.length > 0) {
+                    const allInCategoryChecked = booksInCategory.every((book) =>
+                      linkedIds.has(book.id),
+                    );
+
+                    const header = document.createElement("div");
+                    header.className = "wb-category-header";
+                    header.innerHTML = `
 			            <span class="arrow">▼</span>
 			            <input type="checkbox" class="wb-category-checkbox" data-category-id="${
-                    category.id
-                  }" ${allInCategoryChecked ? "checked" : ""}>
+                      category.id
+                    }" ${allInCategoryChecked ? "checked" : ""}>
 			            <span>${category.name}</span>
 			        `;
 
-                  const bookContainer = document.createElement("div");
-                  bookContainer.className = "wb-book-container";
-                  bookContainer.dataset.containerFor = category.id;
+                    const bookContainer = document.createElement("div");
+                    bookContainer.className = "wb-book-container";
+                    bookContainer.dataset.containerFor = category.id;
 
-                  booksInCategory.forEach((book) => {
-                    const isChecked = linkedIds.has(book.id);
-                    const label = document.createElement("label");
-                    // 给书名包一个span，方便CSS做省略号处理
-                    label.innerHTML = `<input type="checkbox" class="wb-book-checkbox" value="${
-                      book.id
-                    }" data-parent-category="${category.id}" ${
-                      isChecked ? "checked" : ""
-                    }> <span class="wb-book-name">${book.name}</span>`;
-                    bookContainer.appendChild(label);
-                  });
+                    booksInCategory.forEach((book) => {
+                      const isChecked = linkedIds.has(book.id);
+                      const label = document.createElement("label");
+                      label.innerHTML = `<input type="checkbox" class="wb-book-checkbox" value="${
+                        book.id
+                      }" data-parent-category="${category.id}" ${
+                        isChecked ? "checked" : ""
+                      }> <span class="wb-book-name">${book.name}</span>`;
+                      bookContainer.appendChild(label);
+                    });
 
-                  // 默认将所有文件夹设置为折叠状态，保持界面整洁
-                  header.classList.add("collapsed");
-                  bookContainer.classList.add("collapsed");
+                    header.classList.add("collapsed");
+                    bookContainer.classList.add("collapsed");
 
-                  header.onclick = (e) => {
-                    if (e.target.matches('input[type="checkbox"]') || e.target.classList.contains("wb-category-checkbox")) {
-                      return;
-                    }
-                    e.preventDefault();
-                    e.stopPropagation();
-                    header.classList.toggle("collapsed");
-                    bookContainer.classList.toggle("collapsed");
-                  };
+                    header.onclick = (e) => {
+                      if (e.target.matches('input[type="checkbox"]') || e.target.classList.contains("wb-category-checkbox")) {
+                        return;
+                      }
+                      e.preventDefault();
+                      e.stopPropagation();
+                      header.classList.toggle("collapsed");
+                      bookContainer.classList.toggle("collapsed");
+                    };
 
-                  worldBookCheckboxesContainer.appendChild(header);
-                  worldBookCheckboxesContainer.appendChild(bookContainer);
-                }
-              });
+                    worldBookCheckboxesContainer.appendChild(header);
+                    worldBookCheckboxesContainer.appendChild(bookContainer);
+                  }
+                });
 
-              updateWorldBookSelectionDisplay(); // 更新顶部的已选数量显示
+                updateWorldBookSelectionDisplay();
+              };
+
+              await reloadWorldBookCheckboxes();
 
               // 加载并更新所有预览相关控件
               const themeRadio = document.querySelector(
@@ -78528,43 +78636,12 @@ ${stickerContext || "无"}
             window.renderGroupMemberSettings = renderGroupMemberSettings;
             const container = document.getElementById("group-members-settings");
             container.innerHTML = "";
-            const chat = state.chats[state.activeChatId];
-            const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? String(window.PeerManager.getOrCreateMyPeerCode()) : "";
             members.forEach((member) => {
               const div = document.createElement("div");
               div.className = "member-editor";
               div.dataset.memberId = member.id;
               div.style.position = "relative";
-
-              const isPeerHuman = Boolean(member.isPeerMember || member.roleType === "peer" || Boolean(member.peerCode));
-              const isAddedByMe = !member.addedByPeerCode || member.addedByPeerCode === "user" || (myCode && String(member.addedByPeerCode) === myCode);
-
-              let privacyBtnHtml = "";
-              if (chat && chat.isGroup && chat.isPeerGroup && !isPeerHuman) {
-                if (isAddedByMe) {
-                  const btnText = member.isPrivate ? "私密" : "公开";
-                  const btnBg = member.isPrivate ? "var(--accent-color)" : "var(--secondary-bg)";
-                  const btnColor = member.isPrivate ? "#ffffff" : "var(--text-secondary)";
-                  privacyBtnHtml = `<button type="button" class="member-privacy-toggle-btn" style="margin-top: 4px; height: 20px; line-height: 18px; padding: 0 6px; font-size: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: ${btnBg}; color: ${btnColor}; cursor: pointer; width: auto !important; flex-shrink: 0;">${btnText}</button>`;
-                } else if (member.isPrivate) {
-                  privacyBtnHtml = `<span style="margin-top: 4px; height: 20px; line-height: 18px; padding: 0 6px; font-size: 10px; border-radius: 4px; background: var(--secondary-bg); color: var(--text-secondary); display: inline-block;">私密</span>`;
-                }
-              }
-
-              // 显示的是 groupNickname
-              div.innerHTML = `<img src="${member.avatar}" alt="${member.groupNickname}"><div class="member-name">${member.groupNickname}</div>${privacyBtnHtml}`;
-              const privBtn = div.querySelector(".member-privacy-toggle-btn");
-              if (privBtn) {
-                privBtn.addEventListener("click", async (e) => {
-                  e.stopPropagation();
-                  member.isPrivate = !member.isPrivate;
-                  await db.chats.put(chat);
-                  if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                    window.PeerManager.syncGroupSettingsToPeers(chat);
-                  }
-                  renderGroupMemberSettings(chat.members);
-                });
-              }
+              div.innerHTML = `<img src="${member.avatar}" alt="${member.groupNickname}"><div class="member-name">${member.groupNickname}</div>`;
               div.addEventListener("click", () => openMemberEditor(member.id));
               container.appendChild(div);
             });
@@ -78704,6 +78781,32 @@ ${stickerContext || "无"}
               // 调用头像框选择器，并告诉它我们正在为'member'类型的成员（也就是NPC）设置头像框
               openFrameSelectorModal("member", memberId);
             });
+
+            const privacyBtn = document.getElementById("member-privacy-btn");
+            if (privacyBtn) {
+              const isPeerGrp = Boolean(chat && chat.isGroup && chat.isPeerGroup && !isPeerHuman);
+              if (isPeerGrp) {
+                privacyBtn.style.display = "inline-flex";
+                const isAddedByMe = !member.addedByPeerCode || member.addedByPeerCode === "user" || (myCode && String(member.addedByPeerCode) === myCode);
+                privacyBtn.textContent = member.isPrivate ? "私密" : "公开";
+                if (isAddedByMe) {
+                  privacyBtn.disabled = false;
+                  privacyBtn.style.cursor = "pointer";
+                  privacyBtn.style.opacity = "1";
+                  privacyBtn.onclick = () => {
+                    member.isPrivate = !member.isPrivate;
+                    privacyBtn.textContent = member.isPrivate ? "私密" : "公开";
+                  };
+                } else {
+                  privacyBtn.disabled = true;
+                  privacyBtn.style.cursor = "default";
+                  privacyBtn.style.opacity = "0.7";
+                  privacyBtn.onclick = null;
+                }
+              } else {
+                privacyBtn.style.display = "none";
+              }
+            }
 
             document
               .getElementById("member-settings-modal")
@@ -79551,6 +79654,21 @@ ${stickerContext || "无"}
               chat.settings.linkedWorldBookIds = Array.from(checkedBooks).map(
                 (cb) => cb.value,
               );
+
+              if (chat.isGroup && chat.isPeerGroup) {
+                const linkedWbObjs = (state.worldBooks || []).filter((b) => chat.settings.linkedWorldBookIds.includes(String(b.id)) || chat.settings.linkedWorldBookIds.includes(b.id));
+                const existingShared = Array.isArray(chat.settings.sharedWorldBooks) ? chat.settings.sharedWorldBooks : [];
+                const mergedShared = [...existingShared];
+                linkedWbObjs.forEach((wb) => {
+                  const idx = mergedShared.findIndex((x) => String(x.id) === String(wb.id));
+                  if (idx >= 0) {
+                    mergedShared[idx] = wb;
+                  } else {
+                    mergedShared.push(wb);
+                  }
+                });
+                chat.settings.sharedWorldBooks = mergedShared;
+              }
 
               // 保存模组绑定配置
               if (window.ModuleManager && typeof window.ModuleManager.saveChatModuleConfig === 'function') {

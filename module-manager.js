@@ -10229,15 +10229,11 @@ ${chaptersDigest}
 
       if (activeChapters.length === 0) return '';
 
-      let promptBlock = '=== 【当前跑团模组活跃章节】 ===\n你现在是跑团守秘人（KP），请根据以下已加载的模组章节内容推进游戏，严格遵守防剧透与判定规范：\n\n';
+      const chapterBlocks = activeChapters.map((c, idx) => {
+        return `---------- 【模组章节 ${idx + 1}：${c.title}】 ----------\n${c.content}\n---------- 【模组章节 ${idx + 1} 结束】 ----------`;
+      }).join('\n\n');
 
-      activeChapters.forEach(c => {
-        promptBlock += `【当前章节：${c.title}】(${c.category})\n${c.content}\n\n`;
-      });
-
-      promptBlock += '=== 【模组带团指令】 ===\n1. 仅围绕上述活跃章节描写，禁止编造后续未加载章节剧情；\n2. 遇到【检定】标记引导玩家掷骰；\n3. 遇到【KP批注】按批注节奏推进。\n==============================';
-
-      return promptBlock;
+      return `==============================\n【跑团模组开始】\n你现在是跑团守秘人，请根据以下已加载的模组章节内容推进游戏，严格遵守防剧透与判定规范：\n\n${chapterBlocks}\n\n---------- 【模组带团指令】 ----------\n1. 仅围绕上述活跃章节描写，禁止编造后续未加载章节剧情；\n2. 遇到【检定】标记引导玩家掷骰；\n3. 遇到【KP批注】按批注节奏推进。\n【跑团模组结束】\n==============================`;
     },
 
     initEventListeners() {

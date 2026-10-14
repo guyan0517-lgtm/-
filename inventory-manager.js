@@ -2881,7 +2881,7 @@ HTML设计与排版核心规范：
     if (playerItems.length === 0 && !hasMemberItems && !hasAiItems && !chat.inventoryEnabled) {
       return "";
     }
-    const lines = ["\n# 【第五大类】物品栏与道具系统"];
+    const lines = ["# 物品栏与道具系统"];
     lines.push("当前场景中各角色持有以下物品清单，AI已知悉，请在互动和鉴定时准确呼应，无需重复向玩家输出物品简介：");
     if (playerItems.length > 0) {
       const myNickname = chat.isGroup ? (chat.settings?.myNickname || "我") : "玩家";
@@ -2937,7 +2937,11 @@ HTML设计与排版核心规范：
     lines.push('```json\n{\n  "type": "apply_item_effect",\n  "target": "实际生效的角色名",\n  "key": "hp",\n  "delta": -2,\n  "approved": true\n}\n```');
     lines.push("若涉及多个属性或技能修改，也可以使用 changes 数组，例如修改 hp、san、mp、力量、克苏鲁神话 等任意属性或技能。系统会自动静默更新该角色的面板数值。");
     lines.push("3. 非数值效果：如果道具的功能是非数值描述，例如抵御一次死亡、消除疲惫等，请直接在剧情对话中进行生动演绎与回应，无需输出 apply_item_effect 指令。");
-    return lines.join("\n");
+    const raw = lines.join("\n");
+    if (typeof window !== "undefined" && typeof window.formatPromptSection === "function") {
+      return window.formatPromptSection("道具", raw);
+    }
+    return raw;
   }
 
   // 检查AI回复并自动解析AI赠送的物品

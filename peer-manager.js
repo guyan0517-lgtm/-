@@ -548,8 +548,8 @@
       if (!this.heartbeatTimer) {
         this.heartbeatTimer = setInterval(() => {
           this.sendOnlinePingToFriends();
-          this.refreshActivePeerHeaderStatus();
-        }, 8000);
+          this.syncAllPeerPresenceUI();
+        }, 4000);
       }
     },
 
@@ -566,7 +566,7 @@
       }
       this.retryOutboxPackets();
       this.sendOnlinePingToFriends();
-      this.refreshActivePeerHeaderStatus();
+      this.syncAllPeerPresenceUI();
     },
 
     getAllKnownPeerCodes: function () {
@@ -590,12 +590,14 @@
     isPeerOnline: function (peerCode) {
       if (!peerCode || !this.peerLastSeen) return false;
       const last = this.peerLastSeen[peerCode] || 0;
-      return last > 0 && Date.now() - last < 26000;
+      return last > 0 && Date.now() - last < 10000;
     },
 
     markPeerOnline: function (peerCode) {
       if (!peerCode) return;
       if (!this.peerLastSeen) this.peerLastSeen = {};
+      if (!this.peerOfflineLockUntil) this.peerOfflineLockUntil = {};
+      this.peerOfflineLockUntil[peerCode] = 0;
       this.peerLastSeen[peerCode] = Date.now();
       if (window.state && window.state.chats) {
         for (const chat of Object.values(window.state.chats)) {
@@ -604,12 +606,14 @@
           }
         }
       }
-      this.refreshActivePeerHeaderStatus();
+      this.syncAllPeerPresenceUI();
     },
 
     markPeerOffline: function (peerCode) {
       if (!peerCode) return;
       if (!this.peerLastSeen) this.peerLastSeen = {};
+      if (!this.peerOfflineLockUntil) this.peerOfflineLockUntil = {};
+      this.peerOfflineLockUntil[peerCode] = Date.now() + 7000;
       this.peerLastSeen[peerCode] = 0;
       if (window.state && window.state.chats) {
         for (const chat of Object.values(window.state.chats)) {
@@ -617,6 +621,37 @@
             chat.status = { text: "离线", isBusy: true };
           }
         }
+      }
+      this.syncAllPeerPresenceUI();
+    },
+
+    syncAllPeerPresenceUI: function () {
+      if (!window.state || !window.state.chats) return;
+      for (const chat of Object.values(window.state.chats)) {
+        if (!chat || chat.isGroup || chat.roleType !== "peer" || !chat.peerCode) continue;
+        const online = this.isPeerOnline(chat.peerCode);
+        const statusText = online ? "在线" : "离线";
+        chat.status = { text: statusText, isBusy: !online };
+
+        const listItems = document.querySelectorAll(`[data-chat-id="${chat.id}"] .last-msg`);
+        listItems.forEach((listItem) => {
+          const curText = listItem.textContent || "";
+          const updatedText = /^\[(在线|离线)\]/.test(curText)
+            ? curText.replace(/^\[(在线|离线)\]/, `[${statusText}]`)
+            : curText
+              ? `[${statusText}] ${curText}`
+              : `[${statusText}]`;
+          if (listItem.textContent !== updatedText) {
+            listItem.textContent = updatedText;
+          }
+        });
+
+        const contactStatusEls = document.querySelectorAll(`[data-peer-status-chat-id="${chat.id}"]`);
+        contactStatusEls.forEach((el) => {
+          if (el.textContent !== statusText) {
+            el.textContent = statusText;
+          }
+        });
       }
       this.refreshActivePeerHeaderStatus();
     },
@@ -663,6 +698,16 @@
       if (this.ws && this.ws.readyState === 1) {
         try {
           this.ws.send(jsonStr);
+        } catch (e) {}
+      }
+      if (
+        payload.type === "offline_ping" &&
+        typeof navigator !== "undefined" &&
+        typeof navigator.sendBeacon === "function"
+      ) {
+        try {
+          const blob = new Blob([jsonStr], { type: "application/json" });
+          navigator.sendBeacon(this.getApiUrl("/api/peer/send"), blob);
         } catch (e) {}
       }
       fetch(this.getApiUrl("/api/peer/send"), {
@@ -996,9 +1041,15 @@
           if (data && data.onlinePeers && typeof data.onlinePeers === "object") {
             for (const [pCode, isOn] of Object.entries(data.onlinePeers)) {
               if (isOn) {
-                this.markPeerOnline(pCode);
+                const lockedUntil = (this.peerOfflineLockUntil && this.peerOfflineLockUntil[pCode]) || 0;
+                if (Date.now() > lockedUntil) {
+                  this.markPeerOnline(pCode);
+                }
+              } else {
+                this.markPeerOffline(pCode);
               }
             }
+            this.syncAllPeerPresenceUI();
           }
           if (data && Array.isArray(data.events) && data.events.length > 0) {
             data.events.forEach((evt) => this.enqueueIncomingEvent(evt));
@@ -1144,6 +1195,12 @@
         await this.receiveTypingStatus(data);
       } else if (data.type === "group_module_image") {
         await this.receiveGroupModuleImage(data);
+      } else if (data.type === "peer_presence") {
+        if (data.status === "offline") {
+          this.markPeerOffline(data.peerCode);
+        } else if (data.status === "online") {
+          this.markPeerOnline(data.peerCode);
+        }
       }
 
       if (data.eventId) {
@@ -1402,7 +1459,10 @@
             if (!byPeerCode.has(c.peerCode)) byPeerCode.set(c.peerCode, []);
             byPeerCode.get(c.peerCode).push(c);
           } else if (c.isGroup) {
-            const hasRealPeer = Array.isArray(c.members) && c.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)));
+            const hasRealPeer =
+              Boolean(c.peerGroupId) ||
+              (Array.isArray(c.members) &&
+                c.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode))));
             if (!hasRealPeer && c.isPeerGroup) {
               c.isPeerGroup = false;
               if (window.state && window.state.chats && window.state.chats[c.id]) {
@@ -1411,9 +1471,12 @@
               try {
                 await window.db.chats.put(c);
               } catch (e) {}
-            } else if (hasRealPeer && c.isPeerGroup && c.peerGroupId) {
-              if (!byGroupId.has(c.peerGroupId)) byGroupId.set(c.peerGroupId, []);
-              byGroupId.get(c.peerGroupId).push(c);
+            } else if (hasRealPeer && (c.isPeerGroup || c.peerGroupId)) {
+              c.isPeerGroup = true;
+              if (c.peerGroupId) {
+                if (!byGroupId.has(c.peerGroupId)) byGroupId.set(c.peerGroupId, []);
+                byGroupId.get(c.peerGroupId).push(c);
+              }
             }
           }
         }
@@ -2002,7 +2065,7 @@
       };
     },
 
-    onPeerGroupCreated: async function (groupChat) {
+    onPeerGroupCreated: async function (groupChat, invitedPeerMembers) {
       if (!groupChat || !groupChat.isGroup) return;
       const myCode = this.getOrCreateMyPeerCode();
       const snap = await this.buildGroupSyncSnapshot(groupChat);
@@ -2011,9 +2074,11 @@
       }
       this.subscribeAllKnownFriendsMqtt();
 
-      const peerTargets = (groupChat.members || []).filter(
-        (m) => (m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode
-      );
+      const peerTargets = Array.isArray(invitedPeerMembers)
+        ? invitedPeerMembers.filter((m) => m && m.peerCode && m.peerCode !== myCode)
+        : (groupChat.members || []).filter(
+            (m) => (m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode
+          );
       const myNick = (groupChat.settings && (groupChat.settings.myNickname || groupChat.settings.myName)) || "我";
       const myAva = await this.compressAvatarForWire(groupChat.settings && groupChat.settings.myAvatar);
 
@@ -2036,7 +2101,7 @@
       }
     },
 
-    onMembersAddedToPeerGroup: async function (groupChat, newlyAddedMembers) {
+    onMembersAddedToPeerGroup: async function (groupChat, newlyAddedMembers, invitedPeerMembers) {
       if (!groupChat || !groupChat.isGroup) return;
       const myCode = this.getOrCreateMyPeerCode();
       const snap = await this.buildGroupSyncSnapshot(groupChat);
@@ -2048,8 +2113,9 @@
       const myNick = (groupChat.settings && (groupChat.settings.myNickname || groupChat.settings.myName)) || "我";
       const myAva = await this.compressAvatarForWire(groupChat.settings && groupChat.settings.myAvatar);
 
-      for (const m of newlyAddedMembers || []) {
-        if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
+      const inviteList = Array.isArray(invitedPeerMembers) ? invitedPeerMembers : (newlyAddedMembers || []);
+      for (const m of inviteList) {
+        if ((m.isPeerMember || m.roleType === "peer" || m.peerCode) && m.peerCode && m.peerCode !== myCode) {
           const invitePayload = {
             type: "group_invite",
             eventId: "ginv_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
@@ -2253,31 +2319,38 @@
       await this.refreshAppChatAndContactsUI();
 
       const smallMyAva = await this.compressAvatarForWire(groupChat.settings.myAvatar);
+      const notifyPeerCodes = new Set();
+      if (invite.fromCode && invite.fromCode !== myCode) {
+        notifyPeerCodes.add(invite.fromCode);
+      }
       for (const m of builtMembers) {
         if (m.peerCode && m.peerCode !== myCode) {
-          const joinPkt = {
-            type: "group_join_accept",
-            eventId: "gjoin_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
-            fromCode: myCode,
-            toCode: m.peerCode,
-            groupId: sharedGroupId,
-            memberProfile: {
-              peerCode: myCode,
-              originalName: groupChat.settings.myNickname || "我",
-              groupNickname: groupChat.settings.myNickname || "我",
-              avatar: smallMyAva,
-              avatarFrame: groupChat.settings.myAvatarFrame || "",
-              age: groupChat.settings.myAge || "",
-              birthday: groupChat.settings.myBirthday || "",
-              gender: groupChat.settings.myGender || "",
-              genderNote: groupChat.settings.myGenderNote || "",
-              cocPanel: this.sanitizeCocPanelForPeerUI(groupChat.settings.myCocPanel),
-              secretPersona: groupChat.settings.myPersona || ""
-            },
-            timestamp: Date.now()
-          };
-          this.dispatchPacketToNetwork(m.peerCode, joinPkt, "/api/peer/send", false);
+          notifyPeerCodes.add(m.peerCode);
         }
+      }
+      for (const targetPeerCode of notifyPeerCodes) {
+        const joinPkt = {
+          type: "group_join_accept",
+          eventId: "gjoin_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+          fromCode: myCode,
+          toCode: targetPeerCode,
+          groupId: sharedGroupId,
+          memberProfile: {
+            peerCode: myCode,
+            originalName: groupChat.settings.myNickname || "我",
+            groupNickname: groupChat.settings.myNickname || "我",
+            avatar: smallMyAva,
+            avatarFrame: groupChat.settings.myAvatarFrame || "",
+            age: groupChat.settings.myAge || "",
+            birthday: groupChat.settings.myBirthday || "",
+            gender: groupChat.settings.myGender || "",
+            genderNote: groupChat.settings.myGenderNote || "",
+            cocPanel: this.sanitizeCocPanelForPeerUI(groupChat.settings.myCocPanel),
+            secretPersona: groupChat.settings.myPersona || ""
+          },
+          timestamp: Date.now()
+        };
+        this.dispatchPacketToNetwork(targetPeerCode, joinPkt, "/api/peer/send", false);
       }
 
       if (remaining.length === 0 && this.getIncomingRequests().length === 0) {
@@ -2304,6 +2377,7 @@
       const groupChat = await this.findPeerGroupChatByIdAsync(data.groupId);
       if (!groupChat) return;
 
+      groupChat.isPeerGroup = true;
       if (!Array.isArray(groupChat.members)) groupChat.members = [];
       let member = groupChat.members.find((m) => m.peerCode === mp.peerCode);
       if (!member) {
@@ -2347,6 +2421,9 @@
       };
       groupChat.history.push(sysMsg);
 
+      if (window.state && window.state.chats) {
+        window.state.chats[groupChat.id] = groupChat;
+      }
       if (window.db && window.db.chats) {
         await window.db.chats.put(groupChat);
       }
@@ -2354,7 +2431,26 @@
         if (typeof window.appendMessage === "function") {
           window.appendMessage(sysMsg, groupChat);
         }
+        if (typeof window.renderGroupMemberSettings === "function") {
+          window.renderGroupMemberSettings(groupChat.members);
+        }
       }
+      this.showPeerNotice(
+        `“${member.groupNickname || "密友"}”已同意加入群聊“${groupChat.name || "群聊"}”`,
+        () => {
+          if (typeof window.openChat === "function") {
+            window.openChat(groupChat.id);
+          }
+        },
+        {
+          title: groupChat.name || "群聊",
+          message: `${member.groupNickname || "密友"} 已加入群聊`,
+          avatar: member.avatar || groupChat.settings?.groupAvatar,
+          chatId: groupChat.id,
+          tag: "peer_gjoin_" + groupChat.id + "_" + mp.peerCode
+        }
+      );
+      await this.syncGroupSettingsToPeers(groupChat);
       await this.refreshAppChatAndContactsUI();
     },
 
@@ -3043,22 +3139,38 @@
       const delSet = new Set(Array.isArray(data.deletedTimestamps) ? data.deletedTimestamps : []);
       const rerollAfterTs = data.rerollAfterTimestamp ? Number(data.rerollAfterTimestamp) : null;
 
+      const beforeLen = chat.history.length;
       chat.history = chat.history.filter((m) => {
         if (!m) return false;
         if (delSet.has(m.timestamp)) return false;
-        if (rerollAfterTs && m.timestamp > rerollAfterTs && m.type !== "summary" && !m.isPeerUserMessage && m.role === "assistant") {
+        if (
+          rerollAfterTs &&
+          m.timestamp > rerollAfterTs &&
+          m.type !== "summary" &&
+          !m.isPeerUserMessage &&
+          !m.isDiceMessage &&
+          m.senderName !== "骰娘" &&
+          m.sender !== "骰娘" &&
+          m.role === "assistant"
+        ) {
           return false;
         }
         return true;
       });
 
-      if (window.db && window.db.chats) {
-        await window.db.chats.put(chat);
-      }
-      if (window.state && String(window.state.activeChatId) === String(chat.id)) {
-        if (typeof window.renderChatInterfaceProxy === "function") {
-          window.renderChatInterfaceProxy(chat.id);
+      if (chat.history.length !== beforeLen) {
+        if (window.state && window.state.chats) {
+          window.state.chats[chat.id] = chat;
         }
+        if (window.db && window.db.chats) {
+          await window.db.chats.put(chat);
+        }
+        if (window.state && String(window.state.activeChatId) === String(chat.id)) {
+          if (typeof window.renderChatInterfaceProxy === "function") {
+            window.renderChatInterfaceProxy(chat.id);
+          }
+        }
+        await this.refreshAppChatAndContactsUI();
       }
       await this.refreshAppChatAndContactsUI();
     },
@@ -3852,8 +3964,9 @@
       const isPeerGroup = Boolean(
         chat &&
         chat.isGroup &&
-        Array.isArray(chat.members) &&
-        chat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))
+        (Boolean(chat.peerGroupId) ||
+          (Array.isArray(chat.members) &&
+            chat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))))
       );
 
       if (chat && chat.isGroup && !isPeerGroup && chat.isPeerGroup) {

@@ -296,6 +296,9 @@ app.post('/api/peer/send', (req, res) => {
     if (fromCode) {
       if (type === 'offline_ping') {
         peerLastPoll.delete(fromCode);
+        if (peerClients.has(fromCode)) {
+          peerClients.delete(fromCode);
+        }
       } else {
         peerLastPoll.set(fromCode, Date.now());
       }
@@ -411,7 +414,7 @@ app.get('/api/peer/poll', (req, res) => {
       const wsSet = peerClients.get(pCode);
       const hasWs = Boolean(wsSet && wsSet.size > 0);
       const lastSeen = peerLastPoll.get(pCode) || 0;
-      onlinePeers[pCode] = Boolean(hasWs || (lastSeen > 0 && now - lastSeen < 12000));
+      onlinePeers[pCode] = Boolean(hasWs || (lastSeen > 0 && now - lastSeen < 9000));
     });
   }
   return res.json({ success: true, events, profile, onlinePeers });
@@ -440,6 +443,7 @@ wss.on('connection', (ws) => {
             peerClients.set(boundCode, new Set());
           }
           peerClients.get(boundCode).add(ws);
+          peerLastPoll.set(boundCode, Date.now());
           if (data.name || data.avatar) {
             peerProfiles.set(boundCode, {
               name: data.name,
@@ -545,6 +549,9 @@ wss.on('connection', (ws) => {
         if (data.fromCode) {
           if (data.type === 'offline_ping') {
             peerLastPoll.delete(data.fromCode);
+            if (peerClients.has(data.fromCode)) {
+              peerClients.delete(data.fromCode);
+            }
           } else {
             peerLastPoll.set(data.fromCode, Date.now());
           }
@@ -578,6 +585,23 @@ wss.on('connection', (ws) => {
       if (peerClients.get(boundCode).size === 0) {
         peerClients.delete(boundCode);
         peerLastPoll.delete(boundCode);
+        const offlineEvt = {
+          type: 'peer_presence',
+          status: 'offline',
+          peerCode: boundCode,
+          timestamp: Date.now()
+        };
+        for (const [otherCode, clientSet] of peerClients.entries()) {
+          if (otherCode !== boundCode) {
+            for (const otherWs of clientSet) {
+              if (otherWs.readyState === 1) {
+                try {
+                  otherWs.send(JSON.stringify(offlineEvt));
+                } catch (e) {}
+              }
+            }
+          }
+        }
       }
     }
   });
