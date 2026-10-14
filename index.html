@@ -22225,23 +22225,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           listEl.innerHTML = "";
-          const localPresets = (await db.thoughtChainPresets.toArray()) || [];
           const mergedMap = new Map();
-          localPresets.forEach((p) => {
-            if (p && p.id) mergedMap.set(String(p.id), p);
-          });
-          if (Array.isArray(chat.settings?.sharedThoughtChains)) {
-            chat.settings.sharedThoughtChains.forEach((sp) => {
-              if (sp && sp.id && !mergedMap.has(String(sp.id))) {
-                mergedMap.set(String(sp.id), sp);
-              }
+          if (isPeerGrp) {
+            if (Array.isArray(chat.settings?.sharedThoughtChains)) {
+              chat.settings.sharedThoughtChains.forEach((sp) => {
+                if (sp && sp.id) {
+                  mergedMap.set(String(sp.id), sp);
+                }
+              });
+            }
+          } else {
+            const localPresets = (await db.thoughtChainPresets.toArray()) || [];
+            localPresets.forEach((p) => {
+              if (p && p.id) mergedMap.set(String(p.id), p);
             });
           }
           const presets = Array.from(mergedMap.values());
 
           let currentPresetName = "无";
           if (chat.thoughtChainId) {
-            const currentPreset = mergedMap.get(String(chat.thoughtChainId)) || (await db.thoughtChainPresets.get(chat.thoughtChainId));
+            const currentPreset = mergedMap.get(String(chat.thoughtChainId)) || (!isPeerGrp ? (await db.thoughtChainPresets.get(chat.thoughtChainId)) : null);
             if (currentPreset) {
               currentPresetName = currentPreset.name;
             }
@@ -22363,6 +22366,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           document.getElementById("thought-chain-bind-modal").classList.remove("visible");
         }
+        window.openThoughtChainBindModal = openThoughtChainBindModal;
 
         function isChatThoughtChainActive(chat) {
           if (!chat || chat.thoughtChainEnabled === false) return false;
@@ -22751,19 +22755,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (type === "module") {
             if (titleEl) titleEl.textContent = "导入模组";
             const localMods = (dbInstance && dbInstance.modules) ? await dbInstance.modules.toArray() : [];
-            const localIdSet = new Set(localMods.map(m => String(m.id)));
             const sharedList = Array.isArray(chat.settings.sharedModules) ? chat.settings.sharedModules : [];
-            const sharedIdSet = new Set(sharedList.filter(sm => sm && sm.module).map(sm => String(sm.module.id)));
-            if (chat.activeModuleId) sharedIdSet.add(String(chat.activeModuleId));
+            const sharedIdSet = new Set(sharedList.filter(sm => sm && sm.module && sm.module.id).map(sm => String(sm.module.id)));
 
             sharedList.forEach(sm => {
               if (!sm || !sm.module || !sm.module.id) return;
               const idStr = String(sm.module.id);
-              const inLocal = localIdSet.has(idStr);
               items.push({
                 id: idStr,
                 name: sm.module.name || "未命名模组",
-                tag: inLocal ? "已同步" : "群聊共享",
+                tag: "已导入群聊",
                 rawShared: sm,
                 rawLocal: localMods.find(m => String(m.id) === idStr) || null
               });
@@ -22772,32 +22773,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             localMods.forEach(m => {
               if (!m || !m.id) return;
               const idStr = String(m.id);
-              if (sharedIdSet.has(idStr) && items.some(x => x.id === idStr)) return;
+              if (items.some(x => x.id === idStr)) return;
               items.push({
                 id: idStr,
                 name: m.name || "未命名模组",
-                tag: sharedIdSet.has(idStr) ? "已同步" : "本地模组",
+                tag: "本地模组",
                 rawShared: null,
                 rawLocal: m
               });
-              if (sharedIdSet.has(idStr)) preCheckedIds.add(idStr);
             });
           } else if (type === "thoughtChain") {
             if (titleEl) titleEl.textContent = "导入思维链";
             const localTcs = (dbInstance && dbInstance.thoughtChainPresets) ? await dbInstance.thoughtChainPresets.toArray() : [];
-            const localIdSet = new Set(localTcs.map(t => String(t.id)));
             const sharedList = Array.isArray(chat.settings.sharedThoughtChains) ? chat.settings.sharedThoughtChains : [];
             const sharedIdSet = new Set(sharedList.filter(t => t && t.id).map(t => String(t.id)));
-            if (chat.thoughtChainId) sharedIdSet.add(String(chat.thoughtChainId));
 
             sharedList.forEach(tc => {
               if (!tc || !tc.id) return;
               const idStr = String(tc.id);
-              const inLocal = localIdSet.has(idStr);
               items.push({
                 id: idStr,
                 name: tc.name || "未命名思维链",
-                tag: inLocal ? "已同步" : "群聊共享",
+                tag: "已导入群聊",
                 rawShared: tc,
                 rawLocal: localTcs.find(t => String(t.id) === idStr) || null
               });
@@ -22810,29 +22807,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               items.push({
                 id: idStr,
                 name: tc.name || "未命名思维链",
-                tag: sharedIdSet.has(idStr) ? "已同步" : "本地预设",
+                tag: "本地预设",
                 rawShared: null,
                 rawLocal: tc
               });
-              if (sharedIdSet.has(idStr)) preCheckedIds.add(idStr);
             });
           } else if (type === "worldbook") {
             if (titleEl) titleEl.textContent = "导入世界书";
             const localWbs = Array.isArray(state.worldBooks) ? state.worldBooks : [];
-            const localIdSet = new Set(localWbs.map(b => String(b.id)));
             const sharedList = Array.isArray(chat.settings.sharedWorldBooks) ? chat.settings.sharedWorldBooks : [];
-            const linkedSet = new Set((chat.settings.linkedWorldBookIds || []).map(String));
-            const sharedIdSet = new Set(sharedList.filter(b => b && b.id).map(b => String(b.id)));
-            linkedSet.forEach(id => sharedIdSet.add(id));
 
             sharedList.forEach(wb => {
               if (!wb || !wb.id) return;
               const idStr = String(wb.id);
-              const inLocal = localIdSet.has(idStr);
               items.push({
                 id: idStr,
                 name: wb.name || "未命名世界书",
-                tag: inLocal ? "已同步" : "群聊共享",
+                tag: "已导入群聊",
                 rawShared: wb,
                 rawLocal: localWbs.find(b => String(b.id) === idStr) || null
               });
@@ -22845,28 +22836,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               items.push({
                 id: idStr,
                 name: wb.name || "未命名世界书",
-                tag: sharedIdSet.has(idStr) ? "已关联" : "本地世界书",
+                tag: "本地世界书",
                 rawShared: null,
                 rawLocal: wb
               });
-              if (sharedIdSet.has(idStr)) preCheckedIds.add(idStr);
             });
           } else if (type === "summaryPreset") {
             if (titleEl) titleEl.textContent = "导入总结预设";
             const localPresets = typeof getSummaryPresets === "function" ? getSummaryPresets() : [];
-            const localIdSet = new Set(localPresets.map(p => String(p.id)));
             if (!chat.settings.summary) chat.settings.summary = {};
             const sharedList = Array.isArray(chat.settings.summary.sharedPresets) ? chat.settings.summary.sharedPresets : [];
-            const sharedIdSet = new Set(sharedList.filter(p => p && p.id).map(p => String(p.id)));
 
             sharedList.forEach(sp => {
               if (!sp || !sp.id) return;
               const idStr = String(sp.id);
-              const inLocal = localIdSet.has(idStr);
               items.push({
                 id: idStr,
                 name: sp.name || "未命名预设",
-                tag: inLocal ? "已同步" : "群聊共享",
+                tag: "已导入群聊",
                 rawShared: sp,
                 rawLocal: localPresets.find(p => String(p.id) === idStr) || null
               });
@@ -22879,11 +22866,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               items.push({
                 id: idStr,
                 name: lp.name || "未命名预设",
-                tag: sharedIdSet.has(idStr) ? "已同步" : "本地预设",
+                tag: "本地预设",
                 rawShared: null,
                 rawLocal: lp
               });
-              if (sharedIdSet.has(idStr)) preCheckedIds.add(idStr);
             });
           }
 
@@ -22930,45 +22916,51 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const selectedItems = items.filter(it => checkedIds.has(it.id));
 
               if (type === "module") {
-                if (!Array.isArray(chat.settings.sharedModules)) chat.settings.sharedModules = [];
+                const newSharedModules = [];
                 for (const it of selectedItems) {
-                  if (it.rawShared && it.rawShared.module && dbInstance) {
-                    try {
-                      if (dbInstance.modules) await dbInstance.modules.put(it.rawShared.module);
-                      if (Array.isArray(it.rawShared.chapters) && dbInstance.moduleChapters) {
-                        for (const ch of it.rawShared.chapters) await dbInstance.moduleChapters.put(ch);
-                      }
-                      if (Array.isArray(it.rawShared.items) && dbInstance.moduleItems) {
-                        for (const mItem of it.rawShared.items) await dbInstance.moduleItems.put(mItem);
-                      }
-                      if (Array.isArray(it.rawShared.locationNav) && dbInstance.moduleLocationNav) {
-                        for (const ln of it.rawShared.locationNav) await dbInstance.moduleLocationNav.put(ln);
-                      }
-                    } catch (e) {}
-                  }
-                  if (it.rawLocal) {
-                    await window.packageAndSyncChatModule(chat, it.rawLocal.id);
+                  if (it.rawLocal && dbInstance) {
+                    const modObj = it.rawLocal;
+                    const chaps = dbInstance.moduleChapters ? await dbInstance.moduleChapters.where("moduleId").equals(modObj.id).toArray() : [];
+                    const mItems = dbInstance.moduleItems ? await dbInstance.moduleItems.where("moduleId").equals(modObj.id).toArray() : [];
+                    const locNav = dbInstance.moduleLocationNav ? await dbInstance.moduleLocationNav.where("moduleId").equals(modObj.id).toArray() : [];
+                    newSharedModules.push({
+                      module: modObj,
+                      chapters: chaps,
+                      items: mItems,
+                      locationNav: locNav
+                    });
+                    if (dbInstance.moduleImages && window.PeerManager && typeof window.PeerManager.syncModuleImagesToPeers === "function") {
+                      try {
+                        const imgs = await dbInstance.moduleImages.where("moduleId").equals(modObj.id).toArray();
+                        if (imgs && imgs.length > 0) {
+                          window.PeerManager.syncModuleImagesToPeers(chat, modObj.id, imgs);
+                        }
+                      } catch (e) {}
+                    }
+                  } else if (it.rawShared && it.rawShared.module) {
+                    newSharedModules.push(it.rawShared);
                   }
                 }
+                chat.settings.sharedModules = newSharedModules;
                 chat.settings.sharedModuleIds = Array.from(checkedIds);
+                if (chat.activeModuleId && !checkedIds.has(String(chat.activeModuleId))) {
+                  chat.activeModuleId = null;
+                }
                 await db.chats.put(chat);
                 if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
                   await window.PeerManager.syncGroupSettingsToPeers(chat);
                 }
                 await renderChatModulePickerList(currentModulePickerFilter);
               } else if (type === "thoughtChain") {
-                if (!Array.isArray(chat.settings.sharedThoughtChains)) chat.settings.sharedThoughtChains = [];
+                const newSharedTcs = [];
                 for (const it of selectedItems) {
                   const tcObj = it.rawLocal || it.rawShared;
                   if (!tcObj) continue;
-                  if (dbInstance && dbInstance.thoughtChainPresets) {
-                    try {
-                      await dbInstance.thoughtChainPresets.put(tcObj);
-                    } catch (e) {}
-                  }
-                  const exIdx = chat.settings.sharedThoughtChains.findIndex(t => String(t.id) === String(tcObj.id));
-                  if (exIdx >= 0) chat.settings.sharedThoughtChains[exIdx] = tcObj;
-                  else chat.settings.sharedThoughtChains.push(tcObj);
+                  newSharedTcs.push(tcObj);
+                }
+                chat.settings.sharedThoughtChains = newSharedTcs;
+                if (chat.thoughtChainId && !checkedIds.has(String(chat.thoughtChainId))) {
+                  chat.thoughtChainId = null;
                 }
                 if (selectedItems.length > 0 && !chat.thoughtChainId) {
                   const firstTc = selectedItems[0].rawLocal || selectedItems[0].rawShared;
@@ -22980,30 +22972,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
                 await openThoughtChainBindModal();
               } else if (type === "worldbook") {
-                if (!Array.isArray(chat.settings.sharedWorldBooks)) chat.settings.sharedWorldBooks = [];
+                const newSharedWbs = [];
                 if (!Array.isArray(chat.settings.linkedWorldBookIds)) chat.settings.linkedWorldBookIds = [];
                 for (const it of selectedItems) {
                   const wbObj = it.rawLocal || it.rawShared;
                   if (!wbObj) continue;
-                  if (!Array.isArray(state.worldBooks)) state.worldBooks = [];
-                  const localIdx = state.worldBooks.findIndex(b => String(b.id) === String(wbObj.id));
-                  if (localIdx === -1) {
-                    state.worldBooks.push(wbObj);
-                  } else {
-                    state.worldBooks[localIdx] = wbObj;
-                  }
-                  if (dbInstance && dbInstance.worldBooks) {
-                    try {
-                      await dbInstance.worldBooks.put(wbObj);
-                    } catch (e) {}
-                  }
-                  const shIdx = chat.settings.sharedWorldBooks.findIndex(b => String(b.id) === String(wbObj.id));
-                  if (shIdx >= 0) chat.settings.sharedWorldBooks[shIdx] = wbObj;
-                  else chat.settings.sharedWorldBooks.push(wbObj);
+                  newSharedWbs.push(wbObj);
                   if (!chat.settings.linkedWorldBookIds.some(id => String(id) === String(wbObj.id))) {
                     chat.settings.linkedWorldBookIds.push(wbObj.id);
                   }
                 }
+                chat.settings.sharedWorldBooks = newSharedWbs;
+                chat.settings.linkedWorldBookIds = chat.settings.linkedWorldBookIds.filter(id => checkedIds.has(String(id)));
                 await db.chats.put(chat);
                 if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
                   await window.PeerManager.syncGroupSettingsToPeers(chat);
@@ -23013,23 +22993,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               } else if (type === "summaryPreset") {
                 if (!chat.settings.summary) chat.settings.summary = {};
-                if (!Array.isArray(chat.settings.summary.sharedPresets)) chat.settings.summary.sharedPresets = [];
-                const localPresets = typeof getSummaryPresets === "function" ? getSummaryPresets() : [];
-                let localChanged = false;
+                const newSharedPresets = [];
                 for (const it of selectedItems) {
                   const spObj = it.rawLocal || it.rawShared;
                   if (!spObj) continue;
-                  if (!localPresets.some(p => String(p.id) === String(spObj.id))) {
-                    localPresets.push(spObj);
-                    localChanged = true;
-                  }
-                  const shIdx = chat.settings.summary.sharedPresets.findIndex(p => String(p.id) === String(spObj.id));
-                  if (shIdx >= 0) chat.settings.summary.sharedPresets[shIdx] = spObj;
-                  else chat.settings.summary.sharedPresets.push(spObj);
+                  newSharedPresets.push(spObj);
                 }
-                if (localChanged && typeof saveSummaryPresets === "function") {
-                  saveSummaryPresets(localPresets);
-                }
+                chat.settings.summary.sharedPresets = newSharedPresets;
                 await db.chats.put(chat);
                 if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
                   await window.PeerManager.syncGroupSettingsToPeers(chat);
@@ -23126,15 +23096,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return;
             }
 
-            let modules = await dbInstance.modules.toArray();
-            if (chat && Array.isArray(chat.settings?.sharedModules)) {
-              const existingModIds = new Set(modules.map(m => String(m.id)));
-              chat.settings.sharedModules.forEach(sm => {
-                if (sm && sm.module && sm.module.id && !existingModIds.has(String(sm.module.id))) {
-                  modules.push(sm.module);
-                  existingModIds.add(String(sm.module.id));
-                }
-              });
+            const isPeerGrp = chat ? window.isPeerGroupChat(chat) : false;
+            let modules = [];
+            if (isPeerGrp) {
+              if (Array.isArray(chat.settings?.sharedModules)) {
+                const seenIds = new Set();
+                chat.settings.sharedModules.forEach(sm => {
+                  if (sm && sm.module && sm.module.id && !seenIds.has(String(sm.module.id))) {
+                    modules.push(sm.module);
+                    seenIds.add(String(sm.module.id));
+                  }
+                });
+              }
+            } else {
+              modules = await dbInstance.modules.toArray();
             }
             modules.sort((a, b) => {
               const orderA = (a.sortOrder !== undefined && a.sortOrder !== null) ? a.sortOrder : ((a.order !== undefined && a.order !== null) ? a.order : 0);
@@ -23159,6 +23134,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (!chapsMap.has(mId)) chapsMap.set(mId, []);
               chapsMap.get(mId).push(c);
             });
+            if (isPeerGrp && Array.isArray(chat.settings?.sharedModules)) {
+              chat.settings.sharedModules.forEach(sm => {
+                if (sm && sm.module && sm.module.id && Array.isArray(sm.chapters)) {
+                  const mId = String(sm.module.id);
+                  if (!chapsMap.has(mId) || chapsMap.get(mId).length === 0) {
+                    chapsMap.set(mId, sm.chapters);
+                  }
+                }
+              });
+            }
 
             const imgsMap = new Map();
             allImages.forEach(img => {
@@ -23174,7 +23159,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             if (modules.length === 0) {
-              listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 40px 10px; font-size: 13px;">暂无模组</div>';
+              listEl.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 40px 10px; font-size: 13px;">${isPeerGrp ? "暂未导入模组，请点击右上角导入按钮" : "暂无模组"}</div>`;
               return;
             }
 
@@ -51711,7 +51696,9 @@ ${stickerContext || "无"}
             const linkedContents = chat.settings.linkedWorldBookIds
               .map((bookId) => {
                 const worldBook = (state.worldBooks || []).find(
-                  (wb) => wb.id === bookId,
+                  (wb) => wb && String(wb.id) === String(bookId),
+                ) || (chat.settings?.sharedWorldBooks || []).find(
+                  (wb) => wb && String(wb.id) === String(bookId),
                 );
                 return worldBook && worldBook.content
                   ? `\n\n## 世界书: ${worldBook.name}\n${worldBook.content}`
@@ -61849,7 +61836,6 @@ ${stickerContext || "无"}
         function renderSummaryPresetsUI() {
           const select = document.getElementById("summary-preset-select");
           if (!select) return;
-          let presets = getSummaryPresets();
           const activeChat = state.activeChatId ? state.chats[state.activeChatId] : null;
           const isPeerGrp = typeof window.isPeerGroupChat === "function"
             ? window.isPeerGroupChat(activeChat)
@@ -61863,34 +61849,40 @@ ${stickerContext || "无"}
               }
             };
           }
-          if (isPeerGrp && Array.isArray(activeChat.settings?.summary?.sharedPresets)) {
-            const existingIds = new Set(presets.map(p => String(p.id)));
-            activeChat.settings.summary.sharedPresets.forEach(sp => {
-              if (sp && sp.id && !existingIds.has(String(sp.id))) {
-                presets.push(sp);
-                existingIds.add(String(sp.id));
-              }
-            });
+          let presets = [];
+          if (isPeerGrp) {
+            if (Array.isArray(activeChat.settings?.summary?.sharedPresets)) {
+              const existingIds = new Set();
+              activeChat.settings.summary.sharedPresets.forEach(sp => {
+                if (sp && sp.id && !existingIds.has(String(sp.id))) {
+                  presets.push(sp);
+                  existingIds.add(String(sp.id));
+                }
+              });
+            }
+          } else {
+            presets = getSummaryPresets();
           }
           const defaultId = getDefaultSummaryPresetId();
-          const sharedActiveId = (activeChat && activeChat.isGroup && activeChat.isPeerGroup)
+          const sharedActiveId = isPeerGrp
             ? (activeChat.settings?.summary?.activePresetId || "")
             : "";
-          const currentVal = sharedActiveId || select.value || defaultId;
+          const currentVal = isPeerGrp ? (sharedActiveId || select.value) : (select.value || defaultId);
           let optionsHtml = '<option value="">选择预设</option>';
           optionsHtml += presets
             .map((p) => {
-              const isDef = p.id === defaultId;
+              const isDef = !isPeerGrp && p.id === defaultId;
               const prefix = isDef ? "默认 · " : "";
-              const isSel = p.id === currentVal;
+              const isSel = String(p.id) === String(currentVal);
               return `<option value="${p.id}" ${isSel ? "selected" : ""}>${prefix}${p.name}</option>`;
             })
             .join("");
           select.innerHTML = optionsHtml;
-          if (currentVal && presets.some((p) => p.id === currentVal)) {
+          if (currentVal && presets.some((p) => String(p.id) === String(currentVal))) {
             select.value = currentVal;
           }
         }
+        window.renderSummaryPresetsUI = renderSummaryPresetsUI;
 
         const selectedSummaryTimestamps = new Set();
         let isSummaryMultiSelecting = false;
@@ -79396,17 +79388,25 @@ ${stickerContext || "无"}
                 const categories = await db.worldBookCategories.toArray();
                 const catIds = new Set(categories.map(c => String(c.id)));
                 const mergedBooksMap = new Map();
-                (state.worldBooks || []).forEach(b => {
-                  if (b && b.id) mergedBooksMap.set(String(b.id), b);
-                });
-                if (Array.isArray(chat.settings?.sharedWorldBooks)) {
-                  chat.settings.sharedWorldBooks.forEach(sb => {
-                    if (sb && sb.id && !mergedBooksMap.has(String(sb.id))) {
-                      mergedBooksMap.set(String(sb.id), sb);
-                    }
+                if (isPeerGrpForWb) {
+                  if (Array.isArray(chat.settings?.sharedWorldBooks)) {
+                    chat.settings.sharedWorldBooks.forEach(sb => {
+                      if (sb && sb.id) {
+                        mergedBooksMap.set(String(sb.id), sb);
+                      }
+                    });
+                  }
+                } else {
+                  (state.worldBooks || []).forEach(b => {
+                    if (b && b.id) mergedBooksMap.set(String(b.id), b);
                   });
                 }
                 const books = Array.from(mergedBooksMap.values());
+
+                if (books.length === 0) {
+                  worldBookCheckboxesContainer.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 14px 10px; font-size: 12px;">${isPeerGrpForWb ? "暂未导入世界书，请点击上方导入按钮" : "暂无世界书"}</div>`;
+                  return;
+                }
 
                 const hasUncategorized = books.some((book) => !book.categoryId || !catIds.has(String(book.categoryId)));
                 if (hasUncategorized) {
@@ -80923,6 +80923,9 @@ ${stickerContext || "无"}
               if (state.chats) {
                 state.chats[chat.id] = chat;
                 state.chats[String(chat.id)] = chat;
+              }
+              if (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
               }
 
               applyScopedCss(
@@ -85842,8 +85845,12 @@ ${stickerContext || "无"}
           const presetSelect = document.getElementById("summary-preset-select");
           if (presetSelect) {
             presetSelect.addEventListener("change", () => {
+              const chat = state.chats[state.activeChatId];
               const presets = getSummaryPresets();
-              const found = presets.find((p) => p.id === presetSelect.value);
+              let found = presets.find((p) => String(p.id) === String(presetSelect.value));
+              if (!found && chat && Array.isArray(chat.settings?.summary?.sharedPresets)) {
+                found = chat.settings.summary.sharedPresets.find((p) => p && String(p.id) === String(presetSelect.value));
+              }
               const promptInput = document.getElementById("summary-prompt-input");
               const countInput = document.getElementById("summary-count-input");
               const maxMemoryInput = document.getElementById("max-memory");
@@ -85851,7 +85858,6 @@ ${stickerContext || "无"}
                 if (promptInput) promptInput.value = found.prompt;
                 if (countInput && found.count !== undefined) countInput.value = found.count;
                 if (maxMemoryInput && found.contextCount !== undefined) maxMemoryInput.value = found.contextCount;
-                const chat = state.chats[state.activeChatId];
                 if (chat && chat.settings) {
                   if (!chat.settings.summary) chat.settings.summary = {};
                   chat.settings.summary.prompt = found.prompt;
@@ -85860,14 +85866,6 @@ ${stickerContext || "无"}
                   if (found.count !== undefined) chat.settings.summary.count = found.count;
                   if (found.contextCount !== undefined) chat.settings.summary.contextCount = found.contextCount;
                   if (found.contextCount !== undefined) chat.settings.maxMemory = found.contextCount;
-                  if (chat.isGroup && chat.isPeerGroup) {
-                    if (!Array.isArray(chat.settings.summary.sharedPresets)) {
-                      chat.settings.summary.sharedPresets = [];
-                    }
-                    const exIdx = chat.settings.summary.sharedPresets.findIndex(p => String(p.id) === String(found.id));
-                    if (exIdx >= 0) chat.settings.summary.sharedPresets[exIdx] = found;
-                    else chat.settings.summary.sharedPresets.push(found);
-                  }
                 }
               }
             });

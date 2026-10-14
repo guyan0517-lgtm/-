@@ -2761,20 +2761,6 @@
 
       if (Array.isArray(data.sharedWorldBooks)) {
         groupChat.settings.sharedWorldBooks = data.sharedWorldBooks;
-        if (window.state && Array.isArray(window.state.worldBooks)) {
-          for (const wb of data.sharedWorldBooks) {
-            if (!wb || !wb.id) continue;
-            const existingWbIdx = window.state.worldBooks.findIndex((b) => String(b.id) === String(wb.id));
-            if (existingWbIdx === -1) {
-              window.state.worldBooks.push(wb);
-              if (window.db && window.db.worldBooks) {
-                try {
-                  await window.db.worldBooks.put(wb);
-                } catch (e) {}
-              }
-            }
-          }
-        }
       }
       if (Array.isArray(data.linkedWorldBookIds)) {
         groupChat.settings.linkedWorldBookIds = data.linkedWorldBookIds;
@@ -2786,7 +2772,6 @@
           for (const sm of data.sharedModules) {
             if (!sm || !sm.module) continue;
             try {
-              if (window.db.modules) await window.db.modules.put(sm.module);
               if (Array.isArray(sm.chapters) && window.db.moduleChapters) {
                 for (const ch of sm.chapters) {
                   await window.db.moduleChapters.put(ch);
@@ -2887,14 +2872,6 @@
 
       if (Array.isArray(data.sharedThoughtChains)) {
         groupChat.settings.sharedThoughtChains = data.sharedThoughtChains;
-        if (window.db && window.db.thoughtChainPresets) {
-          for (const tc of data.sharedThoughtChains) {
-            if (!tc || !tc.id) continue;
-            try {
-              await window.db.thoughtChainPresets.put(tc);
-            } catch (e) {}
-          }
-        }
       }
       if (data.thoughtChainEnabled !== undefined) {
         groupChat.thoughtChainEnabled = data.thoughtChainEnabled;
@@ -2916,6 +2893,23 @@
         }
         if (typeof window.renderGroupMemberSettings === "function") {
           window.renderGroupMemberSettings(groupChat.members);
+        }
+        const modPickerModal = document.getElementById("chat-module-picker-modal");
+        if (modPickerModal && modPickerModal.classList.contains("visible") && typeof window.renderChatModulePickerList === "function") {
+          window.renderChatModulePickerList();
+        }
+        const tcBindModal = document.getElementById("thought-chain-bind-modal");
+        if (tcBindModal && tcBindModal.classList.contains("visible") && typeof window.openThoughtChainBindModal === "function") {
+          window.openThoughtChainBindModal();
+        }
+        const chatSettingsModal = document.getElementById("chat-settings-modal");
+        if (chatSettingsModal && chatSettingsModal.classList.contains("visible")) {
+          if (typeof window.reloadActiveChatWorldBooks === "function") {
+            window.reloadActiveChatWorldBooks();
+          }
+          if (typeof window.renderSummaryPresetsUI === "function") {
+            window.renderSummaryPresetsUI();
+          }
         }
         const sumModal = document.getElementById("summary-viewer-modal");
         if (sumModal && sumModal.classList.contains("visible") && typeof window.openSummaryViewer === "function") {
