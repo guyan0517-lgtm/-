@@ -1273,40 +1273,6 @@
             </div>
           </div>
 
-          <!-- 督促卡片 -->
-          <div class="moe-card">
-            <div class="moe-card-header">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-              <h3>督促</h3>
-            </div>
-            <div class="moe-card-body">
-              <div class="form-group">
-                <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">模式</label>
-                <select id="urging-mode-select" class="moe-input" style="width: 100%; height: 38px; line-height: 38px; font-size: 13px; box-sizing: border-box; padding: 0 10px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
-                  <option value="system">系统</option>
-                  <option value="scold">国粹</option>
-                </select>
-              </div>
-              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
-                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
-                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">地狱</span>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="hell-mode-switch" />
-                    <span class="slider"></span>
-                  </label>
-                </label>
-              </div>
-              <div class="form-group" style="margin-top: 12px;">
-                <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">国粹</label>
-                <textarea id="scold-prompt-input" class="moe-input" rows="4" style="width: 100%; min-height: 90px; resize: vertical; font-size: 12px; line-height: 1.5; padding: 8px 10px; box-sizing: border-box; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);"></textarea>
-              </div>
-              <div class="form-group" style="margin-top: 12px;">
-                <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">地狱</label>
-                <textarea id="hell-prompt-input" class="moe-input" rows="4" style="width: 100%; min-height: 90px; resize: vertical; font-size: 12px; line-height: 1.5; padding: 8px 10px; box-sizing: border-box; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);"></textarea>
-              </div>
-            </div>
-          </div>
-
           <!-- 副 API 卡片 -->
           <div class="moe-card">
             <div class="moe-card-header">
@@ -2003,6 +1969,40 @@
               >
                 🧨 初始化 (清空全部数据)
               </button>
+            </div>
+          </div>
+
+          <!-- 督促卡片 -->
+          <div class="moe-card">
+            <div class="moe-card-header">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              <h3>督促</h3>
+            </div>
+            <div class="moe-card-body">
+              <div class="form-group">
+                <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">模式</label>
+                <select id="urging-mode-select" class="moe-input" style="width: 100%; height: 38px; line-height: 38px; font-size: 13px; box-sizing: border-box; padding: 0 10px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+                  <option value="system">系统</option>
+                  <option value="scold">国粹</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
+                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
+                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">地狱</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="hell-mode-switch" />
+                    <span class="slider"></span>
+                  </label>
+                </label>
+              </div>
+              <div class="form-group" style="margin-top: 12px;">
+                <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">国粹</label>
+                <textarea id="scold-prompt-input" class="moe-input" rows="4" style="width: 100%; min-height: 90px; resize: vertical; font-size: 12px; line-height: 1.5; padding: 8px 10px; box-sizing: border-box; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);"></textarea>
+              </div>
+              <div class="form-group" style="margin-top: 12px;">
+                <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">地狱</label>
+                <textarea id="hell-prompt-input" class="moe-input" rows="4" style="width: 100%; min-height: 90px; resize: vertical; font-size: 12px; line-height: 1.5; padding: 8px 10px; box-sizing: border-box; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);"></textarea>
+              </div>
             </div>
           </div>
 
@@ -7335,6 +7335,7 @@
                   <option value="">选择预设</option>
                 </select>
                 <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+                  <button type="button" id="summary-preset-import-btn" class="summary-preset-btn" style="display: none;">导入</button>
                   <button type="button" id="summary-preset-default-btn" class="summary-preset-btn">默认</button>
                   <button type="button" id="summary-preset-new-btn" class="summary-preset-btn">新建</button>
                   <button type="button" id="summary-preset-save-btn" class="summary-preset-btn">保存</button>
@@ -8090,6 +8091,71 @@
               <button id="block-chat-btn" class="moe-btn-danger">
                 🚫 拉黑对方
               </button>
+            </div>
+          </div>
+
+          <div class="settings-group-card moe-card" id="peer-group-map-icon-card" style="display: none;">
+            <div class="moe-card-header">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              <h3>图标</h3>
+            </div>
+            <div class="moe-card-body">
+              <div class="form-group">
+                <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">效果</label>
+                <select id="peer-group-map-location-effect-select" class="moe-input" style="width: 100%; height: 36px; line-height: 36px; font-size: 13px;">
+                  <option value="pin">圆头针</option>
+                  <option value="glow">闪烁</option>
+                  <option value="custom">自定义</option>
+                </select>
+
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">颜色</span>
+                    <div style="position: relative; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border-color); overflow: hidden; background: var(--secondary-bg); cursor: pointer;">
+                      <div id="peer-group-map-location-color-preview" style="width: 100%; height: 100%; background: #E53E3E;"></div>
+                      <input type="color" id="peer-group-map-location-color-input" value="#E53E3E" style="position: absolute; top: -10px; left: -10px; width: 50px; height: 50px; opacity: 0; cursor: pointer;" />
+                    </div>
+                  </div>
+
+                  <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 110px;">
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">频率</span>
+                    <input type="range" id="peer-group-map-location-glow-speed" min="0.4" max="3.0" step="0.1" value="1.2" class="moe-slider" style="flex: 1;" />
+                    <span id="peer-group-map-location-glow-speed-val" style="font-size: 11px; color: var(--text-secondary); min-width: 24px;">1.2s</span>
+                  </div>
+
+                  <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 110px;">
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">亮度</span>
+                    <input type="range" id="peer-group-map-location-glow-brightness" min="0.2" max="1.0" step="0.05" value="0.8" class="moe-slider" style="flex: 1;" />
+                    <span id="peer-group-map-location-glow-brightness-val" style="font-size: 11px; color: var(--text-secondary); min-width: 24px;">0.8</span>
+                  </div>
+                </div>
+
+                <div id="peer-group-map-location-custom-icon-section" style="margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div id="peer-group-map-location-custom-icon-preview" style="width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--card-bg); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+                    </div>
+                    <span style="font-size: 12px; color: var(--text-primary); font-weight: 500;">图标</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; color: var(--text-secondary); user-select: none;">
+                      <input type="checkbox" id="peer-group-map-location-custom-glow" style="accent-color: var(--accent-color); width: 14px; height: 14px; margin: 0; flex-shrink: 0;" />
+                      <span>发光</span>
+                    </label>
+                    <input type="file" id="peer-group-map-location-custom-icon-file" accept="image/png,image/gif,image/jpeg,image/webp,image/svg+xml" style="display: none;" />
+                    <button type="button" class="moe-btn-small" id="peer-group-map-location-import-icon-btn" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">导入</button>
+                    <button type="button" class="moe-btn-small" id="peer-group-map-location-clear-icon-btn" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: none; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">清除</button>
+                  </div>
+                </div>
+
+                <div id="peer-group-map-location-custom-scale-section" style="margin-top: 6px; padding: 6px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                  <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500; flex-shrink: 0;">缩放</span>
+                  <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                    <input type="range" id="peer-group-map-location-custom-scale" min="0.5" max="4.0" step="0.1" value="2.0" class="moe-slider" style="flex: 1;" />
+                    <span id="peer-group-map-location-custom-scale-val" style="font-size: 11px; color: var(--text-secondary); min-width: 28px;">2.0x</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -9709,7 +9775,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">当前配置思维链</div>
             <div id="tc-current-bound-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">无</div>
           </div>
-          <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">选择思维链预设</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">选择思维链预设</span>
+            <button type="button" id="import-shared-tc-btn" class="moe-btn-mini" style="display: none; height: 26px; padding: 0 8px; font-size: 11px; white-space: nowrap; flex-shrink: 0;">导入</button>
+          </div>
           <div id="tc-preset-select-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
         </div>
         <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
@@ -9902,8 +9971,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     <!-- 聊天模组选择弹窗 -->
     <div id="chat-module-picker-modal" class="modal">
       <div class="modal-content" style="max-width: 440px; width: 92%; height: 80vh; max-height: 80vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); box-sizing: border-box;">
-        <div class="modal-header" style="display: flex; justify-content: center; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+        <div class="modal-header" style="display: flex; justify-content: center; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); position: relative;">
           <span style="font-weight: 600; font-size: 16px; color: var(--text-primary);">模组选择</span>
+          <button type="button" id="import-shared-module-btn" class="moe-btn-mini" style="display: none; position: absolute; right: 0; height: 26px; padding: 0 8px; font-size: 11px; white-space: nowrap; flex-shrink: 0;">导入</button>
         </div>
         
         <!-- 筛选分类行 -->
@@ -9922,6 +9992,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
           <button type="button" class="chat-mod-footer-btn secondary" id="chat-module-picker-cancel-btn">关闭</button>
           <button type="button" class="chat-mod-footer-btn primary" id="chat-module-picker-confirm-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 联机群聊通用资源导入弹窗 -->
+    <div id="shared-resource-import-modal" class="modal">
+      <div class="modal-content" style="max-width: 400px; width: 90%; height: auto; max-height: 78vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); box-sizing: border-box;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <span id="shared-resource-import-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">导入</span>
+          <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+            <button type="button" id="shared-resource-select-all-btn" class="summary-preset-btn" style="font-size: 11px; padding: 2px 8px;">全选</button>
+            <button type="button" id="shared-resource-clear-all-btn" class="summary-preset-btn" style="font-size: 11px; padding: 2px 8px;">清空</button>
+          </div>
+        </div>
+        <div class="modal-body" id="shared-resource-import-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 2px;"></div>
+        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+          <button type="button" class="chat-mod-footer-btn secondary" id="shared-resource-cancel-btn">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="shared-resource-confirm-btn">保存</button>
         </div>
       </div>
     </div>
@@ -22118,22 +22206,47 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const masterSwitch = document.getElementById("tc-enable-master-switch");
           const currentNameEl = document.getElementById("tc-current-bound-name");
           const listEl = document.getElementById("tc-preset-select-list");
+          const importTcBtn = document.getElementById("import-shared-tc-btn");
+
+          const isPeerGrp = typeof window.isPeerGroupChat === "function"
+            ? window.isPeerGroupChat(chat)
+            : Boolean(chat.isGroup && chat.isPeerGroup);
+          if (importTcBtn) {
+            importTcBtn.style.display = isPeerGrp ? "inline-flex" : "none";
+            importTcBtn.onclick = () => {
+              if (typeof window.openSharedResourceImportModal === "function") {
+                window.openSharedResourceImportModal("thoughtChain");
+              }
+            };
+          }
 
           if (masterSwitch) {
             masterSwitch.checked = chat.thoughtChainEnabled !== false;
           }
 
+          listEl.innerHTML = "";
+          const localPresets = (await db.thoughtChainPresets.toArray()) || [];
+          const mergedMap = new Map();
+          localPresets.forEach((p) => {
+            if (p && p.id) mergedMap.set(String(p.id), p);
+          });
+          if (Array.isArray(chat.settings?.sharedThoughtChains)) {
+            chat.settings.sharedThoughtChains.forEach((sp) => {
+              if (sp && sp.id && !mergedMap.has(String(sp.id))) {
+                mergedMap.set(String(sp.id), sp);
+              }
+            });
+          }
+          const presets = Array.from(mergedMap.values());
+
           let currentPresetName = "无";
           if (chat.thoughtChainId) {
-            const currentPreset = await db.thoughtChainPresets.get(chat.thoughtChainId);
+            const currentPreset = mergedMap.get(String(chat.thoughtChainId)) || (await db.thoughtChainPresets.get(chat.thoughtChainId));
             if (currentPreset) {
               currentPresetName = currentPreset.name;
             }
           }
           currentNameEl.textContent = currentPresetName;
-
-          listEl.innerHTML = "";
-          const presets = (await db.thoughtChainPresets.toArray()) || [];
 
           selectedThoughtChainBindId = chat.thoughtChainId || null;
           let selectedCocEnable = chat.thoughtChainEnableCoc !== false;
@@ -22158,10 +22271,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           presets.forEach((preset) => {
             const item = document.createElement("div");
-            const isChecked = selectedThoughtChainBindId === preset.id;
+            const isChecked = String(selectedThoughtChainBindId) === String(preset.id);
             item.className = `tc-bind-card ${isChecked ? "selected" : ""}`;
-
-            const hasCoc = preset.cocContent && preset.cocContent.trim().length > 0;
 
             item.innerHTML = `
               <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -22197,7 +22308,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let chat = state.chats[state.activeChatId];
           if (!chat) return;
 
-          // 若 IndexedDB 中有更新的历史记录，先进行合并，确保任何新增消息绝不丢失
           if (typeof db !== "undefined" && db.chats) {
             try {
               const dbChat = await db.chats.get(chat.id);
@@ -22221,10 +22331,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             chat.thoughtChainEnableCoc = true;
           }
 
+          const isPeerGrp = typeof window.isPeerGroupChat === "function"
+            ? window.isPeerGroupChat(chat)
+            : Boolean(chat.isGroup && chat.isPeerGroup);
+          if (isPeerGrp && selectedThoughtChainBindId) {
+            if (!chat.settings) chat.settings = {};
+            if (!Array.isArray(chat.settings.sharedThoughtChains)) {
+              chat.settings.sharedThoughtChains = [];
+            }
+            let foundTc = null;
+            try {
+              foundTc = await db.thoughtChainPresets.get(selectedThoughtChainBindId);
+            } catch (e) {}
+            if (!foundTc && Array.isArray(chat.settings.sharedThoughtChains)) {
+              foundTc = chat.settings.sharedThoughtChains.find(t => String(t.id) === String(selectedThoughtChainBindId));
+            }
+            if (foundTc) {
+              const exIdx = chat.settings.sharedThoughtChains.findIndex(t => String(t.id) === String(foundTc.id));
+              if (exIdx >= 0) chat.settings.sharedThoughtChains[exIdx] = foundTc;
+              else chat.settings.sharedThoughtChains.push(foundTc);
+            }
+          }
+
           await db.chats.put(chat);
           if (state.chats) {
             state.chats[chat.id] = chat;
             state.chats[String(chat.id)] = chat;
+          }
+          if (isPeerGrp && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
           }
           document.getElementById("thought-chain-bind-modal").classList.remove("visible");
         }
@@ -22290,6 +22425,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               try {
                 preset = await db.thoughtChainPresets.get(presetId);
               } catch (e) {}
+              if (!preset && Array.isArray(chat.settings?.sharedThoughtChains)) {
+                preset = chat.settings.sharedThoughtChains.find(p => String(p.id) === String(presetId));
+              }
             }
             let block = "---------- 【思维链填写规范与顶级字段代码定义】 ----------\n" +
               "思维链代码结构与全局唯一性规则：\n" +
@@ -22342,9 +22480,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const allMods = await dbInstance.modules.toArray();
               mod = allMods.find(m => String(m.id) === String(chat.activeModuleId));
             }
+            let sharedModEntry = null;
+            if (Array.isArray(chat.settings?.sharedModules)) {
+              sharedModEntry = chat.settings.sharedModules.find(sm => sm && sm.module && String(sm.module.id) === String(chat.activeModuleId));
+              if (!mod && sharedModEntry) {
+                mod = sharedModEntry.module;
+              }
+            }
             if (!mod) return "";
 
-            const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
+            let allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
+            if (allChaps.length === 0 && sharedModEntry && Array.isArray(sharedModEntry.chapters)) {
+              allChaps = [...sharedModEntry.chapters];
+            }
             allChaps.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
             let block = `---------- 【模组保密总则】 ----------\n` +
@@ -22522,6 +22670,384 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         let currentModulePickerFilter = 'all';
         let currentViewingModuleId = null;
 
+        window.isPeerGroupChat = function(chat) {
+          if (!chat || !chat.isGroup) return false;
+          const isPg = Boolean(
+            chat.isPeerGroup ||
+            chat.peerGroupId ||
+            (Array.isArray(chat.members) && chat.members.some(m => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))) ||
+            (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)
+          );
+          if (isPg && !chat.isPeerGroup) {
+            chat.isPeerGroup = true;
+          }
+          return isPg;
+        };
+
+        window.packageAndSyncChatModule = async function(chat, modId) {
+          if (!chat) return;
+          const isPeerGrp = window.isPeerGroupChat(chat);
+          if (!isPeerGrp) return;
+          const targetModId = modId !== undefined ? modId : chat.activeModuleId;
+          if (targetModId) {
+            try {
+              const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+              if (dbInstance && dbInstance.modules) {
+                let modObj = await dbInstance.modules.get(targetModId);
+                if (!modObj) {
+                  const allM = await dbInstance.modules.toArray();
+                  modObj = allM.find(m => String(m.id) === String(targetModId));
+                }
+                if (modObj) {
+                  const chaps = dbInstance.moduleChapters ? await dbInstance.moduleChapters.where("moduleId").equals(modObj.id).toArray() : [];
+                  const items = dbInstance.moduleItems ? await dbInstance.moduleItems.where("moduleId").equals(modObj.id).toArray() : [];
+                  const locNav = dbInstance.moduleLocationNav ? await dbInstance.moduleLocationNav.where("moduleId").equals(modObj.id).toArray() : [];
+                  if (!chat.settings) chat.settings = {};
+                  if (!Array.isArray(chat.settings.sharedModules)) chat.settings.sharedModules = [];
+                  const entry = {
+                    module: modObj,
+                    chapters: chaps,
+                    items: items,
+                    locationNav: locNav
+                  };
+                  const exIdx = chat.settings.sharedModules.findIndex(sm => sm && sm.module && String(sm.module.id) === String(modObj.id));
+                  if (exIdx >= 0) chat.settings.sharedModules[exIdx] = entry;
+                  else chat.settings.sharedModules.push(entry);
+
+                  if (dbInstance.moduleImages && window.PeerManager && typeof window.PeerManager.syncModuleImagesToPeers === "function") {
+                    const imgs = await dbInstance.moduleImages.where("moduleId").equals(modObj.id).toArray();
+                    if (imgs && imgs.length > 0) {
+                      window.PeerManager.syncModuleImagesToPeers(chat, modObj.id, imgs);
+                    }
+                  }
+                }
+              }
+            } catch (e) {}
+          }
+          if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            await window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
+        };
+
+        window.openSharedResourceImportModal = async function(type) {
+          if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+          if (!chat.settings) chat.settings = {};
+
+          const modal = document.getElementById("shared-resource-import-modal");
+          const titleEl = document.getElementById("shared-resource-import-title");
+          const listEl = document.getElementById("shared-resource-import-list");
+          const selectAllBtn = document.getElementById("shared-resource-select-all-btn");
+          const clearAllBtn = document.getElementById("shared-resource-clear-all-btn");
+          const cancelBtn = document.getElementById("shared-resource-cancel-btn");
+          const confirmBtn = document.getElementById("shared-resource-confirm-btn");
+          if (!modal || !listEl) return;
+
+          const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+          const items = [];
+          const preCheckedIds = new Set();
+
+          if (type === "module") {
+            if (titleEl) titleEl.textContent = "导入模组";
+            const localMods = (dbInstance && dbInstance.modules) ? await dbInstance.modules.toArray() : [];
+            const localIdSet = new Set(localMods.map(m => String(m.id)));
+            const sharedList = Array.isArray(chat.settings.sharedModules) ? chat.settings.sharedModules : [];
+            const sharedIdSet = new Set(sharedList.filter(sm => sm && sm.module).map(sm => String(sm.module.id)));
+            if (chat.activeModuleId) sharedIdSet.add(String(chat.activeModuleId));
+
+            sharedList.forEach(sm => {
+              if (!sm || !sm.module || !sm.module.id) return;
+              const idStr = String(sm.module.id);
+              const inLocal = localIdSet.has(idStr);
+              items.push({
+                id: idStr,
+                name: sm.module.name || "未命名模组",
+                tag: inLocal ? "已同步" : "群聊共享",
+                rawShared: sm,
+                rawLocal: localMods.find(m => String(m.id) === idStr) || null
+              });
+              preCheckedIds.add(idStr);
+            });
+            localMods.forEach(m => {
+              if (!m || !m.id) return;
+              const idStr = String(m.id);
+              if (sharedIdSet.has(idStr) && items.some(x => x.id === idStr)) return;
+              items.push({
+                id: idStr,
+                name: m.name || "未命名模组",
+                tag: sharedIdSet.has(idStr) ? "已同步" : "本地模组",
+                rawShared: null,
+                rawLocal: m
+              });
+              if (sharedIdSet.has(idStr)) preCheckedIds.add(idStr);
+            });
+          } else if (type === "thoughtChain") {
+            if (titleEl) titleEl.textContent = "导入思维链";
+            const localTcs = (dbInstance && dbInstance.thoughtChainPresets) ? await dbInstance.thoughtChainPresets.toArray() : [];
+            const localIdSet = new Set(localTcs.map(t => String(t.id)));
+            const sharedList = Array.isArray(chat.settings.sharedThoughtChains) ? chat.settings.sharedThoughtChains : [];
+            const sharedIdSet = new Set(sharedList.filter(t => t && t.id).map(t => String(t.id)));
+            if (chat.thoughtChainId) sharedIdSet.add(String(chat.thoughtChainId));
+
+            sharedList.forEach(tc => {
+              if (!tc || !tc.id) return;
+              const idStr = String(tc.id);
+              const inLocal = localIdSet.has(idStr);
+              items.push({
+                id: idStr,
+                name: tc.name || "未命名思维链",
+                tag: inLocal ? "已同步" : "群聊共享",
+                rawShared: tc,
+                rawLocal: localTcs.find(t => String(t.id) === idStr) || null
+              });
+              preCheckedIds.add(idStr);
+            });
+            localTcs.forEach(tc => {
+              if (!tc || !tc.id) return;
+              const idStr = String(tc.id);
+              if (items.some(x => x.id === idStr)) return;
+              items.push({
+                id: idStr,
+                name: tc.name || "未命名思维链",
+                tag: sharedIdSet.has(idStr) ? "已同步" : "本地预设",
+                rawShared: null,
+                rawLocal: tc
+              });
+              if (sharedIdSet.has(idStr)) preCheckedIds.add(idStr);
+            });
+          } else if (type === "worldbook") {
+            if (titleEl) titleEl.textContent = "导入世界书";
+            const localWbs = Array.isArray(state.worldBooks) ? state.worldBooks : [];
+            const localIdSet = new Set(localWbs.map(b => String(b.id)));
+            const sharedList = Array.isArray(chat.settings.sharedWorldBooks) ? chat.settings.sharedWorldBooks : [];
+            const linkedSet = new Set((chat.settings.linkedWorldBookIds || []).map(String));
+            const sharedIdSet = new Set(sharedList.filter(b => b && b.id).map(b => String(b.id)));
+            linkedSet.forEach(id => sharedIdSet.add(id));
+
+            sharedList.forEach(wb => {
+              if (!wb || !wb.id) return;
+              const idStr = String(wb.id);
+              const inLocal = localIdSet.has(idStr);
+              items.push({
+                id: idStr,
+                name: wb.name || "未命名世界书",
+                tag: inLocal ? "已同步" : "群聊共享",
+                rawShared: wb,
+                rawLocal: localWbs.find(b => String(b.id) === idStr) || null
+              });
+              preCheckedIds.add(idStr);
+            });
+            localWbs.forEach(wb => {
+              if (!wb || !wb.id) return;
+              const idStr = String(wb.id);
+              if (items.some(x => x.id === idStr)) return;
+              items.push({
+                id: idStr,
+                name: wb.name || "未命名世界书",
+                tag: sharedIdSet.has(idStr) ? "已关联" : "本地世界书",
+                rawShared: null,
+                rawLocal: wb
+              });
+              if (sharedIdSet.has(idStr)) preCheckedIds.add(idStr);
+            });
+          } else if (type === "summaryPreset") {
+            if (titleEl) titleEl.textContent = "导入总结预设";
+            const localPresets = typeof getSummaryPresets === "function" ? getSummaryPresets() : [];
+            const localIdSet = new Set(localPresets.map(p => String(p.id)));
+            if (!chat.settings.summary) chat.settings.summary = {};
+            const sharedList = Array.isArray(chat.settings.summary.sharedPresets) ? chat.settings.summary.sharedPresets : [];
+            const sharedIdSet = new Set(sharedList.filter(p => p && p.id).map(p => String(p.id)));
+
+            sharedList.forEach(sp => {
+              if (!sp || !sp.id) return;
+              const idStr = String(sp.id);
+              const inLocal = localIdSet.has(idStr);
+              items.push({
+                id: idStr,
+                name: sp.name || "未命名预设",
+                tag: inLocal ? "已同步" : "群聊共享",
+                rawShared: sp,
+                rawLocal: localPresets.find(p => String(p.id) === idStr) || null
+              });
+              preCheckedIds.add(idStr);
+            });
+            localPresets.forEach(lp => {
+              if (!lp || !lp.id) return;
+              const idStr = String(lp.id);
+              if (items.some(x => x.id === idStr)) return;
+              items.push({
+                id: idStr,
+                name: lp.name || "未命名预设",
+                tag: sharedIdSet.has(idStr) ? "已同步" : "本地预设",
+                rawShared: null,
+                rawLocal: lp
+              });
+              if (sharedIdSet.has(idStr)) preCheckedIds.add(idStr);
+            });
+          }
+
+          listEl.innerHTML = "";
+          if (items.length === 0) {
+            listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 30px 10px; font-size: 13px;">暂无可导入条目</div>';
+          } else {
+            items.forEach(item => {
+              const row = document.createElement("label");
+              row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; box-sizing: border-box;";
+              const isChecked = preCheckedIds.has(item.id);
+              row.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+                  <input type="checkbox" class="shared-resource-import-cb" value="${item.id}" ${isChecked ? "checked" : ""} style="width: 17px; height: 17px; margin: 0; flex-shrink: 0; accent-color: var(--accent-color); cursor: pointer;" />
+                  <span style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${item.name}</span>
+                </div>
+                <span style="font-size: 11px; color: var(--text-secondary); background: var(--card-bg); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border-color); flex-shrink: 0;">${item.tag}</span>
+              `;
+              listEl.appendChild(row);
+            });
+          }
+
+          if (selectAllBtn) {
+            selectAllBtn.onclick = () => {
+              listEl.querySelectorAll(".shared-resource-import-cb").forEach(cb => { cb.checked = true; });
+            };
+          }
+          if (clearAllBtn) {
+            clearAllBtn.onclick = () => {
+              listEl.querySelectorAll(".shared-resource-import-cb").forEach(cb => { cb.checked = false; });
+            };
+          }
+          if (cancelBtn) {
+            cancelBtn.onclick = () => {
+              modal.classList.remove("visible");
+              modal.style.display = "none";
+            };
+          }
+          if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+              const checkedIds = new Set(
+                Array.from(listEl.querySelectorAll(".shared-resource-import-cb:checked")).map(cb => String(cb.value))
+              );
+              const selectedItems = items.filter(it => checkedIds.has(it.id));
+
+              if (type === "module") {
+                if (!Array.isArray(chat.settings.sharedModules)) chat.settings.sharedModules = [];
+                for (const it of selectedItems) {
+                  if (it.rawShared && it.rawShared.module && dbInstance) {
+                    try {
+                      if (dbInstance.modules) await dbInstance.modules.put(it.rawShared.module);
+                      if (Array.isArray(it.rawShared.chapters) && dbInstance.moduleChapters) {
+                        for (const ch of it.rawShared.chapters) await dbInstance.moduleChapters.put(ch);
+                      }
+                      if (Array.isArray(it.rawShared.items) && dbInstance.moduleItems) {
+                        for (const mItem of it.rawShared.items) await dbInstance.moduleItems.put(mItem);
+                      }
+                      if (Array.isArray(it.rawShared.locationNav) && dbInstance.moduleLocationNav) {
+                        for (const ln of it.rawShared.locationNav) await dbInstance.moduleLocationNav.put(ln);
+                      }
+                    } catch (e) {}
+                  }
+                  if (it.rawLocal) {
+                    await window.packageAndSyncChatModule(chat, it.rawLocal.id);
+                  }
+                }
+                chat.settings.sharedModuleIds = Array.from(checkedIds);
+                await db.chats.put(chat);
+                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  await window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+                await renderChatModulePickerList(currentModulePickerFilter);
+              } else if (type === "thoughtChain") {
+                if (!Array.isArray(chat.settings.sharedThoughtChains)) chat.settings.sharedThoughtChains = [];
+                for (const it of selectedItems) {
+                  const tcObj = it.rawLocal || it.rawShared;
+                  if (!tcObj) continue;
+                  if (dbInstance && dbInstance.thoughtChainPresets) {
+                    try {
+                      await dbInstance.thoughtChainPresets.put(tcObj);
+                    } catch (e) {}
+                  }
+                  const exIdx = chat.settings.sharedThoughtChains.findIndex(t => String(t.id) === String(tcObj.id));
+                  if (exIdx >= 0) chat.settings.sharedThoughtChains[exIdx] = tcObj;
+                  else chat.settings.sharedThoughtChains.push(tcObj);
+                }
+                if (selectedItems.length > 0 && !chat.thoughtChainId) {
+                  const firstTc = selectedItems[0].rawLocal || selectedItems[0].rawShared;
+                  if (firstTc) chat.thoughtChainId = firstTc.id;
+                }
+                await db.chats.put(chat);
+                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  await window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+                await openThoughtChainBindModal();
+              } else if (type === "worldbook") {
+                if (!Array.isArray(chat.settings.sharedWorldBooks)) chat.settings.sharedWorldBooks = [];
+                if (!Array.isArray(chat.settings.linkedWorldBookIds)) chat.settings.linkedWorldBookIds = [];
+                for (const it of selectedItems) {
+                  const wbObj = it.rawLocal || it.rawShared;
+                  if (!wbObj) continue;
+                  if (!Array.isArray(state.worldBooks)) state.worldBooks = [];
+                  const localIdx = state.worldBooks.findIndex(b => String(b.id) === String(wbObj.id));
+                  if (localIdx === -1) {
+                    state.worldBooks.push(wbObj);
+                  } else {
+                    state.worldBooks[localIdx] = wbObj;
+                  }
+                  if (dbInstance && dbInstance.worldBooks) {
+                    try {
+                      await dbInstance.worldBooks.put(wbObj);
+                    } catch (e) {}
+                  }
+                  const shIdx = chat.settings.sharedWorldBooks.findIndex(b => String(b.id) === String(wbObj.id));
+                  if (shIdx >= 0) chat.settings.sharedWorldBooks[shIdx] = wbObj;
+                  else chat.settings.sharedWorldBooks.push(wbObj);
+                  if (!chat.settings.linkedWorldBookIds.some(id => String(id) === String(wbObj.id))) {
+                    chat.settings.linkedWorldBookIds.push(wbObj.id);
+                  }
+                }
+                await db.chats.put(chat);
+                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  await window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+                if (typeof window.reloadActiveChatWorldBooks === "function") {
+                  await window.reloadActiveChatWorldBooks();
+                }
+              } else if (type === "summaryPreset") {
+                if (!chat.settings.summary) chat.settings.summary = {};
+                if (!Array.isArray(chat.settings.summary.sharedPresets)) chat.settings.summary.sharedPresets = [];
+                const localPresets = typeof getSummaryPresets === "function" ? getSummaryPresets() : [];
+                let localChanged = false;
+                for (const it of selectedItems) {
+                  const spObj = it.rawLocal || it.rawShared;
+                  if (!spObj) continue;
+                  if (!localPresets.some(p => String(p.id) === String(spObj.id))) {
+                    localPresets.push(spObj);
+                    localChanged = true;
+                  }
+                  const shIdx = chat.settings.summary.sharedPresets.findIndex(p => String(p.id) === String(spObj.id));
+                  if (shIdx >= 0) chat.settings.summary.sharedPresets[shIdx] = spObj;
+                  else chat.settings.summary.sharedPresets.push(spObj);
+                }
+                if (localChanged && typeof saveSummaryPresets === "function") {
+                  saveSummaryPresets(localPresets);
+                }
+                await db.chats.put(chat);
+                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  await window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+                if (typeof renderSummaryPresetsUI === "function") {
+                  renderSummaryPresetsUI();
+                }
+              }
+
+              modal.classList.remove("visible");
+              modal.style.display = "none";
+            };
+          }
+
+          modal.classList.add("visible");
+          modal.style.display = "flex";
+        };
+
         async function openChatModulePickerModal() {
           if (!state.activeChatId) return;
           const chat = state.chats[state.activeChatId];
@@ -22532,7 +23058,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const importModBtn = document.getElementById("import-shared-module-btn");
           if (importModBtn) {
-            const isPeerGrp = Boolean(chat.isGroup && chat.isPeerGroup);
+            const isPeerGrp = window.isPeerGroupChat(chat);
             importModBtn.style.display = isPeerGrp ? "inline-flex" : "none";
             importModBtn.onclick = () => {
               if (typeof window.openSharedResourceImportModal === "function") {
@@ -22601,14 +23127,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             let modules = await dbInstance.modules.toArray();
-            if (chat && chat.isGroup && chat.isPeerGroup) {
-              const sharedModIds = new Set(
-                Array.isArray(chat.settings?.sharedModuleIds)
-                  ? chat.settings.sharedModuleIds.map(String)
-                  : []
-              );
-              if (chat.activeModuleId) sharedModIds.add(String(chat.activeModuleId));
-              modules = modules.filter(m => sharedModIds.has(String(m.id)));
+            if (chat && Array.isArray(chat.settings?.sharedModules)) {
+              const existingModIds = new Set(modules.map(m => String(m.id)));
+              chat.settings.sharedModules.forEach(sm => {
+                if (sm && sm.module && sm.module.id && !existingModIds.has(String(sm.module.id))) {
+                  modules.push(sm.module);
+                  existingModIds.add(String(sm.module.id));
+                }
+              });
             }
             modules.sort((a, b) => {
               const orderA = (a.sortOrder !== undefined && a.sortOrder !== null) ? a.sortOrder : ((a.order !== undefined && a.order !== null) ? a.order : 0);
@@ -22770,6 +23296,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       chat.activeModuleId = mod.id;
                       if (!chat.selectedModuleChapterIds) chat.selectedModuleChapterIds = [];
                       if (!chat.settings) chat.settings = {};
+                      if (chat.isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings.peerMembers) && chat.settings.peerMembers.length > 0))) {
+                        chat.settings.useModuleMap = true;
+                      }
                       chat.settings.deletedLocationNames = [];
                       chat.settings.customLocations = [];
                       chat.settings.temporaryLocations = [];
@@ -22787,8 +23316,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (typeof state !== 'undefined' && state?.chats) {
                       state.chats[chat.id] = chat;
                     }
-                    if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                      window.PeerManager.syncGroupSettingsToPeers(chat);
+                    if (typeof window.packageAndSyncChatModule === "function") {
+                      await window.packageAndSyncChatModule(chat, chat.activeModuleId);
                     }
                     await renderChatModulePickerList(currentModulePickerFilter);
                     if (typeof updateChatModuleMapBar === 'function') {
@@ -22869,6 +23398,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const allMods = await dbInstance.modules.toArray();
               mod = allMods.find(m => String(m.id) === String(moduleId));
             }
+            let sharedModEntry = null;
+            if (Array.isArray(chat.settings?.sharedModules)) {
+              sharedModEntry = chat.settings.sharedModules.find(sm => sm && sm.module && String(sm.module.id) === String(moduleId));
+              if (!mod && sharedModEntry) {
+                mod = sharedModEntry.module;
+              }
+            }
             if (!mod) {
               listEl.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">未找到该模组</div>';
               return;
@@ -22876,7 +23412,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             if (titleEl) titleEl.textContent = mod.name;
 
-            const allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
+            let allChaps = await dbInstance.moduleChapters.where('moduleId').equals(mod.id).toArray();
+            if (allChaps.length === 0 && sharedModEntry && Array.isArray(sharedModEntry.chapters)) {
+              allChaps = [...sharedModEntry.chapters];
+            }
             allChaps.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
             // 更新每个章节真实字数（与Token分析计算方式完全一致）
@@ -29512,9 +30051,52 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.renderChatList = renderChatList;
         window.renderChatListProxy = renderChatList;
 
+        function isMessageVisibleToCurrentUser(msg, chat) {
+          if (!msg || !Array.isArray(msg.visibleTo) || msg.visibleTo.length === 0) return true;
+          const cleanTarget = (s) => String(s || "").trim().replace(/^[\[【\(（"'「『]+|[\]】\)）"'」』]+$/g, "").trim();
+          const targets = msg.visibleTo.map(cleanTarget).filter(Boolean);
+          if (targets.length === 0) return true;
+          const myNames = new Set();
+          if (chat && chat.settings) {
+            if (chat.settings.myNickname) myNames.add(cleanTarget(chat.settings.myNickname));
+            if (chat.settings.myName) myNames.add(cleanTarget(chat.settings.myName));
+          }
+          if (typeof state !== "undefined" && state.qzoneSettings && state.qzoneSettings.nickname) {
+            myNames.add(cleanTarget(state.qzoneSettings.nickname));
+          }
+          if (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") {
+            const myCode = window.PeerManager.getOrCreateMyPeerCode();
+            if (myCode) myNames.add(cleanTarget(myCode));
+          }
+          if (myNames.size === 0) myNames.add("我");
+          return targets.some((t) => myNames.has(t));
+        }
+        window.isMessageVisibleToCurrentUser = isMessageVisibleToCurrentUser;
+
+        function isOutOfCharacterChineseBracketMsg(rawContent) {
+          if (typeof rawContent !== "string") return false;
+          const trimmed = rawContent.trim();
+          if (trimmed.length < 2) return false;
+          if (!trimmed.startsWith("（") || !trimmed.endsWith("）")) return false;
+          let depth = 0;
+          for (let i = 0; i < trimmed.length; i++) {
+            const ch = trimmed[i];
+            if (ch === "（") {
+              depth++;
+            } else if (ch === "）") {
+              depth--;
+              if (depth < 0) return false;
+            } else if (depth === 0 && ch.trim() !== "") {
+              return false;
+            }
+          }
+          return depth === 0;
+        }
+        window.isOutOfCharacterChineseBracketMsg = isOutOfCharacterChineseBracketMsg;
+
         function createChatListItem(chat) {
           const lastMsgObj =
-            chat.history.filter((msg) => !msg.isHidden).slice(-1)[0] || {};
+            chat.history.filter((msg) => !msg.isHidden && isMessageVisibleToCurrentUser(msg, chat)).slice(-1)[0] || {};
           let lastMsgDisplay;
 
           if (
@@ -30705,6 +31287,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (msg.isHidden) {
+            return null;
+          }
+          if (typeof isMessageVisibleToCurrentUser === "function" && !isMessageVisibleToCurrentUser(msg, chat)) {
             return null;
           }
 
@@ -32778,6 +33363,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             window.chatDrafts = window.chatDrafts || {};
             window.chatDrafts[state.activeChatId] = oldInput.value;
           }
+          if (String(state.activeChatId) !== String(chatId) && typeof cancelReplyMode === "function") {
+            cancelReplyMode();
+          }
           let chat = (state.chats && state.chats[chatId]) ||
                      (state.chats && state.chats[String(chatId)]) ||
                      (state.chats && state.chats[Number(chatId)]) ||
@@ -33624,6 +34212,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         // ==========================================
         function isChatModuleMapMode(chat) {
           if (!chat || !chat.activeModuleId) return false;
+          if (chat.isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0))) {
+            return true;
+          }
           const modal = document.getElementById("chat-map-modal");
           const toggleEl = document.getElementById("chat-map-use-module-toggle");
           if (modal && modal.classList.contains("visible") && toggleEl) {
@@ -33921,6 +34512,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (typeof state !== 'undefined' && state?.chats) {
                 state.chats[chat.id] = chat;
                 state.chats[String(chat.id)] = chat;
+              }
+              if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
               }
 
               renderChatMiniMap();
@@ -34255,8 +34849,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (!chat.settings) chat.settings = {};
           if (!chat.settings.mapViewMode) chat.settings.mapViewMode = "text";
-          if (chat.settings.useModuleMap === undefined) chat.settings.useModuleMap = false;
+          const isPeerGrpMap = Boolean(chat.isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)));
+          if (isPeerGrpMap) {
+            chat.settings.useModuleMap = true;
+          } else if (chat.settings.useModuleMap === undefined) {
+            chat.settings.useModuleMap = false;
+          }
 
+          const useModWrap = document.getElementById("chat-map-use-module-wrap");
+          if (useModWrap) {
+            useModWrap.style.display = isPeerGrpMap ? "none" : "inline-flex";
+          }
           const useModToggle = document.getElementById("chat-map-use-module-toggle");
           const topGenBtn = document.getElementById("chat-map-top-gen-btn");
           const topImportBtn = document.getElementById("chat-map-top-import-btn");
@@ -35156,7 +35759,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function getAllChatLocations(chat) {
           let locations = [];
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-          const useModule = isChatModuleMapMode(chat);
+          const isPeerGrpMap = Boolean(chat && chat.isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)));
+          if (isPeerGrpMap && !chat.activeModuleId) {
+            return [];
+          }
+          const useModule = isPeerGrpMap ? true : isChatModuleMapMode(chat);
 
           if (useModule && chat && chat.activeModuleId && dbInstance) {
             try {
@@ -35564,6 +36171,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (dbInstance && chat.id) {
                 await dbInstance.chats.put(chat);
               }
+              if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
               await renderChatMapList();
               renderChatMiniMap();
             };
@@ -35600,6 +36210,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   chat.settings.temporaryLocations = chat.settings.temporaryLocations.filter((t) => t.id !== node.id && t.name !== node.name);
                   const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
                   if (dbInstance) await dbInstance.chats.put(chat);
+                  if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                    window.PeerManager.syncGroupSettingsToPeers(chat);
+                  }
                   await renderChatMapList();
                 }
               };
@@ -35773,6 +36386,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       state.chats[currentChat.id] = currentChat;
                       state.chats[String(currentChat.id)] = currentChat;
                     }
+                    if (currentChat.isGroup && currentChat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                      window.PeerManager.syncGroupSettingsToPeers(currentChat);
+                    }
                     closeModal();
                     if (typeof window.showCustomAlert === "function") {
                       window.showCustomAlert("导入成功", `已成功将地图导入到${destModeName}`);
@@ -35867,6 +36483,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (typeof state !== 'undefined' && state?.chats) {
                       state.chats[currentChat.id] = currentChat;
                       state.chats[String(currentChat.id)] = currentChat;
+                    }
+                    if (currentChat.isGroup && currentChat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                      window.PeerManager.syncGroupSettingsToPeers(currentChat);
                     }
                     closeModal();
                     if (typeof window.showCustomAlert === "function") {
@@ -36013,6 +36632,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance) await dbInstance.chats.put(chat);
+              if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
               closeModal();
               await renderChatMapList();
             };
@@ -36143,6 +36765,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
               if (dbInstance) await dbInstance.chats.put(chat);
+              if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
               closeModal();
               await renderChatMapList();
             };
@@ -36773,12 +37398,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             if (matchedNode) {
-              const effectType = (state?.apiConfig?.mapLocationEffect) || (window.state?.apiConfig?.mapLocationEffect) || "pin";
-              const pinColor = (state?.apiConfig?.mapLocationColor) || (window.state?.apiConfig?.mapLocationColor) || "#E53E3E";
-              const glowSpeed = (state?.apiConfig?.mapLocationGlowSpeed) || 1.2;
-              const glowBright = (state?.apiConfig?.mapLocationGlowBrightness !== undefined) ? state?.apiConfig?.mapLocationGlowBrightness : 0.8;
-              const customIcon = (state?.apiConfig?.mapLocationCustomIcon) || "";
-              const customGlow = !!(state?.apiConfig?.mapLocationCustomGlow);
+              const isPeerGrpIcon = Boolean(chat.isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)));
+              const effectType = isPeerGrpIcon
+                ? (chat.settings?.peerGroupMapLocationEffect || "pin")
+                : ((state?.apiConfig?.mapLocationEffect) || (window.state?.apiConfig?.mapLocationEffect) || "pin");
+              const pinColor = isPeerGrpIcon
+                ? (chat.settings?.peerGroupMapLocationColor || "#E53E3E")
+                : ((state?.apiConfig?.mapLocationColor) || (window.state?.apiConfig?.mapLocationColor) || "#E53E3E");
+              const glowSpeed = isPeerGrpIcon
+                ? (chat.settings?.peerGroupMapLocationGlowSpeed || 1.2)
+                : ((state?.apiConfig?.mapLocationGlowSpeed) || 1.2);
+              const glowBright = isPeerGrpIcon
+                ? (chat.settings?.peerGroupMapLocationGlowBrightness !== undefined ? chat.settings.peerGroupMapLocationGlowBrightness : 0.8)
+                : ((state?.apiConfig?.mapLocationGlowBrightness !== undefined) ? state?.apiConfig?.mapLocationGlowBrightness : 0.8);
+              const customIcon = isPeerGrpIcon
+                ? (chat.settings?.peerGroupMapLocationCustomIcon || "")
+                : ((state?.apiConfig?.mapLocationCustomIcon) || "");
+              const customGlow = isPeerGrpIcon
+                ? !!(chat.settings?.peerGroupMapLocationCustomGlow)
+                : !!(state?.apiConfig?.mapLocationCustomGlow);
 
               matchedNode.classList.remove("map-location-pin", "map-location-glow");
               matchedNode.style.removeProperty("filter");
@@ -36860,7 +37498,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 matchedNode.style.setProperty("--map-loc-glow-speed", `${glowSpeed}s`);
                 matchedNode.style.setProperty("--map-loc-glow-spread", `${Math.round(8 * glowBright)}px`);
               } else if (effectType === "custom" && customIcon) {
-                const customScale = (state?.apiConfig?.mapLocationCustomScale !== undefined) ? parseFloat(state.apiConfig.mapLocationCustomScale) : 2.0;
+                const customScale = isPeerGrpIcon
+                  ? (chat.settings?.peerGroupMapLocationCustomScale !== undefined ? parseFloat(chat.settings.peerGroupMapLocationCustomScale) : 2.0)
+                  : ((state?.apiConfig?.mapLocationCustomScale !== undefined) ? parseFloat(state.apiConfig.mapLocationCustomScale) : 2.0);
                 const iconSize = Math.max(12, Math.round(20 * customScale));
                 const iconOffset = -Math.round(iconSize / 2);
 
@@ -37192,6 +37832,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             state.chats[String(chat.id)] = chat;
           }
           if (dbInstance) await dbInstance.chats.put(chat);
+          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
 
           // 若当前活跃查看的正是此聊天且地图浮层已处于打开状态，立即原地刷新渲染
           const miniModal = document.getElementById("chat-mini-map-modal");
@@ -37338,6 +37981,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (state.chats) {
             state.chats[chat.id] = chat;
             state.chats[String(chat.id)] = chat;
+          }
+          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
           }
 
           if (typeof renderChatMiniMap === "function") {
@@ -39128,9 +39774,9 @@ ${templateFieldLines || '      "状态": "正常"'}
 
               const groupCommandBlock = window.formatPromptSection("指令", `
 ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
-- 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_timestamp": 消息时间戳数字, "reply_content": "回复文本内容"}
-- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}，或在文本开头写 #私密 目标玩家名: 内容
-- 发送语音: {"type": "voice_message", "name": "角色名", "content": "语音的文字内容"}
+- 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_sender": "被引用者名字", "target_content": "被引用消息原文", "reply_content": "回复文本内容"}。针对某个玩家做出的检定结果进行判定或回应时，AI必须使用引用回复引注该玩家的检定消息
+- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}
+  无痕私密对话判定规范：当当前信息为某个人的侦查结果、聆听结果、某个HO位的秘密、只有特定PC能看见的画面时，则必须使用私密内容。且私密内容的范围仅仅包含可以被称作隐私的、短小的信息，即在模组中有标注的或者是检定的结果。而像其他不属于隐私的内容，比如场景描写、共通的场景描写、对话细节动作等，如果要进行描写的话，需要再分一个公共的气泡，否则另一个人将完全不知道这个场景发生了什么，就会缺少开头和结果，所以绝对不能误判。
 ${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
 ${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}${statusMember ? systemStatusContext : ""}`);
@@ -39205,10 +39851,16 @@ ${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}�
                       content: `${tsPrefix}[剧情/环境旁白: ${effectiveContent}]`,
                     };
                   }
+                  if ((msg.role === "user" || msg.isPeerUserMessage) && typeof effectiveContent === "string" && isOutOfCharacterChineseBracketMsg(effectiveContent)) {
+                    return null;
+                  }
                   if (msg.role === "assistant" && !msg.isPeerUserMessage) {
                     // AI消息的处理逻辑保持不变...
                     let assistantMsgObject = { type: msg.type || "text" };
                     assistantMsgObject.name = msg.senderName;
+                    if (Array.isArray(msg.visibleTo) && msg.visibleTo.length > 0) {
+                      assistantMsgObject.visibleTo = msg.visibleTo;
+                    }
                     const isStatusMsg = msg.type === "system_status" || msg.type === "status_bar" || msg.roleType === "system_status" || msg.name === "系统状态" || msg.senderName === "系统状态" || (statusSenderName && (msg.name === statusSenderName || msg.senderName === statusSenderName)) || (typeof effectiveContent === "string" && (effectiveContent.includes("[日期]：") || effectiveContent.includes("【日期】")));
                     const isImageMsg = msg.type === "naiimag" || msg.type === "nov" || msg.type === "ai_image" || msg.type === "image" || msg.type === "realimag" || msg.type === "novelai" || msg.type === "nai_image" || Boolean(msg.imageUrl);
 
@@ -40134,6 +40786,28 @@ ${stickerContext || "无"}
               });
             }
 
+            if (
+              isMusicContextAllowed &&
+              state.musicState &&
+              (state.musicState.isActive || state.musicState.isPlaying)
+            ) {
+              const currentTrack =
+                state.musicState.currentIndex > -1 && Array.isArray(state.musicState.playlist)
+                  ? state.musicState.playlist[state.musicState.currentIndex]
+                  : null;
+              if (currentTrack && !currentTrack.isKeepAlive && currentTrack.name) {
+                const musicTagStr = `▷用户正在播放音乐：${currentTrack.name}${currentTrack.artist ? " " + currentTrack.artist : ""}`;
+                for (let mIdx = messagesPayload.length - 1; mIdx >= 0; mIdx--) {
+                  const mItem = messagesPayload[mIdx];
+                  if (mItem && mItem.role === "user" && typeof mItem.content === "string" && !mItem.content.trim().startsWith("==================================================")) {
+                    mItem._musicPlayingLabel = musicTagStr;
+                    mItem.content = `${musicTagStr}\n${mItem.content}`;
+                    break;
+                  }
+                }
+              }
+            }
+
             // 在上下文最后一条消息之后附带本轮天气与幸运系统消息
             if (turnActiveWeather || turnActiveLuck) {
               const turnParts = [];
@@ -40153,7 +40827,8 @@ ${stickerContext || "无"}
             // 思维链历史合规性检测与督促模式注入
             const isCurrentChatThinkingActive = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : false;
             const isThinkingMissing = isCurrentChatThinkingActive && typeof checkPreviousTurnThinkingValid === "function" && !checkPreviousTurnThinkingValid(historySlice, isCurrentChatThinkingActive);
-            const currentUrgingMode = state.apiConfig?.urgingMode || "system";
+            const isPeerGrpUrge = Boolean(chat && chat.isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)));
+            const currentUrgingMode = isPeerGrpUrge ? "system" : (state.apiConfig?.urgingMode || "system");
 
             if (isCurrentChatThinkingActive && isThinkingMissing) {
               if (currentUrgingMode === "scold") {
@@ -40172,7 +40847,7 @@ ${stickerContext || "无"}
             }
 
             // 地狱独立开关注入
-            if (state.apiConfig?.hellModeEnabled) {
+            if (state.apiConfig?.hellModeEnabled && !isPeerGrpUrge) {
               const hellText = state.apiConfig?.hellPrompt || window.DEFAULT_HELL_PROMPT || "每一回合都必须精益求精！你必须端正态度，严禁偷懒缩水！每回合必须在顶级 thinking 字段内用中文一条不漏地彻底自检思维链，绝不能擅自快进剧情。必须严格遵照单回合行动原则与世界书设定，先充分渲染情绪氛围与环境场景细节，再描写人物互动细节。单气泡字数要饱满，切勿为了省事而简写略写，保持细腻深度的文风，每一回合都必须做到最好！";
               messagesPayload.push({
                 role: "user",
@@ -40812,10 +41487,19 @@ ${stickerContext || "无"}
               }
 
               let aiMessage = null;
-              let parsedVisibleTo = Array.isArray(msgData.visibleTo)
-                ? msgData.visibleTo.map(v => String(v).trim()).filter(Boolean)
-                : (typeof msgData.visibleTo === "string" && msgData.visibleTo.trim()
-                  ? msgData.visibleTo.split(/[,，、]/).map(v => v.trim()).filter(Boolean)
+              const rawVisibleField = msgData.visibleTo || msgData.visible_to || msgData.visible;
+              const normalizeVisibleTarget = (v) => {
+                const cleaned = String(v || "").trim().replace(/^[\[【\(（"'「『]+|[\]】\)）"'」』]+$/g, "").trim();
+                if (!cleaned) return "";
+                if (cleaned === "我" || cleaned === "用户" || cleaned === "玩家") {
+                  return (chat && chat.settings && (chat.settings.myNickname || chat.settings.myName)) || (state && state.qzoneSettings && state.qzoneSettings.nickname) || "我";
+                }
+                return cleaned;
+              };
+              let parsedVisibleTo = Array.isArray(rawVisibleField)
+                ? rawVisibleField.map(normalizeVisibleTarget).filter(Boolean)
+                : (typeof rawVisibleField === "string" && rawVisibleField.trim()
+                  ? rawVisibleField.split(/[,，、]/).map(normalizeVisibleTarget).filter(Boolean)
                   : null);
               const baseMessage = {
                 role: "assistant",
@@ -43865,16 +44549,27 @@ ${stickerContext || "无"}
                   break;
 
                 case "quote_reply": {
+                  const qObj = (msgData.quote_reply && typeof msgData.quote_reply === "object") ? msgData.quote_reply : msgData;
+                  const qTargetTs = qObj.target_timestamp || msgData.target_timestamp;
+                  const qTargetContent = String(qObj.target_content || msgData.target_content || "").trim();
+                  const qTargetSender = String(qObj.target_sender || msgData.target_sender || "").trim();
+                  const qReplyContent = String(qObj.reply_content || msgData.reply_content || msgData.content || "").trim();
                   let originalMessage = null;
-                  if (msgData.target_timestamp) {
+                  if (qTargetTs) {
                     originalMessage = (chat.history || []).find(
-                      (m) => m.timestamp == msgData.target_timestamp,
+                      (m) => m.timestamp == qTargetTs,
                     );
                   }
-                  if (!originalMessage && msgData.target_content) {
+                  if (!originalMessage && qTargetContent) {
                     originalMessage = (chat.history || []).slice().reverse().find(
-                      (m) => typeof m.content === "string" && m.content.includes(msgData.target_content)
+                      (m) => typeof m.content === "string" && (m.content.includes(qTargetContent) || qTargetContent.includes(m.content))
                     );
+                  }
+                  if (!originalMessage && qTargetSender) {
+                    originalMessage = (chat.history || []).slice().reverse().find((m) => {
+                      const mSender = m.senderName || (m.role === "user" ? (chat.settings?.myNickname || "我") : chat.name);
+                      return mSender === qTargetSender || String(mSender).includes(qTargetSender);
+                    });
                   }
                   if (originalMessage) {
                     const quoteContext = {
@@ -43889,25 +44584,25 @@ ${stickerContext || "无"}
                     aiMessage = {
                       ...baseMessage,
                       type: "text",
-                      content: msgData.reply_content || msgData.content || "",
+                      content: qReplyContent,
                       quote: quoteContext,
                     };
-                  } else if (msgData.target_sender && msgData.target_content) {
+                  } else if (qTargetSender || qTargetContent) {
                     aiMessage = {
                       ...baseMessage,
                       type: "text",
-                      content: msgData.reply_content || msgData.content || "",
+                      content: qReplyContent,
                       quote: {
                         timestamp: Date.now(),
-                        senderName: msgData.target_sender,
-                        content: String(msgData.target_content),
+                        senderName: qTargetSender || "群成员",
+                        content: qTargetContent || "（检定/消息）",
                       },
                     };
                   } else {
                     aiMessage = {
                       ...baseMessage,
                       type: "text",
-                      content: msgData.reply_content || msgData.content || "",
+                      content: qReplyContent,
                     };
                   }
                   break;
@@ -44175,15 +44870,33 @@ ${stickerContext || "无"}
                         const bodyStr = (inlineWhisperMatch[3] || "").trim();
                         if (targetStr && bodyStr) {
                           cleanMsgText = bodyStr;
-                          baseMessage.visibleTo = targetStr.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+                          baseMessage.visibleTo = targetStr.split(/[,，、]/).map(normalizeVisibleTarget).filter(Boolean);
                         }
                       }
                       aiMessage = { ...baseMessage, content: cleanMsgText };
                       if (msgData.quote_reply && typeof msgData.quote_reply === "object" && !aiMessage.quote) {
+                        const qTargetTs = msgData.quote_reply.target_timestamp;
+                        const qTargetContent = String(msgData.quote_reply.target_content || "").trim();
+                        const qTargetSender = String(msgData.quote_reply.target_sender || "").trim();
+                        let origMsg = null;
+                        if (qTargetTs) {
+                          origMsg = (chat.history || []).find((m) => m.timestamp == qTargetTs);
+                        }
+                        if (!origMsg && qTargetContent) {
+                          origMsg = (chat.history || []).slice().reverse().find(
+                            (m) => typeof m.content === "string" && (m.content.includes(qTargetContent) || qTargetContent.includes(m.content))
+                          );
+                        }
+                        if (!origMsg && qTargetSender) {
+                          origMsg = (chat.history || []).slice().reverse().find((m) => {
+                            const mSender = m.senderName || (m.role === "user" ? (chat.settings?.myNickname || "我") : chat.name);
+                            return mSender === qTargetSender || String(mSender).includes(qTargetSender);
+                          });
+                        }
                         aiMessage.quote = {
-                          timestamp: msgData.quote_reply.target_timestamp || Date.now(),
-                          senderName: msgData.quote_reply.target_sender || "群成员",
-                          content: String(msgData.quote_reply.target_content || ""),
+                          timestamp: origMsg ? origMsg.timestamp : (qTargetTs || Date.now()),
+                          senderName: origMsg ? (origMsg.senderName || (origMsg.role === "user" ? (chat.settings?.myNickname || "我") : chat.name)) : (qTargetSender || "群成员"),
+                          content: origMsg ? String(origMsg.content || "") : qTargetContent,
                         };
                         if (msgData.quote_reply.reply_content) {
                           aiMessage.content = msgData.quote_reply.reply_content;
@@ -44523,7 +45236,8 @@ ${stickerContext || "无"}
                   window.PeerManager.broadcastGroupMessage(chat, aiMessage, false);
                 }
 
-                if (!isViewingThisChat || document.hidden) {
+                const isVisibleToMeLocal = typeof isMessageVisibleToCurrentUser === "function" ? isMessageVisibleToCurrentUser(aiMessage, chat) : true;
+                if ((!isViewingThisChat || document.hidden) && isVisibleToMeLocal) {
                   let notificationText;
                   switch (aiMessage.type) {
                     case "transfer":
@@ -44595,16 +45309,18 @@ ${stickerContext || "无"}
                   String(state.activeChatId) === String(chat.id);
 
                 if (!isCurrentlyViewingThisChat) {
-                  // 如果用户不在当前聊天界面，就把这个聊天的未读数 +1
-                  chat.unreadCount = (chat.unreadCount || 0) + 1;
-                  if (typeof renderChatList === "function") renderChatList();
-                  if (typeof updateGlobalChatUnreadBadge === "function") updateGlobalChatUnreadBadge();
+                  if (isVisibleToMeLocal) {
+                    // 如果用户不在当前聊天界面，就把这个聊天的未读数 +1
+                    chat.unreadCount = (chat.unreadCount || 0) + 1;
+                    if (typeof renderChatList === "function") renderChatList();
+                    if (typeof updateGlobalChatUnreadBadge === "function") updateGlobalChatUnreadBadge();
+                  }
                 } else {
                   chat.unreadCount = 0;
                 }
 
                 // 2. 只有在当前正在查看此聊天界面时，才执行追加到 DOM
-                if (isCurrentlyViewingThisChat) {
+                if (isCurrentlyViewingThisChat && isVisibleToMeLocal) {
                   appendMessage(aiMessage, chat);
                   playNotificationSound();
                   await new Promise((resolve) =>
@@ -44906,6 +45622,10 @@ ${stickerContext || "无"}
             isPeerOnlySticker: true,
             timestamp: Date.now(),
           };
+          if (currentReplyContext) {
+            msg.quote = currentReplyContext;
+            cancelReplyMode();
+          }
           chat.history.push(msg);
           await db.chats.put(chat);
           appendMessage(msg, chat);
@@ -47518,6 +48238,19 @@ ${stickerContext || "无"}
             rerollNaiBtn.style.display = "none";
           }
 
+          const isPeerFriendMsg = Boolean(
+            message && (
+              message.isPeerUserMessage ||
+              message.senderPeerCode ||
+              (chat && !chat.isGroup && chat.roleType === "peer" && message.role === "assistant") ||
+              (chat && chat.isGroup && Array.isArray(chat.members) && message.role !== "user" && chat.members.some(m => m && (m.isPeerMember || m.roleType === "peer") && (m.groupNickname === message.senderName || m.originalName === message.senderName)))
+            )
+          );
+          const editMsgBtn = document.getElementById("edit-message-btn");
+          if (editMsgBtn) {
+            editMsgBtn.style.display = isPeerFriendMsg ? "none" : "";
+          }
+
           const recallBtn = document.getElementById("recall-message-btn");
           if (recallBtn) {
             recallBtn.style.display = "";
@@ -48134,6 +48867,17 @@ ${stickerContext || "无"}
             (m) => m.timestamp === timestampToEdit,
           );
           if (!message) return;
+
+          const isPeerFriendMsg = Boolean(
+            message.isPeerUserMessage ||
+            message.senderPeerCode ||
+            (chat && !chat.isGroup && chat.roleType === "peer" && message.role === "assistant") ||
+            (chat && chat.isGroup && Array.isArray(chat.members) && message.role !== "user" && chat.members.some(m => m && (m.isPeerMember || m.roleType === "peer") && (m.groupNickname === message.senderName || m.originalName === message.senderName)))
+          );
+          if (isPeerFriendMsg) {
+            hideMessageActions();
+            return;
+          }
 
           // 2. 现在可以安全地关闭旧菜单了，因为它不会影响我们的局部变量
           hideMessageActions();
@@ -52621,21 +53365,32 @@ ${stickerContext || "无"}
           if (!message) return;
 
           // 1. 同时获取“完整内容”和“预览片段”
-          const fullContent = String(message.content || "");
+          const rawText = (typeof message.optimizedContent === "string" && message.optimizedContent !== "")
+            ? message.optimizedContent
+            : (typeof message.content === "string" ? message.content : "");
+          let fullContent = String(rawText || "");
           let previewSnippet = "";
 
           if (
-            typeof message.content === "string" &&
-            STICKER_REGEX.test(message.content)
+            message.type === "sticker" ||
+            message.isPeerOnlySticker ||
+            (typeof message.content === "string" &&
+              STICKER_REGEX.test(message.content))
           ) {
-            previewSnippet = "[表情]";
+            previewSnippet = message.meaning ? `[表情: ${message.meaning}]` : "[表情]";
+            fullContent = previewSnippet;
           } else if (
             message.type === "ai_image" ||
-            message.type === "user_photo"
+            message.type === "user_photo" ||
+            message.type === "naiimag" ||
+            Boolean(message.imageUrl) ||
+            Array.isArray(message.content)
           ) {
             previewSnippet = "[图片]";
+            fullContent = (message.type === "ai_image" && fullContent.trim()) ? `[图片: ${fullContent.trim()}]` : "[图片]";
           } else if (message.type === "voice_message") {
             previewSnippet = "[语音]";
+            if (!fullContent.trim()) fullContent = "[语音消息]";
           } else {
             // 预览片段依然截断，但只用于UI显示
             previewSnippet =
@@ -52643,13 +53398,20 @@ ${stickerContext || "无"}
               (fullContent.length > 50 ? "..." : "");
           }
 
+          const myRealName =
+            chat.settings?.myNickname ||
+            (chat.settings?.myName && chat.settings.myName !== "我" ? chat.settings.myName : "") ||
+            (window.PeerManager && typeof window.PeerManager.getMyProfile === "function" ? window.PeerManager.getMyProfile()?.name : "") ||
+            state.qzoneSettings?.nickname ||
+            "我";
+
           // 2. 将“完整内容”存入上下文，以备发送时使用
           currentReplyContext = {
             timestamp: message.timestamp,
             senderName:
               message.senderName ||
               (message.role === "user"
-                ? chat.settings.myNickname || "我"
+                ? myRealName
                 : chat.name),
             content: fullContent, // <--- 这里存的是完整的原文！
           };
@@ -52671,8 +53433,11 @@ ${stickerContext || "无"}
          */
         function cancelReplyMode() {
           currentReplyContext = null;
-          document.getElementById("reply-preview-bar").style.display = "none";
+          const bar = document.getElementById("reply-preview-bar");
+          if (bar) bar.style.display = "none";
         }
+        window.getCurrentReplyContext = () => currentReplyContext;
+        window.cancelReplyMode = cancelReplyMode;
 
         let activeTransferTimestamp = null; // 用于暂存被点击的转账消息的时间戳
 
@@ -61086,7 +61851,19 @@ ${stickerContext || "无"}
           if (!select) return;
           let presets = getSummaryPresets();
           const activeChat = state.activeChatId ? state.chats[state.activeChatId] : null;
-          if (activeChat && activeChat.isGroup && activeChat.isPeerGroup && Array.isArray(activeChat.settings?.summary?.sharedPresets)) {
+          const isPeerGrp = typeof window.isPeerGroupChat === "function"
+            ? window.isPeerGroupChat(activeChat)
+            : Boolean(activeChat && activeChat.isGroup && activeChat.isPeerGroup);
+          const importSummaryBtn = document.getElementById("summary-preset-import-btn");
+          if (importSummaryBtn) {
+            importSummaryBtn.style.display = isPeerGrp ? "inline-flex" : "none";
+            importSummaryBtn.onclick = () => {
+              if (typeof window.openSharedResourceImportModal === "function") {
+                window.openSharedResourceImportModal("summaryPreset");
+              }
+            };
+          }
+          if (isPeerGrp && Array.isArray(activeChat.settings?.summary?.sharedPresets)) {
             const existingIds = new Set(presets.map(p => String(p.id)));
             activeChat.settings.summary.sharedPresets.forEach(sp => {
               if (sp && sp.id && !existingIds.has(String(sp.id))) {
@@ -61517,13 +62294,19 @@ ${stickerContext || "无"}
           }
 
           let textBlocks = [];
+          const isContextHistoryMsg = (m, i) => {
+            if (i === 0) return false;
+            const c = typeof m.content === "string" ? m.content.trim() : "";
+            if (c.startsWith("==================================================")) return false;
+            return true;
+          };
           allMsgs.forEach((msg, idx) => {
             const role = msg.role || "user";
             let roleTitle = "";
             if (role === "system") {
               roleTitle = "系统提示与全部注入词";
             } else if (role === "user") {
-              roleTitle = "用户输入或推进消息";
+              roleTitle = "用户输入";
             } else if (role === "assistant") {
               roleTitle = "助手历史回复";
             } else {
@@ -61545,7 +62328,35 @@ ${stickerContext || "无"}
               rawContent = String(msg.content || "");
             }
 
-            textBlocks.push(`=== 第 ${idx + 1} 块消息 · ${roleTitle} ===\n${cleanDebugNewlines(rawContent)}`);
+            if (role === "user") {
+              if (rawContent.startsWith("▷用户正在播放音乐：")) {
+                const firstNl = rawContent.indexOf("\n");
+                if (firstNl !== -1) {
+                  const musicHeaderLine = rawContent.substring(0, firstNl).trim();
+                  rawContent = rawContent.substring(firstNl + 1);
+                  roleTitle = `用户输入  ${musicHeaderLine}`;
+                } else {
+                  roleTitle = `用户输入  ${rawContent.trim()}`;
+                  rawContent = "";
+                }
+              } else if (msg._musicPlayingLabel) {
+                roleTitle = `用户输入  ${msg._musicPlayingLabel}`;
+              }
+            }
+
+            const curIsCtx = isContextHistoryMsg(msg, idx);
+            const prevIsCtx = idx > 0 ? isContextHistoryMsg(allMsgs[idx - 1], idx - 1) : false;
+            const nextIsCtx = idx < allMsgs.length - 1 ? isContextHistoryMsg(allMsgs[idx + 1], idx + 1) : false;
+
+            let blockStr = `=== 第 ${idx + 1} 块消息 · ${roleTitle} ===\n${cleanDebugNewlines(rawContent)}`;
+            if (curIsCtx && !prevIsCtx) {
+              blockStr = `==================================================\n【上下文 开始】\n${blockStr}`;
+            }
+            if (curIsCtx && !nextIsCtx) {
+              blockStr = `${blockStr}\n【上下文 结束】\n==================================================`;
+            }
+
+            textBlocks.push(blockStr);
           });
 
           return textBlocks.join("\n\n");
@@ -62641,6 +63452,9 @@ ${stickerContext || "无"}
           if (!chat || !chat.settings || !chat.settings.keeperForcedDraw) return;
 
           window.activeGeneratingKeeperDraw = window.activeGeneratingKeeperDraw || {};
+          if (window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[String(chat.id)]) {
+            return;
+          }
           window.activeGeneratingKeeperDraw[chat.id] = true;
           window.activeGeneratingKeeperDraw[String(chat.id)] = true;
           window.activeGeneratingKeeperDraw[chatId] = true;
@@ -62756,22 +63570,14 @@ ${stickerContext || "无"}
               }
             }
 
-            // 6. 提示词代码与格式指令（只告诉生图指令，由AI自主判断张数）
+            // 6. 提示词代码与格式指令
             const keeperInstructionBlock = `
 # 【NovelAI 生图指令任务】
 请根据当前最新剧情进展、场景环境描写以及各角色的外貌动作，发送 NovelAI 生图指令。
-你可以根据剧情画面需要，自主判断本次生成 1 张或多张图片。
+本次末尾生图仅调用一次，只生成 1 张图片。
 【铁律】：除了生图指令外，禁止输出任何其他普通对话气泡或多余文字。
-你的回复必须为合法 JSON，只包含 type 为 "naiimag" 的生图字段，格式示例：
-单张格式：
+你的回复必须为合法 JSON，只包含 1 条 type 为 "naiimag" 的生图字段，格式示例：
 {"type": "naiimag", "name": "${keeperCharName}", "prompt": "masterpiece, 1girl, detailed description tags..."}
-多张格式：
-[
-  {"type": "naiimag", "name": "${keeperCharName}", "prompt": "详细英文描述词1..."},
-  {"type": "naiimag", "name": "${keeperCharName}", "prompt": "详细英文描述词2..."}
-]
-或
-{"type": "naiimag", "name": "${keeperCharName}", "images": [{"prompt": "详细英文描述词1..."}, {"prompt": "详细英文描述词2..."}]}
 `;
 
             const keeperSystemPrompt = [
@@ -62858,10 +63664,9 @@ ${stickerContext || "无"}
               if (cleanPrompt) promptsToGenerate.push(cleanPrompt);
             }
 
-            for (const singlePrompt of promptsToGenerate) {
-              if (singlePrompt && singlePrompt.trim()) {
-                await generateAndAppendKeeperNaiImage(chat, singlePrompt.trim());
-              }
+            const firstPrompt = promptsToGenerate.find((p) => p && String(p).trim());
+            if (firstPrompt) {
+              await generateAndAppendKeeperNaiImage(chat, String(firstPrompt).trim());
             }
           } catch (err) {
             console.error("守密人强制生图失败:", err);
@@ -63101,6 +63906,20 @@ ${stickerContext || "无"}
               imageUrl: imageDataUrl,
               prompt: aiPrompt,
               fullPrompt: finalPositivePrompt,
+              negativePrompt: finalNegativePrompt,
+              model: model,
+              naiSettings: {
+                resolution: settings.resolution || `${width || 1024}x${height || 1024}`,
+                width: width || 1024,
+                height: height || 1024,
+                steps: settings.steps || 28,
+                cfg_scale: settings.cfg_scale || 5,
+                sampler: settings.sampler || "k_euler_ancestral",
+                uc_preset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+                quality_toggle: settings.quality_toggle !== false,
+                smea: settings.smea,
+                smea_dyn: settings.smea_dyn,
+              },
               isKeeperForcedDraw: true,
               isForcedDraw: true,
               timestamp: Date.now(),
@@ -63117,6 +63936,9 @@ ${stickerContext || "无"}
               state.chats[String(chat.id)] = chat;
             }
             await db.chats.put(chat);
+            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+              window.PeerManager.broadcastGroupMessage(chat, aiMessage, false);
+            }
             if (typeof renderChatList === "function") {
               renderChatList();
             }
@@ -63139,6 +63961,8 @@ ${stickerContext || "无"}
               imageUrl: "https://i.postimg.cc/KYr2qRCK/1.jpg",
               prompt: aiPrompt,
               fullPrompt: finalPositivePrompt,
+              negativePrompt: finalNegativePrompt,
+              model: model,
               content: `[图片生成异常: ${err.message || "请求失败"}]`,
               isKeeperForcedDraw: true,
               isForcedDraw: true,
@@ -63155,6 +63979,9 @@ ${stickerContext || "无"}
               state.chats[String(chat.id)] = chat;
             }
             await db.chats.put(chat);
+            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+              window.PeerManager.broadcastGroupMessage(chat, fallbackMessage, false);
+            }
             const msgContainer = document.getElementById("chat-messages");
             const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${fallbackMessage.timestamp}"]`);
             if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
@@ -77553,6 +78380,113 @@ ${stickerContext || "无"}
                 groupAffectionSection.style.display = isGroup ? "block" : "none";
               }
 
+              const peerGroupMapIconCard = document.getElementById("peer-group-map-icon-card");
+              const isPeerGrpChat = Boolean(isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)));
+              if (peerGroupMapIconCard) {
+                peerGroupMapIconCard.style.display = isPeerGrpChat ? "block" : "none";
+                if (isPeerGrpChat) {
+                  if (!chat.settings) chat.settings = {};
+                  const pgEffectSelect = document.getElementById("peer-group-map-location-effect-select");
+                  const pgColorPreview = document.getElementById("peer-group-map-location-color-preview");
+                  const pgColorInput = document.getElementById("peer-group-map-location-color-input");
+                  const pgSpeedInput = document.getElementById("peer-group-map-location-glow-speed");
+                  const pgSpeedVal = document.getElementById("peer-group-map-location-glow-speed-val");
+                  const pgBrightInput = document.getElementById("peer-group-map-location-glow-brightness");
+                  const pgBrightVal = document.getElementById("peer-group-map-location-glow-brightness-val");
+                  const pgCustomIconPreview = document.getElementById("peer-group-map-location-custom-icon-preview");
+                  const pgCustomGlowCb = document.getElementById("peer-group-map-location-custom-glow");
+                  const pgCustomIconFile = document.getElementById("peer-group-map-location-custom-icon-file");
+                  const pgImportIconBtn = document.getElementById("peer-group-map-location-import-icon-btn");
+                  const pgClearIconBtn = document.getElementById("peer-group-map-location-clear-icon-btn");
+                  const pgCustomScaleInput = document.getElementById("peer-group-map-location-custom-scale");
+                  const pgCustomScaleVal = document.getElementById("peer-group-map-location-custom-scale-val");
+
+                  const curPgEffect = chat.settings.peerGroupMapLocationEffect || "pin";
+                  const curPgColor = chat.settings.peerGroupMapLocationColor || "#E53E3E";
+                  const curPgSpeed = chat.settings.peerGroupMapLocationGlowSpeed || 1.2;
+                  const curPgBright = chat.settings.peerGroupMapLocationGlowBrightness !== undefined ? chat.settings.peerGroupMapLocationGlowBrightness : 0.8;
+                  const curPgGlow = !!chat.settings.peerGroupMapLocationCustomGlow;
+                  const curPgScale = chat.settings.peerGroupMapLocationCustomScale !== undefined ? chat.settings.peerGroupMapLocationCustomScale : 2.0;
+
+                  if (pgEffectSelect) {
+                    pgEffectSelect.value = curPgEffect;
+                    pgEffectSelect.onchange = () => {
+                      chat.settings.peerGroupMapLocationEffect = pgEffectSelect.value;
+                    };
+                  }
+                  if (pgColorPreview && pgColorInput) {
+                    pgColorPreview.style.background = curPgColor;
+                    pgColorInput.value = curPgColor.startsWith("#") ? curPgColor : "#E53E3E";
+                    pgColorInput.oninput = () => {
+                      pgColorPreview.style.background = pgColorInput.value;
+                      chat.settings.peerGroupMapLocationColor = pgColorInput.value;
+                    };
+                  }
+                  if (pgSpeedInput && pgSpeedVal) {
+                    pgSpeedInput.value = curPgSpeed;
+                    pgSpeedVal.textContent = curPgSpeed + "s";
+                    pgSpeedInput.oninput = () => {
+                      pgSpeedVal.textContent = pgSpeedInput.value + "s";
+                      chat.settings.peerGroupMapLocationGlowSpeed = parseFloat(pgSpeedInput.value) || 1.2;
+                    };
+                  }
+                  if (pgBrightInput && pgBrightVal) {
+                    pgBrightInput.value = curPgBright;
+                    pgBrightVal.textContent = curPgBright;
+                    pgBrightInput.oninput = () => {
+                      pgBrightVal.textContent = pgBrightInput.value;
+                      chat.settings.peerGroupMapLocationGlowBrightness = parseFloat(pgBrightInput.value) || 0.8;
+                    };
+                  }
+                  const renderPgIconPreview = () => {
+                    if (!pgCustomIconPreview) return;
+                    if (chat.settings.peerGroupMapLocationCustomIcon) {
+                      pgCustomIconPreview.innerHTML = `<img src="${chat.settings.peerGroupMapLocationCustomIcon}" style="width: 100%; height: 100%; object-fit: contain;" />`;
+                      if (pgClearIconBtn) pgClearIconBtn.style.display = "inline-flex";
+                    } else {
+                      pgCustomIconPreview.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>`;
+                      if (pgClearIconBtn) pgClearIconBtn.style.display = "none";
+                    }
+                  };
+                  renderPgIconPreview();
+                  if (pgCustomGlowCb) {
+                    pgCustomGlowCb.checked = curPgGlow;
+                    pgCustomGlowCb.onchange = () => {
+                      chat.settings.peerGroupMapLocationCustomGlow = pgCustomGlowCb.checked;
+                    };
+                  }
+                  if (pgImportIconBtn && pgCustomIconFile) {
+                    pgImportIconBtn.onclick = () => pgCustomIconFile.click();
+                    pgCustomIconFile.onchange = (e) => {
+                      const file = e.target.files && e.target.files[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (re) => {
+                        chat.settings.peerGroupMapLocationCustomIcon = re.target.result;
+                        renderPgIconPreview();
+                      };
+                      reader.readAsDataURL(file);
+                      pgCustomIconFile.value = "";
+                    };
+                  }
+                  if (pgClearIconBtn) {
+                    pgClearIconBtn.onclick = () => {
+                      chat.settings.peerGroupMapLocationCustomIcon = "";
+                      renderPgIconPreview();
+                    };
+                  }
+                  if (pgCustomScaleInput && pgCustomScaleVal) {
+                    pgCustomScaleInput.value = curPgScale;
+                    pgCustomScaleVal.textContent = Number(curPgScale).toFixed(1) + "x";
+                    pgCustomScaleInput.oninput = () => {
+                      const val = parseFloat(pgCustomScaleInput.value) || 2.0;
+                      pgCustomScaleVal.textContent = val.toFixed(1) + "x";
+                      chat.settings.peerGroupMapLocationCustomScale = val;
+                    };
+                  }
+                }
+              }
+
               const isDiceOrStatus = chat.isDiceBot || chat.roleType === "system_status" || chat.roleType === "dice" || chat.isDice;
               const aiInvBtn = document.getElementById("manage-ai-inventory-btn");
               if (aiInvBtn) {
@@ -78439,31 +79373,15 @@ ${stickerContext || "无"}
               }
 
               const importSharedWbBtn = document.getElementById("import-shared-wb-btn");
-              const hasSharedWbs = Boolean(
-                chat && chat.isGroup && chat.isPeerGroup &&
-                Array.isArray(chat.settings?.sharedWorldBooks) &&
-                chat.settings.sharedWorldBooks.length > 0
-              );
+              const isPeerGrpForWb = typeof window.isPeerGroupChat === "function"
+                ? window.isPeerGroupChat(chat)
+                : Boolean(chat && chat.isGroup && chat.isPeerGroup);
               if (importSharedWbBtn) {
-                importSharedWbBtn.style.display = hasSharedWbs ? "inline-flex" : "none";
-                importSharedWbBtn.onclick = async () => {
-                  const sharedList = chat.settings.sharedWorldBooks || [];
-                  let count = 0;
-                  for (const book of sharedList) {
-                    if (!book || !book.id) continue;
-                    const exists = (state.worldBooks || []).some(b => String(b.id) === String(book.id));
-                    if (!exists) {
-                      state.worldBooks.push(book);
-                      if (window.db && window.db.worldBooks) {
-                        await window.db.worldBooks.put(book);
-                      }
-                      count++;
-                    }
+                importSharedWbBtn.style.display = isPeerGrpForWb ? "inline-flex" : "none";
+                importSharedWbBtn.onclick = () => {
+                  if (typeof window.openSharedResourceImportModal === "function") {
+                    window.openSharedResourceImportModal("worldbook");
                   }
-                  if (typeof window.showCustomAlert === "function") {
-                    await window.showCustomAlert("提示", count > 0 ? `成功导入 ${count} 本世界书` : "所有世界书已在本地");
-                  }
-                  await reloadWorldBookCheckboxes();
                 };
               }
 
@@ -78473,18 +79391,30 @@ ${stickerContext || "无"}
                 );
                 if (!worldBookCheckboxesContainer) return;
                 worldBookCheckboxesContainer.innerHTML = "";
-                const linkedIds = new Set(chat.settings.linkedWorldBookIds || []);
+                const linkedIds = new Set((chat.settings.linkedWorldBookIds || []).map(String));
 
                 const categories = await db.worldBookCategories.toArray();
-                const books = state.worldBooks;
+                const catIds = new Set(categories.map(c => String(c.id)));
+                const mergedBooksMap = new Map();
+                (state.worldBooks || []).forEach(b => {
+                  if (b && b.id) mergedBooksMap.set(String(b.id), b);
+                });
+                if (Array.isArray(chat.settings?.sharedWorldBooks)) {
+                  chat.settings.sharedWorldBooks.forEach(sb => {
+                    if (sb && sb.id && !mergedBooksMap.has(String(sb.id))) {
+                      mergedBooksMap.set(String(sb.id), sb);
+                    }
+                  });
+                }
+                const books = Array.from(mergedBooksMap.values());
 
-                const hasUncategorized = books.some((book) => !book.categoryId);
+                const hasUncategorized = books.some((book) => !book.categoryId || !catIds.has(String(book.categoryId)));
                 if (hasUncategorized) {
                   categories.push({ id: "uncategorized", name: "未分类" });
                 }
 
                 const booksByCategoryId = books.reduce((acc, book) => {
-                  const categoryId = book.categoryId || "uncategorized";
+                  const categoryId = (book.categoryId && catIds.has(String(book.categoryId))) ? book.categoryId : "uncategorized";
                   if (!acc[categoryId]) {
                     acc[categoryId] = [];
                   }
@@ -78514,7 +79444,7 @@ ${stickerContext || "无"}
                     bookContainer.dataset.containerFor = category.id;
 
                     booksInCategory.forEach((book) => {
-                      const isChecked = linkedIds.has(book.id);
+                      const isChecked = linkedIds.has(String(book.id)) || linkedIds.has(book.id);
                       const label = document.createElement("label");
                       label.innerHTML = `<input type="checkbox" class="wb-book-checkbox" value="${
                         book.id
@@ -78544,6 +79474,7 @@ ${stickerContext || "无"}
 
                 updateWorldBookSelectionDisplay();
               };
+              window.reloadActiveChatWorldBooks = reloadWorldBookCheckboxes;
 
               await reloadWorldBookCheckboxes();
 
@@ -78671,9 +79602,13 @@ ${stickerContext || "无"}
             document.getElementById("member-name-input").value =
               member.groupNickname || member.originalName || (sourceChat && sourceChat.name) || "";
             const isPeerHuman = Boolean(member.isPeerMember || member.roleType === "peer" || (sourceChat && sourceChat.roleType === "peer"));
+            const isDiceOrStatusRole = Boolean(isStatusRole || member.isDiceBot || member.roleType === "system_status" || member.roleType === "dice" || member.isDice || (sourceChat && (sourceChat.roleType === "system_status" || sourceChat.roleType === "dice" || sourceChat.isDiceBot || sourceChat.isDice)));
+            if (isDiceOrStatusRole) {
+              member.isPrivate = false;
+            }
             const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? String(window.PeerManager.getOrCreateMyPeerCode()) : "";
             const isAddedByOtherPeer = Boolean(member.addedByPeerCode && member.addedByPeerCode !== "user" && (!myCode || String(member.addedByPeerCode) !== myCode));
-            const isPrivateToMe = Boolean(member.isPrivate && isAddedByOtherPeer);
+            const isPrivateToMe = Boolean(!isDiceOrStatusRole && member.isPrivate && isAddedByOtherPeer);
             const isMemberLocked = Boolean(isPeerHuman || isPrivateToMe || member.isInvestigatorLocked || (sourceChat && sourceChat.settings?.isInvestigatorLocked));
             const memberPersonaTextarea = document.getElementById("member-persona-input");
             if (isPeerHuman || isPrivateToMe) {
@@ -78784,7 +79719,7 @@ ${stickerContext || "无"}
 
             const privacyBtn = document.getElementById("member-privacy-btn");
             if (privacyBtn) {
-              const isPeerGrp = Boolean(chat && chat.isGroup && chat.isPeerGroup && !isPeerHuman);
+              const isPeerGrp = Boolean(chat && chat.isGroup && chat.isPeerGroup && !isPeerHuman && !isDiceOrStatusRole);
               if (isPeerGrp) {
                 privacyBtn.style.display = "inline-flex";
                 const isAddedByMe = !member.addedByPeerCode || member.addedByPeerCode === "user" || (myCode && String(member.addedByPeerCode) === myCode);
@@ -78838,7 +79773,10 @@ ${stickerContext || "无"}
               }
               member.groupNickname = newNickname; // 只修改群昵称
               const isPeerHumanOnSave = Boolean(member.isPeerMember || member.roleType === "peer" || (state.chats[member.id]?.roleType === "peer"));
-              const isMemberLockedOnSave = !!(isPeerHumanOnSave || member.isInvestigatorLocked || (state.chats[member.id]?.settings?.isInvestigatorLocked));
+              const myCodeOnSave = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? String(window.PeerManager.getOrCreateMyPeerCode()) : "";
+              const isAddedByOtherPeerOnSave = Boolean(member.addedByPeerCode && member.addedByPeerCode !== "user" && (!myCodeOnSave || String(member.addedByPeerCode) !== myCodeOnSave));
+              const isPrivateToMeOnSave = Boolean(member.isPrivate && isAddedByOtherPeerOnSave);
+              const isMemberLockedOnSave = !!(isPeerHumanOnSave || isPrivateToMeOnSave || member.isInvestigatorLocked || (state.chats[member.id]?.settings?.isInvestigatorLocked));
               if (!isMemberLockedOnSave) {
                 member.persona = document.getElementById(
                   "member-persona-input",
@@ -79702,6 +80640,21 @@ ${stickerContext || "无"}
                   interval: groupActivityInterval,
                   lastActivityTimestamp: lastTimestamp, // 保留上次的时间戳
                 };
+
+                if (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)) {
+                  const pgEffectEl = document.getElementById("peer-group-map-location-effect-select");
+                  const pgColorEl = document.getElementById("peer-group-map-location-color-input");
+                  const pgSpeedEl = document.getElementById("peer-group-map-location-glow-speed");
+                  const pgBrightEl = document.getElementById("peer-group-map-location-glow-brightness");
+                  const pgGlowEl = document.getElementById("peer-group-map-location-custom-glow");
+                  const pgScaleEl = document.getElementById("peer-group-map-location-custom-scale");
+                  if (pgEffectEl) chat.settings.peerGroupMapLocationEffect = pgEffectEl.value;
+                  if (pgColorEl) chat.settings.peerGroupMapLocationColor = pgColorEl.value;
+                  if (pgSpeedEl) chat.settings.peerGroupMapLocationGlowSpeed = parseFloat(pgSpeedEl.value) || 1.2;
+                  if (pgBrightEl) chat.settings.peerGroupMapLocationGlowBrightness = parseFloat(pgBrightEl.value) || 0.8;
+                  if (pgGlowEl) chat.settings.peerGroupMapLocationCustomGlow = pgGlowEl.checked;
+                  if (pgScaleEl) chat.settings.peerGroupMapLocationCustomScale = parseFloat(pgScaleEl.value) || 2.0;
+                }
               } else if (chat.roleType === "system_status") {
                 const sysPersonaInput = document.getElementById("system-status-persona-input");
                 if (sysPersonaInput) chat.settings.aiPersona = sysPersonaInput.value.trim();

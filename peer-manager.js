@@ -43,12 +43,15 @@
     currentPlayingBubble: null,
 
     getDeviceClientSuffix: function () {
-      let devId = localStorage.getItem("tukey_mqtt_device_id");
-      if (!devId) {
-        devId = Math.random().toString(36).slice(2, 9);
-        localStorage.setItem("tukey_mqtt_device_id", devId);
+      if (!this._tabClientSuffix) {
+        let devId = localStorage.getItem("tukey_mqtt_device_id");
+        if (!devId) {
+          devId = Math.random().toString(36).slice(2, 7);
+          localStorage.setItem("tukey_mqtt_device_id", devId);
+        }
+        this._tabClientSuffix = devId + "_" + Math.random().toString(36).slice(2, 6);
       }
-      return devId;
+      return this._tabClientSuffix;
     },
 
     generateRandomCode: function () {
@@ -549,7 +552,7 @@
         this.heartbeatTimer = setInterval(() => {
           this.sendOnlinePingToFriends();
           this.syncAllPeerPresenceUI();
-        }, 4000);
+        }, 3000);
       }
     },
 
@@ -590,7 +593,7 @@
     isPeerOnline: function (peerCode) {
       if (!peerCode || !this.peerLastSeen) return false;
       const last = this.peerLastSeen[peerCode] || 0;
-      return last > 0 && Date.now() - last < 10000;
+      return last > 0 && Date.now() - last < 22000;
     },
 
     markPeerOnline: function (peerCode) {
@@ -613,7 +616,7 @@
       if (!peerCode) return;
       if (!this.peerLastSeen) this.peerLastSeen = {};
       if (!this.peerOfflineLockUntil) this.peerOfflineLockUntil = {};
-      this.peerOfflineLockUntil[peerCode] = Date.now() + 7000;
+      this.peerOfflineLockUntil[peerCode] = Date.now() + 2500;
       this.peerLastSeen[peerCode] = 0;
       if (window.state && window.state.chats) {
         for (const chat of Object.values(window.state.chats)) {
@@ -1045,8 +1048,6 @@
                 if (Date.now() > lockedUntil) {
                   this.markPeerOnline(pCode);
                 }
-              } else {
-                this.markPeerOffline(pCode);
               }
             }
             this.syncAllPeerPresenceUI();
@@ -1169,6 +1170,16 @@
           return;
         }
         this.markEventIdSeen(data.eventId);
+      }
+
+      const incomingSender = data.fromCode || data.peerCode;
+      if (
+        incomingSender &&
+        incomingSender !== myCode &&
+        data.type !== "offline_ping" &&
+        !(data.type === "peer_presence" && data.status === "offline")
+      ) {
+        this.markPeerOnline(incomingSender);
       }
 
       if (data.type === "message") {
@@ -2024,13 +2035,64 @@
         ? groupChat.history.filter((msg) => msg && msg.type === "summary")
         : [];
 
-      const sharedModulesSanitized = Array.isArray(groupChat.settings?.sharedModules)
-        ? groupChat.settings.sharedModules.map((sm) => ({
+      const sharedModulesSanitized = [];
+      if (Array.isArray(groupChat.settings?.sharedModules)) {
+        for (const sm of groupChat.settings.sharedModules) {
+          let locNav = Array.isArray(sm.locationNav) ? sm.locationNav : [];
+          if (locNav.length === 0 && sm.module && sm.module.id && window.db && window.db.moduleLocationNav) {
+            try {
+              locNav = await window.db.moduleLocationNav.where("moduleId").equals(sm.module.id).toArray();
+              if (locNav.length === 0 && !isNaN(Number(sm.module.id))) {
+                locNav = await window.db.moduleLocationNav.where("moduleId").equals(Number(sm.module.id)).toArray();
+              }
+              if (locNav.length === 0) {
+                locNav = await window.db.moduleLocationNav.where("moduleId").equals(String(sm.module.id)).toArray();
+              }
+            } catch (e) {}
+          }
+          sharedModulesSanitized.push({
             module: sm.module,
             chapters: sm.chapters || [],
-            items: sm.items || []
-          }))
-        : [];
+            items: sm.items || [],
+            locationNav: locNav
+          });
+        }
+      }
+
+      let activeModuleLocationNav = [];
+      if (groupChat.activeModuleId && window.db && window.db.moduleLocationNav) {
+        try {
+          activeModuleLocationNav = await window.db.moduleLocationNav.where("moduleId").equals(groupChat.activeModuleId).toArray();
+          if (activeModuleLocationNav.length === 0 && !isNaN(Number(groupChat.activeModuleId))) {
+            activeModuleLocationNav = await window.db.moduleLocationNav.where("moduleId").equals(Number(groupChat.activeModuleId)).toArray();
+          }
+          if (activeModuleLocationNav.length === 0) {
+            activeModuleLocationNav = await window.db.moduleLocationNav.where("moduleId").equals(String(groupChat.activeModuleId)).toArray();
+          }
+        } catch (e) {}
+      }
+
+      const mapSyncData = {
+        useModuleMap: true,
+        deletedLocationNames: Array.isArray(groupChat.settings?.deletedLocationNames) ? groupChat.settings.deletedLocationNames : [],
+        customLocations: Array.isArray(groupChat.settings?.customLocations) ? groupChat.settings.customLocations : [],
+        temporaryLocations: Array.isArray(groupChat.settings?.temporaryLocations) ? groupChat.settings.temporaryLocations : [],
+        currentLocation: groupChat.settings?.currentLocation || "",
+        moduleMiniMaps: groupChat.settings?.moduleMiniMaps ? JSON.parse(JSON.stringify(groupChat.settings.moduleMiniMaps)) : {},
+        miniMapSvg: groupChat.settings?.miniMapSvg || null,
+        miniMapStyle: groupChat.settings?.miniMapStyle || "自适应",
+        peerGroupMapLocationEffect: groupChat.settings?.peerGroupMapLocationEffect,
+        peerGroupMapLocationColor: groupChat.settings?.peerGroupMapLocationColor,
+        peerGroupMapLocationGlowSpeed: groupChat.settings?.peerGroupMapLocationGlowSpeed,
+        peerGroupMapLocationGlowBrightness: groupChat.settings?.peerGroupMapLocationGlowBrightness,
+        peerGroupMapLocationCustomIcon: groupChat.settings?.peerGroupMapLocationCustomIcon,
+        peerGroupMapLocationCustomGlow: groupChat.settings?.peerGroupMapLocationCustomGlow,
+        peerGroupMapLocationCustomScale: groupChat.settings?.peerGroupMapLocationCustomScale
+      };
+
+      const selectedChapIds = Array.isArray(groupChat.selectedModuleChapterIds)
+        ? groupChat.selectedModuleChapterIds
+        : (Array.isArray(groupChat.activeModuleChapterIds) ? groupChat.activeModuleChapterIds : []);
 
       return {
         sharedGroupId: sharedGroupId,
@@ -2052,9 +2114,13 @@
           : [],
         sharedModules: sharedModulesSanitized,
         activeModuleId: groupChat.activeModuleId || null,
-        activeModuleChapterIds: Array.isArray(groupChat.activeModuleChapterIds)
-          ? groupChat.activeModuleChapterIds
-          : [],
+        activeModuleLocationNav: activeModuleLocationNav,
+        mapSyncData: mapSyncData,
+        activeModuleChapterIds: selectedChapIds,
+        selectedModuleChapterIds: selectedChapIds,
+        moduleAiScopeChapterIds: Array.isArray(groupChat.moduleAiScopeChapterIds) ? groupChat.moduleAiScopeChapterIds : [],
+        loadModuleToc: Boolean(groupChat.loadModuleToc),
+        loadModuleImages: Boolean(groupChat.loadModuleImages),
         moduleSwitchMode: groupChat.moduleSwitchMode || "semi",
         sharedThoughtChains: Array.isArray(groupChat.settings?.sharedThoughtChains)
           ? groupChat.settings.sharedThoughtChains
@@ -2488,7 +2554,13 @@
             linkedWorldBookIds: snap.linkedWorldBookIds,
             sharedModules: snap.sharedModules,
             activeModuleId: snap.activeModuleId,
+            activeModuleLocationNav: snap.activeModuleLocationNav,
+            mapSyncData: snap.mapSyncData,
             activeModuleChapterIds: snap.activeModuleChapterIds,
+            selectedModuleChapterIds: snap.selectedModuleChapterIds,
+            moduleAiScopeChapterIds: snap.moduleAiScopeChapterIds,
+            loadModuleToc: snap.loadModuleToc,
+            loadModuleImages: snap.loadModuleImages,
             moduleSwitchMode: snap.moduleSwitchMode,
             sharedThoughtChains: snap.sharedThoughtChains,
             thoughtChainEnabled: snap.thoughtChainEnabled,
@@ -2725,15 +2797,89 @@
                   await window.db.moduleItems.put(it);
                 }
               }
+              if (Array.isArray(sm.locationNav) && window.db.moduleLocationNav) {
+                for (const ln of sm.locationNav) {
+                  await window.db.moduleLocationNav.put(ln);
+                }
+              }
             } catch (e) {}
           }
         }
       }
+      if (Array.isArray(data.activeModuleLocationNav) && window.db && window.db.moduleLocationNav) {
+        for (const ln of data.activeModuleLocationNav) {
+          try {
+            await window.db.moduleLocationNav.put(ln);
+          } catch (e) {}
+        }
+      }
       if (data.activeModuleId !== undefined) {
         groupChat.activeModuleId = data.activeModuleId;
+        groupChat.settings.useModuleMap = true;
       }
-      if (Array.isArray(data.activeModuleChapterIds)) {
+      if (data.mapSyncData && typeof data.mapSyncData === "object") {
+        groupChat.settings.useModuleMap = true;
+        if (Array.isArray(data.mapSyncData.deletedLocationNames)) {
+          groupChat.settings.deletedLocationNames = data.mapSyncData.deletedLocationNames;
+        }
+        if (Array.isArray(data.mapSyncData.customLocations)) {
+          groupChat.settings.customLocations = data.mapSyncData.customLocations;
+        }
+        if (Array.isArray(data.mapSyncData.temporaryLocations)) {
+          groupChat.settings.temporaryLocations = data.mapSyncData.temporaryLocations;
+        }
+        if (data.mapSyncData.currentLocation !== undefined) {
+          groupChat.settings.currentLocation = data.mapSyncData.currentLocation;
+        }
+        if (data.mapSyncData.moduleMiniMaps && typeof data.mapSyncData.moduleMiniMaps === "object") {
+          groupChat.settings.moduleMiniMaps = {
+            ...(groupChat.settings.moduleMiniMaps || {}),
+            ...data.mapSyncData.moduleMiniMaps
+          };
+        }
+        if (data.mapSyncData.miniMapSvg !== undefined) {
+          groupChat.settings.miniMapSvg = data.mapSyncData.miniMapSvg;
+        }
+        if (data.mapSyncData.miniMapStyle !== undefined) {
+          groupChat.settings.miniMapStyle = data.mapSyncData.miniMapStyle;
+        }
+        if (data.mapSyncData.peerGroupMapLocationEffect !== undefined) {
+          groupChat.settings.peerGroupMapLocationEffect = data.mapSyncData.peerGroupMapLocationEffect;
+        }
+        if (data.mapSyncData.peerGroupMapLocationColor !== undefined) {
+          groupChat.settings.peerGroupMapLocationColor = data.mapSyncData.peerGroupMapLocationColor;
+        }
+        if (data.mapSyncData.peerGroupMapLocationGlowSpeed !== undefined) {
+          groupChat.settings.peerGroupMapLocationGlowSpeed = data.mapSyncData.peerGroupMapLocationGlowSpeed;
+        }
+        if (data.mapSyncData.peerGroupMapLocationGlowBrightness !== undefined) {
+          groupChat.settings.peerGroupMapLocationGlowBrightness = data.mapSyncData.peerGroupMapLocationGlowBrightness;
+        }
+        if (data.mapSyncData.peerGroupMapLocationCustomIcon !== undefined) {
+          groupChat.settings.peerGroupMapLocationCustomIcon = data.mapSyncData.peerGroupMapLocationCustomIcon;
+        }
+        if (data.mapSyncData.peerGroupMapLocationCustomGlow !== undefined) {
+          groupChat.settings.peerGroupMapLocationCustomGlow = data.mapSyncData.peerGroupMapLocationCustomGlow;
+        }
+        if (data.mapSyncData.peerGroupMapLocationCustomScale !== undefined) {
+          groupChat.settings.peerGroupMapLocationCustomScale = data.mapSyncData.peerGroupMapLocationCustomScale;
+        }
+      }
+      if (Array.isArray(data.selectedModuleChapterIds)) {
+        groupChat.selectedModuleChapterIds = data.selectedModuleChapterIds;
+        groupChat.activeModuleChapterIds = data.selectedModuleChapterIds;
+      } else if (Array.isArray(data.activeModuleChapterIds)) {
         groupChat.activeModuleChapterIds = data.activeModuleChapterIds;
+        groupChat.selectedModuleChapterIds = data.activeModuleChapterIds;
+      }
+      if (Array.isArray(data.moduleAiScopeChapterIds)) {
+        groupChat.moduleAiScopeChapterIds = data.moduleAiScopeChapterIds;
+      }
+      if (data.loadModuleToc !== undefined) {
+        groupChat.loadModuleToc = data.loadModuleToc;
+      }
+      if (data.loadModuleImages !== undefined) {
+        groupChat.loadModuleImages = data.loadModuleImages;
       }
       if (data.moduleSwitchMode !== undefined) {
         groupChat.moduleSwitchMode = data.moduleSwitchMode;
@@ -2775,6 +2921,14 @@
         if (sumModal && sumModal.classList.contains("visible") && typeof window.openSummaryViewer === "function") {
           window.openSummaryViewer();
         }
+        const mapModal = document.getElementById("chat-map-modal");
+        if (mapModal && mapModal.classList.contains("visible") && typeof window.renderChatMapList === "function") {
+          window.renderChatMapList();
+        }
+        const miniMapModal = document.getElementById("chat-mini-map-modal");
+        if (miniMapModal && miniMapModal.classList.contains("visible") && typeof window.renderChatMiniMap === "function") {
+          window.renderChatMiniMap();
+        }
         if (typeof window.renderChatInterfaceProxy === "function") {
           window.renderChatInterfaceProxy(groupChat.id);
         }
@@ -2801,6 +2955,11 @@
         (m) => (m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode
       );
 
+      const normalizedMsg = { ...msg, eventId: baseEventId };
+      if (normalizedMsg.quote && normalizedMsg.quote.senderName === "我" && isFromLocalUser && myNick && myNick !== "我") {
+        normalizedMsg.quote = { ...normalizedMsg.quote, senderName: myNick };
+      }
+
       for (const pm of peerTargets) {
         const pkt = {
           type: "group_message",
@@ -2813,10 +2972,7 @@
           senderName: isFromLocalUser ? myNick : (msg.senderName || msg.sender || "角色"),
           senderAvatar: isFromLocalUser ? myAva : (msg.senderAvatar || ""),
           senderAvatarFrame: isFromLocalUser ? myFrame : (msg.senderAvatarFrame || ""),
-          msgPayload: {
-            ...msg,
-            eventId: baseEventId
-          },
+          msgPayload: normalizedMsg,
           timestamp: msg.timestamp || Date.now()
         };
         this.dispatchPacketToNetwork(pm.peerCode, pkt, "/api/peer/send", false);
@@ -3480,6 +3636,7 @@
         isPeerOnlySticker: isSticker,
         audioData: data.audioData || "",
         audioDuration: data.audioDuration || 0,
+        ...(data.quote ? { quote: data.quote } : {}),
         timestamp: data.timestamp || Date.now()
       };
 
@@ -3621,10 +3778,18 @@
         isPeerOnlySticker: isSticker,
         audioData: msg.audioData || "",
         audioDuration: msg.audioDuration || 0,
-        senderName: chat.settings?.myName || myProfile.name,
+        senderName: (chat.settings?.myName && chat.settings.myName !== "我" ? chat.settings.myName : "") || myProfile.name || "我",
         senderAvatar: smallAva,
         senderAvatarFrame: chat.settings?.myAvatarFrame || "",
         peerAvatarFrame: chat.settings?.aiAvatarFrame || "",
+        ...(msg.quote
+          ? {
+              quote:
+                msg.quote.senderName === "我" && ((chat.settings?.myName && chat.settings.myName !== "我") || myProfile.name)
+                  ? { ...msg.quote, senderName: (chat.settings?.myName && chat.settings.myName !== "我" ? chat.settings.myName : myProfile.name) }
+                  : msg.quote
+            }
+          : {}),
         timestamp: msg.timestamp || Date.now()
       };
 
@@ -3888,6 +4053,12 @@
         audioDuration: durationSec,
         timestamp: Date.now()
       };
+      if (typeof window.getCurrentReplyContext === "function" && window.getCurrentReplyContext()) {
+        msg.quote = window.getCurrentReplyContext();
+        if (typeof window.cancelReplyMode === "function") {
+          window.cancelReplyMode();
+        }
+      }
 
       if (!Array.isArray(chat.history)) chat.history = [];
       chat.history.push(msg);

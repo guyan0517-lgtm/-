@@ -414,7 +414,7 @@ app.get('/api/peer/poll', (req, res) => {
       const wsSet = peerClients.get(pCode);
       const hasWs = Boolean(wsSet && wsSet.size > 0);
       const lastSeen = peerLastPoll.get(pCode) || 0;
-      onlinePeers[pCode] = Boolean(hasWs || (lastSeen > 0 && now - lastSeen < 9000));
+      onlinePeers[pCode] = Boolean(hasWs || (lastSeen > 0 && now - lastSeen < 22000));
     });
   }
   return res.json({ success: true, events, profile, onlinePeers });
