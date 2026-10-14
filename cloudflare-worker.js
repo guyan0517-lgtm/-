@@ -18,12 +18,23 @@ function pushToWorkerMailbox(code, event) {
   if (!peerMailboxes.has(code)) {
     peerMailboxes.set(code, []);
   }
-  const box = peerMailboxes.get(code);
+  let box = peerMailboxes.get(code);
   if (event.eventId && box.some(item => item && item.eventId === event.eventId)) {
     return;
   }
+  if (event.type === "group_typing_status") {
+    box = box.filter(item => !(item && item.type === "group_typing_status" && item.fromCode === event.fromCode));
+  } else if (event.type === "group_member_update" && event.groupId) {
+    box = box.filter(item => !(item && item.type === "group_member_update" && String(item.groupId) === String(event.groupId)));
+  } else if (event.type === "profile_update" && (event.peerCode || event.fromCode)) {
+    const pCode = event.peerCode || event.fromCode;
+    box = box.filter(item => !(item && item.type === "profile_update" && (item.peerCode === pCode || item.fromCode === pCode)));
+  } else if (event.type === "peer_ack" && event.ackEventId) {
+    box = box.filter(item => !(item && item.type === "peer_ack" && item.ackEventId === event.ackEventId));
+  }
   box.push(event);
   if (box.length > 200) box.shift();
+  peerMailboxes.set(code, box);
 }
 
 export default {
@@ -208,10 +219,10 @@ export default {
       if (peersParam) {
         const now = Date.now();
         peersParam.split(",").forEach((p) => {
-          const pCode = p.trim();
+          const pCode = p.trim().toUpperCase();
           if (!pCode) return;
-          const lastSeen = peerLastPoll.get(pCode) || 0;
-          onlinePeers[pCode] = Boolean(lastSeen > 0 && now - lastSeen < 12000);
+          const lastSeen = peerLastPoll.get(pCode) || peerLastPoll.get(p.trim()) || 0;
+          onlinePeers[pCode] = Boolean(lastSeen > 0 && now - lastSeen < 25000);
         });
       }
       return new Response(JSON.stringify({ success: true, events, profile, onlinePeers }), { headers: getCorsHeaders() });

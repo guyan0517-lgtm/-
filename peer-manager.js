@@ -208,24 +208,36 @@
     },
 
     publishRetainedMailboxForTarget: function (targetCode, specificClient) {
-      if (!targetCode) return;
+      const normTarget = this.normalizePeerCode(targetCode);
+      if (!normTarget) return;
       const clients = specificClient ? [specificClient] : this.mqttClients || [];
       if (clients.length === 0) return;
 
-      const myCode = this.getOrCreateMyPeerCode();
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const list = this.getOutboxQueue();
-      const targetItems = list
-        .filter((item) => item && item.targetCode === targetCode && item.payload)
-        .slice(-20)
-        .map((item) => item.payload);
+      const targetItems = [];
+      let totalLen = 0;
+      const candidates = list.filter(
+        (item) => item && this.normalizePeerCode(item.targetCode) === normTarget && item.payload
+      );
+      for (let i = candidates.length - 1; i >= 0 && targetItems.length < 6; i--) {
+        const p = candidates[i].payload;
+        try {
+          const s = JSON.stringify(p);
+          if (s.length <= 14000 && totalLen + s.length <= 48000) {
+            targetItems.unshift(p);
+            totalLen += s.length;
+          }
+        } catch (e) {}
+      }
 
-      const topic = TOPIC_PREFIX + "mailbox/" + targetCode + "/" + myCode;
+      const topic = TOPIC_PREFIX + "mailbox/" + normTarget + "/" + myCode;
       const pktStr =
         targetItems.length > 0
           ? JSON.stringify({
               type: "mailbox_bundle",
               fromCode: myCode,
-              toCode: targetCode,
+              toCode: normTarget,
               events: targetItems,
               timestamp: Date.now()
             })
@@ -234,7 +246,7 @@
       clients.forEach((c) => {
         if (c && c.connected) {
           try {
-            c.publish(topic, pktStr, { qos: 1, retain: true });
+            c.publish(topic, pktStr, { qos: 0, retain: true });
           } catch (e) {}
         }
       });
@@ -244,7 +256,7 @@
       const list = this.getOutboxQueue();
       const targets = new Set();
       list.forEach((item) => {
-        if (item && item.targetCode) targets.add(item.targetCode);
+        if (item && item.targetCode) targets.add(this.normalizePeerCode(item.targetCode));
       });
       targets.forEach((targetCode) => {
         this.publishRetainedMailboxForTarget(targetCode, specificClient);
@@ -252,19 +264,50 @@
     },
 
     addToOutboxQueue: function (targetCode, payload, apiPath) {
-      if (!targetCode || !payload || !payload.eventId) return;
-      const list = this.getOutboxQueue();
+      const normTarget = this.normalizePeerCode(targetCode);
+      if (!normTarget || !payload || !payload.eventId) return;
+      try {
+        const serializedLen = JSON.stringify(payload).length;
+        if (serializedLen > 120000) {
+          return;
+        }
+      } catch (e) {
+        return;
+      }
+      let list = this.getOutboxQueue();
       if (list.some((item) => item && item.eventId === payload.eventId)) return;
+      if (payload.type === "group_member_update" && payload.groupId) {
+        list = list.filter(
+          (item) =>
+            !(
+              item &&
+              this.normalizePeerCode(item.targetCode) === normTarget &&
+              item.payload &&
+              item.payload.type === "group_member_update" &&
+              String(item.payload.groupId) === String(payload.groupId)
+            )
+        );
+      } else if (payload.type === "profile_update") {
+        list = list.filter(
+          (item) =>
+            !(
+              item &&
+              this.normalizePeerCode(item.targetCode) === normTarget &&
+              item.payload &&
+              item.payload.type === "profile_update"
+            )
+        );
+      }
       list.push({
         eventId: payload.eventId,
-        targetCode: targetCode,
+        targetCode: normTarget,
         payload: payload,
         apiPath: apiPath || "/api/peer/send",
         createdAt: Date.now(),
         lastTriedAt: Date.now()
       });
       this.saveOutboxQueue(list);
-      this.publishRetainedMailboxForTarget(targetCode);
+      this.publishRetainedMailboxForTarget(normTarget);
     },
 
     removeFromOutboxQueue: function (eventId) {
@@ -273,7 +316,7 @@
       const removedTargets = new Set();
       const next = list.filter((item) => {
         if (item && item.eventId === eventId) {
-          if (item.targetCode) removedTargets.add(item.targetCode);
+          if (item.targetCode) removedTargets.add(this.normalizePeerCode(item.targetCode));
           return false;
         }
         return true;
@@ -389,7 +432,7 @@
       return { name, avatar, myAvatarFrame };
     },
 
-    compressAvatarForWire: function (src) {
+    compressAvatarForWire: function (src, customMaxDim, customQuality) {
       return new Promise((resolve) => {
         if (!src || typeof src !== "string") {
           resolve("");
@@ -399,7 +442,10 @@
           resolve(src);
           return;
         }
-        if (src.length < 32000) {
+        const maxDim = Number(customMaxDim) > 0 ? Number(customMaxDim) : 512;
+        const quality = Number(customQuality) > 0 ? Number(customQuality) : 0.90;
+        const rawThreshold = customMaxDim ? 450000 : 250000;
+        if (src.length < rawThreshold || src.startsWith("data:image/gif")) {
           resolve(src);
           return;
         }
@@ -407,9 +453,8 @@
         img.onload = function () {
           try {
             const canvas = document.createElement("canvas");
-            const maxDim = 96;
-            let w = img.width || 96;
-            let h = img.height || 96;
+            let w = img.width || maxDim;
+            let h = img.height || maxDim;
             if (w > h) {
               if (w > maxDim) {
                 h = Math.round((h * maxDim) / w);
@@ -424,14 +469,19 @@
             canvas.width = w;
             canvas.height = h;
             const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL("image/jpeg", 0.72));
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = "high";
+              ctx.drawImage(img, 0, 0, w, h);
+            }
+            const out = canvas.toDataURL("image/jpeg", quality);
+            resolve(out && out.length < src.length ? out : src);
           } catch (e) {
-            resolve("");
+            resolve(src);
           }
         };
         img.onerror = function () {
-          resolve("");
+          resolve(src);
         };
         img.src = src;
       });
@@ -551,12 +601,14 @@
       if (!this.heartbeatTimer) {
         this.heartbeatTimer = setInterval(() => {
           this.sendOnlinePingToFriends();
+          this.publishMyRetainedPresence("online");
           this.syncAllPeerPresenceUI();
         }, 3000);
       }
     },
 
     wakeUpAndSyncNow: function () {
+      this.flushIncomingQueue();
       this.pollOnce();
       if (!this.ws || this.ws.readyState > 1) {
         this.connectWebSocket();
@@ -565,46 +617,92 @@
         this.connectMqttBroker();
       } else {
         this.subscribeAllKnownFriendsMqtt();
+        this.publishMyRetainedPresence("online");
         this.publishAllRetainedMailboxes();
       }
       this.retryOutboxPackets();
       this.sendOnlinePingToFriends();
       this.syncAllPeerPresenceUI();
+      if (
+        window.state &&
+        window.state.activeChatId &&
+        document.getElementById("chat-interface-screen") &&
+        document.getElementById("chat-interface-screen").classList.contains("active") &&
+        typeof window.renderChatInterfaceProxy === "function"
+      ) {
+        const activeChat = window.state.chats && window.state.chats[window.state.activeChatId];
+        const msgBox = document.getElementById("chat-messages");
+        if (activeChat && (activeChat.roleType === "peer" || activeChat.isPeerGroup) && msgBox) {
+          const lastHist = Array.isArray(activeChat.history) && activeChat.history.length > 0
+            ? activeChat.history[activeChat.history.length - 1]
+            : null;
+          if (lastHist && lastHist.timestamp && !msgBox.querySelector(`[data-timestamp="${lastHist.timestamp}"]`)) {
+            window.renderChatInterfaceProxy(activeChat.id);
+          }
+        }
+      }
+    },
+
+    normalizePeerCode: function (code) {
+      return code ? String(code).trim().toUpperCase() : "";
+    },
+
+    getChatPeerCode: function (chat) {
+      if (!chat) return "";
+      return this.normalizePeerCode(chat.peerCode || (chat.settings && chat.settings.peerCode) || "");
     },
 
     getAllKnownPeerCodes: function () {
-      const myCode = this.getOrCreateMyPeerCode();
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const codes = new Set();
       if (window.state && window.state.chats) {
         for (const chat of Object.values(window.state.chats)) {
-          if (chat && chat.roleType === "peer" && chat.peerCode && chat.peerCode !== myCode) {
-            codes.add(chat.peerCode);
+          const cCode = this.getChatPeerCode(chat);
+          if (chat && chat.roleType === "peer" && cCode && cCode !== myCode) {
+            codes.add(cCode);
           }
           if (chat && chat.isGroup && chat.isPeerGroup && Array.isArray(chat.members)) {
             chat.members.forEach((m) => {
-              if (m && m.peerCode && m.peerCode !== myCode) codes.add(m.peerCode);
+              const mCode = this.normalizePeerCode(m && m.peerCode);
+              if (mCode && mCode !== myCode) codes.add(mCode);
             });
           }
         }
       }
+      const outMap = this.getOutgoingRequests();
+      Object.keys(outMap).forEach((c) => {
+        const norm = this.normalizePeerCode(c);
+        if (norm && norm !== myCode) codes.add(norm);
+      });
+      const backupMap = this.getSavedFriendsBackup();
+      Object.keys(backupMap).forEach((c) => {
+        const norm = this.normalizePeerCode(c);
+        if (norm && norm !== myCode) codes.add(norm);
+      });
       return Array.from(codes);
     },
 
     isPeerOnline: function (peerCode) {
-      if (!peerCode || !this.peerLastSeen) return false;
-      const last = this.peerLastSeen[peerCode] || 0;
-      return last > 0 && Date.now() - last < 22000;
+      const norm = this.normalizePeerCode(peerCode);
+      if (!norm || !this.peerLastSeen) return false;
+      const last = this.peerLastSeen[norm] || this.peerLastSeen[peerCode] || 0;
+      return last > 0 && Date.now() - last < 25000;
     },
 
     markPeerOnline: function (peerCode) {
-      if (!peerCode) return;
+      const norm = this.normalizePeerCode(peerCode);
+      if (!norm) return;
       if (!this.peerLastSeen) this.peerLastSeen = {};
       if (!this.peerOfflineLockUntil) this.peerOfflineLockUntil = {};
-      this.peerOfflineLockUntil[peerCode] = 0;
-      this.peerLastSeen[peerCode] = Date.now();
+      this.peerOfflineLockUntil[norm] = 0;
+      this.peerLastSeen[norm] = Date.now();
+      if (peerCode !== norm) {
+        this.peerOfflineLockUntil[peerCode] = 0;
+        this.peerLastSeen[peerCode] = Date.now();
+      }
       if (window.state && window.state.chats) {
         for (const chat of Object.values(window.state.chats)) {
-          if (chat && chat.roleType === "peer" && !chat.isGroup && chat.peerCode === peerCode) {
+          if (chat && chat.roleType === "peer" && !chat.isGroup && this.getChatPeerCode(chat) === norm) {
             chat.status = { text: "在线", isBusy: false };
           }
         }
@@ -613,14 +711,19 @@
     },
 
     markPeerOffline: function (peerCode) {
-      if (!peerCode) return;
+      const norm = this.normalizePeerCode(peerCode);
+      if (!norm) return;
       if (!this.peerLastSeen) this.peerLastSeen = {};
       if (!this.peerOfflineLockUntil) this.peerOfflineLockUntil = {};
-      this.peerOfflineLockUntil[peerCode] = Date.now() + 2500;
-      this.peerLastSeen[peerCode] = 0;
+      this.peerOfflineLockUntil[norm] = Date.now() + 2500;
+      this.peerLastSeen[norm] = 0;
+      if (peerCode !== norm) {
+        this.peerOfflineLockUntil[peerCode] = Date.now() + 2500;
+        this.peerLastSeen[peerCode] = 0;
+      }
       if (window.state && window.state.chats) {
         for (const chat of Object.values(window.state.chats)) {
-          if (chat && chat.roleType === "peer" && !chat.isGroup && chat.peerCode === peerCode) {
+          if (chat && chat.roleType === "peer" && !chat.isGroup && this.getChatPeerCode(chat) === norm) {
             chat.status = { text: "离线", isBusy: true };
           }
         }
@@ -631,8 +734,10 @@
     syncAllPeerPresenceUI: function () {
       if (!window.state || !window.state.chats) return;
       for (const chat of Object.values(window.state.chats)) {
-        if (!chat || chat.isGroup || chat.roleType !== "peer" || !chat.peerCode) continue;
-        const online = this.isPeerOnline(chat.peerCode);
+        const cCode = this.getChatPeerCode(chat);
+        if (!chat || chat.isGroup || chat.roleType !== "peer" || !cCode) continue;
+        if (!chat.peerCode) chat.peerCode = cCode;
+        const online = this.isPeerOnline(cCode);
         const statusText = online ? "在线" : "离线";
         chat.status = { text: statusText, isBusy: !online };
 
@@ -663,7 +768,8 @@
       if (!window.state || !window.state.activeChatId || !window.state.chats) return;
       const activeChat = window.state.chats[window.state.activeChatId];
       if (!activeChat || activeChat.roleType !== "peer" || activeChat.isGroup) return;
-      const online = this.isPeerOnline(activeChat.peerCode);
+      const cCode = this.getChatPeerCode(activeChat);
+      const online = this.isPeerOnline(cCode);
       activeChat.status = { text: online ? "在线" : "离线", isBusy: !online };
       const statusContainer = document.getElementById("chat-header-status");
       if (statusContainer) {
@@ -676,7 +782,8 @@
     },
 
     transmitPresencePacket: function (targetCode, payload) {
-      if (!targetCode || !payload) return;
+      const normTarget = this.normalizePeerCode(targetCode);
+      if (!normTarget || !payload) return;
       const jsonStr = JSON.stringify(payload);
       if (this.bc) {
         try {
@@ -690,7 +797,7 @@
         this.mqttClients.forEach((c) => {
           if (c) {
             try {
-              c.publish(TOPIC_PREFIX + "inbox/" + targetCode, jsonStr, {
+              c.publish(TOPIC_PREFIX + "inbox/" + normTarget, jsonStr, {
                 qos: 0,
                 retain: false
               });
@@ -721,36 +828,59 @@
       }).catch(() => {});
     },
 
+    publishMyRetainedPresence: function (status, specificClient) {
+      const clients = specificClient ? [specificClient] : this.mqttClients || [];
+      if (clients.length === 0) return;
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      if (!myCode) return;
+      const pkt = JSON.stringify({
+        type: "peer_presence",
+        status: status || "online",
+        peerCode: myCode,
+        timestamp: Date.now()
+      });
+      clients.forEach((c) => {
+        if (c && c.connected) {
+          try {
+            c.publish(TOPIC_PREFIX + "presence/" + myCode, pkt, { qos: 0, retain: true });
+          } catch (e) {}
+        }
+      });
+    },
+
     sendOnlinePingToPeer: function (friendCode) {
-      if (!friendCode) return;
-      const myCode = this.getOrCreateMyPeerCode();
-      if (friendCode === myCode) return;
+      const normFriend = this.normalizePeerCode(friendCode);
+      if (!normFriend) return;
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      if (normFriend === myCode) return;
       const pingPkt = {
         type: "online_ping",
         eventId: "ping_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
         fromCode: myCode,
-        toCode: friendCode,
+        toCode: normFriend,
         timestamp: Date.now()
       };
-      this.transmitPresencePacket(friendCode, pingPkt);
+      this.transmitPresencePacket(normFriend, pingPkt);
     },
 
     sendOnlinePongToPeer: function (friendCode) {
-      if (!friendCode) return;
-      const myCode = this.getOrCreateMyPeerCode();
-      if (friendCode === myCode) return;
+      const normFriend = this.normalizePeerCode(friendCode);
+      if (!normFriend) return;
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      if (normFriend === myCode) return;
       const pongPkt = {
         type: "online_pong",
         eventId: "pong_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
         fromCode: myCode,
-        toCode: friendCode,
+        toCode: normFriend,
         timestamp: Date.now()
       };
-      this.transmitPresencePacket(friendCode, pongPkt);
+      this.transmitPresencePacket(normFriend, pongPkt);
     },
 
     sendOfflinePingToFriends: function () {
-      const myCode = this.getOrCreateMyPeerCode();
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      this.publishMyRetainedPresence("offline");
       const codes = this.getAllKnownPeerCodes();
       codes.forEach((friendCode) => {
         const offPkt = {
@@ -786,15 +916,17 @@
     },
 
     subscribePeerTopicsOnClient: function (client, peerCode, isSelf) {
-      if (!client || !peerCode) return;
-      const myCode = this.getOrCreateMyPeerCode();
+      const normCode = this.normalizePeerCode(peerCode);
+      if (!client || !normCode) return;
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       try {
-        client.subscribe(TOPIC_PREFIX + "inbox/" + peerCode, { qos: 1 });
+        client.subscribe(TOPIC_PREFIX + "inbox/" + normCode, { qos: 1 });
         if (isSelf) {
-          client.subscribe(TOPIC_PREFIX + "mailbox/" + peerCode + "/+", { qos: 1 });
+          client.subscribe(TOPIC_PREFIX + "mailbox/" + normCode + "/+", { qos: 1 });
         } else {
-          client.subscribe(TOPIC_PREFIX + "profile/" + peerCode, { qos: 1 });
-          client.subscribe(TOPIC_PREFIX + "mailbox/" + myCode + "/" + peerCode, { qos: 1 });
+          client.subscribe(TOPIC_PREFIX + "profile/" + normCode, { qos: 1 });
+          client.subscribe(TOPIC_PREFIX + "presence/" + normCode, { qos: 0 });
+          client.subscribe(TOPIC_PREFIX + "mailbox/" + myCode + "/" + normCode, { qos: 1 });
         }
       } catch (e) {}
     },
@@ -803,26 +935,8 @@
       const clients = targetClient ? [targetClient] : this.mqttClients || [];
       if (clients.length === 0) return;
 
-      const myCode = this.getOrCreateMyPeerCode();
-      const codes = new Set();
-
-      if (window.state && window.state.chats) {
-        for (const chat of Object.values(window.state.chats)) {
-          if (chat && chat.roleType === "peer" && chat.peerCode) {
-            codes.add(chat.peerCode);
-          }
-          if (chat && chat.isGroup && chat.isPeerGroup && Array.isArray(chat.members)) {
-            chat.members.forEach((m) => {
-              if (m && m.peerCode && m.peerCode !== myCode) codes.add(m.peerCode);
-            });
-          }
-        }
-      }
-
-      const outMap = this.getOutgoingRequests();
-      Object.keys(outMap).forEach((c) => codes.add(c));
-      const backupMap = this.getSavedFriendsBackup();
-      Object.keys(backupMap).forEach((c) => codes.add(c));
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      const codes = new Set(this.getAllKnownPeerCodes());
 
       clients.forEach((c) => {
         if (!c) return;
@@ -838,7 +952,7 @@
       const mqttLib = await this.ensureMqttScriptLoaded();
       if (!mqttLib || typeof mqttLib.connect !== "function") return;
 
-      const myCode = this.getOrCreateMyPeerCode();
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const devSuffix = this.getDeviceClientSuffix();
       this.mqttClients = [];
 
@@ -857,14 +971,27 @@
             clean: false,
             keepalive: 30,
             reconnectPeriod: 2500,
-            connectTimeout: 10000
+            connectTimeout: 10000,
+            will: {
+              topic: TOPIC_PREFIX + "presence/" + myCode,
+              payload: JSON.stringify({
+                type: "peer_presence",
+                status: "offline",
+                peerCode: myCode,
+                timestamp: Date.now()
+              }),
+              qos: 0,
+              retain: true
+            }
           });
 
           client.on("connect", () => {
             this.subscribeAllKnownFriendsMqtt(client);
+            this.publishMyRetainedPresence("online", client);
             this.publishMyRetainedProfile(client);
             this.publishAllRetainedMailboxes(client);
             this.retryOutboxPackets();
+            this.sendOnlinePingToFriends();
           });
 
           client.on("message", (topic, messageBuffer) => {
@@ -886,11 +1013,12 @@
     publishMyRetainedProfile: async function (specificClient) {
       const clients = specificClient ? [specificClient] : this.mqttClients || [];
       if (clients.length === 0) return;
-      const myCode = this.getOrCreateMyPeerCode();
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const profile = this.getMyProfile();
       const smallAva = await this.compressAvatarForWire(profile.avatar);
       const pkt = JSON.stringify({
         type: "profile_update",
+        isRetainedProfile: true,
         eventId: "prof_ret_" + myCode + "_" + Date.now(),
         peerCode: myCode,
         name: profile.name,
@@ -909,7 +1037,8 @@
     },
 
     transmitPacketRaw: function (targetCode, payload, apiPath, retainOnInbox) {
-      if (!targetCode || !payload) return;
+      const normTarget = this.normalizePeerCode(targetCode);
+      if (!normTarget || !payload) return;
       const jsonStr = JSON.stringify(payload);
 
       if (this.bc) {
@@ -925,7 +1054,7 @@
         this.mqttClients.forEach((c) => {
           if (c) {
             try {
-              c.publish(TOPIC_PREFIX + "inbox/" + targetCode, jsonStr, {
+              c.publish(TOPIC_PREFIX + "inbox/" + normTarget, jsonStr, {
                 qos: 1,
                 retain: false
               });
@@ -950,15 +1079,24 @@
     },
 
     dispatchPacketToNetwork: function (targetCode, payload, apiPath, retainOnInbox) {
-      if (!targetCode || !payload) return;
-      if (payload.type !== "peer_ack" && payload.type !== "online_ping" && payload.eventId) {
-        this.addToOutboxQueue(targetCode, payload, apiPath);
+      const normTarget = this.normalizePeerCode(targetCode);
+      if (!normTarget || !payload) return;
+      this.transmitPacketRaw(normTarget, payload, apiPath, false);
+      if (
+        payload.type !== "peer_ack" &&
+        payload.type !== "online_ping" &&
+        payload.type !== "online_pong" &&
+        payload.type !== "offline_ping" &&
+        payload.type !== "peer_presence" &&
+        payload.type !== "group_typing_status" &&
+        payload.eventId
+      ) {
+        this.addToOutboxQueue(normTarget, payload, apiPath);
       }
-      this.transmitPacketRaw(targetCode, payload, apiPath, false);
     },
 
     connectWebSocket: function () {
-      const myCode = this.getOrCreateMyPeerCode();
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const profile = this.getMyProfile();
 
       this.registerViaHttp();
@@ -1011,7 +1149,7 @@
     },
 
     registerViaHttp: async function () {
-      const myCode = this.getOrCreateMyPeerCode();
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const profile = this.getMyProfile();
       const smallAva = await this.compressAvatarForWire(profile.avatar);
       fetch(this.getApiUrl("/api/peer/register"), {
@@ -1031,11 +1169,13 @@
       this.pollOnce();
       this.pollTimer = setInterval(() => {
         this.pollOnce();
-      }, 2500);
+      }, 1200);
     },
 
     pollOnce: function () {
-      const myCode = this.getOrCreateMyPeerCode();
+      if (this._isPollingNow) return;
+      this._isPollingNow = true;
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const peersList = this.getAllKnownPeerCodes();
       const peersQuery = peersList.length > 0 ? "&peers=" + encodeURIComponent(peersList.join(",")) : "";
       fetch(this.getApiUrl("/api/peer/poll?code=" + encodeURIComponent(myCode) + peersQuery))
@@ -1043,10 +1183,11 @@
         .then((data) => {
           if (data && data.onlinePeers && typeof data.onlinePeers === "object") {
             for (const [pCode, isOn] of Object.entries(data.onlinePeers)) {
-              if (isOn) {
-                const lockedUntil = (this.peerOfflineLockUntil && this.peerOfflineLockUntil[pCode]) || 0;
+              const norm = this.normalizePeerCode(pCode);
+              if (isOn && norm) {
+                const lockedUntil = (this.peerOfflineLockUntil && this.peerOfflineLockUntil[norm]) || 0;
                 if (Date.now() > lockedUntil) {
-                  this.markPeerOnline(pCode);
+                  this.markPeerOnline(norm);
                 }
               }
             }
@@ -1056,7 +1197,10 @@
             data.events.forEach((evt) => this.enqueueIncomingEvent(evt));
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          this._isPollingNow = false;
+        });
     },
 
     isAppDbReady: function () {
@@ -1070,7 +1214,7 @@
     },
 
     onAppDbLoaded: async function () {
-      const myCode = this.getOrCreateMyPeerCode();
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       if (window.state && window.state.globalSettings) {
         if (!window.state.globalSettings.myPeerCode) {
           window.state.globalSettings.myPeerCode = myCode;
@@ -1079,22 +1223,178 @@
       await this.deduplicatePeerChatsInDb();
       await this.refreshAppChatAndContactsUI();
       this.subscribeAllKnownFriendsMqtt();
+      this.publishMyRetainedPresence("online");
       this.flushIncomingQueue();
       this.retryOutboxPackets();
       this.pollOnce();
       this.sendOnlinePingToFriends();
+      this.syncAllPeerPresenceUI();
+    },
+
+    handleImmediatePresenceEvent: function (data) {
+      if (!data || !data.type) return false;
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      const toCode = this.normalizePeerCode(data.toCode);
+      if (toCode && toCode !== myCode) return true;
+      if (Array.isArray(data.targetCodes) && !data.targetCodes.map((c) => this.normalizePeerCode(c)).includes(myCode)) {
+        return true;
+      }
+
+      if (data.type === "peer_ack") {
+        const fromCode = this.normalizePeerCode(data.fromCode);
+        if (fromCode && fromCode !== myCode) {
+          this.markPeerOnline(fromCode);
+        }
+        if (data.ackEventId) {
+          this.removeFromOutboxQueue(data.ackEventId);
+        }
+        if (data.eventId) {
+          this.ackEventsToServer([data.eventId]);
+        }
+        return true;
+      }
+
+      if (data.type === "online_ping") {
+        const fromCode = this.normalizePeerCode(data.fromCode);
+        if (fromCode && fromCode !== myCode) {
+          if (!data.timestamp || Date.now() - data.timestamp < 30000) {
+            this.markPeerOnline(fromCode);
+            this.sendOnlinePongToPeer(fromCode);
+            if (this.isAppDbReady()) {
+              this.retryOutboxPackets(fromCode);
+              this.publishRetainedMailboxForTarget(fromCode);
+            }
+          }
+        }
+        if (data.eventId) this.ackEventsToServer([data.eventId]);
+        return true;
+      }
+
+      if (data.type === "online_pong") {
+        const fromCode = this.normalizePeerCode(data.fromCode);
+        if (fromCode && fromCode !== myCode) {
+          if (!data.timestamp || Date.now() - data.timestamp < 30000) {
+            this.markPeerOnline(fromCode);
+          }
+        }
+        if (data.eventId) this.ackEventsToServer([data.eventId]);
+        return true;
+      }
+
+      if (data.type === "offline_ping") {
+        const fromCode = this.normalizePeerCode(data.fromCode);
+        if (fromCode && fromCode !== myCode) {
+          if (!data.timestamp || Date.now() - data.timestamp < 30000) {
+            this.markPeerOffline(fromCode);
+          }
+        }
+        if (data.eventId) this.ackEventsToServer([data.eventId]);
+        return true;
+      }
+
+      if (data.type === "peer_presence") {
+        const pCode = this.normalizePeerCode(data.peerCode || data.fromCode);
+        if (pCode && pCode !== myCode) {
+          const isFresh = !data.timestamp || Date.now() - data.timestamp < 25000;
+          if (data.status === "offline") {
+            if (isFresh) this.markPeerOffline(pCode);
+          } else if (data.status === "online") {
+            if (isFresh) {
+              this.markPeerOnline(pCode);
+            } else {
+              this.sendOnlinePingToPeer(pCode);
+            }
+          }
+        }
+        return true;
+      }
+
+      return false;
+    },
+
+    enqueueSingleEvent: function (evt) {
+      if (!evt || !evt.type) return;
+      if (this.handleImmediatePresenceEvent(evt)) return;
+
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      const toCode = this.normalizePeerCode(evt.toCode);
+      if (toCode && toCode !== myCode) return;
+      if (Array.isArray(evt.targetCodes) && !evt.targetCodes.map((c) => this.normalizePeerCode(c)).includes(myCode)) {
+        return;
+      }
+
+      const incomingSender = this.normalizePeerCode(evt.fromCode || evt.peerCode);
+      const isFreshPacket = !evt.timestamp || Date.now() - evt.timestamp < 25000;
+      if (
+        incomingSender &&
+        incomingSender !== myCode &&
+        !evt.isRetainedProfile &&
+        isFreshPacket &&
+        evt.type !== "offline_ping" &&
+        !(evt.type === "peer_presence" && evt.status === "offline")
+      ) {
+        this.markPeerOnline(incomingSender);
+      }
+
+      if (evt.eventId) {
+        this.ackEventsToServer([evt.eventId]);
+        if (evt.fromCode || evt.peerCode) {
+          this.sendPeerAck(evt.fromCode || evt.peerCode, evt.eventId);
+        }
+        if (this.seenEventIds.has(evt.eventId)) {
+          return;
+        }
+        if (this.pendingIncomingQueue.some((q) => q && q.eventId === evt.eventId)) {
+          return;
+        }
+      }
+
+      if (evt.type === "group_member_update" && evt.groupId) {
+        this.pendingIncomingQueue = this.pendingIncomingQueue.filter(
+          (q) => !(q && q.type === "group_member_update" && String(q.groupId) === String(evt.groupId))
+        );
+      } else if (evt.type === "group_typing_status") {
+        this.pendingIncomingQueue = this.pendingIncomingQueue.filter(
+          (q) => !(q && q.type === "group_typing_status" && q.fromCode === evt.fromCode)
+        );
+      }
+
+      const isUrgentChatEvt =
+        evt.type === "message" ||
+        evt.type === "group_message" ||
+        evt.type === "group_typing_status" ||
+        evt.type === "msg_edit" ||
+        evt.type === "msg_delete";
+
+      if (isUrgentChatEvt) {
+        let insertIdx = this.pendingIncomingQueue.findIndex(
+          (q) =>
+            q &&
+            (q.type === "group_member_update" ||
+              q.type === "group_module_image" ||
+              q.type === "profile_update")
+        );
+        if (insertIdx === -1) {
+          this.pendingIncomingQueue.push(evt);
+        } else {
+          this.pendingIncomingQueue.splice(insertIdx, 0, evt);
+        }
+      } else {
+        this.pendingIncomingQueue.push(evt);
+      }
     },
 
     enqueueIncomingEvent: function (data) {
       if (!data || !data.type) return;
+      if (this.handleImmediatePresenceEvent(data)) {
+        return;
+      }
       if (data.type === "mailbox_bundle" && Array.isArray(data.events)) {
         data.events.forEach((evt) => {
-          if (evt && evt.type) {
-            this.pendingIncomingQueue.push(evt);
-          }
+          this.enqueueSingleEvent(evt);
         });
       } else {
-        this.pendingIncomingQueue.push(data);
+        this.enqueueSingleEvent(data);
       }
       if (this.isAppDbReady()) {
         this.flushIncomingQueue();
@@ -1108,58 +1408,28 @@
       try {
         while (this.pendingIncomingQueue.length > 0) {
           const evt = this.pendingIncomingQueue.shift();
-          await this.handleIncomingEvent(evt);
+          try {
+            await this.handleIncomingEvent(evt);
+          } catch (innerErr) {
+            console.error("处理单条联机事件异常:", innerErr);
+          }
         }
-      } catch (e) {
-        console.error("处理联机事件异常:", e);
       } finally {
         this.isFlushingQueue = false;
+        if (this.pendingIncomingQueue.length > 0 && this.isAppDbReady()) {
+          this.flushIncomingQueue();
+        }
       }
     },
 
     handleIncomingEvent: async function (data) {
       if (!data || !data.type) return;
-      const myCode = this.getOrCreateMyPeerCode();
+      if (this.handleImmediatePresenceEvent(data)) return;
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      const toCode = this.normalizePeerCode(data.toCode);
 
-      if (data.toCode && data.toCode !== myCode) return;
-      if (Array.isArray(data.targetCodes) && !data.targetCodes.includes(myCode)) return;
-
-      if (data.type === "online_ping") {
-        if (data.fromCode && data.fromCode !== myCode) {
-          this.markPeerOnline(data.fromCode);
-          this.sendOnlinePongToPeer(data.fromCode);
-          this.retryOutboxPackets(data.fromCode);
-          this.publishRetainedMailboxForTarget(data.fromCode);
-        }
-        return;
-      }
-
-      if (data.type === "online_pong") {
-        if (data.fromCode && data.fromCode !== myCode) {
-          this.markPeerOnline(data.fromCode);
-        }
-        return;
-      }
-
-      if (data.type === "offline_ping") {
-        if (data.fromCode && data.fromCode !== myCode) {
-          this.markPeerOffline(data.fromCode);
-        }
-        return;
-      }
-
-      if (data.type === "peer_ack") {
-        if (data.fromCode && data.fromCode !== myCode) {
-          this.markPeerOnline(data.fromCode);
-        }
-        if (data.ackEventId) {
-          this.removeFromOutboxQueue(data.ackEventId);
-        }
-        if (data.eventId) {
-          this.ackEventsToServer([data.eventId]);
-        }
-        return;
-      }
+      if (toCode && toCode !== myCode) return;
+      if (Array.isArray(data.targetCodes) && !data.targetCodes.map((c) => this.normalizePeerCode(c)).includes(myCode)) return;
 
       if (data.eventId) {
         if (this.seenEventIds.has(data.eventId)) {
@@ -1170,16 +1440,10 @@
           return;
         }
         this.markEventIdSeen(data.eventId);
-      }
-
-      const incomingSender = data.fromCode || data.peerCode;
-      if (
-        incomingSender &&
-        incomingSender !== myCode &&
-        data.type !== "offline_ping" &&
-        !(data.type === "peer_presence" && data.status === "offline")
-      ) {
-        this.markPeerOnline(incomingSender);
+        this.ackEventsToServer([data.eventId]);
+        if (data.fromCode || data.peerCode) {
+          this.sendPeerAck(data.fromCode || data.peerCode, data.eventId);
+        }
       }
 
       if (data.type === "message") {
@@ -1207,18 +1471,7 @@
       } else if (data.type === "group_module_image") {
         await this.receiveGroupModuleImage(data);
       } else if (data.type === "peer_presence") {
-        if (data.status === "offline") {
-          this.markPeerOffline(data.peerCode);
-        } else if (data.status === "online") {
-          this.markPeerOnline(data.peerCode);
-        }
-      }
-
-      if (data.eventId) {
-        this.ackEventsToServer([data.eventId]);
-        if (data.fromCode || data.peerCode) {
-          this.sendPeerAck(data.fromCode || data.peerCode, data.eventId);
-        }
+        this.handleImmediatePresenceEvent(data);
       }
 
       const senderPeer = data.fromCode || data.peerCode;
@@ -1664,7 +1917,8 @@
     },
 
     findPeerGroupChatByIdAsync: async function (groupId) {
-      if (!groupId) return null;
+      if (!groupId && groupId !== 0) return null;
+      const groupIdStr = String(groupId);
       const localId = this.getLocalGroupChatId(groupId);
       if (window.state && window.state.chats) {
         if (window.state.chats[localId]) return window.state.chats[localId];
@@ -1673,7 +1927,9 @@
           if (
             chat &&
             chat.isGroup &&
-            (chat.peerGroupId === groupId || chat.id === groupId || chat.id === localId)
+            (String(chat.peerGroupId) === groupIdStr ||
+              String(chat.id) === groupIdStr ||
+              String(chat.id) === String(localId))
           ) {
             return chat;
           }
@@ -1686,12 +1942,15 @@
             (c) =>
               c &&
               c.isGroup &&
-              (c.peerGroupId === groupId || c.id === groupId || c.id === localId)
+              (String(c.peerGroupId) === groupIdStr ||
+                String(c.id) === groupIdStr ||
+                String(c.id) === String(localId))
           );
           if (found) {
             if (!window.state) window.state = {};
             if (!window.state.chats) window.state.chats = {};
             window.state.chats[found.id] = found;
+            window.state.chats[String(found.id)] = found;
             return found;
           }
         } catch (e) {}
@@ -2243,13 +2502,17 @@
       );
 
       if (typeof window.showCustomConfirm === "function") {
-        const ok = await window.showCustomConfirm(
-          "群聊通知",
-          `“${inviteItem.fromName}”邀请你加入群聊“${inviteItem.groupName}”，是否加入？`
-        );
-        if (ok) {
-          await this.acceptGroupInvite(inviteItem.groupId);
-        }
+        window
+          .showCustomConfirm(
+            "群聊通知",
+            `“${inviteItem.fromName}”邀请你加入群聊“${inviteItem.groupName}”，是否加入？`
+          )
+          .then((ok) => {
+            if (ok) {
+              this.acceptGroupInvite(inviteItem.groupId);
+            }
+          })
+          .catch(() => {});
       }
     },
 
@@ -2586,7 +2849,7 @@
       );
       for (const img of images) {
         if (!img || !img.dataUrl) continue;
-        const compressedUrl = await this.compressAvatarForWire(img.dataUrl, 640, 0.75);
+        const compressedUrl = await this.compressAvatarForWire(img.dataUrl, 1440, 0.90);
         for (const pm of peerTargets) {
           const pkt = {
             type: "group_module_image",
@@ -2772,31 +3035,23 @@
           for (const sm of data.sharedModules) {
             if (!sm || !sm.module) continue;
             try {
-              if (Array.isArray(sm.chapters) && window.db.moduleChapters) {
-                for (const ch of sm.chapters) {
-                  await window.db.moduleChapters.put(ch);
-                }
+              if (Array.isArray(sm.chapters) && sm.chapters.length > 0 && window.db.moduleChapters) {
+                await window.db.moduleChapters.bulkPut(sm.chapters);
               }
-              if (Array.isArray(sm.items) && window.db.moduleItems) {
-                for (const it of sm.items) {
-                  await window.db.moduleItems.put(it);
-                }
+              if (Array.isArray(sm.items) && sm.items.length > 0 && window.db.moduleItems) {
+                await window.db.moduleItems.bulkPut(sm.items);
               }
-              if (Array.isArray(sm.locationNav) && window.db.moduleLocationNav) {
-                for (const ln of sm.locationNav) {
-                  await window.db.moduleLocationNav.put(ln);
-                }
+              if (Array.isArray(sm.locationNav) && sm.locationNav.length > 0 && window.db.moduleLocationNav) {
+                await window.db.moduleLocationNav.bulkPut(sm.locationNav);
               }
             } catch (e) {}
           }
         }
       }
-      if (Array.isArray(data.activeModuleLocationNav) && window.db && window.db.moduleLocationNav) {
-        for (const ln of data.activeModuleLocationNav) {
-          try {
-            await window.db.moduleLocationNav.put(ln);
-          } catch (e) {}
-        }
+      if (Array.isArray(data.activeModuleLocationNav) && data.activeModuleLocationNav.length > 0 && window.db && window.db.moduleLocationNav) {
+        try {
+          await window.db.moduleLocationNav.bulkPut(data.activeModuleLocationNav);
+        } catch (e) {}
       }
       if (data.activeModuleId !== undefined) {
         groupChat.activeModuleId = data.activeModuleId;
@@ -2883,6 +3138,10 @@
         groupChat.thoughtChainEnableCoc = data.thoughtChainEnableCoc;
       }
 
+      if (window.state && window.state.chats) {
+        window.state.chats[groupChat.id] = groupChat;
+        window.state.chats[String(groupChat.id)] = groupChat;
+      }
       if (window.db && window.db.chats) {
         await window.db.chats.put(groupChat);
       }
@@ -3036,6 +3295,11 @@
 
       groupChat.history.push(msgToInsert);
 
+      if (window.state && window.state.chats) {
+        window.state.chats[groupChat.id] = groupChat;
+        window.state.chats[String(groupChat.id)] = groupChat;
+      }
+
       const chatScreen = document.getElementById("chat-interface-screen");
       const isCurrentActive =
         window.state &&
@@ -3053,16 +3317,16 @@
         groupChat.unreadCount = (groupChat.unreadCount || 0) + 1;
       }
 
-      if (window.db && window.db.chats) {
-        await window.db.chats.put(groupChat);
-      }
-
       if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
         if (typeof window.appendMessage === "function") {
           window.appendMessage(msgToInsert, groupChat);
         } else if (typeof window.renderChatInterfaceProxy === "function") {
           window.renderChatInterfaceProxy(groupChat.id);
         }
+      }
+
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(groupChat);
       }
 
       if (isVisibleToMe) {
@@ -3187,20 +3451,28 @@
     broadcastTypingStatus: function (chat, isTyping) {
       if (!chat) return;
       const myCode = this.getOrCreateMyPeerCode();
-      const targets = [];
+      const targetSet = new Set();
 
-      if (chat.isGroup && chat.isPeerGroup) {
+      if (chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)))) {
         (chat.members || []).forEach((m) => {
           if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
-            targets.push(m.peerCode);
+            targetSet.add(m.peerCode);
           }
         });
+        if (chat.settings && Array.isArray(chat.settings.peerMembers)) {
+          chat.settings.peerMembers.forEach((pm) => {
+            const pCode = typeof pm === "string" ? pm : (pm && pm.peerCode);
+            if (pCode && pCode !== myCode) {
+              targetSet.add(pCode);
+            }
+          });
+        }
       } else if (chat.roleType === "peer" && chat.peerCode) {
-        targets.push(chat.peerCode);
+        targetSet.add(chat.peerCode);
       }
 
       const sharedGroupId = chat.isGroup ? (chat.peerGroupId || chat.id) : "";
-      for (const peerCode of targets) {
+      for (const peerCode of targetSet) {
         const pkt = {
           type: "group_typing_status",
           eventId: "gtyp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
@@ -3225,19 +3497,58 @@
         : await this.findPeerChatByCodeAsync(data.fromCode);
       if (!chat) return;
 
+      window.remoteGeneratingChats = window.remoteGeneratingChats || {};
+      const sharedGrpId = chat.peerGroupId || chat.id;
+      if (data.isTyping) {
+        window.remoteGeneratingChats[chat.id] = true;
+        window.remoteGeneratingChats[String(chat.id)] = true;
+        if (sharedGrpId) window.remoteGeneratingChats[String(sharedGrpId)] = true;
+      } else {
+        delete window.remoteGeneratingChats[chat.id];
+        delete window.remoteGeneratingChats[String(chat.id)];
+        if (sharedGrpId) delete window.remoteGeneratingChats[String(sharedGrpId)];
+      }
+
       if (window.state && String(window.state.activeChatId) === String(chat.id)) {
         const typingInd = document.getElementById("typing-indicator");
         const chatHeaderTitle = document.getElementById("chat-header-title");
-        if (typingInd) {
-          typingInd.style.display = data.isTyping ? "block" : "none";
-        }
-        if (chatHeaderTitle) {
-          if (data.isTyping) {
-            chatHeaderTitle.textContent = chat.isGroup ? "群成员正在输入中..." : "对方正在输入中...";
-            chatHeaderTitle.classList.add("typing-status");
-          } else {
+        const messagesContainer = document.getElementById("chat-messages");
+        if (chat.isGroup) {
+          if (typingInd) {
+            if (data.isTyping) {
+              typingInd.textContent = "群成员正在回复中...";
+              typingInd.style.display = "block";
+              if (messagesContainer) {
+                messagesContainer.appendChild(typingInd);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+              }
+            } else {
+              const isLocalGen = !!(
+                (window.activeGeneratingChats && (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)])) ||
+                (window.activeGeneratingKeeperDraw && (window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[String(chat.id)]))
+              );
+              if (!isLocalGen) {
+                typingInd.style.display = "none";
+              }
+            }
+          }
+          if (chatHeaderTitle) {
             chatHeaderTitle.textContent = chat.name;
             chatHeaderTitle.classList.remove("typing-status");
+          }
+        } else {
+          if (typingInd) {
+            typingInd.style.display = "none";
+          }
+          if (chatHeaderTitle) {
+            if (data.isTyping) {
+              chatHeaderTitle.textContent = "对方正在输入中...";
+              chatHeaderTitle.classList.add("typing-status");
+            } else {
+              const displayName = chat.settings?.remarkName ? chat.settings.remarkName : chat.name;
+              chatHeaderTitle.textContent = displayName;
+              chatHeaderTitle.classList.remove("typing-status");
+            }
           }
         }
       }
@@ -3247,17 +3558,26 @@
       if (!chat) return;
       if ((!Array.isArray(deletedTimestamps) || deletedTimestamps.length === 0) && !rerollAfterTimestamp) return;
       const myCode = this.getOrCreateMyPeerCode();
-      const targets = [];
+      const targetSet = new Set();
 
-      if (chat.isGroup && chat.isPeerGroup) {
+      if (chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)))) {
         (chat.members || []).forEach((m) => {
           if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
-            targets.push(m.peerCode);
+            targetSet.add(m.peerCode);
           }
         });
+        if (chat.settings && Array.isArray(chat.settings.peerMembers)) {
+          chat.settings.peerMembers.forEach((pm) => {
+            const pCode = typeof pm === "string" ? pm : (pm && pm.peerCode);
+            if (pCode && pCode !== myCode) {
+              targetSet.add(pCode);
+            }
+          });
+        }
       } else if (chat.roleType === "peer" && chat.peerCode) {
-        targets.push(chat.peerCode);
+        targetSet.add(chat.peerCode);
       }
+      const targets = Array.from(targetSet);
 
       const sharedGroupId = chat.isGroup ? (chat.peerGroupId || chat.id) : "";
       for (const peerCode of targets) {
@@ -3615,6 +3935,7 @@
 
       const isVoice = data.msgType === "voice_message" || Boolean(data.audioData);
       const isSticker = data.msgType === "sticker" || Boolean(data.isPeerOnlySticker) || Boolean(data.meaning);
+      const isImageMsg = Array.isArray(content) && content[0] && content[0].type === "image_url";
       const incomingMsg = {
         role: "assistant",
         type: isVoice ? "voice_message" : (isSticker ? "sticker" : undefined),
@@ -3650,9 +3971,7 @@
 
       if (window.state && window.state.chats) {
         window.state.chats[peerChat.id] = peerChat;
-      }
-      if (window.db && window.db.chats) {
-        await window.db.chats.put(peerChat);
+        window.state.chats[String(peerChat.id)] = peerChat;
       }
 
       if (window.state && String(window.state.activeChatId) === String(peerChat.id)) {
@@ -3663,8 +3982,18 @@
         }
       }
 
+      if (window.db && window.db.chats) {
+        await window.db.chats.put(peerChat);
+      }
+
       const displayTitle = peerChat.settings?.remarkName || peerChat.name || "密友";
-      const previewText = isVoice ? "[语音]" : (isSticker ? `[表情: ${data.meaning || "表情"}]` : content);
+      const previewText = isVoice
+        ? "[语音]"
+        : isSticker
+          ? `[表情: ${data.meaning || "表情"}]`
+          : isImageMsg
+            ? "[图片]"
+            : String(content || "");
 
       this.showPeerNotice(
         previewText,
@@ -4146,7 +4475,7 @@
       }
 
       if (timelineBtn) {
-        timelineBtn.style.display = isPeerGroup ? "none" : "";
+        timelineBtn.style.display = "";
       }
 
       if (isPeer) {
@@ -4170,9 +4499,9 @@
           this.sendOnlinePingToPeer(chat.peerCode);
         }
       } else {
-        if (rerollBtn) rerollBtn.style.display = "";
+        if (rerollBtn) rerollBtn.style.display = isPeerGroup ? "none" : "";
         if (actionsTop) {
-          actionsTop.style.justifyContent = "";
+          actionsTop.style.justifyContent = isPeerGroup ? "flex-start" : "";
           actionsTop.style.gap = "";
         }
         if (mapBtn) mapBtn.style.display = "";

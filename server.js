@@ -198,11 +198,13 @@ function scheduleSaveMailboxStore() {
       for (const [k, v] of peerProfiles.entries()) {
         profilesObj[k] = v;
       }
-      fs.writeFileSync(MAILBOX_STORE_PATH, JSON.stringify({ mailboxes: mailboxesObj, profiles: profilesObj }), 'utf8');
+      fs.promises
+        .writeFile(MAILBOX_STORE_PATH, JSON.stringify({ mailboxes: mailboxesObj, profiles: profilesObj }), 'utf8')
+        .catch((e) => console.warn('[PeerStore] Save warning:', e.message));
     } catch (e) {
       console.warn('[PeerStore] Save warning:', e.message);
     }
-  }, 200);
+  }, 800);
 }
 
 loadMailboxStoreFromDisk();
@@ -212,15 +214,28 @@ function pushToMailbox(code, event) {
   if (!peerMailboxes.has(code)) {
     peerMailboxes.set(code, []);
   }
-  const box = peerMailboxes.get(code);
+  let box = peerMailboxes.get(code);
   if (event.eventId && box.some(item => item && item.eventId === event.eventId)) {
     return;
+  }
+  if (event.type === 'group_typing_status') {
+    box = box.filter(item => !(item && item.type === 'group_typing_status' && item.fromCode === event.fromCode));
+  } else if (event.type === 'group_member_update' && event.groupId) {
+    box = box.filter(item => !(item && item.type === 'group_member_update' && String(item.groupId) === String(event.groupId)));
+  } else if (event.type === 'profile_update' && (event.peerCode || event.fromCode)) {
+    const pCode = event.peerCode || event.fromCode;
+    box = box.filter(item => !(item && item.type === 'profile_update' && (item.peerCode === pCode || item.fromCode === pCode)));
+  } else if (event.type === 'peer_ack' && event.ackEventId) {
+    box = box.filter(item => !(item && item.type === 'peer_ack' && item.ackEventId === event.ackEventId));
   }
   box.push(event);
   if (box.length > 200) {
     box.shift();
   }
-  scheduleSaveMailboxStore();
+  peerMailboxes.set(code, box);
+  if (event.type !== 'group_typing_status') {
+    scheduleSaveMailboxStore();
+  }
 }
 
 function ackFromMailbox(code, eventIds) {
@@ -251,10 +266,26 @@ function sendToPeerWs(code, event) {
 app.post('/api/peer/register', (req, res) => {
   const { peerCode, name, avatar, myAvatarFrame } = req.body;
   if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
-  peerProfiles.set(peerCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
+  const normCode = String(peerCode).trim().toUpperCase();
+  peerLastPoll.set(normCode, Date.now());
+  peerProfiles.set(normCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
   scheduleSaveMailboxStore();
   return res.json({ success: true });
 });
+
+function pushPresenceToMailbox(code, event) {
+  if (!code || !event) return;
+  if (!peerMailboxes.has(code)) {
+    peerMailboxes.set(code, []);
+  }
+  const box = peerMailboxes.get(code);
+  const filtered = box.filter(item => !(item && (item.type === 'online_ping' || item.type === 'online_pong' || item.type === 'offline_ping') && item.fromCode === event.fromCode));
+  filtered.push(event);
+  if (filtered.length > 200) {
+    filtered.shift();
+  }
+  peerMailboxes.set(code, filtered);
+}
 
 app.post('/api/peer/send', (req, res) => {
   const body = req.body || {};
@@ -277,40 +308,49 @@ app.post('/api/peer/send', (req, res) => {
     timestamp
   } = body;
   if (!toCode) return res.status(400).json({ error: 'Missing target' });
+  const normFrom = fromCode ? String(fromCode).trim().toUpperCase() : '';
+  const normTo = String(toCode).trim().toUpperCase();
+
+  if (normFrom && type !== 'offline_ping') {
+    peerLastPoll.set(normFrom, Date.now());
+  }
 
   if (type === 'peer_ack') {
     const ackEvt = {
       type: 'peer_ack',
       eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
       ackEventId,
-      fromCode,
-      toCode,
+      fromCode: normFrom || fromCode,
+      toCode: normTo,
       timestamp: Date.now()
     };
-    sendToPeerWs(toCode, ackEvt);
-    pushToMailbox(toCode, ackEvt);
+    sendToPeerWs(normTo, ackEvt);
+    pushToMailbox(normTo, ackEvt);
     return res.json({ success: true });
   }
 
   if (type === 'online_ping' || type === 'online_pong' || type === 'offline_ping') {
-    if (fromCode) {
+    if (normFrom) {
       if (type === 'offline_ping') {
-        peerLastPoll.delete(fromCode);
-        if (peerClients.has(fromCode)) {
-          peerClients.delete(fromCode);
+        peerLastPoll.delete(normFrom);
+        if (peerClients.has(normFrom)) {
+          peerClients.delete(normFrom);
         }
       } else {
-        peerLastPoll.set(fromCode, Date.now());
+        peerLastPoll.set(normFrom, Date.now());
       }
     }
     const pingEvt = {
       type,
       eventId: eventId || ('ping_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-      fromCode,
-      toCode,
+      fromCode: normFrom || fromCode,
+      toCode: normTo,
       timestamp: Date.now()
     };
-    sendToPeerWs(toCode, pingEvt);
+    const delivered = sendToPeerWs(normTo, pingEvt);
+    if (!delivered) {
+      pushPresenceToMailbox(normTo, pingEvt);
+    }
     return res.json({ success: true });
   }
 
@@ -318,11 +358,13 @@ app.post('/api/peer/send', (req, res) => {
     const customEvent = {
       ...body,
       type,
+      fromCode: normFrom || fromCode,
+      toCode: normTo,
       eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
       timestamp: timestamp || Date.now()
     };
-    const delivered = sendToPeerWs(toCode, customEvent);
-    pushToMailbox(toCode, customEvent);
+    const delivered = sendToPeerWs(normTo, customEvent);
+    pushToMailbox(normTo, customEvent);
     return res.json({ success: true, delivered });
   }
 
@@ -331,8 +373,8 @@ app.post('/api/peer/send', (req, res) => {
     ...body,
     type: 'message',
     eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-    fromCode,
-    toCode,
+    fromCode: normFrom || fromCode,
+    toCode: normTo,
     content: content || '[语音消息]',
     msgType: msgType || 'text',
     meaning: meaning || '',
@@ -345,20 +387,22 @@ app.post('/api/peer/send', (req, res) => {
     peerAvatarFrame: peerAvatarFrame || '',
     timestamp: timestamp || Date.now()
   };
-  const delivered = sendToPeerWs(toCode, event);
-  pushToMailbox(toCode, event);
+  const delivered = sendToPeerWs(normTo, event);
+  pushToMailbox(normTo, event);
   return res.json({ success: true, delivered });
 });
 
 app.post('/api/peer/profile', (req, res) => {
   const { eventId, peerCode, name, avatar, myAvatarFrame, peerAvatarFrame, targetCodes = [] } = req.body;
   if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
-  peerProfiles.set(peerCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
+  const normCode = String(peerCode).trim().toUpperCase();
+  peerLastPoll.set(normCode, Date.now());
+  peerProfiles.set(normCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
   scheduleSaveMailboxStore();
   const event = {
     type: 'profile_update',
     eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-    peerCode,
+    peerCode: normCode,
     name,
     avatar,
     myAvatarFrame: myAvatarFrame !== undefined ? myAvatarFrame : undefined,
@@ -367,8 +411,9 @@ app.post('/api/peer/profile', (req, res) => {
   };
   if (Array.isArray(targetCodes)) {
     for (const target of targetCodes) {
-      sendToPeerWs(target, event);
-      pushToMailbox(target, event);
+      const normTarget = String(target).trim().toUpperCase();
+      sendToPeerWs(normTarget, event);
+      pushToMailbox(normTarget, event);
     }
   }
   return res.json({ success: true });
@@ -377,31 +422,37 @@ app.post('/api/peer/profile', (req, res) => {
 app.post('/api/peer/request', (req, res) => {
   const { type = 'friend_request', eventId, fromCode, toCode, fromName, fromAvatar, fromAvatarFrame } = req.body;
   if (!toCode) return res.status(400).json({ error: 'Missing target' });
+  const normFrom = fromCode ? String(fromCode).trim().toUpperCase() : '';
+  const normTo = String(toCode).trim().toUpperCase();
+  if (normFrom) peerLastPoll.set(normFrom, Date.now());
   const event = {
     type: type === 'friend_accept' ? 'friend_accept' : 'friend_request',
     eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-    fromCode,
-    toCode,
+    fromCode: normFrom || fromCode,
+    toCode: normTo,
     fromName,
     fromAvatar,
     fromAvatarFrame: fromAvatarFrame || '',
     timestamp: Date.now()
   };
-  sendToPeerWs(toCode, event);
-  pushToMailbox(toCode, event);
+  sendToPeerWs(normTo, event);
+  pushToMailbox(normTo, event);
   return res.json({ success: true });
 });
 
 app.post('/api/peer/ack', (req, res) => {
   const { peerCode, eventIds = [] } = req.body;
   if (!peerCode) return res.status(400).json({ error: 'Missing peerCode' });
-  ackFromMailbox(peerCode, eventIds);
+  const normCode = String(peerCode).trim().toUpperCase();
+  peerLastPoll.set(normCode, Date.now());
+  ackFromMailbox(normCode, eventIds);
   return res.json({ success: true });
 });
 
 app.get('/api/peer/poll', (req, res) => {
-  const code = req.query.code;
-  if (!code) return res.status(400).json({ error: 'Missing code' });
+  const rawCode = req.query.code;
+  if (!rawCode) return res.status(400).json({ error: 'Missing code' });
+  const code = String(rawCode).trim().toUpperCase();
   peerLastPoll.set(code, Date.now());
   const events = peerMailboxes.get(code) || [];
   const profile = peerProfiles.get(code) || null;
@@ -409,12 +460,12 @@ app.get('/api/peer/poll', (req, res) => {
   if (typeof req.query.peers === 'string' && req.query.peers.trim()) {
     const now = Date.now();
     req.query.peers.split(',').forEach((p) => {
-      const pCode = p.trim();
+      const pCode = p.trim().toUpperCase();
       if (!pCode) return;
       const wsSet = peerClients.get(pCode);
       const hasWs = Boolean(wsSet && wsSet.size > 0);
       const lastSeen = peerLastPoll.get(pCode) || 0;
-      onlinePeers[pCode] = Boolean(hasWs || (lastSeen > 0 && now - lastSeen < 22000));
+      onlinePeers[pCode] = Boolean(hasWs || (lastSeen > 0 && now - lastSeen < 25000));
     });
   }
   return res.json({ success: true, events, profile, onlinePeers });
@@ -437,7 +488,7 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(raw);
       if (data.type === 'register') {
-        boundCode = data.peerCode;
+        boundCode = data.peerCode ? String(data.peerCode).trim().toUpperCase() : null;
         if (boundCode) {
           if (!peerClients.has(boundCode)) {
             peerClients.set(boundCode, new Set());
@@ -453,29 +504,50 @@ wss.on('connection', (ws) => {
             });
             scheduleSaveMailboxStore();
           }
+          const onlineEvt = {
+            type: 'peer_presence',
+            status: 'online',
+            peerCode: boundCode,
+            timestamp: Date.now()
+          };
+          for (const [otherCode, clientSet] of peerClients.entries()) {
+            if (otherCode !== boundCode) {
+              for (const otherWs of clientSet) {
+                if (otherWs.readyState === 1) {
+                  try {
+                    otherWs.send(JSON.stringify(onlineEvt));
+                  } catch (e) {}
+                }
+              }
+            }
+          }
           const box = peerMailboxes.get(boundCode) || [];
           if (box.length > 0) {
             box.forEach(evt => ws.send(JSON.stringify(evt)));
           }
         }
       } else if (data.type === 'ack') {
-        const targetCode = data.peerCode || boundCode;
+        const targetCode = String(data.peerCode || boundCode || '').trim().toUpperCase();
+        if (targetCode) peerLastPoll.set(targetCode, Date.now());
         if (targetCode && Array.isArray(data.eventIds)) {
           ackFromMailbox(targetCode, data.eventIds);
         }
       } else if (data.type === 'peer_ack') {
         const { eventId, ackEventId, fromCode, toCode } = data;
-        if (toCode) {
+        const normFrom = String(fromCode || boundCode || '').trim().toUpperCase();
+        const normTo = String(toCode || '').trim().toUpperCase();
+        if (normFrom) peerLastPoll.set(normFrom, Date.now());
+        if (normTo) {
           const ackEvt = {
             type: 'peer_ack',
             eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
             ackEventId,
-            fromCode,
-            toCode,
+            fromCode: normFrom,
+            toCode: normTo,
             timestamp: Date.now()
           };
-          sendToPeerWs(toCode, ackEvt);
-          pushToMailbox(toCode, ackEvt);
+          sendToPeerWs(normTo, ackEvt);
+          pushToMailbox(normTo, ackEvt);
         }
       } else if (data.type === 'message') {
         const {
@@ -492,12 +564,15 @@ wss.on('connection', (ws) => {
           peerAvatarFrame,
           timestamp
         } = data;
-        if (toCode) {
+        const normFrom = String(fromCode || boundCode || '').trim().toUpperCase();
+        const normTo = String(toCode || '').trim().toUpperCase();
+        if (normFrom) peerLastPoll.set(normFrom, Date.now());
+        if (normTo) {
           const event = {
             type: 'message',
             eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-            fromCode,
-            toCode,
+            fromCode: normFrom,
+            toCode: normTo,
             content: content || '[语音消息]',
             msgType: msgType || 'text',
             audioData: audioData || '',
@@ -508,17 +583,19 @@ wss.on('connection', (ws) => {
             peerAvatarFrame: peerAvatarFrame || '',
             timestamp: timestamp || Date.now()
           };
-          sendToPeerWs(toCode, event);
-          pushToMailbox(toCode, event);
+          sendToPeerWs(normTo, event);
+          pushToMailbox(normTo, event);
         }
       } else if (data.type === 'profile_update') {
         const { eventId, peerCode, name, avatar, myAvatarFrame, peerAvatarFrame, targetCodes = [] } = data;
-        peerProfiles.set(peerCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
+        const normCode = String(peerCode || boundCode || '').trim().toUpperCase();
+        if (normCode) peerLastPoll.set(normCode, Date.now());
+        peerProfiles.set(normCode, { name, avatar, myAvatarFrame, lastSeen: Date.now() });
         scheduleSaveMailboxStore();
         const event = {
           type: 'profile_update',
           eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-          peerCode,
+          peerCode: normCode,
           name,
           avatar,
           myAvatarFrame: myAvatarFrame !== undefined ? myAvatarFrame : undefined,
@@ -527,52 +604,67 @@ wss.on('connection', (ws) => {
         };
         if (Array.isArray(targetCodes)) {
           targetCodes.forEach(target => {
-            sendToPeerWs(target, event);
-            pushToMailbox(target, event);
+            const normTarget = String(target).trim().toUpperCase();
+            sendToPeerWs(normTarget, event);
+            pushToMailbox(normTarget, event);
           });
         }
       } else if (data.type === 'friend_request' || data.type === 'friend_accept') {
         const { eventId, fromCode, toCode, fromName, fromAvatar, fromAvatarFrame } = data;
+        const normFrom = String(fromCode || boundCode || '').trim().toUpperCase();
+        const normTo = String(toCode || '').trim().toUpperCase();
+        if (normFrom) peerLastPoll.set(normFrom, Date.now());
         const event = {
           type: data.type,
           eventId: eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-          fromCode,
-          toCode,
+          fromCode: normFrom,
+          toCode: normTo,
           fromName,
           fromAvatar,
           fromAvatarFrame: fromAvatarFrame || '',
           timestamp: Date.now()
         };
-        sendToPeerWs(toCode, event);
-        pushToMailbox(toCode, event);
+        sendToPeerWs(normTo, event);
+        pushToMailbox(normTo, event);
       } else if (data.type === 'online_ping' || data.type === 'online_pong' || data.type === 'offline_ping') {
-        if (data.fromCode) {
+        const normFrom = String(data.fromCode || boundCode || '').trim().toUpperCase();
+        const normTo = String(data.toCode || '').trim().toUpperCase();
+        if (normFrom) {
           if (data.type === 'offline_ping') {
-            peerLastPoll.delete(data.fromCode);
-            if (peerClients.has(data.fromCode)) {
-              peerClients.delete(data.fromCode);
+            peerLastPoll.delete(normFrom);
+            if (peerClients.has(normFrom)) {
+              peerClients.delete(normFrom);
             }
           } else {
-            peerLastPoll.set(data.fromCode, Date.now());
+            peerLastPoll.set(normFrom, Date.now());
           }
         }
-        if (data.toCode) {
-          sendToPeerWs(data.toCode, {
+        if (normTo) {
+          const pingEvt = {
             type: data.type,
             eventId: data.eventId || ('ping_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-            fromCode: data.fromCode || boundCode,
-            toCode: data.toCode,
+            fromCode: normFrom,
+            toCode: normTo,
             timestamp: Date.now()
-          });
+          };
+          const delivered = sendToPeerWs(normTo, pingEvt);
+          if (!delivered) {
+            pushPresenceToMailbox(normTo, pingEvt);
+          }
         }
       } else if (data.toCode) {
+        const normFrom = String(data.fromCode || boundCode || '').trim().toUpperCase();
+        const normTo = String(data.toCode || '').trim().toUpperCase();
+        if (normFrom) peerLastPoll.set(normFrom, Date.now());
         const customEvent = {
           ...data,
+          fromCode: normFrom || data.fromCode,
+          toCode: normTo,
           eventId: data.eventId || ('evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
           timestamp: data.timestamp || Date.now()
         };
-        sendToPeerWs(data.toCode, customEvent);
-        pushToMailbox(data.toCode, customEvent);
+        sendToPeerWs(normTo, customEvent);
+        pushToMailbox(normTo, customEvent);
       }
     } catch (e) {
       console.warn('[WS] Parse error:', e.message);
@@ -584,24 +676,6 @@ wss.on('connection', (ws) => {
       peerClients.get(boundCode).delete(ws);
       if (peerClients.get(boundCode).size === 0) {
         peerClients.delete(boundCode);
-        peerLastPoll.delete(boundCode);
-        const offlineEvt = {
-          type: 'peer_presence',
-          status: 'offline',
-          peerCode: boundCode,
-          timestamp: Date.now()
-        };
-        for (const [otherCode, clientSet] of peerClients.entries()) {
-          if (otherCode !== boundCode) {
-            for (const otherWs of clientSet) {
-              if (otherWs.readyState === 1) {
-                try {
-                  otherWs.send(JSON.stringify(offlineEvt));
-                } catch (e) {}
-              }
-            }
-          }
-        }
       }
     }
   });

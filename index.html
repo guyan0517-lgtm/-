@@ -25359,7 +25359,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           avatarEl.src = chat.settings?.aiAvatar || defaultAvatar;
           nameEl.textContent = chat.settings?.remarkName || chat.name;
-          statusEl.textContent = chat.status?.text || "在线";
+          statusEl.setAttribute("data-peer-status-chat-id", chat.id);
+          if (chat.roleType === "peer" && window.PeerManager && typeof window.PeerManager.isPeerOnline === "function") {
+            const pCode = chat.peerCode || chat.settings?.peerCode;
+            const isPeerOn = window.PeerManager.isPeerOnline(pCode);
+            statusEl.textContent = isPeerOn ? "在线" : "离线";
+            if (pCode && typeof window.PeerManager.sendOnlinePingToPeer === "function") {
+              window.PeerManager.sendOnlinePingToPeer(pCode);
+            }
+          } else {
+            statusEl.textContent = chat.status?.text || "在线";
+          }
 
           const aiCoc = chat.settings?.aiCocPanel || chat.cocPanel || {};
           const rawStats = aiCoc.stats || chat.settings?.coc7 || chat.coc7 || {};
@@ -30425,7 +30435,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           window.activeGeneratingChats = window.activeGeneratingChats || {};
           window.activeGeneratingKeeperDraw = window.activeGeneratingKeeperDraw || {};
-          const isThisChatGenerating = !!(window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId] || window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[chatId]);
+          window.remoteGeneratingChats = window.remoteGeneratingChats || {};
+          const sharedGroupIdForCheck = chat.peerGroupId || chat.id;
+          const isRemoteGenerating = !!(window.remoteGeneratingChats[chat.id] || window.remoteGeneratingChats[String(chat.id)] || window.remoteGeneratingChats[chatId] || (sharedGroupIdForCheck && window.remoteGeneratingChats[String(sharedGroupIdForCheck)]));
+          const isThisChatGenerating = !!(window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId] || window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[chatId] || isRemoteGenerating);
           if (isThisChatGenerating) {
             if (chat.isGroup) {
               chatHeaderTitle.textContent = displayName;
@@ -30444,9 +30457,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } else {
               statusContainer.style.display = "flex";
               if (chat.roleType === "peer" && window.PeerManager && typeof window.PeerManager.isPeerOnline === "function") {
-                const isPeerOn = window.PeerManager.isPeerOnline(chat.peerCode);
+                const pCode = chat.peerCode || chat.settings?.peerCode;
+                const isPeerOn = window.PeerManager.isPeerOnline(pCode);
                 statusTextEl.textContent = isPeerOn ? "在线" : "离线";
                 statusContainer.classList.toggle("busy", !isPeerOn);
+                if (pCode && typeof window.PeerManager.sendOnlinePingToPeer === "function") {
+                  window.PeerManager.sendOnlinePingToPeer(pCode);
+                }
               } else {
                 statusTextEl.textContent = chat.status?.text || "在线";
                 statusContainer.classList.toggle(
@@ -30603,7 +30620,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           typingIndicator.id = "typing-indicator";
           window.activeGeneratingChats = window.activeGeneratingChats || {};
           window.activeGeneratingKeeperDraw = window.activeGeneratingKeeperDraw || {};
-          const isGeneratingCurrently = !!(window.activeGeneratingChats[chatId] || window.activeGeneratingChats[chat.id] || window.activeGeneratingKeeperDraw[chatId] || window.activeGeneratingKeeperDraw[chat.id]);
+          window.remoteGeneratingChats = window.remoteGeneratingChats || {};
+          const isRemoteGenNow = !!(window.remoteGeneratingChats[chatId] || window.remoteGeneratingChats[chat.id] || window.remoteGeneratingChats[String(chat.id)] || (sharedGroupIdForCheck && window.remoteGeneratingChats[String(sharedGroupIdForCheck)]));
+          const isGeneratingCurrently = !!(window.activeGeneratingChats[chatId] || window.activeGeneratingChats[chat.id] || window.activeGeneratingKeeperDraw[chatId] || window.activeGeneratingKeeperDraw[chat.id] || isRemoteGenNow);
           if (isGeneratingCurrently) {
             if (chat.isGroup) {
               typingIndicator.textContent = "群成员正在回复中...";
@@ -33369,11 +33388,39 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 try { dbChat = await db.chats.get(chat.id); } catch (e) {}
               }
               if (dbChat) {
-                const memHistoryLen = (chat && Array.isArray(chat.history)) ? chat.history.length : 0;
-                const dbHistoryLen = (Array.isArray(dbChat.history)) ? dbChat.history.length : 0;
-                if (memHistoryLen > dbHistoryLen) {
-                  dbChat.history = chat.history;
-                  try { await db.chats.put(dbChat); } catch (_) {}
+                if (chat && Array.isArray(chat.history) && chat.history.length > 0) {
+                  const dbHist = Array.isArray(dbChat.history) ? dbChat.history : [];
+                  const mergedMap = new Map();
+                  const makeMsgKey = (m) => {
+                    if (!m) return "";
+                    if (m.eventId) return "evt_" + m.eventId;
+                    const cStr = typeof m.content === "string" ? m.content.slice(0, 120) : JSON.stringify(m.content || "").slice(0, 120);
+                    return `${m.role}_${m.timestamp}_${cStr}`;
+                  };
+                  for (const m of dbHist) {
+                    if (!m) continue;
+                    mergedMap.set(makeMsgKey(m), m);
+                  }
+                  let addedFromMem = false;
+                  for (const m of chat.history) {
+                    if (!m) continue;
+                    const k = makeMsgKey(m);
+                    if (!mergedMap.has(k)) {
+                      mergedMap.set(k, m);
+                      addedFromMem = true;
+                    }
+                  }
+                  if (addedFromMem || chat.history.length > dbHist.length) {
+                    const mergedArr = Array.from(mergedMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+                    dbChat.history = mergedArr;
+                    try { await db.chats.put(dbChat); } catch (_) {}
+                  }
+                }
+                if (chat && chat.settings) {
+                  dbChat.settings = { ...(dbChat.settings || {}), ...chat.settings };
+                }
+                if (chat && Array.isArray(chat.members) && chat.members.length > 0) {
+                  dbChat.members = chat.members;
                 }
                 if (!state.chats) state.chats = {};
                 state.chats[dbChat.id] = dbChat;
@@ -33489,11 +33536,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           const rerollBtnEl = document.getElementById("reroll-btn");
           if (rerollBtnEl) {
-            rerollBtnEl.style.display = isPeerSingle ? "none" : "";
+            rerollBtnEl.style.display = (isPeerSingle || isRealPeerGroup) ? "none" : "";
           }
           const timelineBranchBtnEl = document.getElementById("timeline-branch-btn");
           if (timelineBranchBtnEl) {
-            timelineBranchBtnEl.style.display = isRealPeerGroup ? "none" : "";
+            timelineBranchBtnEl.style.display = "";
           }
           if (!isPeerSingle && !isRealPeerGroup) {
             const stickerPanelEl = document.getElementById("sticker-panel");
@@ -39115,7 +39162,8 @@ ${recentHistoryText}
           const typingIndicator = document.getElementById("typing-indicator");
 
           // 根据聊天类型，决定显示哪种“正在输入”
-          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
+          const isPeerGrpChat = Boolean(chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
+          if (isPeerGrpChat && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
             window.PeerManager.broadcastTypingStatus(chat, true);
           }
           const chatScreenElForTyping = document.getElementById("chat-interface-screen");
@@ -39126,9 +39174,9 @@ ${recentHistoryText}
                 typingIndicator.style.display = "block";
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
               }
-              if (chat.isPeerGroup && chatHeaderTitle) {
-                chatHeaderTitle.textContent = "群成员正在输入中...";
-                chatHeaderTitle.classList.add("typing-status");
+              if (chatHeaderTitle) {
+                chatHeaderTitle.textContent = chat.name;
+                chatHeaderTitle.classList.remove("typing-status");
               }
             } else if (chat.settings.offlineMode?.enabled) {
               if (chatHeaderTitle) {
@@ -45548,7 +45596,9 @@ ${stickerContext || "无"}
               }
             }
           } finally {
-            if (chat && chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
+            const isPeerGrpFinally = Boolean(chat && chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
+            const isKeeperDrawingFinally = !!(window.activeGeneratingKeeperDraw && (window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[chatId]));
+            if (isPeerGrpFinally && !isKeeperDrawingFinally && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
               window.PeerManager.broadcastTypingStatus(chat, false);
             }
             if (window.activeGeneratingChats) {
@@ -45568,7 +45618,9 @@ ${stickerContext || "无"}
               const curTypingInd = document.getElementById("typing-indicator");
               if (curTypingInd) {
                 const isKeeperDrawing = !!(window.activeGeneratingKeeperDraw && (window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[chatId]));
-                if (chat.isGroup && (chat.settings?.keeperForcedDraw || isKeeperDrawing)) {
+                const sGrpId = chat.peerGroupId || chat.id;
+                const isRemoteGenStill = !!(window.remoteGeneratingChats && (window.remoteGeneratingChats[chat.id] || window.remoteGeneratingChats[String(chat.id)] || window.remoteGeneratingChats[chatId] || (sGrpId && window.remoteGeneratingChats[String(sGrpId)])));
+                if (chat.isGroup && (chat.settings?.keeperForcedDraw || isKeeperDrawing || isRemoteGenStill)) {
                   curTypingInd.textContent = "群成员正在回复中...";
                   curTypingInd.style.display = "block";
                 } else {
@@ -55892,11 +55944,15 @@ ${stickerContext || "无"}
           // 3. 保存更新后的聊天记录到数据库
           await db.chats.put(chat);
 
-          if (chat.isGroup && chat.isPeerGroup && removedMessages.length > 0 && window.PeerManager && typeof window.PeerManager.broadcastMessageDelete === "function") {
+          const isPeerGrpReroll = Boolean(chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
+          if (isPeerGrpReroll && removedMessages.length > 0 && window.PeerManager && typeof window.PeerManager.broadcastMessageDelete === "function") {
             const removedTsList = removedMessages.map(m => m.timestamp).filter(Boolean);
             if (removedTsList.length > 0) {
               window.PeerManager.broadcastMessageDelete(chat, removedTsList);
             }
+          }
+          if (isPeerGrpReroll && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
+            window.PeerManager.broadcastTypingStatus(chat, true);
           }
 
           // 4. 刷新聊天界面，消除被删除的消息
@@ -63451,6 +63507,11 @@ ${stickerContext || "无"}
           window.activeGeneratingKeeperDraw[String(chat.id)] = true;
           window.activeGeneratingKeeperDraw[chatId] = true;
 
+          const isPeerGrpDraw = Boolean(chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
+          if (isPeerGrpDraw && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
+            window.PeerManager.broadcastTypingStatus(chat, true);
+          }
+
           if (chat.isGroup && String(state.activeChatId) === String(chat.id)) {
             const typingInd = document.getElementById("typing-indicator");
             if (typingInd) {
@@ -63696,9 +63757,16 @@ ${stickerContext || "无"}
               delete window.activeGeneratingKeeperDraw[String(chat.id)];
               delete window.activeGeneratingKeeperDraw[chatId];
             }
+            const isPeerGrpDrawDone = Boolean(chat && chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
+            const isStillGenChat = !!(window.activeGeneratingChats && (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[chatId]));
+            if (isPeerGrpDrawDone && !isStillGenChat && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
+              window.PeerManager.broadcastTypingStatus(chat, false);
+            }
             if (chat.isGroup && String(state.activeChatId) === String(chat.id)) {
               const curTypingInd = document.getElementById("typing-indicator");
-              if (curTypingInd && (!window.activeGeneratingChats || !window.activeGeneratingChats[chat.id])) {
+              const sGrpId = chat.peerGroupId || chat.id;
+              const isRemoteGenNow = !!(window.remoteGeneratingChats && (window.remoteGeneratingChats[chat.id] || window.remoteGeneratingChats[String(chat.id)] || (sGrpId && window.remoteGeneratingChats[String(sGrpId)])));
+              if (curTypingInd && !isStillGenChat && !isRemoteGenNow) {
                 curTypingInd.style.display = "none";
               }
             }
@@ -81469,19 +81537,37 @@ ${stickerContext || "无"}
               if (!file || !state.activeChatId) return;
               const reader = new FileReader();
               reader.onload = async (e) => {
-                const base64Url = e.target.result;
+                const rawBase64Url = e.target.result;
                 const chat = state.chats[state.activeChatId];
+                if (!chat) return;
+                let finalImageUrl = rawBase64Url;
+                if (typeof compressImage === "function" && rawBase64Url && rawBase64Url.length > 350000) {
+                  try {
+                    finalImageUrl = await compressImage(rawBase64Url, 0.90, 1440);
+                  } catch (_) {}
+                }
                 const msg = {
                   role: "user",
                   content: [
-                    { type: "image_url", image_url: { url: base64Url } },
+                    { type: "image_url", image_url: { url: finalImageUrl } },
                   ],
                   timestamp: Date.now(),
                 };
+                if (currentReplyContext) {
+                  msg.quote = currentReplyContext;
+                  cancelReplyMode();
+                }
                 chat.history.push(msg);
                 await db.chats.put(chat);
                 appendMessage(msg, chat);
                 renderChatList();
+                if (window.PeerManager) {
+                  if (chat.isGroup && chat.isPeerGroup && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                    window.PeerManager.broadcastGroupMessage(chat, msg, true);
+                  } else if (chat.roleType === "peer" && !chat.isGroup && typeof window.PeerManager.sendDirectPeerMessage === "function") {
+                    window.PeerManager.sendDirectPeerMessage(chat, msg);
+                  }
+                }
               };
               reader.readAsDataURL(file);
               event.target.value = null;
