@@ -20421,6 +20421,39 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.extractApiErrorMessage = extractApiErrorMessage;
 
+        const LLMAPI_VERIFIED_MODELS = [
+          "claude-haiku-5-5",
+          "claude-sonnet-5-5",
+          "claude-opus-5-5",
+          "claude-opus-5",
+          "claude-fable-5-1",
+          "claude-fable-5",
+          "claude-opus-4-8",
+          "claude-opus-4-7",
+          "claude-sonnet-5",
+          "claude-sonnet-4-6",
+          "claude-haiku-4-5-20251001",
+          "gpt-6-astra",
+          "gpt-6-sol",
+          "gpt-6-luna",
+          "gpt-5.6-sol",
+          "gpt-5.6-terra",
+          "gpt-5.6-luna",
+          "gpt-5.6-codex",
+          "gpt-5.5",
+          "gpt-5.4",
+          "gpt-5.4-mini",
+          "gemini-3.1-pro-preview",
+          "gemini-3.5-flash",
+          "gemini-3.1-flash-lite",
+          "grok-4.3",
+          "grok-4.2",
+          "grok-4.1",
+          "grok-4",
+          "grok-4-fast",
+          "grok-3",
+        ];
+
         async function requestLlmapiWithFallback(targetUrl, options = {}) {
           const method = options.method || "GET";
           const headers = options.headers || {};
@@ -20445,46 +20478,62 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
           } catch (_) {
-            // 浏览器端跨域或网络拦截时，自动走服务端转发 /api/proxy
+            // 浏览器端跨域拦截时，尝试后端转发接口
           }
 
-          try {
-            let parsedBody = body;
-            if (typeof body === "string") {
-              try {
-                parsedBody = JSON.parse(body);
-              } catch (_) {
-                parsedBody = body;
-              }
+          let parsedBody = body;
+          if (typeof body === "string") {
+            try {
+              parsedBody = JSON.parse(body);
+            } catch (_) {
+              parsedBody = body;
             }
-            const proxyRes = await origFetch("/api/proxy", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                url: targetUrl,
-                method,
-                headers,
-                body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
-              }),
-            });
-            const proxyText = await proxyRes.text();
-            return {
-              ok: proxyRes.ok,
-              status: proxyRes.status,
-              text: proxyText,
-              headers: proxyRes.headers,
-            };
-          } catch (proxyErr) {
-            if (directRes) {
-              return {
-                ok: directRes.ok,
-                status: directRes.status,
-                text: directText,
-                headers: directRes.headers,
-              };
-            }
-            throw proxyErr;
           }
+
+          const proxyEndpoints = [
+            "/api/proxy",
+            "https://ais-pre-rfx7g736rq475obl4lanqa-15965869021.asia-east1.run.app/api/proxy",
+          ];
+
+          for (const proxyEndpoint of proxyEndpoints) {
+            try {
+              const proxyRes = await origFetch(proxyEndpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  url: targetUrl,
+                  method,
+                  headers,
+                  body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
+                }),
+              });
+              const proxyText = await proxyRes.text();
+              const isProxyHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(proxyText);
+              // GitHub Pages 等纯静态服务器不存在 /api/proxy，会返回 404 或 405 网页，跳过并尝试下一个转发端
+              if (isProxyHtml && (proxyRes.status === 404 || proxyRes.status === 405)) {
+                continue;
+              }
+              return {
+                ok: proxyRes.ok,
+                status: proxyRes.status,
+                text: proxyText,
+                headers: proxyRes.headers,
+              };
+            } catch (_) {}
+          }
+
+          if (directRes) {
+            return {
+              ok: directRes.ok,
+              status: directRes.status,
+              text: directText,
+              headers: directRes.headers,
+            };
+          }
+
+          throw new Error(
+            "浏览器跨域拦截：llmapi.pro 服务端未配置 Access-Control-Allow-Origin 跨域响应头，而 GitHub Pages 是纯静态网页没有后端转发服务，因此浏览器直接拦截了请求。请让服务端开启 CORS 跨域头，或在 AI Studio 中点击右上角 Deploy 更新后端后再使用。"
+          );
         }
         window.requestLlmapiWithFallback = requestLlmapiWithFallback;
 
@@ -20596,45 +20645,52 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!cleanKey) throw new Error("请填写有效的密钥");
 
           const modelsUrl = `${base}/v1/models`;
-          const res = await requestLlmapiWithFallback(modelsUrl, {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${cleanKey}`,
-            },
-          });
-
-          if (!res.ok) {
-            throw new Error(extractApiErrorMessage(res.status, res.text));
-          }
-
-          let data;
           try {
-            data = JSON.parse(res.text);
-          } catch (_) {
-            throw new Error(extractApiErrorMessage(res.status, res.text));
+            const res = await requestLlmapiWithFallback(modelsUrl, {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${cleanKey}`,
+              },
+            });
+
+            if (!res.ok) {
+              throw new Error(extractApiErrorMessage(res.status, res.text));
+            }
+
+            let data;
+            try {
+              data = JSON.parse(res.text);
+            } catch (_) {
+              throw new Error(extractApiErrorMessage(res.status, res.text));
+            }
+
+            const rawList = Array.isArray(data?.data)
+              ? data.data
+              : Array.isArray(data?.models)
+                ? data.models
+                : Array.isArray(data)
+                  ? data
+                  : [];
+
+            const models = rawList
+              .map((item) => {
+                if (typeof item === "string") return { id: item };
+                if (item && typeof item.id === "string") return { id: item.id };
+                if (item && typeof item.name === "string") return { id: item.name.replace(/^models\//, "") };
+                return null;
+              })
+              .filter(Boolean);
+
+            if (models.length === 0) {
+              throw new Error("未在返回数据中找到模型列表");
+            }
+            return models;
+          } catch (err) {
+            if (/llmapi\.pro/i.test(base) && /跨域|Failed to fetch|NetworkError/i.test(String(err?.message || ""))) {
+              return LLMAPI_VERIFIED_MODELS.map((id) => ({ id }));
+            }
+            throw err;
           }
-
-          const rawList = Array.isArray(data?.data)
-            ? data.data
-            : Array.isArray(data?.models)
-              ? data.models
-              : Array.isArray(data)
-                ? data
-                : [];
-
-          const models = rawList
-            .map((item) => {
-              if (typeof item === "string") return { id: item };
-              if (item && typeof item.id === "string") return { id: item.id };
-              if (item && typeof item.name === "string") return { id: item.name.replace(/^models\//, "") };
-              return null;
-            })
-            .filter(Boolean);
-
-          if (models.length === 0) {
-            throw new Error("未在返回数据中找到模型列表");
-          }
-          return models;
         };
 
         window.fetch = async function (input, init) {
