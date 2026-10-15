@@ -1113,7 +1113,7 @@
           <!-- 1. 云端大脑卡片 -->
           <div class="moe-card">
             <div class="moe-card-header">
-              <span class="icon">☁️</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
               <h3>API 连接</h3>
             </div>
             <div class="moe-card-body">
@@ -1195,7 +1195,7 @@
                 />
               </div>
               <button id="fetch-models-btn" class="moe-btn-secondary" style="margin-top: 15px;">
-                📡 拉取模型列表
+                拉取模型列表
               </button>
             </div>
           </div>
@@ -1313,11 +1313,11 @@
             </div>
           </div>
 
-          <!-- 辅助与交互设置（认知、音乐、效果、音效） -->
+          <!-- 辅助设置（认知、音乐、效果、音效） -->
           <div class="moe-card">
             <div class="moe-card-header">
-              <span class="icon">✨</span>
-              <h3>辅助与交互设置</h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+              <h3>辅助</h3>
             </div>
             <div class="moe-card-body">
               <div class="form-group" style="padding-top: 4px;">
@@ -2092,15 +2092,40 @@
             </button>
           </div>
 
+          <!-- 控制台卡片 -->
+          <div class="moe-card" id="api-console-card">
+            <div class="moe-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="4 17 10 11 4 5"></polyline>
+                  <line x1="12" y1="19" x2="20" y2="19"></line>
+                </svg>
+                <h3>终端</h3>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button type="button" class="moe-btn-small" id="test-api-console-btn" onclick="if(window.testApiCallFromConsole)window.testApiCallFromConsole();" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">
+                  测试
+                </button>
+                <button type="button" class="moe-btn-small" id="clear-api-console-btn" onclick="if(window.clearApiConsoleLogs)window.clearApiConsoleLogs();" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">
+                  清空
+                </button>
+              </div>
+            </div>
+            <div class="moe-card-body" style="padding: 10px;">
+              <div id="api-console-log-list" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                <div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 14px 0;">暂无调用记录</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 底部留白，防止被悬浮按钮遮挡 -->
           <div style="height: 80px"></div>
         </div>
 
-        <!-- ★★★ 萌系悬浮保存按钮 ★★★ -->
+        <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
-          💾<span style="font-size: 12px; display: block; margin-top: -2px"
-            >保存</span
-          >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          <span style="font-size: 12px; display: block; margin-top: -2px">保存</span>
         </button>
 
         <!-- 隐藏的 input -->
@@ -20546,6 +20571,218 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.requestLlmapiWithFallback = requestLlmapiWithFallback;
 
+        const API_CONSOLE_STORAGE_KEY = "tukey_api_console_logs_v1";
+        function getApiConsoleLogs() {
+          try {
+            const raw = localStorage.getItem(API_CONSOLE_STORAGE_KEY);
+            return raw ? JSON.parse(raw) : [];
+          } catch (_) {
+            return [];
+          }
+        }
+
+        function saveApiConsoleLogs(logs) {
+          try {
+            localStorage.setItem(API_CONSOLE_STORAGE_KEY, JSON.stringify(logs.slice(0, 50)));
+          } catch (_) {}
+        }
+
+        function recordApiCallLog(data) {
+          try {
+            const logs = getApiConsoleLogs();
+            const now = new Date();
+            const timeStr = String(now.getHours()).padStart(2, "0") + ":" +
+              String(now.getMinutes()).padStart(2, "0") + ":" +
+              String(now.getSeconds()).padStart(2, "0");
+            const entry = {
+              id: "log_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+              time: timeStr,
+              source: data.source || "主API",
+              model: data.model || "默认模型",
+              status: data.status || "成功",
+              duration: data.duration || "0.1秒",
+              purpose: data.purpose || "调用",
+              detail: data.detail || "",
+              timestamp: Date.now()
+            };
+            logs.unshift(entry);
+            saveApiConsoleLogs(logs);
+            if (typeof renderApiConsoleLogs === "function") {
+              renderApiConsoleLogs();
+            }
+          } catch (_) {}
+        }
+        window.recordApiCallLog = recordApiCallLog;
+
+        function clearApiConsoleLogs() {
+          try {
+            localStorage.removeItem(API_CONSOLE_STORAGE_KEY);
+            if (typeof renderApiConsoleLogs === "function") {
+              renderApiConsoleLogs();
+            }
+          } catch (_) {}
+        }
+        window.clearApiConsoleLogs = clearApiConsoleLogs;
+
+        async function testApiCallFromConsole() {
+          const testBtn = document.getElementById("test-api-console-btn");
+          if (testBtn) {
+            testBtn.disabled = true;
+            testBtn.textContent = "测试中";
+          }
+          const domSubForced = document.getElementById("sub-api-use-forced-image");
+          const isSubActive = domSubForced ? domSubForced.checked : !!(state.apiConfig?.subApiUses?.forcedImage);
+
+          const cfg = (state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
+          let proxyUrl = "";
+          let apiKey = "";
+          let model = "";
+          let protocol = "default";
+          let sourceName = "主API";
+
+          if (isSubActive && (cfg.subProxyUrl || document.getElementById("sub-proxy-url")?.value)) {
+            sourceName = "副API";
+            proxyUrl = (document.getElementById("sub-proxy-url")?.value || cfg.subProxyUrl || "").trim();
+            apiKey = (document.getElementById("sub-api-key")?.value || cfg.subApiKey || "").trim();
+            model = (document.getElementById("sub-model-select")?.value || cfg.subModel || "gpt-4o").trim();
+            protocol = document.getElementById("sub-api-protocol-select")?.value || cfg.subApiProtocol || "default";
+          } else {
+            sourceName = "主API";
+            proxyUrl = (document.getElementById("proxy-url")?.value || cfg.proxyUrl || "").trim();
+            apiKey = (document.getElementById("api-key")?.value || cfg.apiKey || "").trim();
+            model = (document.getElementById("model-select")?.value || cfg.model || "gpt-4o").trim();
+            protocol = document.getElementById("api-protocol-select")?.value || cfg.apiProtocol || "default";
+          }
+
+          if (!proxyUrl || !apiKey) {
+            alert("请先填写反代地址和密钥后再测试");
+            if (testBtn) {
+              testBtn.disabled = false;
+              testBtn.textContent = "测试";
+            }
+            return;
+          }
+
+          const startT = Date.now();
+          try {
+            const isGemini = proxyUrl === GEMINI_API_URL || proxyUrl.includes("generativelanguage.googleapis.com");
+            const isClaude = protocol === "claude" || /claude/i.test(model);
+            let replyText = "";
+
+            if (isGemini) {
+              const gCfg = toGeminiRequestData(model, apiKey, "You are a test assistant.", [{ role: "user", content: "请回复收到" }], isGemini, 0.7);
+              const res = await origFetch(gCfg.url, gCfg.data);
+              if (!res.ok) throw new Error("HTTP " + res.status + ": " + (await res.text()));
+              const jData = await res.json();
+              replyText = jData?.candidates?.[0]?.content?.parts?.[0]?.text || "成功";
+            } else if (isClaude) {
+              let claudeUrl = proxyUrl.replace(/\/+$/, "");
+              if (!claudeUrl.endsWith("/messages")) {
+                claudeUrl = claudeUrl.endsWith("/v1") ? `${claudeUrl}/messages` : `${claudeUrl}/v1/messages`;
+              }
+              const cRes = await requestLlmapiWithFallback(claudeUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-api-key": apiKey,
+                  "anthropic-version": "2023-06-01",
+                },
+                body: JSON.stringify({
+                  model: model,
+                  max_tokens: 30,
+                  messages: [{ role: "user", content: "请回复收到" }],
+                }),
+              });
+              if (!cRes.ok) throw new Error("HTTP " + cRes.status + ": " + (cRes.text || ""));
+              const cJson = JSON.parse(cRes.text);
+              replyText = cJson?.content?.[0]?.text || "成功";
+            } else {
+              let oUrl = proxyUrl.replace(/\/+$/, "");
+              if (!oUrl.endsWith("/chat/completions") && !oUrl.endsWith("/completions")) {
+                oUrl = oUrl.endsWith("/v1") ? `${oUrl}/chat/completions` : `${oUrl}/v1/chat/completions`;
+              }
+              const oRes = await requestLlmapiWithFallback(oUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: model,
+                  messages: [{ role: "user", content: "请回复收到" }],
+                  temperature: 0.7,
+                }),
+              });
+              if (!oRes.ok) throw new Error("HTTP " + oRes.status + ": " + (oRes.text || ""));
+              const oJson = JSON.parse(oRes.text);
+              replyText = oJson?.choices?.[0]?.message?.content || "成功";
+            }
+
+            const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
+            recordApiCallLog({
+              source: sourceName,
+              model: model,
+              status: "成功",
+              duration: dur,
+              purpose: "测试",
+              detail: String(replyText).trim().slice(0, 100) || "回复成功",
+            });
+          } catch (err) {
+            const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
+            recordApiCallLog({
+              source: sourceName,
+              model: model,
+              status: "失败",
+              duration: dur,
+              purpose: "测试",
+              detail: err && err.message ? err.message : String(err),
+            });
+          } finally {
+            if (testBtn) {
+              testBtn.disabled = false;
+              testBtn.textContent = "测试";
+            }
+          }
+        }
+        window.testApiCallFromConsole = testApiCallFromConsole;
+
+        function renderApiConsoleLogs() {
+          const container = document.getElementById("api-console-log-list");
+          if (!container) return;
+          const logs = getApiConsoleLogs();
+          if (!logs || logs.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 14px 0;">暂无调用记录</div>';
+            return;
+          }
+          container.innerHTML = logs.map(item => {
+            const isOk = item.status === "成功";
+            const statusColor = isOk ? "var(--accent-color)" : "var(--tukey-expense, #e53e3e)";
+            const safeDetail = String(item.detail || "")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#039;");
+            return `
+              <div class="api-console-log-item" style="border: 1px solid var(--border-color); background: var(--secondary-bg); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box;">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                  <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${statusColor}; flex-shrink: 0;"></span>
+                    <span style="font-weight: 600; color: var(--text-primary); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.source} · ${item.model}</span>
+                  </div>
+                  <span style="font-size: 11.5px; font-weight: 600; color: ${statusColor}; flex-shrink: 0; margin-left: 8px;">${item.status}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary); width: 100%;">
+                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.time} · 耗时 ${item.duration}</span>
+                  <span style="flex-shrink: 0; margin-left: 8px;">${item.purpose}</span>
+                </div>
+                ${safeDetail ? `<div style="font-size: 11px; color: var(--text-secondary); background: var(--card-bg); padding: 5px 8px; border-radius: 5px; word-break: break-all; max-height: 46px; overflow: hidden; text-overflow: ellipsis; line-height: 1.35; border: 1px solid var(--border-color);">${safeDetail}</div>` : ''}
+              </div>
+            `;
+          }).join("");
+        }
+        window.renderApiConsoleLogs = renderApiConsoleLogs;
+
         function normalizeMessagesForClaudeRelay(rawMessages) {
           if (!Array.isArray(rawMessages)) return [{ role: "user", content: "你好" }];
           const systemParts = [];
@@ -20734,16 +20971,45 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               /llmapi/i.test(isSubCall ? subProxy : mainProxy);
 
             if (!isClaudeOrLlmapi && protocol === "default") {
+              const fetchStartT = Date.now();
               try {
-                return await origFetch(input, init);
+                const directRes = await origFetch(input, init);
+                const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
+                recordApiCallLog({
+                  source: isSubCall ? "副API" : "主API",
+                  model: modelId || "默认模型",
+                  status: directRes.ok ? "成功" : "失败",
+                  duration: durStr,
+                  purpose: "对话",
+                  detail: directRes.ok ? "回复成功" : `HTTP ${directRes.status}`,
+                });
+                return directRes;
               } catch (directErr) {
                 if (/Failed to fetch|NetworkError/i.test(String(directErr?.message || ""))) {
                   const fallbackRes = await requestLlmapiWithFallback(urlStr, init);
+                  const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
+                  recordApiCallLog({
+                    source: isSubCall ? "副API" : "主API",
+                    model: modelId || "默认模型",
+                    status: fallbackRes.ok ? "成功" : "失败",
+                    duration: durStr,
+                    purpose: "对话",
+                    detail: fallbackRes.ok ? "回复成功" : `HTTP ${fallbackRes.status}`,
+                  });
                   return new Response(fallbackRes.text, {
                     status: fallbackRes.status,
                     headers: fallbackRes.headers,
                   });
                 }
+                const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
+                recordApiCallLog({
+                  source: isSubCall ? "副API" : "主API",
+                  model: modelId || "默认模型",
+                  status: "失败",
+                  duration: durStr,
+                  purpose: "对话",
+                  detail: directErr?.message || "网络错误",
+                });
                 throw directErr;
               }
             }
@@ -20813,6 +21079,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               stream: false,
             };
 
+            const fetchStartT = Date.now();
             const res = await requestLlmapiWithFallback(targetUrl, {
               method: "POST",
               headers: {
@@ -20824,6 +21091,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             if (!res.ok) {
               const errMsg = extractApiErrorMessage(res.status, res.text);
+              const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
+              recordApiCallLog({
+                source: isSubCall ? "副API" : "主API",
+                model: modelId,
+                status: "失败",
+                duration: durStr,
+                purpose: "对话",
+                detail: errMsg || `HTTP ${res.status}`,
+              });
               const errPayload = JSON.stringify({
                 error: {
                   message: errMsg,
@@ -20897,11 +21173,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
+            const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
+            let previewReply = "";
+            if (Array.isArray(data.choices) && data.choices[0]?.message?.content) {
+              previewReply = String(data.choices[0].message.content).slice(0, 100);
+            }
+            recordApiCallLog({
+              source: isSubCall ? "副API" : "主API",
+              model: modelId,
+              status: "成功",
+              duration: durStr,
+              purpose: "对话",
+              detail: previewReply || "回复成功",
+            });
+
             return new Response(JSON.stringify(data), {
               status: 200,
               headers: { "Content-Type": "application/json" },
             });
           } catch (err) {
+            recordApiCallLog({
+              source: (typeof isSubCall !== "undefined" && isSubCall) ? "副API" : "主API",
+              model: (typeof modelId !== "undefined" && modelId) ? modelId : "默认模型",
+              status: "失败",
+              duration: "0.1秒",
+              purpose: "对话",
+              detail: err?.message || String(err),
+            });
             return Promise.reject(err);
           }
         };
@@ -23040,11 +23338,71 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         const THOUGHT_CHAIN_FOLDED_NOTICE = "已折叠历史思考";
 
         function checkPreviousTurnThinkingValid(historySlice, isThinkingActive) {
-          if (!isThinkingActive || !Array.isArray(historySlice)) return true;
-          const lastAssistant = [...historySlice].reverse().find((m) => m && m.role === "assistant");
-          if (!lastAssistant) return true;
-          const thinkingRaw = typeof lastAssistant.thinking === "string" ? lastAssistant.thinking.trim() : "";
-          if (!thinkingRaw) return false;
+          if (!isThinkingActive) return true;
+          const list = Array.isArray(historySlice) && historySlice.length > 0 ? historySlice : (typeof chat !== "undefined" && chat && Array.isArray(chat.history) ? chat.history : []);
+          if (!list || list.length === 0) return true;
+
+          let lastAssistantIdx = -1;
+          for (let i = list.length - 1; i >= 0; i--) {
+            const m = list[i];
+            if (m && m.role === "assistant" && !m.isPeerUserMessage) {
+              lastAssistantIdx = i;
+              break;
+            }
+          }
+          if (lastAssistantIdx === -1) return true;
+
+          const lastTurnAssistantMessages = [];
+          for (let i = lastAssistantIdx; i >= 0; i--) {
+            const m = list[i];
+            if (!m) continue;
+            if (m.role === "user" || m.isPeerUserMessage) {
+              break;
+            }
+            if (m.role === "assistant") {
+              lastTurnAssistantMessages.push(m);
+            }
+          }
+
+          let collectedThinking = "";
+          for (const m of lastTurnAssistantMessages) {
+            if (typeof m.thinking === "string" && m.thinking.trim()) {
+              collectedThinking += (collectedThinking ? "\n" : "") + m.thinking.trim();
+            }
+            if (typeof m.reasoning_content === "string" && m.reasoning_content.trim()) {
+              collectedThinking += (collectedThinking ? "\n" : "") + m.reasoning_content.trim();
+            }
+            if (typeof m.thought === "string" && m.thought.trim()) {
+              collectedThinking += (collectedThinking ? "\n" : "") + m.thought.trim();
+            }
+            const contentStr = typeof m.content === "string" ? m.content : (typeof m.message === "string" ? m.message : "");
+            if (contentStr && /<thinking>([\s\S]*?)<\/thinking>/i.test(contentStr)) {
+              const matches = contentStr.match(/<thinking>([\s\S]*?)<\/thinking>/gi);
+              if (matches) {
+                for (const t of matches) {
+                  const inner = t.replace(/<\/?thinking>/gi, "").trim();
+                  if (inner) {
+                    collectedThinking += (collectedThinking ? "\n" : "") + inner;
+                  }
+                }
+              }
+            }
+            if (contentStr && (contentStr.trim().startsWith("{") || contentStr.trim().startsWith("```json"))) {
+              try {
+                const clean = contentStr.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+                const parsed = JSON.parse(clean);
+                if (parsed && typeof parsed.thinking === "string" && parsed.thinking.trim()) {
+                  collectedThinking += (collectedThinking ? "\n" : "") + parsed.thinking.trim();
+                }
+              } catch (_) {}
+            }
+          }
+
+          const rawThinking = collectedThinking.trim();
+          if (!rawThinking) {
+            return false;
+          }
+
           const copyKeywords = [
             "已折叠历史思考",
             "在此处渲染了完整思维链",
@@ -23055,12 +23413,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             "本段折叠提示",
             "系统记录：此处为上一轮"
           ];
-          if (copyKeywords.some((kw) => thinkingRaw.includes(kw))) {
+
+          let stripped = rawThinking;
+          for (const kw of copyKeywords) {
+            stripped = stripped.split(kw).join("");
+          }
+          stripped = stripped.replace(/[^\w\u4e00-\u9fa5]/g, "").trim();
+
+          if (stripped.length === 0) {
             return false;
           }
-          if (thinkingRaw.length < 10) {
-            return false;
-          }
+
           return true;
         }
 
@@ -30762,6 +31125,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           calculateTotalImageSize();
+          if (typeof renderApiConsoleLogs === "function") {
+            renderApiConsoleLogs();
+          }
         }
 
         /**
@@ -64918,18 +65284,30 @@ ${stickerContext || "无"}
             ];
 
             // 7. 确定调用的 API 配置：在副API中勾选强制生图时严格调用副API，否则调用主API
-            const isForcedImageSub = Boolean(state.apiConfig?.subApiUses?.forcedImage);
-            let apiCfg = getEffectiveApiConfig(isForcedImageSub ? "forcedImage" : "");
+            const isForcedImageSub = Boolean(
+              (document.getElementById("sub-api-use-forced-image") && document.getElementById("sub-api-use-forced-image").checked) ||
+              state.apiConfig?.subApiUses?.forcedImage ||
+              window.state?.apiConfig?.subApiUses?.forcedImage
+            );
+            const cfg = (state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
+            let apiCfg;
             if (isForcedImageSub) {
-              const cfg = (state && state.apiConfig) || {};
+              const domSubProxy = document.getElementById("sub-proxy-url")?.value?.trim() || "";
+              const domSubKey = document.getElementById("sub-api-key")?.value?.trim() || "";
+              const domSubModel = document.getElementById("sub-model-select")?.value?.trim() || "";
+              const domSubTemp = document.getElementById("sub-temperature-slider")?.value;
+              const domSubProto = document.getElementById("sub-api-protocol-select")?.value;
+
               apiCfg = {
-                proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || cfg.proxyUrl || "https://api.openai.com",
-                apiKey: (cfg.subApiKey && cfg.subApiKey.trim()) || (cfg.apiKey && cfg.apiKey.trim()) || "",
-                model: (cfg.subModel && cfg.subModel.trim()) || cfg.model || "gpt-4",
-                temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (parseFloat(cfg.temperature) || 0.8),
-                apiProtocol: cfg.subApiProtocol || "default",
+                proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || domSubProxy || (cfg.proxyUrl && cfg.proxyUrl.trim()) || "https://api.openai.com",
+                apiKey: (cfg.subApiKey && cfg.subApiKey.trim()) || domSubKey || (cfg.apiKey && cfg.apiKey.trim()) || "",
+                model: (cfg.subModel && cfg.subModel.trim()) || domSubModel || cfg.model || "gpt-4o",
+                temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (domSubTemp ? parseFloat(domSubTemp) : (parseFloat(cfg.temperature) || 0.8)),
+                apiProtocol: cfg.subApiProtocol || domSubProto || "default",
                 isSub: true,
               };
+            } else {
+              apiCfg = getEffectiveApiConfig("");
             }
             const { proxyUrl, apiKey, model, temperature, apiProtocol, isSub } = apiCfg;
 
@@ -64941,6 +65319,7 @@ ${stickerContext || "无"}
 
             console.log(`[强制生图] 正在调用 ${isSub ? "【副API】" : "【主API】"}，模型: ${model}，协议: ${apiProtocol || "default"}，反代地址: ${proxyUrl}`);
 
+            const forcedDrawStart = Date.now();
             let targetUrl = (proxyUrl || "https://api.openai.com").trim().replace(/\/+$/, "");
             const isGemini = targetUrl === GEMINI_API_URL || targetUrl.includes("generativelanguage.googleapis.com");
             const isClaude = (apiProtocol === "claude") || /claude/i.test(model);
@@ -65005,6 +65384,16 @@ ${stickerContext || "无"}
               rawContent = openaiData?.choices?.[0]?.message?.content || "";
             }
 
+            const forcedDur = ((Date.now() - forcedDrawStart) / 1000).toFixed(1) + "秒";
+            recordApiCallLog({
+              source: isSub ? "副API" : "主API",
+              model: model,
+              status: "成功",
+              duration: forcedDur,
+              purpose: "强制生图",
+              detail: rawContent ? rawContent.slice(0, 150) : "已生成生图指令",
+            });
+
             if (!rawContent || !rawContent.trim()) return;
 
             const promptsToGenerate = [];
@@ -65039,6 +65428,15 @@ ${stickerContext || "无"}
             }
           } catch (err) {
             console.error("守密人强制生图失败:", err);
+            const forcedDur = (typeof forcedDrawStart !== "undefined") ? (((Date.now() - forcedDrawStart) / 1000).toFixed(1) + "秒") : "0.1秒";
+            recordApiCallLog({
+              source: (typeof isSub !== "undefined" && isSub) ? "副API" : "主API",
+              model: (typeof model !== "undefined" && model) ? model : "未知模型",
+              status: "失败",
+              duration: forcedDur,
+              purpose: "强制生图",
+              detail: err && err.message ? err.message : String(err),
+            });
             const errorMsg = {
               role: "assistant",
               sender: chat.isGroup ? "系统消息" : chat.name,
@@ -79081,6 +79479,7 @@ ${stickerContext || "无"}
               const protoEl = document.getElementById("api-protocol-select");
               const protocol = protoEl ? protoEl.value : (state.apiConfig.apiProtocol || "default");
               if (!url || !key) return alert("请先填写反代地址和密钥");
+              const startT = Date.now();
               try {
                 const models = await window.fetchApiModelsByProtocol(url, key, protocol);
                 const picker = document.getElementById("fetched-model-list");
@@ -79128,10 +79527,28 @@ ${stickerContext || "无"}
                     }
                   }
                 };
+                const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
+                recordApiCallLog({
+                  source: "主API",
+                  model: "模型列表",
+                  status: "成功",
+                  duration: dur,
+                  purpose: "拉取",
+                  detail: `拉取到 ${models.length} 个模型`,
+                });
                 alert(
                   `成功拉取 ${models.length} 个模型！\n请点击下方的下拉框选择，选择后会自动填入输入框。`,
                 );
               } catch (error) {
+                const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
+                recordApiCallLog({
+                  source: "主API",
+                  model: "模型列表",
+                  status: "失败",
+                  duration: dur,
+                  purpose: "拉取",
+                  detail: error.message,
+                });
                 alert(`拉取模型失败: ${error.message}`);
               }
             });
@@ -86566,6 +86983,7 @@ ${stickerContext || "无"}
               }
               subFetchModelsBtn.disabled = true;
               subFetchModelsBtn.textContent = "正在拉取...";
+              const startT = Date.now();
               try {
                 const models = await window.fetchApiModelsByProtocol(proxyUrl, apiKey, protocol);
                 const listEl = document.getElementById("sub-fetched-model-list");
@@ -86578,8 +86996,26 @@ ${stickerContext || "无"}
                   listEl.appendChild(opt);
                 });
                 listEl.style.display = "block";
+                const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
+                recordApiCallLog({
+                  source: "副API",
+                  model: "模型列表",
+                  status: "成功",
+                  duration: dur,
+                  purpose: "拉取",
+                  detail: `拉取到 ${models.length} 个模型`,
+                });
                 alert(`成功拉取 ${models.length} 个模型！`);
               } catch (err) {
+                const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
+                recordApiCallLog({
+                  source: "副API",
+                  model: "模型列表",
+                  status: "失败",
+                  duration: dur,
+                  purpose: "拉取",
+                  detail: err.message,
+                });
                 alert("拉取模型失败: " + err.message);
               } finally {
                 subFetchModelsBtn.disabled = false;
