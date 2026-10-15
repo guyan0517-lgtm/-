@@ -1118,6 +1118,13 @@
             </div>
             <div class="moe-card-body">
               <div class="form-group">
+                <label>协议</label>
+                <select id="api-protocol-select" class="moe-input">
+                  <option value="default">默认</option>
+                  <option value="claude">克劳德</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label>反代地址 (Proxy)</label>
                 <input
                   type="text"
@@ -1267,6 +1274,23 @@
                   </div>
                 </div>
               </div>
+              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color);">
+                <label style="font-weight: bold; font-size: 14px; color: var(--text-primary); margin-bottom: 6px; display: block;">音效</label>
+                <div style="padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                    <div style="width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--card-bg); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    </div>
+                    <span id="peer-online-sound-status-text" style="font-size: 12px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">默认叮咚</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <input type="file" id="peer-online-sound-file" accept="audio/*" style="display: none;" onchange="if(window.PeerManager&&window.PeerManager.handleOnlineSoundUpload)window.PeerManager.handleOnlineSoundUpload(this);" />
+                    <button type="button" class="moe-btn-small" id="peer-online-test-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.playPeerOnlineSound)window.PeerManager.playPeerOnlineSound(true);" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">试听</button>
+                    <button type="button" class="moe-btn-small" id="peer-online-import-sound-btn" onclick="document.getElementById('peer-online-sound-file').click();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">导入</button>
+                    <button type="button" class="moe-btn-small" id="peer-online-clear-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.clearCustomOnlineSound)window.PeerManager.clearCustomOnlineSound();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: none; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">清除</button>
+                  </div>
+                </div>
+              </div>
               <button id="fetch-models-btn" class="moe-btn-secondary">
                 📡 拉取模型列表
               </button>
@@ -1280,6 +1304,13 @@
               <h3>副 API</h3>
             </div>
             <div class="moe-card-body">
+              <div class="form-group">
+                <label>协议</label>
+                <select id="sub-api-protocol-select" class="moe-input">
+                  <option value="default">默认</option>
+                  <option value="claude">克劳德</option>
+                </select>
+              </div>
               <div class="form-group">
                 <label>反代地址</label>
                 <input
@@ -3228,6 +3259,31 @@
                     ></path>
                   </svg>
                 </span>
+                <!-- 单线按钮 仅密友群聊显示，定位于名字正左侧 -->
+                <span
+                  class="action-btn"
+                  id="group-solo-line-btn"
+                  title="单线"
+                  onclick="if(typeof window.openSoloLineModal==='function'){window.openSoloLineModal();}"
+                  style="cursor: pointer; position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-right: 8px; display: none; align-items: center; justify-content: center; flex-shrink: 0;"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 2.5L14.4 9.6L21.5 12L14.4 14.4L12 21.5L9.6 14.4L2.5 12L9.6 9.6L12 2.5Z"></path>
+                    <circle cx="12" cy="12" r="2" fill="currentColor" fill-opacity="0.28"></circle>
+                    <circle cx="18.5" cy="5.5" r="1.2" fill="currentColor"></circle>
+                    <circle cx="5.5" cy="18.5" r="1.2" fill="currentColor"></circle>
+                  </svg>
+                </span>
                 <span id="chat-header-title">聊天对象</span>
               </div>
               <div id="chat-header-status">
@@ -3277,6 +3333,73 @@
                 style="color: #ff3b30"
                 >删除</span
               >
+            </div>
+          </div>
+        </div>
+
+        <!-- 群精华渐入覆盖面板 仅密友群聊可用 -->
+        <div
+          id="group-essence-overlay"
+          style="position: absolute; inset: 0; z-index: 9500; background: var(--background-color); display: flex; flex-direction: column; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.24s ease, visibility 0.24s ease;"
+        >
+          <div
+            style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--card-bg); border-bottom: 1px solid var(--border-color); flex-shrink: 0; min-height: 52px; box-sizing: border-box;"
+          >
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+              <span style="font-size: 16px; font-weight: 600; color: var(--text-primary);">群精华</span>
+              <span id="group-essence-count-badge" style="font-size: 12px; color: var(--text-secondary);"></span>
+            </div>
+            <span
+              id="group-essence-close-btn"
+              class="action-btn"
+              title="返回聊天"
+              onclick="if(typeof window.closeGroupEssencePanel==='function')window.closeGroupEssencePanel();"
+              style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-primary); flex-shrink: 0;"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </span>
+          </div>
+          <div
+            id="group-essence-list"
+            style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;"
+          ></div>
+        </div>
+
+        <!-- 单线弹窗 -->
+        <div class="modal" id="solo-line-modal" style="display: none; z-index: 10000;">
+          <div class="modal-content" style="width: 340px; max-width: 92vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">单线</span>
+              <button type="button" onclick="if(typeof window.closeSoloLineModal==='function')window.closeSoloLineModal();" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
+              <!-- 主线 / 单线快速切换 -->
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <button type="button" id="solo-modal-mode-main-btn" class="moe-btn" onclick="if(typeof window.selectSoloModalTab==='function')window.selectSoloModalTab('main');" style="flex: 1; height: 32px; font-size: 12.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">主线</button>
+                <button type="button" id="solo-modal-mode-solo-btn" class="moe-btn" onclick="if(typeof window.selectSoloModalTab==='function')window.selectSoloModalTab('solo');" style="flex: 1; height: 32px; font-size: 12.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">单线</button>
+              </div>
+
+              <!-- 单线列表与玩家设置（仅在选中“单线”标签时显示，主线标签下隐藏） -->
+              <div id="solo-threads-section" style="display: none; flex-direction: column; gap: 10px;">
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 0;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0;">单线列表</label>
+                    <button type="button" class="moe-btn" onclick="if(typeof window.createNewSoloThread==='function')window.createNewSoloThread();" style="height: 24px; padding: 0 8px; font-size: 11px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px;">新建</button>
+                  </div>
+                  <div id="solo-threads-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+                </div>
+
+                <div class="form-group" id="solo-thread-players-section" style="display: none; flex-direction: column; gap: 6px; margin-bottom: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0;">单线玩家</label>
+                  <div id="solo-thread-players-list" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+              <button type="button" class="moe-btn" onclick="if(typeof window.closeSoloLineModal==='function')window.closeSoloLineModal();" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
+              <button type="button" id="solo-modal-enter-btn" class="moe-btn" onclick="if(typeof window.confirmEnterSoloModalSelection==='function')window.confirmEnterSoloModalSelection();" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: var(--card-bg); border: none; border-radius: 6px;">进入</button>
             </div>
           </div>
         </div>
@@ -3739,7 +3862,6 @@
               id="timeline-branch-btn"
               class="chat-action-icon-btn action-button"
               title="时间轴/存档"
-              onclick="if(typeof openBranchingModal==='function')openBranchingModal();"
             >
               <svg
                 width="24"
@@ -7169,17 +7291,18 @@
                 ></div>
               </div>
               <div
+                id="link-memory-depth-row"
                 style="
                   margin-top: 8px;
                   display: flex;
                   align-items: center;
                   gap: 10px;
-                  background: #f9f9f9;
+                  background: var(--secondary-bg);
                   padding: 8px;
                   border-radius: 8px;
                 "
               >
-                <label style="margin: 0; font-size: 13px; color: #666"
+                <label style="margin: 0; font-size: 13px; color: var(--text-secondary)"
                   >互通条数:</label
                 >
                 <input
@@ -7187,7 +7310,7 @@
                   id="link-memory-depth-input"
                   value="5"
                   min="1"
-                  max="20"
+                  max="2000"
                   class="moe-input"
                   style="width: 80px; text-align: center"
                 />
@@ -20242,6 +20365,466 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           },
         };
       };
+
+      // ================= 独立连接模式与克劳德/llmapi兼容层 =================
+      (function () {
+        if (window._claudeProtocolLayerInstalled) return;
+        window._claudeProtocolLayerInstalled = true;
+
+        const origFetch = window.fetch.bind(window);
+        window._origNativeFetch = origFetch;
+
+        function normalizeLlmapiBaseUrl(rawUrl) {
+          let u = String(rawUrl || "").replace(/[\u200B-\u200D\uFEFF"'\s]+/g, "").trim();
+          if (!u) return "";
+          if (!/^https?:\/\//i.test(u)) {
+            u = "https://" + u.replace(/^\/+/, "");
+          }
+          u = u.replace(/\/+$/, "");
+          let prev = "";
+          while (u !== prev) {
+            prev = u;
+            u = u
+              .replace(/\/v1\/chat\/completions$/i, "")
+              .replace(/\/chat\/completions$/i, "")
+              .replace(/\/v1\/messages$/i, "")
+              .replace(/\/messages$/i, "")
+              .replace(/\/v1\/models$/i, "")
+              .replace(/\/models$/i, "")
+              .replace(/\/v1$/i, "")
+              .replace(/\/+$/, "");
+          }
+          return u;
+        }
+        window.normalizeLlmapiBaseUrl = normalizeLlmapiBaseUrl;
+
+        function extractApiErrorMessage(status, text) {
+          const raw = String(text || "").trim();
+          if (!raw) return "HTTP " + status;
+          try {
+            const parsed = JSON.parse(raw);
+            const msg =
+              parsed?.error?.message ||
+              (typeof parsed?.error === "string" ? parsed.error : "") ||
+              parsed?.message ||
+              parsed?.msg ||
+              parsed?.detail ||
+              JSON.stringify(parsed);
+            const code = parsed?.error?.code || parsed?.code || "";
+            return code ? `[${code}] ${msg}` : String(msg);
+          } catch (_) {
+            if (/^<!DOCTYPE\s+html|^<html/i.test(raw)) {
+              return `请求路径返回了网页而非JSON数据，请检查反代地址是否正确 (HTTP ${status})`;
+            }
+            return raw.slice(0, 300);
+          }
+        }
+        window.extractApiErrorMessage = extractApiErrorMessage;
+
+        async function requestLlmapiWithFallback(targetUrl, options = {}) {
+          const method = options.method || "GET";
+          const headers = options.headers || {};
+          const body = options.body;
+
+          let directRes = null;
+          let directText = "";
+          try {
+            directRes = await origFetch(targetUrl, {
+              method,
+              headers,
+              body: method !== "GET" && method !== "HEAD" ? body : undefined,
+            });
+            directText = await directRes.text();
+            const isHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(directText);
+            if (!isHtml) {
+              return {
+                ok: directRes.ok,
+                status: directRes.status,
+                text: directText,
+                headers: directRes.headers,
+              };
+            }
+          } catch (_) {
+            // 浏览器端跨域或网络拦截时，自动走服务端转发 /api/proxy
+          }
+
+          try {
+            let parsedBody = body;
+            if (typeof body === "string") {
+              try {
+                parsedBody = JSON.parse(body);
+              } catch (_) {
+                parsedBody = body;
+              }
+            }
+            const proxyRes = await origFetch("/api/proxy", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                url: targetUrl,
+                method,
+                headers,
+                body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
+              }),
+            });
+            const proxyText = await proxyRes.text();
+            return {
+              ok: proxyRes.ok,
+              status: proxyRes.status,
+              text: proxyText,
+              headers: proxyRes.headers,
+            };
+          } catch (proxyErr) {
+            if (directRes) {
+              return {
+                ok: directRes.ok,
+                status: directRes.status,
+                text: directText,
+                headers: directRes.headers,
+              };
+            }
+            throw proxyErr;
+          }
+        }
+        window.requestLlmapiWithFallback = requestLlmapiWithFallback;
+
+        function normalizeMessagesForClaudeRelay(rawMessages) {
+          if (!Array.isArray(rawMessages)) return [{ role: "user", content: "你好" }];
+          const systemParts = [];
+          const turns = [];
+
+          for (const msg of rawMessages) {
+            if (!msg) continue;
+            const role = msg.role === "assistant" || msg.role === "model" ? "assistant" : (msg.role === "system" ? "system" : "user");
+            let textContent = "";
+            let hasImageParts = false;
+            const normalizedParts = [];
+
+            if (typeof msg.content === "string") {
+              textContent = msg.content.trim();
+            } else if (Array.isArray(msg.content)) {
+              for (const part of msg.content) {
+                if (!part) continue;
+                if (typeof part === "string") {
+                  if (part.trim()) {
+                    textContent += (textContent ? "\n" : "") + part.trim();
+                    normalizedParts.push({ type: "text", text: part.trim() });
+                  }
+                } else if (part.type === "text" && typeof part.text === "string") {
+                  if (part.text.trim()) {
+                    textContent += (textContent ? "\n" : "") + part.text.trim();
+                    normalizedParts.push({ type: "text", text: part.text.trim() });
+                  }
+                } else if (part.type === "image_url" && part.image_url?.url) {
+                  hasImageParts = true;
+                  normalizedParts.push({ type: "image_url", image_url: { url: part.image_url.url } });
+                }
+              }
+            }
+
+            if (role === "system") {
+              if (textContent) {
+                if (turns.length === 0) {
+                  systemParts.push(textContent);
+                } else {
+                  turns.push({ role: "user", content: textContent });
+                }
+              }
+              continue;
+            }
+
+            if (!textContent && !hasImageParts) continue;
+            const finalContent = hasImageParts ? normalizedParts : textContent;
+
+            if (turns.length > 0 && turns[turns.length - 1].role === role) {
+              const prev = turns[turns.length - 1];
+              if (typeof prev.content === "string" && typeof finalContent === "string") {
+                prev.content = prev.content + "\n\n" + finalContent;
+              } else {
+                const prevArr = Array.isArray(prev.content)
+                  ? prev.content
+                  : [{ type: "text", text: String(prev.content || "") }];
+                const nextArr = Array.isArray(finalContent)
+                  ? finalContent
+                  : [{ type: "text", text: String(finalContent || "") }];
+                prev.content = [...prevArr, ...nextArr];
+              }
+            } else {
+              turns.push({ role, content: finalContent });
+            }
+          }
+
+          if (turns.length === 0) {
+            if (systemParts.length > 0) {
+              return [{ role: "user", content: systemParts.join("\n\n") }];
+            }
+            return [{ role: "user", content: "继续" }];
+          }
+
+          if (turns[0].role !== "user") {
+            turns.unshift({ role: "user", content: "开始对话" });
+          }
+
+          if (turns[turns.length - 1].role !== "user") {
+            turns.push({ role: "user", content: "继续当前场景" });
+          }
+
+          const result = [];
+          if (systemParts.length > 0) {
+            result.push({ role: "system", content: systemParts.join("\n\n") });
+          }
+          result.push(...turns);
+          return result;
+        }
+
+        window.fetchApiModelsByProtocol = async function (url, key, protocol) {
+          const activeProto = protocol || "default";
+          // 旧模式：100% 保持原有拉取逻辑不动
+          if (activeProto === "default") {
+            const response = await origFetch(`${url}/v1/models`, {
+              headers: { Authorization: `Bearer ${key}` },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            return data.data || [];
+          }
+
+          // 新模式（克劳德 / llmapi OpenAI 兼容模式）
+          const base = normalizeLlmapiBaseUrl(url);
+          const cleanKey = String(getRandomValue(String(key || "").trim()) || "").trim();
+          if (!base) throw new Error("请填写有效的反代地址");
+          if (!cleanKey) throw new Error("请填写有效的密钥");
+
+          const modelsUrl = `${base}/v1/models`;
+          const res = await requestLlmapiWithFallback(modelsUrl, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${cleanKey}`,
+            },
+          });
+
+          if (!res.ok) {
+            throw new Error(extractApiErrorMessage(res.status, res.text));
+          }
+
+          let data;
+          try {
+            data = JSON.parse(res.text);
+          } catch (_) {
+            throw new Error(extractApiErrorMessage(res.status, res.text));
+          }
+
+          const rawList = Array.isArray(data?.data)
+            ? data.data
+            : Array.isArray(data?.models)
+              ? data.models
+              : Array.isArray(data)
+                ? data
+                : [];
+
+          const models = rawList
+            .map((item) => {
+              if (typeof item === "string") return { id: item };
+              if (item && typeof item.id === "string") return { id: item.id };
+              if (item && typeof item.name === "string") return { id: item.name.replace(/^models\//, "") };
+              return null;
+            })
+            .filter(Boolean);
+
+          if (models.length === 0) {
+            throw new Error("未在返回数据中找到模型列表");
+          }
+          return models;
+        };
+
+        window.fetch = async function (input, init) {
+          try {
+            const urlStr = typeof input === "string" ? input : (input && input.url ? input.url : String(input || ""));
+            const apiCfg = (window.state && window.state.apiConfig) ? window.state.apiConfig : {};
+
+            // 判断是否命中了 AI 聊天补全接口
+            const isChatCompletionCall =
+              urlStr.includes("/chat/completions") ||
+              urlStr.includes(":generateContent");
+
+            if (!isChatCompletionCall) {
+              return origFetch(input, init);
+            }
+
+            // 判断是主 API 还是副 API
+            const mainProxy = String(apiCfg.proxyUrl || "").trim();
+            const subProxy = String(apiCfg.subProxyUrl || "").trim();
+            let isSubCall = false;
+            if (subProxy && subProxy !== mainProxy && urlStr.startsWith(subProxy)) {
+              isSubCall = true;
+            }
+
+            const protocol = isSubCall
+              ? (apiCfg.subApiProtocol || "default")
+              : (apiCfg.apiProtocol || "default");
+
+            // 旧模式（默认）：一条代码不动，完全走原来的 fetch 逻辑
+            if (protocol === "default") {
+              return origFetch(input, init);
+            }
+
+            // 新模式（克劳德 / llmapi OpenAI 兼容模式）
+            const domProxy = document.getElementById(isSubCall ? "sub-proxy-url" : "proxy-url")?.value?.trim() || "";
+            const domKey = document.getElementById(isSubCall ? "sub-api-key" : "api-key")?.value?.trim() || "";
+            const domModel = document.getElementById(isSubCall ? "sub-model-select" : "model-select")?.value?.trim() || "";
+
+            const rawBase = (isSubCall ? subProxy : mainProxy) || domProxy || urlStr;
+            const base = normalizeLlmapiBaseUrl(rawBase);
+            if (!base) {
+              throw new Error("未配置反代地址，请在API设置中填写 https://llmapi.pro");
+            }
+
+            const targetUrl = `${base}/v1/chat/completions`;
+
+            let authHeader = "";
+            if (init && init.headers) {
+              if (typeof init.headers.get === "function") {
+                authHeader = init.headers.get("Authorization") || init.headers.get("authorization") || "";
+              } else {
+                authHeader = init.headers.Authorization || init.headers.authorization || "";
+              }
+            }
+            let cleanKey = authHeader.replace(/^Bearer\s+/i, "").trim();
+            if (!cleanKey) {
+              const cfgKey = isSubCall ? apiCfg.subApiKey : apiCfg.apiKey;
+              cleanKey = String(getRandomValue(String(cfgKey || domKey || "").trim()) || "").trim();
+            }
+
+            let parsedBody = {};
+            if (init && typeof init.body === "string") {
+              try {
+                parsedBody = JSON.parse(init.body);
+              } catch (_) {}
+            }
+
+            const modelId = String(
+              parsedBody.model ||
+              (isSubCall ? apiCfg.subModel : apiCfg.model) ||
+              domModel ||
+              "claude-opus-4-7"
+            ).trim();
+
+            let rawMessages = parsedBody.messages;
+            // 如果原请求因某原因构造了 Gemini contents 格式，则转回 OpenAI messages
+            if (!Array.isArray(rawMessages) && Array.isArray(parsedBody.contents)) {
+              rawMessages = [];
+              if (parsedBody.systemInstruction?.parts?.[0]?.text) {
+                rawMessages.push({ role: "system", content: parsedBody.systemInstruction.parts[0].text });
+              }
+              for (const c of parsedBody.contents) {
+                const text = Array.isArray(c.parts) ? c.parts.map(p => p.text || "").join("\n") : "";
+                rawMessages.push({
+                  role: c.role === "model" ? "assistant" : "user",
+                  content: text
+                });
+              }
+            }
+
+            const normalizedMessages = normalizeMessagesForClaudeRelay(rawMessages);
+
+            const openAiPayload = {
+              model: modelId,
+              messages: normalizedMessages,
+            };
+
+            const res = await requestLlmapiWithFallback(targetUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${cleanKey}`,
+              },
+              body: JSON.stringify(openAiPayload),
+            });
+
+            if (!res.ok) {
+              const errMsg = extractApiErrorMessage(res.status, res.text);
+              const errPayload = JSON.stringify({
+                error: {
+                  message: errMsg,
+                  code: res.status,
+                },
+                message: errMsg,
+              });
+              // 主动提示详细服务端错误，避免静默失败
+              setTimeout(() => {
+                console.error("API请求失败:", errMsg);
+              }, 0);
+              return new Response(errPayload, {
+                status: res.status,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+
+            let data;
+            try {
+              data = JSON.parse(res.text);
+            } catch (_) {
+              const errMsg = extractApiErrorMessage(res.status, res.text);
+              return new Response(
+                JSON.stringify({ error: { message: errMsg }, message: errMsg }),
+                { status: 502, headers: { "Content-Type": "application/json" } }
+              );
+            }
+
+            // 兼容不同中转站返回结构，确保 choices[0].message.content 一定为字符串
+            if (!Array.isArray(data.choices) && Array.isArray(data.content)) {
+              let textOut = "";
+              let thinkingOut = "";
+              for (const block of data.content) {
+                if (block?.type === "thinking" && block.thinking) {
+                  thinkingOut += block.thinking;
+                } else if (block?.type === "text" && typeof block.text === "string") {
+                  textOut += block.text;
+                }
+              }
+              data = {
+                ...data,
+                choices: [
+                  {
+                    index: 0,
+                    message: {
+                      role: "assistant",
+                      content: textOut,
+                      reasoning_content: thinkingOut || undefined,
+                    },
+                  },
+                ],
+              };
+            } else if (Array.isArray(data.choices) && data.choices[0]?.message) {
+              const msg = data.choices[0].message;
+              if (Array.isArray(msg.content)) {
+                let textOut = "";
+                let thinkingOut = "";
+                for (const block of msg.content) {
+                  if (typeof block === "string") {
+                    textOut += block;
+                  } else if (block?.type === "thinking" && block.thinking) {
+                    thinkingOut += block.thinking;
+                  } else if (typeof block?.text === "string") {
+                    textOut += block.text;
+                  }
+                }
+                msg.content = textOut;
+                if (thinkingOut && !msg.reasoning_content) {
+                  msg.reasoning_content = thinkingOut;
+                }
+              }
+            }
+
+            return new Response(JSON.stringify(data), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          } catch (err) {
+            return Promise.reject(err);
+          }
+        };
+      })();
       document.addEventListener("DOMContentLoaded", () => {
         // ===================================================================
         // 1. 所有变量和常量定义
@@ -22703,13 +23286,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   modObj = allM.find(m => String(m.id) === String(targetModId));
                 }
                 if (modObj) {
+                  const cleanModObj = Object.assign({}, modObj);
+                  delete cleanModObj.chapters;
+                  delete cleanModObj.items;
+                  delete cleanModObj.images;
                   const chaps = dbInstance.moduleChapters ? await dbInstance.moduleChapters.where("moduleId").equals(modObj.id).toArray() : [];
                   const items = dbInstance.moduleItems ? await dbInstance.moduleItems.where("moduleId").equals(modObj.id).toArray() : [];
                   const locNav = dbInstance.moduleLocationNav ? await dbInstance.moduleLocationNav.where("moduleId").equals(modObj.id).toArray() : [];
                   if (!chat.settings) chat.settings = {};
                   if (!Array.isArray(chat.settings.sharedModules)) chat.settings.sharedModules = [];
                   const entry = {
-                    module: modObj,
+                    module: cleanModObj,
                     chapters: chaps,
                     items: items,
                     locationNav: locNav
@@ -22729,7 +23316,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } catch (e) {}
           }
           if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-            await window.PeerManager.syncGroupSettingsToPeers(chat);
+            window.PeerManager.syncGroupSettingsToPeers(chat);
           }
         };
 
@@ -22919,7 +23506,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const newSharedModules = [];
                 for (const it of selectedItems) {
                   if (it.rawLocal && dbInstance) {
-                    const modObj = it.rawLocal;
+                    const modObj = Object.assign({}, it.rawLocal);
+                    delete modObj.chapters;
+                    delete modObj.items;
+                    delete modObj.images;
                     const chaps = dbInstance.moduleChapters ? await dbInstance.moduleChapters.where("moduleId").equals(modObj.id).toArray() : [];
                     const mItems = dbInstance.moduleItems ? await dbInstance.moduleItems.where("moduleId").equals(modObj.id).toArray() : [];
                     const locNav = dbInstance.moduleLocationNav ? await dbInstance.moduleLocationNav.where("moduleId").equals(modObj.id).toArray() : [];
@@ -22938,7 +23528,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       } catch (e) {}
                     }
                   } else if (it.rawShared && it.rawShared.module) {
-                    newSharedModules.push(it.rawShared);
+                    const cleanMod = Object.assign({}, it.rawShared.module);
+                    delete cleanMod.chapters;
+                    delete cleanMod.items;
+                    delete cleanMod.images;
+                    newSharedModules.push({
+                      module: cleanMod,
+                      chapters: it.rawShared.chapters || [],
+                      items: it.rawShared.items || [],
+                      locationNav: it.rawShared.locationNav || []
+                    });
                   }
                 }
                 chat.settings.sharedModules = newSharedModules;
@@ -22946,11 +23545,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (chat.activeModuleId && !checkedIds.has(String(chat.activeModuleId))) {
                   chat.activeModuleId = null;
                 }
-                await db.chats.put(chat);
-                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                  await window.PeerManager.syncGroupSettingsToPeers(chat);
-                }
+                modal.classList.remove("visible");
+                modal.style.display = "none";
                 await renderChatModulePickerList(currentModulePickerFilter);
+                db.chats.put(chat).catch(() => {});
+                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+                return;
               } else if (type === "thoughtChain") {
                 const newSharedTcs = [];
                 for (const it of selectedItems) {
@@ -22966,11 +23568,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   const firstTc = selectedItems[0].rawLocal || selectedItems[0].rawShared;
                   if (firstTc) chat.thoughtChainId = firstTc.id;
                 }
-                await db.chats.put(chat);
-                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                  await window.PeerManager.syncGroupSettingsToPeers(chat);
-                }
+                modal.classList.remove("visible");
+                modal.style.display = "none";
                 await openThoughtChainBindModal();
+                db.chats.put(chat).catch(() => {});
+                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+                return;
               } else if (type === "worldbook") {
                 const newSharedWbs = [];
                 if (!Array.isArray(chat.settings.linkedWorldBookIds)) chat.settings.linkedWorldBookIds = [];
@@ -22984,13 +23589,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
                 chat.settings.sharedWorldBooks = newSharedWbs;
                 chat.settings.linkedWorldBookIds = chat.settings.linkedWorldBookIds.filter(id => checkedIds.has(String(id)));
-                await db.chats.put(chat);
-                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                  await window.PeerManager.syncGroupSettingsToPeers(chat);
-                }
+                modal.classList.remove("visible");
+                modal.style.display = "none";
                 if (typeof window.reloadActiveChatWorldBooks === "function") {
                   await window.reloadActiveChatWorldBooks();
                 }
+                db.chats.put(chat).catch(() => {});
+                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+                return;
               } else if (type === "summaryPreset") {
                 if (!chat.settings.summary) chat.settings.summary = {};
                 const newSharedPresets = [];
@@ -23000,13 +23608,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   newSharedPresets.push(spObj);
                 }
                 chat.settings.summary.sharedPresets = newSharedPresets;
-                await db.chats.put(chat);
-                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                  await window.PeerManager.syncGroupSettingsToPeers(chat);
-                }
+                modal.classList.remove("visible");
+                modal.style.display = "none";
                 if (typeof renderSummaryPresetsUI === "function") {
                   renderSummaryPresetsUI();
                 }
+                db.chats.put(chat).catch(() => {});
+                if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+                return;
               }
 
               modal.classList.remove("visible");
@@ -23098,6 +23709,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             const isPeerGrp = chat ? window.isPeerGroupChat(chat) : false;
             let modules = [];
+            let allChapters = [];
+            let allImages = [];
             if (isPeerGrp) {
               if (Array.isArray(chat.settings?.sharedModules)) {
                 const seenIds = new Set();
@@ -23110,6 +23723,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             } else {
               modules = await dbInstance.modules.toArray();
+              try {
+                if (dbInstance.moduleChapters) {
+                  allChapters = await dbInstance.moduleChapters.toArray();
+                }
+                if (dbInstance.moduleImages) {
+                  allImages = await dbInstance.moduleImages.toArray();
+                }
+              } catch (e) {}
             }
             modules.sort((a, b) => {
               const orderA = (a.sortOrder !== undefined && a.sortOrder !== null) ? a.sortOrder : ((a.order !== undefined && a.order !== null) ? a.order : 0);
@@ -23117,16 +23738,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (orderA !== orderB) return orderA - orderB;
               return (b.createdAt || 0) - (a.createdAt || 0);
             });
-            let allChapters = [];
-            let allImages = [];
-            try {
-              if (dbInstance.moduleChapters) {
-                allChapters = await dbInstance.moduleChapters.toArray();
-              }
-              if (dbInstance.moduleImages) {
-                allImages = await dbInstance.moduleImages.toArray();
-              }
-            } catch (e) {}
 
             const chapsMap = new Map();
             allChapters.forEach(c => {
@@ -23297,16 +23908,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                         }
                       }
                     }
-                    await db.chats.put(chat);
                     if (typeof state !== 'undefined' && state?.chats) {
                       state.chats[chat.id] = chat;
-                    }
-                    if (typeof window.packageAndSyncChatModule === "function") {
-                      await window.packageAndSyncChatModule(chat, chat.activeModuleId);
                     }
                     await renderChatModulePickerList(currentModulePickerFilter);
                     if (typeof updateChatModuleMapBar === 'function') {
                       updateChatModuleMapBar(chat);
+                    }
+                    db.chats.put(chat).catch(() => {});
+                    if (typeof window.packageAndSyncChatModule === "function") {
+                      window.packageAndSyncChatModule(chat, chat.activeModuleId);
                     }
                   }
                 });
@@ -27855,6 +28466,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               apiKey: cfg.subApiKey.trim(),
               model: cfg.subModel || cfg.model || "gpt-4",
               temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (parseFloat(cfg.temperature) || 0.8),
+              apiProtocol: cfg.subApiProtocol || cfg.apiProtocol || "default",
               isSub: true,
             };
           }
@@ -27864,6 +28476,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             apiKey: cfg.apiKey || "",
             model: cfg.model || "gpt-4",
             temperature: cfg.temperature !== undefined ? parseFloat(cfg.temperature) : 0.8,
+            apiProtocol: cfg.apiProtocol || "default",
             isSub: false,
           };
         }
@@ -29318,6 +29931,158 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function renderApiSettings() {
           // 1. 更新 API 相关的输入框
+          if (!state.apiConfig.protocolProfiles) {
+            state.apiConfig.protocolProfiles = {};
+          }
+          if (!state.apiConfig.subProtocolProfiles) {
+            state.apiConfig.subProtocolProfiles = {};
+          }
+          const currentMainProto = state.apiConfig.apiProtocol === "claude" ? "claude" : "default";
+          state.apiConfig.apiProtocol = currentMainProto;
+          if (!state.apiConfig.protocolProfiles[currentMainProto]) {
+            state.apiConfig.protocolProfiles[currentMainProto] = {
+              proxyUrl: state.apiConfig.proxyUrl || "",
+              apiKey: state.apiConfig.apiKey || "",
+              model: state.apiConfig.model || "gpt-4",
+              temperature: state.apiConfig.temperature !== undefined ? state.apiConfig.temperature : 0.8,
+            };
+          }
+          const currentSubProto = state.apiConfig.subApiProtocol === "claude" ? "claude" : "default";
+          state.apiConfig.subApiProtocol = currentSubProto;
+          if (!state.apiConfig.subProtocolProfiles[currentSubProto]) {
+            state.apiConfig.subProtocolProfiles[currentSubProto] = {
+              proxyUrl: state.apiConfig.subProxyUrl || "",
+              apiKey: state.apiConfig.subApiKey || "",
+              model: state.apiConfig.subModel || "",
+              temperature: state.apiConfig.subTemperature !== undefined ? state.apiConfig.subTemperature : 0.8,
+            };
+          }
+
+          const apiProtocolSelect = document.getElementById("api-protocol-select");
+          if (apiProtocolSelect) {
+            apiProtocolSelect.value = currentMainProto;
+            apiProtocolSelect.onchange = async () => {
+              const prevProto = state.apiConfig.apiProtocol === "claude" ? "claude" : "default";
+              const nextProto = apiProtocolSelect.value === "claude" ? "claude" : "default";
+              if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
+
+              // 保存切换前模式的配置
+              const curProxyVal = document.getElementById("proxy-url")?.value?.trim() || "";
+              const curKeyVal = document.getElementById("api-key")?.value?.trim() || "";
+              const curModelVal = document.getElementById("model-select")?.value?.trim() || "";
+              const curTempVal = parseFloat(document.getElementById("temperature-slider")?.value) || 0.8;
+              state.apiConfig.protocolProfiles[prevProto] = {
+                proxyUrl: curProxyVal,
+                apiKey: curKeyVal,
+                model: curModelVal,
+                temperature: curTempVal,
+              };
+
+              // 读取目标模式的配置（若首次切到克劳德且当前填的是llmapi则自动带入，否则互相独立）
+              let targetProfile = state.apiConfig.protocolProfiles[nextProto];
+              if (!targetProfile) {
+                if (nextProto === "claude" && curProxyVal.includes("llmapi")) {
+                  targetProfile = {
+                    proxyUrl: curProxyVal,
+                    apiKey: curKeyVal,
+                    model: curModelVal,
+                    temperature: curTempVal,
+                  };
+                } else {
+                  targetProfile = {
+                    proxyUrl: nextProto === "claude" ? "https://llmapi.pro" : "",
+                    apiKey: "",
+                    model: nextProto === "claude" ? "claude-opus-4-7" : "gpt-4",
+                    temperature: 0.8,
+                  };
+                }
+                state.apiConfig.protocolProfiles[nextProto] = targetProfile;
+              }
+
+              state.apiConfig.apiProtocol = nextProto;
+              state.apiConfig.proxyUrl = targetProfile.proxyUrl || "";
+              state.apiConfig.apiKey = targetProfile.apiKey || "";
+              state.apiConfig.model = targetProfile.model || "";
+              state.apiConfig.temperature = targetProfile.temperature !== undefined ? targetProfile.temperature : 0.8;
+
+              const proxyEl = document.getElementById("proxy-url");
+              const keyEl = document.getElementById("api-key");
+              const modelEl = document.getElementById("model-select");
+              const tempEl = document.getElementById("temperature-slider");
+              const tempValEl = document.getElementById("temperature-value");
+              const pickerEl = document.getElementById("fetched-model-list");
+
+              if (proxyEl) proxyEl.value = state.apiConfig.proxyUrl;
+              if (keyEl) keyEl.value = state.apiConfig.apiKey;
+              if (modelEl) modelEl.value = state.apiConfig.model;
+              if (tempEl) tempEl.value = state.apiConfig.temperature;
+              if (tempValEl) tempValEl.textContent = state.apiConfig.temperature;
+              if (pickerEl) pickerEl.style.display = "none";
+
+              if (typeof renderApiPresetSelector === "function") {
+                renderApiPresetSelector();
+              }
+              if (typeof db !== "undefined" && db.apiConfig) {
+                await db.apiConfig.put(state.apiConfig);
+              }
+            };
+          }
+
+          const subApiProtocolSelect = document.getElementById("sub-api-protocol-select");
+          if (subApiProtocolSelect) {
+            subApiProtocolSelect.value = currentSubProto;
+            subApiProtocolSelect.onchange = async () => {
+              const prevSubProto = state.apiConfig.subApiProtocol === "claude" ? "claude" : "default";
+              const nextSubProto = subApiProtocolSelect.value === "claude" ? "claude" : "default";
+              if (!state.apiConfig.subProtocolProfiles) state.apiConfig.subProtocolProfiles = {};
+
+              const curSubProxy = document.getElementById("sub-proxy-url")?.value?.trim() || "";
+              const curSubKey = document.getElementById("sub-api-key")?.value?.trim() || "";
+              const curSubModel = document.getElementById("sub-model-select")?.value?.trim() || "";
+              const curSubTemp = parseFloat(document.getElementById("sub-temperature-slider")?.value) || 0.8;
+              state.apiConfig.subProtocolProfiles[prevSubProto] = {
+                proxyUrl: curSubProxy,
+                apiKey: curSubKey,
+                model: curSubModel,
+                temperature: curSubTemp,
+              };
+
+              let targetSubProfile = state.apiConfig.subProtocolProfiles[nextSubProto];
+              if (!targetSubProfile) {
+                targetSubProfile = {
+                  proxyUrl: nextSubProto === "claude" ? "https://llmapi.pro" : "",
+                  apiKey: "",
+                  model: "",
+                  temperature: 0.8,
+                };
+                state.apiConfig.subProtocolProfiles[nextSubProto] = targetSubProfile;
+              }
+
+              state.apiConfig.subApiProtocol = nextSubProto;
+              state.apiConfig.subProxyUrl = targetSubProfile.proxyUrl || "";
+              state.apiConfig.subApiKey = targetSubProfile.apiKey || "";
+              state.apiConfig.subModel = targetSubProfile.model || "";
+              state.apiConfig.subTemperature = targetSubProfile.temperature !== undefined ? targetSubProfile.temperature : 0.8;
+
+              const subProxyEl = document.getElementById("sub-proxy-url");
+              const subKeyEl = document.getElementById("sub-api-key");
+              const subModelEl = document.getElementById("sub-model-select");
+              const subTempEl = document.getElementById("sub-temperature-slider");
+              const subTempValEl = document.getElementById("sub-temperature-value");
+              const subPickerEl = document.getElementById("sub-fetched-model-list");
+
+              if (subProxyEl) subProxyEl.value = state.apiConfig.subProxyUrl;
+              if (subKeyEl) subKeyEl.value = state.apiConfig.subApiKey;
+              if (subModelEl) subModelEl.value = state.apiConfig.subModel;
+              if (subTempEl) subTempEl.value = state.apiConfig.subTemperature;
+              if (subTempValEl) subTempValEl.textContent = state.apiConfig.subTemperature;
+              if (subPickerEl) subPickerEl.style.display = "none";
+
+              if (typeof db !== "undefined" && db.apiConfig) {
+                await db.apiConfig.put(state.apiConfig);
+              }
+            };
+          }
           document.getElementById("proxy-url").value =
             state.apiConfig.proxyUrl || "";
           document.getElementById("api-key").value =
@@ -30072,22 +30837,54 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (typeof rawContent !== "string") return false;
           const trimmed = rawContent.trim();
           if (trimmed.length < 2) return false;
-          if (!trimmed.startsWith("（") || !trimmed.endsWith("）")) return false;
-          let depth = 0;
-          for (let i = 0; i < trimmed.length; i++) {
-            const ch = trimmed[i];
-            if (ch === "（") {
-              depth++;
-            } else if (ch === "）") {
-              depth--;
-              if (depth < 0) return false;
-            } else if (depth === 0 && ch.trim() !== "") {
-              return false;
+          if (/^\[(?:表情|好友申请|语音|照片|图片|转账|外卖|红包)[:：]/.test(trimmed)) return false;
+          const pairs = [
+            ["（", "）"],
+            ["(", ")"],
+            ["【", "】"],
+            ["[", "]"]
+          ];
+          for (const [openCh, closeCh] of pairs) {
+            if (trimmed.startsWith(openCh) && trimmed.endsWith(closeCh)) {
+              let depth = 0;
+              let valid = true;
+              for (let i = 0; i < trimmed.length; i++) {
+                const ch = trimmed[i];
+                if (ch === openCh) {
+                  depth++;
+                } else if (ch === closeCh) {
+                  depth--;
+                  if (depth < 0) {
+                    valid = false;
+                    break;
+                  }
+                } else if (depth === 0 && ch.trim() !== "") {
+                  valid = false;
+                  break;
+                }
+              }
+              if (valid && depth === 0) return true;
             }
           }
-          return depth === 0;
+          return false;
         }
         window.isOutOfCharacterChineseBracketMsg = isOutOfCharacterChineseBracketMsg;
+
+        function isPeerGroupOocOrStickerMsg(msg) {
+          if (!msg) return false;
+          const isSticker = Boolean(
+            msg.type === "sticker" ||
+            msg.isPeerOnlySticker ||
+            msg.meaning ||
+            (typeof msg.content === "string" && typeof STICKER_REGEX !== "undefined" && STICKER_REGEX.test(msg.content.trim()))
+          );
+          if (isSticker) return true;
+          if ((msg.role === "user" || msg.isPeerUserMessage) && typeof msg.content === "string" && isOutOfCharacterChineseBracketMsg(msg.content)) {
+            return true;
+          }
+          return false;
+        }
+        window.isPeerGroupOocOrStickerMsg = isPeerGroupOocOrStickerMsg;
 
         function createChatListItem(chat) {
           const lastMsgObj =
@@ -31294,6 +32091,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return null;
           }
           if (typeof isMessageVisibleToCurrentUser === "function" && !isMessageVisibleToCurrentUser(msg, chat)) {
+            return null;
+          }
+          if (chat && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && chat.hideOocAndStickers && typeof window.isPeerGroupOocOrStickerMsg === "function" && window.isPeerGroupOocOrStickerMsg(msg)) {
             return null;
           }
 
@@ -33388,7 +34188,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 try { dbChat = await db.chats.get(chat.id); } catch (e) {}
               }
               if (dbChat) {
-                if (chat && Array.isArray(chat.history) && chat.history.length > 0) {
+                const sameLineMode = (dbChat.activeLineMode || "main") === (chat?.activeLineMode || "main");
+                if (sameLineMode && chat && Array.isArray(chat.history) && chat.history.length > 0) {
                   const dbHist = Array.isArray(dbChat.history) ? dbChat.history : [];
                   const mergedMap = new Map();
                   const makeMsgKey = (m) => {
@@ -33415,6 +34216,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     dbChat.history = mergedArr;
                     try { await db.chats.put(dbChat); } catch (_) {}
                   }
+                } else if (chat && !sameLineMode) {
+                  dbChat.activeLineMode = chat.activeLineMode;
+                  dbChat.history = chat.history;
+                  if (Array.isArray(chat.mainLineHistory)) {
+                    dbChat.mainLineHistory = chat.mainLineHistory;
+                  }
+                }
+                if (chat && Array.isArray(chat.mainLineHistory) && (!Array.isArray(dbChat.mainLineHistory) || chat.mainLineHistory.length > dbChat.mainLineHistory.length)) {
+                  dbChat.mainLineHistory = chat.mainLineHistory;
                 }
                 if (chat && chat.settings) {
                   dbChat.settings = { ...(dbChat.settings || {}), ...chat.settings };
@@ -33466,6 +34276,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const heartBtn = document.getElementById("char-heart-btn");
           if (heartBtn) {
             heartBtn.style.display = chat.isGroup ? "none" : "inline-flex";
+          }
+          const isPeerGroupForHeader = Boolean(typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+          if (!isPeerGroupForHeader && chat.activeLineMode === "solo") {
+            chat.activeLineMode = "main";
+            if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
+              chat.history = [...chat.mainLineHistory];
+            }
+          }
+          const soloLineBtn = document.getElementById("group-solo-line-btn");
+          if (soloLineBtn) {
+            soloLineBtn.style.display = isPeerGroupForHeader ? "inline-flex" : "none";
+            soloLineBtn.style.color = "";
+          }
+          if (typeof window.closeGroupEssencePanel === "function") {
+            window.closeGroupEssencePanel(true);
+          }
+          if (typeof window.updateSoloLineBannerUI === "function") {
+            window.updateSoloLineBannerUI(chat);
           }
           // 【群聊好感度按钮】群聊仅保留右上角入口，底部入口在群聊时隐藏
           const groupAffectionBtn = document.getElementById("group-affection-btn");
@@ -33541,6 +34369,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const timelineBranchBtnEl = document.getElementById("timeline-branch-btn");
           if (timelineBranchBtnEl) {
             timelineBranchBtnEl.style.display = "";
+          }
+          if (typeof window.updateTimelineOrOocBtnUI === "function") {
+            window.updateTimelineOrOocBtnUI(chat);
           }
           if (!isPeerSingle && !isRealPeerGroup) {
             const stickerPanelEl = document.getElementById("sticker-panel");
@@ -38458,14 +39289,42 @@ ${recentHistoryText}
           const aiTurnStartHistoryLength = (chat.history || []).length;
 
           let summaryContext = "";
-          const summaries = chat.history.filter(
-            (msg) => msg.type === "summary",
-          );
+          const isPeerGrpForSummary = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+          const summaries = (isPeerGrpForSummary && typeof window.getEffectiveChatSummaries === "function")
+            ? window.getEffectiveChatSummaries(chat)
+            : chat.history.filter((msg) => msg && msg.type === "summary");
           if (summaries.length > 0) {
-            const summaryBody = `这是你和用户的长期记忆，必须严格遵守：\n${summaries.map((summary, index) => `- 总结${index + 1}: ${summary.content}`).join("\n")}`;
-            summaryContext = (typeof window.formatPromptSection === "function")
-              ? window.formatPromptSection("总结", summaryBody)
-              : `\n# 对话记忆总结\n${summaryBody}\n`;
+            const normalSummaries = [];
+            const privateSoloSummaries = [];
+            summaries.forEach((summary) => {
+              if (isPeerGrpForSummary && chat.activeLineMode !== "solo" && summary.soloThreadId) {
+                privateSoloSummaries.push(summary);
+              } else if (!summary.soloThreadId || isPeerGrpForSummary) {
+                normalSummaries.push(summary);
+              }
+            });
+            const sections = [];
+            if (normalSummaries.length > 0) {
+              const normalLines = normalSummaries.map((s, idx) => `- 总结${idx + 1}: ${s.content}`).join("\n");
+              const normalBody = `这是你和用户的长期记忆，必须严格遵守：\n${normalLines}`;
+              sections.push(
+                typeof window.formatPromptSection === "function"
+                  ? window.formatPromptSection("总结", normalBody)
+                  : `\n==================================================\n【总结 开始】\n${normalBody}\n【总结 结束】\n==================================================\n`
+              );
+            }
+            if (privateSoloSummaries.length > 0) {
+              const soloLines = privateSoloSummaries.map((s, idx) =>
+                `- 单线总结${idx + 1}【来自单线「${s.soloThreadName || "单线"}」的私密内容，仅供AI掌握幕后线索，严禁在主线中向未参与该单线的玩家直接剧透】: ${s.content}`
+              ).join("\n");
+              const soloBody = `以下是来自单人线分支的私密总结记忆（仅供AI知悉幕后发展，严禁在主线中向未参与对应单线的玩家剧透）：\n${soloLines}`;
+              sections.push(
+                typeof window.formatPromptSection === "function"
+                  ? window.formatPromptSection("单人线私密总结记忆", soloBody)
+                  : `\n==================================================\n【单人线私密总结记忆 开始】\n${soloBody}\n【单人线私密总结记忆 结束】\n==================================================\n`
+              );
+            }
+            summaryContext = sections.filter(Boolean).join("\n");
           }
           // 将世界书读取提到这里，确保线下模式也能生效
           let worldBookContext = "";
@@ -38968,9 +39827,22 @@ ${recentHistoryText}
               }
 
               // 保存
-              await db.chats.put(chat);
-              renderChatList();
-              checkAndTriggerSummary(chatId);
+              if (chat.isGroup) {
+              if (chat.activeLineMode === "solo" && typeof window.ensureSoloLineConfig === "function") {
+                const cfg = window.ensureSoloLineConfig(chat);
+                if (cfg && !chat.viewingPeerSoloThread) {
+                  const curT = (cfg.threads || []).find((t) => t && t.id === cfg.activeThreadId);
+                  if (curT && Array.isArray(chat.history)) {
+                    curT.history = [...chat.history];
+                  }
+                }
+              } else if (Array.isArray(chat.history)) {
+                chat.mainLineHistory = [...chat.history];
+              }
+            }
+            await db.chats.put(chat);
+            renderChatList();
+            checkAndTriggerSummary(chatId);
             } catch (error) {
               console.error("线下模式AI响应失败:", error);
               const errorMessage = {
@@ -39595,28 +40467,61 @@ ${recentHistoryText}
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
             let linkedMemoryContext = "";
-            if (
+            const isPeerGrpForMemLink = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+            if (isPeerGrpForMemLink && chat.activeLineMode === "solo") {
+              const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+              const isLinkedMain = activeThread ? (activeThread.linkedMainGroup !== false) : true;
+              const mainDepth = Math.max(1, Number(activeThread?.linkedMainDepth) || Number(chat.settings?.soloLineConfig?.mainToSoloContextCount) || 200);
+              if (isLinkedMain && Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
+                const recentMain = chat.mainLineHistory
+                  .filter((msg) => msg && !msg.isHidden && msg.type !== "summary")
+                  .slice(-mainDepth);
+                if (recentMain.length > 0) {
+                  const formattedMain = recentMain
+                    .map((msg) => `  - ${formatMessageForContext(msg, chat)}`)
+                    .join("\n");
+                  linkedMemoryContext = window.formatPromptSection(
+                    "大群主线互通记忆",
+                    `来自大群主线「${chat.name || "主线"}」的最近 ${recentMain.length} 条对话记录（供当前单人线参考上下文）：\n${formattedMain}`
+                  );
+                }
+              }
+            } else if (
               chat.settings.linkedMemories &&
               chat.settings.linkedMemories.length > 0
             ) {
-              // 使用 Promise.all 并行处理所有链接，提高效率
+              const allSoloThreads = (isPeerGrpForMemLink && typeof window.getAllGroupSoloThreads === "function")
+                ? window.getAllGroupSoloThreads(chat)
+                : [];
               const contextPromises = chat.settings.linkedMemories.map(
                 async (link) => {
-                  const linkedChat = state.chats[link.chatId];
-                  if (!linkedChat) return ""; // 如果找不到链接的聊天，则跳过
+                  const soloId = link.soloThreadId || (link.isSoloThread ? link.chatId : null) || (String(link.chatId || "").startsWith("solo_") ? link.chatId : null);
+                  if (isPeerGrpForMemLink && soloId) {
+                    const matchedSolo = allSoloThreads.find((t) => t && t.id === soloId);
+                    if (!matchedSolo || !Array.isArray(matchedSolo.history)) return "";
+                    const depthVal = Math.max(1, Number(link.depth) || 200);
+                    const recentSolo = matchedSolo.history
+                      .filter((msg) => msg && !msg.isHidden && msg.type !== "summary")
+                      .slice(-depthVal);
+                    if (recentSolo.length === 0) return "";
+                    const formattedSolo = recentSolo
+                      .map((msg) => `  - ${formatMessageForContext(msg, chat)}`)
+                      .join("\n");
+                    return `---------- 【来自单人线「${matchedSolo.name || "单线"}」的最近对话记录（私密幕后线索，严禁在主线直接向未参与玩家剧透）开始】 ----------\n${formattedSolo}\n---------- 【来自单人线「${matchedSolo.name || "单线"}」的最近对话记录 结束】 ----------`;
+                  }
 
-                  // 从数据库获取最新的聊天记录，确保数据同步
+                  const linkedChat = state.chats[link.chatId];
+                  if (!linkedChat) return "";
+
                   const freshLinkedChat = await db.chats.get(link.chatId);
                   if (!freshLinkedChat) return "";
 
-                  // 截取最近的 `depth` 条消息
                   const recentHistory = freshLinkedChat.history
-                    .filter((msg) => !msg.isHidden) // 过滤掉隐藏消息
+                    .filter((msg) => !msg.isHidden)
                     .slice(-link.depth);
 
                   if (recentHistory.length === 0) return "";
 
-                  // 格式化这些消息
                   const formattedMessages = recentHistory
                     .map(
                       (msg) =>
@@ -39624,14 +40529,17 @@ ${recentHistoryText}
                     )
                     .join("\n");
 
-                  return `\n## 附加上下文：来自与“${linkedChat.name}”的最近对话内容 (仅你可见)\n${formattedMessages}`;
+                  return `---------- 【来自「${linkedChat.name}」的最近对话内容（仅AI可见）开始】 ----------\n${formattedMessages}\n---------- 【来自「${linkedChat.name}」的最近对话内容 结束】 ----------`;
                 },
               );
 
-              // 等待所有链接都处理完毕
-              const allContexts = await Promise.all(contextPromises);
-              // 将所有上下文拼接起来
-              linkedMemoryContext = allContexts.filter(Boolean).join("\n");
+              const allContexts = (await Promise.all(contextPromises)).filter(Boolean);
+              if (allContexts.length > 0) {
+                linkedMemoryContext = window.formatPromptSection(
+                  "记忆互通上下文",
+                  allContexts.join("\n\n")
+                );
+              }
             }
 
             let sharedContext = "";
@@ -39754,9 +40662,16 @@ ${recentHistoryText}
                 : membersList;
 
               const myNickname = chat.settings.myNickname || "我";
+              const allHumanNames = [
+                myNickname,
+                ...peerHumanMembers.map((p) => p.groupNickname || p.originalName || "密友"),
+              ];
               const peerHumanNamesStr = peerHumanMembers.length > 0
-                ? peerHumanMembers.map((p) => `【${p.groupNickname || p.originalName || "密友"}】`).join("、")
+                ? allHumanNames.map((n) => `【${n}】`).join("、")
                 : "";
+              const peerHumanForbiddenNamesStr = peerHumanMembers.length > 0
+                ? allHumanNames.map((n) => `"${n}"`).join("、")
+                : `"${myNickname}"`;
               // 1. 获取群公告内容
               const announcement = chat.settings.groupAnnouncement || "";
               let announcementContext = "";
@@ -39772,7 +40687,7 @@ ${recentHistoryText}
               const isGroupMusicAllowed = ((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false);
               // updated by lrq 251027
               const groupFormatBlock = window.formatPromptSection("格式", `
-你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。用户的身份是【${myNickname}】${peerHumanNamesStr ? `，同群真人玩家还包括：${peerHumanNamesStr}` : ""}，你绝对不能生成 name 为 "${myNickname}"${peerHumanNamesStr ? " 或任何真人玩家名字" : ""} 的消息。禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。本轮回复的所有气泡，必须按顺序装入顶层唯一的 chatResponse 列表中，绝对禁止在外部输出多个并列代码块。
+你的回复必须且只能是一个严格的JSON数据。每一个消息对象都必须包含 "name" 字段（本名或系统状态栏名称）与 "type" 字段。${peerHumanMembers.length > 0 ? `本群真人玩家包括：${peerHumanNamesStr}，所有真人玩家地位完全平等，处于同一层级，不分主次，请将他们作为平等的共同参与者同等对待，你绝对不能生成 name 为 ${peerHumanForbiddenNamesStr} 的消息。` : `用户的身份是【${myNickname}】，你绝对不能生成 name 为 "${myNickname}" 的消息。`}禁止出戏，绝不能透露你是AI、模型或提及“扮演”、“生成”等词语。本轮回复的所有气泡，必须按顺序装入顶层唯一的 chatResponse 列表中，绝对禁止在外部输出多个并列代码块。
 
 标准输出格式示例:
 ${isGroupThinkingActive ? `{
@@ -39805,52 +40720,72 @@ ${templateFieldLines || '      "状态": "正常"'}
   }
 ]`}`);
 
+              const isPeerGrpPrompt = Boolean(typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
               const groupCommandBlock = window.formatPromptSection("指令", `
 ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
-- 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_sender": "被引用者名字", "target_content": "被引用消息原文", "reply_content": "回复文本内容"}。针对某个玩家做出的检定结果进行判定或回应时，AI必须使用引用回复引注该玩家的检定消息
-- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}
-  无痕私密对话判定规范：当当前信息为某个人的侦查结果、聆听结果、某个HO位的秘密、只有特定PC能看见的画面时，则必须使用私密内容。且私密内容的范围仅仅包含可以被称作隐私的、短小的信息，即在模组中有标注的或者是检定的结果。而像其他不属于隐私的内容，比如场景描写、共通的场景描写、对话细节动作等，如果要进行描写的话，需要再分一个公共的气泡，否则另一个人将完全不知道这个场景发生了什么，就会缺少开头和结果，所以绝对不能误判。
-${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
+- 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_sender": "被引用者名字", "target_content": "被引用消息原文", "reply_content": "回复文本内容"}${isPeerGrpPrompt ? "。针对某个玩家做出的检定结果进行判定或回应时，AI必须使用引用回复引注该玩家的检定消息" : ""}
+${isPeerGrpPrompt ? `- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}\n` : ""}${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
-${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}${statusMember ? systemStatusContext : ""}`);
+${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}`);
+
+              const groupWhisperRuleBlock = isPeerGrpPrompt
+                ? window.formatPromptSection("无痕私密对话规范", `当当前信息为某个人的侦查结果、聆听结果、某个HO位的秘密、只有特定PC能看见的画面时，则必须使用私密内容（在消息对象中加上 "visibleTo": ["目标玩家群昵称"]）。且私密内容的范围仅仅包含可以被称作隐私的、短小的信息，即在模组中有标注的或者是检定的结果。而像其他不属于隐私的内容，比如场景描写、共通的场景描写、对话细节动作等，如果要进行描写的话，需要再分一个公共的气泡，否则另一个人将完全不知道这个场景发生了什么，就会缺少开头和结果，所以绝对不能误判。`)
+                : "";
+
+              const groupStatusRuleBlock = statusMember ? window.formatPromptSection("状态栏规范", systemStatusContext) : "";
 
               const groupMembersBlock = window.formatPromptSection("群成员人设", `
 群AI成员列表及COC角色档案（各角色已用分隔符独立隔开）:
 
 ${fullMembersList}`);
 
-              const groupMyPersonaBlock = window.formatPromptSection("我的人设", `
-- 姓名：${chat.settings.myName || myNickname}
-${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- 年龄：${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- 生日：${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- 性别：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- 角色人设：
-${chat.settings.myPersona || "普通人"}`);
+              const myPlayerEntry = {
+                name: chat.settings.myName || myNickname,
+                coc: window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : "",
+                age: chat.settings.myAge ? `- 年龄：${chat.settings.myAge}\n` : "",
+                birth: chat.settings.myBirthday ? `- 生日：${chat.settings.myBirthday}\n` : "",
+                gen: chat.settings.myGender ? `- 性别：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : "",
+                persona: chat.settings.myPersona || "普通人",
+              };
+              const groupMyPersonaBlock = peerHumanMembers.length > 0
+                ? window.formatPromptSection("真人玩家人设", [
+                    myPlayerEntry,
+                    ...peerHumanMembers.map((pm) => ({
+                      name: pm.groupNickname || pm.originalName || "密友",
+                      coc: window.getCocPromptStatus && window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)}\n` : "",
+                      age: pm.age ? `- 年龄：${pm.age}\n` : "",
+                      birth: pm.birthday ? `- 生日：${pm.birthday}\n` : "",
+                      gen: pm.gender ? `- 性别：${pm.gender}${pm.genderNote ? " " + pm.genderNote : ""}\n` : "",
+                      persona: pm.secretPersona || pm.persona || "普通人",
+                    })),
+                  ].map((hp, idx) => `---------- 【真人玩家 ${idx + 1}：${hp.name} 开始】 ----------\n- 姓名：${hp.name}\n${hp.coc}${hp.age}${hp.birth}${hp.gen}- 角色人设：\n${hp.persona}\n---------- 【真人玩家 ${idx + 1}：${hp.name} 结束】 ----------`).join("\n\n"))
+                : window.formatPromptSection("我的人设", `
+- 姓名：${myPlayerEntry.name}
+${myPlayerEntry.coc}${myPlayerEntry.age}${myPlayerEntry.birth}${myPlayerEntry.gen}- 角色人设：
+${myPlayerEntry.persona}`);
 
-              const groupPeerPlayersPersonaBlock = peerHumanMembers.length > 0
-                ? window.formatPromptSection("同群玩家人设", peerHumanMembers.map((pm, idx) => {
-                    const pmName = pm.groupNickname || pm.originalName || "密友";
-                    const pmCoc = window.getCocPromptStatus && window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)}\n` : "";
-                    const pmAge = pm.age ? `- 年龄：${pm.age}\n` : "";
-                    const pmBirth = pm.birthday ? `- 生日：${pm.birthday}\n` : "";
-                    const pmGen = pm.gender ? `- 性别：${pm.gender}${pm.genderNote ? " " + pm.genderNote : ""}\n` : "";
-                    const pmPersona = pm.secretPersona || pm.persona || "普通人";
-                    return `---------- 【同群真人玩家 ${idx + 1}：${pmName} 开始】 ----------\n- 姓名：${pmName}\n${pmCoc}${pmAge}${pmBirth}${pmGen}- 角色人设：\n${pmPersona}\n---------- 【同群真人玩家 ${idx + 1}：${pmName} 结束】 ----------`;
-                  }).join("\n\n"))
-                : "";
+              const groupPeerPlayersPersonaBlock = "";
 
               const combatPromptStr = typeof window.getCombatPromptBlock === "function" ? window.getCombatPromptBlock(chat) : "";
+              const soloLinePromptStr = (isPeerGrpPrompt && typeof window.getSoloLinePromptBlock === "function") ? window.getSoloLinePromptBlock(chat) : "";
+              const groupAffectionBlock = (chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0)
+                ? window.formatPromptSection("角色好感度系统", `当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。`)
+                : "";
               const groupContextBlock = window.formatPromptSection("情境", `
 ${sharedContext}
 ${stickerContext}
-${linkedMemoryContext}
-${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n角色好感度系统:\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合各角色的好感度水平展开相应的对话反应。\n` : ""}
 ${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}。\n` : ""}
 现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`);
 
               systemPrompt = [
                 groupFormatBlock,
                 groupCommandBlock,
+                groupWhisperRuleBlock,
+                groupStatusRuleBlock,
                 groupMembersBlock,
                 groupMyPersonaBlock,
                 groupPeerPlayersPersonaBlock,
+                soloLinePromptStr,
                 thoughtChainPromptBlock,
                 worldBookContent,
                 moduleChaptersPromptBlock,
@@ -39860,6 +40795,8 @@ ${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}�
                 combatPromptStr,
                 announcementContext,
                 summaryContext,
+                linkedMemoryContext,
+                groupAffectionBlock,
                 groupContextBlock
               ].filter(Boolean).join("\n");
 
@@ -48307,6 +49244,20 @@ ${stickerContext || "无"}
               }
             }
           }
+
+          const copyMsgBtn = document.getElementById("copy-message-btn");
+          if (copyMsgBtn) {
+            const isPeerGrpAction = Boolean(chat && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+            if (isPeerGrpAction) {
+              const essList = Array.isArray(chat.settings?.essenceMessages) ? chat.settings.essenceMessages : [];
+              const alreadyEssence = Boolean(message && essList.some((em) => em && em.timestamp === message.timestamp));
+              copyMsgBtn.innerHTML = alreadyEssence
+                ? "<span>移</span><span>出</span><span>精</span><span>华</span>"
+                : "<span>设</span><span>为</span><span>精</span><span>华</span>";
+            } else {
+              copyMsgBtn.innerHTML = "<span>复</span><span>制</span><span>文</span><span>本</span>";
+            }
+          }
           // --- 新增逻辑结束 ---
 
           document
@@ -48804,6 +49755,68 @@ ${stickerContext || "无"}
             (m) => m.timestamp === activeMessageTimestamp,
           );
           if (!message) return;
+
+          if (chat && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)) {
+            if (!chat.settings) chat.settings = {};
+            if (!Array.isArray(chat.settings.essenceMessages)) {
+              chat.settings.essenceMessages = [];
+            }
+            const existingIdx = chat.settings.essenceMessages.findIndex(
+              (em) => em && em.timestamp === message.timestamp
+            );
+            const myNick = chat.settings.myNickname || chat.settings.myName || "我";
+            hideMessageActions();
+            if (existingIdx >= 0) {
+              chat.settings.essenceMessages.splice(existingIdx, 1);
+              await db.chats.put(chat);
+              if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
+              if (typeof window.renderGroupEssenceList === "function") {
+                window.renderGroupEssenceList(chat);
+              }
+              await showCustomAlert("群精华", "已将该消息移出群精华");
+            } else {
+              let senderName = "";
+              let senderAvatar = "";
+              const isUserMsg = message.role === "user" && !message.isPeerUserMessage;
+              if (isUserMsg) {
+                senderName = myNick;
+                senderAvatar = chat.settings.myAvatar || defaultMyGroupAvatar;
+              } else {
+                senderName = message.senderName || message.sender || chat.name || "成员";
+                const mem = (chat.members || []).find(
+                  (m) => (message.senderPeerCode && m.peerCode === message.senderPeerCode) ||
+                         m.originalName === senderName ||
+                         m.groupNickname === senderName
+                );
+                senderAvatar = mem ? mem.avatar : (message.senderAvatar || defaultGroupMemberAvatar);
+              }
+              const essenceItem = {
+                timestamp: message.timestamp,
+                senderName: senderName,
+                senderAvatar: senderAvatar,
+                content: typeof message.optimizedContent === "string" && message.optimizedContent.trim()
+                  ? message.optimizedContent
+                  : message.content,
+                rawContent: message.content,
+                type: message.type || "text",
+                imageUrl: message.imageUrl || message.url || "",
+                addedBy: myNick,
+                addedAt: Date.now()
+              };
+              chat.settings.essenceMessages.push(essenceItem);
+              await db.chats.put(chat);
+              if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
+              if (typeof window.renderGroupEssenceList === "function") {
+                window.renderGroupEssenceList(chat);
+              }
+              await showCustomAlert("群精华", "已设为群精华，在聊天页面从右向左滑动可查看群精华");
+            }
+            return;
+          }
 
           let textToCopy;
           if (typeof message.content === "object") {
@@ -50100,6 +51113,7 @@ ${stickerContext || "无"}
           );
           if (newNickname !== null && newNickname.trim()) {
             chat.settings.myNickname = newNickname.trim();
+            chat.settings.myName = newNickname.trim();
             await db.chats.put(chat);
 
             if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
@@ -55045,6 +56059,11 @@ ${stickerContext || "无"}
             if (selectedPreset) {
               proxyUrlInput.value = selectedPreset.proxyUrl;
               apiKeyInput.value = selectedPreset.apiKey;
+              const protoEl = document.getElementById("api-protocol-select");
+              if (protoEl && selectedPreset.apiProtocol) {
+                protoEl.value = selectedPreset.apiProtocol;
+                state.apiConfig.apiProtocol = selectedPreset.apiProtocol;
+              }
             }
           }
         }
@@ -55110,7 +56129,9 @@ ${stickerContext || "无"}
             "请为这个配置起个名字：",
           );
           if (name && name.trim()) {
-            const newPreset = { name: name.trim(), proxyUrl, apiKey };
+            const protoEl = document.getElementById("api-protocol-select");
+            const apiProtocol = protoEl ? protoEl.value : (state.apiConfig.apiProtocol || "default");
+            const newPreset = { name: name.trim(), proxyUrl, apiKey, apiProtocol };
             const newId = await db.apiPresets.add(newPreset);
 
             if (!state.apiPresets) state.apiPresets = [];
@@ -55141,6 +56162,8 @@ ${stickerContext || "无"}
           if (preset) {
             preset.proxyUrl = proxyUrl;
             preset.apiKey = apiKey;
+            const protoEl = document.getElementById("api-protocol-select");
+            if (protoEl) preset.apiProtocol = protoEl.value || "default";
             await db.apiPresets.put(preset);
             document
               .getElementById("preset-actions-modal")
@@ -61539,8 +62562,16 @@ ${stickerContext || "无"}
           const chat = state.chats[chatId];
           const summarySettings = chat.settings.summary;
 
-          // 精确截取最后N条消息作为总结范围
-          const messagesToSummarize = chat.history.slice(
+          // 精确截取最后N条非私密消息作为总结范围
+          const eligibleHistoryForAutoSummary = (chat.history || []).filter((msg) => {
+            if (!msg || msg.type === "summary") return false;
+            if (Array.isArray(msg.visibleTo) && msg.visibleTo.length > 0) return false;
+            if (msg.isPrivateWhisper || msg.secretTarget) return false;
+            const txt = typeof msg.content === "string" ? msg.content.trim() : "";
+            if (/^(?:#私密|\[私密[:：])/.test(txt)) return false;
+            return true;
+          });
+          const messagesToSummarize = eligibleHistoryForAutoSummary.slice(
             -summarySettings.count,
           );
 
@@ -61612,8 +62643,16 @@ ${stickerContext || "无"}
             messagesToSummarize = chat.history.slice(lastSummaryIndex + 1);
           }
 
+          const isSecretWhisperMessage = (msg) => {
+            if (!msg) return false;
+            if (Array.isArray(msg.visibleTo) && msg.visibleTo.length > 0) return true;
+            if (msg.isPrivateWhisper || msg.secretTarget) return true;
+            const txt = typeof msg.content === "string" ? msg.content.trim() : "";
+            if (/^(?:#私密|\[私密[:：])/.test(txt)) return true;
+            return false;
+          };
           const filteredMessagesForSummary = messagesToSummarize.filter(
-            (msg) => msg.type !== "summary",
+            (msg) => msg && msg.type !== "summary" && !isSecretWhisperMessage(msg),
           );
 
           if (filteredMessagesForSummary.length === 0) {
@@ -61752,12 +62791,42 @@ ${stickerContext || "无"}
             rangeInfo: finalRangeInfo,
           };
 
+          if (chat.isGroup && chat.activeLineMode === "solo") {
+            const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+            const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+              ? window.PeerManager.getOrCreateMyPeerCode()
+              : "user";
+            if (activeThread) {
+              summaryMessage.soloThreadId = activeThread.id;
+              summaryMessage.soloThreadName = activeThread.name || "单线";
+              summaryMessage.soloOwnerPeerCode = activeThread.ownerPeerCode || myCode;
+              summaryMessage.soloPlayerPeerCodes = Array.isArray(activeThread.playerPeerCodes) && activeThread.playerPeerCodes.length > 0
+                ? [...activeThread.playerPeerCodes]
+                : [activeThread.ownerPeerCode || myCode];
+            }
+          }
+
           chat.history.push(summaryMessage);
+          if (chat.isGroup) {
+            if (chat.activeLineMode === "solo") {
+              if (!Array.isArray(chat.mainLineHistory)) chat.mainLineHistory = [];
+              if (!chat.mainLineHistory.some((m) => m && m.timestamp === summaryMessage.timestamp)) {
+                chat.mainLineHistory.push({ ...summaryMessage });
+              }
+            } else if (Array.isArray(chat.mainLineHistory)) {
+              if (!chat.mainLineHistory.some((m) => m && m.timestamp === summaryMessage.timestamp)) {
+                chat.mainLineHistory.push({ ...summaryMessage });
+              }
+            }
+          }
           if (chat.settings && chat.settings.summary) {
             chat.settings.summary.lastSummaryIndex = newLastSummaryIndex;
           }
 
           await db.chats.put(chat);
+          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
           console.log(`新的总结已作为记忆保存 for chat: ${chatId}`);
           return summaryMessage;
         }
@@ -61972,6 +63041,14 @@ ${stickerContext || "无"}
         }
 
         function enterSummaryMultiSelect(timestamp) {
+          const chat = state.chats[state.activeChatId];
+          if (chat && chat.isGroup && timestamp) {
+            const allSums = typeof window.getEffectiveChatSummaries === "function" ? window.getEffectiveChatSummaries(chat) : (chat.history || []);
+            const targetSum = allSums.find((m) => m && m.timestamp === timestamp);
+            if (targetSum && targetSum.soloThreadId && typeof window.isUserInSoloSummary === "function" && !window.isUserInSoloSummary(targetSum, chat)) {
+              return;
+            }
+          }
           isSummaryMultiSelecting = true;
           selectedSummaryTimestamps.clear();
           if (timestamp) selectedSummaryTimestamps.add(timestamp);
@@ -61985,6 +63062,14 @@ ${stickerContext || "无"}
         }
 
         function toggleSummarySelection(timestamp) {
+          const chat = state.chats[state.activeChatId];
+          if (chat && chat.isGroup && timestamp) {
+            const allSums = typeof window.getEffectiveChatSummaries === "function" ? window.getEffectiveChatSummaries(chat) : (chat.history || []);
+            const targetSum = allSums.find((m) => m && m.timestamp === timestamp);
+            if (targetSum && targetSum.soloThreadId && typeof window.isUserInSoloSummary === "function" && !window.isUserInSoloSummary(targetSum, chat)) {
+              return;
+            }
+          }
           if (selectedSummaryTimestamps.has(timestamp)) {
             selectedSummaryTimestamps.delete(timestamp);
           } else {
@@ -61996,7 +63081,10 @@ ${stickerContext || "无"}
         function handleSelectAllSummaries() {
           const chat = state.chats[state.activeChatId];
           if (!chat) return;
-          const summaries = (chat.history || []).filter((m) => m.type === "summary");
+          const allSums = (chat.isGroup && typeof window.getEffectiveChatSummaries === "function")
+            ? window.getEffectiveChatSummaries(chat)
+            : (chat.history || []).filter((m) => m.type === "summary");
+          const summaries = allSums.filter((s) => !s.soloThreadId || typeof window.isUserInSoloSummary !== "function" || window.isUserInSoloSummary(s, chat));
           if (selectedSummaryTimestamps.size === summaries.length) {
             selectedSummaryTimestamps.clear();
           } else {
@@ -62015,9 +63103,17 @@ ${stickerContext || "无"}
             return;
           }
 
-          const selected = (chat.history || [])
-            .filter((m) => m.type === "summary" && selectedSummaryTimestamps.has(m.timestamp))
+          const allSums = (chat.isGroup && typeof window.getEffectiveChatSummaries === "function")
+            ? window.getEffectiveChatSummaries(chat)
+            : (chat.history || []).filter((m) => m.type === "summary");
+          const selected = allSums
+            .filter((m) => m.type === "summary" && selectedSummaryTimestamps.has(m.timestamp) && (!m.soloThreadId || typeof window.isUserInSoloSummary !== "function" || window.isUserInSoloSummary(m, chat)))
             .sort((a, b) => a.timestamp - b.timestamp);
+
+          if (selected.length < 2) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请至少选择两条可操作的总结");
+            return;
+          }
 
           const mergedText = selected.map((s) => s.content.trim()).join("\n\n");
           const headers = selected.map((s) => (s.header || "").trim()).filter(Boolean);
@@ -62090,15 +63186,36 @@ ${stickerContext || "无"}
             rangeInfo: mergedRangeInfo,
           };
 
+          if (chat.isGroup && chat.activeLineMode === "solo") {
+            const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+            const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+              ? window.PeerManager.getOrCreateMyPeerCode()
+              : "user";
+            if (activeThread) {
+              newSummary.soloThreadId = activeThread.id;
+              newSummary.soloThreadName = activeThread.name || "单线";
+              newSummary.soloOwnerPeerCode = activeThread.ownerPeerCode || myCode;
+              newSummary.soloPlayerPeerCodes = Array.isArray(activeThread.playerPeerCodes) && activeThread.playerPeerCodes.length > 0
+                ? [...activeThread.playerPeerCodes]
+                : [activeThread.ownerPeerCode || myCode];
+            }
+          }
+
           if (lastSelectedIndex >= 0) {
             chat.history.splice(lastSelectedIndex + 1, 0, newSummary);
           } else {
             chat.history.push(newSummary);
           }
+          if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
+            chat.mainLineHistory.push({ ...newSummary });
+          }
           if (chat.settings && chat.settings.summary) {
             chat.settings.summary.lastSummaryIndex = chat.history.length - 1;
           }
           await db.chats.put(chat);
+          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
           exitSummaryMultiSelect();
           openSummaryViewer();
           if (typeof showCustomAlert === "function") await showCustomAlert("完成", "已合并生成新的对话记忆");
@@ -62121,9 +63238,17 @@ ${stickerContext || "无"}
             return;
           }
 
-          const selected = (chat.history || [])
-            .filter((m) => m.type === "summary" && selectedSummaryTimestamps.has(m.timestamp))
+          const allSums = (chat.isGroup && typeof window.getEffectiveChatSummaries === "function")
+            ? window.getEffectiveChatSummaries(chat)
+            : (chat.history || []).filter((m) => m.type === "summary");
+          const selected = allSums
+            .filter((m) => m.type === "summary" && selectedSummaryTimestamps.has(m.timestamp) && (!m.soloThreadId || typeof window.isUserInSoloSummary !== "function" || window.isUserInSoloSummary(m, chat)))
             .sort((a, b) => a.timestamp - b.timestamp);
+
+          if (selected.length < 2) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "请至少选择两条可操作的总结");
+            return;
+          }
 
           let combinedRanges = [];
           selected.forEach((s) => {
@@ -62236,8 +63361,15 @@ ${stickerContext || "无"}
         async function handleEditSummaryHeader(timestamp) {
           const chat = state.chats[state.activeChatId];
           if (!chat) return;
-          const summary = (chat.history || []).find((m) => m.timestamp === timestamp);
+          const allSums = (chat.isGroup && typeof window.getEffectiveChatSummaries === "function")
+            ? window.getEffectiveChatSummaries(chat)
+            : (chat.history || []);
+          const summary = allSums.find((m) => m && m.timestamp === timestamp);
           if (!summary) return;
+          if (summary.soloThreadId && typeof window.isUserInSoloSummary === "function" && !window.isUserInSoloSummary(summary, chat)) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "仅该单线内的玩家可修改此记忆");
+            return;
+          }
 
           const currentHeader = summary.header || "";
           let newHeader = null;
@@ -62248,7 +63380,13 @@ ${stickerContext || "无"}
           }
           if (newHeader !== null) {
             summary.header = newHeader.trim();
+            if (typeof window.syncSummaryUpdateAcrossGroup === "function") {
+              window.syncSummaryUpdateAcrossGroup(chat, timestamp, summary);
+            }
             await db.chats.put(chat);
+            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+              window.PeerManager.syncGroupSettingsToPeers(chat);
+            }
             openSummaryViewer();
           }
         }
@@ -64066,7 +65204,10 @@ ${stickerContext || "无"}
 
           const titleEl = document.getElementById("summary-viewer-title");
           if (titleEl) {
-            titleEl.textContent = `“${chat.name}”的对话记忆`;
+            const effName = typeof window.getEffectiveChatDisplayTitle === "function"
+              ? window.getEffectiveChatDisplayTitle(chat)
+              : chat.name;
+            titleEl.textContent = `“${effName}”的对话记忆`;
           }
 
           if (typeof exitSummaryMultiSelect === "function") {
@@ -64077,9 +65218,9 @@ ${stickerContext || "无"}
           if (listEl) {
             listEl.innerHTML = "";
 
-            const summaries = (chat.history || []).filter(
-              (msg) => msg && msg.type === "summary",
-            );
+            const summaries = (chat.isGroup && typeof window.getEffectiveChatSummaries === "function")
+              ? window.getEffectiveChatSummaries(chat)
+              : (chat.history || []).filter((msg) => msg && msg.type === "summary");
 
             if (summaries.length === 0) {
               listEl.innerHTML =
@@ -64090,6 +65231,13 @@ ${stickerContext || "无"}
                 card.className = "summary-item-card";
                 card.dataset.timestamp = summary.timestamp;
 
+                const isSoloSummary = Boolean(summary.soloThreadId);
+                const canAccessSolo = !isSoloSummary || (typeof window.isUserInSoloSummary === "function" ? window.isUserInSoloSummary(summary, chat) : true);
+                const safeSoloName = String(summary.soloThreadName || "单线")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;");
+
                 let cardHeader = (summary.header || "").trim();
 
                 const formattedTime = summary.timestamp ? new Date(summary.timestamp).toLocaleString("zh-CN", {
@@ -64097,11 +65245,13 @@ ${stickerContext || "无"}
                   timeStyle: "short",
                 }) : "";
 
-                const safeContent = (summary.content || "")
-                  .replace(/&/g, "&amp;")
-                  .replace(/</g, "&lt;")
-                  .replace(/>/g, "&gt;")
-                  .replace(/\n/g, "<br>");
+                const safeContent = canAccessSolo
+                  ? (summary.content || "")
+                      .replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/\n/g, "<br>")
+                  : `<span style="color: var(--text-secondary);">来自${safeSoloName}</span>`;
 
                 const safeHeader = (cardHeader || "")
                   .replace(/&/g, "&amp;")
@@ -64112,14 +65262,22 @@ ${stickerContext || "无"}
                 const rangeText = `第${rangeInfo.start}条-第${rangeInfo.end}条`;
                 const hasGap = !!rangeInfo.hasLargeGap;
 
-                const headerHtml = safeHeader ? `
+                const soloBadgeHtml = isSoloSummary
+                  ? `<span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color); flex-shrink: 0;">来自${safeSoloName}</span>`
+                  : "";
+
+                const headerHtml = !canAccessSolo
+                  ? `${soloBadgeHtml}`
+                  : (safeHeader ? `
+                  ${soloBadgeHtml}
                   <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--secondary-bg); color: var(--accent-color); border: 1px solid var(--border-color); flex-shrink: 0;">卡头</span>
                   <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击修改卡头">${safeHeader}</span>
                 ` : `
+                  ${soloBadgeHtml}
                   <span class="summary-card-header-title" data-timestamp="${summary.timestamp}" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;" title="点击添加卡头"></span>
-                `;
+                `);
 
-                const rangePopoverHtml = hasGap ? `
+                const rangePopoverHtml = (hasGap && canAccessSolo) ? `
                   <button type="button" class="summary-range-info-btn" data-timestamp="${summary.timestamp}" title="查看条目" style="background: none; border: none; padding: 0; margin: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); opacity: 0.6; line-height: 1;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <circle cx="12" cy="12" r="10"></circle>
@@ -64132,12 +65290,7 @@ ${stickerContext || "无"}
                   </div>
                 ` : "";
 
-                card.innerHTML = `
-                  <div class="summary-card-header">
-                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                      <input type="checkbox" class="summary-select-checkbox" data-timestamp="${summary.timestamp}" style="display: none; width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color); margin: 0; flex-shrink: 0;" />
-                      ${headerHtml}
-                    </div>
+                const actionsHtml = canAccessSolo ? `
                     <div class="summary-actions">
                       <button type="button" class="edit-summary-header-btn" data-timestamp="${summary.timestamp}" title="卡头">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -64158,6 +65311,15 @@ ${stickerContext || "无"}
                         </svg>
                       </button>
                     </div>
+                ` : "";
+
+                card.innerHTML = `
+                  <div class="summary-card-header">
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                      ${canAccessSolo ? `<input type="checkbox" class="summary-select-checkbox" data-timestamp="${summary.timestamp}" style="display: none; width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color); margin: 0; flex-shrink: 0;" />` : ""}
+                      ${headerHtml}
+                    </div>
+                    ${actionsHtml}
                   </div>
                   <div class="summary-content">${safeContent}</div>
                   <div class="summary-meta">
@@ -64186,10 +65348,18 @@ ${stickerContext || "无"}
 
         async function editSummary(timestamp) {
           const chat = state.chats[state.activeChatId];
-          const summary = (chat.history || []).find(
-            (msg) => msg.timestamp === timestamp,
+          if (!chat) return;
+          const allSums = (chat.isGroup && typeof window.getEffectiveChatSummaries === "function")
+            ? window.getEffectiveChatSummaries(chat)
+            : (chat.history || []);
+          const summary = allSums.find(
+            (msg) => msg && msg.timestamp === timestamp,
           );
           if (!summary) return;
+          if (summary.soloThreadId && typeof window.isUserInSoloSummary === "function" && !window.isUserInSoloSummary(summary, chat)) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "仅该单线内的玩家可修改此记忆");
+            return;
+          }
 
           const newContent = await showCustomPrompt(
             "编辑总结",
@@ -64200,22 +65370,41 @@ ${stickerContext || "无"}
 
           if (newContent !== null) {
             summary.content = newContent.trim();
+            if (typeof window.syncSummaryUpdateAcrossGroup === "function") {
+              window.syncSummaryUpdateAcrossGroup(chat, timestamp, summary);
+            }
             await db.chats.put(chat);
+            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+              window.PeerManager.syncGroupSettingsToPeers(chat);
+            }
             openSummaryViewer();
           }
         }
 
         async function deleteSummary(timestamp) {
+          const chat = state.chats[state.activeChatId];
+          if (!chat) return;
+          const allSums = (chat.isGroup && typeof window.getEffectiveChatSummaries === "function")
+            ? window.getEffectiveChatSummaries(chat)
+            : (chat.history || []);
+          const summary = allSums.find((msg) => msg && msg.timestamp === timestamp);
+          if (summary && summary.soloThreadId && typeof window.isUserInSoloSummary === "function" && !window.isUserInSoloSummary(summary, chat)) {
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "仅该单线内的玩家可删除此记忆");
+            return;
+          }
+
           const confirmed = await showCustomConfirm(
             "确认删除",
             "确定要删除这条总结记忆吗",
             { confirmButtonClass: "btn-danger" },
           );
           if (confirmed) {
-            const chat = state.chats[state.activeChatId];
-            chat.history = chat.history.filter(
+            chat.history = (chat.history || []).filter(
               (msg) => msg.timestamp !== timestamp,
             );
+            if (typeof window.syncSummaryUpdateAcrossGroup === "function") {
+              window.syncSummaryUpdateAcrossGroup(chat, timestamp, null);
+            }
 
             const lastRemainingSummary = chat.history
               .filter((m) => m.type === "summary")
@@ -64239,6 +65428,9 @@ ${stickerContext || "无"}
             }
 
             await db.chats.put(chat);
+            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+              window.PeerManager.syncGroupSettingsToPeers(chat);
+            }
             openSummaryViewer();
             await showCustomAlert("完成", "总结已删除");
           }
@@ -72285,6 +73477,16 @@ ${stickerContext || "无"}
          */
         function openBranchingModal() {
           if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (chat && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)) {
+            chat.hideOocAndStickers = !chat.hideOocAndStickers;
+            if (typeof window.updateTimelineOrOocBtnUI === "function") {
+              window.updateTimelineOrOocBtnUI(chat);
+            }
+            renderChatInterface(state.activeChatId);
+            db.chats.put(chat).catch(() => {});
+            return;
+          }
           renderBranchList();
           document.getElementById("branching-modal").classList.add("visible");
         }
@@ -72345,6 +73547,16 @@ ${stickerContext || "无"}
          */
         function openBranchingModal() {
           if (!state.activeChatId) return;
+          const chat = state.chats[state.activeChatId];
+          if (chat && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)) {
+            chat.hideOocAndStickers = !chat.hideOocAndStickers;
+            if (typeof window.updateTimelineOrOocBtnUI === "function") {
+              window.updateTimelineOrOocBtnUI(chat);
+            }
+            renderChatInterface(state.activeChatId);
+            db.chats.put(chat).catch(() => {});
+            return;
+          }
           renderBranchList();
           document.getElementById("branching-modal").classList.add("visible");
         }
@@ -77443,6 +78655,10 @@ ${stickerContext || "无"}
                 return; // 阻止保存
               }
 
+              const protoEl = document.getElementById("api-protocol-select");
+              if (protoEl) state.apiConfig.apiProtocol = protoEl.value || "default";
+              const subProtoEl = document.getElementById("sub-api-protocol-select");
+              if (subProtoEl) state.apiConfig.subApiProtocol = subProtoEl.value || "default";
               state.apiConfig.proxyUrl = document
                 .getElementById("proxy-url")
                 .value.trim();
@@ -77450,10 +78666,17 @@ ${stickerContext || "无"}
                 .getElementById("api-key")
                 .value.trim();
               state.apiConfig.model =
-                document.getElementById("model-select").value;
+                document.getElementById("model-select").value.trim();
               state.apiConfig.temperature = parseFloat(
                 document.getElementById("temperature-slider").value,
               );
+              if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
+              state.apiConfig.protocolProfiles[state.apiConfig.apiProtocol || "default"] = {
+                proxyUrl: state.apiConfig.proxyUrl,
+                apiKey: state.apiConfig.apiKey,
+                model: state.apiConfig.model,
+                temperature: state.apiConfig.temperature,
+              };
               const cognitionSwitch = document.getElementById("real-time-cognition-switch");
               state.apiConfig.realTimeCognitionEnabled = cognitionSwitch ? cognitionSwitch.checked : true;
               const globalMusicSwitch = document.getElementById("global-ai-music-switch");
@@ -77472,6 +78695,13 @@ ${stickerContext || "无"}
               if (subModelEl) state.apiConfig.subModel = subModelEl.value.trim();
               const subTempSlider = document.getElementById("sub-temperature-slider");
               if (subTempSlider) state.apiConfig.subTemperature = parseFloat(subTempSlider.value) || 0.8;
+              if (!state.apiConfig.subProtocolProfiles) state.apiConfig.subProtocolProfiles = {};
+              state.apiConfig.subProtocolProfiles[state.apiConfig.subApiProtocol || "default"] = {
+                proxyUrl: state.apiConfig.subProxyUrl || "",
+                apiKey: state.apiConfig.subApiKey || "",
+                model: state.apiConfig.subModel || "",
+                temperature: state.apiConfig.subTemperature || 0.8,
+              };
 
               const subSummaryEl = document.getElementById("sub-api-use-summary");
               const subFanficEl = document.getElementById("sub-api-use-fanfic");
@@ -77670,44 +78900,56 @@ ${stickerContext || "无"}
             .addEventListener("click", async () => {
               const url = document.getElementById("proxy-url").value.trim();
               const key = document.getElementById("api-key").value.trim();
+              const protoEl = document.getElementById("api-protocol-select");
+              const protocol = protoEl ? protoEl.value : (state.apiConfig.apiProtocol || "default");
               if (!url || !key) return alert("请先填写反代地址和密钥");
               try {
-                let isGemini = url === GEMINI_API_URL;
-                const response = await fetch(
-                  isGemini
-                    ? `${GEMINI_API_URL}?key=${getRandomValue(key)}`
-                    : `${url}/v1/models`,
-                  isGemini
-                    ? undefined
-                    : { headers: { Authorization: `Bearer ${key}` } },
-                );
-                if (!response.ok) throw new Error("无法获取模型列表");
-                const data = await response.json();
-                let models = isGemini ? data.models : data.data;
-                if (isGemini) {
-                  models = models.map((model) => {
-                    const parts = model.name.split("/");
-                    return {
-                      id: parts.length > 1 ? parts[1] : model.name,
-                    };
-                  });
-                }
-                // 获取我们的辅助下拉框
+                const models = await window.fetchApiModelsByProtocol(url, key, protocol);
                 const picker = document.getElementById("fetched-model-list");
                 picker.innerHTML =
-                  '<option value="">▼ 请选择模型 (点击自动填入上方)</option>';
-
-                // 填充下拉框
+                  '<option value="">▼ 请选择模型</option>';
                 models.forEach((model) => {
                   const option = document.createElement("option");
-                  option.value = model.id;
-                  option.textContent = model.id;
+                  const mId = typeof model === "string" ? model : model.id;
+                  option.value = mId;
+                  option.textContent = mId;
                   picker.appendChild(option);
                 });
-
-                // 显示下拉框
                 picker.style.display = "block";
-
+                if (protocol === "claude") {
+                  state.apiConfig.apiProtocol = "claude";
+                  state.apiConfig.proxyUrl = url;
+                  state.apiConfig.apiKey = key;
+                  if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
+                  state.apiConfig.protocolProfiles.claude = {
+                    ...(state.apiConfig.protocolProfiles.claude || {}),
+                    proxyUrl: url,
+                    apiKey: key,
+                    model: document.getElementById("model-select")?.value?.trim() || "",
+                    temperature: parseFloat(document.getElementById("temperature-slider")?.value) || 0.8,
+                  };
+                  if (typeof db !== "undefined" && db.apiConfig) {
+                    await db.apiConfig.put(state.apiConfig);
+                  }
+                }
+                picker.onchange = async function () {
+                  const modelInput = document.getElementById("model-select");
+                  if (modelInput) modelInput.value = this.value;
+                  if ((document.getElementById("api-protocol-select")?.value || state.apiConfig.apiProtocol) === "claude" && this.value) {
+                    state.apiConfig.model = this.value;
+                    if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
+                    state.apiConfig.protocolProfiles.claude = {
+                      ...(state.apiConfig.protocolProfiles.claude || {}),
+                      proxyUrl: document.getElementById("proxy-url")?.value?.trim() || state.apiConfig.proxyUrl || "",
+                      apiKey: document.getElementById("api-key")?.value?.trim() || state.apiConfig.apiKey || "",
+                      model: this.value,
+                      temperature: parseFloat(document.getElementById("temperature-slider")?.value) || 0.8,
+                    };
+                    if (typeof db !== "undefined" && db.apiConfig) {
+                      await db.apiConfig.put(state.apiConfig);
+                    }
+                  }
+                };
                 alert(
                   `成功拉取 ${models.length} 个模型！\n请点击下方的下拉框选择，选择后会自动填入输入框。`,
                 );
@@ -78586,7 +79828,8 @@ ${stickerContext || "无"}
                 }
               };
 
-              await updateTokenDisplay();
+              // 异步计算Token明细，避免大模组/大地图阻塞聊天设置面板打开
+              Promise.resolve().then(() => updateTokenDisplay()).catch(() => {});
 
               // 3. 【关键】移除旧的监听器（防止重复），并添加新的点击监听器
               // 使用 cloneNode 技巧快速清除旧的 event listeners
@@ -79042,33 +80285,68 @@ ${stickerContext || "无"}
               );
               memoryLinkCheckboxesContainer.innerHTML = ""; // 清空旧选项
 
-              // 1. 获取除了当前聊天以外的所有聊天
-              const otherChats = Object.values(state.chats).filter(
-                (c) => c.id !== chat.id,
-              );
-
-              // 2. 动态创建带头像的复选框
-              otherChats.forEach((otherChat) => {
-                const existingLink = (chat.settings?.linkedMemories || []).find(
-                  (link) => link.chatId === otherChat.id,
+              const isPeerGrpMemUi = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+              const depthFormGroupEl = document.getElementById("link-memory-depth-input")?.closest(".form-group");
+              if (isPeerGrpMemUi && chat.activeLineMode === "solo") {
+                if (depthFormGroupEl) depthFormGroupEl.style.display = "none";
+                const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+                const isMainChecked = activeThread ? (activeThread.linkedMainGroup !== false) : true;
+                const mainDepthVal = Number(activeThread?.linkedMainDepth) || Number(chat.settings?.soloLineConfig?.mainToSoloContextCount) || 200;
+                const row = document.createElement("div");
+                row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-color); box-sizing: border-box;";
+                row.innerHTML = `
+                  <input type="number" class="moe-input solo-link-depth-input" data-solo-id="__main_group__" value="${mainDepthVal}" min="1" max="2000" style="width: 68px !important; height: 28px !important; padding: 0 6px !important; font-size: 12px !important; text-align: center !important; flex-shrink: 0 !important;" onclick="event.stopPropagation();" />
+                  <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-primary);">${chat.name || "大群"}</span>
+                  <input type="checkbox" class="solo-link-checkbox" value="__main_group__" ${isMainChecked ? "checked" : ""} style="width: 16px !important; height: 16px !important; min-width: 16px !important; min-height: 16px !important; margin: 0 !important; flex-shrink: 0 !important;" />
+                `;
+                memoryLinkCheckboxesContainer.appendChild(row);
+              } else if (isPeerGrpMemUi) {
+                if (depthFormGroupEl) depthFormGroupEl.style.display = "none";
+                const allSoloThreads = typeof window.getAllGroupSoloThreads === "function" ? window.getAllGroupSoloThreads(chat) : [];
+                if (allSoloThreads.length === 0) {
+                  const emptyHint = document.createElement("div");
+                  emptyHint.style.cssText = "padding: 12px; text-align: center; font-size: 12px; color: var(--text-secondary);";
+                  emptyHint.textContent = "当前暂无单人线";
+                  memoryLinkCheckboxesContainer.appendChild(emptyHint);
+                } else {
+                  allSoloThreads.forEach((st) => {
+                    const existingLink = (chat.settings?.linkedMemories || []).find(
+                      (link) => (link.soloThreadId || link.chatId) === st.id
+                    );
+                    const isChecked = existingLink ? "checked" : "";
+                    const depthVal = existingLink && existingLink.depth ? existingLink.depth : 200;
+                    const row = document.createElement("div");
+                    row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-color); box-sizing: border-box;";
+                    row.innerHTML = `
+                      <input type="number" class="moe-input solo-link-depth-input" data-solo-id="${st.id}" value="${depthVal}" min="1" max="2000" style="width: 68px !important; height: 28px !important; padding: 0 6px !important; font-size: 12px !important; text-align: center !important; flex-shrink: 0 !important;" onclick="event.stopPropagation();" />
+                      <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-primary);">${st.name || "单线"}</span>
+                      <input type="checkbox" class="solo-link-checkbox" value="${st.id}" ${isChecked} style="width: 16px !important; height: 16px !important; min-width: 16px !important; min-height: 16px !important; margin: 0 !important; flex-shrink: 0 !important;" />
+                    `;
+                    memoryLinkCheckboxesContainer.appendChild(row);
+                  });
+                }
+              } else {
+                if (depthFormGroupEl) depthFormGroupEl.style.display = "";
+                const otherChats = Object.values(state.chats).filter(
+                  (c) => c.id !== chat.id,
                 );
-                const isChecked = existingLink ? "checked" : "";
-
-                // 根据是群聊还是单聊，获取正确的头像URL
-                const avatarUrl = otherChat.isGroup
-                  ? otherChat.settings.groupAvatar || defaultGroupAvatar
-                  : otherChat.settings.aiAvatar || defaultAvatar;
-
-                const label = document.createElement("label");
-
-                // 构建包含 <img> 标签的新HTML结构
-                label.innerHTML = `
+                otherChats.forEach((otherChat) => {
+                  const existingLink = (chat.settings?.linkedMemories || []).find(
+                    (link) => link.chatId === otherChat.id,
+                  );
+                  const isChecked = existingLink ? "checked" : "";
+                  const avatarUrl = otherChat.isGroup
+                    ? otherChat.settings.groupAvatar || defaultGroupAvatar
+                    : otherChat.settings.aiAvatar || defaultAvatar;
+                  const label = document.createElement("label");
+                  label.innerHTML = `
 			        <input type="checkbox" value="${otherChat.id}" ${isChecked}>
 			        <img src="${avatarUrl}" class="avatar-preview">
 			        <span>${otherChat.name} ${otherChat.isGroup ? "(群聊)" : ""}</span>
 			    `;
-                memoryLinkCheckboxesContainer.appendChild(label);
-              });
+                  memoryLinkCheckboxesContainer.appendChild(label);
+                });
+              }
 
               // 3. 更新已选数量的显示和记忆条数
               function updateMemoryLinkDisplay() {
@@ -79140,8 +80418,23 @@ ${stickerContext || "无"}
               }
 
               if (isGroup) {
-                document.getElementById("my-group-nickname-input").value =
-                  chat.settings.myNickname || "";
+                const grpMyNickInput = document.getElementById("my-group-nickname-input");
+                const grpMyNameInput = document.getElementById("my-name-input");
+                const initialGrpMyNick = chat.settings.myNickname || chat.settings.myName || "";
+                if (grpMyNickInput) grpMyNickInput.value = initialGrpMyNick;
+                if (grpMyNameInput) grpMyNameInput.value = initialGrpMyNick;
+                if (grpMyNickInput && grpMyNameInput) {
+                  grpMyNickInput.oninput = () => {
+                    if (state.chats[state.activeChatId]?.isGroup) {
+                      grpMyNameInput.value = grpMyNickInput.value;
+                    }
+                  };
+                  grpMyNameInput.oninput = () => {
+                    if (state.chats[state.activeChatId]?.isGroup) {
+                      grpMyNickInput.value = grpMyNameInput.value;
+                    }
+                  };
+                }
                 document.getElementById("group-avatar-preview").src =
                   chat.settings.groupAvatar || defaultGroupAvatar;
                 renderGroupMemberSettings(chat.members);
@@ -79667,9 +80960,21 @@ ${stickerContext || "无"}
             }
 
             populateAgeSelectOptions();
-            document.getElementById("member-name-input").value =
-              member.groupNickname || member.originalName || (sourceChat && sourceChat.name) || "";
             const isPeerHuman = Boolean(member.isPeerMember || member.roleType === "peer" || (sourceChat && sourceChat.roleType === "peer"));
+            const memberNameInputEl = document.getElementById("member-name-input");
+            if (memberNameInputEl) {
+              memberNameInputEl.value =
+                member.groupNickname || member.originalName || (sourceChat && sourceChat.name) || "";
+              if (isPeerHuman) {
+                memberNameInputEl.setAttribute("readonly", "true");
+                memberNameInputEl.readOnly = true;
+                memberNameInputEl.style.opacity = "0.7";
+              } else {
+                memberNameInputEl.removeAttribute("readonly");
+                memberNameInputEl.readOnly = false;
+                memberNameInputEl.style.opacity = "1";
+              }
+            }
             const isDiceOrStatusRole = Boolean(isStatusRole || member.isDiceBot || member.roleType === "system_status" || member.roleType === "dice" || member.isDice || (sourceChat && (sourceChat.roleType === "system_status" || sourceChat.roleType === "dice" || sourceChat.isDiceBot || sourceChat.isDice)));
             if (isDiceOrStatusRole) {
               member.isPrivate = false;
@@ -79832,15 +81137,17 @@ ${stickerContext || "无"}
               const member = (chat.members || []).find((m) => m.id === editingMemberId);
               if (!member) return;
 
-              const newNickname = document
-                .getElementById("member-name-input")
-                .value.trim();
-              if (!newNickname) {
-                alert("群昵称不能为空！");
-                return;
-              }
-              member.groupNickname = newNickname; // 只修改群昵称
               const isPeerHumanOnSave = Boolean(member.isPeerMember || member.roleType === "peer" || (state.chats[member.id]?.roleType === "peer"));
+              if (!isPeerHumanOnSave) {
+                const newNickname = document
+                  .getElementById("member-name-input")
+                  .value.trim();
+                if (!newNickname) {
+                  alert("群昵称不能为空！");
+                  return;
+                }
+                member.groupNickname = newNickname; // 只修改非真人成员群昵称
+              }
               const myCodeOnSave = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? String(window.PeerManager.getOrCreateMyPeerCode()) : "";
               const isAddedByOtherPeerOnSave = Boolean(member.addedByPeerCode && member.addedByPeerCode !== "user" && (!myCodeOnSave || String(member.addedByPeerCode) !== myCodeOnSave));
               const isPrivateToMeOnSave = Boolean(member.isPrivate && isAddedByOtherPeerOnSave);
@@ -79885,15 +81192,15 @@ ${stickerContext || "无"}
                   await db.chats.put(sourceChat);
                 }
               }
-              await db.chats.put(chat);
-              if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                window.PeerManager.syncGroupSettingsToPeers(chat);
-              }
-
               renderGroupMemberSettings(chat.members);
               document
                 .getElementById("member-settings-modal")
                 .classList.remove("visible");
+
+              db.chats.put(chat).catch(() => {});
+              if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
             });
           document
             .getElementById("reset-theme-btn")
@@ -80607,22 +81914,64 @@ ${stickerContext || "无"}
               // --- 新增代码结束 ---
 
               // 记忆互通功能 - 保存逻辑
-              const linkedMemoryCheckboxes = document.querySelectorAll(
-                "#memory-link-checkboxes-container input:checked",
-              );
-              const memoryDepth =
-                parseInt(
-                  document.getElementById("link-memory-depth-input").value,
-                ) || 5;
+              const isPeerGrpSave = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+              const isInSoloModeSave = Boolean(isPeerGrpSave && chat.activeLineMode === "solo");
+              const isPeerOrSoloGroupSave = isPeerGrpSave;
 
-              chat.settings.linkMemoryDepth = memoryDepth; // 独立保存记忆条数设置
+              if (isInSoloModeSave) {
+                const mainChk = document.querySelector(
+                  '#memory-link-checkboxes-container input.solo-link-checkbox[value="__main_group__"]',
+                );
+                const mainDepthInp = document.querySelector(
+                  '#memory-link-checkboxes-container input.solo-link-depth-input[data-solo-id="__main_group__"]',
+                );
+                const activeThread = typeof window.getActiveSoloThread === "function"
+                  ? window.getActiveSoloThread(chat)
+                  : null;
+                const parsedDepth = Math.max(1, parseInt(mainDepthInp ? mainDepthInp.value : "200", 10) || 200);
+                if (activeThread) {
+                  activeThread.linkedMainGroup = mainChk ? Boolean(mainChk.checked) : true;
+                  activeThread.linkedMainDepth = parsedDepth;
+                }
+                if (chat.settings.soloLineConfig) {
+                  chat.settings.soloLineConfig.mainToSoloContextCount = parsedDepth;
+                  chat.settings.soloLineConfig.mainToSoloMode = (mainChk && !mainChk.checked) ? "none" : "count";
+                }
+              } else if (isPeerOrSoloGroupSave) {
+                const checkedSoloBoxes = document.querySelectorAll(
+                  "#memory-link-checkboxes-container input.solo-link-checkbox:checked",
+                );
+                chat.settings.linkedMemories = Array.from(checkedSoloBoxes).map((checkbox) => {
+                  const sId = checkbox.value;
+                  const depthInp = document.querySelector(
+                    `#memory-link-checkboxes-container input.solo-link-depth-input[data-solo-id="${sId}"]`,
+                  );
+                  const dVal = Math.max(1, parseInt(depthInp ? depthInp.value : "200", 10) || 200);
+                  return {
+                    chatId: sId,
+                    soloThreadId: sId,
+                    isSoloThread: true,
+                    depth: dVal,
+                  };
+                });
+              } else {
+                const linkedMemoryCheckboxes = document.querySelectorAll(
+                  '#memory-link-checkboxes-container input[type="checkbox"]:checked',
+                );
+                const memoryDepth =
+                  parseInt(
+                    document.getElementById("link-memory-depth-input").value,
+                  ) || 5;
 
-              chat.settings.linkedMemories = Array.from(
-                linkedMemoryCheckboxes,
-              ).map((checkbox) => ({
-                chatId: checkbox.value,
-                depth: memoryDepth, // 对所有选中的链接应用相同的深度
-              }));
+                chat.settings.linkMemoryDepth = memoryDepth; // 独立保存记忆条数设置
+
+                chat.settings.linkedMemories = Array.from(
+                  linkedMemoryCheckboxes,
+                ).map((checkbox) => ({
+                  chatId: checkbox.value,
+                  depth: memoryDepth, // 对所有选中的链接应用相同的深度
+                }));
+              }
 
               const selectedThemeRadio = document.querySelector(
                 'input[name="theme-select"]:checked',
@@ -80682,9 +82031,15 @@ ${stickerContext || "无"}
               }
 
               if (chat.isGroup) {
-                chat.settings.myNickname = document
+                const enteredGroupNick = document
                   .getElementById("my-group-nickname-input")
                   .value.trim();
+                const enteredMyName = document
+                  .getElementById("my-name-input")
+                  .value.trim();
+                const resolvedMyGroupNick = enteredGroupNick || enteredMyName || "我";
+                chat.settings.myNickname = resolvedMyGroupNick;
+                chat.settings.myName = resolvedMyGroupNick;
                 chat.settings.groupAvatar = document.getElementById(
                   "group-avatar-preview",
                 ).src;
@@ -80987,13 +82342,9 @@ ${stickerContext || "无"}
                     : "manual";
               }
 
-              await db.chats.put(chat);
               if (state.chats) {
                 state.chats[chat.id] = chat;
                 state.chats[String(chat.id)] = chat;
-              }
-              if (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                window.PeerManager.syncGroupSettingsToPeers(chat);
               }
 
               applyScopedCss(
@@ -81002,9 +82353,26 @@ ${stickerContext || "无"}
                 "custom-bubble-style",
               );
 
+              if (chat.isGroup) {
+                if (chat.activeLineMode === "solo" && typeof window.ensureSoloLineConfig === "function") {
+                  const cfg = window.ensureSoloLineConfig(chat);
+                  if (cfg && !chat.viewingPeerSoloThread) {
+                    const curT = (cfg.threads || []).find((t) => t && t.id === cfg.activeThreadId);
+                    if (curT && Array.isArray(chat.history)) {
+                      curT.history = [...chat.history];
+                    }
+                  }
+                } else if (Array.isArray(chat.history)) {
+                  chat.mainLineHistory = [...chat.history];
+                }
+              }
+              await db.chats.put(chat).catch(() => {});
               chatSettingsModal.classList.remove("visible");
               renderChatInterface(state.activeChatId);
               renderChatList();
+              if (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
             });
 
           document
@@ -85012,6 +86380,8 @@ ${stickerContext || "无"}
             subFetchModelsBtn.addEventListener("click", async () => {
               const proxyUrl = document.getElementById("sub-proxy-url").value.trim();
               const apiKey = document.getElementById("sub-api-key").value.trim();
+              const subProtoEl = document.getElementById("sub-api-protocol-select");
+              const protocol = subProtoEl ? subProtoEl.value : (state.apiConfig.subApiProtocol || "default");
               if (!proxyUrl || !apiKey) {
                 alert("请先填写副 API 的反代地址和密钥！");
                 return;
@@ -85019,18 +86389,14 @@ ${stickerContext || "无"}
               subFetchModelsBtn.disabled = true;
               subFetchModelsBtn.textContent = "正在拉取...";
               try {
-                const res = await fetch(`${proxyUrl}/v1/models`, {
-                  headers: { Authorization: `Bearer ${apiKey}` },
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const models = (data.data || []).map((m) => m.id);
+                const models = await window.fetchApiModelsByProtocol(proxyUrl, apiKey, protocol);
                 const listEl = document.getElementById("sub-fetched-model-list");
                 listEl.innerHTML = '<option value="">点击此处选择已拉取的模型</option>';
                 models.forEach((m) => {
+                  const mId = typeof m === "string" ? m : m.id;
                   const opt = document.createElement("option");
-                  opt.value = m;
-                  opt.textContent = m;
+                  opt.value = mId;
+                  opt.textContent = mId;
                   listEl.appendChild(opt);
                 });
                 listEl.style.display = "block";
@@ -88969,6 +90335,1143 @@ ${stickerContext || "无"}
 
         modal.classList.add("visible");
       };
+
+      // ================= 群聊单线系统与记忆互通 =================
+      (function () {
+        let pendingModalMode = "main";
+        let pendingSelectedThreadId = null;
+
+        function getAppState() {
+          return window.state || {};
+        }
+
+        function getMyPeerCode() {
+          return (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+            ? window.PeerManager.getOrCreateMyPeerCode()
+            : "user";
+        }
+
+        async function saveChatToDb(chat) {
+          if (!chat) return;
+          const dbInst = window.db || (typeof db !== "undefined" ? db : null);
+          if (dbInst && dbInst.chats) {
+            await dbInst.chats.put(chat);
+          }
+        }
+
+        function refreshChatView(chatId) {
+          if (typeof window.renderChatInterfaceProxy === "function") {
+            window.renderChatInterfaceProxy(chatId);
+          } else if (typeof window.renderChatInterface === "function") {
+            window.renderChatInterface(chatId);
+          }
+        }
+
+        async function askPrompt(title, placeholder, defaultVal) {
+          if (typeof window.showCustomPrompt === "function") {
+            return await window.showCustomPrompt(title, placeholder, defaultVal);
+          }
+          return window.prompt(title, defaultVal || "");
+        }
+
+        async function askConfirm(title, message) {
+          if (typeof window.showCustomConfirm === "function") {
+            return await window.showCustomConfirm(title, message);
+          }
+          return window.confirm(message || title);
+        }
+
+        async function showAlertMsg(title, message) {
+          if (typeof window.showCustomAlert === "function") {
+            return await window.showCustomAlert(title, message);
+          }
+          if (typeof showCustomAlert === "function") {
+            return await showCustomAlert(title, message);
+          }
+          alert(message || title);
+        }
+
+        function isPeerGrp(chat) {
+          return Boolean(chat && chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+        }
+
+        function ensureSoloLineConfig(chat) {
+          if (!isPeerGrp(chat)) return null;
+          if (!chat.settings) chat.settings = {};
+          const myCode = getMyPeerCode();
+          const myNick = chat.settings.myNickname || chat.settings.myName || "我";
+          if (!chat.settings.soloLineConfig || typeof chat.settings.soloLineConfig !== "object") {
+            chat.settings.soloLineConfig = {
+              mainToSoloMode: "count",
+              mainToSoloContextCount: 200,
+              mainToSoloSummaryCount: 20,
+              soloToMainMode: "count",
+              soloToMainContextCount: 200,
+              soloToMainSummaryCount: 20,
+              activeThreadId: null,
+              threads: []
+            };
+          }
+          const cfg = chat.settings.soloLineConfig;
+          if (!Array.isArray(cfg.threads)) {
+            cfg.threads = [];
+          }
+          // 清理自动生成的空白默认单线，满足创建群聊默认只有大群、没有单线的要求
+          if (
+            cfg.threads.length === 1 &&
+            cfg.threads[0] &&
+            String(cfg.threads[0].id || "").startsWith("solo_default_") &&
+            cfg.threads[0].name === "默认单线" &&
+            (!Array.isArray(cfg.threads[0].history) || cfg.threads[0].history.length === 0)
+          ) {
+            cfg.threads = [];
+            cfg.activeThreadId = null;
+            if (chat.activeLineMode === "solo" && !chat.viewingPeerSoloThread) {
+              chat.activeLineMode = "main";
+            }
+          }
+          cfg.threads.forEach((t) => {
+            if (!t) return;
+            if (!t.ownerPeerCode) t.ownerPeerCode = myCode;
+            if (!t.ownerName) t.ownerName = myNick;
+            if (!Array.isArray(t.playerPeerCodes) || t.playerPeerCodes.length === 0) {
+              t.playerPeerCodes = [t.ownerPeerCode];
+            }
+            if (t.linkedMainGroup === undefined) t.linkedMainGroup = true;
+            if (t.linkedMainDepth === undefined) t.linkedMainDepth = 200;
+            if (!Array.isArray(t.history)) t.history = [];
+          });
+          if (!cfg.activeThreadId && cfg.threads.length > 0) {
+            cfg.activeThreadId = cfg.threads[0].id;
+          }
+          if (cfg.threads.length === 0 && !chat.viewingPeerSoloThread) {
+            cfg.activeThreadId = null;
+          }
+          if (chat.activeLineMode === "solo") {
+            if (!chat.viewingPeerSoloThread) {
+              const activeThread = cfg.threads.find((t) => t.id === cfg.activeThreadId);
+              if (activeThread && Array.isArray(chat.history)) {
+                activeThread.history = chat.history;
+              }
+            } else if (Array.isArray(chat.history)) {
+              chat.viewingPeerSoloThread.history = chat.history;
+              chat.viewingPeerSoloThread.publicHistory = chat.history;
+            }
+          }
+          return cfg;
+        }
+        window.ensureSoloLineConfig = ensureSoloLineConfig;
+
+        function getAllGroupSoloThreads(chat) {
+          if (!isPeerGrp(chat)) return [];
+          const cfg = ensureSoloLineConfig(chat);
+          if (!cfg) return [];
+          const myCode = getMyPeerCode();
+          const resultMap = new Map();
+
+          (cfg.threads || []).forEach((t) => {
+            if (!t || !t.id) return;
+            if (chat.activeLineMode === "solo" && !chat.viewingPeerSoloThread && cfg.activeThreadId === t.id && Array.isArray(chat.history)) {
+              t.history = chat.history;
+            }
+            resultMap.set(t.id, t);
+          });
+
+          const sharedPeerSolos = chat.settings?.sharedSoloRecords || {};
+          for (const [peerCode, peerThreads] of Object.entries(sharedPeerSolos)) {
+            if (peerCode === myCode || !Array.isArray(peerThreads)) continue;
+            peerThreads.forEach((pt) => {
+              if (!pt) return;
+              if (
+                String(pt.id || "").startsWith("solo_default") &&
+                pt.name === "默认单线" &&
+                (!Array.isArray(pt.history) || pt.history.length === 0) &&
+                (!Array.isArray(pt.publicHistory) || pt.publicHistory.length === 0)
+              ) {
+                return;
+              }
+              const normId = pt.id === "solo_default" ? ("solo_default_" + peerCode) : (pt.id || ("solo_" + peerCode));
+              const hist = Array.isArray(pt.history)
+                ? pt.history
+                : (Array.isArray(pt.publicHistory) ? pt.publicHistory : []);
+              const peerObj = {
+                ...pt,
+                id: normId,
+                ownerPeerCode: pt.ownerPeerCode || peerCode,
+                ownerName: pt.ownerName || "密友",
+                playerPeerCodes: Array.isArray(pt.playerPeerCodes) && pt.playerPeerCodes.length > 0
+                  ? pt.playerPeerCodes
+                  : [pt.ownerPeerCode || peerCode],
+                isPublic: Boolean(pt.isPublic),
+                linkedMainGroup: pt.linkedMainGroup !== false,
+                linkedMainDepth: Number(pt.linkedMainDepth) || 200,
+                history: hist,
+                isPeerThread: true
+              };
+              if (chat.activeLineMode === "solo" && chat.viewingPeerSoloThread && chat.viewingPeerSoloThread.id === normId && Array.isArray(chat.history)) {
+                peerObj.history = chat.history;
+              }
+              if (!resultMap.has(normId)) {
+                resultMap.set(normId, peerObj);
+              }
+            });
+          }
+
+          return Array.from(resultMap.values());
+        }
+        window.getAllGroupSoloThreads = getAllGroupSoloThreads;
+
+        function getActiveSoloThread(chat) {
+          if (!isPeerGrp(chat)) return null;
+          const cfg = ensureSoloLineConfig(chat);
+          if (!cfg) return null;
+          if (chat.viewingPeerSoloThread) {
+            const all = getAllGroupSoloThreads(chat);
+            const foundPeer = all.find((t) => t.id === chat.viewingPeerSoloThread.id);
+            return foundPeer || chat.viewingPeerSoloThread;
+          }
+          const all = getAllGroupSoloThreads(chat);
+          return all.find((t) => t.id === cfg.activeThreadId) || cfg.threads[0] || all[0] || null;
+        }
+        window.getActiveSoloThread = getActiveSoloThread;
+
+        function canCurrentUserAccessSoloThread(thread, chat) {
+          if (!thread) return false;
+          const myCode = getMyPeerCode();
+          if (!thread.ownerPeerCode || thread.ownerPeerCode === myCode) return true;
+          if (Array.isArray(thread.playerPeerCodes) && thread.playerPeerCodes.includes(myCode)) return true;
+          if (thread.isPublic) return true;
+          return false;
+        }
+        window.canCurrentUserAccessSoloThread = canCurrentUserAccessSoloThread;
+
+        function isUserInSoloSummary(summary, chat) {
+          if (!summary || !summary.soloThreadId) return true;
+          const myCode = getMyPeerCode();
+          if (summary.soloOwnerPeerCode && summary.soloOwnerPeerCode === myCode) return true;
+          if (Array.isArray(summary.soloPlayerPeerCodes) && summary.soloPlayerPeerCodes.includes(myCode)) return true;
+          if (isPeerGrp(chat)) {
+            const allThreads = getAllGroupSoloThreads(chat);
+            const matchedThread = allThreads.find((t) => t.id === summary.soloThreadId);
+            if (matchedThread) {
+              if (!matchedThread.ownerPeerCode || matchedThread.ownerPeerCode === myCode) return true;
+              if (Array.isArray(matchedThread.playerPeerCodes) && matchedThread.playerPeerCodes.includes(myCode)) return true;
+            }
+          }
+          return false;
+        }
+        window.isUserInSoloSummary = isUserInSoloSummary;
+
+        function getEffectiveChatDisplayTitle(chat) {
+          if (!chat) return "";
+          if (isPeerGrp(chat) && chat.activeLineMode === "solo") {
+            const activeThread = getActiveSoloThread(chat);
+            if (activeThread && activeThread.name) {
+              return activeThread.name;
+            }
+          }
+          if (!chat.isGroup && chat.settings && chat.settings.remarkName) {
+            return chat.settings.remarkName;
+          }
+          return chat.name || "";
+        }
+        window.getEffectiveChatDisplayTitle = getEffectiveChatDisplayTitle;
+
+        function getEffectiveChatSummaries(chat) {
+          if (!chat) return [];
+          if (!isPeerGrp(chat)) {
+            return (chat.history || []).filter((m) => m && m.type === "summary");
+          }
+          const summaryMap = new Map();
+          const addFromList = (list, threadMeta) => {
+            if (!Array.isArray(list)) return;
+            list.forEach((m) => {
+              if (!m || m.type !== "summary" || !m.timestamp) return;
+              const copy = { ...m };
+              if (threadMeta && !copy.soloThreadId) {
+                copy.soloThreadId = threadMeta.id;
+                copy.soloThreadName = threadMeta.name || "单线";
+                copy.soloOwnerPeerCode = threadMeta.ownerPeerCode;
+                copy.soloPlayerPeerCodes = Array.isArray(threadMeta.playerPeerCodes)
+                  ? [...threadMeta.playerPeerCodes]
+                  : [threadMeta.ownerPeerCode];
+              }
+              const existing = summaryMap.get(copy.timestamp);
+              if (!existing || (!existing.soloThreadId && copy.soloThreadId)) {
+                summaryMap.set(copy.timestamp, copy);
+              }
+            });
+          };
+
+          if (Array.isArray(chat.mainLineHistory)) {
+            addFromList(chat.mainLineHistory, null);
+          }
+          if (chat.activeLineMode !== "solo" && Array.isArray(chat.history)) {
+            addFromList(chat.history, null);
+          }
+          const allThreads = getAllGroupSoloThreads(chat);
+          allThreads.forEach((t) => {
+            addFromList(t.history, t);
+          });
+          if (chat.activeLineMode === "solo" && Array.isArray(chat.history)) {
+            const activeT = getActiveSoloThread(chat);
+            addFromList(chat.history, activeT);
+          }
+
+          return Array.from(summaryMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        }
+        window.getEffectiveChatSummaries = getEffectiveChatSummaries;
+
+        function syncSummaryUpdateAcrossGroup(chat, timestamp, updatedSummaryOrNull) {
+          if (!chat || !chat.isGroup || !timestamp) return;
+          const updateArr = (arr) => {
+            if (!Array.isArray(arr)) return arr;
+            if (updatedSummaryOrNull === null) {
+              return arr.filter((m) => !m || m.timestamp !== timestamp);
+            }
+            const next = arr.map((m) => {
+              if (m && m.timestamp === timestamp && m.type === "summary") {
+                return { ...m, header: updatedSummaryOrNull.header, content: updatedSummaryOrNull.content };
+              }
+              return m;
+            });
+            return next;
+          };
+
+          if (Array.isArray(chat.history)) {
+            chat.history = updateArr(chat.history);
+          }
+          if (Array.isArray(chat.mainLineHistory)) {
+            chat.mainLineHistory = updateArr(chat.mainLineHistory);
+          }
+          if (!isPeerGrp(chat)) return;
+          const cfg = ensureSoloLineConfig(chat);
+          if (cfg && Array.isArray(cfg.threads)) {
+            cfg.threads.forEach((t) => {
+              if (t && Array.isArray(t.history)) {
+                t.history = updateArr(t.history);
+              }
+            });
+          }
+          const sharedPeerSolos = chat.settings?.sharedSoloRecords || {};
+          for (const peerThreads of Object.values(sharedPeerSolos)) {
+            if (!Array.isArray(peerThreads)) continue;
+            peerThreads.forEach((pt) => {
+              if (pt && Array.isArray(pt.history)) {
+                pt.history = updateArr(pt.history);
+              }
+              if (pt && Array.isArray(pt.publicHistory)) {
+                pt.publicHistory = updateArr(pt.publicHistory);
+              }
+            });
+          }
+        }
+        window.syncSummaryUpdateAcrossGroup = syncSummaryUpdateAcrossGroup;
+
+        function getGroupHumanPlayersList(chat) {
+          const myCode = getMyPeerCode();
+          const myNick = chat?.settings?.myNickname || chat?.settings?.myName || "我";
+          const playersMap = new Map();
+          playersMap.set(myCode, { peerCode: myCode, name: myNick });
+
+          if (chat && Array.isArray(chat.members)) {
+            chat.members.forEach((m) => {
+              if (m && (m.isPeerMember || m.roleType === "peer") && m.peerCode) {
+                const pName = m.groupNickname || m.name || m.originalName || "密友";
+                playersMap.set(m.peerCode, { peerCode: m.peerCode, name: pName });
+              }
+            });
+          }
+          if (chat && Array.isArray(chat.settings?.peerMembers)) {
+            chat.settings.peerMembers.forEach((pm) => {
+              if (pm && pm.peerCode && !playersMap.has(pm.peerCode)) {
+                playersMap.set(pm.peerCode, { peerCode: pm.peerCode, name: pm.name || pm.nickname || "密友" });
+              }
+            });
+          }
+          return Array.from(playersMap.values());
+        }
+        window.getGroupHumanPlayersList = getGroupHumanPlayersList;
+
+        window.buildMySharedSoloPayload = function (chat) {
+          if (!isPeerGrp(chat)) return [];
+          const cfg = ensureSoloLineConfig(chat);
+          if (!cfg) return [];
+          const myCode = getMyPeerCode();
+          const myNick = chat.settings?.myNickname || chat.settings?.myName || "我";
+          return cfg.threads.map((t) => {
+            const historySource = (chat.activeLineMode === "solo" && !chat.viewingPeerSoloThread && cfg.activeThreadId === t.id)
+              ? (chat.history || [])
+              : (t.history || []);
+            return {
+              id: t.id,
+              name: t.name || "单线",
+              ownerPeerCode: t.ownerPeerCode || myCode,
+              ownerName: t.ownerName || myNick,
+              playerPeerCodes: Array.isArray(t.playerPeerCodes) && t.playerPeerCodes.length > 0
+                ? [...t.playerPeerCodes]
+                : [t.ownerPeerCode || myCode],
+              isPublic: Boolean(t.isPublic),
+              linkedMainGroup: t.linkedMainGroup !== false,
+              linkedMainDepth: Number(t.linkedMainDepth) || 200,
+              summaryText: t.summaryText || "",
+              history: historySource,
+              publicHistory: historySource
+            };
+          });
+        };
+
+        window.getSoloLinePromptBlock = function (chat) {
+          if (!isPeerGrp(chat)) return "";
+          if (chat.activeLineMode !== "solo") {
+            return "";
+          }
+          const activeThread = getActiveSoloThread(chat);
+          if (!activeThread) return "";
+          const allPlayers = getGroupHumanPlayersList(chat);
+          const myCode = getMyPeerCode();
+          const participantCodes = (activeThread && Array.isArray(activeThread.playerPeerCodes) && activeThread.playerPeerCodes.length > 0)
+            ? activeThread.playerPeerCodes
+            : [activeThread?.ownerPeerCode || myCode];
+          const presentNames = [];
+          const absentNames = [];
+          allPlayers.forEach((p) => {
+            if (participantCodes.includes(p.peerCode)) {
+              presentNames.push(`【${p.name}】`);
+            } else {
+              absentNames.push(`【${p.name}】`);
+            }
+          });
+          const presentStr = presentNames.length > 0
+            ? presentNames.join("、")
+            : `【${chat.settings?.myNickname || chat.settings?.myName || "我"}】`;
+          const absentRule = absentNames.length > 0
+            ? `不在本单线现场的真人玩家：${absentNames.join("、")}。请绝对不要替不在场的真人玩家发言或描述其在场。`
+            : "同群其他未参与本单线的真人玩家当前不在现场。";
+
+          return window.formatPromptSection(
+            "单人线独立行动模式",
+            `当前处于单人线分支「${activeThread ? activeThread.name : "单线"}」。\n` +
+            `当前在此单人线中共同行动的真人玩家为：${presentStr}。\n` +
+            `${absentRule}\n` +
+            `请围绕当前单人线内的在场玩家展开剧情描写、环境反馈与检定判定。`
+          );
+        };
+
+        window.updateSoloLineBannerUI = function (chat) {
+          const titleEl = document.getElementById("chat-header-title");
+          if (titleEl && chat && !titleEl.classList.contains("typing-status")) {
+            titleEl.textContent = getEffectiveChatDisplayTitle(chat);
+          }
+        };
+
+        window.switchGroupLineMode = async function (targetMode, targetThreadId, peerSoloObj) {
+          const appState = getAppState();
+          const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
+          if (!isPeerGrp(chat)) return;
+          const cfg = ensureSoloLineConfig(chat);
+          if (!cfg) return;
+
+          if (chat.activeLineMode === "solo") {
+            if (!chat.viewingPeerSoloThread) {
+              const curThread = cfg.threads.find((t) => t.id === cfg.activeThreadId);
+              if (curThread) {
+                curThread.history = Array.isArray(chat.history) ? [...chat.history] : [];
+              }
+            } else {
+              chat.viewingPeerSoloThread.history = Array.isArray(chat.history) ? [...chat.history] : [];
+            }
+          } else {
+            chat.mainLineHistory = Array.isArray(chat.history) ? [...chat.history] : [];
+          }
+
+          if (targetMode === "main") {
+            chat.activeLineMode = "main";
+            chat.viewingPeerSoloThread = null;
+            chat.hasUnreadMainLineInSolo = false;
+            if (Array.isArray(chat.mainLineHistory)) {
+              chat.history = [...chat.mainLineHistory];
+            }
+          } else {
+            const allThreads = getAllGroupSoloThreads(chat);
+            const targetThread = peerSoloObj || allThreads.find((t) => t.id === targetThreadId) || getActiveSoloThread(chat);
+            if (!targetThread) {
+              await showAlertMsg("提示", "当前暂无单线，请先点击右上角新建单线");
+              return false;
+            }
+            if (!canCurrentUserAccessSoloThread(targetThread, chat)) {
+              await showAlertMsg("提示", "该单线为私密单线，仅创建者或参与玩家可进入");
+              return false;
+            }
+            chat.activeLineMode = "solo";
+            const isLocalThread = cfg.threads.some((t) => t.id === targetThread.id);
+            if (!isLocalThread) {
+              chat.viewingPeerSoloThread = targetThread;
+              cfg.activeThreadId = targetThread.id;
+              const histArr = Array.isArray(targetThread.history)
+                ? targetThread.history
+                : (Array.isArray(targetThread.publicHistory) ? targetThread.publicHistory : []);
+              chat.history = [...histArr];
+            } else {
+              chat.viewingPeerSoloThread = null;
+              cfg.activeThreadId = targetThread.id;
+              const localThread = cfg.threads.find((t) => t.id === targetThread.id);
+              if (!Array.isArray(localThread.history)) localThread.history = [];
+              chat.history = [...localThread.history];
+            }
+          }
+
+          window.updateSoloLineBannerUI(chat);
+          refreshChatView(chat.id);
+
+          saveChatToDb(chat).catch(() => {});
+          if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
+          return true;
+        };
+
+        window.selectSoloModalModeTab = function (mode) {
+          pendingModalMode = mode === "solo" ? "solo" : "main";
+          const appState = getAppState();
+          const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
+          if (isPeerGrp(chat)) {
+            renderSoloLineModalContent(chat);
+          }
+        };
+        window.selectSoloModalTab = window.selectSoloModalModeTab;
+
+        window.confirmEnterSelectedLineMode = async function () {
+          const appState = getAppState();
+          const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
+          if (!isPeerGrp(chat)) return;
+          if (pendingModalMode === "main") {
+            await window.switchGroupLineMode("main");
+            window.closeSoloLineModal();
+          } else {
+            const allThreads = getAllGroupSoloThreads(chat);
+            const targetThread = allThreads.find((t) => t.id === pendingSelectedThreadId) || allThreads[0];
+            if (!targetThread) {
+              await showAlertMsg("提示", "当前暂无单线，请先点击新建按钮创建单线");
+              return;
+            }
+            if (!canCurrentUserAccessSoloThread(targetThread, chat)) {
+              await showAlertMsg("提示", "该单线为私密单线，仅创建者或参与玩家可进入");
+              return;
+            }
+            const ok = await window.switchGroupLineMode("solo", targetThread.id, targetThread.isPeerThread ? targetThread : null);
+            if (ok !== false) {
+              window.closeSoloLineModal();
+            }
+          }
+        };
+        window.confirmEnterSoloModalSelection = window.confirmEnterSelectedLineMode;
+
+        function renderSoloLineModalContent(chat) {
+          if (!isPeerGrp(chat)) return;
+          const cfg = ensureSoloLineConfig(chat);
+          if (!cfg) return;
+
+          const mainBtn = document.getElementById("solo-modal-mode-main-btn");
+          const soloBtn = document.getElementById("solo-modal-mode-solo-btn");
+          const soloContentEl = document.getElementById("solo-threads-section") || document.getElementById("solo-modal-solo-content");
+          const isSoloTab = pendingModalMode === "solo";
+
+          if (mainBtn) {
+            mainBtn.style.background = !isSoloTab ? "var(--accent-color)" : "var(--secondary-bg)";
+            mainBtn.style.color = !isSoloTab ? "var(--card-bg)" : "var(--text-primary)";
+          }
+          if (soloBtn) {
+            soloBtn.style.background = isSoloTab ? "var(--accent-color)" : "var(--secondary-bg)";
+            soloBtn.style.color = isSoloTab ? "var(--card-bg)" : "var(--text-primary)";
+          }
+          if (soloContentEl) {
+            soloContentEl.style.display = isSoloTab ? "flex" : "none";
+          }
+          if (!isSoloTab) {
+            return;
+          }
+
+          const myCode = getMyPeerCode();
+          const allThreads = getAllGroupSoloThreads(chat);
+          if (!pendingSelectedThreadId || !allThreads.some((t) => t.id === pendingSelectedThreadId)) {
+            const accessible = allThreads.find((t) => canCurrentUserAccessSoloThread(t, chat));
+            pendingSelectedThreadId = accessible ? accessible.id : (allThreads[0] ? allThreads[0].id : null);
+          }
+
+          const listEl = document.getElementById("solo-threads-list");
+          if (listEl) {
+            listEl.innerHTML = "";
+            if (allThreads.length === 0) {
+              const emptyDiv = document.createElement("div");
+              emptyDiv.style.cssText = "padding: 16px 10px; text-align: center; font-size: 12px; color: var(--text-secondary); background: var(--secondary-bg); border: 1px dashed var(--border-color); border-radius: 8px;";
+              emptyDiv.textContent = "暂无单线，请点击右上角新建";
+              listEl.appendChild(emptyDiv);
+            }
+            allThreads.forEach((t) => {
+              const isOwner = !t.ownerPeerCode || t.ownerPeerCode === myCode;
+              const canAccess = canCurrentUserAccessSoloThread(t, chat);
+              const isSelected = pendingSelectedThreadId === t.id;
+              const row = document.createElement("div");
+              row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid " + (isSelected ? "var(--accent-color)" : "var(--border-color)") + "; box-sizing: border-box;";
+              const msgCount = (chat.activeLineMode === "solo" && cfg.activeThreadId === t.id)
+                ? (chat.history ? chat.history.length : 0)
+                : (t.history ? t.history.length : 0);
+              const safeName = String(t.name || "单线")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+              const safeOwner = String(t.ownerName || "我")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+
+              const rightControlsHtml = isOwner
+                ? `
+                  <button type="button" class="moe-btn" data-solo-pub="${t.id}" style="height: 22px; padding: 0 6px; font-size: 11px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; flex-shrink: 0;">${t.isPublic ? "公开" : "私密"}</button>
+                  <button type="button" class="moe-btn" data-solo-rename="${t.id}" style="height: 22px; padding: 0 6px; font-size: 11px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; flex-shrink: 0;">改名</button>
+                  <button type="button" class="moe-btn" data-solo-clear="${t.id}" style="height: 22px; padding: 0 6px; font-size: 11px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; flex-shrink: 0;">清空</button>
+                  <button type="button" class="moe-btn" data-solo-del="${t.id}" style="height: 22px; padding: 0 6px; font-size: 11px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; flex-shrink: 0;">删除</button>
+                `
+                : `
+                  <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); flex-shrink: 0;">${t.isPublic ? "公开" : (canAccess ? "可进入" : "仅创建者")}</span>
+                `;
+
+              row.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; cursor: pointer;" data-solo-select="${t.id}">
+                  <span style="width: 8px; height: 8px; min-width: 8px; min-height: 8px; border-radius: 50%; background: ${isSelected ? "var(--accent-color)" : "var(--border-color)"}; flex-shrink: 0;"></span>
+                  <span style="font-size: 12.5px; font-weight: 600; color: ${canAccess ? "var(--text-primary)" : "var(--text-secondary)"}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">${safeName}</span>
+                  <span style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">${safeOwner}</span>
+                  ${canAccess ? `<span style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">${msgCount}条</span>` : ""}
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                  ${rightControlsHtml}
+                </div>
+              `;
+
+              row.querySelector(`[data-solo-select="${t.id}"]`).onclick = async () => {
+                if (!canAccess) {
+                  await showAlertMsg("提示", "该单线为私密单线，仅创建者或参与玩家可进入");
+                  return;
+                }
+                pendingSelectedThreadId = t.id;
+                renderSoloLineModalContent(chat);
+              };
+
+              if (isOwner) {
+                const localT = cfg.threads.find((item) => item.id === t.id) || t;
+                const pubBtn = row.querySelector(`[data-solo-pub="${t.id}"]`);
+                if (pubBtn) {
+                  pubBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    localT.isPublic = !localT.isPublic;
+                    renderSoloLineModalContent(chat);
+                    saveChatToDb(chat).catch(() => {});
+                    if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                      window.PeerManager.syncGroupSettingsToPeers(chat);
+                    }
+                  };
+                }
+                const renameBtn = row.querySelector(`[data-solo-rename="${t.id}"]`);
+                if (renameBtn) {
+                  renameBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const nextName = await askPrompt("修改单线名称", "请输入新的单线名称", localT.name || "单线");
+                    if (nextName && nextName.trim()) {
+                      localT.name = nextName.trim();
+                      window.updateSoloLineBannerUI(chat);
+                      renderSoloLineModalContent(chat);
+                      saveChatToDb(chat).catch(() => {});
+                      if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                        window.PeerManager.syncGroupSettingsToPeers(chat);
+                      }
+                    }
+                  };
+                }
+                const clearBtn = row.querySelector(`[data-solo-clear="${t.id}"]`);
+                if (clearBtn) {
+                  clearBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const ok = await askConfirm("清空单线", `确定清空单线「${localT.name}」的对话记录吗？`);
+                    if (!ok) return;
+                    localT.history = [];
+                    if (chat.activeLineMode === "solo" && !chat.viewingPeerSoloThread && cfg.activeThreadId === localT.id) {
+                      chat.history = localT.history;
+                      refreshChatView(chat.id);
+                    }
+                    renderSoloLineModalContent(chat);
+                    saveChatToDb(chat).catch(() => {});
+                    if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                      window.PeerManager.syncGroupSettingsToPeers(chat);
+                    }
+                  };
+                }
+                const delBtn = row.querySelector(`[data-solo-del="${t.id}"]`);
+                if (delBtn) {
+                  delBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const ok = await askConfirm("删除单线", `确定删除单线「${localT.name}」吗？`);
+                    if (!ok) return;
+                    cfg.threads = cfg.threads.filter((item) => item.id !== localT.id);
+                    if (cfg.activeThreadId === localT.id) {
+                      cfg.activeThreadId = cfg.threads[0] ? cfg.threads[0].id : null;
+                      if (chat.activeLineMode === "solo" && !chat.viewingPeerSoloThread) {
+                        if (cfg.threads[0]) {
+                          chat.history = cfg.threads[0].history;
+                          refreshChatView(chat.id);
+                        } else {
+                          await window.switchGroupLineMode("main");
+                        }
+                      }
+                    }
+                    if (pendingSelectedThreadId === localT.id) {
+                      pendingSelectedThreadId = cfg.threads[0] ? cfg.threads[0].id : null;
+                    }
+                    window.updateSoloLineBannerUI(chat);
+                    renderSoloLineModalContent(chat);
+                    saveChatToDb(chat).catch(() => {});
+                    if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                      window.PeerManager.syncGroupSettingsToPeers(chat);
+                    }
+                  };
+                }
+              }
+
+              listEl.appendChild(row);
+            });
+          }
+
+          const playersSection = document.getElementById("solo-thread-players-section") || document.getElementById("solo-players-select-section");
+          const playersListEl = document.getElementById("solo-thread-players-list");
+          const selectedThread = allThreads.find((t) => t.id === pendingSelectedThreadId);
+          if (playersSection && playersListEl) {
+            playersListEl.innerHTML = "";
+            if (!selectedThread) {
+              playersSection.style.display = "none";
+            } else {
+              playersSection.style.display = "flex";
+              const isSelectedOwner = !selectedThread.ownerPeerCode || selectedThread.ownerPeerCode === myCode;
+              const humanPlayers = getGroupHumanPlayersList(chat);
+              const curPlayerCodes = Array.isArray(selectedThread.playerPeerCodes) && selectedThread.playerPeerCodes.length > 0
+                ? selectedThread.playerPeerCodes
+                : [selectedThread.ownerPeerCode || myCode];
+
+              humanPlayers.forEach((hp) => {
+                const isChecked = curPlayerCodes.includes(hp.peerCode);
+                const itemLabel = document.createElement("label");
+                itemLabel.style.cssText = "display: inline-flex !important; align-items: center !important; gap: 6px !important; padding: 4px 10px !important; border-radius: 6px !important; background: var(--card-bg) !important; border: 1px solid var(--border-color) !important; font-size: 12px !important; color: var(--text-primary) !important; cursor: " + (isSelectedOwner ? "pointer" : "default") + " !important; box-sizing: border-box !important;";
+                const safePName = String(hp.name || "玩家")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;");
+                itemLabel.innerHTML = `
+                  <input type="checkbox" value="${hp.peerCode}" ${isChecked ? "checked" : ""} ${isSelectedOwner ? "" : "disabled"} style="width: 15px !important; height: 15px !important; min-width: 15px !important; min-height: 15px !important; margin: 0 !important; padding: 0 !important; flex-shrink: 0 !important; accent-color: var(--accent-color) !important; cursor: ${isSelectedOwner ? "pointer" : "default"} !important;" />
+                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px;">${safePName}</span>
+                `;
+                if (isSelectedOwner) {
+                  const chk = itemLabel.querySelector("input");
+                  chk.addEventListener("change", () => {
+                    const localT = cfg.threads.find((item) => item.id === selectedThread.id) || selectedThread;
+                    let nextCodes = Array.isArray(localT.playerPeerCodes) ? [...localT.playerPeerCodes] : [myCode];
+                    if (chk.checked) {
+                      if (!nextCodes.includes(hp.peerCode)) nextCodes.push(hp.peerCode);
+                    } else {
+                      nextCodes = nextCodes.filter((c) => c !== hp.peerCode);
+                      if (nextCodes.length === 0) {
+                        nextCodes = [localT.ownerPeerCode || myCode];
+                        chk.checked = nextCodes.includes(hp.peerCode);
+                      }
+                    }
+                    localT.playerPeerCodes = nextCodes;
+                    selectedThread.playerPeerCodes = nextCodes;
+                    saveChatToDb(chat).catch(() => {});
+                    if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                      window.PeerManager.syncGroupSettingsToPeers(chat);
+                    }
+                  });
+                }
+                playersListEl.appendChild(itemLabel);
+              });
+            }
+          }
+        }
+        window.renderSoloLineModalContent = renderSoloLineModalContent;
+
+        window.openSoloLineModal = function () {
+          const appState = getAppState();
+          const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
+          if (!isPeerGrp(chat)) return;
+          const cfg = ensureSoloLineConfig(chat);
+          pendingModalMode = "solo";
+          pendingSelectedThreadId = cfg ? cfg.activeThreadId : null;
+          renderSoloLineModalContent(chat);
+          const modal = document.getElementById("solo-line-modal");
+          if (modal) {
+            modal.style.display = "flex";
+            modal.classList.add("visible");
+          }
+        };
+
+        window.closeSoloLineModal = function () {
+          const modal = document.getElementById("solo-line-modal");
+          if (modal) {
+            modal.classList.remove("visible");
+            modal.style.display = "none";
+          }
+        };
+
+        window.createNewSoloThread = async function () {
+          const appState = getAppState();
+          const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
+          if (!isPeerGrp(chat)) return;
+          const cfg = ensureSoloLineConfig(chat);
+          const name = await askPrompt("新建单线", "请输入单线名称", `单线 ${cfg.threads.length + 1}`);
+          if (!name || !name.trim()) return;
+          const myCode = getMyPeerCode();
+          const myNick = chat.settings?.myNickname || chat.settings?.myName || "我";
+          const newThread = {
+            id: "solo_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            name: name.trim(),
+            ownerPeerCode: myCode,
+            ownerName: myNick,
+            playerPeerCodes: [myCode],
+            isPublic: false,
+            linkedMainGroup: true,
+            linkedMainDepth: 200,
+            history: [],
+            summaryText: ""
+          };
+          cfg.threads.push(newThread);
+          if (!cfg.activeThreadId) cfg.activeThreadId = newThread.id;
+          pendingModalMode = "solo";
+          pendingSelectedThreadId = newThread.id;
+          renderSoloLineModalContent(chat);
+          saveChatToDb(chat).catch(() => {});
+          if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
+        };
+
+        // ================= 密友群聊：隐藏或显示题外话按钮 UI =================
+        const OOC_VISIBLE_SVG = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+        const OOC_HIDDEN_SVG = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>`;
+
+        window.updateTimelineOrOocBtnUI = function (chat) {
+          const btn = document.getElementById("timeline-branch-btn");
+          if (!btn) return;
+          if (!btn.dataset.origTimelineSvg) {
+            btn.dataset.origTimelineSvg = btn.innerHTML;
+          }
+          if (isPeerGrp(chat)) {
+            const isHiding = Boolean(chat.hideOocAndStickers);
+            btn.innerHTML = isHiding ? OOC_HIDDEN_SVG : OOC_VISIBLE_SVG;
+            btn.title = isHiding ? "显示题外话" : "隐藏题外话";
+            btn.style.color = isHiding ? "var(--accent-color)" : "";
+          } else {
+            btn.innerHTML = btn.dataset.origTimelineSvg;
+            btn.title = "时间轴/存档";
+            btn.style.color = "";
+          }
+        };
+
+        // ================= 密友群聊：群精华渐入覆盖面板与左滑右滑手势 =================
+        window.renderGroupEssenceList = function (chat) {
+          const listEl = document.getElementById("group-essence-list");
+          const badgeEl = document.getElementById("group-essence-count-badge");
+          if (!listEl) return;
+          listEl.innerHTML = "";
+          if (!isPeerGrp(chat)) return;
+
+          const essenceList = Array.isArray(chat.settings?.essenceMessages)
+            ? [...chat.settings.essenceMessages].sort((a, b) => (b.addedAt || b.timestamp || 0) - (a.addedAt || a.timestamp || 0))
+            : [];
+
+          if (badgeEl) {
+            badgeEl.textContent = essenceList.length > 0 ? `共 ${essenceList.length} 条` : "";
+          }
+
+          if (essenceList.length === 0) {
+            const emptyCard = document.createElement("div");
+            emptyCard.style.cssText = "padding: 40px 20px; text-align: center; color: var(--text-secondary); font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 10px;";
+            emptyCard.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.45;">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+              <span>暂无群精华消息，在群聊中长按消息点击设为精华即可收录线索与地图</span>
+            `;
+            listEl.appendChild(emptyCard);
+            return;
+          }
+
+          essenceList.forEach((item) => {
+            if (!item) return;
+            const card = document.createElement("div");
+            card.style.cssText = "background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;";
+
+            const safeSender = String(item.senderName || "成员")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            const safeAddedBy = String(item.addedBy || "群成员")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            const msgDate = item.timestamp ? new Date(item.timestamp).toLocaleString() : "";
+            const avatarUrl = item.senderAvatar || (typeof defaultGroupMemberAvatar !== "undefined" ? defaultGroupMemberAvatar : "");
+
+            let bodyText = "";
+            if (typeof item.content === "string") {
+              bodyText = item.content;
+            } else if (Array.isArray(item.content)) {
+              bodyText = item.content.map((p) => p.text || "").join(" ");
+            } else if (item.content && typeof item.content === "object") {
+              bodyText = item.content.content || item.content.text || JSON.stringify(item.content);
+            }
+            const safeBody = String(bodyText || "")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/\n/g, "<br>");
+
+            let imgUrl = item.imageUrl || "";
+            if (!imgUrl && typeof item.rawContent === "string" && item.rawContent.startsWith("data:image")) {
+              imgUrl = item.rawContent;
+            }
+            if (!imgUrl && Array.isArray(item.rawContent) && item.rawContent[0]?.image_url?.url) {
+              imgUrl = item.rawContent[0].image_url.url;
+            }
+
+            card.innerHTML = `
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                  <img src="${avatarUrl}" style="width: 32px; height: 32px; min-width: 32px; min-height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />
+                  <div style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
+                    <span style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeSender}</span>
+                    <span style="font-size: 11px; color: var(--text-secondary);">${msgDate}</span>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="moe-btn essence-jump-btn" style="height: 24px; padding: 0 8px; font-size: 11px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; flex-shrink: 0;">定位</button>
+                  <button type="button" class="moe-btn essence-remove-btn" style="height: 24px; padding: 0 8px; font-size: 11px; background: var(--secondary-bg); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; flex-shrink: 0;">移出</button>
+                </div>
+              </div>
+              <div style="font-size: 13px; line-height: 1.55; color: var(--text-primary); word-break: break-word; padding: 4px 0;">
+                ${safeBody || (imgUrl ? "" : "图片或特殊卡片消息")}
+                ${imgUrl ? `<div style="margin-top: 6px;"><img src="${imgUrl}" class="essence-preview-img" style="max-width: 100%; max-height: 220px; border-radius: 8px; object-fit: contain; cursor: pointer; border: 1px solid var(--border-color);" /></div>` : ""}
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 6px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-secondary);">
+                <span>由 ${safeAddedBy} 设为精华</span>
+              </div>
+            `;
+
+            const previewImgEl = card.querySelector(".essence-preview-img");
+            if (previewImgEl && imgUrl) {
+              previewImgEl.onclick = (e) => {
+                e.stopPropagation();
+                const viewerModal = document.getElementById("image-viewer-modal");
+                const viewerImg = document.getElementById("image-viewer-img");
+                if (viewerModal && viewerImg) {
+                  viewerImg.src = imgUrl;
+                  viewerModal.style.display = "flex";
+                }
+              };
+            }
+
+            const jumpBtn = card.querySelector(".essence-jump-btn");
+            if (jumpBtn) {
+              jumpBtn.onclick = () => {
+                window.closeGroupEssencePanel();
+                const targetBubble = document.querySelector(`#chat-messages [data-timestamp="${item.timestamp}"]`);
+                if (targetBubble) {
+                  targetBubble.scrollIntoView({ behavior: "smooth", block: "center" });
+                } else {
+                  showAlertMsg("提示", "该消息当前不在屏幕加载范围内或位于其他分支线");
+                }
+              };
+            }
+
+            const removeBtn = card.querySelector(".essence-remove-btn");
+            if (removeBtn) {
+              removeBtn.onclick = async () => {
+                if (!Array.isArray(chat.settings?.essenceMessages)) return;
+                chat.settings.essenceMessages = chat.settings.essenceMessages.filter(
+                  (em) => em && em.timestamp !== item.timestamp
+                );
+                window.renderGroupEssenceList(chat);
+                await saveChatToDb(chat);
+                if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
+                }
+              };
+            }
+
+            listEl.appendChild(card);
+          });
+        };
+
+        window.openGroupEssencePanel = function () {
+          const appState = getAppState();
+          const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
+          if (!isPeerGrp(chat)) return;
+          const overlay = document.getElementById("group-essence-overlay");
+          if (!overlay) return;
+          window.renderGroupEssenceList(chat);
+          overlay.classList.add("visible");
+          overlay.style.visibility = "visible";
+          overlay.style.opacity = "1";
+          overlay.style.pointerEvents = "auto";
+          if (typeof window.pushMobileBackGuard === "function") {
+            window.pushMobileBackGuard("group-essence");
+          }
+        };
+
+        window.closeGroupEssencePanel = function (silent) {
+          const overlay = document.getElementById("group-essence-overlay");
+          if (!overlay) return;
+          overlay.classList.remove("visible");
+          overlay.style.opacity = "0";
+          overlay.style.pointerEvents = "none";
+          if (silent) {
+            overlay.style.visibility = "hidden";
+          } else {
+            setTimeout(() => {
+              if (!overlay.classList.contains("visible")) {
+                overlay.style.visibility = "hidden";
+              }
+            }, 240);
+          }
+        };
+
+        // 绑定聊天界面左滑打开群精华、右滑关闭群精华手势
+        (function bindChatEssenceSwipeGesture() {
+          let touchStartX = 0;
+          let touchStartY = 0;
+          let touchStartTarget = null;
+
+          document.addEventListener("touchstart", (e) => {
+            if (!e.touches || e.touches.length !== 1) return;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            touchStartTarget = e.target;
+          }, { passive: true });
+
+          document.addEventListener("touchend", (e) => {
+            if (!e.changedTouches || e.changedTouches.length !== 1) return;
+            const chatScreen = document.getElementById("chat-interface-screen");
+            if (!chatScreen || !chatScreen.classList.contains("active")) return;
+            const appState = getAppState();
+            const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
+            if (!isPeerGrp(chat)) return;
+
+            if (touchStartTarget && touchStartTarget.closest("input, textarea, select, .modal.visible, #chat-mini-map-modal")) {
+              return;
+            }
+
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            const dy = e.changedTouches[0].clientY - touchStartY;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+            const overlay = document.getElementById("group-essence-overlay");
+            const isEssenceOpen = overlay && overlay.classList.contains("visible");
+
+            if (dx < -60 && !isEssenceOpen) {
+              window.openGroupEssencePanel();
+            } else if (dx > 60 && isEssenceOpen) {
+              window.closeGroupEssencePanel();
+            }
+          }, { passive: true });
+        })();
+
+        // ================= 手机滑动返回拦截：滑动返回等于应用内返回上一层而非退出网页 =================
+        (function setupMobileBackNavigation() {
+          let isHandlingPop = false;
+
+          window.pushMobileBackGuard = function (tag) {
+            if (isHandlingPop) return;
+            try {
+              window.history.pushState({ tukeyGuard: true, tag: tag || "screen" }, "");
+            } catch (_) {}
+          };
+
+          try {
+            window.history.replaceState({ tukeyGuard: true, tag: "root" }, "");
+            window.history.pushState({ tukeyGuard: true, tag: "init" }, "");
+          } catch (_) {}
+
+          const origShowScreen = window.showScreen;
+          if (typeof origShowScreen === "function" && !origShowScreen._wrappedWithBackGuard) {
+            const wrappedShowScreen = function (screenId) {
+              const res = origShowScreen.apply(this, arguments);
+              if (!isHandlingPop && screenId && screenId !== "home-screen") {
+                window.pushMobileBackGuard(screenId);
+              }
+              return res;
+            };
+            wrappedShowScreen._wrappedWithBackGuard = true;
+            window.showScreen = wrappedShowScreen;
+            showScreen = wrappedShowScreen;
+          }
+
+          window.addEventListener("popstate", () => {
+            isHandlingPop = true;
+            try {
+              // 1. 若大图预览打开，优先关闭大图预览
+              const imgViewer = document.getElementById("image-viewer-modal");
+              if (imgViewer && imgViewer.style.display !== "none" && imgViewer.style.display !== "") {
+                imgViewer.style.display = "none";
+                window.history.pushState({ tukeyGuard: true, tag: "keep" }, "");
+                isHandlingPop = false;
+                return;
+              }
+
+              // 2. 若群精华渐入覆盖面板打开，优先退出群精华回到聊天中
+              const essenceOverlay = document.getElementById("group-essence-overlay");
+              if (essenceOverlay && essenceOverlay.classList.contains("visible")) {
+                window.closeGroupEssencePanel();
+                window.history.pushState({ tukeyGuard: true, tag: "keep" }, "");
+                isHandlingPop = false;
+                return;
+              }
+
+              // 3. 若有打开的弹窗 modal.visible，优先关闭顶层弹窗
+              const visibleModals = Array.from(document.querySelectorAll(".modal.visible"));
+              if (visibleModals.length > 0) {
+                const topModal = visibleModals[visibleModals.length - 1];
+                topModal.classList.remove("visible");
+                if (topModal.id === "solo-line-modal") {
+                  topModal.style.display = "none";
+                }
+                window.history.pushState({ tukeyGuard: true, tag: "keep" }, "");
+                isHandlingPop = false;
+                return;
+              }
+
+              // 4. 检查当前所在的 screen，触发对应返回按钮或返回上一级
+              const activeScreen = document.querySelector(".screen.active");
+              if (activeScreen && activeScreen.id !== "home-screen") {
+                if (activeScreen.id === "chat-interface-screen") {
+                  const chatBackBtn = document.getElementById("back-to-list-btn") || activeScreen.querySelector(".back-btn");
+                  if (chatBackBtn) {
+                    chatBackBtn.click();
+                  } else if (typeof window.showScreen === "function") {
+                    window.showScreen("chat-list-screen");
+                  }
+                } else {
+                  const backBtn = activeScreen.querySelector(".header .back-btn, .back-btn");
+                  if (backBtn) {
+                    backBtn.click();
+                  } else if (typeof window.showScreen === "function") {
+                    window.showScreen("home-screen");
+                  }
+                }
+              }
+
+              window.history.pushState({ tukeyGuard: true, tag: "keep" }, "");
+            } catch (_) {}
+            isHandlingPop = false;
+          });
+        })();
+      })();
 
       document.addEventListener(
         "contextmenu",
