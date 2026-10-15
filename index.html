@@ -1113,17 +1113,10 @@
           <!-- 1. 云端大脑卡片 -->
           <div class="moe-card">
             <div class="moe-card-header">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+              <span class="icon">☁️</span>
               <h3>API 连接</h3>
             </div>
             <div class="moe-card-body">
-              <div class="form-group">
-                <label>协议</label>
-                <select id="api-protocol-select" class="moe-input">
-                  <option value="default">默认</option>
-                  <option value="claude">克劳德</option>
-                </select>
-              </div>
               <div class="form-group">
                 <label>反代地址 (Proxy)</label>
                 <input
@@ -1194,133 +1187,7 @@
                   class="moe-slider"
                 />
               </div>
-              <button id="fetch-models-btn" class="moe-btn-secondary" style="margin-top: 15px;">
-                拉取模型列表
-              </button>
-            </div>
-          </div>
-
-          <!-- 副 API 卡片 -->
-          <div class="moe-card">
-            <div class="moe-card-header">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-              <h3>副 API</h3>
-            </div>
-            <div class="moe-card-body">
-              <div class="form-group">
-                <label>协议</label>
-                <select id="sub-api-protocol-select" class="moe-input">
-                  <option value="default">默认</option>
-                  <option value="claude">克劳德</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>反代地址</label>
-                <input
-                  type="text"
-                  id="sub-proxy-url"
-                  placeholder="https://api.openai.com"
-                  class="moe-input"
-                />
-              </div>
-              <div class="form-group">
-                <label>密钥</label>
-                <input
-                  type="password"
-                  id="sub-api-key"
-                  placeholder="sk-..."
-                  class="moe-input"
-                />
-              </div>
-              <div class="form-group">
-                <label>模型选择</label>
-                <input
-                  type="text"
-                  id="sub-model-select"
-                  class="moe-input"
-                  placeholder="如 gpt-4o"
-                />
-                <select
-                  id="sub-fetched-model-list"
-                  class="moe-input"
-                  style="
-                    margin-top: 5px;
-                    display: none;
-                    border: 1px dashed var(--accent-color);
-                  "
-                  onchange="
-                    document.getElementById('sub-model-select').value = this.value
-                  "
-                >
-                  <option value="">点击此处选择已拉取的模型</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label
-                  >温度:
-                  <span
-                    id="sub-temperature-value"
-                    style="color: var(--accent-color)"
-                    >0.8</span
-                  ></label
-                >
-                <input
-                  type="range"
-                  id="sub-temperature-slider"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value="0.8"
-                  class="moe-slider"
-                />
-              </div>
-              <button id="sub-fetch-models-btn" class="moe-btn-secondary">
-                拉取模型列表
-              </button>
               <div class="form-group" style="margin-top: 15px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
-                <label style="font-weight: bold; text-align: left; display: block; margin-bottom: 10px;">用途</label>
-                <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start; text-align: left; width: 100%;">
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
-                    <input type="checkbox" id="sub-api-use-summary" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
-                    <span style="font-size: 14px; color: var(--text-primary);">总结</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
-                    <input type="checkbox" id="sub-api-use-fanfic" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
-                    <span style="font-size: 14px; color: var(--text-primary);">同人</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
-                    <input type="checkbox" id="sub-api-use-module" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
-                    <span style="font-size: 14px; color: var(--text-primary);">模组</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
-                    <input type="checkbox" id="sub-api-use-optimize" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
-                    <span style="font-size: 14px; color: var(--text-primary);">文本优化</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
-                    <input type="checkbox" id="sub-api-use-draw" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
-                    <span style="font-size: 14px; color: var(--text-primary);">头像、道具生图</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
-                    <input type="checkbox" id="sub-api-use-forced-image" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
-                    <span style="font-size: 14px; color: var(--text-primary);">强制生图</span>
-                  </label>
-                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
-                    <input type="checkbox" id="sub-api-use-map" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
-                    <span style="font-size: 14px; color: var(--text-primary);">地图</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 辅助设置（认知、音乐、效果、音效） -->
-          <div class="moe-card">
-            <div class="moe-card-header">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-              <h3>辅助</h3>
-            </div>
-            <div class="moe-card-body">
-              <div class="form-group" style="padding-top: 4px;">
                 <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
                   <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">认知</span>
                   <label class="toggle-switch">
@@ -1415,6 +1282,115 @@
                     <button type="button" class="moe-btn-small" id="peer-online-import-sound-btn" onclick="document.getElementById('peer-online-sound-file').click();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">导入</button>
                     <button type="button" class="moe-btn-small" id="peer-online-clear-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.clearCustomOnlineSound)window.PeerManager.clearCustomOnlineSound();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: none; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">清除</button>
                   </div>
+                </div>
+              </div>
+              <button id="fetch-models-btn" class="moe-btn-secondary">
+                📡 拉取模型列表
+              </button>
+            </div>
+          </div>
+
+          <!-- 副 API 卡片 -->
+          <div class="moe-card">
+            <div class="moe-card-header">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              <h3>副 API</h3>
+            </div>
+            <div class="moe-card-body">
+              <div class="form-group">
+                <label>反代地址</label>
+                <input
+                  type="text"
+                  id="sub-proxy-url"
+                  placeholder="https://api.openai.com"
+                  class="moe-input"
+                />
+              </div>
+              <div class="form-group">
+                <label>密钥</label>
+                <input
+                  type="password"
+                  id="sub-api-key"
+                  placeholder="sk-..."
+                  class="moe-input"
+                />
+              </div>
+              <div class="form-group">
+                <label>模型选择</label>
+                <input
+                  type="text"
+                  id="sub-model-select"
+                  class="moe-input"
+                  placeholder="如 gpt-4o"
+                />
+                <select
+                  id="sub-fetched-model-list"
+                  class="moe-input"
+                  style="
+                    margin-top: 5px;
+                    display: none;
+                    border: 1px dashed var(--accent-color);
+                  "
+                  onchange="
+                    document.getElementById('sub-model-select').value = this.value
+                  "
+                >
+                  <option value="">点击此处选择已拉取的模型</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label
+                  >温度:
+                  <span
+                    id="sub-temperature-value"
+                    style="color: var(--accent-color)"
+                    >0.8</span
+                  ></label
+                >
+                <input
+                  type="range"
+                  id="sub-temperature-slider"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value="0.8"
+                  class="moe-slider"
+                />
+              </div>
+              <button id="sub-fetch-models-btn" class="moe-btn-secondary">
+                拉取模型列表
+              </button>
+              <div class="form-group" style="margin-top: 15px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
+                <label style="font-weight: bold; text-align: left; display: block; margin-bottom: 10px;">用途</label>
+                <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start; text-align: left; width: 100%;">
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-summary" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">总结</span>
+                  </label>
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-fanfic" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">同人</span>
+                  </label>
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-module" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">模组</span>
+                  </label>
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-optimize" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">文本优化</span>
+                  </label>
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-draw" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">头像、道具生图</span>
+                  </label>
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-forced-image" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">强制生图</span>
+                  </label>
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-map" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">地图</span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -2092,40 +2068,15 @@
             </button>
           </div>
 
-          <!-- 控制台卡片 -->
-          <div class="moe-card" id="api-console-card">
-            <div class="moe-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="4 17 10 11 4 5"></polyline>
-                  <line x1="12" y1="19" x2="20" y2="19"></line>
-                </svg>
-                <h3>终端</h3>
-              </div>
-              <div style="display: flex; gap: 6px; align-items: center;">
-                <button type="button" class="moe-btn-small" id="test-api-console-btn" onclick="if(window.testApiCallFromConsole)window.testApiCallFromConsole();" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">
-                  测试
-                </button>
-                <button type="button" class="moe-btn-small" id="clear-api-console-btn" onclick="if(window.clearApiConsoleLogs)window.clearApiConsoleLogs();" style="height: 26px; min-height: 26px; padding: 0 10px; font-size: 11px; margin: 0; width: auto; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;">
-                  清空
-                </button>
-              </div>
-            </div>
-            <div class="moe-card-body" style="padding: 10px;">
-              <div id="api-console-log-list" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-                <div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 14px 0;">暂无调用记录</div>
-              </div>
-            </div>
-          </div>
-
           <!-- 底部留白，防止被悬浮按钮遮挡 -->
           <div style="height: 80px"></div>
         </div>
 
-        <!-- 悬浮保存按钮 -->
+        <!-- ★★★ 萌系悬浮保存按钮 ★★★ -->
         <button id="save-api-settings-btn" class="moe-fab-save">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-          <span style="font-size: 12px; display: block; margin-top: -2px">保存</span>
+          💾<span style="font-size: 12px; display: block; margin-top: -2px"
+            >保存</span
+          >
         </button>
 
         <!-- 隐藏的 input -->
@@ -20400,810 +20351,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           },
         };
       };
-
-      // ================= 独立连接模式与克劳德/llmapi兼容层 =================
-      (function () {
-        if (window._claudeProtocolLayerInstalled) return;
-        window._claudeProtocolLayerInstalled = true;
-
-        const origFetch = window.fetch.bind(window);
-        window._origNativeFetch = origFetch;
-
-        function normalizeLlmapiBaseUrl(rawUrl) {
-          let u = String(rawUrl || "").replace(/[\u200B-\u200D\uFEFF"'\s]+/g, "").trim();
-          if (!u) return "";
-          if (!/^https?:\/\//i.test(u)) {
-            u = "https://" + u.replace(/^\/+/, "");
-          }
-          u = u.replace(/\/+$/, "");
-          let prev = "";
-          while (u !== prev) {
-            prev = u;
-            u = u
-              .replace(/\/v1\/chat\/completions$/i, "")
-              .replace(/\/chat\/completions$/i, "")
-              .replace(/\/v1\/messages$/i, "")
-              .replace(/\/messages$/i, "")
-              .replace(/\/v1\/models$/i, "")
-              .replace(/\/models$/i, "")
-              .replace(/\/v1$/i, "")
-              .replace(/\/+$/, "");
-          }
-          return u;
-        }
-        window.normalizeLlmapiBaseUrl = normalizeLlmapiBaseUrl;
-
-        function extractApiErrorMessage(status, text) {
-          const raw = String(text || "").trim();
-          if (!raw) return "HTTP " + status;
-          try {
-            const parsed = JSON.parse(raw);
-            const msg =
-              parsed?.error?.message ||
-              (typeof parsed?.error === "string" ? parsed.error : "") ||
-              parsed?.message ||
-              parsed?.msg ||
-              parsed?.detail ||
-              JSON.stringify(parsed);
-            const code = parsed?.error?.code || parsed?.code || "";
-            return code ? `[${code}] ${msg}` : String(msg);
-          } catch (_) {
-            if (/^<!DOCTYPE\s+html|^<html/i.test(raw)) {
-              return `请求路径返回了网页而非JSON数据，请检查反代地址是否正确 (HTTP ${status})`;
-            }
-            return raw.slice(0, 300);
-          }
-        }
-        window.extractApiErrorMessage = extractApiErrorMessage;
-
-        const LLMAPI_VERIFIED_MODELS = [
-          "claude-haiku-5-5",
-          "claude-sonnet-5-5",
-          "claude-opus-5-5",
-          "claude-opus-5",
-          "claude-fable-5-1",
-          "claude-fable-5",
-          "claude-opus-4-8",
-          "claude-opus-4-7",
-          "claude-sonnet-5",
-          "claude-sonnet-4-6",
-          "claude-haiku-4-5-20251001",
-          "gpt-6-astra",
-          "gpt-6-sol",
-          "gpt-6-luna",
-          "gpt-5.6-sol",
-          "gpt-5.6-terra",
-          "gpt-5.6-luna",
-          "gpt-5.6-codex",
-          "gpt-5.5",
-          "gpt-5.4",
-          "gpt-5.4-mini",
-          "gemini-3.1-pro-preview",
-          "gemini-3.5-flash",
-          "gemini-3.1-flash-lite",
-          "grok-4.3",
-          "grok-4.2",
-          "grok-4.1",
-          "grok-4",
-          "grok-4-fast",
-          "grok-3",
-        ];
-        window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
-
-        async function requestLlmapiWithFallback(targetUrl, options = {}) {
-          const method = options.method || "GET";
-          const headers = options.headers || {};
-          const body = options.body;
-
-          let directRes = null;
-          let directText = "";
-          try {
-            directRes = await origFetch(targetUrl, {
-              method,
-              headers,
-              body: method !== "GET" && method !== "HEAD" ? body : undefined,
-            });
-            directText = await directRes.text();
-            const isHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(directText);
-            if (!isHtml) {
-              return {
-                ok: directRes.ok,
-                status: directRes.status,
-                text: directText,
-                headers: directRes.headers,
-              };
-            }
-          } catch (_) {
-            // 浏览器端跨域拦截时，尝试后端转发接口
-          }
-
-          let parsedBody = body;
-          if (typeof body === "string") {
-            try {
-              parsedBody = JSON.parse(body);
-            } catch (_) {
-              parsedBody = body;
-            }
-          }
-
-          const proxyEndpoints = [
-            "/api/proxy",
-            "https://ais-pre-ugzk54jw372rrw774brrw3-328602855376.asia-southeast1.run.app/api/proxy",
-            "https://ais-dev-ugzk54jw372rrw774brrw3-328602855376.asia-southeast1.run.app/api/proxy",
-          ];
-
-          for (const proxyEndpoint of proxyEndpoints) {
-            try {
-              const proxyRes = await origFetch(proxyEndpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  url: targetUrl,
-                  method,
-                  headers,
-                  body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
-                }),
-              });
-              const proxyText = await proxyRes.text();
-              const isProxyHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(proxyText);
-              if (isProxyHtml) {
-                continue;
-              }
-              return {
-                ok: proxyRes.ok,
-                status: proxyRes.status,
-                text: proxyText,
-                headers: proxyRes.headers,
-              };
-            } catch (_) {}
-          }
-
-          if (directRes) {
-            return {
-              ok: directRes.ok,
-              status: directRes.status,
-              text: directText,
-              headers: directRes.headers,
-            };
-          }
-
-          throw new Error("连接失败 请检查网络连接 反代地址与密钥");
-        }
-        window.requestLlmapiWithFallback = requestLlmapiWithFallback;
-
-        const API_CONSOLE_STORAGE_KEY = "tukey_api_console_logs_v1";
-        function getApiConsoleLogs() {
-          try {
-            const raw = localStorage.getItem(API_CONSOLE_STORAGE_KEY);
-            return raw ? JSON.parse(raw) : [];
-          } catch (_) {
-            return [];
-          }
-        }
-
-        function saveApiConsoleLogs(logs) {
-          try {
-            localStorage.setItem(API_CONSOLE_STORAGE_KEY, JSON.stringify(logs.slice(0, 50)));
-          } catch (_) {}
-        }
-
-        function recordApiCallLog(data) {
-          try {
-            const logs = getApiConsoleLogs();
-            const now = new Date();
-            const timeStr = String(now.getHours()).padStart(2, "0") + ":" +
-              String(now.getMinutes()).padStart(2, "0") + ":" +
-              String(now.getSeconds()).padStart(2, "0");
-            const entry = {
-              id: "log_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-              time: timeStr,
-              source: data.source || "主API",
-              model: data.model || "默认模型",
-              status: data.status || "成功",
-              duration: data.duration || "0.1秒",
-              purpose: data.purpose || "调用",
-              detail: data.detail || "",
-              timestamp: Date.now()
-            };
-            logs.unshift(entry);
-            saveApiConsoleLogs(logs);
-            if (typeof renderApiConsoleLogs === "function") {
-              renderApiConsoleLogs();
-            }
-          } catch (_) {}
-        }
-        window.recordApiCallLog = recordApiCallLog;
-
-        function clearApiConsoleLogs() {
-          try {
-            localStorage.removeItem(API_CONSOLE_STORAGE_KEY);
-            if (typeof renderApiConsoleLogs === "function") {
-              renderApiConsoleLogs();
-            }
-          } catch (_) {}
-        }
-        window.clearApiConsoleLogs = clearApiConsoleLogs;
-
-        async function testApiCallFromConsole() {
-          const testBtn = document.getElementById("test-api-console-btn");
-          if (testBtn) {
-            testBtn.disabled = true;
-            testBtn.textContent = "测试中";
-          }
-          const domSubForced = document.getElementById("sub-api-use-forced-image");
-          const isSubActive = domSubForced ? domSubForced.checked : !!(state.apiConfig?.subApiUses?.forcedImage);
-
-          const cfg = (state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
-          let proxyUrl = "";
-          let apiKey = "";
-          let model = "";
-          let protocol = "default";
-          let sourceName = "主API";
-
-          if (isSubActive && (cfg.subProxyUrl || document.getElementById("sub-proxy-url")?.value)) {
-            sourceName = "副API";
-            proxyUrl = (document.getElementById("sub-proxy-url")?.value || cfg.subProxyUrl || "").trim();
-            apiKey = (document.getElementById("sub-api-key")?.value || cfg.subApiKey || "").trim();
-            model = (document.getElementById("sub-model-select")?.value || cfg.subModel || "gpt-4o").trim();
-            protocol = document.getElementById("sub-api-protocol-select")?.value || cfg.subApiProtocol || "default";
-          } else {
-            sourceName = "主API";
-            proxyUrl = (document.getElementById("proxy-url")?.value || cfg.proxyUrl || "").trim();
-            apiKey = (document.getElementById("api-key")?.value || cfg.apiKey || "").trim();
-            model = (document.getElementById("model-select")?.value || cfg.model || "gpt-4o").trim();
-            protocol = document.getElementById("api-protocol-select")?.value || cfg.apiProtocol || "default";
-          }
-
-          if (!proxyUrl || !apiKey) {
-            alert("请先填写反代地址和密钥后再测试");
-            if (testBtn) {
-              testBtn.disabled = false;
-              testBtn.textContent = "测试";
-            }
-            return;
-          }
-
-          const startT = Date.now();
-          try {
-            const isGemini = proxyUrl === GEMINI_API_URL || proxyUrl.includes("generativelanguage.googleapis.com");
-            const isClaude = protocol === "claude" || /claude/i.test(model);
-            let replyText = "";
-
-            if (isGemini) {
-              const gCfg = toGeminiRequestData(model, apiKey, "You are a test assistant.", [{ role: "user", content: "请回复收到" }], isGemini, 0.7);
-              const res = await origFetch(gCfg.url, gCfg.data);
-              if (!res.ok) throw new Error("HTTP " + res.status + ": " + (await res.text()));
-              const jData = await res.json();
-              replyText = jData?.candidates?.[0]?.content?.parts?.[0]?.text || "成功";
-            } else if (isClaude) {
-              let claudeUrl = proxyUrl.replace(/\/+$/, "");
-              if (!claudeUrl.endsWith("/messages")) {
-                claudeUrl = claudeUrl.endsWith("/v1") ? `${claudeUrl}/messages` : `${claudeUrl}/v1/messages`;
-              }
-              const cRes = await requestLlmapiWithFallback(claudeUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "x-api-key": apiKey,
-                  "anthropic-version": "2023-06-01",
-                },
-                body: JSON.stringify({
-                  model: model,
-                  max_tokens: 30,
-                  messages: [{ role: "user", content: "请回复收到" }],
-                }),
-              });
-              if (!cRes.ok) throw new Error("HTTP " + cRes.status + ": " + (cRes.text || ""));
-              const cJson = JSON.parse(cRes.text);
-              replyText = cJson?.content?.[0]?.text || "成功";
-            } else {
-              let oUrl = proxyUrl.replace(/\/+$/, "");
-              if (!oUrl.endsWith("/chat/completions") && !oUrl.endsWith("/completions")) {
-                oUrl = oUrl.endsWith("/v1") ? `${oUrl}/chat/completions` : `${oUrl}/v1/chat/completions`;
-              }
-              const oRes = await requestLlmapiWithFallback(oUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                  model: model,
-                  messages: [{ role: "user", content: "请回复收到" }],
-                  temperature: 0.7,
-                }),
-              });
-              if (!oRes.ok) throw new Error("HTTP " + oRes.status + ": " + (oRes.text || ""));
-              const oJson = JSON.parse(oRes.text);
-              replyText = oJson?.choices?.[0]?.message?.content || "成功";
-            }
-
-            const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
-            recordApiCallLog({
-              source: sourceName,
-              model: model,
-              status: "成功",
-              duration: dur,
-              purpose: "测试",
-              detail: String(replyText).trim().slice(0, 100) || "回复成功",
-            });
-          } catch (err) {
-            const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
-            recordApiCallLog({
-              source: sourceName,
-              model: model,
-              status: "失败",
-              duration: dur,
-              purpose: "测试",
-              detail: err && err.message ? err.message : String(err),
-            });
-          } finally {
-            if (testBtn) {
-              testBtn.disabled = false;
-              testBtn.textContent = "测试";
-            }
-          }
-        }
-        window.testApiCallFromConsole = testApiCallFromConsole;
-
-        function renderApiConsoleLogs() {
-          const container = document.getElementById("api-console-log-list");
-          if (!container) return;
-          const logs = getApiConsoleLogs();
-          if (!logs || logs.length === 0) {
-            container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 14px 0;">暂无调用记录</div>';
-            return;
-          }
-          container.innerHTML = logs.map(item => {
-            const isOk = item.status === "成功";
-            const statusColor = isOk ? "var(--accent-color)" : "var(--tukey-expense, #e53e3e)";
-            const safeDetail = String(item.detail || "")
-              .replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")
-              .replace(/"/g, "&quot;")
-              .replace(/'/g, "&#039;");
-            return `
-              <div class="api-console-log-item" style="border: 1px solid var(--border-color); background: var(--secondary-bg); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box;">
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                  <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;">
-                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${statusColor}; flex-shrink: 0;"></span>
-                    <span style="font-weight: 600; color: var(--text-primary); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.source} · ${item.model}</span>
-                  </div>
-                  <span style="font-size: 11.5px; font-weight: 600; color: ${statusColor}; flex-shrink: 0; margin-left: 8px;">${item.status}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary); width: 100%;">
-                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.time} · 耗时 ${item.duration}</span>
-                  <span style="flex-shrink: 0; margin-left: 8px;">${item.purpose}</span>
-                </div>
-                ${safeDetail ? `<div style="font-size: 11px; color: var(--text-secondary); background: var(--card-bg); padding: 5px 8px; border-radius: 5px; word-break: break-all; max-height: 46px; overflow: hidden; text-overflow: ellipsis; line-height: 1.35; border: 1px solid var(--border-color);">${safeDetail}</div>` : ''}
-              </div>
-            `;
-          }).join("");
-        }
-        window.renderApiConsoleLogs = renderApiConsoleLogs;
-
-        function normalizeMessagesForClaudeRelay(rawMessages) {
-          if (!Array.isArray(rawMessages)) return [{ role: "user", content: "你好" }];
-          const systemParts = [];
-          const turns = [];
-
-          for (const msg of rawMessages) {
-            if (!msg) continue;
-            const role = msg.role === "assistant" || msg.role === "model" ? "assistant" : (msg.role === "system" ? "system" : "user");
-            let textContent = "";
-            let hasImageParts = false;
-            const normalizedParts = [];
-
-            if (typeof msg.content === "string") {
-              textContent = msg.content.trim();
-            } else if (Array.isArray(msg.content)) {
-              for (const part of msg.content) {
-                if (!part) continue;
-                if (typeof part === "string") {
-                  if (part.trim()) {
-                    textContent += (textContent ? "\n" : "") + part.trim();
-                    normalizedParts.push({ type: "text", text: part.trim() });
-                  }
-                } else if (part.type === "text" && typeof part.text === "string") {
-                  if (part.text.trim()) {
-                    textContent += (textContent ? "\n" : "") + part.text.trim();
-                    normalizedParts.push({ type: "text", text: part.text.trim() });
-                  }
-                } else if (part.type === "image_url" && part.image_url?.url) {
-                  hasImageParts = true;
-                  normalizedParts.push({ type: "image_url", image_url: { url: part.image_url.url } });
-                }
-              }
-            }
-
-            if (role === "system") {
-              if (textContent) {
-                if (turns.length === 0) {
-                  systemParts.push(textContent);
-                } else {
-                  turns.push({ role: "user", content: textContent });
-                }
-              }
-              continue;
-            }
-
-            if (!textContent && !hasImageParts) continue;
-            const finalContent = hasImageParts ? normalizedParts : textContent;
-
-            if (turns.length > 0 && turns[turns.length - 1].role === role) {
-              const prev = turns[turns.length - 1];
-              if (typeof prev.content === "string" && typeof finalContent === "string") {
-                prev.content = prev.content + "\n\n" + finalContent;
-              } else {
-                const prevArr = Array.isArray(prev.content)
-                  ? prev.content
-                  : [{ type: "text", text: String(prev.content || "") }];
-                const nextArr = Array.isArray(finalContent)
-                  ? finalContent
-                  : [{ type: "text", text: String(finalContent || "") }];
-                prev.content = [...prevArr, ...nextArr];
-              }
-            } else {
-              turns.push({ role, content: finalContent });
-            }
-          }
-
-          if (turns.length === 0) {
-            if (systemParts.length > 0) {
-              return [{ role: "user", content: systemParts.join("\n\n") }];
-            }
-            return [{ role: "user", content: "继续" }];
-          }
-
-          if (turns[0].role !== "user") {
-            turns.unshift({ role: "user", content: "开始对话" });
-          }
-
-          if (turns[turns.length - 1].role !== "user") {
-            turns.push({ role: "user", content: "继续当前场景" });
-          }
-
-          const result = [];
-          if (systemParts.length > 0) {
-            result.push({ role: "system", content: systemParts.join("\n\n") });
-          }
-          result.push(...turns);
-          return result;
-        }
-
-        window.fetchApiModelsByProtocol = async function (url, key, protocol) {
-          const activeProto = protocol || "default";
-          // 旧模式：100% 保持原有拉取逻辑不动
-          if (activeProto === "default") {
-            const response = await origFetch(`${url}/v1/models`, {
-              headers: { Authorization: `Bearer ${key}` },
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            return data.data || [];
-          }
-
-          // 新模式（克劳德 / llmapi OpenAI 兼容模式）
-          const base = normalizeLlmapiBaseUrl(url);
-          const cleanKey = String(getRandomValue(String(key || "").trim()) || "").trim();
-          if (!base) throw new Error("请填写有效的反代地址");
-          if (!cleanKey) throw new Error("请填写有效的密钥");
-
-          const modelsUrl = `${base}/v1/models`;
-          try {
-            const res = await requestLlmapiWithFallback(modelsUrl, {
-              method: "GET",
-              headers: {
-                Authorization: `Bearer ${cleanKey}`,
-              },
-            });
-
-            if (!res.ok) {
-              throw new Error(extractApiErrorMessage(res.status, res.text));
-            }
-
-            let data;
-            try {
-              data = JSON.parse(res.text);
-            } catch (_) {
-              throw new Error(extractApiErrorMessage(res.status, res.text));
-            }
-
-            const rawList = Array.isArray(data?.data)
-              ? data.data
-              : Array.isArray(data?.models)
-                ? data.models
-                : Array.isArray(data)
-                  ? data
-                  : [];
-
-            const models = rawList
-              .map((item) => {
-                if (typeof item === "string") return { id: item };
-                if (item && typeof item.id === "string") return { id: item.id };
-                if (item && typeof item.name === "string") return { id: item.name.replace(/^models\//, "") };
-                return null;
-              })
-              .filter(Boolean);
-
-            if (models.length === 0) {
-              throw new Error("未在返回数据中找到模型列表");
-            }
-            return models;
-          } catch (err) {
-            if (/llmapi\.pro/i.test(base) && /跨域|Failed to fetch|NetworkError/i.test(String(err?.message || ""))) {
-              return LLMAPI_VERIFIED_MODELS.map((id) => ({ id }));
-            }
-            throw err;
-          }
-        };
-
-        window.fetch = async function (input, init) {
-          try {
-            const urlStr = typeof input === "string" ? input : (input && input.url ? input.url : String(input || ""));
-            const apiCfg = (window.state && window.state.apiConfig) ? window.state.apiConfig : {};
-
-            // 判断是否命中了 AI 聊天补全接口
-            const isChatCompletionCall =
-              urlStr.includes("/chat/completions") ||
-              urlStr.includes(":generateContent");
-
-            if (!isChatCompletionCall) {
-              return origFetch(input, init);
-            }
-
-            // 判断是主 API 还是副 API
-            const mainProxy = String(apiCfg.proxyUrl || "").trim();
-            const subProxy = String(apiCfg.subProxyUrl || "").trim();
-            let isSubCall = false;
-            if (subProxy && subProxy !== mainProxy && urlStr.startsWith(subProxy)) {
-              isSubCall = true;
-            }
-
-            const protocol = isSubCall
-              ? (apiCfg.subApiProtocol || "default")
-              : (apiCfg.apiProtocol || "default");
-
-            const isClaudeOrLlmapi =
-              protocol === "claude" ||
-              /llmapi/i.test(urlStr) ||
-              /llmapi/i.test(isSubCall ? subProxy : mainProxy);
-
-            if (!isClaudeOrLlmapi && protocol === "default") {
-              const fetchStartT = Date.now();
-              try {
-                const directRes = await origFetch(input, init);
-                const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
-                recordApiCallLog({
-                  source: isSubCall ? "副API" : "主API",
-                  model: modelId || "默认模型",
-                  status: directRes.ok ? "成功" : "失败",
-                  duration: durStr,
-                  purpose: "对话",
-                  detail: directRes.ok ? "回复成功" : `HTTP ${directRes.status}`,
-                });
-                return directRes;
-              } catch (directErr) {
-                if (/Failed to fetch|NetworkError/i.test(String(directErr?.message || ""))) {
-                  const fallbackRes = await requestLlmapiWithFallback(urlStr, init);
-                  const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
-                  recordApiCallLog({
-                    source: isSubCall ? "副API" : "主API",
-                    model: modelId || "默认模型",
-                    status: fallbackRes.ok ? "成功" : "失败",
-                    duration: durStr,
-                    purpose: "对话",
-                    detail: fallbackRes.ok ? "回复成功" : `HTTP ${fallbackRes.status}`,
-                  });
-                  return new Response(fallbackRes.text, {
-                    status: fallbackRes.status,
-                    headers: fallbackRes.headers,
-                  });
-                }
-                const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
-                recordApiCallLog({
-                  source: isSubCall ? "副API" : "主API",
-                  model: modelId || "默认模型",
-                  status: "失败",
-                  duration: durStr,
-                  purpose: "对话",
-                  detail: directErr?.message || "网络错误",
-                });
-                throw directErr;
-              }
-            }
-
-            const domProxy = document.getElementById(isSubCall ? "sub-proxy-url" : "proxy-url")?.value?.trim() || "";
-            const domKey = document.getElementById(isSubCall ? "sub-api-key" : "api-key")?.value?.trim() || "";
-            const domModel = document.getElementById(isSubCall ? "sub-model-select" : "model-select")?.value?.trim() || "";
-
-            const rawBase = (isSubCall ? subProxy : mainProxy) || domProxy || urlStr;
-            const base = normalizeLlmapiBaseUrl(rawBase);
-            if (!base) {
-              throw new Error("请在设置中填写有效的反代地址");
-            }
-
-            const targetUrl = `${base}/v1/chat/completions`;
-
-            let authHeader = "";
-            if (init && init.headers) {
-              if (typeof init.headers.get === "function") {
-                authHeader = init.headers.get("Authorization") || init.headers.get("authorization") || "";
-              } else {
-                authHeader = init.headers.Authorization || init.headers.authorization || "";
-              }
-            }
-            let cleanKey = authHeader.replace(/^Bearer\s+/i, "").trim();
-            if (!cleanKey) {
-              const cfgKey = isSubCall ? apiCfg.subApiKey : apiCfg.apiKey;
-              cleanKey = String(getRandomValue(String(cfgKey || domKey || "").trim()) || "").trim();
-            }
-
-            let parsedBody = {};
-            if (init && typeof init.body === "string") {
-              try {
-                parsedBody = JSON.parse(init.body);
-              } catch (_) {}
-            }
-
-            const modelId = String(
-              parsedBody.model ||
-              (isSubCall ? apiCfg.subModel : apiCfg.model) ||
-              domModel ||
-              "claude-opus-4-7"
-            ).trim();
-
-            let rawMessages = parsedBody.messages;
-            // 如果原请求因某原因构造了 Gemini contents 格式，则转回 OpenAI messages
-            if (!Array.isArray(rawMessages) && Array.isArray(parsedBody.contents)) {
-              rawMessages = [];
-              if (parsedBody.systemInstruction?.parts?.[0]?.text) {
-                rawMessages.push({ role: "system", content: parsedBody.systemInstruction.parts[0].text });
-              }
-              for (const c of parsedBody.contents) {
-                const text = Array.isArray(c.parts) ? c.parts.map(p => p.text || "").join("\n") : "";
-                rawMessages.push({
-                  role: c.role === "model" ? "assistant" : "user",
-                  content: text
-                });
-              }
-            }
-
-            const normalizedMessages = normalizeMessagesForClaudeRelay(rawMessages);
-
-            const openAiPayload = {
-              model: modelId,
-              messages: normalizedMessages,
-              temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
-              stream: false,
-            };
-
-            const fetchStartT = Date.now();
-            const res = await requestLlmapiWithFallback(targetUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${cleanKey}`,
-              },
-              body: JSON.stringify(openAiPayload),
-            });
-
-            if (!res.ok) {
-              const errMsg = extractApiErrorMessage(res.status, res.text);
-              const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
-              recordApiCallLog({
-                source: isSubCall ? "副API" : "主API",
-                model: modelId,
-                status: "失败",
-                duration: durStr,
-                purpose: "对话",
-                detail: errMsg || `HTTP ${res.status}`,
-              });
-              const errPayload = JSON.stringify({
-                error: {
-                  message: errMsg,
-                  code: res.status,
-                },
-                message: errMsg,
-              });
-              // 主动提示详细服务端错误，避免静默失败
-              setTimeout(() => {
-                console.error("API请求失败:", errMsg);
-              }, 0);
-              return new Response(errPayload, {
-                status: res.status,
-                headers: { "Content-Type": "application/json" },
-              });
-            }
-
-            let data;
-            try {
-              data = JSON.parse(res.text);
-            } catch (_) {
-              const errMsg = extractApiErrorMessage(res.status, res.text);
-              return new Response(
-                JSON.stringify({ error: { message: errMsg }, message: errMsg }),
-                { status: 502, headers: { "Content-Type": "application/json" } }
-              );
-            }
-
-            // 兼容不同中转站返回结构，确保 choices[0].message.content 一定为字符串
-            if (!Array.isArray(data.choices) && Array.isArray(data.content)) {
-              let textOut = "";
-              let thinkingOut = "";
-              for (const block of data.content) {
-                if (block?.type === "thinking" && block.thinking) {
-                  thinkingOut += block.thinking;
-                } else if (block?.type === "text" && typeof block.text === "string") {
-                  textOut += block.text;
-                }
-              }
-              data = {
-                ...data,
-                choices: [
-                  {
-                    index: 0,
-                    message: {
-                      role: "assistant",
-                      content: textOut,
-                      reasoning_content: thinkingOut || undefined,
-                    },
-                  },
-                ],
-              };
-            } else if (Array.isArray(data.choices) && data.choices[0]?.message) {
-              const msg = data.choices[0].message;
-              if (Array.isArray(msg.content)) {
-                let textOut = "";
-                let thinkingOut = "";
-                for (const block of msg.content) {
-                  if (typeof block === "string") {
-                    textOut += block;
-                  } else if (block?.type === "thinking" && block.thinking) {
-                    thinkingOut += block.thinking;
-                  } else if (typeof block?.text === "string") {
-                    textOut += block.text;
-                  }
-                }
-                msg.content = textOut;
-                if (thinkingOut && !msg.reasoning_content) {
-                  msg.reasoning_content = thinkingOut;
-                }
-              }
-            }
-
-            const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
-            let previewReply = "";
-            if (Array.isArray(data.choices) && data.choices[0]?.message?.content) {
-              previewReply = String(data.choices[0].message.content).slice(0, 100);
-            }
-            recordApiCallLog({
-              source: isSubCall ? "副API" : "主API",
-              model: modelId,
-              status: "成功",
-              duration: durStr,
-              purpose: "对话",
-              detail: previewReply || "回复成功",
-            });
-
-            return new Response(JSON.stringify(data), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            });
-          } catch (err) {
-            recordApiCallLog({
-              source: (typeof isSubCall !== "undefined" && isSubCall) ? "副API" : "主API",
-              model: (typeof modelId !== "undefined" && modelId) ? modelId : "默认模型",
-              status: "失败",
-              duration: "0.1秒",
-              purpose: "对话",
-              detail: err?.message || String(err),
-            });
-            return Promise.reject(err);
-          }
-        };
-      })();
       document.addEventListener("DOMContentLoaded", () => {
         // ===================================================================
         // 1. 所有变量和常量定义
@@ -23338,71 +22485,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         const THOUGHT_CHAIN_FOLDED_NOTICE = "已折叠历史思考";
 
         function checkPreviousTurnThinkingValid(historySlice, isThinkingActive) {
-          if (!isThinkingActive) return true;
-          const list = Array.isArray(historySlice) && historySlice.length > 0 ? historySlice : (typeof chat !== "undefined" && chat && Array.isArray(chat.history) ? chat.history : []);
-          if (!list || list.length === 0) return true;
-
-          let lastAssistantIdx = -1;
-          for (let i = list.length - 1; i >= 0; i--) {
-            const m = list[i];
-            if (m && m.role === "assistant" && !m.isPeerUserMessage) {
-              lastAssistantIdx = i;
-              break;
-            }
-          }
-          if (lastAssistantIdx === -1) return true;
-
-          const lastTurnAssistantMessages = [];
-          for (let i = lastAssistantIdx; i >= 0; i--) {
-            const m = list[i];
-            if (!m) continue;
-            if (m.role === "user" || m.isPeerUserMessage) {
-              break;
-            }
-            if (m.role === "assistant") {
-              lastTurnAssistantMessages.push(m);
-            }
-          }
-
-          let collectedThinking = "";
-          for (const m of lastTurnAssistantMessages) {
-            if (typeof m.thinking === "string" && m.thinking.trim()) {
-              collectedThinking += (collectedThinking ? "\n" : "") + m.thinking.trim();
-            }
-            if (typeof m.reasoning_content === "string" && m.reasoning_content.trim()) {
-              collectedThinking += (collectedThinking ? "\n" : "") + m.reasoning_content.trim();
-            }
-            if (typeof m.thought === "string" && m.thought.trim()) {
-              collectedThinking += (collectedThinking ? "\n" : "") + m.thought.trim();
-            }
-            const contentStr = typeof m.content === "string" ? m.content : (typeof m.message === "string" ? m.message : "");
-            if (contentStr && /<thinking>([\s\S]*?)<\/thinking>/i.test(contentStr)) {
-              const matches = contentStr.match(/<thinking>([\s\S]*?)<\/thinking>/gi);
-              if (matches) {
-                for (const t of matches) {
-                  const inner = t.replace(/<\/?thinking>/gi, "").trim();
-                  if (inner) {
-                    collectedThinking += (collectedThinking ? "\n" : "") + inner;
-                  }
-                }
-              }
-            }
-            if (contentStr && (contentStr.trim().startsWith("{") || contentStr.trim().startsWith("```json"))) {
-              try {
-                const clean = contentStr.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-                const parsed = JSON.parse(clean);
-                if (parsed && typeof parsed.thinking === "string" && parsed.thinking.trim()) {
-                  collectedThinking += (collectedThinking ? "\n" : "") + parsed.thinking.trim();
-                }
-              } catch (_) {}
-            }
-          }
-
-          const rawThinking = collectedThinking.trim();
-          if (!rawThinking) {
-            return false;
-          }
-
+          if (!isThinkingActive || !Array.isArray(historySlice)) return true;
+          const lastAssistant = [...historySlice].reverse().find((m) => m && m.role === "assistant");
+          if (!lastAssistant) return true;
+          const thinkingRaw = typeof lastAssistant.thinking === "string" ? lastAssistant.thinking.trim() : "";
+          if (!thinkingRaw) return false;
           const copyKeywords = [
             "已折叠历史思考",
             "在此处渲染了完整思维链",
@@ -23413,17 +22500,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             "本段折叠提示",
             "系统记录：此处为上一轮"
           ];
-
-          let stripped = rawThinking;
-          for (const kw of copyKeywords) {
-            stripped = stripped.split(kw).join("");
-          }
-          stripped = stripped.replace(/[^\w\u4e00-\u9fa5]/g, "").trim();
-
-          if (stripped.length === 0) {
+          if (copyKeywords.some((kw) => thinkingRaw.includes(kw))) {
             return false;
           }
-
+          if (thinkingRaw.length < 10) {
+            return false;
+          }
           return true;
         }
 
@@ -28903,15 +27985,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function getEffectiveApiConfig(purpose) {
           const cfg = (state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
           const uses = cfg.subApiUses || {};
-          // 仅当传入了 purpose、且在副 API 用途列表中勾选了该项时，切实切换并调用副 API
-          if (purpose && uses[purpose]) {
-            const effectiveSubKey = (cfg.subApiKey && cfg.subApiKey.trim()) || (cfg.apiKey && cfg.apiKey.trim()) || "";
+          // 仅当传入了 purpose、且在用途中勾选了该项、且副 API 填写了有效 Key 时，才切换副 API
+          if (purpose && uses[purpose] && cfg.subApiKey && cfg.subApiKey.trim() !== '') {
             return {
-              proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || cfg.proxyUrl || "https://api.openai.com",
-              apiKey: (cfg.subApiKey && cfg.subApiKey.trim()) ? cfg.subApiKey.trim() : effectiveSubKey,
-              model: (cfg.subModel && cfg.subModel.trim()) || cfg.model || "gpt-4",
+              proxyUrl: cfg.subProxyUrl || cfg.proxyUrl || "https://api.openai.com",
+              apiKey: cfg.subApiKey.trim(),
+              model: cfg.subModel || cfg.model || "gpt-4",
               temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (parseFloat(cfg.temperature) || 0.8),
-              apiProtocol: cfg.subApiProtocol || "default",
               isSub: true,
             };
           }
@@ -28921,7 +28001,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             apiKey: cfg.apiKey || "",
             model: cfg.model || "gpt-4",
             temperature: cfg.temperature !== undefined ? parseFloat(cfg.temperature) : 0.8,
-            apiProtocol: cfg.apiProtocol || "default",
             isSub: false,
           };
         }
@@ -30376,158 +29455,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function renderApiSettings() {
           // 1. 更新 API 相关的输入框
-          if (!state.apiConfig.protocolProfiles) {
-            state.apiConfig.protocolProfiles = {};
-          }
-          if (!state.apiConfig.subProtocolProfiles) {
-            state.apiConfig.subProtocolProfiles = {};
-          }
-          const currentMainProto = state.apiConfig.apiProtocol === "claude" ? "claude" : "default";
-          state.apiConfig.apiProtocol = currentMainProto;
-          if (!state.apiConfig.protocolProfiles[currentMainProto]) {
-            state.apiConfig.protocolProfiles[currentMainProto] = {
-              proxyUrl: state.apiConfig.proxyUrl || "",
-              apiKey: state.apiConfig.apiKey || "",
-              model: state.apiConfig.model || "gpt-4",
-              temperature: state.apiConfig.temperature !== undefined ? state.apiConfig.temperature : 0.8,
-            };
-          }
-          const currentSubProto = state.apiConfig.subApiProtocol === "claude" ? "claude" : "default";
-          state.apiConfig.subApiProtocol = currentSubProto;
-          if (!state.apiConfig.subProtocolProfiles[currentSubProto]) {
-            state.apiConfig.subProtocolProfiles[currentSubProto] = {
-              proxyUrl: state.apiConfig.subProxyUrl || "",
-              apiKey: state.apiConfig.subApiKey || "",
-              model: state.apiConfig.subModel || "",
-              temperature: state.apiConfig.subTemperature !== undefined ? state.apiConfig.subTemperature : 0.8,
-            };
-          }
-
-          const apiProtocolSelect = document.getElementById("api-protocol-select");
-          if (apiProtocolSelect) {
-            apiProtocolSelect.value = currentMainProto;
-            apiProtocolSelect.onchange = async () => {
-              const prevProto = state.apiConfig.apiProtocol === "claude" ? "claude" : "default";
-              const nextProto = apiProtocolSelect.value === "claude" ? "claude" : "default";
-              if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
-
-              // 保存切换前模式的配置
-              const curProxyVal = document.getElementById("proxy-url")?.value?.trim() || "";
-              const curKeyVal = document.getElementById("api-key")?.value?.trim() || "";
-              const curModelVal = document.getElementById("model-select")?.value?.trim() || "";
-              const curTempVal = parseFloat(document.getElementById("temperature-slider")?.value) || 0.8;
-              state.apiConfig.protocolProfiles[prevProto] = {
-                proxyUrl: curProxyVal,
-                apiKey: curKeyVal,
-                model: curModelVal,
-                temperature: curTempVal,
-              };
-
-              // 读取目标模式的配置（若首次切到克劳德且当前填的是llmapi则自动带入，否则互相独立）
-              let targetProfile = state.apiConfig.protocolProfiles[nextProto];
-              if (!targetProfile) {
-                if (nextProto === "claude" && curProxyVal.includes("llmapi")) {
-                  targetProfile = {
-                    proxyUrl: curProxyVal,
-                    apiKey: curKeyVal,
-                    model: curModelVal,
-                    temperature: curTempVal,
-                  };
-                } else {
-                  targetProfile = {
-                    proxyUrl: nextProto === "claude" ? "https://llmapi.pro" : "",
-                    apiKey: "",
-                    model: nextProto === "claude" ? "claude-opus-4-7" : "gpt-4",
-                    temperature: 0.8,
-                  };
-                }
-                state.apiConfig.protocolProfiles[nextProto] = targetProfile;
-              }
-
-              state.apiConfig.apiProtocol = nextProto;
-              state.apiConfig.proxyUrl = targetProfile.proxyUrl || "";
-              state.apiConfig.apiKey = targetProfile.apiKey || "";
-              state.apiConfig.model = targetProfile.model || "";
-              state.apiConfig.temperature = targetProfile.temperature !== undefined ? targetProfile.temperature : 0.8;
-
-              const proxyEl = document.getElementById("proxy-url");
-              const keyEl = document.getElementById("api-key");
-              const modelEl = document.getElementById("model-select");
-              const tempEl = document.getElementById("temperature-slider");
-              const tempValEl = document.getElementById("temperature-value");
-              const pickerEl = document.getElementById("fetched-model-list");
-
-              if (proxyEl) proxyEl.value = state.apiConfig.proxyUrl;
-              if (keyEl) keyEl.value = state.apiConfig.apiKey;
-              if (modelEl) modelEl.value = state.apiConfig.model;
-              if (tempEl) tempEl.value = state.apiConfig.temperature;
-              if (tempValEl) tempValEl.textContent = state.apiConfig.temperature;
-              if (pickerEl) pickerEl.style.display = "none";
-
-              if (typeof renderApiPresetSelector === "function") {
-                renderApiPresetSelector();
-              }
-              if (typeof db !== "undefined" && db.apiConfig) {
-                await db.apiConfig.put(state.apiConfig);
-              }
-            };
-          }
-
-          const subApiProtocolSelect = document.getElementById("sub-api-protocol-select");
-          if (subApiProtocolSelect) {
-            subApiProtocolSelect.value = currentSubProto;
-            subApiProtocolSelect.onchange = async () => {
-              const prevSubProto = state.apiConfig.subApiProtocol === "claude" ? "claude" : "default";
-              const nextSubProto = subApiProtocolSelect.value === "claude" ? "claude" : "default";
-              if (!state.apiConfig.subProtocolProfiles) state.apiConfig.subProtocolProfiles = {};
-
-              const curSubProxy = document.getElementById("sub-proxy-url")?.value?.trim() || "";
-              const curSubKey = document.getElementById("sub-api-key")?.value?.trim() || "";
-              const curSubModel = document.getElementById("sub-model-select")?.value?.trim() || "";
-              const curSubTemp = parseFloat(document.getElementById("sub-temperature-slider")?.value) || 0.8;
-              state.apiConfig.subProtocolProfiles[prevSubProto] = {
-                proxyUrl: curSubProxy,
-                apiKey: curSubKey,
-                model: curSubModel,
-                temperature: curSubTemp,
-              };
-
-              let targetSubProfile = state.apiConfig.subProtocolProfiles[nextSubProto];
-              if (!targetSubProfile) {
-                targetSubProfile = {
-                  proxyUrl: nextSubProto === "claude" ? "https://llmapi.pro" : "",
-                  apiKey: "",
-                  model: "",
-                  temperature: 0.8,
-                };
-                state.apiConfig.subProtocolProfiles[nextSubProto] = targetSubProfile;
-              }
-
-              state.apiConfig.subApiProtocol = nextSubProto;
-              state.apiConfig.subProxyUrl = targetSubProfile.proxyUrl || "";
-              state.apiConfig.subApiKey = targetSubProfile.apiKey || "";
-              state.apiConfig.subModel = targetSubProfile.model || "";
-              state.apiConfig.subTemperature = targetSubProfile.temperature !== undefined ? targetSubProfile.temperature : 0.8;
-
-              const subProxyEl = document.getElementById("sub-proxy-url");
-              const subKeyEl = document.getElementById("sub-api-key");
-              const subModelEl = document.getElementById("sub-model-select");
-              const subTempEl = document.getElementById("sub-temperature-slider");
-              const subTempValEl = document.getElementById("sub-temperature-value");
-              const subPickerEl = document.getElementById("sub-fetched-model-list");
-
-              if (subProxyEl) subProxyEl.value = state.apiConfig.subProxyUrl;
-              if (subKeyEl) subKeyEl.value = state.apiConfig.subApiKey;
-              if (subModelEl) subModelEl.value = state.apiConfig.subModel;
-              if (subTempEl) subTempEl.value = state.apiConfig.subTemperature;
-              if (subTempValEl) subTempValEl.textContent = state.apiConfig.subTemperature;
-              if (subPickerEl) subPickerEl.style.display = "none";
-
-              if (typeof db !== "undefined" && db.apiConfig) {
-                await db.apiConfig.put(state.apiConfig);
-              }
-            };
-          }
           document.getElementById("proxy-url").value =
             state.apiConfig.proxyUrl || "";
           document.getElementById("api-key").value =
@@ -30785,26 +29712,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (subForcedImage) subForcedImage.checked = !!uses.forcedImage;
           const subMap = document.getElementById("sub-api-use-map");
           if (subMap) subMap.checked = !!uses.map;
-
-          const syncSubApiUses = async () => {
-            if (!state.apiConfig) state.apiConfig = {};
-            state.apiConfig.subApiUses = {
-              summary: subSummary ? subSummary.checked : false,
-              fanfic: subFanfic ? subFanfic.checked : false,
-              module: subModule ? subModule.checked : false,
-              optimize: subOptimize ? subOptimize.checked : false,
-              draw: subDraw ? subDraw.checked : false,
-              forcedImage: subForcedImage ? subForcedImage.checked : false,
-              map: subMap ? subMap.checked : false,
-            };
-            const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-            if (dbInstance && dbInstance.apiConfig) {
-              await dbInstance.apiConfig.put(state.apiConfig);
-            }
-          };
-          [subSummary, subFanfic, subModule, subOptimize, subDraw, subForcedImage, subMap].forEach((el) => {
-            if (el) el.onchange = syncSubApiUses;
-          });
 
           // 督促设置回显与实时持久化
           const urgingModeSelect = document.getElementById("urging-mode-select");
@@ -31125,9 +30032,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           calculateTotalImageSize();
-          if (typeof renderApiConsoleLogs === "function") {
-            renderApiConsoleLogs();
-          }
         }
 
         /**
@@ -39574,7 +38478,6 @@ ${recentHistoryText}
           }
 
           window.activeGeneratingChats = window.activeGeneratingChats || {};
-          window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
           if (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId]) {
             console.warn("当前聊天正在生成回复中，忽略重复触发");
             return;
@@ -46773,9 +45676,7 @@ ${stickerContext || "无"}
               try { finishTurnRender(); } catch (e) {}
               finishTurnRender = null;
             }
-            if (window.chatTurnRenderPromise && chat && chat.id) {
-              try { delete window.chatTurnRenderPromise[String(chat.id)]; } catch (e) {}
-            }
+            delete window.chatTurnRenderPromise[String(chat.id)];
 
             if (callHasBeenHandled && videoCallState.isGroupCall) {
               videoCallState.isAwaitingResponse = false;
@@ -46956,38 +45857,31 @@ ${stickerContext || "无"}
               try { finishTurnRender(); } catch (e) {}
               finishTurnRender = null;
             }
-            if (window.chatTurnRenderPromise && chat && chat.id) {
-              try { delete window.chatTurnRenderPromise[String(chat.id)]; } catch (e) {}
+            if (chat && chat.id) {
+              delete window.chatTurnRenderPromise[String(chat.id)];
             }
-            if (chat && Array.isArray(chat.history)) {
-              chat.history = chat.history.filter((msg) => !msg.isTemporary);
-            }
-            const errText = error && error.message ? error.message : String(error || "未知错误");
+            chat.history = chat.history.filter((msg) => !msg.isTemporary);
             if (
-              chat &&
               !chat.isGroup &&
               chat.relationship?.status === "pending_ai_approval"
             ) {
               chat.relationship.status = "blocked_by_ai";
               await showCustomAlert(
                 "申请失败",
-                `AI在处理你的好友申请时出错了，请稍后重试。\n错误信息: ${errText}`,
+                `AI在处理你的好友申请时出错了，请稍后重试。\n错误信息: ${error.message}`,
               );
-            } else if (chat) {
-              const errorContent = `[出错了: ${errText}]`;
+            } else {
+              const errorContent = `[出错了: ${error.message}]`;
               const errorMessage = {
                 role: "assistant",
                 content: errorContent,
                 timestamp: Date.now(),
               };
               if (chat.isGroup) errorMessage.senderName = "系统消息";
-              if (!Array.isArray(chat.history)) chat.history = [];
               chat.history.push(errorMessage);
             }
 
-            if (chat && chat.id) {
-              await db.chats.put(chat);
-            }
+            await db.chats.put(chat);
             if (state.chats) {
               state.chats[chat.id] = chat;
               state.chats[String(chat.id)] = chat;
@@ -56528,7 +55422,6 @@ ${stickerContext || "无"}
           const selectEl = document.getElementById("api-preset-select");
           const proxyUrlInput = document.getElementById("proxy-url");
           const apiKeyInput = document.getElementById("api-key");
-          const modelInput = document.getElementById("model-select");
           const selectedId = parseInt(selectEl.value);
 
           if (selectedId && state.apiPresets) {
@@ -56536,28 +55429,8 @@ ${stickerContext || "无"}
               (p) => p.id === selectedId,
             );
             if (selectedPreset) {
-              if (proxyUrlInput) proxyUrlInput.value = selectedPreset.proxyUrl || "";
-              if (apiKeyInput) apiKeyInput.value = selectedPreset.apiKey || "";
-              if (modelInput && selectedPreset.model) {
-                modelInput.value = selectedPreset.model;
-                state.apiConfig.model = selectedPreset.model;
-              }
-              state.apiConfig.proxyUrl = selectedPreset.proxyUrl || "";
-              state.apiConfig.apiKey = selectedPreset.apiKey || "";
-
-              const protoEl = document.getElementById("api-protocol-select");
-              const isClaude =
-                selectedPreset.apiProtocol === "claude" ||
-                /claude|llmapi/i.test(selectedPreset.name || "") ||
-                /llmapi/i.test(selectedPreset.proxyUrl || "");
-              const targetProto = isClaude ? "claude" : (selectedPreset.apiProtocol || "default");
-              if (protoEl) {
-                protoEl.value = targetProto;
-              }
-              state.apiConfig.apiProtocol = targetProto;
-              if (typeof db !== "undefined" && db.apiConfig) {
-                db.apiConfig.put(state.apiConfig);
-              }
+              proxyUrlInput.value = selectedPreset.proxyUrl;
+              apiKeyInput.value = selectedPreset.apiKey;
             }
           }
         }
@@ -56623,11 +55496,7 @@ ${stickerContext || "无"}
             "请为这个配置起个名字：",
           );
           if (name && name.trim()) {
-            const protoEl = document.getElementById("api-protocol-select");
-            const apiProtocol = protoEl ? protoEl.value : (state.apiConfig.apiProtocol || "default");
-            const modelInput = document.getElementById("model-select");
-            const model = modelInput ? modelInput.value.trim() : "";
-            const newPreset = { name: name.trim(), proxyUrl, apiKey, apiProtocol, model };
+            const newPreset = { name: name.trim(), proxyUrl, apiKey };
             const newId = await db.apiPresets.add(newPreset);
 
             if (!state.apiPresets) state.apiPresets = [];
@@ -56658,10 +55527,6 @@ ${stickerContext || "无"}
           if (preset) {
             preset.proxyUrl = proxyUrl;
             preset.apiKey = apiKey;
-            const modelInput = document.getElementById("model-select");
-            if (modelInput) preset.model = modelInput.value.trim();
-            const protoEl = document.getElementById("api-protocol-select");
-            if (protoEl) preset.apiProtocol = protoEl.value || "default";
             await db.apiPresets.put(preset);
             document
               .getElementById("preset-actions-modal")
@@ -65283,116 +64148,47 @@ ${stickerContext || "无"}
               { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON。` }
             ];
 
-            // 7. 确定调用的 API 配置：在副API中勾选强制生图时严格调用副API，否则调用主API
-            const isForcedImageSub = Boolean(
-              (document.getElementById("sub-api-use-forced-image") && document.getElementById("sub-api-use-forced-image").checked) ||
-              state.apiConfig?.subApiUses?.forcedImage ||
-              window.state?.apiConfig?.subApiUses?.forcedImage
-            );
-            const cfg = (state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
-            let apiCfg;
-            if (isForcedImageSub) {
-              const domSubProxy = document.getElementById("sub-proxy-url")?.value?.trim() || "";
-              const domSubKey = document.getElementById("sub-api-key")?.value?.trim() || "";
-              const domSubModel = document.getElementById("sub-model-select")?.value?.trim() || "";
-              const domSubTemp = document.getElementById("sub-temperature-slider")?.value;
-              const domSubProto = document.getElementById("sub-api-protocol-select")?.value;
-
-              apiCfg = {
-                proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || domSubProxy || (cfg.proxyUrl && cfg.proxyUrl.trim()) || "https://api.openai.com",
-                apiKey: (cfg.subApiKey && cfg.subApiKey.trim()) || domSubKey || (cfg.apiKey && cfg.apiKey.trim()) || "",
-                model: (cfg.subModel && cfg.subModel.trim()) || domSubModel || cfg.model || "gpt-4o",
-                temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (domSubTemp ? parseFloat(domSubTemp) : (parseFloat(cfg.temperature) || 0.8)),
-                apiProtocol: cfg.subApiProtocol || domSubProto || "default",
-                isSub: true,
-              };
-            } else {
+            let apiCfg = getEffectiveApiConfig("forcedImage");
+            if (!apiCfg || !apiCfg.apiKey) {
               apiCfg = getEffectiveApiConfig("");
             }
-            const { proxyUrl, apiKey, model, temperature, apiProtocol, isSub } = apiCfg;
+            const { proxyUrl, apiKey, model, temperature } = apiCfg;
 
             if (!apiKey) {
-              const errMsg = isSub ? "未配置副 API Key，请先在 API 设置中填写副 API 密钥。" : "未配置 API Key，无法执行守秘人生图。";
-              console.warn(errMsg);
-              throw new Error(errMsg);
+              console.warn("未配置 API Key，无法执行守秘人生图。");
+              return;
             }
 
-            console.log(`[强制生图] 正在调用 ${isSub ? "【副API】" : "【主API】"}，模型: ${model}，协议: ${apiProtocol || "default"}，反代地址: ${proxyUrl}`);
-
-            const forcedDrawStart = Date.now();
             let targetUrl = (proxyUrl || "https://api.openai.com").trim().replace(/\/+$/, "");
             const isGemini = targetUrl === GEMINI_API_URL || targetUrl.includes("generativelanguage.googleapis.com");
-            const isClaude = (apiProtocol === "claude") || /claude/i.test(model);
-            let rawContent = "";
+            let response;
 
             if (isGemini) {
               const geminiConfig = toGeminiRequestData(model, apiKey, keeperSystemPrompt, messagesForApi, isGemini, temperature);
-              const response = await fetch(geminiConfig.url, geminiConfig.data);
-              if (!response.ok) throw new Error(await response.text());
-              const data = await response.json();
-              rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            } else if (isClaude) {
-              let claudeUrl = targetUrl;
-              if (!claudeUrl.endsWith("/messages")) {
-                claudeUrl = claudeUrl.endsWith("/v1") ? `${claudeUrl}/messages` : `${claudeUrl}/v1/messages`;
-              }
-              const claudePayload = {
-                model: model,
-                max_tokens: 1024,
-                system: keeperSystemPrompt,
-                messages: [
-                  { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON。` }
-                ],
-                temperature: temperature || 0.7,
-              };
-              let claudeRes = await requestLlmapiWithFallback(claudeUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "x-api-key": apiKey,
-                  "anthropic-version": "2023-06-01",
-                },
-                body: JSON.stringify(claudePayload),
-              });
-              if (!claudeRes.ok) {
-                throw new Error(`Claude API 错误 (${claudeRes.status}): ${claudeRes.text || ""}`);
-              }
-              const claudeData = JSON.parse(claudeRes.text);
-              rawContent = claudeData?.content?.[0]?.text || "";
+              response = await fetch(geminiConfig.url, geminiConfig.data);
             } else {
-              let openaiUrl = targetUrl;
-              if (!openaiUrl.endsWith("/chat/completions") && !openaiUrl.endsWith("/completions")) {
-                openaiUrl = openaiUrl.endsWith("/v1") ? `${openaiUrl}/chat/completions` : `${openaiUrl}/v1/chat/completions`;
+              if (!targetUrl.endsWith("/chat/completions") && !targetUrl.endsWith("/completions")) {
+                targetUrl = targetUrl.endsWith("/v1") ? `${targetUrl}/chat/completions` : `${targetUrl}/v1/chat/completions`;
               }
-              const openaiPayload = {
-                model: model,
-                messages: messagesForApi,
-                temperature: temperature || 0.7,
-              };
-              let openaiRes = await requestLlmapiWithFallback(openaiUrl, {
+              response = await fetch(targetUrl, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${apiKey}`,
                 },
-                body: JSON.stringify(openaiPayload),
+                body: JSON.stringify({
+                  model: model,
+                  messages: messagesForApi,
+                  temperature: temperature || 0.7,
+                }),
               });
-              if (!openaiRes.ok) {
-                throw new Error(`API 错误 (${openaiRes.status}): ${openaiRes.text || ""}`);
-              }
-              const openaiData = JSON.parse(openaiRes.text);
-              rawContent = openaiData?.choices?.[0]?.message?.content || "";
             }
 
-            const forcedDur = ((Date.now() - forcedDrawStart) / 1000).toFixed(1) + "秒";
-            recordApiCallLog({
-              source: isSub ? "副API" : "主API",
-              model: model,
-              status: "成功",
-              duration: forcedDur,
-              purpose: "强制生图",
-              detail: rawContent ? rawContent.slice(0, 150) : "已生成生图指令",
-            });
+            if (!response.ok) throw new Error(await response.text());
+            const data = await response.json();
+            const rawContent = isGemini
+              ? data?.candidates?.[0]?.content?.parts?.[0]?.text
+              : data?.choices?.[0]?.message?.content;
 
             if (!rawContent || !rawContent.trim()) return;
 
@@ -65428,15 +64224,6 @@ ${stickerContext || "无"}
             }
           } catch (err) {
             console.error("守密人强制生图失败:", err);
-            const forcedDur = (typeof forcedDrawStart !== "undefined") ? (((Date.now() - forcedDrawStart) / 1000).toFixed(1) + "秒") : "0.1秒";
-            recordApiCallLog({
-              source: (typeof isSub !== "undefined" && isSub) ? "副API" : "主API",
-              model: (typeof model !== "undefined" && model) ? model : "未知模型",
-              status: "失败",
-              duration: forcedDur,
-              purpose: "强制生图",
-              detail: err && err.message ? err.message : String(err),
-            });
             const errorMsg = {
               role: "assistant",
               sender: chat.isGroup ? "系统消息" : chat.name,
@@ -79231,10 +78018,6 @@ ${stickerContext || "无"}
                 return; // 阻止保存
               }
 
-              const protoEl = document.getElementById("api-protocol-select");
-              if (protoEl) state.apiConfig.apiProtocol = protoEl.value || "default";
-              const subProtoEl = document.getElementById("sub-api-protocol-select");
-              if (subProtoEl) state.apiConfig.subApiProtocol = subProtoEl.value || "default";
               state.apiConfig.proxyUrl = document
                 .getElementById("proxy-url")
                 .value.trim();
@@ -79242,17 +78025,10 @@ ${stickerContext || "无"}
                 .getElementById("api-key")
                 .value.trim();
               state.apiConfig.model =
-                document.getElementById("model-select").value.trim();
+                document.getElementById("model-select").value;
               state.apiConfig.temperature = parseFloat(
                 document.getElementById("temperature-slider").value,
               );
-              if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
-              state.apiConfig.protocolProfiles[state.apiConfig.apiProtocol || "default"] = {
-                proxyUrl: state.apiConfig.proxyUrl,
-                apiKey: state.apiConfig.apiKey,
-                model: state.apiConfig.model,
-                temperature: state.apiConfig.temperature,
-              };
               const cognitionSwitch = document.getElementById("real-time-cognition-switch");
               state.apiConfig.realTimeCognitionEnabled = cognitionSwitch ? cognitionSwitch.checked : true;
               const globalMusicSwitch = document.getElementById("global-ai-music-switch");
@@ -79271,13 +78047,6 @@ ${stickerContext || "无"}
               if (subModelEl) state.apiConfig.subModel = subModelEl.value.trim();
               const subTempSlider = document.getElementById("sub-temperature-slider");
               if (subTempSlider) state.apiConfig.subTemperature = parseFloat(subTempSlider.value) || 0.8;
-              if (!state.apiConfig.subProtocolProfiles) state.apiConfig.subProtocolProfiles = {};
-              state.apiConfig.subProtocolProfiles[state.apiConfig.subApiProtocol || "default"] = {
-                proxyUrl: state.apiConfig.subProxyUrl || "",
-                apiKey: state.apiConfig.subApiKey || "",
-                model: state.apiConfig.subModel || "",
-                temperature: state.apiConfig.subTemperature || 0.8,
-              };
 
               const subSummaryEl = document.getElementById("sub-api-use-summary");
               const subFanficEl = document.getElementById("sub-api-use-fanfic");
@@ -79476,79 +78245,48 @@ ${stickerContext || "无"}
             .addEventListener("click", async () => {
               const url = document.getElementById("proxy-url").value.trim();
               const key = document.getElementById("api-key").value.trim();
-              const protoEl = document.getElementById("api-protocol-select");
-              const protocol = protoEl ? protoEl.value : (state.apiConfig.apiProtocol || "default");
               if (!url || !key) return alert("请先填写反代地址和密钥");
-              const startT = Date.now();
               try {
-                const models = await window.fetchApiModelsByProtocol(url, key, protocol);
+                let isGemini = url === GEMINI_API_URL;
+                const response = await fetch(
+                  isGemini
+                    ? `${GEMINI_API_URL}?key=${getRandomValue(key)}`
+                    : `${url}/v1/models`,
+                  isGemini
+                    ? undefined
+                    : { headers: { Authorization: `Bearer ${key}` } },
+                );
+                if (!response.ok) throw new Error("无法获取模型列表");
+                const data = await response.json();
+                let models = isGemini ? data.models : data.data;
+                if (isGemini) {
+                  models = models.map((model) => {
+                    const parts = model.name.split("/");
+                    return {
+                      id: parts.length > 1 ? parts[1] : model.name,
+                    };
+                  });
+                }
+                // 获取我们的辅助下拉框
                 const picker = document.getElementById("fetched-model-list");
                 picker.innerHTML =
-                  '<option value="">▼ 请选择模型</option>';
+                  '<option value="">▼ 请选择模型 (点击自动填入上方)</option>';
+
+                // 填充下拉框
                 models.forEach((model) => {
                   const option = document.createElement("option");
-                  const mId = typeof model === "string" ? model : model.id;
-                  option.value = mId;
-                  option.textContent = mId;
+                  option.value = model.id;
+                  option.textContent = model.id;
                   picker.appendChild(option);
                 });
+
+                // 显示下拉框
                 picker.style.display = "block";
-                if (protocol === "claude") {
-                  state.apiConfig.apiProtocol = "claude";
-                  state.apiConfig.proxyUrl = url;
-                  state.apiConfig.apiKey = key;
-                  if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
-                  state.apiConfig.protocolProfiles.claude = {
-                    ...(state.apiConfig.protocolProfiles.claude || {}),
-                    proxyUrl: url,
-                    apiKey: key,
-                    model: document.getElementById("model-select")?.value?.trim() || "",
-                    temperature: parseFloat(document.getElementById("temperature-slider")?.value) || 0.8,
-                  };
-                  if (typeof db !== "undefined" && db.apiConfig) {
-                    await db.apiConfig.put(state.apiConfig);
-                  }
-                }
-                picker.onchange = async function () {
-                  const modelInput = document.getElementById("model-select");
-                  if (modelInput) modelInput.value = this.value;
-                  if ((document.getElementById("api-protocol-select")?.value || state.apiConfig.apiProtocol) === "claude" && this.value) {
-                    state.apiConfig.model = this.value;
-                    if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
-                    state.apiConfig.protocolProfiles.claude = {
-                      ...(state.apiConfig.protocolProfiles.claude || {}),
-                      proxyUrl: document.getElementById("proxy-url")?.value?.trim() || state.apiConfig.proxyUrl || "",
-                      apiKey: document.getElementById("api-key")?.value?.trim() || state.apiConfig.apiKey || "",
-                      model: this.value,
-                      temperature: parseFloat(document.getElementById("temperature-slider")?.value) || 0.8,
-                    };
-                    if (typeof db !== "undefined" && db.apiConfig) {
-                      await db.apiConfig.put(state.apiConfig);
-                    }
-                  }
-                };
-                const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
-                recordApiCallLog({
-                  source: "主API",
-                  model: "模型列表",
-                  status: "成功",
-                  duration: dur,
-                  purpose: "拉取",
-                  detail: `拉取到 ${models.length} 个模型`,
-                });
+
                 alert(
                   `成功拉取 ${models.length} 个模型！\n请点击下方的下拉框选择，选择后会自动填入输入框。`,
                 );
               } catch (error) {
-                const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
-                recordApiCallLog({
-                  source: "主API",
-                  model: "模型列表",
-                  status: "失败",
-                  duration: dur,
-                  purpose: "拉取",
-                  detail: error.message,
-                });
                 alert(`拉取模型失败: ${error.message}`);
               }
             });
@@ -86975,47 +85713,30 @@ ${stickerContext || "无"}
             subFetchModelsBtn.addEventListener("click", async () => {
               const proxyUrl = document.getElementById("sub-proxy-url").value.trim();
               const apiKey = document.getElementById("sub-api-key").value.trim();
-              const subProtoEl = document.getElementById("sub-api-protocol-select");
-              const protocol = subProtoEl ? subProtoEl.value : (state.apiConfig.subApiProtocol || "default");
               if (!proxyUrl || !apiKey) {
                 alert("请先填写副 API 的反代地址和密钥！");
                 return;
               }
               subFetchModelsBtn.disabled = true;
               subFetchModelsBtn.textContent = "正在拉取...";
-              const startT = Date.now();
               try {
-                const models = await window.fetchApiModelsByProtocol(proxyUrl, apiKey, protocol);
+                const res = await fetch(`${proxyUrl}/v1/models`, {
+                  headers: { Authorization: `Bearer ${apiKey}` },
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const models = (data.data || []).map((m) => m.id);
                 const listEl = document.getElementById("sub-fetched-model-list");
                 listEl.innerHTML = '<option value="">点击此处选择已拉取的模型</option>';
                 models.forEach((m) => {
-                  const mId = typeof m === "string" ? m : m.id;
                   const opt = document.createElement("option");
-                  opt.value = mId;
-                  opt.textContent = mId;
+                  opt.value = m;
+                  opt.textContent = m;
                   listEl.appendChild(opt);
                 });
                 listEl.style.display = "block";
-                const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
-                recordApiCallLog({
-                  source: "副API",
-                  model: "模型列表",
-                  status: "成功",
-                  duration: dur,
-                  purpose: "拉取",
-                  detail: `拉取到 ${models.length} 个模型`,
-                });
                 alert(`成功拉取 ${models.length} 个模型！`);
               } catch (err) {
-                const dur = ((Date.now() - startT) / 1000).toFixed(1) + "秒";
-                recordApiCallLog({
-                  source: "副API",
-                  model: "模型列表",
-                  status: "失败",
-                  duration: dur,
-                  purpose: "拉取",
-                  detail: err.message,
-                });
                 alert("拉取模型失败: " + err.message);
               } finally {
                 subFetchModelsBtn.disabled = false;

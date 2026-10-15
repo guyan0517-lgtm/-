@@ -117,17 +117,7 @@ app.post('/api/merge-pdf', async (req, res) => {
 });
 
 // Forward proxy for AI requests to prevent browser CORS and network failures
-app.options('/api/proxy', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key');
-  res.sendStatus(204);
-});
-
 app.post('/api/proxy', async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key');
   try {
     const { url, method = 'POST', headers = {}, body } = req.body;
     if (!url) {
