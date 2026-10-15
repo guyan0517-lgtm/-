@@ -25691,7 +25691,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return { x: e.pageX, y: e.pageY };
         }
 
-        function ensureAllBackButtonsSvg() {
+        let hasInitializedBackButtonsSvg = false;
+        function ensureAllBackButtonsSvg(force = false) {
+          if (hasInitializedBackButtonsSvg && !force) return;
           const backSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block; pointer-events: none;"><path d="M15 18l-6-6 6-6" /></svg>`;
           document.querySelectorAll(".back-btn").forEach(btn => {
             if (!btn.querySelector("svg") && !btn.querySelector("img")) {
@@ -25703,6 +25705,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
           });
+          hasInitializedBackButtonsSvg = true;
         }
         window.ensureAllBackButtonsSvg = ensureAllBackButtonsSvg;
 
@@ -25748,6 +25751,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (screenId === "chat-interface-screen") {
             updateListenTogetherIcon(state.activeChatId);
+            const msgsContainer = document.getElementById("chat-messages");
+            if (msgsContainer) {
+              msgsContainer.scrollTop = msgsContainer.scrollHeight;
+              requestAnimationFrame(() => {
+                msgsContainer.scrollTop = msgsContainer.scrollHeight;
+              });
+              setTimeout(() => {
+                msgsContainer.scrollTop = msgsContainer.scrollHeight;
+              }, 40);
+            }
           }
 
           if (screenId === "font-settings-screen") {
@@ -25981,6 +25994,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return;
             }
 
+            const grpFragment = document.createDocumentFragment();
             filteredGroups.forEach(grp => {
               const row = document.createElement("div");
               row.className = "contact-member-row";
@@ -25997,7 +26011,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const memberCount = Array.isArray(grp.members) ? grp.members.length : 0;
 
               row.innerHTML = `
-                <img src="${avatar}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
+                <img src="${avatar}" loading="lazy" decoding="async" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
                   <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${grp.name}</span>
                   <span style="font-size: 11px; color: var(--text-secondary);">${memberCount} 位成员</span>
@@ -26008,8 +26022,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 openGroupCardModal(grp.id);
               });
 
-              listEl.appendChild(row);
+              grpFragment.appendChild(row);
             });
+            listEl.appendChild(grpFragment);
             return;
           }
 
@@ -26074,6 +26089,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (contactsCurrentSubTab === "special") {
+            const specialFragment = document.createDocumentFragment();
             filteredChars.forEach(char => {
               const row = document.createElement("div");
               row.className = "contact-member-row";
@@ -26096,7 +26112,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
 
               row.innerHTML = `
-                <img src="${avatar}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
+                <img src="${avatar}" loading="lazy" decoding="async" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
                 <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
                   <div style="display: flex; align-items: center; gap: 4px;">
                     <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
@@ -26109,11 +26125,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 openContactCardModal(char.id);
               });
 
-              listEl.appendChild(row);
+              specialFragment.appendChild(row);
             });
+            listEl.appendChild(specialFragment);
             return;
           }
 
+          const groupsFragment = document.createDocumentFragment();
           groups.forEach((group) => {
             const isDef = group.id === defaultGroupId;
             const groupMembers = filteredChars.filter(c => {
@@ -26196,6 +26214,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (groupMembers.length === 0) {
               bodyEl.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-secondary); font-size: 11.5px;">暂无成员</div>`;
             } else {
+              const membersFragment = document.createDocumentFragment();
               groupMembers.forEach((char) => {
                 const row = document.createElement("div");
                 row.className = "contact-member-row";
@@ -26216,7 +26235,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
 
                 row.innerHTML = `
-                  <img src="${avatar}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
+                  <img src="${avatar}" loading="lazy" decoding="async" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" />
                   <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; text-align: left;">
                     <div style="display: flex; align-items: center; gap: 4px;">
                       <span style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
@@ -26229,14 +26248,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   openContactCardModal(char.id);
                 });
 
-                bodyEl.appendChild(row);
+                membersFragment.appendChild(row);
               });
+              bodyEl.appendChild(membersFragment);
             }
 
             groupContainer.appendChild(headerEl);
             groupContainer.appendChild(bodyEl);
-            listEl.appendChild(groupContainer);
+            groupsFragment.appendChild(groupContainer);
           });
+          listEl.appendChild(groupsFragment);
         }
 
         window.addNewContactGroup = async function() {
@@ -31287,29 +31308,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const pinnedChats = allChats.filter((chat) => chat.isPinned);
           const unpinnedChats = allChats.filter((chat) => !chat.isPinned);
 
-          pinnedChats.sort(
-            (a, b) =>
-              (b.history?.slice(-1)[0]?.timestamp || 0) -
-              (a.history?.slice(-1)[0]?.timestamp || 0),
-          );
+          const getChatLastTimestamp = (c) => {
+            if (!c || !Array.isArray(c.history) || c.history.length === 0) return 0;
+            return c.history[c.history.length - 1]?.timestamp || 0;
+          };
 
-          unpinnedChats.sort(
-            (a, b) =>
-              (b.history?.slice(-1)[0]?.timestamp || 0) -
-              (a.history?.slice(-1)[0]?.timestamp || 0),
-          );
+          pinnedChats.sort((a, b) => getChatLastTimestamp(b) - getChatLastTimestamp(a));
+          unpinnedChats.sort((a, b) => getChatLastTimestamp(b) - getChatLastTimestamp(a));
 
-          // 3. 渲染所有置顶会话
+          // 3. 批量渲染所有会话（使用 DocumentFragment 避免逐个触发页面重排）
+          const fragment = document.createDocumentFragment();
           pinnedChats.forEach((chat) => {
-            const item = createChatListItem(chat);
-            chatListEl.appendChild(item);
+            fragment.appendChild(createChatListItem(chat));
           });
-
-          // 4. 渲染未置顶会话
           unpinnedChats.forEach((chat) => {
-            const item = createChatListItem(chat);
-            chatListEl.appendChild(item);
+            fragment.appendChild(createChatListItem(chat));
           });
+          chatListEl.appendChild(fragment);
 
           updateGlobalChatUnreadBadge();
         }
@@ -31392,8 +31407,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.isPeerGroupOocOrStickerMsg = isPeerGroupOocOrStickerMsg;
 
         function createChatListItem(chat) {
-          const lastMsgObj =
-            chat.history.filter((msg) => !msg.isHidden && isMessageVisibleToCurrentUser(msg, chat)).slice(-1)[0] || {};
+          let lastMsgObj = {};
+          if (Array.isArray(chat.history)) {
+            for (let i = chat.history.length - 1; i >= 0; i--) {
+              const msg = chat.history[i];
+              if (msg && !msg.isHidden && isMessageVisibleToCurrentUser(msg, chat)) {
+                lastMsgObj = msg;
+                break;
+              }
+            }
+          }
           let lastMsgDisplay;
 
           if (
@@ -31617,7 +31640,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           content.innerHTML = `
 			        <div class="chat-list-item" data-chat-id="${chat.id}">
-			            <img src="${avatar || defaultAvatar}" class="avatar">
+			            <img src="${avatar || defaultAvatar}" class="avatar" loading="lazy" decoding="async">
 			            <div class="info">
 			                <div class="name-line">
 			                    <span class="name">${
@@ -31942,11 +31965,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             typingIndicator.textContent = chat.isGroup ? "群成员正在回复中..." : "对方正在输入...";
           }
           messagesContainer.appendChild(typingIndicator);
-          setTimeout(
-            () =>
-              (messagesContainer.scrollTop = messagesContainer.scrollHeight),
-            0,
-          );
+          const scrollToBottomDirectly = () => {
+            if (messagesContainer) {
+              messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+          };
+          scrollToBottomDirectly();
+          requestAnimationFrame(scrollToBottomDirectly);
+          setTimeout(scrollToBottomDirectly, 20);
+          setTimeout(scrollToBottomDirectly, 100);
           renderChatPet();
         }
 
@@ -67807,14 +67834,18 @@ ${stickerContext || "无"}
           if (typeof text !== "string") {
             try { text = JSON.stringify(text); } catch (e) { return 0; }
           }
-          // 图片base64数据串不按全字符计算，统一转换为单张图片标准视觉Token估算值258
-          const base64ImgRegex = /data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g;
-          const imgMatches = text.match(base64ImgRegex);
-          if (imgMatches && imgMatches.length > 0) {
-            const textWithoutImages = text.replace(base64ImgRegex, "");
-            return textWithoutImages.length + (imgMatches.length * 258);
+          if (text.indexOf("data:image/") === -1) {
+            return text.length;
           }
-          return text.length;
+          // 图片base64数据串不按全字符计算，统一转换为单张图片标准视觉Token估算值258
+          let imgCount = 0;
+          let idx = text.indexOf("data:image/");
+          while (idx !== -1) {
+            imgCount++;
+            idx = text.indexOf("data:image/", idx + 11);
+          }
+          const textWithoutImages = text.replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g, "");
+          return textWithoutImages.length + (imgCount * 258);
         }
         window.calculateTokenCount = calculateTokenCount;
 
@@ -79077,6 +79108,9 @@ ${stickerContext || "无"}
           const chatInput = document.getElementById("chat-input");
           const sendBtn = document.getElementById("send-btn");
 
+          let isSendingChatMsg = false;
+          let lastSendTimestamp = 0;
+
           if (sendBtn) {
             sendBtn.addEventListener("mousedown", (e) => {
               if (document.activeElement === chatInput) {
@@ -79095,8 +79129,13 @@ ${stickerContext || "无"}
               }
             });
             sendBtn.addEventListener("click", async () => {
+              const now = Date.now();
+              if (isSendingChatMsg || (now - lastSendTimestamp < 350)) return;
               const content = chatInput.value.trim();
               if (!content || !state.activeChatId) return;
+              isSendingChatMsg = true;
+              lastSendTimestamp = now;
+              setTimeout(() => { isSendingChatMsg = false; }, 350);
 
               const chat = state.chats[state.activeChatId];
 
@@ -79250,11 +79289,7 @@ ${stickerContext || "无"}
                 msg.quote = currentReplyContext; // 将引用信息附加到消息对象上
               }
 
-              chat.history.push(msg);
-              await incrementMessageCount(state.activeChatId);
-              await db.chats.put(chat);
-              appendMessage(msg, chat);
-              renderChatList();
+              // 立即清空输入框与草稿，防止二次点击与延迟感
               chatInput.value = "";
               chatInput.style.height = "auto";
               if (state.activeChatId !== null && state.activeChatId !== undefined) {
@@ -79263,7 +79298,27 @@ ${stickerContext || "无"}
               }
               chatInput.focus();
 
+              // 立即入库会话并在界面渲染气泡（0延迟视觉反馈）
+              chat.history.push(msg);
+              appendMessage(msg, chat);
               cancelReplyMode();
+
+              // 异步在后台持久化，不阻塞主线程
+              Promise.resolve().then(async () => {
+                try {
+                  await incrementMessageCount(state.activeChatId);
+                  const dbInstance = typeof db !== 'undefined' ? db : (window.database || null);
+                  if (dbInstance && dbInstance.chats) {
+                    await dbInstance.chats.put(chat);
+                  }
+                } catch (dbErr) {
+                  console.error("保存消息异常:", dbErr);
+                }
+              });
+
+              if (typeof renderChatList === "function") {
+                renderChatList();
+              }
 
               if (chat.roleType === "peer") {
                 if (window.PeerManager && typeof window.PeerManager.sendDirectPeerMessage === "function") {
@@ -80553,6 +80608,8 @@ ${stickerContext || "无"}
             .getElementById("chat-settings-btn")
             .addEventListener("click", async () => {
               if (!state.activeChatId) return;
+              const modalEl = document.getElementById("chat-settings-modal");
+              if (modalEl) modalEl.classList.add("visible");
               const chat = state.chats[state.activeChatId];
               const isGroup = chat.isGroup;
               document.getElementById("offline-mode-section").style.display =
@@ -80727,7 +80784,9 @@ ${stickerContext || "无"}
                   }
                 };
 
-                updateTokenDisplay();
+                setTimeout(() => {
+                  updateTokenDisplay();
+                }, 40);
 
                 tokenDisplay.addEventListener("click", async () => {
                   const result = await getTokenDetailedBreakdown(
