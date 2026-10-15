@@ -9993,6 +9993,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             </label>
           </div>
 
+          <!-- 强制生图上下文条数 -->
+          <div class="form-group" style="margin: 0; padding-bottom: 12px; border-bottom: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <label for="keeper-context-count-input" style="font-weight: 600; font-size: 13px; color: var(--text-primary); margin: 0;">条数</label>
+            <input type="number" id="keeper-context-count-input" class="moe-input" min="0" max="100" style="width: 80px; height: 32px; text-align: center; font-size: 13px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;" value="12" />
+          </div>
+
           <!-- 生图提示词与预设 -->
           <div class="form-group" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -42248,20 +42254,40 @@ ${stickerContext || "无"}
               });
             }
 
-            if (
-              isMusicContextAllowed &&
-              state.musicState &&
-              (state.musicState.isActive || state.musicState.isPlaying)
-            ) {
+            for (let mIdx = 0; mIdx < messagesPayload.length; mIdx++) {
+              const mItem = messagesPayload[mIdx];
+              if (mItem && mItem.role === "user" && typeof mItem.content === "string") {
+                if (mItem._musicPlayingLabel) delete mItem._musicPlayingLabel;
+                if (mItem.content.startsWith("▷用户正在播放音乐：")) {
+                  const firstNl = mItem.content.indexOf("\n");
+                  mItem.content = firstNl !== -1 ? mItem.content.substring(firstNl + 1) : "";
+                }
+              }
+            }
+
+            const isMusicActive = Boolean(state.musicState && (state.musicState.isActive || state.musicState.isPlaying));
+            if (isMusicActive) {
               const currentTrack =
                 state.musicState.currentIndex > -1 && Array.isArray(state.musicState.playlist)
                   ? state.musicState.playlist[state.musicState.currentIndex]
                   : null;
-              if (currentTrack && !currentTrack.isKeepAlive && currentTrack.name) {
-                const musicTagStr = `▷用户正在播放音乐：${currentTrack.name}${currentTrack.artist ? " " + currentTrack.artist : ""}`;
-                for (let mIdx = messagesPayload.length - 1; mIdx >= 0; mIdx--) {
-                  const mItem = messagesPayload[mIdx];
-                  if (mItem && mItem.role === "user" && typeof mItem.content === "string" && !mItem.content.trim().startsWith("==================================================")) {
+              const isAudioPlaying = Boolean(
+                state.musicState.isPlaying &&
+                currentTrack &&
+                !currentTrack.isKeepAlive &&
+                currentTrack.name &&
+                (typeof audioPlayer === "undefined" || !audioPlayer || !audioPlayer.paused)
+              );
+              let musicTagStr = "▷用户正在播放音乐：无";
+              if (isAudioPlaying) {
+                musicTagStr = `▷用户正在播放音乐：${currentTrack.name}${currentTrack.artist ? " " + currentTrack.artist : ""}`;
+              }
+
+              for (let mIdx = messagesPayload.length - 1; mIdx >= 0; mIdx--) {
+                const mItem = messagesPayload[mIdx];
+                if (mItem && mItem.role === "user" && typeof mItem.content === "string") {
+                  const cTrim = mItem.content.trim();
+                  if (!cTrim.startsWith("==================================================") && !cTrim.startsWith("[系统消息]")) {
                     mItem._musicPlayingLabel = musicTagStr;
                     mItem.content = `${musicTagStr}\n${mItem.content}`;
                     break;
@@ -64007,6 +64033,19 @@ ${stickerContext || "无"}
             if (c.startsWith("==================================================")) return false;
             return true;
           };
+
+          let lastUserMsgIdx = -1;
+          for (let i = allMsgs.length - 1; i >= 0; i--) {
+            const m = allMsgs[i];
+            if (m && m.role === "user") {
+              const c = typeof m.content === "string" ? m.content.trim() : "";
+              if (!c.startsWith("==================================================") && !c.startsWith("[系统消息]")) {
+                lastUserMsgIdx = i;
+                break;
+              }
+            }
+          }
+
           allMsgs.forEach((msg, idx) => {
             const role = msg.role || "user";
             let roleTitle = "";
@@ -64036,18 +64075,25 @@ ${stickerContext || "无"}
             }
 
             if (role === "user") {
+              let musicHeaderLine = "";
               if (rawContent.startsWith("▷用户正在播放音乐：")) {
                 const firstNl = rawContent.indexOf("\n");
                 if (firstNl !== -1) {
-                  const musicHeaderLine = rawContent.substring(0, firstNl).trim();
+                  musicHeaderLine = rawContent.substring(0, firstNl).trim();
                   rawContent = rawContent.substring(firstNl + 1);
-                  roleTitle = `用户输入  ${musicHeaderLine}`;
                 } else {
-                  roleTitle = `用户输入  ${rawContent.trim()}`;
+                  musicHeaderLine = rawContent.trim();
                   rawContent = "";
                 }
               } else if (msg._musicPlayingLabel) {
-                roleTitle = `用户输入  ${msg._musicPlayingLabel}`;
+                musicHeaderLine = String(msg._musicPlayingLabel).trim();
+              }
+
+              if (idx === lastUserMsgIdx && musicHeaderLine) {
+                const cleanTag = musicHeaderLine.startsWith("▷") ? musicHeaderLine : `▷${musicHeaderLine}`;
+                roleTitle = `用户输入 ${cleanTag}`;
+              } else {
+                roleTitle = "用户输入";
               }
             }
 
@@ -64350,6 +64396,14 @@ ${stickerContext || "无"}
             forcedSwitch.checked = chat.settings.keeperForcedDraw === true;
           }
 
+          const countInput = document.getElementById("keeper-context-count-input");
+          if (countInput) {
+            const savedCount = (chat.settings.keeperMaxMemory !== undefined && chat.settings.keeperMaxMemory !== null && !isNaN(parseInt(chat.settings.keeperMaxMemory)))
+              ? parseInt(chat.settings.keeperMaxMemory)
+              : (chat.settings.maxMemory || 12);
+            countInput.value = savedCount;
+          }
+
           const promptInput = document.getElementById("keeper-prompt-input");
           if (promptInput) {
             promptInput.value = chat.settings.keeperPrompt || DEFAULT_KEEPER_PROMPT;
@@ -64482,6 +64536,12 @@ ${stickerContext || "无"}
 
           const forcedSwitch = document.getElementById("keeper-forced-draw-switch");
           chat.settings.keeperForcedDraw = forcedSwitch ? forcedSwitch.checked : false;
+
+          const countInput = document.getElementById("keeper-context-count-input");
+          if (countInput) {
+            const parsedVal = parseInt(countInput.value);
+            chat.settings.keeperMaxMemory = (!isNaN(parsedVal) && parsedVal >= 0) ? parsedVal : (chat.settings.maxMemory || 12);
+          }
 
           const promptInput = document.getElementById("keeper-prompt-input");
           chat.settings.keeperPrompt = promptInput ? promptInput.value.trim() : DEFAULT_KEEPER_PROMPT;
@@ -65186,7 +65246,9 @@ ${stickerContext || "无"}
 
           try {
             console.log("执行守秘人末尾强制生图...");
-            const maxMem = chat.settings.maxMemory || 12;
+            const maxMem = (chat.settings.keeperMaxMemory !== undefined && chat.settings.keeperMaxMemory !== null && !isNaN(parseInt(chat.settings.keeperMaxMemory)))
+              ? parseInt(chat.settings.keeperMaxMemory)
+              : (chat.settings.maxMemory || 12);
             let combinedHistory = [...(chat.history || [])];
             if (Array.isArray(currentTurnMsgs)) {
               for (const item of currentTurnMsgs) {
@@ -65202,9 +65264,9 @@ ${stickerContext || "无"}
                 }
               }
             }
-            const recentMsgs = combinedHistory
-              .filter((m) => m && !m.isHidden && !m.isTemporary && m.type !== "naiimag")
-              .slice(-maxMem);
+            const recentMsgs = maxMem > 0
+              ? combinedHistory.filter((m) => m && !m.isHidden && !m.isTemporary && m.type !== "naiimag").slice(-maxMem)
+              : [];
 
             let historyText = "";
             recentMsgs.forEach((m) => {
