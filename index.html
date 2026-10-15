@@ -7386,7 +7386,7 @@
               >
               <span class="tag"
                 >token:
-                <span id="context-token-count-display">-- Tokens</span></span
+                <span id="context-token-count-display">-- 字</span></span
               >
             </div>
           </div>
@@ -21395,17 +21395,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         // 检查音频链接是否真的可以播放
         function checkAudioAvailability(url) {
-          if (!url) return Promise.resolve(false);
+          if (!url || typeof url !== "string" || !url.trim()) return Promise.resolve(false);
           return new Promise((resolve) => {
             let settled = false;
             const timer = setTimeout(() => {
               if (!settled) {
                 settled = true;
+                resolve(false);
+              }
+            }, 3500);
+            const tester = new Audio();
+            tester.preload = "metadata";
+            tester.addEventListener("loadedmetadata", () => {
+              if (!settled) {
+                settled = true;
+                clearTimeout(timer);
                 resolve(true);
               }
-            }, 3000);
-            const tester = new Audio();
-            tester.addEventListener("loadedmetadata", () => {
+            }, { once: true });
+            tester.addEventListener("canplay", () => {
               if (!settled) {
                 settled = true;
                 clearTimeout(timer);
@@ -40908,6 +40916,10 @@ ${recentHistoryText}
               // 如果是保活音频，就当做什么都没发生，不生成 context
               if (currentTrack && currentTrack.isKeepAlive) {
                 musicContext = ""; // AI 此时什么都不知道，就像没听歌一样
+              } else if (!state.musicState.isPlaying || (typeof audioPlayer !== "undefined" && audioPlayer && audioPlayer.paused)) {
+                musicContext = `\n\n# 当前音乐情景
+                    -   **当前状态**: 音乐当前处于暂停状态。
+                    -   **正在播放**: 无`;
               } else {
                 // 获取歌词上下文 (保持原有逻辑)
                 let lyricsContext = "";
@@ -47534,6 +47546,144 @@ ${stickerContext || "无"}
           });
         }
 
+        async function renewTrackPlayableUrl(track) {
+          if (!track || track.isLocal) return null;
+
+          const songName = (track.name || "").trim();
+          const songArtist = (track.artist || "").trim();
+          const songId = track.musicId;
+          const songSource = track.musicSource || "netease";
+          const provider = track.apiProvider || "";
+
+          if (songId) {
+            try {
+              const gdApiUrl = `https://music-api.gdstudio.xyz/api.php?btwaf=20639888&types=url&source=${encodeURIComponent(songSource)}&id=${encodeURIComponent(songId)}&br=320`;
+              const gdResult = await Http_Get(gdApiUrl);
+              const gdSongUrl = (gdResult?.url || gdResult?.data?.url || "").trim();
+              if (gdSongUrl && (await checkAudioAvailability(gdSongUrl))) {
+                return {
+                  url: gdSongUrl,
+                  id: songId,
+                  source: songSource,
+                  apiProvider: "gdstudio"
+                };
+              }
+            } catch (_) {}
+
+            try {
+              const vkApiUrl = songSource === "tencent"
+                ? `https://api.vkeys.cn/v2/music/tencent?id=${encodeURIComponent(songId)}`
+                : `https://api.vkeys.cn/v2/music/netease?id=${encodeURIComponent(songId)}`;
+              const vkResult = await Http_Get(vkApiUrl);
+              const vkSongUrl = (vkResult?.data?.url || "").trim();
+              if (vkSongUrl && (await checkAudioAvailability(vkSongUrl))) {
+                return {
+                  url: vkSongUrl,
+                  id: songId,
+                  source: songSource,
+                  apiProvider: provider || "vkeys"
+                };
+              }
+            } catch (_) {}
+
+            if (songSource === "netease") {
+              try {
+                const outerUrl = `https://music.163.com/song/media/outer/url?id=${encodeURIComponent(songId)}.mp3`;
+                if (await checkAudioAvailability(outerUrl)) {
+                  return {
+                    url: outerUrl,
+                    id: songId,
+                    source: "netease",
+                    apiProvider: "netease_outer"
+                  };
+                }
+              } catch (_) {}
+            }
+          }
+
+          if (songName) {
+            console.log(`正在通过搜索重新匹配歌曲《${songName}》...`);
+            try {
+              const gdSearchList = await searchGdstudioMusic(songName);
+              if (Array.isArray(gdSearchList) && gdSearchList.length > 0) {
+                const match = gdSearchList.find(s => {
+                  if (!s || !s.name) return false;
+                  const nameMatch = s.name.trim().toLowerCase() === songName.toLowerCase();
+                  if (!nameMatch) return false;
+                  if (!songArtist) return true;
+                  return s.artist && s.artist.toLowerCase().includes(songArtist.toLowerCase());
+                }) || gdSearchList[0];
+
+                if (match && match.id) {
+                  const mSource = match.originalSource || match.source || "netease";
+                  const gdApiUrl = `https://music-api.gdstudio.xyz/api.php?btwaf=20639888&types=url&source=${encodeURIComponent(mSource)}&id=${encodeURIComponent(match.id)}&br=320`;
+                  const gdResult = await Http_Get(gdApiUrl);
+                  const gdSongUrl = (gdResult?.url || gdResult?.data?.url || "").trim();
+                  if (gdSongUrl && (await checkAudioAvailability(gdSongUrl))) {
+                    return {
+                      url: gdSongUrl,
+                      id: match.id,
+                      source: mSource,
+                      apiProvider: "gdstudio"
+                    };
+                  }
+                }
+              }
+            } catch (_) {}
+
+            try {
+              const neSearchList = await searchNeteaseMusic(songName, songArtist);
+              if (Array.isArray(neSearchList) && neSearchList.length > 0) {
+                const match = neSearchList[0];
+                if (match && match.id) {
+                  const vkApiUrl = `https://api.vkeys.cn/v2/music/netease?id=${encodeURIComponent(match.id)}`;
+                  const vkResult = await Http_Get(vkApiUrl);
+                  const vkSongUrl = (vkResult?.data?.url || "").trim();
+                  if (vkSongUrl && (await checkAudioAvailability(vkSongUrl))) {
+                    return {
+                      url: vkSongUrl,
+                      id: match.id,
+                      source: "netease",
+                      apiProvider: "vkeys"
+                    };
+                  }
+                  const outerUrl = `https://music.163.com/song/media/outer/url?id=${encodeURIComponent(match.id)}.mp3`;
+                  if (await checkAudioAvailability(outerUrl)) {
+                    return {
+                      url: outerUrl,
+                      id: match.id,
+                      source: "netease",
+                      apiProvider: "netease_outer"
+                    };
+                  }
+                }
+              }
+            } catch (_) {}
+
+            try {
+              const qqSearchList = await searchTencentMusic(songName);
+              if (Array.isArray(qqSearchList) && qqSearchList.length > 0) {
+                const match = qqSearchList[0];
+                if (match && match.id) {
+                  const vkApiUrl = `https://api.vkeys.cn/v2/music/tencent?id=${encodeURIComponent(match.id)}`;
+                  const vkResult = await Http_Get(vkApiUrl);
+                  const vkSongUrl = (vkResult?.data?.url || "").trim();
+                  if (vkSongUrl && (await checkAudioAvailability(vkSongUrl))) {
+                    return {
+                      url: vkSongUrl,
+                      id: match.id,
+                      source: "tencent",
+                      apiProvider: "vkeys"
+                    };
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+
+          return null;
+        }
+
         /**
          * 加载歌曲，支持自动检测过期并续期URL
          */
@@ -47545,36 +47695,25 @@ ${stickerContext || "无"}
           }
           let track = state.musicState.playlist[index];
 
-          if (!track.isLocal && track.musicId && track.musicSource) {
-            // 1. 检查当前链接是否有效
+          if (!track.isLocal && track.src) {
             const isUrlValid = await checkAudioAvailability(track.src);
 
             if (!isUrlValid) {
               console.log(
                 `检测到歌曲《${track.name}》链接失效，正在自动续期...`,
               );
-              // 显示一个小提示，让用户知道正在努力
               const statusEl = document.getElementById("music-player-artist");
               if (statusEl) statusEl.textContent = "正在更新链接...";
 
-              try {
-                // 2. 使用保存的ID重新获取链接
-                const apiUrl =
-                  track.musicSource === "netease"
-                    ? `https://api.vkeys.cn/v2/music/netease?id=${track.musicId}`
-                    : `https://api.vkeys.cn/v2/music/tencent?id=${track.musicId}`;
-
-                const res = await Http_Get(apiUrl);
-                if (res?.data?.url) {
-                  // 3. 更新内存中的链接
-                  track.src = res.data.url;
-                  // 4. 更新数据库，保存新链接
-                  state.musicState.playlist[index] = track;
-                  await saveGlobalPlaylist();
-                  console.log(`续期成功！新链接: ${track.src}`);
-                }
-              } catch (e) {
-                console.error("自动续期失败:", e);
+              const renewal = await renewTrackPlayableUrl(track);
+              if (renewal && renewal.url) {
+                track.src = renewal.url;
+                if (renewal.id) track.musicId = renewal.id;
+                if (renewal.source) track.musicSource = renewal.source;
+                if (renewal.apiProvider) track.apiProvider = renewal.apiProvider;
+                state.musicState.playlist[index] = track;
+                await saveGlobalPlaylist();
+                console.log(`续期成功！新链接: ${track.src}`);
               }
             }
           }
@@ -47775,6 +47914,7 @@ ${stickerContext || "无"}
             audioPlayer.volume = 0;
           }
           await loadSong(index);
+          const track = state.musicState.playlist[index];
           try {
             if (audioPlayer) {
               audioPlayer.volume = 0;
@@ -47786,7 +47926,30 @@ ${stickerContext || "无"}
             updatePlayerUI();
             fadeInMusic(fadeMs);
           } catch (error) {
-            console.error("音频播放失败:", error);
+            console.warn("音频播放初次尝试失败，正在尝试自动续期与重新拉取:", error);
+            if (track && !track.isLocal) {
+              const statusEl = document.getElementById("music-player-artist");
+              if (statusEl) statusEl.textContent = "链接失效，正在重新获取...";
+              const renewal = await renewTrackPlayableUrl(track);
+              if (renewal && renewal.url) {
+                track.src = renewal.url;
+                if (renewal.id) track.musicId = renewal.id;
+                if (renewal.source) track.musicSource = renewal.source;
+                if (renewal.apiProvider) track.apiProvider = renewal.apiProvider;
+                state.musicState.playlist[index] = track;
+                await saveGlobalPlaylist();
+                audioPlayer.src = track.src;
+                try {
+                  await audioPlayer.play();
+                  state.musicState.isPlaying = true;
+                  updatePlayerUI();
+                  fadeInMusic(fadeMs);
+                  return;
+                } catch (retryErr) {
+                  console.error("重新获取后播放依然失败:", retryErr);
+                }
+              }
+            }
             state.musicState.isPlaying = false;
             updatePlayerUI();
           }
@@ -47814,11 +47977,10 @@ ${stickerContext || "无"}
               }
             }
           } else {
-            await fadeOutMusic(fadeMs);
-            audioPlayer.pause();
-
             state.musicState.isPlaying = false;
             updatePlayerUI();
+            await fadeOutMusic(fadeMs);
+            if (audioPlayer) audioPlayer.pause();
           }
         }
 
@@ -80526,45 +80688,51 @@ ${stickerContext || "无"}
                 countDisplay.textContent = `${totalMessages} 条`;
               }
 
-              // --- 修改开始：使用深度分析逻辑来更新主界面的Token显示 ---
-              const tokenDisplay = document.getElementById(
+              // --- 修改开始：使用深度分析逻辑来更新主界面的Token与字数显示 ---
+              const targetChatId = (chat && chat.id) || state.activeChatId;
+              let tokenDisplay = document.getElementById(
                 "context-token-count-display",
               );
 
-              const updateTokenDisplay = async () => {
+              if (tokenDisplay) {
+                const freshTokenDisplay = tokenDisplay.cloneNode(true);
+                tokenDisplay.parentNode.replaceChild(
+                  freshTokenDisplay,
+                  tokenDisplay,
+                );
+                tokenDisplay = freshTokenDisplay;
+
                 tokenDisplay.textContent = "计算中...";
 
-                // 复用深度分析的计算逻辑
-                const result = await getTokenDetailedBreakdown(
-                  state.activeChatId,
-                );
+                const updateTokenDisplay = async () => {
+                  try {
+                    const result = await getTokenDetailedBreakdown(
+                      targetChatId,
+                    );
 
-                if (result && result.items) {
-                  const totalCount = result.items.reduce(
-                    (sum, item) => sum + item.count,
-                    0,
+                    if (result && result.items) {
+                      const totalCount = result.items.reduce(
+                        (sum, item) => sum + item.count,
+                        0,
+                      );
+                      tokenDisplay.textContent = `${totalCount.toLocaleString()} 字`;
+                    } else if (result && typeof result.totalTokens === "number") {
+                      tokenDisplay.textContent = `${result.totalTokens.toLocaleString()} 字`;
+                    } else {
+                      tokenDisplay.textContent = "0 字";
+                    }
+                  } catch (err) {
+                    console.error("计算字数失败:", err);
+                    tokenDisplay.textContent = "0 字";
+                  }
+                };
+
+                updateTokenDisplay();
+
+                tokenDisplay.addEventListener("click", async () => {
+                  const result = await getTokenDetailedBreakdown(
+                    targetChatId,
                   );
-                  tokenDisplay.textContent = totalCount.toLocaleString();
-                } else {
-                  tokenDisplay.textContent = "0";
-                }
-              };
-
-              // 异步计算Token明细，避免大模组/大地图阻塞聊天设置面板打开
-              Promise.resolve().then(() => updateTokenDisplay()).catch(() => {});
-
-              // 3. 【关键】移除旧的监听器（防止重复），并添加新的点击监听器
-              // 使用 cloneNode 技巧快速清除旧的 event listeners
-              const newTokenDisplay = tokenDisplay.cloneNode(true);
-              tokenDisplay.parentNode.replaceChild(
-                newTokenDisplay,
-                tokenDisplay,
-              );
-              newTokenDisplay.addEventListener("click", async () => {
-                // 注意：现在返回的是一个对象 { items, outliers }
-                const result = await getTokenDetailedBreakdown(
-                  state.activeChatId,
-                );
                 if (!result) return;
 
                 const breakdown = result.items;
@@ -80642,8 +80810,9 @@ ${stickerContext || "无"}
 
                 await showCustomAlert("Token 深度分析", htmlContent);
               });
+            }
 
-              // --- 统一显示/隐藏控件 ---
+            // --- 统一显示/隐藏控件 ---
 
               const videoCallSettingsGroup = document.getElementById(
                 "video-call-settings-group",
@@ -86012,6 +86181,32 @@ ${stickerContext || "无"}
             if (state.musicState.isActive) {
               state.musicState.isPlaying = true;
               updatePlayerUI();
+            }
+          });
+
+          audioPlayer.addEventListener("error", async () => {
+            if (!state.musicState.isActive) return;
+            const curIdx = state.musicState.currentIndex;
+            const currentTrack = (curIdx >= 0 && Array.isArray(state.musicState.playlist))
+              ? state.musicState.playlist[curIdx]
+              : null;
+            if (currentTrack && !currentTrack.isLocal && !currentTrack._isRenewing) {
+              currentTrack._isRenewing = true;
+              console.warn(`音频加载遇到异常，自动为《${currentTrack.name}》重新拉取有效链接...`);
+              const renewal = await renewTrackPlayableUrl(currentTrack);
+              currentTrack._isRenewing = false;
+              if (renewal && renewal.url) {
+                currentTrack.src = renewal.url;
+                if (renewal.id) currentTrack.musicId = renewal.id;
+                if (renewal.source) currentTrack.musicSource = renewal.source;
+                if (renewal.apiProvider) currentTrack.apiProvider = renewal.apiProvider;
+                state.musicState.playlist[curIdx] = currentTrack;
+                await saveGlobalPlaylist();
+                audioPlayer.src = currentTrack.src;
+                if (state.musicState.isPlaying) {
+                  audioPlayer.play().catch(() => {});
+                }
+              }
             }
           });
 
