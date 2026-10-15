@@ -20453,6 +20453,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           "grok-4-fast",
           "grok-3",
         ];
+        window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
 
         async function requestLlmapiWithFallback(targetUrl, options = {}) {
           const method = options.method || "GET";
@@ -20492,7 +20493,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const proxyEndpoints = [
             "/api/proxy",
-            "https://ais-pre-rfx7g736rq475obl4lanqa-15965869021.asia-east1.run.app/api/proxy",
+            "https://ais-pre-ugzk54jw372rrw774brrw3-328602855376.asia-southeast1.run.app/api/proxy",
+            "https://ais-dev-ugzk54jw372rrw774brrw3-328602855376.asia-southeast1.run.app/api/proxy",
           ];
 
           for (const proxyEndpoint of proxyEndpoints) {
@@ -20509,8 +20511,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               });
               const proxyText = await proxyRes.text();
               const isProxyHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(proxyText);
-              // GitHub Pages 等纯静态服务器不存在 /api/proxy，会返回 404 或 405 网页，跳过并尝试下一个转发端
-              if (isProxyHtml && (proxyRes.status === 404 || proxyRes.status === 405)) {
+              if (isProxyHtml) {
                 continue;
               }
               return {
@@ -20531,9 +20532,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
-          throw new Error(
-            "浏览器跨域拦截：llmapi.pro 服务端未配置 Access-Control-Allow-Origin 跨域响应头，而 GitHub Pages 是纯静态网页没有后端转发服务，因此浏览器直接拦截了请求。请让服务端开启 CORS 跨域头，或在 AI Studio 中点击右上角 Deploy 更新后端后再使用。"
-          );
+          throw new Error("连接失败 请检查网络连接 反代地址与密钥");
         }
         window.requestLlmapiWithFallback = requestLlmapiWithFallback;
 
@@ -20719,12 +20718,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               ? (apiCfg.subApiProtocol || "default")
               : (apiCfg.apiProtocol || "default");
 
-            // 旧模式（默认）：一条代码不动，完全走原来的 fetch 逻辑
-            if (protocol === "default") {
-              return origFetch(input, init);
+            const isClaudeOrLlmapi =
+              protocol === "claude" ||
+              /llmapi/i.test(urlStr) ||
+              /llmapi/i.test(isSubCall ? subProxy : mainProxy);
+
+            if (!isClaudeOrLlmapi && protocol === "default") {
+              try {
+                return await origFetch(input, init);
+              } catch (directErr) {
+                if (/Failed to fetch|NetworkError/i.test(String(directErr?.message || ""))) {
+                  const fallbackRes = await requestLlmapiWithFallback(urlStr, init);
+                  return new Response(fallbackRes.text, {
+                    status: fallbackRes.status,
+                    headers: fallbackRes.headers,
+                  });
+                }
+                throw directErr;
+              }
             }
 
-            // 新模式（克劳德 / llmapi OpenAI 兼容模式）
             const domProxy = document.getElementById(isSubCall ? "sub-proxy-url" : "proxy-url")?.value?.trim() || "";
             const domKey = document.getElementById(isSubCall ? "sub-api-key" : "api-key")?.value?.trim() || "";
             const domModel = document.getElementById(isSubCall ? "sub-model-select" : "model-select")?.value?.trim() || "";
@@ -20732,7 +20745,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const rawBase = (isSubCall ? subProxy : mainProxy) || domProxy || urlStr;
             const base = normalizeLlmapiBaseUrl(rawBase);
             if (!base) {
-              throw new Error("未配置反代地址，请在API设置中填写 https://llmapi.pro");
+              throw new Error("请在设置中填写有效的反代地址");
             }
 
             const targetUrl = `${base}/v1/chat/completions`;
@@ -20786,6 +20799,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const openAiPayload = {
               model: modelId,
               messages: normalizedMessages,
+              temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
+              stream: false,
             };
 
             const res = await requestLlmapiWithFallback(targetUrl, {
@@ -39162,6 +39177,7 @@ ${recentHistoryText}
           }
 
           window.activeGeneratingChats = window.activeGeneratingChats || {};
+          window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
           if (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId]) {
             console.warn("当前聊天正在生成回复中，忽略重复触发");
             return;
@@ -46360,7 +46376,9 @@ ${stickerContext || "无"}
               try { finishTurnRender(); } catch (e) {}
               finishTurnRender = null;
             }
-            delete window.chatTurnRenderPromise[String(chat.id)];
+            if (window.chatTurnRenderPromise && chat && chat.id) {
+              try { delete window.chatTurnRenderPromise[String(chat.id)]; } catch (e) {}
+            }
 
             if (callHasBeenHandled && videoCallState.isGroupCall) {
               videoCallState.isAwaitingResponse = false;
@@ -46541,31 +46559,38 @@ ${stickerContext || "无"}
               try { finishTurnRender(); } catch (e) {}
               finishTurnRender = null;
             }
-            if (chat && chat.id) {
-              delete window.chatTurnRenderPromise[String(chat.id)];
+            if (window.chatTurnRenderPromise && chat && chat.id) {
+              try { delete window.chatTurnRenderPromise[String(chat.id)]; } catch (e) {}
             }
-            chat.history = chat.history.filter((msg) => !msg.isTemporary);
+            if (chat && Array.isArray(chat.history)) {
+              chat.history = chat.history.filter((msg) => !msg.isTemporary);
+            }
+            const errText = error && error.message ? error.message : String(error || "未知错误");
             if (
+              chat &&
               !chat.isGroup &&
               chat.relationship?.status === "pending_ai_approval"
             ) {
               chat.relationship.status = "blocked_by_ai";
               await showCustomAlert(
                 "申请失败",
-                `AI在处理你的好友申请时出错了，请稍后重试。\n错误信息: ${error.message}`,
+                `AI在处理你的好友申请时出错了，请稍后重试。\n错误信息: ${errText}`,
               );
-            } else {
-              const errorContent = `[出错了: ${error.message}]`;
+            } else if (chat) {
+              const errorContent = `[出错了: ${errText}]`;
               const errorMessage = {
                 role: "assistant",
                 content: errorContent,
                 timestamp: Date.now(),
               };
               if (chat.isGroup) errorMessage.senderName = "系统消息";
+              if (!Array.isArray(chat.history)) chat.history = [];
               chat.history.push(errorMessage);
             }
 
-            await db.chats.put(chat);
+            if (chat && chat.id) {
+              await db.chats.put(chat);
+            }
             if (state.chats) {
               state.chats[chat.id] = chat;
               state.chats[String(chat.id)] = chat;
@@ -56106,6 +56131,7 @@ ${stickerContext || "无"}
           const selectEl = document.getElementById("api-preset-select");
           const proxyUrlInput = document.getElementById("proxy-url");
           const apiKeyInput = document.getElementById("api-key");
+          const modelInput = document.getElementById("model-select");
           const selectedId = parseInt(selectEl.value);
 
           if (selectedId && state.apiPresets) {
@@ -56113,12 +56139,27 @@ ${stickerContext || "无"}
               (p) => p.id === selectedId,
             );
             if (selectedPreset) {
-              proxyUrlInput.value = selectedPreset.proxyUrl;
-              apiKeyInput.value = selectedPreset.apiKey;
+              if (proxyUrlInput) proxyUrlInput.value = selectedPreset.proxyUrl || "";
+              if (apiKeyInput) apiKeyInput.value = selectedPreset.apiKey || "";
+              if (modelInput && selectedPreset.model) {
+                modelInput.value = selectedPreset.model;
+                state.apiConfig.model = selectedPreset.model;
+              }
+              state.apiConfig.proxyUrl = selectedPreset.proxyUrl || "";
+              state.apiConfig.apiKey = selectedPreset.apiKey || "";
+
               const protoEl = document.getElementById("api-protocol-select");
-              if (protoEl && selectedPreset.apiProtocol) {
-                protoEl.value = selectedPreset.apiProtocol;
-                state.apiConfig.apiProtocol = selectedPreset.apiProtocol;
+              const isClaude =
+                selectedPreset.apiProtocol === "claude" ||
+                /claude|llmapi/i.test(selectedPreset.name || "") ||
+                /llmapi/i.test(selectedPreset.proxyUrl || "");
+              const targetProto = isClaude ? "claude" : (selectedPreset.apiProtocol || "default");
+              if (protoEl) {
+                protoEl.value = targetProto;
+              }
+              state.apiConfig.apiProtocol = targetProto;
+              if (typeof db !== "undefined" && db.apiConfig) {
+                db.apiConfig.put(state.apiConfig);
               }
             }
           }
@@ -56187,7 +56228,9 @@ ${stickerContext || "无"}
           if (name && name.trim()) {
             const protoEl = document.getElementById("api-protocol-select");
             const apiProtocol = protoEl ? protoEl.value : (state.apiConfig.apiProtocol || "default");
-            const newPreset = { name: name.trim(), proxyUrl, apiKey, apiProtocol };
+            const modelInput = document.getElementById("model-select");
+            const model = modelInput ? modelInput.value.trim() : "";
+            const newPreset = { name: name.trim(), proxyUrl, apiKey, apiProtocol, model };
             const newId = await db.apiPresets.add(newPreset);
 
             if (!state.apiPresets) state.apiPresets = [];
@@ -56218,6 +56261,8 @@ ${stickerContext || "无"}
           if (preset) {
             preset.proxyUrl = proxyUrl;
             preset.apiKey = apiKey;
+            const modelInput = document.getElementById("model-select");
+            if (modelInput) preset.model = modelInput.value.trim();
             const protoEl = document.getElementById("api-protocol-select");
             if (protoEl) preset.apiProtocol = protoEl.value || "default";
             await db.apiPresets.put(preset);
