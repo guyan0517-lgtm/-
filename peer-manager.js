@@ -2509,6 +2509,7 @@
         customLocations: Array.isArray(groupChat.settings?.customLocations) ? groupChat.settings.customLocations : [],
         temporaryLocations: Array.isArray(groupChat.settings?.temporaryLocations) ? groupChat.settings.temporaryLocations : [],
         currentLocation: groupChat.settings?.currentLocation || "",
+        peerPlayerLocations: groupChat.settings?.peerPlayerLocations ? JSON.parse(JSON.stringify(groupChat.settings.peerPlayerLocations)) : {},
         moduleMiniMaps: groupChat.settings?.moduleMiniMaps ? JSON.parse(JSON.stringify(groupChat.settings.moduleMiniMaps)) : {},
         miniMapSvg: groupChat.settings?.miniMapSvg || null,
         miniMapStyle: groupChat.settings?.miniMapStyle || "自适应",
@@ -3038,6 +3039,7 @@
             sharedKeeperPresets: snap.sharedKeeperPresets,
             sharedSoloPayload: typeof window.buildMySharedSoloPayload === "function" ? window.buildMySharedSoloPayload(groupChat) : [],
             essenceMessages: Array.isArray(groupChat.settings?.essenceMessages) ? groupChat.settings.essenceMessages : undefined,
+            peerPhoneData: groupChat.settings?.peerPhoneData ? JSON.parse(JSON.stringify(groupChat.settings.peerPhoneData)) : undefined,
             timestamp: Date.now()
           };
           this.dispatchPacketToNetwork(m.peerCode, pkt, "/api/peer/send", false);
@@ -3233,6 +3235,13 @@
           }
         }
       }
+      if (data.peerPhoneData && typeof data.peerPhoneData === "object") {
+        if (typeof window.mergePeerPhoneDataFromPeer === "function") {
+          try {
+            window.mergePeerPhoneDataFromPeer(groupChat, data.peerPhoneData);
+          } catch (e) {}
+        }
+      }
 
       if (Array.isArray(data.summaries)) {
         if (groupChat.activeLineMode === "solo") {
@@ -3309,8 +3318,21 @@
         if (Array.isArray(data.mapSyncData.temporaryLocations)) {
           groupChat.settings.temporaryLocations = data.mapSyncData.temporaryLocations;
         }
-        if (data.mapSyncData.currentLocation !== undefined) {
-          groupChat.settings.currentLocation = data.mapSyncData.currentLocation;
+        if (data.mapSyncData.peerPlayerLocations && typeof data.mapSyncData.peerPlayerLocations === "object") {
+          if (!groupChat.settings.peerPlayerLocations || typeof groupChat.settings.peerPlayerLocations !== "object") {
+            groupChat.settings.peerPlayerLocations = {};
+          }
+          const myCodeForLoc = this.getOrCreateMyPeerCode();
+          for (const [pCode, pRec] of Object.entries(data.mapSyncData.peerPlayerLocations)) {
+            if (!pRec || typeof pRec !== "object") continue;
+            const existing = groupChat.settings.peerPlayerLocations[pCode];
+            if (!existing || (Number(pRec.timestamp) || 0) >= (Number(existing.timestamp) || 0)) {
+              groupChat.settings.peerPlayerLocations[pCode] = { ...pRec };
+              if (pCode === myCodeForLoc && pRec.location !== undefined) {
+                groupChat.settings.currentLocation = pRec.location;
+              }
+            }
+          }
         }
         if (data.mapSyncData.moduleMiniMaps && typeof data.mapSyncData.moduleMiniMaps === "object") {
           groupChat.settings.moduleMiniMaps = {
@@ -3582,6 +3604,40 @@
         return null;
       };
 
+      if (msgToInsert.type === "system_status" || msgToInsert.playerLocations) {
+        if (!groupChat.settings) groupChat.settings = {};
+        if (!groupChat.settings.peerPlayerLocations || typeof groupChat.settings.peerPlayerLocations !== "object") {
+          groupChat.settings.peerPlayerLocations = {};
+        }
+        const byCode = msgToInsert.playerLocations && msgToInsert.playerLocations.byCode;
+        const msgTs = Number(msgToInsert.timestamp) || Date.now();
+        if (byCode && typeof byCode === "object") {
+          for (const [pCode, pLoc] of Object.entries(byCode)) {
+            if (!pLoc) continue;
+            const prevRec = groupChat.settings.peerPlayerLocations[pCode];
+            if (!prevRec || msgTs >= (Number(prevRec.timestamp) || 0)) {
+              groupChat.settings.peerPlayerLocations[pCode] = {
+                location: String(pLoc).trim(),
+                timestamp: msgTs
+              };
+              if (pCode === myCode) {
+                groupChat.settings.currentLocation = String(pLoc).trim();
+              }
+            }
+          }
+        }
+        if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
+          setTimeout(() => {
+            if (typeof window.renderChatMapList === "function") {
+              try { window.renderChatMapList(); } catch (_) {}
+            }
+            if (typeof window.renderChatMiniMap === "function") {
+              try { window.renderChatMiniMap(); } catch (_) {}
+            }
+          }, 50);
+        }
+      }
+
       if (data.soloThreadId) {
         const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(groupChat) : null;
         const localT = cfg && Array.isArray(cfg.threads) ? cfg.threads.find((t) => t.id === data.soloThreadId) : null;
@@ -3627,6 +3683,9 @@
             }
           }
         }
+        if (typeof window.evaluatePeerPhonePendingMessages === "function") {
+          try { window.evaluatePeerPhonePendingMessages(groupChat); } catch (e) {}
+        }
         if (window.db && window.db.chats) {
           await window.db.chats.put(groupChat);
         }
@@ -3669,6 +3728,10 @@
         );
         if (isDup) return;
         groupChat.history.push(msgToInsert);
+      }
+
+      if (typeof window.evaluatePeerPhonePendingMessages === "function") {
+        try { window.evaluatePeerPhonePendingMessages(groupChat); } catch (e) {}
       }
 
       if (window.state && window.state.chats) {

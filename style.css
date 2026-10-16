@@ -33953,4 +33953,253 @@ select,
   display: none !important;
 }
 
+:root {
+  --mini-phone-shell-bg: var(--tukey-green, var(--accent-color));
+  --mini-phone-shell-bevel-light: var(--card-bg);
+  --mini-phone-shell-bevel-dark: var(--border-color);
+  --mini-phone-screen-bg: var(--card-bg);
+  --mini-phone-header-bg: var(--card-bg);
+  --mini-phone-sent-bg: var(--accent-color);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--secondary-bg);
+  --mini-phone-recv-text: var(--text-primary);
+  --mini-phone-Radius: 22px;
+}
+
+#peer-mini-phone-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  display: none;
+}
+
+#peer-mini-phone-overlay.visible {
+  display: block;
+}
+
+#peer-mini-phone-shell {
+  position: fixed;
+  top: 76px;
+  left: calc(50% - 142px);
+  width: 284px;
+  height: 500px;
+  pointer-events: auto;
+  background: var(--mini-phone-shell-bg);
+  border-radius: var(--mini-phone-Radius);
+  clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% calc(100% - 16px), calc(100% - 16px) 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
+  padding: 14px 16px 16px 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 2px solid var(--border-color);
+  user-select: none;
+}
+
+#peer-mini-phone-shell.phone-theme-default {
+  --mini-phone-shell-bg: var(--card-bg);
+  --mini-phone-screen-bg: var(--background-color);
+  --mini-phone-header-bg: var(--card-bg);
+  --mini-phone-sent-bg: var(--accent-color);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--secondary-bg);
+  --mini-phone-recv-text: var(--text-primary);
+}
+
+#peer-mini-phone-shell.phone-theme-sakura {
+  --mini-phone-shell-bg: var(--accent-color);
+  --mini-phone-screen-bg: var(--card-bg);
+  --mini-phone-header-bg: var(--card-bg);
+  --mini-phone-sent-bg: var(--accent-color);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--secondary-bg);
+  --mini-phone-recv-text: var(--text-primary);
+}
+
+#peer-mini-phone-shell.phone-theme-retro {
+  --mini-phone-shell-bg: var(--secondary-bg);
+  --mini-phone-screen-bg: var(--background-color);
+  --mini-phone-header-bg: var(--secondary-bg);
+  --mini-phone-sent-bg: var(--text-primary);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--card-bg);
+  --mini-phone-recv-text: var(--text-primary);
+  --mini-phone-Radius: 8px;
+}
+
+#peer-mini-phone-shell.phone-theme-cream {
+  --mini-phone-shell-bg: var(--background-color);
+  --mini-phone-screen-bg: var(--card-bg);
+  --mini-phone-header-bg: var(--card-bg);
+  --mini-phone-sent-bg: var(--text-secondary);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--secondary-bg);
+  --mini-phone-recv-text: var(--text-primary);
+}
+
+#peer-mini-phone-drag-bar {
+  width: 100%;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: move;
+  touch-action: none;
+  flex-shrink: 0;
+  margin-bottom: 6px;
+}
+
+#peer-mini-phone-speaker {
+  width: 96px;
+  height: 8px;
+  border-radius: 6px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+}
+
+#peer-mini-phone-close-btn {
+  position: absolute;
+  right: 0;
+  top: 1px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  color: var(--card-bg);
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+#peer-mini-phone-bezel {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  padding: 7px;
+  box-sizing: border-box;
+  background: var(--secondary-bg);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+#peer-mini-phone-screen {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  background: var(--mini-phone-screen-bg);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+#peer-mini-phone-footer {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+#peer-mini-phone-home-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--secondary-bg);
+  border: 3px solid var(--border-color);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.peer-phone-header {
+  height: 38px;
+  padding: 0 10px;
+  background: var(--mini-phone-header-bg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.peer-phone-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  box-sizing: border-box;
+  background: var(--mini-phone-screen-bg);
+}
+
+.peer-phone-contact-avatar {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  background: var(--mini-phone-sent-bg);
+  color: var(--mini-phone-sent-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.peer-phone-contact-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.peer-phone-msg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.peer-phone-msg-bubble {
+  max-width: 78%;
+  padding: 7px 11px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.peer-phone-msg-bubble.sent {
+  align-self: flex-end;
+  background: var(--mini-phone-sent-bg);
+  color: var(--mini-phone-sent-text);
+  border-bottom-right-radius: 4px;
+}
+
+.peer-phone-msg-bubble.recv {
+  align-self: flex-start;
+  background: var(--mini-phone-recv-bg);
+  color: var(--mini-phone-recv-text);
+  border-bottom-left-radius: 4px;
+}
+
+
 
