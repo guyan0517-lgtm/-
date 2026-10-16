@@ -1240,8 +1240,8 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 .ai-generated-image,
 .cleared-image-placeholder,
 .message-bubble img[src*="KYr2qRCK"] {
-  max-width: 55px !important;
-  max-height: 55px !important;
+  max-width: 110px !important;
+  max-height: 110px !important;
   width: auto;
   height: auto;
   border-radius: 8px;
