@@ -33954,24 +33954,34 @@ select,
 }
 
 #chat-input-actions-top.peer-group-toolbar {
+  display: flex !important;
   justify-content: center !important;
-  gap: clamp(4px, 1.2vw, 7px) !important;
+  align-items: center !important;
+  gap: clamp(4px, 1.6vw, 8px) !important;
   padding: 0 !important;
   margin: 0 auto !important;
   width: 100% !important;
   box-sizing: border-box !important;
+  overflow: visible !important;
 }
 
 #chat-input-actions-top.peer-group-toolbar .chat-action-icon-btn {
-  width: clamp(31px, 8.4vw, 36px) !important;
-  height: clamp(31px, 8.4vw, 36px) !important;
-  line-height: clamp(31px, 8.4vw, 36px) !important;
+  width: 38px !important;
+  height: 38px !important;
+  line-height: 38px !important;
+  font-size: 24px !important;
   flex-shrink: 0 !important;
+  margin: 0 !important;
 }
 
 #chat-input-actions-top.peer-group-toolbar .chat-action-icon-btn svg {
-  width: 19px !important;
-  height: 19px !important;
+  width: 24px !important;
+  height: 24px !important;
+}
+
+#chat-input-actions-top.peer-group-toolbar #combat-entry-btn svg {
+  width: 22px !important;
+  height: 22px !important;
 }
 
 :root {
@@ -34015,14 +34025,15 @@ select,
   display: flex;
   flex-direction: column;
   align-items: center;
-  border-top: 2px solid color-mix(in srgb, var(--card-bg) 75%, var(--border-color));
-  border-left: 2px solid color-mix(in srgb, var(--card-bg) 75%, var(--border-color));
-  border-right: 3.5px solid var(--border-color);
-  border-bottom: 4.5px solid var(--border-color);
+  border-top: 2px solid color-mix(in srgb, var(--card-bg) 75%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--card-bg) 75%, transparent);
+  border-right: 3px solid color-mix(in srgb, var(--border-color) 85%, var(--text-primary) 15%);
+  border-bottom: 4.5px solid color-mix(in srgb, var(--border-color) 85%, var(--text-primary) 15%);
   box-shadow:
+    0 4px 0 color-mix(in srgb, var(--border-color) 80%, var(--text-primary) 20%),
+    0 10px 22px color-mix(in srgb, var(--text-primary) 18%, transparent),
     inset 1.5px 1.5px 0 color-mix(in srgb, var(--card-bg) 65%, transparent),
-    inset -2px -2.5px 0 color-mix(in srgb, var(--border-color) 75%, transparent),
-    0 6px 16px color-mix(in srgb, var(--text-primary) 14%, transparent);
+    inset -1.5px -2.5px 0 color-mix(in srgb, var(--text-primary) 15%, transparent);
   user-select: none;
 }
 
@@ -34150,12 +34161,12 @@ select,
   width: 88px;
   height: 8px;
   border-radius: 6px;
-  background: var(--secondary-bg);
-  border-top: 1.5px solid var(--border-color);
-  border-left: 1.5px solid var(--border-color);
-  border-right: 1px solid var(--card-bg);
-  border-bottom: 1px solid var(--card-bg);
-  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--text-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--secondary-bg) 80%, var(--border-color) 20%);
+  border-top: 1.5px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
+  border-left: 1.5px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
+  border-right: 1px solid color-mix(in srgb, var(--card-bg) 80%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--card-bg) 80%, transparent);
+  box-shadow: inset 0 1px 2.5px color-mix(in srgb, var(--text-primary) 18%, transparent);
 }
 
 #peer-mini-phone-close-btn {
@@ -34165,21 +34176,25 @@ select,
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--card-bg) 24%, transparent);
-  color: var(--card-bg);
-  border: 1px solid color-mix(in srgb, var(--card-bg) 42%, transparent);
-  opacity: 0.45;
+  background: transparent;
+  color: #ffffff;
+  border: none;
+  opacity: 0.35;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.2s ease;
 }
 
 #peer-mini-phone-close-btn:hover {
-  opacity: 0.82;
+  opacity: 0.8;
+}
+
+#peer-mini-phone-close-btn svg {
+  stroke: #ffffff;
 }
 
 #peer-mini-phone-bezel {
@@ -34189,14 +34204,14 @@ select,
   padding: 6px;
   box-sizing: border-box;
   background: var(--secondary-bg);
-  border-top: 2px solid var(--border-color);
-  border-left: 2px solid var(--border-color);
-  border-right: 2px solid var(--card-bg);
-  border-bottom: 2px solid var(--card-bg);
+  border-top: 2px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
+  border-left: 2px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
+  border-right: 1.5px solid color-mix(in srgb, var(--card-bg) 85%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--card-bg) 85%, transparent);
   border-radius: 9px;
   box-shadow:
-    inset 0 2px 4px color-mix(in srgb, var(--text-primary) 10%, transparent),
-    inset 0 0 0 1px var(--border-color);
+    inset 1.5px 2px 4px color-mix(in srgb, var(--text-primary) 14%, transparent),
+    inset -1px -1px 2px color-mix(in srgb, var(--card-bg) 70%, transparent);
   display: flex;
   flex-direction: column;
 }
@@ -34207,11 +34222,11 @@ select,
   min-height: 0;
   background: var(--mini-phone-screen-bg);
   border-radius: 5px;
-  border-top: 1.5px solid var(--border-color);
-  border-left: 1.5px solid var(--border-color);
-  border-right: 1px solid var(--card-bg);
-  border-bottom: 1px solid var(--card-bg);
-  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--text-primary) 8%, transparent);
+  border-top: 1px solid var(--border-color);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid color-mix(in srgb, var(--card-bg) 75%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--card-bg) 75%, transparent);
+  box-shadow: inset 0 1.5px 3px color-mix(in srgb, var(--text-primary) 9%, transparent);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -34233,13 +34248,13 @@ select,
   height: 32px;
   border-radius: 50%;
   background: var(--secondary-bg);
-  border-top: 2px solid var(--border-color);
-  border-left: 2px solid var(--border-color);
-  border-right: 2px solid var(--card-bg);
-  border-bottom: 2px solid var(--card-bg);
+  border-top: 1.5px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
+  border-left: 1.5px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
+  border-right: 1.5px solid color-mix(in srgb, var(--card-bg) 80%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--card-bg) 80%, transparent);
   box-shadow:
-    inset 0 1px 3px color-mix(in srgb, var(--text-primary) 10%, transparent),
-    0 1px 0 var(--card-bg);
+    inset 0 1.5px 3px color-mix(in srgb, var(--text-primary) 12%, transparent),
+    0 1px 0 color-mix(in srgb, var(--card-bg) 80%, transparent);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;

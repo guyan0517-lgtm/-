@@ -4514,7 +4514,7 @@
               <select
                 id="mini-phone-theme-selector"
                 class="moe-input select"
-                style="flex: 1"
+                style="flex: 1; height: 38px; line-height: 38px; padding: 0 10px; font-size: 13px; box-sizing: border-box; text-align: left; vertical-align: middle;"
               >
                 <option value="default">原色</option>
                 <option value="sakura">粉色</option>
@@ -4525,7 +4525,7 @@
               <select
                 id="mini-phone-size-selector"
                 class="moe-input select"
-                style="flex: 1"
+                style="flex: 1; height: 38px; line-height: 38px; padding: 0 10px; font-size: 13px; box-sizing: border-box; text-align: left; vertical-align: middle;"
               >
                 <option value="large">大号</option>
                 <option value="medium">中号</option>
@@ -29543,6 +29543,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const statusBarTime = document.getElementById("status-bar-time");
           if (statusBarTime) {
             statusBarTime.textContent = timeString;
+          }
+          const miniPhoneTimeEl = document.getElementById("peer-mini-phone-status-time");
+          if (miniPhoneTimeEl) {
+            miniPhoneTimeEl.textContent = timeString;
           }
 
           // 更新锁屏时钟 (只有当锁屏元素存在时才更新，避免报错)
@@ -94317,10 +94321,9 @@ ${stickerContext || "无"}
             const myNick = targetChat.settings?.myNickname || targetChat.settings?.myName || "我";
             const lineKey = getCurrentLineKey(targetChat);
             const hasSignal = isLineSignalAvailable(targetChat, lineKey);
-            const lineTimeObj = getLineLatestGameTime(targetChat, lineKey);
-            const timeDisplayStr = lineTimeObj
-              ? (lineTimeObj.rawTimeStr || lineTimeObj.timeStr || lineTimeObj.display)
-              : (targetChat._lastStatusValues?.["时间"] || "12:00");
+            const statusBarEl = document.getElementById("status-bar-time");
+            const statusBarTimeStr = (statusBarEl && statusBarEl.textContent && statusBarEl.textContent.trim()) ? statusBarEl.textContent.trim() : "";
+            const timeDisplayStr = statusBarTimeStr || (targetChat._lastStatusValues?.["时间"] || "12:00");
             const directory = getEligiblePhoneDirectory(targetChat);
             const counts = getUnreadAndPendingCounts(targetChat);
 
@@ -94334,7 +94337,7 @@ ${stickerContext || "无"}
                   ${signalSvg}
                   <span style="font-weight: 600;">${hasSignal ? "信号良好" : "无信号"}</span>
                 </div>
-                <span style="font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">${escapePhoneHtml(timeDisplayStr)}</span>
+                <span id="peer-mini-phone-status-time" style="font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">${escapePhoneHtml(timeDisplayStr)}</span>
               </div>
             `;
 
@@ -94700,8 +94703,8 @@ ${stickerContext || "无"}
               <div id="peer-mini-phone-shell">
                 <div id="peer-mini-phone-drag-bar" title="按住拖动位置">
                   <div id="peer-mini-phone-speaker"></div>
-                  <button type="button" id="peer-mini-phone-close-btn" title="关闭">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <button type="button" id="peer-mini-phone-close-btn" title="关闭" style="color: #ffffff; border: none; background: transparent;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"></line>
                       <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>

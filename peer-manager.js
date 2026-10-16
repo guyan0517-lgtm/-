@@ -4937,6 +4937,9 @@
 
       if (actionsTop) {
         actionsTop.classList.toggle("peer-group-toolbar", Boolean(isPeerGroup));
+        if (isPeerGroup) {
+          actionsTop.scrollLeft = 0;
+        }
       }
 
       if (isPeer) {
