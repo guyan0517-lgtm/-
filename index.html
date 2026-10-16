@@ -33234,7 +33234,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             } else {
               let peerMemberObj = (chat.members || []).find(
-                (m) => (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) || (m.isPeerMember && msg.senderName && (m.originalName === msg.senderName || m.groupNickname === msg.senderName)),
+                (m) =>
+                  (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) ||
+                  (msg.senderId && m.id === msg.senderId) ||
+                  (msg.senderName && (m.originalName === msg.senderName || m.groupNickname === msg.senderName)) ||
+                  (msg.sender && (m.originalName === msg.sender || m.groupNickname === msg.sender)),
               );
               if (!peerMemberObj && msg.senderPeerCode && typeof window.getGroupHumanPlayersList === "function") {
                 const hps = window.getGroupHumanPlayersList(chat);
@@ -33243,7 +33247,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   peerMemberObj = { groupNickname: foundHp.name, originalName: foundHp.name, avatar: defaultGroupMemberAvatar };
                 }
               }
-              if (!peerMemberObj && chat.activeLineMode === "solo") {
+              if (!peerMemberObj && msg.isPeerUserMessage && chat.activeLineMode === "solo") {
                 const activeT = (typeof window.getActiveSoloThread === "function") ? window.getActiveSoloThread(chat) : null;
                 if (activeT && (activeT.isPeerThread || chat.viewingPeerSoloThread || (activeT.ownerPeerCode && activeT.ownerPeerCode !== myPeerCodeVal))) {
                   const pOwnerCode = activeT.ownerPeerCode;
@@ -33322,7 +33326,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               avatarFrameSrc = chat.settings.myAvatarFrame || ""; // <--- 获取“我”的头像框
             } else {
               let member = (chat.members || []).find(
-                (m) => (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) || (m.isPeerMember && msg.senderName && (m.originalName === msg.senderName || m.groupNickname === msg.senderName)),
+                (m) =>
+                  (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) ||
+                  (msg.senderId && m.id === msg.senderId) ||
+                  (msg.senderName && (m.originalName === msg.senderName || m.groupNickname === msg.senderName)) ||
+                  (msg.sender && (m.originalName === msg.sender || m.groupNickname === msg.sender)),
               );
               if (!member && msg.senderPeerCode && typeof window.getGroupHumanPlayersList === "function") {
                 const hps = window.getGroupHumanPlayersList(chat);
@@ -33331,7 +33339,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   member = { groupNickname: foundHp.name, originalName: foundHp.name, avatar: defaultGroupMemberAvatar };
                 }
               }
-              if (!member && chat.activeLineMode === "solo") {
+              if (!member && msg.isPeerUserMessage && chat.activeLineMode === "solo") {
                 const activeT = (typeof window.getActiveSoloThread === "function") ? window.getActiveSoloThread(chat) : null;
                 if (activeT && (activeT.isPeerThread || chat.viewingPeerSoloThread || (activeT.ownerPeerCode && activeT.ownerPeerCode !== myPeerCodeVal))) {
                   const pOwnerCode = activeT.ownerPeerCode;
@@ -48016,7 +48024,7 @@ ${stickerContext || "无"}
             meaning: sticker.name,
             isPeerOnlySticker: true,
             timestamp: Date.now(),
-            senderPeerCode: (chat.isGroup && chat.isPeerGroup) ? myCodeForSticker : undefined,
+            senderPeerCode: (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0) || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)))) ? myCodeForSticker : undefined,
             senderName: chat.settings?.myNickname || chat.settings?.myName || "我",
             senderAvatar: chat.settings?.myAvatar || defaultMyGroupAvatar || ""
           };
@@ -80443,7 +80451,7 @@ ${stickerContext || "无"}
                 role: "user",
                 content,
                 timestamp: Date.now(),
-                senderPeerCode: (chat.isGroup && chat.isPeerGroup) ? myCodeForSend : undefined,
+                senderPeerCode: (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0) || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)))) ? myCodeForSend : undefined,
                 senderName: myNickForSend,
                 senderAvatar: myAvatarForSend,
                 senderAvatarFrame: myAvatarFrameForSend
@@ -92749,41 +92757,42 @@ ${stickerContext || "无"}
           if (cfg.threads.length === 0 && !chat.viewingPeerSoloThread) {
             cfg.activeThreadId = null;
           }
-          if (chat.activeLineMode === "solo") {
-            if (typeof syncCurrentSoloThreadHistory === "function") {
-              syncCurrentSoloThreadHistory(chat);
-            }
-          }
           return cfg;
         }
         window.ensureSoloLineConfig = ensureSoloLineConfig;
 
         function syncCurrentSoloThreadHistory(chat) {
           if (!chat || !isPeerGrp(chat) || chat.activeLineMode !== "solo") return;
-          const cfg = ensureSoloLineConfig(chat);
-          if (!cfg) return;
-          const activeT = (typeof getActiveSoloThread === "function") ? getActiveSoloThread(chat) : null;
-          const hist = Array.isArray(chat.history) ? [...chat.history] : [];
-          if (chat.viewingPeerSoloThread || (activeT && activeT.isPeerThread)) {
-            const threadObj = chat.viewingPeerSoloThread || activeT;
-            threadObj.history = hist;
-            threadObj.publicHistory = hist;
-            const threadId = threadObj.id;
-            if (chat.settings?.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
-              for (const sList of Object.values(chat.settings.sharedSoloRecords)) {
-                if (!Array.isArray(sList)) continue;
-                const matchT = sList.find((t) => t && (t.id === threadId || ("solo_" + t.id) === threadId || t.id === ("solo_" + threadId)));
-                if (matchT) {
-                  matchT.history = hist;
-                  matchT.publicHistory = hist;
+          if (chat._isSyncingSoloHistory) return;
+          chat._isSyncingSoloHistory = true;
+          try {
+            const cfg = ensureSoloLineConfig(chat);
+            if (!cfg) return;
+            const activeT = (typeof getActiveSoloThread === "function") ? getActiveSoloThread(chat) : null;
+            const hist = Array.isArray(chat.history) ? [...chat.history] : [];
+            if (chat.viewingPeerSoloThread || (activeT && activeT.isPeerThread)) {
+              const threadObj = chat.viewingPeerSoloThread || activeT;
+              threadObj.history = hist;
+              threadObj.publicHistory = hist;
+              const threadId = threadObj.id;
+              if (chat.settings?.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+                for (const sList of Object.values(chat.settings.sharedSoloRecords)) {
+                  if (!Array.isArray(sList)) continue;
+                  const matchT = sList.find((t) => t && (t.id === threadId || ("solo_" + t.id) === threadId || t.id === ("solo_" + threadId)));
+                  if (matchT) {
+                    matchT.history = hist;
+                    matchT.publicHistory = hist;
+                  }
                 }
               }
+            } else {
+              const curT = (cfg.threads || []).find((t) => t && t.id === cfg.activeThreadId);
+              if (curT) {
+                curT.history = hist;
+              }
             }
-          } else {
-            const curT = (cfg.threads || []).find((t) => t && t.id === cfg.activeThreadId);
-            if (curT) {
-              curT.history = hist;
-            }
+          } finally {
+            delete chat._isSyncingSoloHistory;
           }
         }
         window.syncCurrentSoloThreadHistory = syncCurrentSoloThreadHistory;
