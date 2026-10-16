@@ -1198,6 +1198,15 @@
               <button id="fetch-models-btn" class="moe-btn-secondary" style="margin-top: 15px;">
                 拉取模型列表
               </button>
+              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
+                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
+                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">流式</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="api-stream-switch" />
+                    <span class="slider"></span>
+                  </label>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -20661,11 +20670,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
 
-          // 1. 优先通过本地同源 Node 后端 /api/proxy 转发（避免浏览器跨域拦截白等以及后台 Tab 外部连接降频）
+          // 核心单次调用通道：超时延长至8分钟（480秒），禁止在后台重复重试多扣费用
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            controller.abort(new Error("请求超时：已等待超过7分钟未收到模型回复，连接已切断"));
+          }, 480000);
+
           try {
             const localProxyRes = await origFetch("/api/proxy", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
+              signal: controller.signal,
               body: JSON.stringify({
                 url: targetUrl,
                 method,
@@ -20673,84 +20688,81 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
               }),
             });
-            const localProxyText = await localProxyRes.text();
-            const isLocalProxyHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(localProxyText);
-            if (!isLocalProxyHtml && localProxyRes.status !== 404) {
+            clearTimeout(timeoutId);
+
+            const contentType = localProxyRes.headers.get("content-type") || "";
+
+            // 流式数据处理与实时分片回调
+            if (options.onStreamChunk && localProxyRes.body && contentType.includes("event-stream")) {
+              const reader = localProxyRes.body.getReader();
+              const decoder = new TextDecoder();
+              let fullText = "";
+              let fullThinking = "";
+              let buffer = "";
+
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                  const trimmed = line.trim();
+                  if (!trimmed || !trimmed.startsWith("data:")) continue;
+                  const dataStr = trimmed.slice(5).trim();
+                  if (dataStr === "[DONE]") continue;
+                  try {
+                    const parsed = JSON.parse(dataStr);
+                    const delta = parsed.choices?.[0]?.delta || {};
+                    const deltaContent = delta.content || "";
+                    const deltaReasoning = delta.reasoning_content || delta.reasoning || "";
+                    if (deltaContent) fullText += deltaContent;
+                    if (deltaReasoning) fullThinking += deltaReasoning;
+                    options.onStreamChunk({
+                      content: fullText,
+                      thinking: fullThinking,
+                      deltaContent,
+                      deltaReasoning,
+                    });
+                  } catch (_) {}
+                }
+              }
+
+              const synthesized = {
+                choices: [
+                  {
+                    index: 0,
+                    message: {
+                      role: "assistant",
+                      content: fullText,
+                      reasoning_content: fullThinking || undefined,
+                    },
+                  },
+                ],
+              };
               return {
-                ok: localProxyRes.ok,
-                status: localProxyRes.status,
-                text: localProxyText,
+                ok: true,
+                status: 200,
+                text: JSON.stringify(synthesized),
                 headers: localProxyRes.headers,
               };
             }
-          } catch (_) {
-            // 本地代理不可达时继续尝试直连与备用代理
-          }
 
-          // 2. 尝试浏览器端直连
-          let directRes = null;
-          let directText = "";
-          try {
-            directRes = await origFetch(targetUrl, {
-              method,
-              headers,
-              body: method !== "GET" && method !== "HEAD" ? body : undefined,
-            });
-            directText = await directRes.text();
-            const isHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(directText);
-            if (!isHtml) {
-              return {
-                ok: directRes.ok,
-                status: directRes.status,
-                text: directText,
-                headers: directRes.headers,
-              };
-            }
-          } catch (_) {
-            // 浏览器端跨域拦截时，尝试远程备用转发接口
-          }
-
-          const proxyEndpoints = [
-            "https://ais-pre-ugzk54jw372rrw774brrw3-328602855376.asia-southeast1.run.app/api/proxy",
-            "https://ais-dev-ugzk54jw372rrw774brrw3-328602855376.asia-southeast1.run.app/api/proxy",
-          ];
-
-          for (const proxyEndpoint of proxyEndpoints) {
-            try {
-              const proxyRes = await origFetch(proxyEndpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  url: targetUrl,
-                  method,
-                  headers,
-                  body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
-                }),
-              });
-              const proxyText = await proxyRes.text();
-              const isProxyHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(proxyText);
-              if (isProxyHtml) {
-                continue;
-              }
-              return {
-                ok: proxyRes.ok,
-                status: proxyRes.status,
-                text: proxyText,
-                headers: proxyRes.headers,
-              };
-            } catch (_) {}
-          }
-
-          if (directRes) {
+            const localProxyText = await localProxyRes.text();
             return {
-              ok: directRes.ok,
-              status: directRes.status,
-              text: directText,
-              headers: directRes.headers,
+              ok: localProxyRes.ok,
+              status: localProxyRes.status,
+              text: localProxyText,
+              headers: localProxyRes.headers,
             };
+          } catch (err) {
+            clearTimeout(timeoutId);
+            if (err.name === "AbortError" || controller.signal.aborted) {
+              throw new Error("请求超时：已等待超过7分钟未收到模型回复，连接已切断，请检查网络或模型服务状态");
+            }
+            throw err;
           }
-
-          throw new Error("连接失败 请检查网络连接 反代地址与密钥");
         }
         window.requestLlmapiWithFallback = requestLlmapiWithFallback;
 
@@ -21185,54 +21197,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "默认模型"
             ).trim();
 
+            const isStreamActive = !!apiCfg.streamEnabled;
+
             if (!isClaudeOrLlmapi && protocol === "default") {
               const fetchStartT = Date.now();
+              const fallbackRes = await requestLlmapiWithFallback(urlStr, {
+                ...init,
+                onStreamChunk: isStreamActive ? (chunk) => {
+                  if (typeof window.onAiStreamTokenReceived === "function") {
+                    window.onAiStreamTokenReceived(chunk);
+                  }
+                } : undefined,
+              });
+              const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
               try {
-                const directRes = await origFetch(input, init);
-                const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
-                try {
-                  recordApiCallLog({
-                    source: isSubCall ? "副API" : "主API",
-                    model: modelId,
-                    status: directRes.ok ? "成功" : "失败",
-                    duration: durStr,
-                    purpose: "对话",
-                    detail: directRes.ok ? "回复成功" : `HTTP ${directRes.status}`,
-                  });
-                } catch (_) {}
-                return directRes;
-              } catch (directErr) {
-                if (/Failed to fetch|NetworkError/i.test(String(directErr?.message || ""))) {
-                  const fallbackRes = await requestLlmapiWithFallback(urlStr, init);
-                  const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
-                  try {
-                    recordApiCallLog({
-                      source: isSubCall ? "副API" : "主API",
-                      model: modelId,
-                      status: fallbackRes.ok ? "成功" : "失败",
-                      duration: durStr,
-                      purpose: "对话",
-                      detail: fallbackRes.ok ? "回复成功" : `HTTP ${fallbackRes.status}`,
-                    });
-                  } catch (_) {}
-                  return new Response(fallbackRes.text, {
-                    status: fallbackRes.status,
-                    headers: fallbackRes.headers,
-                  });
-                }
-                const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
-                try {
-                  recordApiCallLog({
-                    source: isSubCall ? "副API" : "主API",
-                    model: modelId,
-                    status: "失败",
-                    duration: durStr,
-                    purpose: "对话",
-                    detail: directErr?.message || "网络错误",
-                  });
-                } catch (_) {}
-                throw directErr;
-              }
+                recordApiCallLog({
+                  source: isSubCall ? "副API" : "主API",
+                  model: modelId,
+                  status: fallbackRes.ok ? "成功" : "失败",
+                  duration: durStr,
+                  purpose: "对话",
+                  detail: fallbackRes.ok ? "回复成功" : `HTTP ${fallbackRes.status}`,
+                });
+              } catch (_) {}
+              return new Response(fallbackRes.text, {
+                status: fallbackRes.status,
+                headers: fallbackRes.headers,
+              });
             }
 
             const domProxy = document.getElementById(isSubCall ? "sub-proxy-url" : "proxy-url")?.value?.trim() || "";
@@ -21282,7 +21273,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               model: modelId,
               messages: normalizedMessages,
               temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
-              stream: false,
+              stream: isStreamActive,
             };
 
             const fetchStartT = Date.now();
@@ -21291,8 +21282,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${cleanKey}`,
+                ...(isStreamActive ? { Accept: "text/event-stream" } : {})
               },
               body: JSON.stringify(openAiPayload),
+              onStreamChunk: isStreamActive ? (chunk) => {
+                if (typeof window.onAiStreamTokenReceived === "function") {
+                  window.onAiStreamTokenReceived(chunk);
+                }
+              } : undefined,
             });
 
             if (!res.ok) {
@@ -21375,6 +21372,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 msg.content = textOut;
                 if (thinkingOut && !msg.reasoning_content) {
                   msg.reasoning_content = thinkingOut;
+                }
+              } else if (!msg.content && (msg.reasoning_content || msg.reasoning)) {
+                const rVal = msg.reasoning_content || msg.reasoning;
+                msg.content = rVal;
+                if (!msg.reasoning_content) {
+                  msg.reasoning_content = rVal;
                 }
               }
             }
@@ -30799,6 +30802,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             state.apiConfig.proxyUrl || "";
           document.getElementById("api-key").value =
             state.apiConfig.apiKey || "";
+
+          const streamSwitch = document.getElementById("api-stream-switch");
+          if (streamSwitch) {
+            streamSwitch.checked = !!state.apiConfig.streamEnabled;
+            streamSwitch.onchange = () => {
+              state.apiConfig.streamEnabled = streamSwitch.checked;
+              if (typeof db !== "undefined" && db.apiConfig) {
+                db.apiConfig.put(state.apiConfig);
+              }
+            };
+          }
 
           const realTimeSwitch = document.getElementById("real-time-cognition-switch");
           if (realTimeSwitch) {
@@ -43326,6 +43340,7 @@ ${stickerContext || "无"}
               ...messagesPayload,
             ];
 
+            const isStreamActive = !!state.apiConfig?.streamEnabled;
             const response = isGemini
               ? await fetch(geminiConfig.url, geminiConfig.data)
               : await fetch(`${proxyUrl}/v1/chat/completions`, {
@@ -43333,12 +43348,13 @@ ${stickerContext || "无"}
                   headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${apiKey}`,
+                    ...(isStreamActive ? { Accept: "text/event-stream" } : {}),
                   },
                   body: JSON.stringify({
                     model: model,
                     messages: openAiMessages,
                     temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                    stream: false,
+                    stream: isStreamActive,
                   }),
                 });
             if (!response.ok) {
@@ -43347,7 +43363,7 @@ ${stickerContext || "无"}
                 // 尝试解析错误信息体为JSON
                 const errorData = await response.json();
                 // 安全地获取错误信息，如果结构不符合预期，就将整个错误对象转为字符串
-                errorMsg += ` - ${errorData?.error?.message || JSON.stringify(errorData)}`;
+                errorMsg += ` - ${errorData?.error?.message || errorData?.message || JSON.stringify(errorData)}`;
               } catch (jsonError) {
                 // 如果连JSON都不是，就直接读取文本
                 errorMsg += ` - ${await response.text()}`;
@@ -43357,8 +43373,9 @@ ${stickerContext || "无"}
             }
             const data = await response.json();
 
-            // 添加对 data 结构的安全检查
+            // 添加对 data 结构的安全检查，全面兼容推理模型思考字段与纯文本
             let aiResponseContent = "";
+            let reasoningFromData = "";
             if (isGemini) {
               const candidate = data?.candidates?.[0];
               if (candidate?.content?.parts && Array.isArray(candidate.content.parts)) {
@@ -43368,12 +43385,17 @@ ${stickerContext || "无"}
               }
             } else {
               const choice = data?.choices?.[0];
-              if (choice?.message?.content) {
-                if (typeof choice.message.content === "string") {
-                  aiResponseContent = choice.message.content;
-                } else if (Array.isArray(choice.message.content)) {
-                  aiResponseContent = choice.message.content.map(c => (typeof c === "string" ? c : (c?.text || JSON.stringify(c)))).join("");
+              const msg = choice?.message || choice;
+              reasoningFromData = msg?.reasoning_content || msg?.reasoning || "";
+              if (msg?.content) {
+                if (typeof msg.content === "string") {
+                  aiResponseContent = msg.content;
+                } else if (Array.isArray(msg.content)) {
+                  aiResponseContent = msg.content.map(c => (typeof c === "string" ? c : (c?.text || JSON.stringify(c)))).join("");
                 }
+              }
+              if (!aiResponseContent && reasoningFromData) {
+                aiResponseContent = reasoningFromData;
               }
             }
 
@@ -43387,18 +43409,18 @@ ${stickerContext || "无"}
                 temperature: state.apiConfig?.temperature || 0.8,
               }, {
                 rawContent: aiResponseContent,
-                reasoningContent: data?.choices?.[0]?.message?.reasoning_content || null,
+                reasoningContent: data?.choices?.[0]?.message?.reasoning_content || reasoningFromData || null,
                 fullData: data,
               });
             }
 
-            // 检查修复后的结果是否真的拿到了内容
+            // 检查修复后的结果是否真的拿到了内容，绝不静默吞掉异常
             if (!aiResponseContent || !aiResponseContent.trim()) {
-              console.warn(
-                `API返回了空内容或格式不正确，尝试容错处理。返回数据:`,
-                data,
-              );
-              aiResponseContent = `[{"action": "text", "content": "..."}]`;
+              if (reasoningFromData && reasoningFromData.trim()) {
+                aiResponseContent = reasoningFromData.trim();
+              } else {
+                throw new Error("模型未返回有效回复内容，请检查反代与模型配置");
+              }
             }
 
             console.log(`AI '${chat.name}' 的原始回复:`, aiResponseContent);
@@ -43611,6 +43633,22 @@ ${stickerContext || "无"}
             }
 
             messagesArray = filteredMessages;
+            if (messagesArray.length === 0) {
+              if (collectedThinking && collectedThinking.trim()) {
+                messagesArray.push({
+                  type: "text",
+                  content: collectedThinking.trim(),
+                  thinking: collectedThinking.trim(),
+                });
+              } else if (aiResponseContent && aiResponseContent.trim()) {
+                messagesArray.push({
+                  type: "text",
+                  content: aiResponseContent.trim(),
+                });
+              } else {
+                throw new Error("模型未返回有效回复内容，请检查模型状态");
+              }
+            }
             if (typeof parseAndAddAiGiftItems === "function") {
               await parseAndAddAiGiftItems(chat, messagesArray);
             }
@@ -47924,6 +47962,9 @@ ${stickerContext || "无"}
               if (chat.isGroup) errorMessage.senderName = "系统消息";
               if (!Array.isArray(chat.history)) chat.history = [];
               chat.history.push(errorMessage);
+              if (typeof showCustomAlert === "function") {
+                showCustomAlert("请求出错", errText);
+              }
             }
 
             if (chat && chat.id) {
@@ -80784,6 +80825,8 @@ ${stickerContext || "无"}
                 model: state.apiConfig.model,
                 temperature: state.apiConfig.temperature,
               };
+              const streamSwitch = document.getElementById("api-stream-switch");
+              state.apiConfig.streamEnabled = streamSwitch ? streamSwitch.checked : false;
               const cognitionSwitch = document.getElementById("real-time-cognition-switch");
               state.apiConfig.realTimeCognitionEnabled = cognitionSwitch ? cognitionSwitch.checked : true;
               const globalMusicSwitch = document.getElementById("global-ai-music-switch");

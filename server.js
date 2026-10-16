@@ -118,6 +118,9 @@ app.post('/api/merge-pdf', async (req, res) => {
 
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
+  req.setTimeout(600000);
+  res.setTimeout(600000);
+
   try {
     const { url, method = 'POST', headers = {}, body } = req.body;
     if (!url) {
@@ -141,6 +144,30 @@ app.post('/api/proxy', async (req, res) => {
     const response = await fetch(url, fetchOptions);
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
+
+    if (contentType.includes('event-stream') || contentType.includes('text/event-stream')) {
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+
+      if (response.body) {
+        const reader = response.body.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+        } catch (streamErr) {
+          console.warn('[Proxy Stream] Stream reading error:', streamErr.message);
+        } finally {
+          res.end();
+        }
+        return;
+      }
+    }
+
     if (contentType) {
       res.setHeader('Content-Type', contentType);
     }
@@ -148,7 +175,7 @@ app.post('/api/proxy', async (req, res) => {
     if (contentType.includes('application/json')) {
       const data = await response.json();
       return res.json(data);
-    } else if (contentType.includes('text/') || contentType.includes('event-stream')) {
+    } else if (contentType.includes('text/')) {
       const text = await response.text();
       return res.send(text);
     } else {
@@ -749,8 +776,14 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Server] Unhandled rejection:', reason);
 });
 
+server.timeout = 600000;
+server.requestTimeout = 600000;
+server.headersTimeout = 610000;
+server.keepAliveTimeout = 600000;
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
+
 
 
