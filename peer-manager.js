@@ -2513,13 +2513,14 @@
         moduleMiniMaps: groupChat.settings?.moduleMiniMaps ? JSON.parse(JSON.stringify(groupChat.settings.moduleMiniMaps)) : {},
         miniMapSvg: groupChat.settings?.miniMapSvg || null,
         miniMapStyle: groupChat.settings?.miniMapStyle || "自适应",
-        peerGroupMapLocationEffect: groupChat.settings?.peerGroupMapLocationEffect,
-        peerGroupMapLocationColor: groupChat.settings?.peerGroupMapLocationColor,
+        peerGroupMapLocationEffect: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.effect || groupChat.settings?.peerGroupMapLocationEffect,
+        peerGroupMapLocationColor: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.color || groupChat.settings?.peerGroupMapLocationColor,
         peerGroupMapLocationGlowSpeed: groupChat.settings?.peerGroupMapLocationGlowSpeed,
         peerGroupMapLocationGlowBrightness: groupChat.settings?.peerGroupMapLocationGlowBrightness,
-        peerGroupMapLocationCustomIcon: groupChat.settings?.peerGroupMapLocationCustomIcon,
-        peerGroupMapLocationCustomGlow: groupChat.settings?.peerGroupMapLocationCustomGlow,
-        peerGroupMapLocationCustomScale: groupChat.settings?.peerGroupMapLocationCustomScale
+        peerGroupMapLocationCustomIcon: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.icon !== undefined ? groupChat.settings.peerGroupPlayerCustomIcons[myCode].icon : groupChat.settings?.peerGroupMapLocationCustomIcon,
+        peerGroupMapLocationCustomGlow: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.glow !== undefined ? groupChat.settings.peerGroupPlayerCustomIcons[myCode].glow : groupChat.settings?.peerGroupMapLocationCustomGlow,
+        peerGroupMapLocationCustomScale: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.scale !== undefined ? groupChat.settings.peerGroupPlayerCustomIcons[myCode].scale : groupChat.settings?.peerGroupMapLocationCustomScale,
+        peerGroupPlayerCustomIcons: groupChat.settings?.peerGroupPlayerCustomIcons || {}
       };
 
       const selectedChapIds = Array.isArray(groupChat.selectedModuleChapterIds)
@@ -3229,7 +3230,45 @@
         if (!groupChat.settings.sharedSoloRecords || typeof groupChat.settings.sharedSoloRecords !== "object") {
           groupChat.settings.sharedSoloRecords = {};
         }
-        groupChat.settings.sharedSoloRecords[data.fromCode] = data.sharedSoloPayload;
+        const existingList = Array.isArray(groupChat.settings.sharedSoloRecords[data.fromCode])
+          ? groupChat.settings.sharedSoloRecords[data.fromCode]
+          : [];
+        const mergedList = data.sharedSoloPayload.map((incomingT) => {
+          if (!incomingT || !incomingT.id) return incomingT;
+          const matchedExisting = existingList.find((ex) => ex && (ex.id === incomingT.id || ("solo_" + ex.id) === incomingT.id || ex.id === ("solo_" + incomingT.id)));
+          const inHist = Array.isArray(incomingT.history) ? incomingT.history : (Array.isArray(incomingT.publicHistory) ? incomingT.publicHistory : []);
+          const exHist = matchedExisting && Array.isArray(matchedExisting.history) ? matchedExisting.history : [];
+
+          const normalizedIncomingHist = inHist.map((m) => {
+            if (!m) return m;
+            if (m.role === "user" && (!m.senderPeerCode || m.senderPeerCode !== myCode)) {
+              return {
+                ...m,
+                role: "assistant",
+                isPeerUserMessage: true,
+                senderPeerCode: m.senderPeerCode || data.fromCode,
+                senderName: m.senderName && m.senderName !== "我" ? m.senderName : (incomingT.ownerName || data.senderName || "密友"),
+                senderAvatar: m.senderAvatar || data.senderAvatar || window.defaultAvatar
+              };
+            }
+            return m;
+          });
+
+          const combined = [...exHist];
+          normalizedIncomingHist.forEach((m) => {
+            if (!m) return;
+            const dup = combined.some((em) => (m.eventId && em.eventId === m.eventId) || (em.timestamp === m.timestamp && em.content === m.content));
+            if (!dup) combined.push(m);
+          });
+          combined.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+
+          return {
+            ...incomingT,
+            history: combined,
+            publicHistory: combined
+          };
+        });
+        groupChat.settings.sharedSoloRecords[data.fromCode] = mergedList;
       }
       if (Array.isArray(data.essenceMessages)) {
         groupChat.settings.essenceMessages = data.essenceMessages;
@@ -3351,26 +3390,22 @@
         if (data.mapSyncData.miniMapStyle !== undefined) {
           groupChat.settings.miniMapStyle = data.mapSyncData.miniMapStyle;
         }
-        if (data.mapSyncData.peerGroupMapLocationEffect !== undefined) {
-          groupChat.settings.peerGroupMapLocationEffect = data.mapSyncData.peerGroupMapLocationEffect;
+        if (data.mapSyncData.peerGroupPlayerCustomIcons && typeof data.mapSyncData.peerGroupPlayerCustomIcons === "object") {
+          if (!groupChat.settings.peerGroupPlayerCustomIcons) groupChat.settings.peerGroupPlayerCustomIcons = {};
+          for (const [code, pConf] of Object.entries(data.mapSyncData.peerGroupPlayerCustomIcons)) {
+            if (code !== myCode && pConf) {
+              groupChat.settings.peerGroupPlayerCustomIcons[code] = { ...pConf };
+            }
+          }
         }
-        if (data.mapSyncData.peerGroupMapLocationColor !== undefined) {
-          groupChat.settings.peerGroupMapLocationColor = data.mapSyncData.peerGroupMapLocationColor;
-        }
-        if (data.mapSyncData.peerGroupMapLocationGlowSpeed !== undefined) {
-          groupChat.settings.peerGroupMapLocationGlowSpeed = data.mapSyncData.peerGroupMapLocationGlowSpeed;
-        }
-        if (data.mapSyncData.peerGroupMapLocationGlowBrightness !== undefined) {
-          groupChat.settings.peerGroupMapLocationGlowBrightness = data.mapSyncData.peerGroupMapLocationGlowBrightness;
-        }
-        if (data.mapSyncData.peerGroupMapLocationCustomIcon !== undefined) {
-          groupChat.settings.peerGroupMapLocationCustomIcon = data.mapSyncData.peerGroupMapLocationCustomIcon;
-        }
-        if (data.mapSyncData.peerGroupMapLocationCustomGlow !== undefined) {
-          groupChat.settings.peerGroupMapLocationCustomGlow = data.mapSyncData.peerGroupMapLocationCustomGlow;
-        }
-        if (data.mapSyncData.peerGroupMapLocationCustomScale !== undefined) {
-          groupChat.settings.peerGroupMapLocationCustomScale = data.mapSyncData.peerGroupMapLocationCustomScale;
+        if (data.fromCode && data.mapSyncData.peerGroupMapLocationCustomIcon !== undefined) {
+          if (!groupChat.settings.peerGroupPlayerCustomIcons) groupChat.settings.peerGroupPlayerCustomIcons = {};
+          groupChat.settings.peerGroupPlayerCustomIcons[data.fromCode] = {
+            icon: data.mapSyncData.peerGroupMapLocationCustomIcon || "",
+            glow: !!data.mapSyncData.peerGroupMapLocationCustomGlow,
+            scale: data.mapSyncData.peerGroupMapLocationCustomScale !== undefined ? data.mapSyncData.peerGroupMapLocationCustomScale : 2.0,
+            effect: data.mapSyncData.peerGroupMapLocationEffect || (data.mapSyncData.peerGroupMapLocationCustomIcon ? "custom" : "pin")
+          };
         }
       }
       if (Array.isArray(data.selectedModuleChapterIds)) {

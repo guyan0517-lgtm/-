@@ -31842,9 +31842,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 			            <div class="info">
 			                <div class="name-line">
 			                    <span class="name">${
-                            !chat.isGroup && chat.settings.remarkName
-                              ? chat.settings.remarkName
-                              : chat.name
+                            typeof window.getEffectiveChatDisplayTitle === "function"
+                              ? window.getEffectiveChatDisplayTitle(chat)
+                              : (!chat.isGroup && chat.settings.remarkName
+                                ? chat.settings.remarkName
+                                : chat.name)
                           }</span>
 			                    ${chat.isGroup ? '<span class="group-tag">群聊</span>' : ""}
 			                    ${streakHtml}
@@ -33171,15 +33173,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const isPeerGrpContext = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
           const myPeerCodeVal = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
+          const myNickVal = (chat && chat.settings && (chat.settings.myNickname || chat.settings.myName)) || "我";
           let isUser = msg.role === "user";
           if (isPeerGrpContext) {
-            if (msg.senderPeerCode) {
+            if (msg.isPeerUserMessage) {
+              isUser = false;
+            } else if (msg.senderPeerCode) {
               isUser = (msg.senderPeerCode === myPeerCodeVal);
-            } else if (msg.role === "user" && chat.activeLineMode === "solo") {
+            } else if (chat.activeLineMode === "solo") {
               const activeT = (typeof window.getActiveSoloThread === "function") ? window.getActiveSoloThread(chat) : null;
-              if (activeT && activeT.ownerPeerCode && activeT.ownerPeerCode !== myPeerCodeVal) {
+              const isPeerThread = Boolean(activeT && (activeT.isPeerThread || chat.viewingPeerSoloThread || (activeT.ownerPeerCode && activeT.ownerPeerCode !== myPeerCodeVal)));
+              if (isPeerThread) {
+                if (msg.senderPeerCode && msg.senderPeerCode !== myPeerCodeVal) {
+                  isUser = false;
+                } else if (!msg.senderPeerCode) {
+                  isUser = false;
+                }
+              } else if (msg.senderName && msg.senderName !== myNickVal && msg.senderName !== "我") {
                 isUser = false;
               }
+            } else if (msg.senderName && msg.senderName !== myNickVal && msg.senderName !== "我") {
+              isUser = false;
             }
           }
           const wrapper = document.createElement("div");
@@ -33220,13 +33234,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             } else {
               let peerMemberObj = (chat.members || []).find(
-                (m) => (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) || m.originalName === msg.senderName || m.originalName === msg.sender || m.groupNickname === msg.senderName || m.groupNickname === msg.sender,
+                (m) => (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) || (m.isPeerMember && msg.senderName && (m.originalName === msg.senderName || m.groupNickname === msg.senderName)),
               );
               if (!peerMemberObj && msg.senderPeerCode && typeof window.getGroupHumanPlayersList === "function") {
                 const hps = window.getGroupHumanPlayersList(chat);
                 const foundHp = hps.find(h => h.peerCode === msg.senderPeerCode);
                 if (foundHp) {
                   peerMemberObj = { groupNickname: foundHp.name, originalName: foundHp.name, avatar: defaultGroupMemberAvatar };
+                }
+              }
+              if (!peerMemberObj && chat.activeLineMode === "solo") {
+                const activeT = (typeof window.getActiveSoloThread === "function") ? window.getActiveSoloThread(chat) : null;
+                if (activeT && (activeT.isPeerThread || chat.viewingPeerSoloThread || (activeT.ownerPeerCode && activeT.ownerPeerCode !== myPeerCodeVal))) {
+                  const pOwnerCode = activeT.ownerPeerCode;
+                  const pOwnerName = activeT.ownerName || "密友";
+                  const foundMem = (chat.members || []).find(m => m.peerCode === pOwnerCode || m.isPeerMember);
+                  peerMemberObj = foundMem || { groupNickname: pOwnerName, originalName: pOwnerName, avatar: defaultGroupMemberAvatar };
                 }
               }
               const member = peerMemberObj;
@@ -33299,13 +33322,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               avatarFrameSrc = chat.settings.myAvatarFrame || ""; // <--- 获取“我”的头像框
             } else {
               let member = (chat.members || []).find(
-                (m) => (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) || m.originalName === msg.senderName || m.originalName === msg.sender || m.groupNickname === msg.senderName || m.groupNickname === msg.sender,
+                (m) => (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) || (m.isPeerMember && msg.senderName && (m.originalName === msg.senderName || m.groupNickname === msg.senderName)),
               );
               if (!member && msg.senderPeerCode && typeof window.getGroupHumanPlayersList === "function") {
                 const hps = window.getGroupHumanPlayersList(chat);
                 const foundHp = hps.find(h => h.peerCode === msg.senderPeerCode);
                 if (foundHp) {
                   member = { groupNickname: foundHp.name, originalName: foundHp.name, avatar: defaultGroupMemberAvatar };
+                }
+              }
+              if (!member && chat.activeLineMode === "solo") {
+                const activeT = (typeof window.getActiveSoloThread === "function") ? window.getActiveSoloThread(chat) : null;
+                if (activeT && (activeT.isPeerThread || chat.viewingPeerSoloThread || (activeT.ownerPeerCode && activeT.ownerPeerCode !== myPeerCodeVal))) {
+                  const pOwnerCode = activeT.ownerPeerCode;
+                  const pOwnerName = activeT.ownerName || "密友";
+                  const foundMem = (chat.members || []).find(m => m.peerCode === pOwnerCode || m.isPeerMember);
+                  member = foundMem || { groupNickname: pOwnerName, originalName: pOwnerName, avatar: defaultGroupMemberAvatar };
                 }
               }
               const statusMem = (msg.type === "system_status") ? (chat.members || []).find(
@@ -35051,6 +35083,31 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           // 把 openChat 函数挂载到全局 window 对象上
           window.openChat = openChat;
+
+          if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && chat.activeLineMode === "solo") {
+            const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(chat) : null;
+            if (cfg) {
+              const allThreads = typeof window.getAllGroupSoloThreads === "function" ? window.getAllGroupSoloThreads(chat) : [];
+              const curThread = allThreads.find((t) => t.id === cfg.activeThreadId) || allThreads[0];
+              if (curThread) {
+                if (curThread.isPeerThread) {
+                  chat.viewingPeerSoloThread = curThread;
+                  const histArr = Array.isArray(curThread.history) ? curThread.history : (Array.isArray(curThread.publicHistory) ? curThread.publicHistory : []);
+                  if (histArr.length > 0 || !Array.isArray(chat.history) || chat.history.length === 0) {
+                    chat.history = [...histArr];
+                  }
+                } else {
+                  chat.viewingPeerSoloThread = null;
+                  const localT = cfg.threads.find((t) => t.id === curThread.id);
+                  if (localT && Array.isArray(localT.history)) {
+                    if (localT.history.length > 0 || !Array.isArray(chat.history) || chat.history.length === 0) {
+                      chat.history = [...localT.history];
+                    }
+                  }
+                }
+              }
+            }
+          }
 
           renderChatInterface(chat.id);
           showScreen("chat-interface-screen");
@@ -39543,9 +39600,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   .replace(/</g, "&lt;")
                   .replace(/>/g, "&gt;");
 
-                if (effectType === "glow") {
+                const myPeerCodeVal = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
+                const isCurrentMe = Boolean(pItem.isMe || pItem.peerCode === myPeerCodeVal);
+                const pCustomConf = chat.settings?.peerGroupPlayerCustomIcons?.[pItem.peerCode] || (isCurrentMe ? {
+                  icon: chat.settings?.peerGroupMapLocationCustomIcon || "",
+                  glow: !!chat.settings?.peerGroupMapLocationCustomGlow,
+                  scale: chat.settings?.peerGroupMapLocationCustomScale !== undefined ? parseFloat(chat.settings.peerGroupMapLocationCustomScale) : 2.0,
+                  effect: chat.settings?.peerGroupMapLocationEffect || "pin"
+                } : null);
+
+                const pEffect = pCustomConf?.effect || (pCustomConf?.icon ? "custom" : (isCurrentMe ? effectType : "pin"));
+                const pIcon = pCustomConf?.icon || (isCurrentMe ? customIcon : "");
+                const pGlow = pCustomConf?.glow !== undefined ? pCustomConf.glow : (isCurrentMe ? customGlow : false);
+                const pScale = pCustomConf?.scale !== undefined ? parseFloat(pCustomConf.scale) : (isCurrentMe && chat.settings?.peerGroupMapLocationCustomScale !== undefined ? parseFloat(chat.settings.peerGroupMapLocationCustomScale) : 2.0);
+
+                if (pEffect === "glow") {
                   matchedNode.classList.add("map-location-glow");
-                  matchedNode.style.setProperty("--map-loc-glow-color", pinColor);
+                  matchedNode.style.setProperty("--map-loc-glow-color", pColor);
                   matchedNode.style.setProperty("--map-loc-glow-speed", `${glowSpeed}s`);
                   matchedNode.style.setProperty("--map-loc-glow-spread", `${Math.round(8 * glowBright)}px`);
                   if (svgRoot) {
@@ -39560,9 +39631,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     `;
                     svgRoot.appendChild(beaconG);
                   }
-                } else if (effectType === "custom" && customIcon) {
-                  const customScale = chat.settings?.peerGroupMapLocationCustomScale !== undefined ? parseFloat(chat.settings.peerGroupMapLocationCustomScale) : 2.0;
-                  const iconSize = Math.max(12, Math.round(20 * customScale));
+                } else if ((pEffect === "custom" || pIcon) && pIcon) {
+                  const iconSize = Math.max(12, Math.round(20 * pScale));
                   const iconOffset = -Math.round(iconSize / 2);
 
                   if (svgRoot) {
@@ -39572,8 +39642,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     beaconG.setAttribute("style", "pointer-events: none;");
 
                     const imgEl = document.createElementNS("http://www.w3.org/2000/svg", "image");
-                    imgEl.setAttribute("href", customIcon);
-                    imgEl.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", customIcon);
+                    imgEl.setAttribute("href", pIcon);
+                    imgEl.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", pIcon);
                     imgEl.setAttribute("x", iconOffset);
                     imgEl.setAttribute("y", iconOffset);
                     imgEl.setAttribute("width", iconSize);
@@ -39589,9 +39659,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     `;
                     beaconG.appendChild(labelG);
 
-                    if (customGlow) {
+                    if (pGlow) {
                       matchedNode.classList.add("map-location-glow");
-                      matchedNode.style.setProperty("--map-loc-glow-color", pinColor);
+                      matchedNode.style.setProperty("--map-loc-glow-color", pColor);
                       matchedNode.style.setProperty("--map-loc-glow-speed", `${glowSpeed}s`);
                       matchedNode.style.setProperty("--map-loc-glow-spread", `${Math.round(8 * glowBright)}px`);
                     }
@@ -40484,7 +40554,9 @@ ${recentHistoryText}
             } finally {
               delete window.activeGeneratingChats[chatId];
               if (initialHeaderTitle && state.activeChatId === chatId) {
-                initialHeaderTitle.textContent = chat.name;
+                initialHeaderTitle.textContent = typeof window.getEffectiveChatDisplayTitle === "function"
+                  ? window.getEffectiveChatDisplayTitle(chat)
+                  : chat.name;
                 initialHeaderTitle.classList.remove("typing-status");
               }
             }
@@ -41148,7 +41220,9 @@ ${recentHistoryText}
                       if (isViewingThisChat) appendMessage(errBubble, chat);
                     } finally {
                       if (chatHeaderTitle) {
-                        chatHeaderTitle.textContent = chat.name;
+                        chatHeaderTitle.textContent = typeof window.getEffectiveChatDisplayTitle === "function"
+                          ? window.getEffectiveChatDisplayTitle(chat)
+                          : chat.name;
                         chatHeaderTitle.classList.remove("typing-status");
                       }
                     }
@@ -41204,7 +41278,9 @@ ${recentHistoryText}
               if (chatHeaderTitle && state.chats[chatId]) {
                 chatHeaderTitle.style.opacity = 0;
                 setTimeout(() => {
-                  chatHeaderTitle.textContent = state.chats[chatId].name;
+                  chatHeaderTitle.textContent = typeof window.getEffectiveChatDisplayTitle === "function"
+                    ? window.getEffectiveChatDisplayTitle(state.chats[chatId])
+                    : state.chats[chatId].name;
                   chatHeaderTitle.classList.remove("typing-status");
                   chatHeaderTitle.style.opacity = 1;
                 }, 200);
@@ -41397,7 +41473,9 @@ ${recentHistoryText}
                 }
               }
               if (chatHeaderTitle) {
-                chatHeaderTitle.textContent = chat.name;
+                chatHeaderTitle.textContent = typeof window.getEffectiveChatDisplayTitle === "function"
+                  ? window.getEffectiveChatDisplayTitle(chat)
+                  : chat.name;
                 chatHeaderTitle.classList.remove("typing-status");
               }
             } else if (chat.settings.offlineMode?.enabled) {
@@ -41422,7 +41500,9 @@ ${recentHistoryText}
                 if (typingIndicator) typingIndicator.style.display = "none";
               } else {
                 if (chatHeaderTitle && state.chats[chatId]) {
-                  chatHeaderTitle.textContent = state.chats[chatId].name;
+                  chatHeaderTitle.textContent = typeof window.getEffectiveChatDisplayTitle === "function"
+                    ? window.getEffectiveChatDisplayTitle(state.chats[chatId])
+                    : state.chats[chatId].name;
                   chatHeaderTitle.classList.remove("typing-status");
                 }
               }
@@ -47905,9 +47985,11 @@ ${stickerContext || "无"}
               const curHeaderTitle = document.getElementById("chat-header-title");
               const targetChatObj = state.chats[chat.id] || state.chats[chatId] || chat;
               if (curHeaderTitle && targetChatObj) {
-                const finalDisplayName = (!targetChatObj.isGroup && targetChatObj.settings?.remarkName)
-                  ? targetChatObj.settings.remarkName
-                  : targetChatObj.name;
+                const finalDisplayName = typeof window.getEffectiveChatDisplayTitle === "function"
+                  ? window.getEffectiveChatDisplayTitle(targetChatObj)
+                  : ((!targetChatObj.isGroup && targetChatObj.settings?.remarkName)
+                    ? targetChatObj.settings.remarkName
+                    : targetChatObj.name);
                 curHeaderTitle.textContent = finalDisplayName;
                 curHeaderTitle.classList.remove("typing-status");
               }
@@ -47926,6 +48008,7 @@ ${stickerContext || "无"}
           }
           const chat = state.chats[state.activeChatId];
           if (!chat) return;
+          const myCodeForSticker = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
           const msg = {
             role: "user",
             type: "sticker",
@@ -47933,13 +48016,23 @@ ${stickerContext || "无"}
             meaning: sticker.name,
             isPeerOnlySticker: true,
             timestamp: Date.now(),
+            senderPeerCode: (chat.isGroup && chat.isPeerGroup) ? myCodeForSticker : undefined,
+            senderName: chat.settings?.myNickname || chat.settings?.myName || "我",
+            senderAvatar: chat.settings?.myAvatar || defaultMyGroupAvatar || ""
           };
           if (currentReplyContext) {
             msg.quote = currentReplyContext;
             cancelReplyMode();
           }
           chat.history.push(msg);
-          await db.chats.put(chat);
+          if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
+            window.syncCurrentSoloThreadHistory(chat);
+          }
+          if (typeof window.saveChatToDb === "function") {
+            await window.saveChatToDb(chat);
+          } else {
+            await db.chats.put(chat);
+          }
           appendMessage(msg, chat);
           renderChatList();
           if (window.PeerManager) {
@@ -80372,15 +80465,19 @@ ${stickerContext || "无"}
 
               // 立即入库会话并在界面渲染气泡（0延迟视觉反馈）
               chat.history.push(msg);
-              if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.ensureSoloLineConfig === "function") {
-                const cfg = window.ensureSoloLineConfig(chat);
-                if (cfg) {
-                  if (!chat.viewingPeerSoloThread) {
-                    const curT = (cfg.threads || []).find((t) => t && t.id === cfg.activeThreadId);
-                    if (curT) curT.history = [...chat.history];
-                  } else {
-                    chat.viewingPeerSoloThread.history = [...chat.history];
-                    chat.viewingPeerSoloThread.publicHistory = [...chat.history];
+              if (chat.isGroup && chat.activeLineMode === "solo") {
+                if (typeof window.syncCurrentSoloThreadHistory === "function") {
+                  window.syncCurrentSoloThreadHistory(chat);
+                } else if (typeof window.ensureSoloLineConfig === "function") {
+                  const cfg = window.ensureSoloLineConfig(chat);
+                  if (cfg) {
+                    if (!chat.viewingPeerSoloThread) {
+                      const curT = (cfg.threads || []).find((t) => t && t.id === cfg.activeThreadId);
+                      if (curT) curT.history = [...chat.history];
+                    } else {
+                      chat.viewingPeerSoloThread.history = [...chat.history];
+                      chat.viewingPeerSoloThread.publicHistory = [...chat.history];
+                    }
                   }
                 }
               }
@@ -81794,6 +81891,14 @@ ${stickerContext || "无"}
                       const reader = new FileReader();
                       reader.onload = (re) => {
                         chat.settings.peerGroupMapLocationCustomIcon = re.target.result;
+                        const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
+                        if (!chat.settings.peerGroupPlayerCustomIcons) chat.settings.peerGroupPlayerCustomIcons = {};
+                        chat.settings.peerGroupPlayerCustomIcons[myCode] = {
+                          icon: re.target.result,
+                          glow: pgCustomGlowCb ? pgCustomGlowCb.checked : false,
+                          scale: parseFloat(pgCustomScaleInput ? pgCustomScaleInput.value : 2.0) || 2.0,
+                          effect: pgEffectSelect ? pgEffectSelect.value : "custom"
+                        };
                         renderPgIconPreview();
                       };
                       reader.readAsDataURL(file);
@@ -81803,6 +81908,14 @@ ${stickerContext || "无"}
                   if (pgClearIconBtn) {
                     pgClearIconBtn.onclick = () => {
                       chat.settings.peerGroupMapLocationCustomIcon = "";
+                      const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
+                      if (!chat.settings.peerGroupPlayerCustomIcons) chat.settings.peerGroupPlayerCustomIcons = {};
+                      chat.settings.peerGroupPlayerCustomIcons[myCode] = {
+                        icon: "",
+                        glow: false,
+                        scale: 2.0,
+                        effect: "pin"
+                      };
                       renderPgIconPreview();
                     };
                   }
@@ -81813,6 +81926,10 @@ ${stickerContext || "无"}
                       const val = parseFloat(pgCustomScaleInput.value) || 2.0;
                       pgCustomScaleVal.textContent = val.toFixed(1) + "x";
                       chat.settings.peerGroupMapLocationCustomScale = val;
+                      const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
+                      if (!chat.settings.peerGroupPlayerCustomIcons) chat.settings.peerGroupPlayerCustomIcons = {};
+                      if (!chat.settings.peerGroupPlayerCustomIcons[myCode]) chat.settings.peerGroupPlayerCustomIcons[myCode] = {};
+                      chat.settings.peerGroupPlayerCustomIcons[myCode].scale = val;
                     };
                   }
                 }
@@ -82272,7 +82389,9 @@ ${stickerContext || "无"}
               }
 
               // --- 加载表单数据 ---
-              document.getElementById("chat-name-input").value = chat.name;
+              document.getElementById("chat-name-input").value = typeof window.getEffectiveChatDisplayTitle === "function"
+                ? window.getEffectiveChatDisplayTitle(chat)
+                : chat.name;
               const remarkGroup = document.getElementById("chat-remark-group");
               const remarkInput = document.getElementById("chat-remark-input");
 
@@ -83974,7 +84093,18 @@ ${stickerContext || "无"}
                 .getElementById("chat-name-input")
                 .value.trim();
               if (!newName) return alert("备注名/群名不能为空！");
-              chat.name = newName;
+              if (chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && chat.activeLineMode === "solo") {
+                const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+                if (activeThread) {
+                  activeThread.name = newName;
+                }
+                chat.name = newName;
+              } else {
+                chat.name = newName;
+                if (chat.isGroup) {
+                  chat.mainGroupName = newName;
+                }
+              }
               // --- 新增代码开始 ---
               if (!chat.isGroup) {
                 const newRemark = document
@@ -84148,6 +84278,16 @@ ${stickerContext || "无"}
                   if (pgBrightEl) chat.settings.peerGroupMapLocationGlowBrightness = parseFloat(pgBrightEl.value) || 0.8;
                   if (pgGlowEl) chat.settings.peerGroupMapLocationCustomGlow = pgGlowEl.checked;
                   if (pgScaleEl) chat.settings.peerGroupMapLocationCustomScale = parseFloat(pgScaleEl.value) || 2.0;
+
+                  const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
+                  if (!chat.settings.peerGroupPlayerCustomIcons) chat.settings.peerGroupPlayerCustomIcons = {};
+                  chat.settings.peerGroupPlayerCustomIcons[myCode] = {
+                    icon: chat.settings.peerGroupMapLocationCustomIcon || "",
+                    glow: pgGlowEl ? pgGlowEl.checked : (chat.settings.peerGroupMapLocationCustomGlow || false),
+                    scale: parseFloat(pgScaleEl ? pgScaleEl.value : 2.0) || 2.0,
+                    effect: pgEffectEl ? pgEffectEl.value : (chat.settings.peerGroupMapLocationEffect || "pin"),
+                    color: pgColorEl ? pgColorEl.value : (chat.settings.peerGroupMapLocationColor || "#E53E3E")
+                  };
                 }
               } else if (chat.roleType === "system_status") {
                 const sysPersonaInput = document.getElementById("system-status-persona-input");
@@ -84991,13 +85131,23 @@ ${stickerContext || "无"}
                     { type: "image_url", image_url: { url: finalImageUrl } },
                   ],
                   timestamp: Date.now(),
+                  senderPeerCode: (chat.isGroup && chat.isPeerGroup) ? ((window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user") : undefined,
+                  senderName: chat.settings?.myNickname || chat.settings?.myName || "我",
+                  senderAvatar: chat.settings?.myAvatar || defaultMyGroupAvatar || ""
                 };
                 if (currentReplyContext) {
                   msg.quote = currentReplyContext;
                   cancelReplyMode();
                 }
                 chat.history.push(msg);
-                await db.chats.put(chat);
+                if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
+                  window.syncCurrentSoloThreadHistory(chat);
+                }
+                if (typeof window.saveChatToDb === "function") {
+                  await window.saveChatToDb(chat);
+                } else {
+                  await db.chats.put(chat);
+                }
                 appendMessage(msg, chat);
                 renderChatList();
                 if (window.PeerManager) {
@@ -85026,11 +85176,24 @@ ${stickerContext || "无"}
                   type: "voice_message",
                   content: text.trim(),
                   timestamp: Date.now(),
+                  senderPeerCode: (chat.isGroup && chat.isPeerGroup) ? ((window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user") : undefined,
+                  senderName: chat.settings?.myNickname || chat.settings?.myName || "我",
+                  senderAvatar: chat.settings?.myAvatar || defaultMyGroupAvatar || ""
                 };
                 chat.history.push(msg);
-                await db.chats.put(chat);
+                if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
+                  window.syncCurrentSoloThreadHistory(chat);
+                }
+                if (typeof window.saveChatToDb === "function") {
+                  await window.saveChatToDb(chat);
+                } else {
+                  await db.chats.put(chat);
+                }
                 appendMessage(msg, chat);
                 renderChatList();
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                  window.PeerManager.broadcastGroupMessage(chat, msg, true);
+                }
               }
             });
           document
@@ -85048,11 +85211,24 @@ ${stickerContext || "无"}
                   type: "user_photo",
                   content: description.trim(),
                   timestamp: Date.now(),
+                  senderPeerCode: (chat.isGroup && chat.isPeerGroup) ? ((window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user") : undefined,
+                  senderName: chat.settings?.myNickname || chat.settings?.myName || "我",
+                  senderAvatar: chat.settings?.myAvatar || defaultMyGroupAvatar || ""
                 };
                 chat.history.push(msg);
-                await db.chats.put(chat);
+                if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
+                  window.syncCurrentSoloThreadHistory(chat);
+                }
+                if (typeof window.saveChatToDb === "function") {
+                  await window.saveChatToDb(chat);
+                } else {
+                  await db.chats.put(chat);
+                }
                 appendMessage(msg, chat);
                 renderChatList();
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                  window.PeerManager.broadcastGroupMessage(chat, msg, true);
+                }
               }
             });
 
@@ -92469,6 +92645,11 @@ ${stickerContext || "无"}
 
         async function saveChatToDb(chat) {
           if (!chat) return;
+          if (chat.activeLineMode === "solo") {
+            if (typeof window.syncCurrentSoloThreadHistory === "function") {
+              window.syncCurrentSoloThreadHistory(chat);
+            }
+          }
           const dbInst = window.db || (typeof db !== "undefined" ? db : null);
           if (dbInst && dbInst.chats) {
             await dbInst.chats.put(chat);
@@ -92508,7 +92689,12 @@ ${stickerContext || "无"}
         }
 
         function isPeerGrp(chat) {
-          return Boolean(chat && chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+          if (!chat || !chat.isGroup) return false;
+          if (chat.isPeerGroup || chat.peerGroupId) return true;
+          if (typeof window.isPeerGroupChat === "function") {
+            return window.isPeerGroupChat(chat);
+          }
+          return false;
         }
 
         function ensureSoloLineConfig(chat) {
@@ -92564,19 +92750,43 @@ ${stickerContext || "无"}
             cfg.activeThreadId = null;
           }
           if (chat.activeLineMode === "solo") {
-            if (!chat.viewingPeerSoloThread) {
-              const activeThread = cfg.threads.find((t) => t.id === cfg.activeThreadId);
-              if (activeThread && Array.isArray(chat.history)) {
-                activeThread.history = chat.history;
-              }
-            } else if (Array.isArray(chat.history)) {
-              chat.viewingPeerSoloThread.history = chat.history;
-              chat.viewingPeerSoloThread.publicHistory = chat.history;
+            if (typeof syncCurrentSoloThreadHistory === "function") {
+              syncCurrentSoloThreadHistory(chat);
             }
           }
           return cfg;
         }
         window.ensureSoloLineConfig = ensureSoloLineConfig;
+
+        function syncCurrentSoloThreadHistory(chat) {
+          if (!chat || !isPeerGrp(chat) || chat.activeLineMode !== "solo") return;
+          const cfg = ensureSoloLineConfig(chat);
+          if (!cfg) return;
+          const activeT = (typeof getActiveSoloThread === "function") ? getActiveSoloThread(chat) : null;
+          const hist = Array.isArray(chat.history) ? [...chat.history] : [];
+          if (chat.viewingPeerSoloThread || (activeT && activeT.isPeerThread)) {
+            const threadObj = chat.viewingPeerSoloThread || activeT;
+            threadObj.history = hist;
+            threadObj.publicHistory = hist;
+            const threadId = threadObj.id;
+            if (chat.settings?.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+              for (const sList of Object.values(chat.settings.sharedSoloRecords)) {
+                if (!Array.isArray(sList)) continue;
+                const matchT = sList.find((t) => t && (t.id === threadId || ("solo_" + t.id) === threadId || t.id === ("solo_" + threadId)));
+                if (matchT) {
+                  matchT.history = hist;
+                  matchT.publicHistory = hist;
+                }
+              }
+            }
+          } else {
+            const curT = (cfg.threads || []).find((t) => t && t.id === cfg.activeThreadId);
+            if (curT) {
+              curT.history = hist;
+            }
+          }
+        }
+        window.syncCurrentSoloThreadHistory = syncCurrentSoloThreadHistory;
 
         function getAllGroupSoloThreads(chat) {
           if (!isPeerGrp(chat)) return [];
@@ -92685,6 +92895,9 @@ ${stickerContext || "无"}
             if (activeThread && activeThread.name) {
               return activeThread.name;
             }
+          }
+          if (chat.isGroup && chat.mainGroupName && chat.activeLineMode !== "solo") {
+            return chat.mainGroupName;
           }
           if (!chat.isGroup && chat.settings && chat.settings.remarkName) {
             return chat.settings.remarkName;
@@ -92815,10 +93028,25 @@ ${stickerContext || "无"}
           if (!cfg) return [];
           const myCode = getMyPeerCode();
           const myNick = chat.settings?.myNickname || chat.settings?.myName || "我";
+          const myAva = chat.settings?.myAvatar || window.defaultMyGroupAvatar || window.defaultAvatar;
+          const myFrame = chat.settings?.myAvatarFrame || "";
           return cfg.threads.map((t) => {
             const historySource = (chat.activeLineMode === "solo" && !chat.viewingPeerSoloThread && cfg.activeThreadId === t.id)
               ? (chat.history || [])
               : (t.history || []);
+            const cleanHist = historySource.map((m) => {
+              if (!m) return m;
+              if (m.role === "user" || !m.senderPeerCode || m.senderPeerCode === myCode) {
+                return {
+                  ...m,
+                  senderPeerCode: m.senderPeerCode || myCode,
+                  senderName: m.senderName && m.senderName !== "我" ? m.senderName : myNick,
+                  senderAvatar: m.senderAvatar || myAva,
+                  senderAvatarFrame: m.senderAvatarFrame || myFrame
+                };
+              }
+              return m;
+            });
             return {
               id: t.id,
               name: t.name || "单线",
@@ -92831,8 +93059,8 @@ ${stickerContext || "无"}
               linkedMainGroup: t.linkedMainGroup !== false,
               linkedMainDepth: Number(t.linkedMainDepth) || 200,
               summaryText: t.summaryText || "",
-              history: historySource,
-              publicHistory: historySource
+              history: cleanHist,
+              publicHistory: cleanHist
             };
           });
         };
@@ -92889,14 +93117,7 @@ ${stickerContext || "无"}
           if (!cfg) return;
 
           if (chat.activeLineMode === "solo") {
-            if (!chat.viewingPeerSoloThread) {
-              const curThread = cfg.threads.find((t) => t.id === cfg.activeThreadId);
-              if (curThread) {
-                curThread.history = Array.isArray(chat.history) ? [...chat.history] : [];
-              }
-            } else {
-              chat.viewingPeerSoloThread.history = Array.isArray(chat.history) ? [...chat.history] : [];
-            }
+            syncCurrentSoloThreadHistory(chat);
           } else {
             chat.mainLineHistory = Array.isArray(chat.history) ? [...chat.history] : [];
           }
@@ -92905,6 +93126,9 @@ ${stickerContext || "无"}
             chat.activeLineMode = "main";
             chat.viewingPeerSoloThread = null;
             chat.hasUnreadMainLineInSolo = false;
+            if (chat.mainGroupName) {
+              chat.name = chat.mainGroupName;
+            }
             if (Array.isArray(chat.mainLineHistory)) {
               chat.history = [...chat.mainLineHistory];
             }
@@ -92919,6 +93143,9 @@ ${stickerContext || "无"}
               await showAlertMsg("提示", "该单线为私密单线，仅创建者或参与玩家可进入");
               return false;
             }
+            if (!chat.mainGroupName) {
+              chat.mainGroupName = chat.name || "群聊";
+            }
             chat.activeLineMode = "solo";
             const isLocalThread = cfg.threads.some((t) => t.id === targetThread.id);
             if (!isLocalThread) {
@@ -92928,17 +93155,25 @@ ${stickerContext || "无"}
                 ? targetThread.history
                 : (Array.isArray(targetThread.publicHistory) ? targetThread.publicHistory : []);
               chat.history = [...histArr];
+              syncCurrentSoloThreadHistory(chat);
             } else {
               chat.viewingPeerSoloThread = null;
               cfg.activeThreadId = targetThread.id;
               const localThread = cfg.threads.find((t) => t.id === targetThread.id);
               if (!Array.isArray(localThread.history)) localThread.history = [];
               chat.history = [...localThread.history];
+              syncCurrentSoloThreadHistory(chat);
+            }
+            if (targetThread.name) {
+              chat.name = targetThread.name;
             }
           }
 
           window.updateSoloLineBannerUI(chat);
           refreshChatView(chat.id);
+          if (typeof window.renderChatList === "function") {
+            window.renderChatList();
+          }
 
           saveChatToDb(chat).catch(() => {});
           if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
@@ -93070,6 +93305,13 @@ ${stickerContext || "无"}
                   await showAlertMsg("提示", "该单线为私密单线，仅创建者或参与玩家可进入");
                   return;
                 }
+                if (pendingSelectedThreadId === t.id) {
+                  const ok = await window.switchGroupLineMode("solo", t.id, t.isPeerThread ? t : null);
+                  if (ok !== false) {
+                    window.closeSoloLineModal();
+                  }
+                  return;
+                }
                 pendingSelectedThreadId = t.id;
                 renderSoloLineModalContent(chat);
               };
@@ -93095,8 +93337,12 @@ ${stickerContext || "无"}
                     const nextName = await askPrompt("修改单线名称", "请输入新的单线名称", localT.name || "单线");
                     if (nextName && nextName.trim()) {
                       localT.name = nextName.trim();
+                      if (chat.activeLineMode === "solo" && cfg.activeThreadId === localT.id) {
+                        chat.name = localT.name;
+                      }
                       window.updateSoloLineBannerUI(chat);
                       renderSoloLineModalContent(chat);
+                      if (typeof window.renderChatList === "function") window.renderChatList();
                       saveChatToDb(chat).catch(() => {});
                       if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
                         window.PeerManager.syncGroupSettingsToPeers(chat);
