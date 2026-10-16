@@ -20523,9 +20523,31 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.normalizeLlmapiBaseUrl = normalizeLlmapiBaseUrl;
 
+        function formatChatCompletionUrl(rawUrl) {
+          let u = String(rawUrl || "").replace(/[\u200B-\u200D\uFEFF"'\s]+/g, "").trim();
+          if (!u) return "";
+          u = u.replace(/\/+$/, "");
+          if (!/^https?:\/\//i.test(u)) {
+            u = "https://" + u.replace(/^\/+/, "");
+          }
+          u = u.replace(/\/+$/, "");
+          if (!u.includes("/chat/completions")) {
+            if (u.endsWith("/v1")) {
+              u = u + "/chat/completions";
+            } else {
+              u = u + "/v1/chat/completions";
+            }
+          }
+          return u;
+        }
+        window.formatChatCompletionUrl = formatChatCompletionUrl;
+
         function extractApiErrorMessage(status, text) {
           const raw = String(text || "").trim();
           if (!raw) return "HTTP " + status;
+          if (/^<!DOCTYPE|<html/i.test(raw) || raw.includes("<head>") || raw.includes("<body>") || raw.includes("405 Not Allowed") || raw.includes("<title>")) {
+            return "HTTP " + status;
+          }
           try {
             const parsed = JSON.parse(raw);
             const msg =
@@ -20533,15 +20555,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               (typeof parsed?.error === "string" ? parsed.error : "") ||
               parsed?.message ||
               parsed?.msg ||
-              parsed?.detail ||
-              JSON.stringify(parsed);
-            const code = parsed?.error?.code || parsed?.code || "";
-            return code ? `[${code}] ${msg}` : String(msg);
-          } catch (_) {
-            if (/^<!DOCTYPE\s+html|^<html/i.test(raw)) {
-              return `请求路径返回了网页而非JSON数据，请检查反代地址是否正确 (HTTP ${status})`;
+              parsed?.detail;
+            if (msg && typeof msg === "string") {
+              if (/^<!DOCTYPE|<html/i.test(msg) || msg.includes("<head>") || msg.includes("<body>")) {
+                return "HTTP " + status;
+              }
+              const code = parsed?.error?.code || parsed?.code || "";
+              return code ? `[${code}] ${msg}` : msg;
             }
-            return raw.slice(0, 300);
+            return "HTTP " + status;
+          } catch (_) {
+            return "HTTP " + status;
           }
         }
         window.extractApiErrorMessage = extractApiErrorMessage;
@@ -20657,10 +20681,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         async function requestLlmapiWithFallback(targetUrl, options = {}) {
           ensureBackgroundKeepAlive();
-          const method = options.method || "GET";
-          const headers = options.headers || {};
-          const body = options.body;
+          const finalUrl = formatChatCompletionUrl(targetUrl);
+          const method = options.method || "POST";
+          const headers = { ...(options.headers || {}) };
+          delete headers["host"];
+          delete headers["origin"];
+          delete headers["referer"];
 
+          const body = options.body;
           let parsedBody = body;
           if (typeof body === "string") {
             try {
@@ -20670,31 +20698,76 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
 
-          // 核心单次调用通道：超时延长至8分钟（480秒），禁止在后台重复重试多扣费用
           const controller = new AbortController();
           const timeoutId = setTimeout(() => {
             controller.abort(new Error("请求超时：已等待超过7分钟未收到模型回复，连接已切断"));
           }, 480000);
 
           try {
-            const localProxyRes = await origFetch("/api/proxy", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: controller.signal,
-              body: JSON.stringify({
-                url: targetUrl,
+            let res = null;
+            let directErr = null;
+            const bodyPayload = method !== "GET" && method !== "HEAD" ? (typeof body === "string" ? body : JSON.stringify(body)) : undefined;
+
+            try {
+              res = await origFetch(finalUrl, {
                 method,
                 headers,
-                body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
-              }),
-            });
+                body: bodyPayload,
+                signal: controller.signal,
+              });
+            } catch (err) {
+              directErr = err;
+            }
+
+            const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
+            if (!res && !isStaticHost) {
+              try {
+                const proxyRes = await origFetch("/api/proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  signal: controller.signal,
+                  body: JSON.stringify({
+                    url: finalUrl,
+                    method,
+                    headers,
+                    body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
+                  }),
+                });
+                if (proxyRes.ok || (proxyRes.status !== 405 && proxyRes.status !== 404)) {
+                  res = proxyRes;
+                }
+              } catch (_) {}
+            }
+
+            if (!res) {
+              clearTimeout(timeoutId);
+              console.error(`HTTP 错误 [${method}] (请求地址: ${finalUrl}): ${directErr?.message || "网络请求失败"}`);
+              throw directErr || new Error("网络请求失败，无法连接到目标服务");
+            }
+
             clearTimeout(timeoutId);
 
-            const contentType = localProxyRes.headers.get("content-type") || "";
+            const contentType = res.headers.get("content-type") || "";
+
+            if (!res.ok) {
+              let errText = "";
+              try {
+                errText = await res.text();
+              } catch (_) {}
+              console.error(`HTTP ${res.status} [${method}] (请求地址: ${finalUrl}): ${errText}`);
+              const simplifiedMsg = extractApiErrorMessage(res.status, errText);
+              return {
+                ok: false,
+                status: res.status,
+                text: errText,
+                error: simplifiedMsg,
+                headers: res.headers,
+              };
+            }
 
             // 流式数据处理与实时分片回调
-            if (options.onStreamChunk && localProxyRes.body && contentType.includes("event-stream")) {
-              const reader = localProxyRes.body.getReader();
+            if (options.onStreamChunk && res.body && contentType.includes("event-stream")) {
+              const reader = res.body.getReader();
               const decoder = new TextDecoder();
               let fullText = "";
               let fullThinking = "";
@@ -20745,25 +20818,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ok: true,
                 status: 200,
                 text: JSON.stringify(synthesized),
-                headers: localProxyRes.headers,
+                headers: res.headers,
               };
             }
 
-            if (localProxyRes.body && contentType.includes("event-stream")) {
+            if (res.body && contentType.includes("event-stream")) {
               return {
-                ok: localProxyRes.ok,
-                status: localProxyRes.status,
-                body: localProxyRes.body,
-                headers: localProxyRes.headers,
+                ok: res.ok,
+                status: res.status,
+                body: res.body,
+                headers: res.headers,
               };
             }
 
-            const localProxyText = await localProxyRes.text();
+            const resText = await res.text();
             return {
-              ok: localProxyRes.ok,
-              status: localProxyRes.status,
-              text: localProxyText,
-              headers: localProxyRes.headers,
+              ok: res.ok,
+              status: res.status,
+              text: resText,
+              headers: res.headers,
             };
           } catch (err) {
             clearTimeout(timeoutId);
@@ -21229,6 +21302,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   detail: fallbackRes.ok ? "回复成功" : `HTTP ${fallbackRes.status}`,
                 });
               } catch (_) {}
+              if (!fallbackRes.ok) {
+                const errMsg = fallbackRes.error || extractApiErrorMessage(fallbackRes.status, fallbackRes.text);
+                return new Response(JSON.stringify({ error: { message: errMsg, code: fallbackRes.status }, message: errMsg }), {
+                  status: fallbackRes.status,
+                  headers: { "Content-Type": "application/json" },
+                });
+              }
               return new Response(fallbackRes.body !== undefined ? fallbackRes.body : fallbackRes.text, {
                 status: fallbackRes.status,
                 headers: fallbackRes.headers,
@@ -21239,12 +21319,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const domKey = document.getElementById(isSubCall ? "sub-api-key" : "api-key")?.value?.trim() || "";
 
             const rawBase = (isSubCall ? subProxy : mainProxy) || domProxy || urlStr;
-            const base = normalizeLlmapiBaseUrl(rawBase);
-            if (!base) {
+            const targetUrl = formatChatCompletionUrl(rawBase);
+            if (!targetUrl) {
               throw new Error("请在设置中填写有效的反代地址");
             }
-
-            const targetUrl = `${base}/v1/chat/completions`;
 
             let authHeader = "";
             if (init && init.headers) {
@@ -41278,9 +41356,16 @@ ${recentHistoryText}
             checkAndTriggerSummary(chatId);
             } catch (error) {
               console.error("线下模式AI响应失败:", error);
+              let displayErr = error && error.message ? error.message : String(error || "未知错误");
+              const httpMatch = displayErr.match(/HTTP\s*(\d{3})/i) || displayErr.match(/\b(400|401|403|404|405|429|500|502|503|504)\b/);
+              if (httpMatch) {
+                displayErr = `HTTP ${httpMatch[1]}`;
+              } else if (/^<!DOCTYPE|<html/i.test(displayErr) || displayErr.includes("<head>") || displayErr.includes("<title>")) {
+                displayErr = "HTTP 错误";
+              }
               const errorMessage = {
                 role: "assistant",
-                content: `[出错了: ${error.message}]`,
+                content: `[出错了: ${displayErr}]`,
                 timestamp: Date.now(),
               };
               chat.history.push(errorMessage);
@@ -48012,6 +48097,13 @@ ${stickerContext || "无"}
               chat.history = chat.history.filter((msg) => !msg.isTemporary);
             }
             const errText = error && error.message ? error.message : String(error || "未知错误");
+            let displayErr = errText;
+            const httpMatch = displayErr.match(/HTTP\s*(\d{3})/i) || displayErr.match(/\b(400|401|403|404|405|429|500|502|503|504)\b/);
+            if (httpMatch) {
+              displayErr = `HTTP ${httpMatch[1]}`;
+            } else if (/^<!DOCTYPE|<html/i.test(displayErr) || displayErr.includes("<head>") || displayErr.includes("<title>")) {
+              displayErr = "HTTP 错误";
+            }
             if (
               chat &&
               !chat.isGroup &&
@@ -48020,10 +48112,10 @@ ${stickerContext || "无"}
               chat.relationship.status = "blocked_by_ai";
               await showCustomAlert(
                 "申请失败",
-                `AI在处理你的好友申请时出错了，请稍后重试。\n错误信息: ${errText}`,
+                `AI在处理你的好友申请时出错了，请稍后重试。\n错误信息: ${displayErr}`,
               );
             } else if (chat) {
-              const errorContent = `[出错了: ${errText}]`;
+              const errorContent = `[出错了: ${displayErr}]`;
               const errorMessage = {
                 role: "assistant",
                 content: errorContent,
@@ -48033,7 +48125,7 @@ ${stickerContext || "无"}
               if (!Array.isArray(chat.history)) chat.history = [];
               chat.history.push(errorMessage);
               if (typeof showCustomAlert === "function") {
-                showCustomAlert("请求出错", errText);
+                showCustomAlert("请求出错", displayErr);
               }
             }
 
