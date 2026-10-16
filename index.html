@@ -34660,6 +34660,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         function appendMessage(msg, chat, isInitialLoad = false) {
+          if (msg && !isInitialLoad) {
+            if (!msg.timestamp) msg.timestamp = Date.now();
+            if (window.lastAssignedMessageTimestamp && msg.timestamp <= window.lastAssignedMessageTimestamp) {
+              msg.timestamp = window.lastAssignedMessageTimestamp + 1;
+            }
+            window.lastAssignedMessageTimestamp = msg.timestamp;
+            if (chat && Array.isArray(chat.history)) {
+              const existsInHist = chat.history.some(
+                (m) => m === msg || (m && m.timestamp === msg.timestamp && m.content === msg.content && m.type === msg.type)
+              );
+              if (!existsInHist && !msg.isTemporary) {
+                chat.history.push(msg);
+                if (typeof db !== "undefined" && db.chats) {
+                  try { db.chats.put(chat); } catch (_) {}
+                }
+              }
+            }
+          }
           const messagesContainer = document.getElementById("chat-messages");
           const messageEl = createMessageElement(msg, chat);
 
@@ -39618,6 +39636,33 @@ ${recentHistoryText}
                 try { dbChat = await db.chats.get(chat.id); } catch (e) {}
               }
               if (dbChat) {
+                const sameLineMode = (dbChat.activeLineMode || "main") === (chat?.activeLineMode || "main");
+                if (sameLineMode && chat && Array.isArray(chat.history) && chat.history.length > 0) {
+                  const dbHist = Array.isArray(dbChat.history) ? dbChat.history : [];
+                  const mergedMap = new Map();
+                  const makeMsgKey = (m) => {
+                    if (!m) return "";
+                    if (m.eventId) return "evt_" + m.eventId;
+                    const cStr = typeof m.content === "string" ? m.content.slice(0, 120) : JSON.stringify(m.content || "").slice(0, 120);
+                    return `${m.role}_${m.timestamp}_${m.type || ""}_${cStr}`;
+                  };
+                  for (const m of dbHist) {
+                    if (m) mergedMap.set(makeMsgKey(m), m);
+                  }
+                  let addedFromMem = false;
+                  for (const m of chat.history) {
+                    if (!m) continue;
+                    const k = makeMsgKey(m);
+                    if (!mergedMap.has(k)) {
+                      mergedMap.set(k, m);
+                      addedFromMem = true;
+                    }
+                  }
+                  if (addedFromMem || chat.history.length > dbHist.length) {
+                    dbChat.history = Array.from(mergedMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+                    try { await db.chats.put(dbChat); } catch (_) {}
+                  }
+                }
                 if (!state.chats) state.chats = {};
                 state.chats[dbChat.id] = dbChat;
                 state.chats[String(dbChat.id)] = dbChat;
@@ -49914,7 +49959,30 @@ ${stickerContext || "无"}
 
           // --- 新增逻辑开始 ---
           const chat = state.chats[state.activeChatId];
-          const message = (chat.history || []).find((m) => m.timestamp === timestamp);
+          let message = (chat?.history || []).find((m) => String(m.timestamp) === String(timestamp));
+          if (!message && chat) {
+            const domBubble = document.querySelector(`#chat-messages .message-bubble[data-timestamp="${timestamp}"], #chat-messages .message-wrapper[data-timestamp="${timestamp}"]`);
+            if (domBubble) {
+              const wrapperEl = domBubble.closest(".message-wrapper") || domBubble;
+              const isUserBubble = wrapperEl.classList.contains("user") || domBubble.classList.contains("user");
+              const contentEl = wrapperEl.querySelector(".content") || domBubble;
+              const naiImgEl = wrapperEl.querySelector(".nai-generated-image");
+              const restoredMsg = {
+                role: isUserBubble ? "user" : "assistant",
+                senderName: isUserBubble ? (chat.settings?.myNickname || chat.settings?.myName || "我") : (chat.name || "AI"),
+                type: naiImgEl ? "naiimag" : "text",
+                content: naiImgEl ? (naiImgEl.getAttribute("data-prompt") || "") : (contentEl ? contentEl.innerText.trim() : ""),
+                imageUrl: naiImgEl ? naiImgEl.src : undefined,
+                prompt: naiImgEl ? (naiImgEl.getAttribute("data-prompt") || "") : undefined,
+                timestamp: Number(timestamp) || timestamp,
+              };
+              if (!Array.isArray(chat.history)) chat.history = [];
+              chat.history.push(restoredMsg);
+              chat.history.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+              try { db.chats.put(chat); } catch (_) {}
+              message = restoredMsg;
+            }
+          }
           const rerollNaiBtn = document.getElementById("reroll-nai-btn");
 
           // 检查消息类型是否为 naiimag
@@ -50629,10 +50697,36 @@ ${stickerContext || "无"}
           const timestampToEdit = activeMessageTimestamp;
 
           const chat = state.chats[state.activeChatId];
-          const message = (chat.history || []).find(
-            (m) => m.timestamp === timestampToEdit,
+          let message = (chat?.history || []).find(
+            (m) => String(m.timestamp) === String(timestampToEdit),
           );
-          if (!message) return;
+          if (!message && chat) {
+            const domBubble = document.querySelector(`#chat-messages .message-bubble[data-timestamp="${timestampToEdit}"], #chat-messages .message-wrapper[data-timestamp="${timestampToEdit}"]`);
+            if (domBubble) {
+              const wrapperEl = domBubble.closest(".message-wrapper") || domBubble;
+              const isUserBubble = wrapperEl.classList.contains("user") || domBubble.classList.contains("user");
+              const contentEl = wrapperEl.querySelector(".content") || domBubble;
+              const naiImgEl = wrapperEl.querySelector(".nai-generated-image");
+              const restoredMsg = {
+                role: isUserBubble ? "user" : "assistant",
+                senderName: isUserBubble ? (chat.settings?.myNickname || chat.settings?.myName || "我") : (chat.name || "AI"),
+                type: naiImgEl ? "naiimag" : "text",
+                content: naiImgEl ? (naiImgEl.getAttribute("data-prompt") || "") : (contentEl ? contentEl.innerText.trim() : ""),
+                imageUrl: naiImgEl ? naiImgEl.src : undefined,
+                prompt: naiImgEl ? (naiImgEl.getAttribute("data-prompt") || "") : undefined,
+                timestamp: Number(timestampToEdit) || timestampToEdit,
+              };
+              if (!Array.isArray(chat.history)) chat.history = [];
+              chat.history.push(restoredMsg);
+              chat.history.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+              try { db.chats.put(chat); } catch (_) {}
+              message = restoredMsg;
+            }
+          }
+          if (!message) {
+            hideMessageActions();
+            return;
+          }
 
           const isPeerFriendMsg = Boolean(
             message.isPeerUserMessage ||
@@ -65616,12 +65710,38 @@ ${stickerContext || "无"}
               const isGemini = targetUrl === GEMINI_API_URL || targetUrl.includes("generativelanguage.googleapis.com");
               const isClaude = (apiProtocol === "claude") || /claude/i.test(model);
 
+              const extractTextFromAnyLlmResponse = (data) => {
+                if (!data) return "";
+                if (typeof data === "string") return data;
+                if (Array.isArray(data.choices) && data.choices[0]) {
+                  const msg = data.choices[0].message || data.choices[0].delta || data.choices[0];
+                  if (typeof msg.content === "string" && msg.content.trim()) return msg.content;
+                  if (Array.isArray(msg.content)) {
+                    const joined = msg.content.map(c => (typeof c === "string" ? c : (c?.text || c?.content || ""))).join("");
+                    if (joined.trim()) return joined;
+                  }
+                  if (typeof msg.text === "string" && msg.text.trim()) return msg.text;
+                  if (typeof msg.reasoning_content === "string" && msg.reasoning_content.trim()) return msg.reasoning_content;
+                }
+                if (Array.isArray(data.content)) {
+                  const joined = data.content.map(c => (typeof c === "string" ? c : (c?.text || c?.thinking || ""))).join("\n");
+                  if (joined.trim()) return joined;
+                }
+                if (Array.isArray(data.candidates) && data.candidates[0]?.content?.parts) {
+                  const joined = data.candidates[0].content.parts.map(p => p?.text || "").join("");
+                  if (joined.trim()) return joined;
+                }
+                if (typeof data.output_text === "string" && data.output_text.trim()) return data.output_text;
+                if (typeof data.text === "string" && data.text.trim()) return data.text;
+                return "";
+              };
+
               if (isGemini) {
                 const geminiConfig = toGeminiRequestData(model, apiKey, keeperSystemPrompt, messagesForApi, isGemini, temperature);
                 const response = await fetch(geminiConfig.url, geminiConfig.data);
                 if (!response.ok) throw new Error(await response.text());
                 const data = await response.json();
-                return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                return { text: extractTextFromAnyLlmResponse(data), fullData: data };
               } else if (isClaude) {
                 let claudeUrl = targetUrl;
                 if (!claudeUrl.endsWith("/messages")) {
@@ -65649,7 +65769,7 @@ ${stickerContext || "无"}
                   throw new Error(`Claude API 错误 ${claudeRes.status}: ${claudeRes.text || ""}`);
                 }
                 const claudeData = JSON.parse(claudeRes.text);
-                return claudeData?.content?.[0]?.text || "";
+                return { text: extractTextFromAnyLlmResponse(claudeData), fullData: claudeData };
               } else {
                 let openaiUrl = targetUrl;
                 if (!openaiUrl.endsWith("/chat/completions") && !openaiUrl.endsWith("/completions")) {
@@ -65664,7 +65784,7 @@ ${stickerContext || "无"}
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${apiKey}`,
+                    "Authorization": `Bearer ${apiKey}`,
                   },
                   body: JSON.stringify(openaiPayload),
                 });
@@ -65672,12 +65792,13 @@ ${stickerContext || "无"}
                   throw new Error(`API 错误 ${openaiRes.status}: ${openaiRes.text || ""}`);
                 }
                 const openaiData = JSON.parse(openaiRes.text);
-                return openaiData?.choices?.[0]?.message?.content || "";
+                return { text: extractTextFromAnyLlmResponse(openaiData), fullData: openaiData };
               }
             }
 
             const forcedDrawStart = Date.now();
             let rawContent = "";
+            let rawFullData = null;
             let activeUsedCfg = candidateConfigs[0];
             let lastKeeperErr = null;
 
@@ -65685,13 +65806,32 @@ ${stickerContext || "无"}
               const currentCand = candidateConfigs[i];
               try {
                 activeUsedCfg = currentCand;
-                rawContent = await requestKeeperLlm(currentCand);
+                const llmRes = await requestKeeperLlm(currentCand);
+                rawContent = (llmRes && typeof llmRes.text === "string") ? llmRes.text : String(llmRes || "");
+                rawFullData = llmRes && llmRes.fullData ? llmRes.fullData : null;
+                if (!rawContent || !rawContent.trim()) {
+                  throw new Error("模型返回了空内容，未生成生图提示词");
+                }
                 lastKeeperErr = null;
                 break;
               } catch (candidateErr) {
                 lastKeeperErr = candidateErr;
                 console.warn(`[强制生图] ${currentCand.isSub ? "副API" : "主API"} 尝试未成功:`, candidateErr?.message || candidateErr);
               }
+            }
+
+            if (typeof recordChatDebugLog === "function") {
+              recordChatDebugLog(chat.id, {
+                systemPrompt: keeperSystemPrompt,
+                messages: messagesForApi,
+                allSentMessages: messagesForApi,
+                model: `${activeUsedCfg.isSub ? "[副API·强制生图] " : "[主API·强制生图] "}${activeUsedCfg.model}`,
+                temperature: activeUsedCfg.temperature || 0.7,
+              }, {
+                rawContent: rawContent || (lastKeeperErr ? `[错误: ${lastKeeperErr.message}]` : "[空返回]"),
+                reasoningContent: rawFullData?.choices?.[0]?.message?.reasoning_content || null,
+                fullData: rawFullData || { error: lastKeeperErr?.message || "空返回" },
+              });
             }
 
             if (lastKeeperErr) {
@@ -65708,8 +65848,6 @@ ${stickerContext || "无"}
               detail: rawContent ? rawContent.slice(0, 150) : "已生成生图指令",
             });
 
-            if (!rawContent || !rawContent.trim()) return;
-
             const promptsToGenerate = [];
             try {
               const jsonMatches = rawContent.match(/\[[\s\S]*?\]|\{[\s\S]*?\}/g) || [];
@@ -65718,27 +65856,39 @@ ${stickerContext || "无"}
                   const parsed = JSON.parse(jm);
                   if (Array.isArray(parsed)) {
                     parsed.forEach(item => {
-                      if (item && (item.prompt || item.content)) promptsToGenerate.push(item.prompt || item.content);
+                      if (item && (item.prompt || item.content || item.description)) promptsToGenerate.push(item.prompt || item.content || item.description);
                     });
                   } else if (Array.isArray(parsed.images)) {
                     parsed.images.forEach(img => {
-                      if (img && (img.prompt || img.content)) promptsToGenerate.push(img.prompt || img.content);
+                      if (img && (img.prompt || img.content || img.description)) promptsToGenerate.push(img.prompt || img.content || img.description);
                     });
-                  } else if (parsed.prompt || parsed.content) {
-                    promptsToGenerate.push(parsed.prompt || parsed.content);
+                  } else if (parsed.prompt || parsed.content || parsed.description) {
+                    promptsToGenerate.push(parsed.prompt || parsed.content || parsed.description);
                   }
                 } catch(e) {}
               }
             } catch (pe) {}
 
             if (promptsToGenerate.length === 0) {
-              const cleanPrompt = rawContent.replace(/^```[a-z]*\s*/i, "").replace(/```$/i, "").replace(/["'\n\r]/g, " ").trim();
-              if (cleanPrompt) promptsToGenerate.push(cleanPrompt);
+              const regexPromptMatch = rawContent.match(/"prompt"\s*:\s*"([^"]+)"/i) || rawContent.match(/"description"\s*:\s*"([^"]+)"/i);
+              if (regexPromptMatch && regexPromptMatch[1]) {
+                promptsToGenerate.push(regexPromptMatch[1].trim());
+              } else {
+                const cleanPrompt = rawContent
+                  .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+                  .replace(/^```[a-z]*\s*/i, "")
+                  .replace(/```$/i, "")
+                  .replace(/["'\n\r{}]/g, " ")
+                  .trim();
+                if (cleanPrompt) promptsToGenerate.push(cleanPrompt);
+              }
             }
 
             const firstPrompt = promptsToGenerate.find((p) => p && String(p).trim());
             if (firstPrompt) {
               await generateAndAppendKeeperNaiImage(chat, String(firstPrompt).trim());
+            } else {
+              throw new Error("未能从返回内容中提取出有效的生图提示词");
             }
           } catch (err) {
             console.warn("守密人强制生图未完成:", err?.message || err);

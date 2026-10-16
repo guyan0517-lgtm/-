@@ -1865,6 +1865,27 @@
 
         let changed = false;
 
+        const mergeChatHistories = (memHist, dbHist) => {
+          const a = Array.isArray(memHist) ? memHist : [];
+          const b = Array.isArray(dbHist) ? dbHist : [];
+          if (a.length === 0) return b;
+          if (b.length === 0) return a;
+          const map = new Map();
+          const getKey = (m) => {
+            if (!m) return "";
+            if (m.eventId) return "evt_" + m.eventId;
+            const cStr = typeof m.content === "string" ? m.content.slice(0, 120) : JSON.stringify(m.content || "").slice(0, 120);
+            return `${m.role}_${m.timestamp}_${m.type || ""}_${cStr}`;
+          };
+          for (const m of b) {
+            if (m) map.set(getKey(m), m);
+          }
+          for (const m of a) {
+            if (m) map.set(getKey(m), m);
+          }
+          return Array.from(map.values()).sort((x, y) => (x.timestamp || 0) - (y.timestamp || 0));
+        };
+
         for (const [peerCode, list] of byPeerCode.entries()) {
           if (list.length <= 1) {
             const only = list[0];
@@ -1878,8 +1899,17 @@
                 only.inMessageList = true;
                 itemChanged = true;
               }
+              const existingMem = window.state && window.state.chats && (window.state.chats[only.id] || window.state.chats[String(only.id)]);
+              if (existingMem && Array.isArray(existingMem.history) && existingMem.history.length > 0) {
+                const merged = mergeChatHistories(existingMem.history, only.history);
+                if (merged.length > (only.history || []).length) {
+                  only.history = merged;
+                  itemChanged = true;
+                }
+              }
               if (window.state && window.state.chats) {
                 window.state.chats[only.id] = only;
+                window.state.chats[String(only.id)] = only;
               }
               this.saveFriendToBackup(only);
               if (itemChanged) {
@@ -1905,7 +1935,9 @@
           const seenKeys = new Set();
 
           for (const chatItem of list) {
-            for (const msg of chatItem.history || []) {
+            const memPeer = window.state && window.state.chats && (window.state.chats[chatItem.id] || window.state.chats[String(chatItem.id)]);
+            const combinedItemHist = memPeer ? mergeChatHistories(memPeer.history, chatItem.history) : (chatItem.history || []);
+            for (const msg of combinedItemHist) {
               if (!msg) continue;
               const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
               if (!seenKeys.has(key)) {
@@ -1920,6 +1952,7 @@
           await window.db.chats.put(primary);
           if (window.state && window.state.chats) {
             window.state.chats[primary.id] = primary;
+            window.state.chats[String(primary.id)] = primary;
           }
           this.saveFriendToBackup(primary);
 
@@ -1954,7 +1987,16 @@
           if (list.length <= 1) {
             const onlyGrp = list[0];
             if (onlyGrp && window.state && window.state.chats) {
+              const existingGrpMem = window.state.chats[onlyGrp.id] || window.state.chats[String(onlyGrp.id)];
+              if (existingGrpMem && Array.isArray(existingGrpMem.history) && existingGrpMem.history.length > 0) {
+                const merged = mergeChatHistories(existingGrpMem.history, onlyGrp.history);
+                if (merged.length > (onlyGrp.history || []).length) {
+                  onlyGrp.history = merged;
+                  try { await window.db.chats.put(onlyGrp); } catch (_) {}
+                }
+              }
               window.state.chats[onlyGrp.id] = onlyGrp;
+              window.state.chats[String(onlyGrp.id)] = onlyGrp;
             }
             continue;
           }
@@ -1969,7 +2011,9 @@
           const mergedHistory = [];
           const seenKeys = new Set();
           for (const chatItem of list) {
-            for (const msg of chatItem.history || []) {
+            const memGrp = window.state && window.state.chats && (window.state.chats[chatItem.id] || window.state.chats[String(chatItem.id)]);
+            const combinedGrpHist = memGrp ? mergeChatHistories(memGrp.history, chatItem.history) : (chatItem.history || []);
+            for (const msg of combinedGrpHist) {
               if (!msg) continue;
               const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
               if (!seenKeys.has(key)) {
@@ -1983,6 +2027,7 @@
           await window.db.chats.put(primary);
           if (window.state && window.state.chats) {
             window.state.chats[primary.id] = primary;
+            window.state.chats[String(primary.id)] = primary;
           }
           for (let i = 1; i < list.length; i++) {
             const dup = list[i];
