@@ -141,13 +141,19 @@ app.post('/api/proxy', async (req, res) => {
     const response = await fetch(url, fetchOptions);
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
+    if (contentType) {
+      res.setHeader('Content-Type', contentType);
+    }
 
     if (contentType.includes('application/json')) {
       const data = await response.json();
       return res.json(data);
-    } else {
+    } else if (contentType.includes('text/') || contentType.includes('event-stream')) {
       const text = await response.text();
       return res.send(text);
+    } else {
+      const arrayBuffer = await response.arrayBuffer();
+      return res.send(Buffer.from(arrayBuffer));
     }
   } catch (err) {
     console.error('Proxy request error:', err);
@@ -209,6 +215,8 @@ function scheduleSaveMailboxStore() {
 
 loadMailboxStoreFromDisk();
 
+const peerWaitingPollers = new Map();
+
 function pushToMailbox(code, event) {
   if (!code || !event) return;
   if (!peerMailboxes.has(code)) {
@@ -235,6 +243,20 @@ function pushToMailbox(code, event) {
   peerMailboxes.set(code, box);
   if (event.type !== 'group_typing_status') {
     scheduleSaveMailboxStore();
+  }
+
+  const waitSet = peerWaitingPollers.get(code);
+  if (waitSet && waitSet.size > 0) {
+    const list = Array.from(waitSet);
+    waitSet.clear();
+    for (const item of list) {
+      if (item && item.timer) clearTimeout(item.timer);
+      if (item && item.res && !item.res.headersSent) {
+        try {
+          item.res.json({ success: true, events: [event], profile: peerProfiles.get(code) || null, onlinePeers: {} });
+        } catch (_) {}
+      }
+    }
   }
 }
 
@@ -468,7 +490,37 @@ app.get('/api/peer/poll', (req, res) => {
       onlinePeers[pCode] = Boolean(hasWs || (lastSeen > 0 && now - lastSeen < 25000));
     });
   }
-  return res.json({ success: true, events, profile, onlinePeers });
+
+  if (events.length > 0 || req.query.wait === '0') {
+    return res.json({ success: true, events, profile, onlinePeers });
+  }
+
+  if (!peerWaitingPollers.has(code)) {
+    peerWaitingPollers.set(code, new Set());
+  }
+  const pollers = peerWaitingPollers.get(code);
+  const entry = { res, timer: null };
+
+  const done = (evts) => {
+    if (entry.timer) clearTimeout(entry.timer);
+    pollers.delete(entry);
+    if (!res.headersSent) {
+      try {
+        res.json({ success: true, events: evts || peerMailboxes.get(code) || [], profile, onlinePeers });
+      } catch (_) {}
+    }
+  };
+
+  entry.timer = setTimeout(() => {
+    done([]);
+  }, 25000);
+
+  req.on('close', () => {
+    if (entry.timer) clearTimeout(entry.timer);
+    pollers.delete(entry);
+  });
+
+  pollers.add(entry);
 });
 
 app.use(express.static(__dirname));
@@ -671,6 +723,10 @@ wss.on('connection', (ws) => {
     }
   });
 
+  ws.on('error', (err) => {
+    console.warn('[WS] Client socket error:', err.message);
+  });
+
   ws.on('close', () => {
     if (boundCode && peerClients.has(boundCode)) {
       peerClients.get(boundCode).delete(ws);
@@ -681,7 +737,20 @@ wss.on('connection', (ws) => {
   });
 });
 
+wss.on('error', (err) => {
+  console.warn('[WSS] Server error:', err.message);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught exception:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] Unhandled rejection:', reason);
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
+
 

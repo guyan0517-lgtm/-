@@ -33953,4 +33953,381 @@ select,
   display: none !important;
 }
 
+#chat-input-actions-top.peer-group-toolbar {
+  display: flex !important;
+  justify-content: safe center !important;
+  align-items: center !important;
+  gap: clamp(2px, 1.3vw, 6px) !important;
+  padding: 0 2px !important;
+  margin: 0 auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+}
 
+#chat-input-actions-top.peer-group-toolbar::-webkit-scrollbar {
+  display: none !important;
+}
+
+#chat-input-actions-top.peer-group-toolbar .chat-action-icon-btn {
+  width: 38px !important;
+  height: 38px !important;
+  line-height: 38px !important;
+  font-size: 24px !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+}
+
+#chat-input-actions-top.peer-group-toolbar .chat-action-icon-btn svg {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+#chat-input-actions-top.peer-group-toolbar #combat-entry-btn svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+:root {
+  --mini-phone-shell-bg: var(--tukey-green, var(--accent-color));
+  --mini-phone-shell-bevel-light: var(--card-bg);
+  --mini-phone-shell-bevel-dark: var(--border-color);
+  --mini-phone-screen-bg: var(--card-bg);
+  --mini-phone-header-bg: var(--card-bg);
+  --mini-phone-sent-bg: var(--accent-color);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--secondary-bg);
+  --mini-phone-recv-text: var(--text-primary);
+  --mini-phone-Radius: 22px;
+  --mini-phone-width: 284px;
+  --mini-phone-height: 500px;
+}
+
+#peer-mini-phone-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  display: none;
+}
+
+#peer-mini-phone-overlay.visible {
+  display: block;
+}
+
+#peer-mini-phone-shell {
+  position: fixed;
+  top: 76px;
+  left: calc(50% - (var(--mini-phone-width, 284px) / 2));
+  width: var(--mini-phone-width, 284px);
+  height: var(--mini-phone-height, 500px);
+  pointer-events: auto;
+  background: var(--mini-phone-shell-bg);
+  border-radius: var(--mini-phone-Radius);
+  padding: 13px 15px 15px 15px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-top: 1.5px solid color-mix(in srgb, var(--card-bg) 65%, transparent);
+  border-left: 1.5px solid color-mix(in srgb, var(--card-bg) 65%, transparent);
+  border-right: 2px solid color-mix(in srgb, var(--mini-phone-shell-bg) 75%, var(--border-color));
+  border-bottom: 3px solid color-mix(in srgb, var(--mini-phone-shell-bg) 75%, var(--border-color));
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--mini-phone-shell-bg) 70%, var(--border-color)),
+    0 8px 18px color-mix(in srgb, var(--text-primary) 7%, transparent),
+    inset 1px 1px 0 color-mix(in srgb, var(--card-bg) 50%, transparent);
+  user-select: none;
+}
+
+#peer-mini-phone-shell.phone-size-large {
+  --mini-phone-width: 284px;
+  --mini-phone-height: 500px;
+  padding: 13px 15px 15px 15px;
+}
+
+#peer-mini-phone-shell.phone-size-medium {
+  --mini-phone-width: 248px;
+  --mini-phone-height: 436px;
+  padding: 11px 12px 12px 12px;
+}
+
+#peer-mini-phone-shell.phone-size-small {
+  --mini-phone-width: 214px;
+  --mini-phone-height: 376px;
+  padding: 9px 10px 10px 10px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-drag-bar {
+  height: 22px;
+  margin-bottom: 5px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-drag-bar {
+  height: 20px;
+  margin-bottom: 4px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-speaker {
+  width: 76px;
+  height: 7px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-speaker {
+  width: 60px;
+  height: 6px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-bezel {
+  padding: 5px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-bezel {
+  padding: 4px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-footer {
+  height: 36px;
+  margin-top: 5px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-footer {
+  height: 30px;
+  margin-top: 4px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-home-btn {
+  width: 28px;
+  height: 28px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-home-btn {
+  width: 24px;
+  height: 24px;
+}
+
+#peer-mini-phone-shell.phone-theme-default {
+  --mini-phone-shell-bg: var(--tukey-green, var(--accent-color));
+  --mini-phone-screen-bg: var(--card-bg);
+  --mini-phone-header-bg: var(--card-bg);
+  --mini-phone-sent-bg: var(--accent-color);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--secondary-bg);
+  --mini-phone-recv-text: var(--text-primary);
+}
+
+#peer-mini-phone-shell.phone-theme-sakura {
+  --mini-phone-shell-bg: var(--tukey-primary, #ff9a9e);
+  --mini-phone-screen-bg: var(--card-bg);
+  --mini-phone-header-bg: var(--card-bg);
+  --mini-phone-sent-bg: var(--tukey-primary, #ff9a9e);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--secondary-bg);
+  --mini-phone-recv-text: var(--text-primary);
+}
+
+#peer-mini-phone-shell.phone-theme-retro {
+  --mini-phone-shell-bg: var(--secondary-bg);
+  --mini-phone-screen-bg: var(--background-color);
+  --mini-phone-header-bg: var(--secondary-bg);
+  --mini-phone-sent-bg: var(--text-primary);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--card-bg);
+  --mini-phone-recv-text: var(--text-primary);
+  --mini-phone-Radius: 10px;
+}
+
+#peer-mini-phone-shell.phone-theme-cream {
+  --mini-phone-shell-bg: var(--background-color);
+  --mini-phone-screen-bg: var(--card-bg);
+  --mini-phone-header-bg: var(--card-bg);
+  --mini-phone-sent-bg: var(--text-secondary);
+  --mini-phone-sent-text: var(--card-bg);
+  --mini-phone-recv-bg: var(--secondary-bg);
+  --mini-phone-recv-text: var(--text-primary);
+}
+
+#peer-mini-phone-drag-bar {
+  width: 100%;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: move;
+  touch-action: none;
+  flex-shrink: 0;
+  margin-bottom: 6px;
+}
+
+#peer-mini-phone-speaker {
+  width: 88px;
+  height: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--card-bg) 60%, var(--border-color));
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  box-shadow: inset 0 1px 1.5px color-mix(in srgb, var(--border-color) 60%, transparent);
+}
+
+#peer-mini-phone-close-btn {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  color: #ffffff;
+  border: none;
+  opacity: 0.35;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+#peer-mini-phone-close-btn:hover {
+  opacity: 0.8;
+}
+
+#peer-mini-phone-close-btn svg {
+  stroke: #ffffff;
+}
+
+#peer-mini-phone-bezel {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  padding: 6px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--card-bg) 80%, var(--secondary-bg));
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  border-radius: 9px;
+  box-shadow:
+    inset 1px 1px 2px color-mix(in srgb, var(--border-color) 70%, transparent),
+    inset -1px -1px 2px color-mix(in srgb, var(--card-bg) 80%, transparent);
+  display: flex;
+  flex-direction: column;
+}
+
+#peer-mini-phone-screen {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  background: var(--mini-phone-screen-bg);
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--border-color) 45%, transparent);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+#peer-mini-phone-footer {
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+#peer-mini-phone-home-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--card-bg) 85%, var(--secondary-bg));
+  border: 1.5px solid color-mix(in srgb, var(--border-color) 75%, transparent);
+  box-shadow:
+    inset 0 1px 2px color-mix(in srgb, var(--border-color) 50%, transparent),
+    0 1px 0 color-mix(in srgb, var(--card-bg) 80%, transparent);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.peer-phone-header {
+  height: 36px;
+  padding: 0 10px;
+  background: var(--mini-phone-header-bg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.peer-phone-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  box-sizing: border-box;
+  background: var(--mini-phone-screen-bg);
+}
+
+.peer-phone-contact-avatar {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  background: var(--mini-phone-sent-bg);
+  color: var(--mini-phone-sent-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.peer-phone-contact-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.peer-phone-msg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.peer-phone-msg-bubble {
+  max-width: 78%;
+  padding: 7px 11px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.peer-phone-msg-bubble.sent {
+  align-self: flex-end;
+  background: var(--mini-phone-sent-bg);
+  color: var(--mini-phone-sent-text);
+  border-bottom-right-radius: 4px;
+}
+
+.peer-phone-msg-bubble.recv {
+  align-self: flex-start;
+  background: var(--mini-phone-recv-bg);
+  color: var(--mini-phone-recv-text);
+  border-bottom-left-radius: 4px;
+}

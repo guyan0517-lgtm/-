@@ -600,10 +600,8 @@
 
       if (!this.heartbeatTimer) {
         this.heartbeatTimer = setInterval(() => {
-          this.sendOnlinePingToFriends();
-          this.publishMyRetainedPresence("online");
           this.syncAllPeerPresenceUI();
-        }, 3000);
+        }, 12000);
       }
     },
 
@@ -689,7 +687,21 @@
       return last > 0 && Date.now() - last < 25000;
     },
 
+    isOnlineSoundEnabled: function () {
+      return localStorage.getItem("tukey_peer_online_sound_enabled_v1") !== "false";
+    },
+
+    toggleOnlineSoundEnabled: function () {
+      const next = !this.isOnlineSoundEnabled();
+      localStorage.setItem("tukey_peer_online_sound_enabled_v1", next ? "true" : "false");
+      this.refreshOnlineSoundSettingsUI();
+    },
+
     playPeerOnlineSound: function (forcePlay) {
+      if (!forcePlay) {
+        if (!this.isOnlineSoundEnabled()) return;
+        if (document.hidden) return;
+      }
       try {
         const customDataUrl = localStorage.getItem("tukey_peer_online_custom_sound_v1") || "";
         if (customDataUrl && customDataUrl.startsWith("data:audio")) {
@@ -739,10 +751,15 @@
     refreshOnlineSoundSettingsUI: function () {
       const statusText = document.getElementById("peer-online-sound-status-text");
       const clearBtn = document.getElementById("peer-online-clear-sound-btn");
+      const toggleBtn = document.getElementById("peer-online-toggle-sound-btn");
+      const enabled = this.isOnlineSoundEnabled();
       const customDataUrl = localStorage.getItem("tukey_peer_online_custom_sound_v1") || "";
       const customName = localStorage.getItem("tukey_peer_online_custom_sound_name_v1") || "自定义音频";
       if (statusText) {
-        statusText.textContent = customDataUrl ? customName : "默认叮咚";
+        statusText.textContent = enabled ? (customDataUrl ? customName : "默认叮咚") : "已关闭";
+      }
+      if (toggleBtn) {
+        toggleBtn.textContent = enabled ? "开启" : "关闭";
       }
       if (clearBtn) {
         clearBtn.style.display = customDataUrl ? "inline-flex" : "none";
@@ -804,23 +821,9 @@
             const bootGracePassed = !this._initTimestamp || (nowTs - this._initTimestamp > 6000);
             if (!wasOnline && isSpecial && bootGracePassed && nowTs - lastNoticeTs > 20000) {
               this.peerLastOnlineNoticeAt[norm] = nowTs;
-              const displayName = chat.settings?.remarkName || chat.name || "密友";
-              this.playPeerOnlineSound(false);
-              this.showPeerNotice(
-                `特别关心密友「${displayName}」已上线`,
-                () => {
-                  if (typeof window.openChat === "function") {
-                    window.openChat(chat.id);
-                  }
-                },
-                {
-                  title: displayName,
-                  message: "密友已上线",
-                  avatar: chat.settings?.aiAvatar || window.defaultAvatar,
-                  chatId: chat.id,
-                  tag: "peer_online_" + norm
-                }
-              );
+              if (!document.hidden) {
+                this.playPeerOnlineSound(false);
+              }
             }
           }
         }
@@ -1283,11 +1286,9 @@
     },
 
     startPollingFallback: function () {
-      if (this.pollTimer) return;
+      if (this.isPollingActive) return;
+      this.isPollingActive = true;
       this.pollOnce();
-      this.pollTimer = setInterval(() => {
-        this.pollOnce();
-      }, 1200);
     },
 
     pollOnce: function () {
@@ -1296,9 +1297,16 @@
       const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const peersList = this.getAllKnownPeerCodes();
       const peersQuery = peersList.length > 0 ? "&peers=" + encodeURIComponent(peersList.join(",")) : "";
-      fetch(this.getApiUrl("/api/peer/poll?code=" + encodeURIComponent(myCode) + peersQuery))
+
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const abortTimer = controller ? setTimeout(() => controller.abort(), 28000) : null;
+
+      fetch(this.getApiUrl("/api/peer/poll?code=" + encodeURIComponent(myCode) + peersQuery), {
+        signal: controller ? controller.signal : undefined
+      })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
+          if (abortTimer) clearTimeout(abortTimer);
           if (data && data.onlinePeers && typeof data.onlinePeers === "object") {
             for (const [pCode, isOn] of Object.entries(data.onlinePeers)) {
               const norm = this.normalizePeerCode(pCode);
@@ -1314,10 +1322,17 @@
           if (data && Array.isArray(data.events) && data.events.length > 0) {
             data.events.forEach((evt) => this.enqueueIncomingEvent(evt));
           }
-        })
-        .catch(() => {})
-        .finally(() => {
           this._isPollingNow = false;
+          setTimeout(() => {
+            this.pollOnce();
+          }, 20);
+        })
+        .catch(() => {
+          if (abortTimer) clearTimeout(abortTimer);
+          this._isPollingNow = false;
+          setTimeout(() => {
+            this.pollOnce();
+          }, 1500);
         });
     },
 
@@ -1813,17 +1828,18 @@
           await window.renderChatList();
         } catch (e) {}
       }
-      if (typeof window.renderContactsScreen === "function") {
-        try {
-          await window.renderContactsScreen();
-        } catch (e) {}
-      } else if (typeof window.switchContactsSubTab === "function") {
-        try {
-          const contactsScreen = document.getElementById("contacts-screen");
-          if (contactsScreen && contactsScreen.classList.contains("active")) {
-            window.switchContactsSubTab("friends");
-          }
-        } catch (e) {}
+      const contactsView = document.getElementById("contacts-view");
+      const contactsScreen = document.getElementById("contacts-screen");
+      const isContactsActive = Boolean(
+        (contactsView && contactsView.classList.contains("active")) ||
+        (contactsScreen && contactsScreen.classList.contains("active"))
+      );
+      if (isContactsActive) {
+        if (typeof window.renderContactsScreen === "function") {
+          try {
+            await window.renderContactsScreen();
+          } catch (e) {}
+        }
       }
     },
 
@@ -1842,18 +1858,13 @@
             byPeerCode.get(c.peerCode).push(c);
           } else if (c.isGroup) {
             const hasRealPeer =
+              Boolean(c.isPeerGroup) ||
               Boolean(c.peerGroupId) ||
               (Array.isArray(c.members) &&
-                c.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode))));
-            if (!hasRealPeer && c.isPeerGroup) {
-              c.isPeerGroup = false;
-              if (window.state && window.state.chats && window.state.chats[c.id]) {
-                window.state.chats[c.id].isPeerGroup = false;
-              }
-              try {
-                await window.db.chats.put(c);
-              } catch (e) {}
-            } else if (hasRealPeer && (c.isPeerGroup || c.peerGroupId)) {
+                c.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))) ||
+              (Array.isArray(c.settings?.peerMembers) && c.settings.peerMembers.length > 0) ||
+              Boolean(c.settings?.soloLineConfig);
+            if (hasRealPeer) {
               c.isPeerGroup = true;
               if (c.peerGroupId) {
                 if (!byGroupId.has(c.peerGroupId)) byGroupId.set(c.peerGroupId, []);
@@ -1864,6 +1875,27 @@
         }
 
         let changed = false;
+
+        const mergeChatHistories = (memHist, dbHist) => {
+          const a = Array.isArray(memHist) ? memHist : [];
+          const b = Array.isArray(dbHist) ? dbHist : [];
+          if (a.length === 0) return b;
+          if (b.length === 0) return a;
+          const map = new Map();
+          const getKey = (m) => {
+            if (!m) return "";
+            if (m.eventId) return "evt_" + m.eventId;
+            const cStr = typeof m.content === "string" ? m.content.slice(0, 120) : JSON.stringify(m.content || "").slice(0, 120);
+            return `${m.role}_${m.timestamp}_${m.type || ""}_${cStr}`;
+          };
+          for (const m of b) {
+            if (m) map.set(getKey(m), m);
+          }
+          for (const m of a) {
+            if (m) map.set(getKey(m), m);
+          }
+          return Array.from(map.values()).sort((x, y) => (x.timestamp || 0) - (y.timestamp || 0));
+        };
 
         for (const [peerCode, list] of byPeerCode.entries()) {
           if (list.length <= 1) {
@@ -1878,8 +1910,17 @@
                 only.inMessageList = true;
                 itemChanged = true;
               }
+              const existingMem = window.state && window.state.chats && (window.state.chats[only.id] || window.state.chats[String(only.id)]);
+              if (existingMem && Array.isArray(existingMem.history) && existingMem.history.length > 0) {
+                const merged = mergeChatHistories(existingMem.history, only.history);
+                if (merged.length > (only.history || []).length) {
+                  only.history = merged;
+                  itemChanged = true;
+                }
+              }
               if (window.state && window.state.chats) {
                 window.state.chats[only.id] = only;
+                window.state.chats[String(only.id)] = only;
               }
               this.saveFriendToBackup(only);
               if (itemChanged) {
@@ -1905,7 +1946,9 @@
           const seenKeys = new Set();
 
           for (const chatItem of list) {
-            for (const msg of chatItem.history || []) {
+            const memPeer = window.state && window.state.chats && (window.state.chats[chatItem.id] || window.state.chats[String(chatItem.id)]);
+            const combinedItemHist = memPeer ? mergeChatHistories(memPeer.history, chatItem.history) : (chatItem.history || []);
+            for (const msg of combinedItemHist) {
               if (!msg) continue;
               const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
               if (!seenKeys.has(key)) {
@@ -1920,6 +1963,7 @@
           await window.db.chats.put(primary);
           if (window.state && window.state.chats) {
             window.state.chats[primary.id] = primary;
+            window.state.chats[String(primary.id)] = primary;
           }
           this.saveFriendToBackup(primary);
 
@@ -1954,7 +1998,16 @@
           if (list.length <= 1) {
             const onlyGrp = list[0];
             if (onlyGrp && window.state && window.state.chats) {
+              const existingGrpMem = window.state.chats[onlyGrp.id] || window.state.chats[String(onlyGrp.id)];
+              if (existingGrpMem && Array.isArray(existingGrpMem.history) && existingGrpMem.history.length > 0) {
+                const merged = mergeChatHistories(existingGrpMem.history, onlyGrp.history);
+                if (merged.length > (onlyGrp.history || []).length) {
+                  onlyGrp.history = merged;
+                  try { await window.db.chats.put(onlyGrp); } catch (_) {}
+                }
+              }
               window.state.chats[onlyGrp.id] = onlyGrp;
+              window.state.chats[String(onlyGrp.id)] = onlyGrp;
             }
             continue;
           }
@@ -1969,7 +2022,9 @@
           const mergedHistory = [];
           const seenKeys = new Set();
           for (const chatItem of list) {
-            for (const msg of chatItem.history || []) {
+            const memGrp = window.state && window.state.chats && (window.state.chats[chatItem.id] || window.state.chats[String(chatItem.id)]);
+            const combinedGrpHist = memGrp ? mergeChatHistories(memGrp.history, chatItem.history) : (chatItem.history || []);
+            for (const msg of combinedGrpHist) {
               if (!msg) continue;
               const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
               if (!seenKeys.has(key)) {
@@ -1983,6 +2038,7 @@
           await window.db.chats.put(primary);
           if (window.state && window.state.chats) {
             window.state.chats[primary.id] = primary;
+            window.state.chats[String(primary.id)] = primary;
           }
           for (let i = 1; i < list.length; i++) {
             const dup = list[i];
@@ -2464,16 +2520,18 @@
         customLocations: Array.isArray(groupChat.settings?.customLocations) ? groupChat.settings.customLocations : [],
         temporaryLocations: Array.isArray(groupChat.settings?.temporaryLocations) ? groupChat.settings.temporaryLocations : [],
         currentLocation: groupChat.settings?.currentLocation || "",
+        peerPlayerLocations: groupChat.settings?.peerPlayerLocations ? JSON.parse(JSON.stringify(groupChat.settings.peerPlayerLocations)) : {},
         moduleMiniMaps: groupChat.settings?.moduleMiniMaps ? JSON.parse(JSON.stringify(groupChat.settings.moduleMiniMaps)) : {},
         miniMapSvg: groupChat.settings?.miniMapSvg || null,
         miniMapStyle: groupChat.settings?.miniMapStyle || "自适应",
-        peerGroupMapLocationEffect: groupChat.settings?.peerGroupMapLocationEffect,
-        peerGroupMapLocationColor: groupChat.settings?.peerGroupMapLocationColor,
+        peerGroupMapLocationEffect: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.effect || groupChat.settings?.peerGroupMapLocationEffect,
+        peerGroupMapLocationColor: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.color || groupChat.settings?.peerGroupMapLocationColor,
         peerGroupMapLocationGlowSpeed: groupChat.settings?.peerGroupMapLocationGlowSpeed,
         peerGroupMapLocationGlowBrightness: groupChat.settings?.peerGroupMapLocationGlowBrightness,
-        peerGroupMapLocationCustomIcon: groupChat.settings?.peerGroupMapLocationCustomIcon,
-        peerGroupMapLocationCustomGlow: groupChat.settings?.peerGroupMapLocationCustomGlow,
-        peerGroupMapLocationCustomScale: groupChat.settings?.peerGroupMapLocationCustomScale
+        peerGroupMapLocationCustomIcon: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.icon !== undefined ? groupChat.settings.peerGroupPlayerCustomIcons[myCode].icon : groupChat.settings?.peerGroupMapLocationCustomIcon,
+        peerGroupMapLocationCustomGlow: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.glow !== undefined ? groupChat.settings.peerGroupPlayerCustomIcons[myCode].glow : groupChat.settings?.peerGroupMapLocationCustomGlow,
+        peerGroupMapLocationCustomScale: groupChat.settings?.peerGroupPlayerCustomIcons?.[myCode]?.scale !== undefined ? groupChat.settings.peerGroupPlayerCustomIcons[myCode].scale : groupChat.settings?.peerGroupMapLocationCustomScale,
+        peerGroupPlayerCustomIcons: groupChat.settings?.peerGroupPlayerCustomIcons || {}
       };
 
       const selectedChapIds = Array.isArray(groupChat.selectedModuleChapterIds)
@@ -2513,7 +2571,16 @@
           : [],
         thoughtChainEnabled: groupChat.thoughtChainEnabled !== false,
         thoughtChainId: groupChat.thoughtChainId || null,
-        thoughtChainEnableCoc: groupChat.thoughtChainEnableCoc !== false
+        thoughtChainEnableCoc: groupChat.thoughtChainEnableCoc !== false,
+        keeperSettings: {
+          keeperForcedDraw: Boolean(groupChat.settings?.keeperForcedDraw),
+          keeperMaxMemory: groupChat.settings?.keeperMaxMemory,
+          keeperPrompt: groupChat.settings?.keeperPrompt,
+          keeperTargetId: groupChat.settings?.keeperTargetId,
+          keeperCharPrompts: groupChat.settings?.keeperCharPrompts || {},
+          keeperActivePresetId: groupChat.settings?.keeperActivePresetId || ""
+        },
+        sharedKeeperPresets: typeof window.getKeeperPresets === "function" ? window.getKeeperPresets() : []
       };
     },
 
@@ -2980,8 +3047,11 @@
             thoughtChainEnabled: snap.thoughtChainEnabled,
             thoughtChainId: snap.thoughtChainId,
             thoughtChainEnableCoc: snap.thoughtChainEnableCoc,
+            keeperSettings: snap.keeperSettings,
+            sharedKeeperPresets: snap.sharedKeeperPresets,
             sharedSoloPayload: typeof window.buildMySharedSoloPayload === "function" ? window.buildMySharedSoloPayload(groupChat) : [],
             essenceMessages: Array.isArray(groupChat.settings?.essenceMessages) ? groupChat.settings.essenceMessages : undefined,
+            peerPhoneData: groupChat.settings?.peerPhoneData ? JSON.parse(JSON.stringify(groupChat.settings.peerPhoneData)) : undefined,
             timestamp: Date.now()
           };
           this.dispatchPacketToNetwork(m.peerCode, pkt, "/api/peer/send", false);
@@ -3039,7 +3109,12 @@
       const groupChat = await this.findPeerGroupChatByIdAsync(data.groupId);
       if (!groupChat) return;
 
-      if (data.groupName) groupChat.name = data.groupName;
+      if (data.groupName) {
+        groupChat.name = data.groupName;
+        if (typeof window.updateSoloLineBannerUI === "function") {
+          window.updateSoloLineBannerUI(groupChat);
+        }
+      }
       if (!groupChat.settings) groupChat.settings = {};
       if (data.groupAvatar) groupChat.settings.groupAvatar = data.groupAvatar;
 
@@ -3166,7 +3241,86 @@
         if (!groupChat.settings.sharedSoloRecords || typeof groupChat.settings.sharedSoloRecords !== "object") {
           groupChat.settings.sharedSoloRecords = {};
         }
-        groupChat.settings.sharedSoloRecords[data.fromCode] = data.sharedSoloPayload;
+        const existingList = Array.isArray(groupChat.settings.sharedSoloRecords[data.fromCode])
+          ? groupChat.settings.sharedSoloRecords[data.fromCode]
+          : [];
+        const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(groupChat) : null;
+        const mergedList = data.sharedSoloPayload.map((incomingT) => {
+          if (!incomingT || !incomingT.id) return incomingT;
+          const matchedExisting = existingList.find((ex) => ex && (ex.id === incomingT.id || ("solo_" + ex.id) === incomingT.id || ex.id === ("solo_" + incomingT.id)));
+          const inHist = Array.isArray(incomingT.history) ? incomingT.history : (Array.isArray(incomingT.publicHistory) ? incomingT.publicHistory : []);
+          const exHist = matchedExisting && Array.isArray(matchedExisting.history) ? matchedExisting.history : [];
+
+          const normalizedIncomingHist = inHist.map((m) => {
+            if (!m) return m;
+            if (m.role === "user" && (!m.senderPeerCode || m.senderPeerCode !== myCode)) {
+              return {
+                ...m,
+                role: "assistant",
+                isPeerUserMessage: true,
+                senderPeerCode: m.senderPeerCode || data.fromCode,
+                senderName: m.senderName && m.senderName !== "我" ? m.senderName : (incomingT.ownerName || data.senderName || "密友"),
+                senderAvatar: m.senderAvatar || data.senderAvatar || window.defaultAvatar
+              };
+            }
+            return m;
+          });
+
+          const combined = [...exHist];
+          normalizedIncomingHist.forEach((m) => {
+            if (!m) return;
+            const dup = combined.some((em) => (m.eventId && em.eventId === m.eventId) || (em.timestamp === m.timestamp && em.content === m.content));
+            if (!dup) combined.push(m);
+          });
+          combined.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+
+          if (cfg && Array.isArray(cfg.threads)) {
+            const localT = cfg.threads.find((t) => t && (t.id === incomingT.id || ("solo_" + t.id) === incomingT.id || t.id === ("solo_" + incomingT.id)));
+            if (localT) {
+              if (!Array.isArray(localT.history)) localT.history = [];
+              normalizedIncomingHist.forEach((m) => {
+                if (!m) return;
+                const dup = localT.history.some((em) => (m.eventId && em.eventId === m.eventId) || (em.timestamp === m.timestamp && em.content === m.content));
+                if (!dup) localT.history.push(m);
+              });
+              localT.history.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+              if (incomingT.ownerPeerCode === data.fromCode) {
+                if (incomingT.name) localT.name = incomingT.name;
+                if (incomingT.playerPeerCodes) localT.playerPeerCodes = incomingT.playerPeerCodes;
+                if (incomingT.isPublic !== undefined) localT.isPublic = incomingT.isPublic;
+              }
+            }
+          }
+
+          const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(groupChat) : null;
+          const isViewingThis = groupChat.activeLineMode === "solo" && activeThread && (activeThread.id === incomingT.id || ("solo_" + activeThread.id) === incomingT.id || activeThread.id === ("solo_" + incomingT.id));
+          if (isViewingThis && Array.isArray(groupChat.history)) {
+            let changed = false;
+            normalizedIncomingHist.forEach((m) => {
+              if (!m) return;
+              const dup = groupChat.history.some((em) => (m.eventId && em.eventId === m.eventId) || (em.timestamp === m.timestamp && em.content === m.content));
+              if (!dup) {
+                groupChat.history.push(m);
+                changed = true;
+              }
+            });
+            if (changed) {
+              groupChat.history.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+              if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
+                if (typeof window.refreshChatView === "function") {
+                  window.refreshChatView(groupChat.id);
+                }
+              }
+            }
+          }
+
+          return {
+            ...incomingT,
+            history: combined,
+            publicHistory: combined
+          };
+        });
+        groupChat.settings.sharedSoloRecords[data.fromCode] = mergedList;
       }
       if (Array.isArray(data.essenceMessages)) {
         groupChat.settings.essenceMessages = data.essenceMessages;
@@ -3175,6 +3329,13 @@
           if (String(activeId) === String(groupChat.id)) {
             window.renderGroupEssenceList(groupChat);
           }
+        }
+      }
+      if (data.peerPhoneData && typeof data.peerPhoneData === "object") {
+        if (typeof window.mergePeerPhoneDataFromPeer === "function") {
+          try {
+            window.mergePeerPhoneDataFromPeer(groupChat, data.peerPhoneData);
+          } catch (e) {}
         }
       }
 
@@ -3253,8 +3414,21 @@
         if (Array.isArray(data.mapSyncData.temporaryLocations)) {
           groupChat.settings.temporaryLocations = data.mapSyncData.temporaryLocations;
         }
-        if (data.mapSyncData.currentLocation !== undefined) {
-          groupChat.settings.currentLocation = data.mapSyncData.currentLocation;
+        if (data.mapSyncData.peerPlayerLocations && typeof data.mapSyncData.peerPlayerLocations === "object") {
+          if (!groupChat.settings.peerPlayerLocations || typeof groupChat.settings.peerPlayerLocations !== "object") {
+            groupChat.settings.peerPlayerLocations = {};
+          }
+          const myCodeForLoc = this.getOrCreateMyPeerCode();
+          for (const [pCode, pRec] of Object.entries(data.mapSyncData.peerPlayerLocations)) {
+            if (!pRec || typeof pRec !== "object") continue;
+            const existing = groupChat.settings.peerPlayerLocations[pCode];
+            if (!existing || (Number(pRec.timestamp) || 0) >= (Number(existing.timestamp) || 0)) {
+              groupChat.settings.peerPlayerLocations[pCode] = { ...pRec };
+              if (pCode === myCodeForLoc && pRec.location !== undefined) {
+                groupChat.settings.currentLocation = pRec.location;
+              }
+            }
+          }
         }
         if (data.mapSyncData.moduleMiniMaps && typeof data.mapSyncData.moduleMiniMaps === "object") {
           groupChat.settings.moduleMiniMaps = {
@@ -3268,26 +3442,22 @@
         if (data.mapSyncData.miniMapStyle !== undefined) {
           groupChat.settings.miniMapStyle = data.mapSyncData.miniMapStyle;
         }
-        if (data.mapSyncData.peerGroupMapLocationEffect !== undefined) {
-          groupChat.settings.peerGroupMapLocationEffect = data.mapSyncData.peerGroupMapLocationEffect;
+        if (data.mapSyncData.peerGroupPlayerCustomIcons && typeof data.mapSyncData.peerGroupPlayerCustomIcons === "object") {
+          if (!groupChat.settings.peerGroupPlayerCustomIcons) groupChat.settings.peerGroupPlayerCustomIcons = {};
+          for (const [code, pConf] of Object.entries(data.mapSyncData.peerGroupPlayerCustomIcons)) {
+            if (code !== myCode && pConf) {
+              groupChat.settings.peerGroupPlayerCustomIcons[code] = { ...pConf };
+            }
+          }
         }
-        if (data.mapSyncData.peerGroupMapLocationColor !== undefined) {
-          groupChat.settings.peerGroupMapLocationColor = data.mapSyncData.peerGroupMapLocationColor;
-        }
-        if (data.mapSyncData.peerGroupMapLocationGlowSpeed !== undefined) {
-          groupChat.settings.peerGroupMapLocationGlowSpeed = data.mapSyncData.peerGroupMapLocationGlowSpeed;
-        }
-        if (data.mapSyncData.peerGroupMapLocationGlowBrightness !== undefined) {
-          groupChat.settings.peerGroupMapLocationGlowBrightness = data.mapSyncData.peerGroupMapLocationGlowBrightness;
-        }
-        if (data.mapSyncData.peerGroupMapLocationCustomIcon !== undefined) {
-          groupChat.settings.peerGroupMapLocationCustomIcon = data.mapSyncData.peerGroupMapLocationCustomIcon;
-        }
-        if (data.mapSyncData.peerGroupMapLocationCustomGlow !== undefined) {
-          groupChat.settings.peerGroupMapLocationCustomGlow = data.mapSyncData.peerGroupMapLocationCustomGlow;
-        }
-        if (data.mapSyncData.peerGroupMapLocationCustomScale !== undefined) {
-          groupChat.settings.peerGroupMapLocationCustomScale = data.mapSyncData.peerGroupMapLocationCustomScale;
+        if (data.fromCode && data.mapSyncData.peerGroupMapLocationCustomIcon !== undefined) {
+          if (!groupChat.settings.peerGroupPlayerCustomIcons) groupChat.settings.peerGroupPlayerCustomIcons = {};
+          groupChat.settings.peerGroupPlayerCustomIcons[data.fromCode] = {
+            icon: data.mapSyncData.peerGroupMapLocationCustomIcon || "",
+            glow: !!data.mapSyncData.peerGroupMapLocationCustomGlow,
+            scale: data.mapSyncData.peerGroupMapLocationCustomScale !== undefined ? data.mapSyncData.peerGroupMapLocationCustomScale : 2.0,
+            effect: data.mapSyncData.peerGroupMapLocationEffect || (data.mapSyncData.peerGroupMapLocationCustomIcon ? "custom" : "pin")
+          };
         }
       }
       if (Array.isArray(data.selectedModuleChapterIds)) {
@@ -3321,6 +3491,32 @@
       }
       if (data.thoughtChainEnableCoc !== undefined) {
         groupChat.thoughtChainEnableCoc = data.thoughtChainEnableCoc;
+      }
+      if (data.keeperSettings && typeof data.keeperSettings === "object") {
+        if (data.keeperSettings.keeperForcedDraw !== undefined) {
+          groupChat.settings.keeperForcedDraw = Boolean(data.keeperSettings.keeperForcedDraw);
+        }
+        if (data.keeperSettings.keeperMaxMemory !== undefined) {
+          groupChat.settings.keeperMaxMemory = data.keeperSettings.keeperMaxMemory;
+        }
+        if (data.keeperSettings.keeperPrompt !== undefined) {
+          groupChat.settings.keeperPrompt = data.keeperSettings.keeperPrompt;
+        }
+        if (data.keeperSettings.keeperTargetId !== undefined) {
+          groupChat.settings.keeperTargetId = data.keeperSettings.keeperTargetId;
+        }
+        if (data.keeperSettings.keeperCharPrompts && typeof data.keeperSettings.keeperCharPrompts === "object") {
+          groupChat.settings.keeperCharPrompts = {
+            ...(groupChat.settings.keeperCharPrompts || {}),
+            ...data.keeperSettings.keeperCharPrompts
+          };
+        }
+        if (data.keeperSettings.keeperActivePresetId !== undefined) {
+          groupChat.settings.keeperActivePresetId = data.keeperSettings.keeperActivePresetId;
+        }
+      }
+      if (Array.isArray(data.sharedKeeperPresets)) {
+        groupChat.settings.sharedKeeperPresets = data.sharedKeeperPresets;
       }
 
       if (window.state && window.state.chats) {
@@ -3382,8 +3578,8 @@
 
     broadcastGroupMessage: async function (groupChat, msg, isFromLocalUser) {
       if (!groupChat || !groupChat.isGroup || !groupChat.isPeerGroup || !msg) return;
-      let soloThreadId = null;
-      if (groupChat.activeLineMode === "solo") {
+      let soloThreadId = msg.soloThreadId || null;
+      if (!soloThreadId && groupChat.activeLineMode === "solo") {
         const activeThread = typeof window.getActiveSoloThread === "function"
           ? window.getActiveSoloThread(groupChat)
           : null;
@@ -3405,9 +3601,22 @@
       const baseEventId = msg.eventId || "gmsg_" + (msg.timestamp || Date.now()) + "_" + Math.random().toString(36).slice(2, 7);
       msg.eventId = baseEventId;
 
-      const peerTargets = (groupChat.members || []).filter(
+      let peerTargets = (groupChat.members || []).filter(
         (m) => (m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode
       );
+
+      // 单线专属过滤：如果当前消息属于单线，仅发送给参与该单线的真人玩家
+      if (soloThreadId) {
+        const activeThread = typeof window.getActiveSoloThread === "function"
+          ? window.getActiveSoloThread(groupChat)
+          : null;
+        const threadObj = activeThread && (activeThread.id === soloThreadId || ("solo_" + activeThread.id) === soloThreadId || activeThread.id === ("solo_" + soloThreadId))
+          ? activeThread
+          : (groupChat.settings?.soloLineConfig?.threads || []).find((t) => t && (t.id === soloThreadId || ("solo_" + t.id) === soloThreadId || t.id === ("solo_" + soloThreadId)));
+        if (threadObj && !threadObj.isPublic && Array.isArray(threadObj.playerPeerCodes) && threadObj.playerPeerCodes.length > 0) {
+          peerTargets = peerTargets.filter((m) => threadObj.playerPeerCodes.includes(m.peerCode));
+        }
+      }
 
       const normalizedMsg = { ...msg, eventId: baseEventId };
       if (normalizedMsg.quote && normalizedMsg.quote.senderName === "我" && isFromLocalUser && myNick && myNick !== "我") {
@@ -3488,37 +3697,111 @@
         timestamp: incomingRaw.timestamp || data.timestamp || Date.now()
       };
 
-      if (data.soloThreadId) {
-        const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(groupChat) : null;
-        const localT = cfg && Array.isArray(cfg.threads) ? cfg.threads.find((t) => t.id === data.soloThreadId) : null;
-        if (localT) {
-          if (!Array.isArray(localT.history)) localT.history = [];
-          const dupLocal = localT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
-          if (!dupLocal) localT.history.push(msgToInsert);
+      const applyNaiMsgUpdateIfPresent = (list) => {
+        if (!Array.isArray(list) || msgToInsert.type !== "naiimag") return null;
+        const found = list.find((m) => m && m.type === "naiimag" && m.timestamp === msgToInsert.timestamp);
+        if (found) {
+          if (msgToInsert.imageUrl) found.imageUrl = msgToInsert.imageUrl;
+          if (msgToInsert.prompt) found.prompt = msgToInsert.prompt;
+          if (msgToInsert.fullPrompt) found.fullPrompt = msgToInsert.fullPrompt;
+          return found;
         }
-        const sharedRecs = groupChat.settings?.sharedSoloRecords?.[data.fromCode];
-        if (Array.isArray(sharedRecs)) {
-          const peerT = sharedRecs.find((t) => t && t.id === data.soloThreadId);
-          if (peerT) {
-            if (!Array.isArray(peerT.history)) peerT.history = [];
-            const dupPeer = peerT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
-            if (!dupPeer) peerT.history.push(msgToInsert);
-            peerT.publicHistory = peerT.history;
-          }
+        return null;
+      };
+
+      if (msgToInsert.type === "system_status" || msgToInsert.playerLocations) {
+        if (!groupChat.settings) groupChat.settings = {};
+        if (!groupChat.settings.peerPlayerLocations || typeof groupChat.settings.peerPlayerLocations !== "object") {
+          groupChat.settings.peerPlayerLocations = {};
         }
-        const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(groupChat) : null;
-        if (groupChat.activeLineMode === "solo" && activeThread && activeThread.id === data.soloThreadId) {
-          const dupActive = groupChat.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
-          if (!dupActive) {
-            groupChat.history.push(msgToInsert);
-            if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
-              if (typeof window.appendMessage === "function") {
-                window.appendMessage(msgToInsert, groupChat);
-              } else if (typeof window.renderChatInterfaceProxy === "function") {
-                window.renderChatInterfaceProxy(groupChat.id);
+        const byCode = msgToInsert.playerLocations && msgToInsert.playerLocations.byCode;
+        const msgTs = Number(msgToInsert.timestamp) || Date.now();
+        if (byCode && typeof byCode === "object") {
+          for (const [pCode, pLoc] of Object.entries(byCode)) {
+            if (!pLoc) continue;
+            const prevRec = groupChat.settings.peerPlayerLocations[pCode];
+            if (!prevRec || msgTs >= (Number(prevRec.timestamp) || 0)) {
+              groupChat.settings.peerPlayerLocations[pCode] = {
+                location: String(pLoc).trim(),
+                timestamp: msgTs
+              };
+              if (pCode === myCode) {
+                groupChat.settings.currentLocation = String(pLoc).trim();
               }
             }
           }
+        }
+        if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
+          setTimeout(() => {
+            if (typeof window.renderChatMapList === "function") {
+              try { window.renderChatMapList(); } catch (_) {}
+            }
+            if (typeof window.renderChatMiniMap === "function") {
+              try { window.renderChatMiniMap(); } catch (_) {}
+            }
+          }, 50);
+        }
+      }
+
+      if (data.soloThreadId) {
+        msgToInsert.soloThreadId = data.soloThreadId;
+        const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(groupChat) : null;
+        const localT = cfg && Array.isArray(cfg.threads) ? cfg.threads.find((t) => t.id === data.soloThreadId || ("solo_" + t.id) === data.soloThreadId || t.id === ("solo_" + data.soloThreadId)) : null;
+        if (localT) {
+          if (!Array.isArray(localT.history)) localT.history = [];
+          const updatedLocal = applyNaiMsgUpdateIfPresent(localT.history);
+          if (!updatedLocal) {
+            const dupLocal = localT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+            if (!dupLocal) localT.history.push(msgToInsert);
+          }
+        }
+        if (groupChat.settings?.sharedSoloRecords && typeof groupChat.settings.sharedSoloRecords === "object") {
+          for (const sList of Object.values(groupChat.settings.sharedSoloRecords)) {
+            if (!Array.isArray(sList)) continue;
+            const peerT = sList.find((t) => t && (t.id === data.soloThreadId || ("solo_" + t.id) === data.soloThreadId || t.id === ("solo_" + data.soloThreadId)));
+            if (peerT) {
+              if (!Array.isArray(peerT.history)) peerT.history = [];
+              const updatedPeer = applyNaiMsgUpdateIfPresent(peerT.history);
+              if (!updatedPeer) {
+                const dupPeer = peerT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+                if (!dupPeer) peerT.history.push(msgToInsert);
+              }
+              peerT.publicHistory = peerT.history;
+            }
+          }
+        }
+        if (groupChat.viewingPeerSoloThread && (groupChat.viewingPeerSoloThread.id === data.soloThreadId || ("solo_" + groupChat.viewingPeerSoloThread.id) === data.soloThreadId || groupChat.viewingPeerSoloThread.id === ("solo_" + data.soloThreadId))) {
+          if (!Array.isArray(groupChat.viewingPeerSoloThread.history)) groupChat.viewingPeerSoloThread.history = [];
+          const updatedView = applyNaiMsgUpdateIfPresent(groupChat.viewingPeerSoloThread.history);
+          if (!updatedView) {
+            const dupView = groupChat.viewingPeerSoloThread.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+            if (!dupView) groupChat.viewingPeerSoloThread.history.push(msgToInsert);
+          }
+          groupChat.viewingPeerSoloThread.publicHistory = groupChat.viewingPeerSoloThread.history;
+        }
+        const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(groupChat) : null;
+        if (groupChat.activeLineMode === "solo" && activeThread && (activeThread.id === data.soloThreadId || ("solo_" + activeThread.id) === data.soloThreadId || activeThread.id === ("solo_" + data.soloThreadId))) {
+          const updatedActive = applyNaiMsgUpdateIfPresent(groupChat.history);
+          if (updatedActive) {
+            if (typeof window.updateNaiBubbleInDom === "function") {
+              window.updateNaiBubbleInDom(groupChat, updatedActive);
+            }
+          } else {
+            const dupActive = groupChat.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+            if (!dupActive) {
+              groupChat.history.push(msgToInsert);
+              if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
+                if (typeof window.appendMessage === "function") {
+                  window.appendMessage(msgToInsert, groupChat);
+                } else if (typeof window.renderChatInterfaceProxy === "function") {
+                  window.renderChatInterfaceProxy(groupChat.id);
+                }
+              }
+            }
+          }
+        }
+        if (typeof window.evaluatePeerPhonePendingMessages === "function") {
+          try { window.evaluatePeerPhonePendingMessages(groupChat); } catch (e) {}
         }
         if (window.db && window.db.chats) {
           await window.db.chats.put(groupChat);
@@ -3526,16 +3809,14 @@
         return;
       }
 
-      const isDup = groupChat.history.some(
-        (m) =>
-          (msgEvtId && m.eventId === msgEvtId) ||
-          (m.timestamp === incomingRaw.timestamp && m.content === incomingRaw.content)
-      );
-      if (isDup && groupChat.activeLineMode !== "solo") return;
-
       if (groupChat.activeLineMode === "solo") {
         if (!Array.isArray(groupChat.mainLineHistory)) {
           groupChat.mainLineHistory = [];
+        }
+        const updatedMain = applyNaiMsgUpdateIfPresent(groupChat.mainLineHistory);
+        if (updatedMain) {
+          if (window.db && window.db.chats) await window.db.chats.put(groupChat);
+          return;
         }
         const dupInMain = groupChat.mainLineHistory.some(
           (m) =>
@@ -3549,7 +3830,25 @@
           window.updateSoloLineBannerUI(groupChat);
         }
       } else {
+        const updatedHist = applyNaiMsgUpdateIfPresent(groupChat.history);
+        if (updatedHist) {
+          if (typeof window.updateNaiBubbleInDom === "function") {
+            window.updateNaiBubbleInDom(groupChat, updatedHist);
+          }
+          if (window.db && window.db.chats) await window.db.chats.put(groupChat);
+          return;
+        }
+        const isDup = groupChat.history.some(
+          (m) =>
+            (msgEvtId && m.eventId === msgEvtId) ||
+            (m.timestamp === incomingRaw.timestamp && m.content === incomingRaw.content)
+        );
+        if (isDup) return;
         groupChat.history.push(msgToInsert);
+      }
+
+      if (typeof window.evaluatePeerPhonePendingMessages === "function") {
+        try { window.evaluatePeerPhonePendingMessages(groupChat); } catch (e) {}
       }
 
       if (window.state && window.state.chats) {
@@ -3706,23 +4005,39 @@
     },
 
     broadcastTypingStatus: function (chat, isTyping) {
-      if (!chat || chat.activeLineMode === "solo") return;
+      if (!chat) return;
       const myCode = this.getOrCreateMyPeerCode();
       const targetSet = new Set();
+      let soloThreadId = null;
 
       if (chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)))) {
-        (chat.members || []).forEach((m) => {
-          if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
-            targetSet.add(m.peerCode);
+        if (chat.activeLineMode === "solo") {
+          const activeThread = typeof window.getActiveSoloThread === "function"
+            ? window.getActiveSoloThread(chat)
+            : null;
+          if (activeThread) {
+            soloThreadId = activeThread.id;
+            const participants = Array.isArray(activeThread.playerPeerCodes) && activeThread.playerPeerCodes.length > 0
+              ? activeThread.playerPeerCodes
+              : [activeThread.ownerPeerCode || myCode];
+            participants.forEach((pCode) => {
+              if (pCode && pCode !== myCode) targetSet.add(pCode);
+            });
           }
-        });
-        if (chat.settings && Array.isArray(chat.settings.peerMembers)) {
-          chat.settings.peerMembers.forEach((pm) => {
-            const pCode = typeof pm === "string" ? pm : (pm && pm.peerCode);
-            if (pCode && pCode !== myCode) {
-              targetSet.add(pCode);
+        } else {
+          (chat.members || []).forEach((m) => {
+            if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
+              targetSet.add(m.peerCode);
             }
           });
+          if (chat.settings && Array.isArray(chat.settings.peerMembers)) {
+            chat.settings.peerMembers.forEach((pm) => {
+              const pCode = typeof pm === "string" ? pm : (pm && pm.peerCode);
+              if (pCode && pCode !== myCode) {
+                targetSet.add(pCode);
+              }
+            });
+          }
         }
       } else if (chat.roleType === "peer" && chat.peerCode) {
         targetSet.add(chat.peerCode);
@@ -3737,6 +4052,7 @@
           toCode: peerCode,
           isGroup: Boolean(chat.isGroup),
           groupId: sharedGroupId,
+          soloThreadId: soloThreadId,
           isTyping: Boolean(isTyping),
           timestamp: Date.now()
         };
@@ -3753,6 +4069,20 @@
         ? await this.findPeerGroupChatByIdAsync(data.groupId)
         : await this.findPeerChatByCodeAsync(data.fromCode);
       if (!chat) return;
+
+      if (data.isGroup) {
+        if (data.soloThreadId) {
+          const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+          const isViewingThisSolo = chat.activeLineMode === "solo" && activeThread && (activeThread.id === data.soloThreadId || ("solo_" + activeThread.id) === data.soloThreadId || activeThread.id === ("solo_" + data.soloThreadId));
+          if (!isViewingThisSolo) {
+            return;
+          }
+        } else {
+          if (chat.activeLineMode === "solo") {
+            return;
+          }
+        }
+      }
 
       window.remoteGeneratingChats = window.remoteGeneratingChats || {};
       const sharedGrpId = chat.peerGroupId || chat.id;
@@ -3773,11 +4103,16 @@
         if (chat.isGroup) {
           if (typingInd) {
             if (data.isTyping) {
+              const wasAtBottom = typeof window.isChatScrolledNearBottom === "function"
+                ? window.isChatScrolledNearBottom(messagesContainer)
+                : true;
               typingInd.textContent = "群成员正在回复中...";
               typingInd.style.display = "block";
               if (messagesContainer) {
                 messagesContainer.appendChild(typingInd);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                if (wasAtBottom) {
+                  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
               }
             } else {
               const isLocalGen = !!(
@@ -4717,13 +5052,17 @@
       const isPeerGroup = Boolean(
         chat &&
         chat.isGroup &&
-        (Boolean(chat.peerGroupId) ||
+        (Boolean(chat.isPeerGroup) ||
+          Boolean(chat.peerGroupId) ||
           (Array.isArray(chat.members) &&
-            chat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))))
+            chat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))) ||
+          (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0) ||
+          Boolean(chat.settings?.soloLineConfig) ||
+          chat.activeLineMode === "solo")
       );
 
-      if (chat && chat.isGroup && !isPeerGroup && chat.isPeerGroup) {
-        chat.isPeerGroup = false;
+      if (chat && chat.isGroup && isPeerGroup && !chat.isPeerGroup) {
+        chat.isPeerGroup = true;
       }
 
       if (stickerBtn) {
@@ -4744,10 +5083,17 @@
         soloBtnEl.style.display = isPeerGroup ? "inline-flex" : "none";
       }
 
+      if (actionsTop) {
+        actionsTop.classList.toggle("peer-group-toolbar", Boolean(isPeerGroup));
+        if (isPeerGroup) {
+          actionsTop.scrollLeft = 0;
+        }
+      }
+
       if (isPeer) {
         if (rerollBtn) rerollBtn.style.display = "none";
         if (actionsTop) {
-          actionsTop.style.justifyContent = "flex-start";
+          actionsTop.style.justifyContent = "center";
           actionsTop.style.gap = "8px";
         }
         if (affectionBtn) affectionBtn.style.display = "none";
@@ -4767,7 +5113,7 @@
       } else {
         if (rerollBtn) rerollBtn.style.display = isPeerGroup ? "none" : "";
         if (actionsTop) {
-          actionsTop.style.justifyContent = isPeerGroup ? "flex-start" : "";
+          actionsTop.style.justifyContent = isPeerGroup ? "center" : "";
           actionsTop.style.gap = "";
         }
         if (mapBtn) mapBtn.style.display = "";
@@ -4781,6 +5127,49 @@
         if (recordPanel) {
           this.cancelVoiceRecording();
           recordPanel.classList.remove("visible");
+        }
+      }
+
+      const chatInput = document.getElementById("chat-input");
+      const sendBtn = document.getElementById("chat-send-btn");
+      if (chat && chat.isGroup && chat.activeLineMode === "solo") {
+        const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+        const canSpeak = typeof window.canCurrentUserSpeakInSoloThread === "function" ? window.canCurrentUserSpeakInSoloThread(activeThread, chat) : true;
+        if (!canSpeak) {
+          if (chatInput) {
+            chatInput.disabled = true;
+            chatInput.readOnly = true;
+            chatInput.placeholder = "仅观看模式，无发言权限";
+          }
+          if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = "0.45";
+            sendBtn.style.pointerEvents = "none";
+          }
+          if (stickerBtn) stickerBtn.style.display = "none";
+          if (waitReplyBtn) waitReplyBtn.style.display = "none";
+        } else {
+          if (chatInput && chatInput.placeholder === "仅观看模式，无发言权限") {
+            chatInput.disabled = false;
+            chatInput.readOnly = false;
+            chatInput.placeholder = "输入消息...";
+          }
+          if (sendBtn && sendBtn.disabled && sendBtn.style.pointerEvents === "none") {
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = "1";
+            sendBtn.style.pointerEvents = "auto";
+          }
+        }
+      } else {
+        if (chatInput && chatInput.placeholder === "仅观看模式，无发言权限") {
+          chatInput.disabled = false;
+          chatInput.readOnly = false;
+          chatInput.placeholder = "输入消息...";
+        }
+        if (sendBtn && sendBtn.disabled && sendBtn.style.pointerEvents === "none") {
+          sendBtn.disabled = false;
+          sendBtn.style.opacity = "1";
+          sendBtn.style.pointerEvents = "auto";
         }
       }
     },
