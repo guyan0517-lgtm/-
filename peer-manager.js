@@ -689,7 +689,21 @@
       return last > 0 && Date.now() - last < 25000;
     },
 
+    isOnlineSoundEnabled: function () {
+      return localStorage.getItem("tukey_peer_online_sound_enabled_v1") !== "false";
+    },
+
+    toggleOnlineSoundEnabled: function () {
+      const next = !this.isOnlineSoundEnabled();
+      localStorage.setItem("tukey_peer_online_sound_enabled_v1", next ? "true" : "false");
+      this.refreshOnlineSoundSettingsUI();
+    },
+
     playPeerOnlineSound: function (forcePlay) {
+      if (!forcePlay) {
+        if (!this.isOnlineSoundEnabled()) return;
+        if (document.hidden) return;
+      }
       try {
         const customDataUrl = localStorage.getItem("tukey_peer_online_custom_sound_v1") || "";
         if (customDataUrl && customDataUrl.startsWith("data:audio")) {
@@ -739,10 +753,15 @@
     refreshOnlineSoundSettingsUI: function () {
       const statusText = document.getElementById("peer-online-sound-status-text");
       const clearBtn = document.getElementById("peer-online-clear-sound-btn");
+      const toggleBtn = document.getElementById("peer-online-toggle-sound-btn");
+      const enabled = this.isOnlineSoundEnabled();
       const customDataUrl = localStorage.getItem("tukey_peer_online_custom_sound_v1") || "";
       const customName = localStorage.getItem("tukey_peer_online_custom_sound_name_v1") || "自定义音频";
       if (statusText) {
-        statusText.textContent = customDataUrl ? customName : "默认叮咚";
+        statusText.textContent = enabled ? (customDataUrl ? customName : "默认叮咚") : "已关闭";
+      }
+      if (toggleBtn) {
+        toggleBtn.textContent = enabled ? "开启" : "关闭";
       }
       if (clearBtn) {
         clearBtn.style.display = customDataUrl ? "inline-flex" : "none";
@@ -804,23 +823,9 @@
             const bootGracePassed = !this._initTimestamp || (nowTs - this._initTimestamp > 6000);
             if (!wasOnline && isSpecial && bootGracePassed && nowTs - lastNoticeTs > 20000) {
               this.peerLastOnlineNoticeAt[norm] = nowTs;
-              const displayName = chat.settings?.remarkName || chat.name || "密友";
-              this.playPeerOnlineSound(false);
-              this.showPeerNotice(
-                `特别关心密友「${displayName}」已上线`,
-                () => {
-                  if (typeof window.openChat === "function") {
-                    window.openChat(chat.id);
-                  }
-                },
-                {
-                  title: displayName,
-                  message: "密友已上线",
-                  avatar: chat.settings?.aiAvatar || window.defaultAvatar,
-                  chatId: chat.id,
-                  tag: "peer_online_" + norm
-                }
-              );
+              if (!document.hidden) {
+                this.playPeerOnlineSound(false);
+              }
             }
           }
         }
@@ -3818,11 +3823,16 @@
         if (chat.isGroup) {
           if (typingInd) {
             if (data.isTyping) {
+              const wasAtBottom = typeof window.isChatScrolledNearBottom === "function"
+                ? window.isChatScrolledNearBottom(messagesContainer)
+                : true;
               typingInd.textContent = "群成员正在回复中...";
               typingInd.style.display = "block";
               if (messagesContainer) {
                 messagesContainer.appendChild(typingInd);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                if (wasAtBottom) {
+                  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
               }
             } else {
               const isLocalGen = !!(

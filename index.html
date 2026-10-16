@@ -1411,6 +1411,7 @@
                   </div>
                   <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                     <input type="file" id="peer-online-sound-file" accept="audio/*" style="display: none;" onchange="if(window.PeerManager&&window.PeerManager.handleOnlineSoundUpload)window.PeerManager.handleOnlineSoundUpload(this);" />
+                    <button type="button" class="moe-btn-small" id="peer-online-toggle-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.toggleOnlineSoundEnabled)window.PeerManager.toggleOnlineSoundEnabled();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">开启</button>
                     <button type="button" class="moe-btn-small" id="peer-online-test-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.playPeerOnlineSound)window.PeerManager.playPeerOnlineSound(true);" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">试听</button>
                     <button type="button" class="moe-btn-small" id="peer-online-import-sound-btn" onclick="document.getElementById('peer-online-sound-file').click();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">导入</button>
                     <button type="button" class="moe-btn-small" id="peer-online-clear-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.clearCustomOnlineSound)window.PeerManager.clearCustomOnlineSound();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: none; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">清除</button>
@@ -34659,6 +34660,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
+        function isChatScrolledNearBottom(container) {
+          const el = container || document.getElementById("chat-messages");
+          if (!el) return true;
+          return el.scrollHeight - el.scrollTop - el.clientHeight <= 100;
+        }
+        window.isChatScrolledNearBottom = isChatScrolledNearBottom;
+
         function appendMessage(msg, chat, isInitialLoad = false) {
           if (msg && !isInitialLoad) {
             if (!msg.timestamp) msg.timestamp = Date.now();
@@ -34679,6 +34687,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
           const messagesContainer = document.getElementById("chat-messages");
+          const wasNearBottom = isInitialLoad ? true : isChatScrolledNearBottom(messagesContainer);
           const messageEl = createMessageElement(msg, chat);
 
           if (!messageEl) return; // 如果消息是隐藏的，则不处理
@@ -34692,7 +34701,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           messagesContainer.insertBefore(messageEl, typingIndicator);
 
           if (!isInitialLoad) {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            if (wasNearBottom) {
+              messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
             currentRenderedCount++;
 
             if (msg) {
@@ -40363,9 +40374,6 @@ ${recentHistoryText}
                         await db.chats.put(chat);
                         if (isViewingThisChat) {
                           appendMessage(imgMsg, chat);
-                          const msgsDiv =
-                            document.getElementById("chat-messages");
-                          msgsDiv.scrollTop = msgsDiv.scrollHeight;
                         }
                       }
                     } catch (err) {
@@ -40620,9 +40628,12 @@ ${recentHistoryText}
           if (state.activeChatId === chatId && chatScreenElForTyping && chatScreenElForTyping.classList.contains("active")) {
             if (chat.isGroup) {
               if (typingIndicator) {
+                const wasAtBottom = isChatScrolledNearBottom(messagesContainer);
                 typingIndicator.textContent = "群成员正在回复中...";
                 typingIndicator.style.display = "block";
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                if (wasAtBottom && messagesContainer) {
+                  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
               }
               if (chatHeaderTitle) {
                 chatHeaderTitle.textContent = chat.name;
@@ -65517,12 +65528,15 @@ ${stickerContext || "无"}
           if (chat.isGroup && String(state.activeChatId) === String(chat.id)) {
             const typingInd = document.getElementById("typing-indicator");
             if (typingInd) {
+              const messagesContainer = document.getElementById("chat-messages");
+              const wasAtBottom = isChatScrolledNearBottom(messagesContainer);
               typingInd.textContent = "群成员正在回复中...";
               typingInd.style.display = "block";
-              const messagesContainer = document.getElementById("chat-messages");
               if (messagesContainer) {
                 messagesContainer.appendChild(typingInd);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                if (wasAtBottom) {
+                  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
               }
             }
           }
@@ -79451,6 +79465,10 @@ ${stickerContext || "无"}
               // 立即入库会话并在界面渲染气泡（0延迟视觉反馈）
               chat.history.push(msg);
               appendMessage(msg, chat);
+              const msgsBoxOnSend = document.getElementById("chat-messages");
+              if (msgsBoxOnSend) {
+                msgsBoxOnSend.scrollTop = msgsBoxOnSend.scrollHeight;
+              }
               cancelReplyMode();
 
               // 异步在后台持久化，不阻塞主线程
@@ -92527,7 +92545,7 @@ ${stickerContext || "无"}
           }, { passive: true });
         })();
 
-        // ================= 手机滑动返回拦截：滑动返回等于应用内返回上一层而非退出网页 =================
+        // ================= 手机滑动返回拦截：滑动返回等于应用内返回上一层，主页面返回绝不退出软件 =================
         (function setupMobileBackNavigation() {
           let isHandlingPop = false;
 
@@ -92538,16 +92556,33 @@ ${stickerContext || "无"}
             } catch (_) {}
           };
 
-          try {
-            window.history.replaceState({ tukeyGuard: true, tag: "root" }, "");
-            window.history.pushState({ tukeyGuard: true, tag: "init" }, "");
-          } catch (_) {}
+          const seedHistoryGuardStack = () => {
+            try {
+              window.history.replaceState({ tukeyGuard: true, tag: "root" }, "");
+              window.history.pushState({ tukeyGuard: true, tag: "guard_1" }, "");
+              window.history.pushState({ tukeyGuard: true, tag: "guard_2" }, "");
+            } catch (_) {}
+          };
+
+          seedHistoryGuardStack();
+
+          const replenishGuardOnGesture = () => {
+            if (!isHandlingPop) {
+              try {
+                if (!window.history.state || !window.history.state.tukeyGuard || window.history.state.tag === "root") {
+                  window.history.pushState({ tukeyGuard: true, tag: "gesture_guard" }, "");
+                }
+              } catch (_) {}
+            }
+          };
+          document.addEventListener("touchstart", replenishGuardOnGesture, { passive: true, capture: true });
+          document.addEventListener("pointerdown", replenishGuardOnGesture, { passive: true, capture: true });
 
           const origShowScreen = window.showScreen;
           if (typeof origShowScreen === "function" && !origShowScreen._wrappedWithBackGuard) {
             const wrappedShowScreen = function (screenId) {
               const res = origShowScreen.apply(this, arguments);
-              if (!isHandlingPop && screenId && screenId !== "home-screen") {
+              if (!isHandlingPop && screenId) {
                 window.pushMobileBackGuard(screenId);
               }
               return res;
@@ -92560,11 +92595,16 @@ ${stickerContext || "无"}
           window.addEventListener("popstate", () => {
             isHandlingPop = true;
             try {
+              // 立即补齐两层历史栈，确保无论在主页面还是任意页面连续滑动返回都不会退出软件
+              try {
+                window.history.pushState({ tukeyGuard: true, tag: "keep_1" }, "");
+                window.history.pushState({ tukeyGuard: true, tag: "keep_2" }, "");
+              } catch (_) {}
+
               // 1. 若大图预览打开，优先关闭大图预览
               const imgViewer = document.getElementById("image-viewer-modal");
               if (imgViewer && imgViewer.style.display !== "none" && imgViewer.style.display !== "") {
                 imgViewer.style.display = "none";
-                window.history.pushState({ tukeyGuard: true, tag: "keep" }, "");
                 isHandlingPop = false;
                 return;
               }
@@ -92573,7 +92613,6 @@ ${stickerContext || "无"}
               const essenceOverlay = document.getElementById("group-essence-overlay");
               if (essenceOverlay && essenceOverlay.classList.contains("visible")) {
                 window.closeGroupEssencePanel();
-                window.history.pushState({ tukeyGuard: true, tag: "keep" }, "");
                 isHandlingPop = false;
                 return;
               }
@@ -92586,12 +92625,11 @@ ${stickerContext || "无"}
                 if (topModal.id === "solo-line-modal") {
                   topModal.style.display = "none";
                 }
-                window.history.pushState({ tukeyGuard: true, tag: "keep" }, "");
                 isHandlingPop = false;
                 return;
               }
 
-              // 4. 检查当前所在的 screen，触发对应返回按钮或返回上一级
+              // 4. 检查当前所在的 screen，触发对应返回按钮或返回上一级；若已在 home-screen 则留在主屏幕不退出
               const activeScreen = document.querySelector(".screen.active");
               if (activeScreen && activeScreen.id !== "home-screen") {
                 if (activeScreen.id === "chat-interface-screen") {
@@ -92610,8 +92648,6 @@ ${stickerContext || "无"}
                   }
                 }
               }
-
-              window.history.pushState({ tukeyGuard: true, tag: "keep" }, "");
             } catch (_) {}
             isHandlingPop = false;
           });
