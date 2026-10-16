@@ -4522,6 +4522,15 @@
                 <option value="cream">奶油</option>
                 <option value="custom">自定</option>
               </select>
+              <select
+                id="mini-phone-size-selector"
+                class="moe-input select"
+                style="flex: 1"
+              >
+                <option value="large">大号</option>
+                <option value="medium">中号</option>
+                <option value="small">小号</option>
+              </select>
             </div>
             <textarea
               id="mini-phone-css-editor"
@@ -47430,6 +47439,9 @@ ${stickerContext || "无"}
               if (aiMessage) {
                 // 1. 将新消息存入历史记录
                 chat.history.push(aiMessage);
+                if (aiMessage.type === "system_status" && isPeerGroupChatInstance(chat) && typeof window.onPeerPhoneStatusBarUpdated === "function") {
+                  try { window.onPeerPhoneStatusBarUpdated(chat, aiMessage); } catch (e) {}
+                }
                 if (state.chats) {
                   state.chats[chat.id] = chat;
                   state.chats[String(chat.id)] = chat;
@@ -93502,12 +93514,24 @@ ${stickerContext || "无"}
           let currentPhoneTab = "contacts"; // "contacts" | "add" | "chat"
           let activePhoneContactId = null;
 
+          const MINI_PHONE_SIZE_DIMS = {
+            large: { width: "284px", height: "500px" },
+            medium: { width: "248px", height: "436px" },
+            small: { width: "214px", height: "376px" }
+          };
+
           const MINI_PHONE_PRESET_CSS = {
             default: `/* 原色主题 */\n#peer-mini-phone-shell {\n  --mini-phone-shell-bg: var(--tukey-green, var(--accent-color));\n  --mini-phone-screen-bg: var(--card-bg);\n  --mini-phone-header-bg: var(--card-bg);\n  --mini-phone-sent-bg: var(--accent-color);\n  --mini-phone-sent-text: var(--card-bg);\n  --mini-phone-recv-bg: var(--secondary-bg);\n  --mini-phone-recv-text: var(--text-primary);\n  --mini-phone-Radius: 22px;\n}`,
             sakura: `/* 粉色主题 */\n#peer-mini-phone-shell {\n  --mini-phone-shell-bg: var(--accent-color);\n  --mini-phone-screen-bg: var(--card-bg);\n  --mini-phone-header-bg: var(--secondary-bg);\n  --mini-phone-sent-bg: var(--accent-color);\n  --mini-phone-sent-text: var(--card-bg);\n  --mini-phone-recv-bg: var(--secondary-bg);\n  --mini-phone-recv-text: var(--text-primary);\n  --mini-phone-Radius: 24px;\n}`,
-            retro: `/* 古早主题 */\n#peer-mini-phone-shell {\n  --mini-phone-shell-bg: var(--secondary-bg);\n  --mini-phone-screen-bg: var(--background-color);\n  --mini-phone-header-bg: var(--secondary-bg);\n  --mini-phone-sent-bg: var(--text-primary);\n  --mini-phone-sent-text: var(--card-bg);\n  --mini-phone-recv-bg: var(--card-bg);\n  --mini-phone-recv-text: var(--text-primary);\n  --mini-phone-Radius: 8px;\n}`,
+            retro: `/* 古早主题 */\n#peer-mini-phone-shell {\n  --mini-phone-shell-bg: var(--secondary-bg);\n  --mini-phone-screen-bg: var(--background-color);\n  --mini-phone-header-bg: var(--secondary-bg);\n  --mini-phone-sent-bg: var(--text-primary);\n  --mini-phone-sent-text: var(--card-bg);\n  --mini-phone-recv-bg: var(--card-bg);\n  --mini-phone-recv-text: var(--text-primary);\n  --mini-phone-Radius: 10px;\n}`,
             cream: `/* 奶油主题 */\n#peer-mini-phone-shell {\n  --mini-phone-shell-bg: var(--background-color);\n  --mini-phone-screen-bg: var(--card-bg);\n  --mini-phone-header-bg: var(--card-bg);\n  --mini-phone-sent-bg: var(--text-secondary);\n  --mini-phone-sent-text: var(--card-bg);\n  --mini-phone-recv-bg: var(--secondary-bg);\n  --mini-phone-recv-text: var(--text-primary);\n  --mini-phone-Radius: 20px;\n}`
           };
+
+          function buildMiniPhonePresetCssWithSize(themeKey, sizeKey) {
+            const base = MINI_PHONE_PRESET_CSS[themeKey] || MINI_PHONE_PRESET_CSS.default;
+            const dims = MINI_PHONE_SIZE_DIMS[sizeKey] || MINI_PHONE_SIZE_DIMS.large;
+            return base.replace(/\}\s*$/, `  --mini-phone-width: ${dims.width};\n  --mini-phone-height: ${dims.height};\n}`);
+          }
 
           function getActivePeerGroupChat() {
             const st = window.state || {};
@@ -93563,25 +93587,56 @@ ${stickerContext || "无"}
             return pd;
           }
 
-          function parseStatusGameTimeFromMsg(msg) {
+          function getStatusTimeColumnLabels(chat) {
+            const labels = ["时间", "时刻", "当前时间", "time"];
+            if (chat && Array.isArray(chat.members)) {
+              const stMem = chat.members.find(m => m && (m.roleType === "system_status" || (window.state?.chats?.[m.id]?.roleType === "system_status")));
+              const stCols = stMem?.settings?.columns || (stMem && window.state?.chats?.[stMem.id]?.settings?.columns) || chat.settings?.columns || [];
+              if (Array.isArray(stCols)) {
+                stCols.forEach(c => {
+                  if (c && c.type === "time" && c.label) {
+                    const cl = String(c.label).replace(/^[\[【]|[\]】]$/g, "").trim();
+                    if (cl && !labels.includes(cl)) labels.push(cl);
+                  }
+                });
+              }
+            }
+            return labels;
+          }
+
+          function parseStatusGameTimeFromMsg(msg, chat) {
             if (!msg) return null;
             let dateRaw = "";
             let timeRaw = "";
+            const timeLabels = getStatusTimeColumnLabels(chat);
             if (msg.fields && typeof msg.fields === "object") {
               for (const [k, v] of Object.entries(msg.fields)) {
                 const ck = String(k).replace(/^[\[【]|[\]】]$/g, "").trim();
                 if (ck === "日期" || ck.toLowerCase() === "date") dateRaw = String(v || "").trim();
-                if (ck === "时间" || ck.toLowerCase() === "time") timeRaw = String(v || "").trim();
+                if (timeLabels.some(tl => tl.toLowerCase() === ck.toLowerCase())) timeRaw = String(v || "").trim();
               }
             }
-            const rawTxt = String(msg.rawStatusText || msg.content || msg.message || "");
+            const rawTxt = String(msg.rawStatusText || msg.content || msg.message || "").replace(/<[^>]+>/g, "\n");
             if (!dateRaw) {
-              const dm = rawTxt.match(/(?:\[?日期\]?)[：:]\s*([^\n\r]+)/);
+              const dm = rawTxt.match(/(?:[\[【]?\s*(?:日期|date)\s*[\]】]?)\s*[：:]\s*([^\n\r\[\]【】]+)/i);
               if (dm) dateRaw = dm[1].trim();
             }
             if (!timeRaw) {
-              const tm = rawTxt.match(/(?:\[?时间\]?)[：:]\s*([^\n\r]+)/);
-              if (tm) timeRaw = tm[1].trim();
+              for (const tl of timeLabels) {
+                const escapedTl = tl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                const reg = new RegExp(`(?:[\\[【]?\\s*${escapedTl}\\s*[\\]】]?)\\s*[：:]\\s*([^\\n\\r\\[\\]【】]+)`, "i");
+                const tm = rawTxt.match(reg);
+                if (tm && tm[1] && tm[1].trim()) {
+                  timeRaw = tm[1].trim();
+                  break;
+                }
+              }
+            }
+            if (!timeRaw) {
+              const fallbackClock = rawTxt.match(/(\d{1,2}\s*[:：]\s*\d{2})/);
+              if (fallbackClock) {
+                timeRaw = fallbackClock[1].replace(/\s+/g, "");
+              }
             }
             if (!dateRaw && !timeRaw) return null;
 
@@ -93628,29 +93683,43 @@ ${stickerContext || "无"}
             const cleanTimeDisplay = hm
               ? `${String(hm[1]).padStart(2, "0")}:${String(hm[2] || "00").padStart(2, "0")}`
               : timeRaw;
-            const display = [dateRaw, cleanTimeDisplay].filter(Boolean).join(" ");
+            const exactStatusTimeStr = timeRaw || cleanTimeDisplay || dateRaw;
+            const display = [dateRaw, exactStatusTimeStr].filter(Boolean).join(" ");
             return {
               dateStr: dateRaw,
-              timeStr: cleanTimeDisplay || timeRaw,
+              rawTimeStr: exactStatusTimeStr,
+              timeStr: exactStatusTimeStr,
               display: display || "当前时刻",
               hasDate: hasDate,
               hasTime: hasTime,
               dayScore: dayScore,
               minScore: minScore,
               comparable: comparable,
-              updatedAt: msg.timestamp || Date.now()
+              updatedAt: Number(msg.timestamp) || Date.now()
             };
           }
 
-          function scanHistoryLatestGameTime(historyArr) {
+          function isSystemStatusHistoryMsg(m, chat) {
+            if (!m) return false;
+            if (m.type === "system_status" || m.type === "status_bar" || m.roleType === "system_status" || m.fields || m.playerLocations) return true;
+            const sName = String(m.senderName || m.name || "").trim();
+            if (sName === "系统状态" || sName === "系统状态栏" || sName === "状态栏") return true;
+            if (chat && Array.isArray(chat.members)) {
+              const stMem = chat.members.find(mem => mem && (mem.roleType === "system_status" || (window.state?.chats?.[mem.id]?.roleType === "system_status")));
+              if (stMem && (sName === stMem.groupNickname || sName === stMem.originalName)) return true;
+            }
+            const txt = String(m.rawStatusText || m.content || m.message || "");
+            if (/(?:[\[【]?\s*(?:时间|时刻|日期|地点|天气|幸运)\s*[\]】]?)\s*[：:]/.test(txt)) return true;
+            return false;
+          }
+
+          function scanHistoryLatestGameTime(historyArr, chat) {
             if (!Array.isArray(historyArr)) return null;
             for (let i = historyArr.length - 1; i >= 0; i--) {
               const m = historyArr[i];
-              if (!m) continue;
-              if (m.type === "system_status" || m.fields || (typeof m.content === "string" && m.content.includes("[时间]"))) {
-                const parsed = parseStatusGameTimeFromMsg(m);
-                if (parsed) return parsed;
-              }
+              if (!isSystemStatusHistoryMsg(m, chat)) continue;
+              const parsed = parseStatusGameTimeFromMsg(m, chat);
+              if (parsed) return parsed;
             }
             return null;
           }
@@ -93659,27 +93728,34 @@ ${stickerContext || "无"}
             if (!chat) return null;
             const pd = ensurePeerPhoneData(chat);
             const curLineKey = getCurrentLineKey(chat);
+            const cached = pd.lineGameTime[lineKey] || null;
             if (lineKey === curLineKey) {
-              const fromCur = scanHistoryLatestGameTime(chat.history);
+              const fromCur = scanHistoryLatestGameTime(chat.history, chat);
               if (fromCur) {
-                pd.lineGameTime[lineKey] = fromCur;
-                return fromCur;
+                if (!cached || (Number(fromCur.updatedAt) || 0) >= (Number(cached.updatedAt) || 0)) {
+                  pd.lineGameTime[lineKey] = fromCur;
+                  return fromCur;
+                }
+                return cached;
               }
             }
             if (lineKey === "main") {
               const mainArr = (chat.activeLineMode === "solo" && Array.isArray(chat.mainLineHistory))
                 ? chat.mainLineHistory
                 : chat.history;
-              const fromMain = scanHistoryLatestGameTime(mainArr);
+              const fromMain = scanHistoryLatestGameTime(mainArr, chat);
               if (fromMain) {
-                pd.lineGameTime.main = fromMain;
-                return fromMain;
+                if (!cached || (Number(fromMain.updatedAt) || 0) >= (Number(cached.updatedAt) || 0)) {
+                  pd.lineGameTime.main = fromMain;
+                  return fromMain;
+                }
+                return cached;
               }
             } else {
               const localThreads = chat.settings?.soloLineConfig?.threads || [];
               const foundLocal = localThreads.find(t => t && String(t.id) === String(lineKey));
               if (foundLocal && Array.isArray(foundLocal.history)) {
-                const fromThread = scanHistoryLatestGameTime(foundLocal.history);
+                const fromThread = scanHistoryLatestGameTime(foundLocal.history, chat);
                 if (fromThread) {
                   pd.lineGameTime[lineKey] = fromThread;
                   return fromThread;
@@ -93690,7 +93766,7 @@ ${stickerContext || "无"}
                 if (!Array.isArray(pList)) continue;
                 const foundRemote = pList.find(t => t && String(t.id) === String(lineKey));
                 if (foundRemote && Array.isArray(foundRemote.history)) {
-                  const fromRemote = scanHistoryLatestGameTime(foundRemote.history);
+                  const fromRemote = scanHistoryLatestGameTime(foundRemote.history, chat);
                   if (fromRemote) {
                     pd.lineGameTime[lineKey] = fromRemote;
                     return fromRemote;
@@ -93698,7 +93774,26 @@ ${stickerContext || "无"}
                 }
               }
             }
-            return pd.lineGameTime[lineKey] || pd.lineGameTime.main || null;
+            if (cached) return cached;
+            const fallbackMainArr = (chat.activeLineMode === "solo" && Array.isArray(chat.mainLineHistory))
+              ? chat.mainLineHistory
+              : chat.history;
+            const fallbackFromMain = scanHistoryLatestGameTime(fallbackMainArr, chat);
+            if (fallbackFromMain) {
+              pd.lineGameTime.main = fallbackFromMain;
+              return fallbackFromMain;
+            }
+            if (pd.lineGameTime.main) return pd.lineGameTime.main;
+            if (chat._lastStatusValues && (chat._lastStatusValues["时间"] || chat._lastStatusValues["日期"])) {
+              return parseStatusGameTimeFromMsg({
+                fields: {
+                  日期: chat._lastStatusValues["日期"] || "",
+                  时间: chat._lastStatusValues["时间"] || ""
+                },
+                timestamp: Date.now()
+              }, chat);
+            }
+            return null;
           }
 
           function getPlayerCurrentLineKey(chat, peerCode) {
@@ -93892,8 +93987,9 @@ ${stickerContext || "无"}
             if (!chat || !statusMsgObj) return;
             const pd = ensurePeerPhoneData(chat);
             const lineKey = getCurrentLineKey(chat);
-            const parsedTime = parseStatusGameTimeFromMsg(statusMsgObj);
+            const parsedTime = parseStatusGameTimeFromMsg(statusMsgObj, chat);
             if (parsedTime) {
+              parsedTime.updatedAt = Date.now();
               pd.lineGameTime[lineKey] = parsedTime;
             }
             window.evaluatePeerPhonePendingMessages(chat);
@@ -94222,7 +94318,9 @@ ${stickerContext || "无"}
             const lineKey = getCurrentLineKey(targetChat);
             const hasSignal = isLineSignalAvailable(targetChat, lineKey);
             const lineTimeObj = getLineLatestGameTime(targetChat, lineKey);
-            const timeDisplayStr = lineTimeObj ? (lineTimeObj.timeStr || lineTimeObj.display) : "12:00";
+            const timeDisplayStr = lineTimeObj
+              ? (lineTimeObj.rawTimeStr || lineTimeObj.timeStr || lineTimeObj.display)
+              : (targetChat._lastStatusValues?.["时间"] || "12:00");
             const directory = getEligiblePhoneDirectory(targetChat);
             const counts = getUnreadAndPendingCounts(targetChat);
 
@@ -94562,6 +94660,7 @@ ${stickerContext || "无"}
 
           function applySavedMiniPhoneAppearance() {
             const savedTheme = localStorage.getItem("ephone_mini_phone_theme") || "default";
+            const savedSize = localStorage.getItem("ephone_mini_phone_size") || "large";
             const savedCustomCss = localStorage.getItem("ephone_mini_phone_custom_css") || "";
             const shellEl = document.getElementById("peer-mini-phone-shell");
             if (shellEl) {
@@ -94569,20 +94668,25 @@ ${stickerContext || "无"}
               if (savedTheme !== "custom") {
                 shellEl.classList.add("phone-theme-" + savedTheme);
               }
+              shellEl.classList.remove("phone-size-large", "phone-size-medium", "phone-size-small");
+              shellEl.classList.add("phone-size-" + (MINI_PHONE_SIZE_DIMS[savedSize] ? savedSize : "large"));
             }
             const styleEl = document.getElementById("mini-phone-custom-style");
+            const presetWithSize = buildMiniPhonePresetCssWithSize(savedTheme, savedSize);
             if (styleEl) {
               if (savedTheme === "custom") {
                 styleEl.textContent = savedCustomCss;
               } else {
-                styleEl.textContent = (MINI_PHONE_PRESET_CSS[savedTheme] || "") + (savedCustomCss ? "\n" + savedCustomCss : "");
+                styleEl.textContent = presetWithSize + (savedCustomCss ? "\n" + savedCustomCss : "");
               }
             }
             const selEl = document.getElementById("mini-phone-theme-selector");
+            const sizeSelEl = document.getElementById("mini-phone-size-selector");
             const editorEl = document.getElementById("mini-phone-css-editor");
             if (selEl) selEl.value = savedTheme;
+            if (sizeSelEl) sizeSelEl.value = MINI_PHONE_SIZE_DIMS[savedSize] ? savedSize : "large";
             if (editorEl) {
-              editorEl.value = savedCustomCss || MINI_PHONE_PRESET_CSS[savedTheme] || MINI_PHONE_PRESET_CSS.default;
+              editorEl.value = savedCustomCss || presetWithSize;
             }
           }
 
@@ -94597,7 +94701,7 @@ ${stickerContext || "无"}
                 <div id="peer-mini-phone-drag-bar" title="按住拖动位置">
                   <div id="peer-mini-phone-speaker"></div>
                   <button type="button" id="peer-mini-phone-close-btn" title="关闭">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"></line>
                       <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
@@ -94719,9 +94823,10 @@ ${stickerContext || "无"}
             }
           };
 
-          // 绑定外观设置中的手机主题与CSS编辑器事件
+          // 绑定外观设置中的手机主题、大小与CSS编辑器事件
           function bindMiniPhoneAppearanceControls() {
             const selEl = document.getElementById("mini-phone-theme-selector");
+            const sizeSelEl = document.getElementById("mini-phone-size-selector");
             const editorEl = document.getElementById("mini-phone-css-editor");
             const applyBtn = document.getElementById("apply-mini-phone-css-btn");
             const resetBtn = document.getElementById("reset-mini-phone-css-btn");
@@ -94732,13 +94837,43 @@ ${stickerContext || "无"}
               selEl._boundMiniPhone = true;
               selEl.addEventListener("change", () => {
                 const chosen = selEl.value || "default";
+                const chosenSize = sizeSelEl ? (sizeSelEl.value || "large") : (localStorage.getItem("ephone_mini_phone_size") || "large");
                 localStorage.setItem("ephone_mini_phone_theme", chosen);
+                if (chosen !== "custom") {
+                  localStorage.removeItem("ephone_mini_phone_custom_css");
+                }
                 if (editorEl) {
                   if (chosen === "custom") {
-                    editorEl.value = localStorage.getItem("ephone_mini_phone_custom_css") || "";
+                    editorEl.value = localStorage.getItem("ephone_mini_phone_custom_css") || buildMiniPhonePresetCssWithSize("default", chosenSize);
                   } else {
-                    editorEl.value = MINI_PHONE_PRESET_CSS[chosen] || MINI_PHONE_PRESET_CSS.default;
+                    editorEl.value = buildMiniPhonePresetCssWithSize(chosen, chosenSize);
                   }
+                }
+                applySavedMiniPhoneAppearance();
+              });
+            }
+
+            if (sizeSelEl && !sizeSelEl._boundMiniPhoneSize) {
+              sizeSelEl._boundMiniPhoneSize = true;
+              sizeSelEl.addEventListener("change", () => {
+                const chosenSize = sizeSelEl.value || "large";
+                const chosenTheme = selEl ? (selEl.value || "default") : (localStorage.getItem("ephone_mini_phone_theme") || "default");
+                localStorage.setItem("ephone_mini_phone_size", chosenSize);
+                const dims = MINI_PHONE_SIZE_DIMS[chosenSize] || MINI_PHONE_SIZE_DIMS.large;
+                if (editorEl && editorEl.value) {
+                  let updatedCss = editorEl.value;
+                  if (/--mini-phone-width\s*:/.test(updatedCss)) {
+                    updatedCss = updatedCss.replace(/--mini-phone-width\s*:\s*[^;]+;/g, `--mini-phone-width: ${dims.width};`);
+                  }
+                  if (/--mini-phone-height\s*:/.test(updatedCss)) {
+                    updatedCss = updatedCss.replace(/--mini-phone-height\s*:\s*[^;]+;/g, `--mini-phone-height: ${dims.height};`);
+                  }
+                  editorEl.value = updatedCss;
+                  if (localStorage.getItem("ephone_mini_phone_custom_css")) {
+                    localStorage.setItem("ephone_mini_phone_custom_css", updatedCss);
+                  }
+                } else if (editorEl && chosenTheme !== "custom") {
+                  editorEl.value = buildMiniPhonePresetCssWithSize(chosenTheme, chosenSize);
                 }
                 applySavedMiniPhoneAppearance();
               });
@@ -94748,8 +94883,10 @@ ${stickerContext || "无"}
               applyBtn._boundMiniPhone = true;
               applyBtn.addEventListener("click", () => {
                 const chosen = selEl ? (selEl.value || "default") : "default";
+                const chosenSize = sizeSelEl ? (sizeSelEl.value || "large") : "large";
                 const cssVal = editorEl ? editorEl.value : "";
                 localStorage.setItem("ephone_mini_phone_theme", chosen);
+                localStorage.setItem("ephone_mini_phone_size", chosenSize);
                 localStorage.setItem("ephone_mini_phone_custom_css", cssVal);
                 const styleEl = document.getElementById("mini-phone-custom-style");
                 if (styleEl) {
@@ -94761,6 +94898,8 @@ ${stickerContext || "无"}
                   if (chosen !== "custom") {
                     shellEl.classList.add("phone-theme-" + chosen);
                   }
+                  shellEl.classList.remove("phone-size-large", "phone-size-medium", "phone-size-small");
+                  shellEl.classList.add("phone-size-" + (MINI_PHONE_SIZE_DIMS[chosenSize] ? chosenSize : "large"));
                 }
                 if (typeof window.showCustomAlert === "function") {
                   window.showCustomAlert("提示", "手机样式已应用");
@@ -94772,6 +94911,7 @@ ${stickerContext || "无"}
               resetBtn._boundMiniPhone = true;
               resetBtn.addEventListener("click", () => {
                 localStorage.setItem("ephone_mini_phone_theme", "default");
+                localStorage.setItem("ephone_mini_phone_size", "large");
                 localStorage.removeItem("ephone_mini_phone_custom_css");
                 applySavedMiniPhoneAppearance();
                 if (typeof window.showCustomAlert === "function") {

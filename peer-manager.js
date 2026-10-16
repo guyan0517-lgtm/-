@@ -4935,10 +4935,14 @@
         soloBtnEl.style.display = isPeerGroup ? "inline-flex" : "none";
       }
 
+      if (actionsTop) {
+        actionsTop.classList.toggle("peer-group-toolbar", Boolean(isPeerGroup));
+      }
+
       if (isPeer) {
         if (rerollBtn) rerollBtn.style.display = "none";
         if (actionsTop) {
-          actionsTop.style.justifyContent = "flex-start";
+          actionsTop.style.justifyContent = "center";
           actionsTop.style.gap = "8px";
         }
         if (affectionBtn) affectionBtn.style.display = "none";
@@ -4958,7 +4962,7 @@
       } else {
         if (rerollBtn) rerollBtn.style.display = isPeerGroup ? "none" : "";
         if (actionsTop) {
-          actionsTop.style.justifyContent = isPeerGroup ? "flex-start" : "";
+          actionsTop.style.justifyContent = isPeerGroup ? "center" : "";
           actionsTop.style.gap = "";
         }
         if (mapBtn) mapBtn.style.display = "";

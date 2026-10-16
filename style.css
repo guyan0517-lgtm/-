@@ -33953,6 +33953,27 @@ select,
   display: none !important;
 }
 
+#chat-input-actions-top.peer-group-toolbar {
+  justify-content: center !important;
+  gap: clamp(4px, 1.2vw, 7px) !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#chat-input-actions-top.peer-group-toolbar .chat-action-icon-btn {
+  width: clamp(31px, 8.4vw, 36px) !important;
+  height: clamp(31px, 8.4vw, 36px) !important;
+  line-height: clamp(31px, 8.4vw, 36px) !important;
+  flex-shrink: 0 !important;
+}
+
+#chat-input-actions-top.peer-group-toolbar .chat-action-icon-btn svg {
+  width: 19px !important;
+  height: 19px !important;
+}
+
 :root {
   --mini-phone-shell-bg: var(--tukey-green, var(--accent-color));
   --mini-phone-shell-bevel-light: var(--card-bg);
@@ -33964,6 +33985,8 @@ select,
   --mini-phone-recv-bg: var(--secondary-bg);
   --mini-phone-recv-text: var(--text-primary);
   --mini-phone-Radius: 22px;
+  --mini-phone-width: 284px;
+  --mini-phone-height: 500px;
 }
 
 #peer-mini-phone-overlay {
@@ -33981,25 +34004,97 @@ select,
 #peer-mini-phone-shell {
   position: fixed;
   top: 76px;
-  left: calc(50% - 142px);
-  width: 284px;
-  height: 500px;
+  left: calc(50% - (var(--mini-phone-width, 284px) / 2));
+  width: var(--mini-phone-width, 284px);
+  height: var(--mini-phone-height, 500px);
   pointer-events: auto;
   background: var(--mini-phone-shell-bg);
   border-radius: var(--mini-phone-Radius);
-  clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% calc(100% - 16px), calc(100% - 16px) 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
-  padding: 14px 16px 16px 16px;
+  padding: 13px 15px 15px 15px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
-  border: 2px solid var(--border-color);
+  border-top: 2px solid color-mix(in srgb, var(--card-bg) 75%, var(--border-color));
+  border-left: 2px solid color-mix(in srgb, var(--card-bg) 75%, var(--border-color));
+  border-right: 3.5px solid var(--border-color);
+  border-bottom: 4.5px solid var(--border-color);
+  box-shadow:
+    inset 1.5px 1.5px 0 color-mix(in srgb, var(--card-bg) 65%, transparent),
+    inset -2px -2.5px 0 color-mix(in srgb, var(--border-color) 75%, transparent),
+    0 6px 16px color-mix(in srgb, var(--text-primary) 14%, transparent);
   user-select: none;
 }
 
+#peer-mini-phone-shell.phone-size-large {
+  --mini-phone-width: 284px;
+  --mini-phone-height: 500px;
+  padding: 13px 15px 15px 15px;
+}
+
+#peer-mini-phone-shell.phone-size-medium {
+  --mini-phone-width: 248px;
+  --mini-phone-height: 436px;
+  padding: 11px 12px 12px 12px;
+}
+
+#peer-mini-phone-shell.phone-size-small {
+  --mini-phone-width: 214px;
+  --mini-phone-height: 376px;
+  padding: 9px 10px 10px 10px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-drag-bar {
+  height: 22px;
+  margin-bottom: 5px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-drag-bar {
+  height: 20px;
+  margin-bottom: 4px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-speaker {
+  width: 76px;
+  height: 7px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-speaker {
+  width: 60px;
+  height: 6px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-bezel {
+  padding: 5px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-bezel {
+  padding: 4px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-footer {
+  height: 36px;
+  margin-top: 5px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-footer {
+  height: 30px;
+  margin-top: 4px;
+}
+
+#peer-mini-phone-shell.phone-size-medium #peer-mini-phone-home-btn {
+  width: 28px;
+  height: 28px;
+}
+
+#peer-mini-phone-shell.phone-size-small #peer-mini-phone-home-btn {
+  width: 24px;
+  height: 24px;
+}
+
 #peer-mini-phone-shell.phone-theme-default {
-  --mini-phone-shell-bg: var(--card-bg);
-  --mini-phone-screen-bg: var(--background-color);
+  --mini-phone-shell-bg: var(--tukey-green, var(--accent-color));
+  --mini-phone-screen-bg: var(--card-bg);
   --mini-phone-header-bg: var(--card-bg);
   --mini-phone-sent-bg: var(--accent-color);
   --mini-phone-sent-text: var(--card-bg);
@@ -34025,7 +34120,7 @@ select,
   --mini-phone-sent-text: var(--card-bg);
   --mini-phone-recv-bg: var(--card-bg);
   --mini-phone-recv-text: var(--text-primary);
-  --mini-phone-Radius: 8px;
+  --mini-phone-Radius: 10px;
 }
 
 #peer-mini-phone-shell.phone-theme-cream {
@@ -34040,7 +34135,7 @@ select,
 
 #peer-mini-phone-drag-bar {
   width: 100%;
-  height: 26px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34052,40 +34147,56 @@ select,
 }
 
 #peer-mini-phone-speaker {
-  width: 96px;
+  width: 88px;
   height: 8px;
   border-radius: 6px;
   background: var(--secondary-bg);
-  border: 1px solid var(--border-color);
+  border-top: 1.5px solid var(--border-color);
+  border-left: 1.5px solid var(--border-color);
+  border-right: 1px solid var(--card-bg);
+  border-bottom: 1px solid var(--card-bg);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--text-primary) 12%, transparent);
 }
 
 #peer-mini-phone-close-btn {
   position: absolute;
   right: 0;
-  top: 1px;
-  width: 22px;
-  height: 22px;
+  top: 2px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: var(--text-primary);
+  background: color-mix(in srgb, var(--card-bg) 24%, transparent);
   color: var(--card-bg);
-  border: none;
+  border: 1px solid color-mix(in srgb, var(--card-bg) 42%, transparent);
+  opacity: 0.45;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
+  transition: opacity 0.15s ease;
+}
+
+#peer-mini-phone-close-btn:hover {
+  opacity: 0.82;
 }
 
 #peer-mini-phone-bezel {
   width: 100%;
   flex: 1;
   min-height: 0;
-  padding: 7px;
+  padding: 6px;
   box-sizing: border-box;
   background: var(--secondary-bg);
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
+  border-top: 2px solid var(--border-color);
+  border-left: 2px solid var(--border-color);
+  border-right: 2px solid var(--card-bg);
+  border-bottom: 2px solid var(--card-bg);
+  border-radius: 9px;
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, var(--text-primary) 10%, transparent),
+    inset 0 0 0 1px var(--border-color);
   display: flex;
   flex-direction: column;
 }
@@ -34095,7 +34206,12 @@ select,
   flex: 1;
   min-height: 0;
   background: var(--mini-phone-screen-bg);
-  border-radius: 4px;
+  border-radius: 5px;
+  border-top: 1.5px solid var(--border-color);
+  border-left: 1.5px solid var(--border-color);
+  border-right: 1px solid var(--card-bg);
+  border-bottom: 1px solid var(--card-bg);
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--text-primary) 8%, transparent);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -34104,7 +34220,7 @@ select,
 
 #peer-mini-phone-footer {
   width: 100%;
-  height: 44px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34113,18 +34229,24 @@ select,
 }
 
 #peer-mini-phone-home-btn {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--secondary-bg);
-  border: 3px solid var(--border-color);
+  border-top: 2px solid var(--border-color);
+  border-left: 2px solid var(--border-color);
+  border-right: 2px solid var(--card-bg);
+  border-bottom: 2px solid var(--card-bg);
+  box-shadow:
+    inset 0 1px 3px color-mix(in srgb, var(--text-primary) 10%, transparent),
+    0 1px 0 var(--card-bg);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
 }
 
 .peer-phone-header {
-  height: 38px;
+  height: 36px;
   padding: 0 10px;
   background: var(--mini-phone-header-bg);
   border-bottom: 1px solid var(--border-color);
@@ -34200,6 +34322,3 @@ select,
   color: var(--mini-phone-recv-text);
   border-bottom-left-radius: 4px;
 }
-
-
-
