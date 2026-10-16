@@ -29668,6 +29668,116 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
+        function parseAiFullResponse(rawString) {
+          // 1. 剥离外层可能存在的 ```json 和 ``` 外壳，只取第一个 { 到最后一个 }
+          let text = String(rawString || "").trim();
+          const firstBrace = text.indexOf('{');
+          const lastBrace = text.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            text = text.slice(firstBrace, lastBrace + 1);
+          }
+
+          // 2. 先尝试直接整体解析
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed && Array.isArray(parsed.chatResponse)) return parsed;
+          } catch (e) {}
+
+          // 3. 【核心修复】：从 "chatResponse" 处一刀切开，避开 thinking 内部的未转义双引号！
+          const chatRespMatch = text.match(/"chatResponse"\s*:\s*\[/);
+          if (chatRespMatch && chatRespMatch.index !== undefined) {
+            const splitIndex = chatRespMatch.index;
+            
+            // 3.1 提取前半部分的 thinking 纯文本（无视里面的任何坏引号）
+            let thinkingPart = text.slice(0, splitIndex);
+            let thinkingText = "";
+            const thinkStart = thinkingPart.match(/"thinking"\s*:\s*"/);
+            if (thinkStart && thinkStart.index !== undefined) {
+              thinkingText = thinkingPart.slice(thinkStart.index + thinkStart[0].length).replace(/"\s*,\s*$/, "");
+            }
+
+            let innerVoiceObj = null;
+            const ivMatch = text.match(/"innerVoice"\s*:\s*(\{[\s\S]*?\})/);
+            if (ivMatch) {
+              try {
+                innerVoiceObj = JSON.parse(ivMatch[1]);
+              } catch (_) {}
+            }
+
+            // 3.2 截取后半部分的 chatResponse 数组字符串 `[...]`
+            let arrayPart = text.slice(splitIndex + chatRespMatch[0].length - 1);
+            const lastBracket = arrayPart.lastIndexOf(']');
+            if (lastBracket !== -1) {
+              arrayPart = arrayPart.slice(0, lastBracket + 1);
+            }
+
+            // 3.3 尝试直接解析整个 chatResponse 数组（保留所有道具、战斗、章节、文本、图片等全部对象结构！）
+            for (const candidate of [arrayPart, arrayPart.replace(/\r?\n/g, "\\n")]) {
+              try {
+                const arr = JSON.parse(candidate);
+                if (Array.isArray(arr)) {
+                  return { thinking: thinkingText, chatResponse: arr, innerVoice: innerVoiceObj };
+                }
+              } catch (err) {}
+            }
+
+            // 4. 【全类型逐项抢救兜底】：如果 chatResponse 数组里某单个气泡内部也包含了未转义引号或换行，
+            // 按顶层对象切分数组中的每一个 `{...}` 元素，逐个独立解析！确保绝不因为一条消息格式瑕疵而丢掉道具、战斗、章节或文本气泡！
+            const rawItems = arrayPart.slice(1, -1).split(/\}(?=\s*,\s*\{\s*"type"|\s*,\s*\{\s*"name")/);
+            const rescuedList = [];
+            for (let i = 0; i < rawItems.length; i++) {
+              let itemStr = rawItems[i].trim().replace(/^,\s*/, "");
+              if (!itemStr.endsWith("}")) itemStr += "}";
+              
+              let parsedItem = null;
+              // 先尝试正常解析单个气泡对象（支持 give_item 嵌套对象、system_status、suggest_combat 等任意类型）
+              for (const s of [itemStr, itemStr.replace(/\r?\n/g, "\\n")]) {
+                try {
+                  parsedItem = JSON.parse(s);
+                  break;
+                } catch (e) {}
+              }
+
+              // 如果该单个对象依然因为内部未转义引号解析失败（通常发生在长文本 text 或 quote_reply 中），精准提取字段修复
+              if (!parsedItem) {
+                const typeMatch = itemStr.match(/"type"\s*:\s*"([^"]+)"/);
+                const nameMatch = itemStr.match(/"name"\s*:\s*"([^"]*)"/);
+                const type = typeMatch ? typeMatch[1] : "text";
+                const name = nameMatch ? nameMatch[1] : "";
+
+                if (type === "text") {
+                  const contentMatch = itemStr.match(/"content"\s*:\s*"([\s\S]*)"\s*\}$/);
+                  parsedItem = {
+                    type: "text",
+                    name: name,
+                    content: contentMatch ? contentMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"') : itemStr
+                  };
+                } else if (type === "quote_reply") {
+                  const tcMatch = itemStr.match(/"target_content"\s*:\s*"([\s\S]*?)"\s*,\s*"reply_content"/);
+                  const rcMatch = itemStr.match(/"reply_content"\s*:\s*"([\s\S]*)"\s*\}$/);
+                  const tsMatch = itemStr.match(/"target_sender"\s*:\s*"([^"]*)"/);
+                  parsedItem = {
+                    type: "quote_reply",
+                    name: name,
+                    target_sender: tsMatch ? tsMatch[1] : "",
+                    target_content: tcMatch ? tcMatch[1] : "",
+                    reply_content: rcMatch ? rcMatch[1].replace(/\\n/g, "\n") : ""
+                  };
+                }
+              }
+
+              if (parsedItem) rescuedList.push(parsedItem);
+            }
+
+            if (rescuedList.length > 0) {
+              return { thinking: thinkingText, chatResponse: rescuedList, innerVoice: innerVoiceObj };
+            }
+          }
+
+          throw new Error("无法从返回内容中提取出有效的 chatResponse 列表");
+        }
+        window.parseAiFullResponse = parseAiFullResponse;
+
         /**
          * 解析AI返回的、可能格式不规范的响应内容
          * @param {string} content - AI返回的原始字符串
@@ -41018,19 +41128,21 @@ ${recentHistoryText}
               let innerVoiceData = null;
 
               try {
-                let sanitizedContent = aiResponseContent
-                  .replace(/^```json\s*/, "")
-                  .replace(/```$/, "")
-                  .trim();
-                const firstBrace = sanitizedContent.indexOf("{");
-                const lastBrace = sanitizedContent.lastIndexOf("}");
-                if (firstBrace !== -1 && lastBrace > firstBrace) {
-                  sanitizedContent = sanitizedContent.substring(
-                    firstBrace,
-                    lastBrace + 1,
-                  );
+                let fullResponse = null;
+                try {
+                  fullResponse = parseAiFullResponse(aiResponseContent);
+                } catch (parseFullErr) {
+                  const sanitized = aiResponseContent.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+                  const fBracket = sanitized.indexOf("[");
+                  const lBracket = sanitized.lastIndexOf("]");
+                  if (fBracket !== -1 && lBracket > fBracket) {
+                    const directArr = JSON.parse(sanitized.slice(fBracket, lBracket + 1));
+                    if (Array.isArray(directArr)) {
+                      fullResponse = { thinking: "", chatResponse: directArr };
+                    }
+                  }
+                  if (!fullResponse) throw parseFullErr;
                 }
-                const fullResponse = JSON.parse(sanitizedContent);
 
                 if (
                   fullResponse.chatResponse &&
@@ -43587,45 +43699,35 @@ ${stickerContext || "无"}
             let extractedThinking = null;
 
             try {
-              // 在解析前，先对AI的原始回复进行“净化”处理
-              let sanitizedContent = aiResponseContent
-                .replace(/^```json\s*/i, "") // 移除开头的 ```json
-                .replace(/^```\s*/i, "")
-                .replace(/```$/i, "")
-                .trim(); // 移除首尾的空格和换行
-
               // 尝试从字符串中提取 <thinking>...</thinking> 标签
-              const thinkingMatch = sanitizedContent.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+              const thinkingMatch = aiResponseContent.match(/<thinking>([\s\S]*?)<\/thinking>/i);
               if (thinkingMatch) {
                 extractedThinking = thinkingMatch[1].trim();
-                sanitizedContent = sanitizedContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
               }
 
-              // 再次净化：如果首个结构符号是 [，按数组提取；如果是 {，按对象提取
-              const firstBracket = sanitizedContent.indexOf("[");
-              const firstBrace = sanitizedContent.indexOf("{");
-              if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
-                const lastBracket = sanitizedContent.lastIndexOf("]");
-                if (lastBracket > firstBracket) {
-                  sanitizedContent = sanitizedContent.substring(
-                    firstBracket,
-                    lastBracket + 1,
-                  );
+              let fullResponse = null;
+              try {
+                fullResponse = parseAiFullResponse(aiResponseContent);
+              } catch (parseFullErr) {
+                const sanitized = aiResponseContent.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+                const fBracket = sanitized.indexOf("[");
+                const lBracket = sanitized.lastIndexOf("]");
+                if (fBracket !== -1 && lBracket > fBracket) {
+                  try {
+                    const directArr = JSON.parse(sanitized.slice(fBracket, lBracket + 1));
+                    if (Array.isArray(directArr)) {
+                      fullResponse = { thinking: "", chatResponse: directArr };
+                    }
+                  } catch (_) {}
                 }
-              } else if (firstBrace !== -1) {
-                const lastBrace = sanitizedContent.lastIndexOf("}");
-                if (lastBrace > firstBrace) {
-                  sanitizedContent = sanitizedContent.substring(
-                    firstBrace,
-                    lastBrace + 1,
-                  );
-                }
+                if (!fullResponse) throw parseFullErr;
               }
-
-              const fullResponse = JSON.parse(sanitizedContent);
 
               if (fullResponse.thinking && typeof fullResponse.thinking === "string") {
-                extractedThinking = fullResponse.thinking.trim();
+                const ft = fullResponse.thinking.trim();
+                if (ft) {
+                  extractedThinking = (extractedThinking ? extractedThinking + "\n" : "") + ft;
+                }
               }
 
               // 现在我们可以安全地解析净化后的内容了
