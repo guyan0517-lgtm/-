@@ -41887,7 +41887,9 @@ ${recentHistoryText}
             const mapPromptObj = await getChatMapPromptBlock(chat);
             const mapPromptBlock = typeof mapPromptObj === "object" ? (mapPromptObj.prompt || "") : (mapPromptObj || "");
             const inventoryPromptBlock = (typeof getChatInventoryPromptBlock === "function") ? getChatInventoryPromptBlock(chat) : "";
-            const dicePromptBlock = window.formatPromptSection("掷骰与属性指令", `
+            const dicePromptBlock = chat.activeLineMode === "solo"
+              ? window.formatPromptSection("单线模式指令规范", `当前处于小群独立单线分支中，严禁主动执行或输出任何以点号开头的系统掷骰指令，严禁生成COC7人物面板，严禁私自替玩家进行检定！所有剧情请以纯正的角色对话与环境叙事直接呈现。`)
+              : window.formatPromptSection("掷骰与属性指令", `
 当前对话框内置骰娘系统，你在发言或叙事文本中直接写出以点号开头的指令即可触发，系统会自动执行并给出掷骰反馈与面板更新：
 1. 自身掷骰与检定：
 - .ra 技能名：进行技能检定，例如 .ra 侦查
@@ -41924,7 +41926,7 @@ ${recentHistoryText}
                     .join("\n");
                   linkedMemoryContext = window.formatPromptSection(
                     "大群主线互通记忆",
-                    `来自大群主线「${chat.name || "主线"}」的最近 ${recentMain.length} 条对话记录（供当前单人线参考上下文）：\n${formattedMain}`
+                    `来自大群主线「${chat.mainGroupName || "大群主线"}」的最近 ${recentMain.length} 条对话记录，仅供你在单人线中理解历史背景参考，绝不可当作当前单线现场已经发生的事情，严禁在当前单线中回复大群的消息：\n${formattedMain}`
                   );
                 }
               }
@@ -42257,9 +42259,10 @@ ${myPlayerEntry.persona}`);
 ${sharedContext}
 ${stickerContext}
 ${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}。\n` : ""}
-现在，请根据以上所有规则和下方的对话历史，继续这场群聊。`);
+${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下方的单线对话历史，继续在此单线分支中进行独立互动，严禁输出任何系统掷骰指令。" : "现在，请根据以上所有规则和下方的对话历史，继续这场群聊。"}`);
 
               systemPrompt = [
+                soloLinePromptStr,
                 groupFormatBlock,
                 groupCommandBlock,
                 groupWhisperRuleBlock,
@@ -42267,7 +42270,6 @@ ${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}�
                 groupMembersBlock,
                 groupMyPersonaBlock,
                 groupPeerPlayersPersonaBlock,
-                soloLinePromptStr,
                 thoughtChainPromptBlock,
                 worldBookContent,
                 moduleChaptersPromptBlock,
@@ -43331,7 +43333,8 @@ ${stickerContext || "无"}
             const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
             if (isKeeperAssigned) {
               const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次回复二到四的气泡最佳，单气泡在屏幕内显示为2/3~3/4最佳。必须率先渲染情绪氛围，具体细节的描写场景，再进行人物细节描写，切勿为了缩减字数而删去场景描写的内容。\n需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。【注意，此处规则的含义为剧情不可跳跃过多，而并非缩减剧情的细节描写或场景细节】\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。`;
-              systemPrompt = window.formatPromptSection("带团", keeperPrefixInstruction) + "\n\n" + systemPrompt;
+              const soloPrepend = (chat.activeLineMode === "solo" && soloLinePromptStr) ? (soloLinePromptStr + "\n\n") : "";
+              systemPrompt = soloPrepend + window.formatPromptSection("带团", keeperPrefixInstruction) + "\n\n" + systemPrompt;
             }
 
             let isGemini = proxyUrl === GEMINI_API_URL;
@@ -47574,6 +47577,12 @@ ${stickerContext || "无"}
 
               // 将渲染逻辑移出循环
               if (aiMessage) {
+                if (chat.isGroup && chat.activeLineMode === "solo") {
+                  const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+                  const activeTId = activeThread ? activeThread.id : (chat.settings?.soloLineConfig?.activeThreadId || null);
+                  aiMessage.soloThreadId = activeTId;
+                  aiMessage.isSoloMessage = true;
+                }
                 // 1. 将新消息存入历史记录
                 chat.history.push(aiMessage);
                 if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.ensureSoloLineConfig === "function") {
@@ -47733,7 +47742,7 @@ ${stickerContext || "无"}
             }
 
             // --- AI 发送骰子指令识别与回复 ---
-            if (typeof window.executeDiceCommand === "function") {
+            if (typeof window.executeDiceCommand === "function" && chat.activeLineMode !== "solo") {
               const newAiMsgs = (chat.history || []).slice(aiTurnStartHistoryLength);
               let diceRole = null;
               if (!chat.isGroup) {
@@ -93075,10 +93084,7 @@ ${stickerContext || "无"}
         };
 
         window.getSoloLinePromptBlock = function (chat) {
-          if (!isPeerGrp(chat)) return "";
-          if (chat.activeLineMode !== "solo") {
-            return "";
-          }
+          if (!isPeerGrp(chat) || chat.activeLineMode !== "solo") return "";
           const activeThread = getActiveSoloThread(chat);
           if (!activeThread) return "";
           const allPlayers = getGroupHumanPlayersList(chat);
@@ -93099,15 +93105,20 @@ ${stickerContext || "无"}
             ? presentNames.join("、")
             : `【${chat.settings?.myNickname || chat.settings?.myName || "我"}】`;
           const absentRule = absentNames.length > 0
-            ? `不在本单线现场的真人玩家：${absentNames.join("、")}。请绝对不要替不在场的真人玩家发言或描述其在场。`
-            : "同群其他未参与本单线的真人玩家当前不在现场。";
+            ? `不在本单线现场的同群其他真人玩家：${absentNames.join("、")}。严禁替不在场的真人玩家发言、严禁描写其在场或参与互动。`
+            : "同群其他未参与本单线的真人玩家当前均不在现场。";
 
           return window.formatPromptSection(
-            "单人线独立行动模式",
-            `当前处于单人线分支「${activeThread ? activeThread.name : "单线"}」。\n` +
-            `当前在此单人线中共同行动的真人玩家为：${presentStr}。\n` +
+            "当前处于单线独立交互模式",
+            `【极其重要：你当前处于小群独立单线分支中】\n` +
+            `当前会话名称：「${activeThread.name || "单线"}」，这是与大群分离的独立单人分支线路。\n` +
+            `你必须明确知悉：你此刻正在本单线中与在场角色单独交互，你绝不是在大群主线中！\n` +
+            `当前在此单线现场共同行动的玩家：${presentStr}。\n` +
             `${absentRule}\n` +
-            `请围绕当前单人线内的在场玩家展开剧情描写、环境反馈与检定判定。`
+            `【单线行为准则】：\n` +
+            `1. 你的所有回复、动作描写、剧情反馈仅限于本单线现场，严禁提及或回复大群中未参与本单线玩家的事件。\n` +
+            `2. 严禁替玩家自动掷骰，严禁擅自输出以点号开头的系统掷骰指令，严禁生成coc人物属性卡。\n` +
+            `3. 专注于此单线中在场玩家的行为与当前环境交互。`
           );
         };
 
@@ -93309,18 +93320,7 @@ ${stickerContext || "无"}
                 </div>
               `;
 
-              row.querySelector(`[data-solo-select="${t.id}"]`).onclick = async () => {
-                if (!canAccess) {
-                  await showAlertMsg("提示", "该单线为私密单线，仅创建者或参与玩家可进入");
-                  return;
-                }
-                if (pendingSelectedThreadId === t.id) {
-                  const ok = await window.switchGroupLineMode("solo", t.id, t.isPeerThread ? t : null);
-                  if (ok !== false) {
-                    window.closeSoloLineModal();
-                  }
-                  return;
-                }
+              row.querySelector(`[data-solo-select="${t.id}"]`).onclick = () => {
                 pendingSelectedThreadId = t.id;
                 renderSoloLineModalContent(chat);
               };

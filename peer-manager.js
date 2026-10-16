@@ -3526,8 +3526,8 @@
 
     broadcastGroupMessage: async function (groupChat, msg, isFromLocalUser) {
       if (!groupChat || !groupChat.isGroup || !groupChat.isPeerGroup || !msg) return;
-      let soloThreadId = null;
-      if (groupChat.activeLineMode === "solo") {
+      let soloThreadId = msg.soloThreadId || null;
+      if (!soloThreadId && groupChat.activeLineMode === "solo") {
         const activeThread = typeof window.getActiveSoloThread === "function"
           ? window.getActiveSoloThread(groupChat)
           : null;
@@ -3549,9 +3549,22 @@
       const baseEventId = msg.eventId || "gmsg_" + (msg.timestamp || Date.now()) + "_" + Math.random().toString(36).slice(2, 7);
       msg.eventId = baseEventId;
 
-      const peerTargets = (groupChat.members || []).filter(
+      let peerTargets = (groupChat.members || []).filter(
         (m) => (m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode
       );
+
+      // 单线专属过滤：如果当前消息属于单线，仅发送给参与该单线的真人玩家
+      if (soloThreadId) {
+        const activeThread = typeof window.getActiveSoloThread === "function"
+          ? window.getActiveSoloThread(groupChat)
+          : null;
+        const threadObj = activeThread && (activeThread.id === soloThreadId || ("solo_" + activeThread.id) === soloThreadId || activeThread.id === ("solo_" + soloThreadId))
+          ? activeThread
+          : (groupChat.settings?.soloLineConfig?.threads || []).find((t) => t && (t.id === soloThreadId || ("solo_" + t.id) === soloThreadId || t.id === ("solo_" + soloThreadId)));
+        if (threadObj && Array.isArray(threadObj.playerPeerCodes) && threadObj.playerPeerCodes.length > 0) {
+          peerTargets = peerTargets.filter((m) => threadObj.playerPeerCodes.includes(m.peerCode));
+        }
+      }
 
       const normalizedMsg = { ...msg, eventId: baseEventId };
       if (normalizedMsg.quote && normalizedMsg.quote.senderName === "我" && isFromLocalUser && myNick && myNick !== "我") {
@@ -3940,23 +3953,39 @@
     },
 
     broadcastTypingStatus: function (chat, isTyping) {
-      if (!chat || chat.activeLineMode === "solo") return;
+      if (!chat) return;
       const myCode = this.getOrCreateMyPeerCode();
       const targetSet = new Set();
+      let soloThreadId = null;
 
       if (chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)))) {
-        (chat.members || []).forEach((m) => {
-          if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
-            targetSet.add(m.peerCode);
+        if (chat.activeLineMode === "solo") {
+          const activeThread = typeof window.getActiveSoloThread === "function"
+            ? window.getActiveSoloThread(chat)
+            : null;
+          if (activeThread) {
+            soloThreadId = activeThread.id;
+            const participants = Array.isArray(activeThread.playerPeerCodes) && activeThread.playerPeerCodes.length > 0
+              ? activeThread.playerPeerCodes
+              : [activeThread.ownerPeerCode || myCode];
+            participants.forEach((pCode) => {
+              if (pCode && pCode !== myCode) targetSet.add(pCode);
+            });
           }
-        });
-        if (chat.settings && Array.isArray(chat.settings.peerMembers)) {
-          chat.settings.peerMembers.forEach((pm) => {
-            const pCode = typeof pm === "string" ? pm : (pm && pm.peerCode);
-            if (pCode && pCode !== myCode) {
-              targetSet.add(pCode);
+        } else {
+          (chat.members || []).forEach((m) => {
+            if ((m.isPeerMember || m.roleType === "peer") && m.peerCode && m.peerCode !== myCode) {
+              targetSet.add(m.peerCode);
             }
           });
+          if (chat.settings && Array.isArray(chat.settings.peerMembers)) {
+            chat.settings.peerMembers.forEach((pm) => {
+              const pCode = typeof pm === "string" ? pm : (pm && pm.peerCode);
+              if (pCode && pCode !== myCode) {
+                targetSet.add(pCode);
+              }
+            });
+          }
         }
       } else if (chat.roleType === "peer" && chat.peerCode) {
         targetSet.add(chat.peerCode);
@@ -3971,6 +4000,7 @@
           toCode: peerCode,
           isGroup: Boolean(chat.isGroup),
           groupId: sharedGroupId,
+          soloThreadId: soloThreadId,
           isTyping: Boolean(isTyping),
           timestamp: Date.now()
         };
@@ -3987,6 +4017,20 @@
         ? await this.findPeerGroupChatByIdAsync(data.groupId)
         : await this.findPeerChatByCodeAsync(data.fromCode);
       if (!chat) return;
+
+      if (data.isGroup) {
+        if (data.soloThreadId) {
+          const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+          const isViewingThisSolo = chat.activeLineMode === "solo" && activeThread && (activeThread.id === data.soloThreadId || ("solo_" + activeThread.id) === data.soloThreadId || activeThread.id === ("solo_" + data.soloThreadId));
+          if (!isViewingThisSolo) {
+            return;
+          }
+        } else {
+          if (chat.activeLineMode === "solo") {
+            return;
+          }
+        }
+      }
 
       window.remoteGeneratingChats = window.remoteGeneratingChats || {};
       const sharedGrpId = chat.peerGroupId || chat.id;
