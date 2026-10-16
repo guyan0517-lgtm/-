@@ -34239,13 +34239,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 </div>
               </div>
             `;
-          } else if (msg.type === "naiimag") {
-            bubble.classList.add("is-realimag", "is-card-like");
-            contentHtml = `<img src="${
-              msg.imageUrl
-            }" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${
-              msg.fullPrompt || msg.prompt || "NovelAI生成"
-            }">`;
+          } else if (msg.type === "naiimag" || msg.type === "nov" || msg.type === "realimag") {
+            const isCleared = msg.content === "[图片已清理]" || (!msg.imageUrl && !msg.image && !msg.url);
+            const realSrc = msg.imageUrl || msg.url || msg.image;
+            if (realSrc && !isCleared) {
+              bubble.classList.add("is-realimag", "is-card-like");
+              const safeTitle = String(msg.fullPrompt || msg.prompt || "NovelAI生成").replace(/"/g, "&quot;");
+              contentHtml = `<img src="${realSrc}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.className='cleared-image-placeholder ai-generated-image'; this.alt='图片已被肥鸭坐塌';">`;
+            } else {
+              bubble.classList.add("is-ai-image");
+              const safeTitle = String(msg.fullPrompt || msg.prompt || "图片已被肥鸭坐塌").replace(/"/g, "&quot;");
+              contentHtml = `<img src="https://i.postimg.cc/KYr2qRCK/1.jpg" class="cleared-image-placeholder ai-generated-image" alt="图片已被肥鸭坐塌" title="${safeTitle}">`;
+            }
+          } else if (msg.content === "[图片已清理]") {
+            bubble.classList.add("is-ai-image");
+            contentHtml = `<img src="https://i.postimg.cc/KYr2qRCK/1.jpg" class="cleared-image-placeholder ai-generated-image" alt="图片已被肥鸭坐塌" title="图片已被肥鸭坐塌">`;
           } else {
             let rawContentText = String(msg.content || "");
             if (rawContentText === "undefined" || rawContentText === "null" || rawContentText === "[object Object]") {
@@ -65942,14 +65950,28 @@ ${stickerContext || "无"}
           const contentEl = bubble.querySelector(".content");
           if (!contentEl) return;
 
-          bubble.classList.add("is-realimag", "is-card-like");
-          const safeTitle = String(msg.fullPrompt || msg.prompt || "NovelAI生成").replace(/"/g, "&quot;");
-          const imgEl = contentEl.querySelector("img.realimag-image");
-          if (imgEl && msg.imageUrl) {
-            imgEl.src = msg.imageUrl;
-            imgEl.title = msg.fullPrompt || msg.prompt || "NovelAI生成";
+          const safeTitle = String(msg.fullPrompt || msg.prompt || (msg.imageUrl ? "NovelAI生成" : "图片已被肥鸭坐塌")).replace(/"/g, "&quot;");
+          if (msg.imageUrl) {
+            bubble.classList.remove("is-ai-image");
+            bubble.classList.add("is-realimag", "is-card-like");
+            const imgEl = contentEl.querySelector("img");
+            if (imgEl) {
+              imgEl.src = msg.imageUrl;
+              imgEl.className = "realimag-image";
+              imgEl.alt = "NovelAI图片分享";
+              imgEl.title = msg.fullPrompt || msg.prompt || "NovelAI生成";
+              imgEl.onerror = function () {
+                this.src = "https://i.postimg.cc/KYr2qRCK/1.jpg";
+                this.className = "cleared-image-placeholder ai-generated-image";
+                this.alt = "图片已被肥鸭坐塌";
+              };
+            } else {
+              contentEl.innerHTML = `<img src="${msg.imageUrl}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.className='cleared-image-placeholder ai-generated-image'; this.alt='图片已被肥鸭坐塌';">`;
+            }
           } else {
-            contentEl.innerHTML = `<img src="${msg.imageUrl}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}">`;
+            bubble.classList.remove("is-realimag", "is-card-like");
+            bubble.classList.add("is-ai-image");
+            contentEl.innerHTML = `<img src="https://i.postimg.cc/KYr2qRCK/1.jpg" class="cleared-image-placeholder ai-generated-image" alt="图片已被肥鸭坐塌" title="${safeTitle}">`;
           }
         }
         window.updateNaiBubbleInDom = updateNaiBubbleInDom;
