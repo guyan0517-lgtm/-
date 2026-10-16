@@ -141,19 +141,13 @@ app.post('/api/proxy', async (req, res) => {
     const response = await fetch(url, fetchOptions);
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
-    }
 
     if (contentType.includes('application/json')) {
       const data = await response.json();
       return res.json(data);
-    } else if (contentType.includes('text/') || contentType.includes('event-stream')) {
+    } else {
       const text = await response.text();
       return res.send(text);
-    } else {
-      const arrayBuffer = await response.arrayBuffer();
-      return res.send(Buffer.from(arrayBuffer));
     }
   } catch (err) {
     console.error('Proxy request error:', err);
@@ -677,10 +671,6 @@ wss.on('connection', (ws) => {
     }
   });
 
-  ws.on('error', (err) => {
-    console.warn('[WS] Client socket error:', err.message);
-  });
-
   ws.on('close', () => {
     if (boundCode && peerClients.has(boundCode)) {
       peerClients.get(boundCode).delete(ws);
@@ -691,20 +681,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-wss.on('error', (err) => {
-  console.warn('[WSS] Server error:', err.message);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('[Server] Uncaught exception:', err);
-});
-
-process.on('unhandledRejection', (reason) => {
-  console.error('[Server] Unhandled rejection:', reason);
-});
-
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
-
 
