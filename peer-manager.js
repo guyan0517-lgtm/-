@@ -1847,18 +1847,13 @@
             byPeerCode.get(c.peerCode).push(c);
           } else if (c.isGroup) {
             const hasRealPeer =
+              Boolean(c.isPeerGroup) ||
               Boolean(c.peerGroupId) ||
               (Array.isArray(c.members) &&
-                c.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode))));
-            if (!hasRealPeer && c.isPeerGroup) {
-              c.isPeerGroup = false;
-              if (window.state && window.state.chats && window.state.chats[c.id]) {
-                window.state.chats[c.id].isPeerGroup = false;
-              }
-              try {
-                await window.db.chats.put(c);
-              } catch (e) {}
-            } else if (hasRealPeer && (c.isPeerGroup || c.peerGroupId)) {
+                c.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))) ||
+              (Array.isArray(c.settings?.peerMembers) && c.settings.peerMembers.length > 0) ||
+              Boolean(c.settings?.soloLineConfig);
+            if (hasRealPeer) {
               c.isPeerGroup = true;
               if (c.peerGroupId) {
                 if (!byGroupId.has(c.peerGroupId)) byGroupId.set(c.peerGroupId, []);
@@ -2563,7 +2558,16 @@
           : [],
         thoughtChainEnabled: groupChat.thoughtChainEnabled !== false,
         thoughtChainId: groupChat.thoughtChainId || null,
-        thoughtChainEnableCoc: groupChat.thoughtChainEnableCoc !== false
+        thoughtChainEnableCoc: groupChat.thoughtChainEnableCoc !== false,
+        keeperSettings: {
+          keeperForcedDraw: Boolean(groupChat.settings?.keeperForcedDraw),
+          keeperMaxMemory: groupChat.settings?.keeperMaxMemory,
+          keeperPrompt: groupChat.settings?.keeperPrompt,
+          keeperTargetId: groupChat.settings?.keeperTargetId,
+          keeperCharPrompts: groupChat.settings?.keeperCharPrompts || {},
+          keeperActivePresetId: groupChat.settings?.keeperActivePresetId || ""
+        },
+        sharedKeeperPresets: typeof window.getKeeperPresets === "function" ? window.getKeeperPresets() : []
       };
     },
 
@@ -3030,6 +3034,8 @@
             thoughtChainEnabled: snap.thoughtChainEnabled,
             thoughtChainId: snap.thoughtChainId,
             thoughtChainEnableCoc: snap.thoughtChainEnableCoc,
+            keeperSettings: snap.keeperSettings,
+            sharedKeeperPresets: snap.sharedKeeperPresets,
             sharedSoloPayload: typeof window.buildMySharedSoloPayload === "function" ? window.buildMySharedSoloPayload(groupChat) : [],
             essenceMessages: Array.isArray(groupChat.settings?.essenceMessages) ? groupChat.settings.essenceMessages : undefined,
             timestamp: Date.now()
@@ -3372,6 +3378,32 @@
       if (data.thoughtChainEnableCoc !== undefined) {
         groupChat.thoughtChainEnableCoc = data.thoughtChainEnableCoc;
       }
+      if (data.keeperSettings && typeof data.keeperSettings === "object") {
+        if (data.keeperSettings.keeperForcedDraw !== undefined) {
+          groupChat.settings.keeperForcedDraw = Boolean(data.keeperSettings.keeperForcedDraw);
+        }
+        if (data.keeperSettings.keeperMaxMemory !== undefined) {
+          groupChat.settings.keeperMaxMemory = data.keeperSettings.keeperMaxMemory;
+        }
+        if (data.keeperSettings.keeperPrompt !== undefined) {
+          groupChat.settings.keeperPrompt = data.keeperSettings.keeperPrompt;
+        }
+        if (data.keeperSettings.keeperTargetId !== undefined) {
+          groupChat.settings.keeperTargetId = data.keeperSettings.keeperTargetId;
+        }
+        if (data.keeperSettings.keeperCharPrompts && typeof data.keeperSettings.keeperCharPrompts === "object") {
+          groupChat.settings.keeperCharPrompts = {
+            ...(groupChat.settings.keeperCharPrompts || {}),
+            ...data.keeperSettings.keeperCharPrompts
+          };
+        }
+        if (data.keeperSettings.keeperActivePresetId !== undefined) {
+          groupChat.settings.keeperActivePresetId = data.keeperSettings.keeperActivePresetId;
+        }
+      }
+      if (Array.isArray(data.sharedKeeperPresets)) {
+        groupChat.settings.sharedKeeperPresets = data.sharedKeeperPresets;
+      }
 
       if (window.state && window.state.chats) {
         window.state.chats[groupChat.id] = groupChat;
@@ -3538,34 +3570,59 @@
         timestamp: incomingRaw.timestamp || data.timestamp || Date.now()
       };
 
+      const applyNaiMsgUpdateIfPresent = (list) => {
+        if (!Array.isArray(list) || msgToInsert.type !== "naiimag") return null;
+        const found = list.find((m) => m && m.type === "naiimag" && m.timestamp === msgToInsert.timestamp);
+        if (found) {
+          if (msgToInsert.imageUrl) found.imageUrl = msgToInsert.imageUrl;
+          if (msgToInsert.prompt) found.prompt = msgToInsert.prompt;
+          if (msgToInsert.fullPrompt) found.fullPrompt = msgToInsert.fullPrompt;
+          return found;
+        }
+        return null;
+      };
+
       if (data.soloThreadId) {
         const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(groupChat) : null;
         const localT = cfg && Array.isArray(cfg.threads) ? cfg.threads.find((t) => t.id === data.soloThreadId) : null;
         if (localT) {
           if (!Array.isArray(localT.history)) localT.history = [];
-          const dupLocal = localT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
-          if (!dupLocal) localT.history.push(msgToInsert);
+          const updatedLocal = applyNaiMsgUpdateIfPresent(localT.history);
+          if (!updatedLocal) {
+            const dupLocal = localT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+            if (!dupLocal) localT.history.push(msgToInsert);
+          }
         }
         const sharedRecs = groupChat.settings?.sharedSoloRecords?.[data.fromCode];
         if (Array.isArray(sharedRecs)) {
           const peerT = sharedRecs.find((t) => t && t.id === data.soloThreadId);
           if (peerT) {
             if (!Array.isArray(peerT.history)) peerT.history = [];
-            const dupPeer = peerT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
-            if (!dupPeer) peerT.history.push(msgToInsert);
+            const updatedPeer = applyNaiMsgUpdateIfPresent(peerT.history);
+            if (!updatedPeer) {
+              const dupPeer = peerT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+              if (!dupPeer) peerT.history.push(msgToInsert);
+            }
             peerT.publicHistory = peerT.history;
           }
         }
         const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(groupChat) : null;
         if (groupChat.activeLineMode === "solo" && activeThread && activeThread.id === data.soloThreadId) {
-          const dupActive = groupChat.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
-          if (!dupActive) {
-            groupChat.history.push(msgToInsert);
-            if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
-              if (typeof window.appendMessage === "function") {
-                window.appendMessage(msgToInsert, groupChat);
-              } else if (typeof window.renderChatInterfaceProxy === "function") {
-                window.renderChatInterfaceProxy(groupChat.id);
+          const updatedActive = applyNaiMsgUpdateIfPresent(groupChat.history);
+          if (updatedActive) {
+            if (typeof window.updateNaiBubbleInDom === "function") {
+              window.updateNaiBubbleInDom(groupChat, updatedActive);
+            }
+          } else {
+            const dupActive = groupChat.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+            if (!dupActive) {
+              groupChat.history.push(msgToInsert);
+              if (window.state && String(window.state.activeChatId) === String(groupChat.id)) {
+                if (typeof window.appendMessage === "function") {
+                  window.appendMessage(msgToInsert, groupChat);
+                } else if (typeof window.renderChatInterfaceProxy === "function") {
+                  window.renderChatInterfaceProxy(groupChat.id);
+                }
               }
             }
           }
@@ -3576,16 +3633,14 @@
         return;
       }
 
-      const isDup = groupChat.history.some(
-        (m) =>
-          (msgEvtId && m.eventId === msgEvtId) ||
-          (m.timestamp === incomingRaw.timestamp && m.content === incomingRaw.content)
-      );
-      if (isDup && groupChat.activeLineMode !== "solo") return;
-
       if (groupChat.activeLineMode === "solo") {
         if (!Array.isArray(groupChat.mainLineHistory)) {
           groupChat.mainLineHistory = [];
+        }
+        const updatedMain = applyNaiMsgUpdateIfPresent(groupChat.mainLineHistory);
+        if (updatedMain) {
+          if (window.db && window.db.chats) await window.db.chats.put(groupChat);
+          return;
         }
         const dupInMain = groupChat.mainLineHistory.some(
           (m) =>
@@ -3599,6 +3654,20 @@
           window.updateSoloLineBannerUI(groupChat);
         }
       } else {
+        const updatedHist = applyNaiMsgUpdateIfPresent(groupChat.history);
+        if (updatedHist) {
+          if (typeof window.updateNaiBubbleInDom === "function") {
+            window.updateNaiBubbleInDom(groupChat, updatedHist);
+          }
+          if (window.db && window.db.chats) await window.db.chats.put(groupChat);
+          return;
+        }
+        const isDup = groupChat.history.some(
+          (m) =>
+            (msgEvtId && m.eventId === msgEvtId) ||
+            (m.timestamp === incomingRaw.timestamp && m.content === incomingRaw.content)
+        );
+        if (isDup) return;
         groupChat.history.push(msgToInsert);
       }
 
@@ -4772,13 +4841,17 @@
       const isPeerGroup = Boolean(
         chat &&
         chat.isGroup &&
-        (Boolean(chat.peerGroupId) ||
+        (Boolean(chat.isPeerGroup) ||
+          Boolean(chat.peerGroupId) ||
           (Array.isArray(chat.members) &&
-            chat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))))
+            chat.members.some((m) => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))) ||
+          (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0) ||
+          Boolean(chat.settings?.soloLineConfig) ||
+          chat.activeLineMode === "solo")
       );
 
-      if (chat && chat.isGroup && !isPeerGroup && chat.isPeerGroup) {
-        chat.isPeerGroup = false;
+      if (chat && chat.isGroup && isPeerGroup && !chat.isPeerGroup) {
+        chat.isPeerGroup = true;
       }
 
       if (stickerBtn) {

@@ -141,13 +141,19 @@ app.post('/api/proxy', async (req, res) => {
     const response = await fetch(url, fetchOptions);
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
+    if (contentType) {
+      res.setHeader('Content-Type', contentType);
+    }
 
     if (contentType.includes('application/json')) {
       const data = await response.json();
       return res.json(data);
-    } else {
+    } else if (contentType.includes('text/') || contentType.includes('event-stream')) {
       const text = await response.text();
       return res.send(text);
+    } else {
+      const arrayBuffer = await response.arrayBuffer();
+      return res.send(Buffer.from(arrayBuffer));
     }
   } catch (err) {
     console.error('Proxy request error:', err);

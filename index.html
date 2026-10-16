@@ -75,7 +75,7 @@
     <script src="module-manager.js" defer></script>
     <script src="inventory-manager.js" defer></script>
     <script src="combat-engine.js" defer></script>
-    <script src="peer-manager.js?v=12" defer></script>
+    <script src="peer-manager.js?v=13" defer></script>
 
     <style></style>
 
@@ -20497,11 +20497,123 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         ];
         window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
 
+        // 后台防降频延时器：利用 Web Worker 计时与 visibilitychange 唤醒，防止切后台时 setTimeout 被浏览器挂起数分钟
+        (function initUnthrottledDelay() {
+          let worker = null;
+          const pendingCallbacks = new Map();
+          let seqId = 1;
+          try {
+            const blob = new Blob([
+              'self.onmessage = function(e) { const d = e.data; setTimeout(function() { self.postMessage(d.id); }, d.ms); };'
+            ], { type: 'application/javascript' });
+            worker = new Worker(URL.createObjectURL(blob));
+            worker.onmessage = function(e) {
+              const id = e.data;
+              const entry = pendingCallbacks.get(id);
+              if (entry) {
+                pendingCallbacks.delete(id);
+                clearTimeout(entry.fallbackTimer);
+                entry.resolve();
+              }
+            };
+          } catch (_) {
+            worker = null;
+          }
+
+          window.waitDelay = function(ms) {
+            const delayMs = Math.max(0, Number(ms) || 0);
+            if (delayMs <= 0) return Promise.resolve();
+            if (document.hidden && delayMs <= 3000) {
+              return Promise.resolve();
+            }
+            return new Promise((resolve) => {
+              const id = seqId++;
+              const startTime = Date.now();
+              const finish = () => {
+                if (pendingCallbacks.has(id)) {
+                  const entry = pendingCallbacks.get(id);
+                  pendingCallbacks.delete(id);
+                  clearTimeout(entry.fallbackTimer);
+                }
+                document.removeEventListener('visibilitychange', onVisChange);
+                resolve();
+              };
+              const onVisChange = () => {
+                if (!document.hidden && Date.now() - startTime >= Math.min(delayMs, 300)) {
+                  finish();
+                }
+              };
+              document.addEventListener('visibilitychange', onVisChange);
+              const fallbackTimer = setTimeout(finish, delayMs);
+              pendingCallbacks.set(id, { resolve: finish, fallbackTimer });
+              if (worker) {
+                try {
+                  worker.postMessage({ id, ms: delayMs });
+                } catch (_) {}
+              }
+            });
+          };
+        })();
+
+        // 后台保活音频自动激活：确保发起 API 请求或切换后台时保活音轨处于运行态，防止移动端/浏览器后台冻结网络与 JS 线程
+        function ensureBackgroundKeepAlive() {
+          try {
+            const audio = document.getElementById("keep-alive-audio");
+            if (audio && audio.paused) {
+              audio.volume = 0.01;
+              const playPromise = audio.play();
+              if (playPromise && typeof playPromise.catch === "function") {
+                playPromise.catch(() => {});
+              }
+            }
+          } catch (_) {}
+        }
+        window.ensureBackgroundKeepAlive = ensureBackgroundKeepAlive;
+        document.addEventListener("pointerdown", ensureBackgroundKeepAlive, { once: true, passive: true });
+        document.addEventListener("keydown", ensureBackgroundKeepAlive, { once: true, passive: true });
+
         async function requestLlmapiWithFallback(targetUrl, options = {}) {
+          ensureBackgroundKeepAlive();
           const method = options.method || "GET";
           const headers = options.headers || {};
           const body = options.body;
 
+          let parsedBody = body;
+          if (typeof body === "string") {
+            try {
+              parsedBody = JSON.parse(body);
+            } catch (_) {
+              parsedBody = body;
+            }
+          }
+
+          // 1. 优先通过本地同源 Node 后端 /api/proxy 转发（避免浏览器跨域拦截白等以及后台 Tab 外部连接降频）
+          try {
+            const localProxyRes = await origFetch("/api/proxy", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                url: targetUrl,
+                method,
+                headers,
+                body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
+              }),
+            });
+            const localProxyText = await localProxyRes.text();
+            const isLocalProxyHtml = /^\s*(<!DOCTYPE\s+html|<html)/i.test(localProxyText);
+            if (!isLocalProxyHtml && localProxyRes.status !== 404) {
+              return {
+                ok: localProxyRes.ok,
+                status: localProxyRes.status,
+                text: localProxyText,
+                headers: localProxyRes.headers,
+              };
+            }
+          } catch (_) {
+            // 本地代理不可达时继续尝试直连与备用代理
+          }
+
+          // 2. 尝试浏览器端直连
           let directRes = null;
           let directText = "";
           try {
@@ -20521,20 +20633,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
           } catch (_) {
-            // 浏览器端跨域拦截时，尝试后端转发接口
-          }
-
-          let parsedBody = body;
-          if (typeof body === "string") {
-            try {
-              parsedBody = JSON.parse(body);
-            } catch (_) {
-              parsedBody = body;
-            }
+            // 浏览器端跨域拦截时，尝试远程备用转发接口
           }
 
           const proxyEndpoints = [
-            "/api/proxy",
             "https://ais-pre-ugzk54jw372rrw774brrw3-328602855376.asia-southeast1.run.app/api/proxy",
             "https://ais-dev-ugzk54jw372rrw774brrw3-328602855376.asia-southeast1.run.app/api/proxy",
           ];
@@ -23744,6 +23846,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const isPg = Boolean(
             chat.isPeerGroup ||
             chat.peerGroupId ||
+            chat.activeLineMode === "solo" ||
+            Boolean(chat.settings?.soloLineConfig) ||
             (Array.isArray(chat.members) && chat.members.some(m => m && (m.isPeerMember || m.roleType === "peer" || Boolean(m.peerCode)))) ||
             (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)
           );
@@ -29389,30 +29493,69 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 移除思维链标签
           trimmedContent = trimmedContent.replace(/<(?:think|thought|thinking)>[\s\S]*?<\/(?:think|thought|thinking)>/gi, "").trim();
 
+          // 内部辅助函数：宽容解析单个 JSON 对象（支持未转义换行符、末尾多余逗号、内容中夹杂未转义双引号等）
+          function tryParseLooseJsonObject(rawStr) {
+            if (!rawStr) return null;
+            let s = rawStr.trim();
+            if (!s.startsWith("{")) return null;
+            if (!s.endsWith("}")) {
+              // 尝试修复末尾截断的对象
+              if ((s.match(/"/g) || []).length % 2 !== 0) {
+                s += '"}';
+              } else {
+                s += "}";
+              }
+            }
+            try {
+              const p = JSON.parse(s);
+              if (p && typeof p === "object") return p;
+            } catch (_) {}
+
+            // 修复真实换行符与末尾逗号后再试
+            try {
+              const fixedNewlines = s
+                .replace(/,\s*}/g, "}")
+                .replace(/\r?\n/g, "\\n");
+              const p2 = JSON.parse(fixedNewlines);
+              if (p2 && typeof p2 === "object") return p2;
+            } catch (_) {}
+
+            // 正则兜底提取常见字段（防止 AI 在台词内使用未转义英文双引号导致最后一条消息解析失败被吞）
+            const extracted = {};
+            const typeMatch = s.match(/"type"\s*:\s*"([^"]+)"/i);
+            if (typeMatch) extracted.type = typeMatch[1].trim();
+            const nameMatch = s.match(/"(?:name|sender|senderName|speaker)"\s*:\s*"([^"]+)"/i);
+            if (nameMatch) extracted.name = nameMatch[1].trim();
+            const promptMatch = s.match(/"(?:prompt|imagePrompt|naiPrompt)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
+            if (promptMatch) extracted.prompt = promptMatch[1].trim();
+
+            const contentFieldMatch = s.match(/"(?:content|message|text|reply)"\s*:\s*"([\s\S]*)"\s*(?:,\s*"(?:type|name|sender|visibleTo|thinking)"[\s\S]*|\s*}$)/i);
+            if (contentFieldMatch) {
+              let val = contentFieldMatch[1];
+              // 剥离尾随的其他已知键值对
+              val = val.replace(/"\s*,\s*"(?:type|name|sender|senderName|visibleTo|visible_to|thinking)"\s*:\s*[\s\S]*$/i, "");
+              extracted.content = val.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+              if (!extracted.type) extracted.type = "text";
+              return extracted;
+            }
+            if (extracted.type || extracted.prompt || extracted.name) {
+              return extracted;
+            }
+            return null;
+          }
+
           // 方案1：整体包裹在markdown代码块中时，提取内部内容
           const codeBlockMatch = trimmedContent.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
           if (codeBlockMatch && codeBlockMatch[1]) {
             trimmedContent = codeBlockMatch[1].trim();
           }
 
-          // 方案2：尝试作为标准的单一JSON数组解析
+          // 方案2：尝试作为标准的单一JSON数组解析（仅当整个字符串本身就是一个完整数组且首尾之外没有多余块时）
           if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
             try {
               const parsed = JSON.parse(trimmedContent);
               if (Array.isArray(parsed) && parsed.length > 0) {
                 return parsed;
-              }
-            } catch (e) {}
-          }
-
-          // 尝试查找第一个 '[' 到最后一个 ']'
-          const firstBracket = trimmedContent.indexOf('[');
-          const lastBracket = trimmedContent.lastIndexOf(']');
-          if (firstBracket !== -1 && lastBracket > firstBracket) {
-            try {
-              const arr = JSON.parse(trimmedContent.substring(firstBracket, lastBracket + 1));
-              if (Array.isArray(arr) && arr.length > 0) {
-                return arr;
               }
             } catch (e) {}
           }
@@ -29446,14 +29589,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 depth--;
                 if (depth === 0 && startIdx !== -1) {
                   const candidate = trimmedContent.substring(startIdx, i + 1);
-                  try {
-                    const parsed = JSON.parse(candidate);
-                    if (parsed && typeof parsed === "object") {
-                      results.push({ item: parsed, start: startIdx, end: i + 1 });
-                    }
-                  } catch (err) {}
+                  const parsed = tryParseLooseJsonObject(candidate);
+                  if (parsed && typeof parsed === "object") {
+                    results.push({ item: parsed, start: startIdx, end: i + 1 });
+                  }
                   startIdx = -1;
+                } else if (depth < 0) {
+                  depth = 0;
                 }
+              }
+            }
+          }
+
+          // 如果因为字符串内部未转义引号导致扫描结束时 startIdx 仍未闭合，尝试兜底按行或末尾闭合提取
+          if (startIdx !== -1 && startIdx < trimmedContent.length) {
+            const tailCandidate = trimmedContent.substring(startIdx);
+            const tailParsed = tryParseLooseJsonObject(tailCandidate);
+            if (tailParsed && typeof tailParsed === "object") {
+              results.push({ item: tailParsed, start: startIdx, end: trimmedContent.length });
+            }
+          }
+
+          // 若括号扫描因为引号错位完全没提出来，按 `{...}` 块再尝试一次逐块提取
+          if (results.length === 0 && trimmedContent.includes("{")) {
+            const blockRegex = /\{[^{}]*\}/g;
+            let match;
+            while ((match = blockRegex.exec(trimmedContent)) !== null) {
+              const parsed = tryParseLooseJsonObject(match[0]);
+              if (parsed && typeof parsed === "object") {
+                results.push({ item: parsed, start: match.index, end: match.index + match[0].length });
               }
             }
           }
@@ -29475,7 +29639,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
             const cleanAfter = textAfter.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
             if (cleanAfter) {
-              finalItems.push({ type: "text", content: cleanAfter });
+              const tailObj = tryParseLooseJsonObject(cleanAfter);
+              if (tailObj) {
+                finalItems.push(tailObj);
+              } else {
+                finalItems.push({ type: "text", content: cleanAfter });
+              }
             }
             return finalItems;
           }
@@ -30154,11 +30323,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
-          let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+          const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
             ? "https://image.novelai.net/ai/generate-image-stream"
             : "https://image.novelai.net/ai/generate-image";
-          let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
-          if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
+          const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
           const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
           let headers = {
@@ -30173,56 +30341,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             headers = cleanHeaders;
           }
 
-          const response = await fetch(apiUrl, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(requestBody)
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API请求失败 (${response.status}): ${errorText}`);
-          }
-
-          const contentType = response.headers.get("content-type");
-          let imageDataUrl = null;
-
-          if (contentType && contentType.includes("text/event-stream")) {
-            const text = await response.text();
-            const lines = text.trim().split("\n");
-            for (let i = lines.length - 1; i >= 0; i--) {
-              const line = lines[i].trim();
-              if (line.startsWith("data: ") && line !== "data: [DONE]") {
-                const dataContent = line.substring(6);
-                try {
-                  const jsonData = JSON.parse(dataContent);
-                  if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
-                    const base64Data = jsonData.image || jsonData.data;
-                    const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                    imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
-                    break;
-                  }
-                } catch (e) {}
-              }
-            }
-            if (!imageDataUrl) {
-              throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
-            }
-          } else {
-            const arrayBuffer = await response.arrayBuffer();
-            if (typeof JSZip !== "undefined") {
-              const zip = await JSZip.loadAsync(arrayBuffer);
-              const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg") || fn.endsWith(".webp"));
-              if (imageFileName) {
-                const imageBlob = await zip.files[imageFileName].async("blob");
-                imageDataUrl = await new Promise((resolve) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result);
-                  reader.readAsDataURL(imageBlob);
-                });
-              }
-            }
-          }
+          const response = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, headers, requestBody);
+          const imageDataUrl = await parseNovelAiResponseToDataUrl(response);
 
           if (!imageDataUrl) {
             throw new Error("未能解析出图片数据，请检查NovelAI配置或网络");
@@ -33920,11 +34040,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               </div>
             `;
           } else if (msg.type === "naiimag") {
-            // NovelAI图片渲染（复用realimag样式）
             bubble.classList.add("is-realimag", "is-card-like");
             contentHtml = `<img src="${
               msg.imageUrl
-            }" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.alt='图片加载失败';" title="${
+            }" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${
               msg.fullPrompt || msg.prompt || "NovelAI生成"
             }">`;
           } else {
@@ -34749,55 +34868,59 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 try { dbChat = await db.chats.get(chat.id); } catch (e) {}
               }
               if (dbChat) {
-                const sameLineMode = (dbChat.activeLineMode || "main") === (chat?.activeLineMode || "main");
-                if (sameLineMode && chat && Array.isArray(chat.history) && chat.history.length > 0) {
-                  const dbHist = Array.isArray(dbChat.history) ? dbChat.history : [];
-                  const mergedMap = new Map();
-                  const makeMsgKey = (m) => {
-                    if (!m) return "";
-                    if (m.eventId) return "evt_" + m.eventId;
-                    const cStr = typeof m.content === "string" ? m.content.slice(0, 120) : JSON.stringify(m.content || "").slice(0, 120);
-                    return `${m.role}_${m.timestamp}_${cStr}`;
-                  };
-                  for (const m of dbHist) {
-                    if (!m) continue;
-                    mergedMap.set(makeMsgKey(m), m);
-                  }
-                  let addedFromMem = false;
-                  for (const m of chat.history) {
-                    if (!m) continue;
-                    const k = makeMsgKey(m);
-                    if (!mergedMap.has(k)) {
-                      mergedMap.set(k, m);
-                      addedFromMem = true;
+                if (chat) {
+                  const sameLineMode = (dbChat.activeLineMode || "main") === (chat.activeLineMode || "main");
+                  if (sameLineMode) {
+                    const dbHist = Array.isArray(dbChat.history) ? dbChat.history : [];
+                    const memHist = Array.isArray(chat.history) ? chat.history : [];
+                    const mergedMap = new Map();
+                    const makeMsgKey = (m) => {
+                      if (!m) return "";
+                      if (m.eventId) return "evt_" + m.eventId;
+                      if (m.keeperDrawEventId) return "kp_" + m.keeperDrawEventId;
+                      const cStr = typeof m.content === "string" ? m.content.slice(0, 120) : JSON.stringify(m.content || "").slice(0, 120);
+                      return `${m.role}_${m.type || "text"}_${m.timestamp}_${cStr}`;
+                    };
+                    for (const m of dbHist) {
+                      if (!m) continue;
+                      mergedMap.set(makeMsgKey(m), m);
+                    }
+                    let addedFromMem = false;
+                    for (const m of memHist) {
+                      if (!m) continue;
+                      const k = makeMsgKey(m);
+                      if (!mergedMap.has(k)) {
+                        mergedMap.set(k, m);
+                        addedFromMem = true;
+                      } else {
+                        // 以内存中的最新对象属性为准（例如已生图完毕的 imageUrl）
+                        const existing = mergedMap.get(k);
+                        if (existing && m.imageUrl && !existing.imageUrl) {
+                          Object.assign(existing, m);
+                          addedFromMem = true;
+                        }
+                      }
+                    }
+                    const mergedArr = Array.from(mergedMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+                    chat.history = mergedArr;
+                    if (addedFromMem || mergedArr.length !== dbHist.length) {
+                      try { await db.chats.put(chat); } catch (_) {}
                     }
                   }
-                  if (addedFromMem || chat.history.length > dbHist.length) {
-                    const mergedArr = Array.from(mergedMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-                    dbChat.history = mergedArr;
-                    try { await db.chats.put(dbChat); } catch (_) {}
+                  if (!Array.isArray(chat.mainLineHistory) && Array.isArray(dbChat.mainLineHistory)) {
+                    chat.mainLineHistory = dbChat.mainLineHistory;
                   }
-                } else if (chat && !sameLineMode) {
-                  dbChat.activeLineMode = chat.activeLineMode;
-                  dbChat.history = chat.history;
-                  if (Array.isArray(chat.mainLineHistory)) {
-                    dbChat.mainLineHistory = chat.mainLineHistory;
+                  chat.settings = { ...(dbChat.settings || {}), ...(chat.settings || {}) };
+                  if ((!Array.isArray(chat.members) || chat.members.length === 0) && Array.isArray(dbChat.members)) {
+                    chat.members = dbChat.members;
                   }
-                }
-                if (chat && Array.isArray(chat.mainLineHistory) && (!Array.isArray(dbChat.mainLineHistory) || chat.mainLineHistory.length > dbChat.mainLineHistory.length)) {
-                  dbChat.mainLineHistory = chat.mainLineHistory;
-                }
-                if (chat && chat.settings) {
-                  dbChat.settings = { ...(dbChat.settings || {}), ...chat.settings };
-                }
-                if (chat && Array.isArray(chat.members) && chat.members.length > 0) {
-                  dbChat.members = chat.members;
+                } else {
+                  chat = dbChat;
                 }
                 if (!state.chats) state.chats = {};
-                state.chats[dbChat.id] = dbChat;
-                state.chats[String(dbChat.id)] = dbChat;
-                state.chats[chatId] = dbChat;
-                chat = dbChat;
+                state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
+                state.chats[chatId] = chat;
               }
             } catch (e) {}
           }
@@ -41089,7 +41212,8 @@ ${recentHistoryText}
               const contextPromises = chat.settings.linkedMemories.map(
                 async (link) => {
                   const soloId = link.soloThreadId || (link.isSoloThread ? link.chatId : null) || (String(link.chatId || "").startsWith("solo_") ? link.chatId : null);
-                  if (isPeerGrpForMemLink && soloId) {
+                  if (isPeerGrpForMemLink) {
+                    if (!soloId) return "";
                     const matchedSolo = allSoloThreads.find((t) => t && t.id === soloId);
                     if (!matchedSolo || !Array.isArray(matchedSolo.history)) return "";
                     const depthVal = Math.max(1, Number(link.depth) || 200);
@@ -41232,20 +41356,54 @@ ${recentHistoryText}
               const peerHumanMembers = chat.members.filter(
                 (m) => m.isPeerMember || m.roleType === "peer"
               );
+
+              const activeKeeperTargetId = (chat.settings && chat.settings.keeperTargetId) ? String(chat.settings.keeperTargetId) : "none";
+              const myGroupPeerCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+                ? window.PeerManager.getOrCreateMyPeerCode()
+                : "";
+              const myNicknameForCheck = chat.settings.myNickname || chat.settings.myName || "我";
+              const isMyUserKeeper = Boolean(
+                activeKeeperTargetId &&
+                activeKeeperTargetId !== "none" &&
+                (
+                  activeKeeperTargetId === "me" ||
+                  (myGroupPeerCode && activeKeeperTargetId === String(myGroupPeerCode)) ||
+                  activeKeeperTargetId === myNicknameForCheck ||
+                  (chat.settings.myName && activeKeeperTargetId === String(chat.settings.myName)) ||
+                  (chat.settings.myNickname && activeKeeperTargetId === String(chat.settings.myNickname))
+                )
+              );
+              const isGroupMemberKeeper = (m) => {
+                if (!m || !activeKeeperTargetId || activeKeeperTargetId === "none") return false;
+                return Boolean(
+                  (m.peerCode && String(m.peerCode) === activeKeeperTargetId) ||
+                  (m.id !== undefined && String(m.id) === activeKeeperTargetId) ||
+                  (m.name && String(m.name) === activeKeeperTargetId) ||
+                  (m.originalName && String(m.originalName) === activeKeeperTargetId) ||
+                  (m.groupNickname && String(m.groupNickname) === activeKeeperTargetId)
+                );
+              };
+
               const membersList = roleplayMembers
                 .map((m, idx) => {
                   const muteStatus = m.isMuted
                     ? " 【状态：已被禁言，禁止让他发言】"
                     : "";
-                  const cocStatus = window.getCocPromptStatus && window.getCocPromptStatus(m.cocPanel) ? `\n  - **COC人物面板**（实时当前数值）：${window.getCocPromptStatus(m.cocPanel)}` : "";
+                  const isThisMemberKp = isGroupMemberKeeper(m);
+                  const cocStatus = (!isThisMemberKp && window.getCocPromptStatus && window.getCocPromptStatus(m.cocPanel)) ? `\n  - **COC人物面板**（实时当前数值）：${window.getCocPromptStatus(m.cocPanel)}` : "";
                   let metaLines = [];
-                  if (m.age) metaLines.push(`  - **年龄**：${m.age}`);
-                  if (m.birthday) metaLines.push(`  - **生日**：${m.birthday}`);
-                  if (m.gender) metaLines.push(`  - **性别**：${m.gender}${m.genderNote ? " " + m.genderNote : ""}`);
+                  if (!isThisMemberKp) {
+                    if (m.age) metaLines.push(`  - **年龄**：${m.age}`);
+                    if (m.birthday) metaLines.push(`  - **生日**：${m.birthday}`);
+                    if (m.gender) metaLines.push(`  - **性别**：${m.gender}${m.genderNote ? " " + m.genderNote : ""}`);
+                  }
                   const metaBlock = metaLines.length > 0 ? "\n" + metaLines.join("\n") : "";
                   const mDisplayName = m.groupNickname || m.originalName || m.name;
                   const mOrigName = m.originalName || m.name || m.groupNickname;
-                  return `---------- 【群AI角色 ${idx + 1}：${mDisplayName}（本名：${mOrigName}）开始】 ----------\n- **姓名**：${mDisplayName}（本名：${mOrigName}）${cocStatus}${metaBlock}\n- **角色人设**：${m.persona || "暂无人设"}${muteStatus}\n---------- 【群AI角色 ${idx + 1}：${mDisplayName} 结束】 ----------`;
+                  const personaTextForPrompt = isThisMemberKp
+                    ? "当前群聊的守秘人（KP/主持人），请使用该角色名字推进剧情、描述环境与主持检定（已隐藏其原有个人人设以防干扰思考）"
+                    : (m.persona || "暂无人设");
+                  return `---------- 【群AI角色 ${idx + 1}：${mDisplayName}（本名：${mOrigName}）${isThisMemberKp ? " · 守秘人(KP)" : ""}开始】 ----------\n- **姓名**：${mDisplayName}（本名：${mOrigName}）${isThisMemberKp ? "\n- **身份**：守秘人（KP）" : ""}${cocStatus}${metaBlock}\n- **角色人设**：${personaTextForPrompt}${muteStatus}\n---------- 【群AI角色 ${idx + 1}：${mDisplayName} 结束】 ----------`;
                 })
                 .join("\n\n");
 
@@ -41334,26 +41492,31 @@ ${fullMembersList}`);
 
               const myPlayerEntry = {
                 name: chat.settings.myName || myNickname,
-                coc: window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : "",
-                age: chat.settings.myAge ? `- 年龄：${chat.settings.myAge}\n` : "",
-                birth: chat.settings.myBirthday ? `- 生日：${chat.settings.myBirthday}\n` : "",
-                gen: chat.settings.myGender ? `- 性别：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : "",
-                persona: chat.settings.myPersona || "普通人",
+                isKp: isMyUserKeeper,
+                coc: (!isMyUserKeeper && window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel)) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : "",
+                age: (!isMyUserKeeper && chat.settings.myAge) ? `- 年龄：${chat.settings.myAge}\n` : "",
+                birth: (!isMyUserKeeper && chat.settings.myBirthday) ? `- 生日：${chat.settings.myBirthday}\n` : "",
+                gen: (!isMyUserKeeper && chat.settings.myGender) ? `- 性别：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : "",
+                persona: isMyUserKeeper ? "当前群聊的守秘人（KP/主持人），已隐藏个人人设以防干扰思考" : (chat.settings.myPersona || "普通人"),
               };
               const groupMyPersonaBlock = peerHumanMembers.length > 0
                 ? window.formatPromptSection("真人玩家人设", [
                     myPlayerEntry,
-                    ...peerHumanMembers.map((pm) => ({
-                      name: pm.groupNickname || pm.originalName || "密友",
-                      coc: window.getCocPromptStatus && window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)}\n` : "",
-                      age: pm.age ? `- 年龄：${pm.age}\n` : "",
-                      birth: pm.birthday ? `- 生日：${pm.birthday}\n` : "",
-                      gen: pm.gender ? `- 性别：${pm.gender}${pm.genderNote ? " " + pm.genderNote : ""}\n` : "",
-                      persona: pm.secretPersona || pm.persona || "普通人",
-                    })),
-                  ].map((hp, idx) => `---------- 【真人玩家 ${idx + 1}：${hp.name} 开始】 ----------\n- 姓名：${hp.name}\n${hp.coc}${hp.age}${hp.birth}${hp.gen}- 角色人设：\n${hp.persona}\n---------- 【真人玩家 ${idx + 1}：${hp.name} 结束】 ----------`).join("\n\n"))
+                    ...peerHumanMembers.map((pm) => {
+                      const isPeerKp = isGroupMemberKeeper(pm);
+                      return {
+                        name: pm.groupNickname || pm.originalName || "密友",
+                        isKp: isPeerKp,
+                        coc: (!isPeerKp && window.getCocPromptStatus && window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)}\n` : "",
+                        age: (!isPeerKp && pm.age) ? `- 年龄：${pm.age}\n` : "",
+                        birth: (!isPeerKp && pm.birthday) ? `- 生日：${pm.birthday}\n` : "",
+                        gen: (!isPeerKp && pm.gender) ? `- 性别：${pm.gender}${pm.genderNote ? " " + pm.genderNote : ""}\n` : "",
+                        persona: isPeerKp ? "当前群聊的守秘人（KP/主持人），已隐藏个人人设以防干扰思考" : (pm.secretPersona || pm.persona || "普通人"),
+                      };
+                    }),
+                  ].map((hp, idx) => `---------- 【真人玩家 ${idx + 1}：${hp.name}${hp.isKp ? " · 守秘人(KP)" : ""} 开始】 ----------\n- 姓名：${hp.name}${hp.isKp ? "\n- 身份：守秘人（KP）" : ""}\n${hp.coc}${hp.age}${hp.birth}${hp.gen}- 角色人设：\n${hp.persona}\n---------- 【真人玩家 ${idx + 1}：${hp.name} 结束】 ----------`).join("\n\n"))
                 : window.formatPromptSection("我的人设", `
-- 姓名：${myPlayerEntry.name}
+- 姓名：${myPlayerEntry.name}${myPlayerEntry.isKp ? "\n- 身份：守秘人（KP）" : ""}
 ${myPlayerEntry.coc}${myPlayerEntry.age}${myPlayerEntry.birth}${myPlayerEntry.gen}- 角色人设：
 ${myPlayerEntry.persona}`);
 
@@ -42696,7 +42859,11 @@ ${stickerContext || "无"}
               let item = messagesArray[i];
               if (!item) continue;
 
-              let text = String(item.content || item.message || "");
+              let text = String(item.content || item.message || item.text || item.reply || "");
+              if (text && item.content === undefined && item.message === undefined) {
+                item.content = text;
+                item.message = text;
+              }
 
               if (item.type === "thinking" || item.type === "thought") {
                 if (text.trim()) {
@@ -42732,7 +42899,7 @@ ${stickerContext || "无"}
               const isInventoryType = item.type === "give_item" || item.type === "gift_item" || item.type === "obtain_item" || item.type === "inventory_card" || item.type === "apply_item_effect" || item.type === "transfer_item" || Boolean(item.give_item);
               const isStatusType = item.type === "system_status" || item.type === "status_bar" || Boolean(item.fields) || Boolean(item.values);
 
-              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType && !isInventoryType && !isStatusType) {
+              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.prompt && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType && !isInventoryType && !isStatusType) {
                 continue;
               }
 
@@ -42759,7 +42926,14 @@ ${stickerContext || "无"}
               for (let i = 0; i < messagesArray.length; i++) {
                 const item = messagesArray[i];
                 if (!item) continue;
-                const isExplicitStatusSender = (item.name === statusSender || item.name === "系统状态" || item.type === "system_status" || item.type === "status_bar");
+                const isExplicitStatusSender = (
+                  item.type === "system_status" ||
+                  item.type === "status_bar" ||
+                  item.name === "系统状态" ||
+                  item.name === "系统状态栏" ||
+                  (chat.isGroup && statusMember && item.name === statusSender) ||
+                  (!chat.isGroup && chat.roleType === "system_status" && item.name === statusSender)
+                );
                 const txt = String(item.content || item.message || "").trim();
 
                 if (item.fields && typeof item.fields === "object") {
@@ -43001,11 +43175,21 @@ ${stickerContext || "无"}
                 continue;
               }
 
+              if (msgData.content === undefined && msgData.message === undefined) {
+                const fallbackTxt = msgData.text || msgData.reply || msgData.body || "";
+                if (fallbackTxt) {
+                  msgData.content = fallbackTxt;
+                  msgData.message = fallbackTxt;
+                }
+              }
+
               if (!msgData.type) {
-                if (chat.isGroup && msgData.name && msgData.message) {
+                if (chat.isGroup && msgData.name && (msgData.message || msgData.content)) {
                   msgData.type = "text";
-                } else if (msgData.content) {
+                } else if (msgData.content || msgData.message) {
                   msgData.type = "text";
+                } else if (msgData.prompt || msgData.imagePrompt || msgData.naiPrompt) {
+                  msgData.type = "naiimag";
                 }
                 // 如果连 content 都没有，才是真的格式不规范
                 else {
@@ -45230,357 +45414,151 @@ ${stickerContext || "无"}
                   }
                   continue;
 
-                // 群聊中发送naiimag的完整逻辑
-                case "naiimag":
-                  // NovelAI图片分享 - 调用NovelAI API生成高质量图片
-                  try {
-                    console.log(
-                      "📸 NovelAI图片生成开始，AI提供的prompt:",
-                      msgData.prompt,
-                    );
+                // 群聊中发送naiimag的完整逻辑：AI填写API返回后立即发送气泡，再异步调用NovelAI生图填充
+                case "naiimag": {
+                  const naiPrompts = getCharacterNAIPrompts(chat.id);
+                  const aiPrompt = msgData.prompt || msgData.content || msgData.image_prompt || msgData.imagePrompt || msgData.description || "a beautiful scene";
+                  const promptParts = [];
+                  if (naiPrompts.artist && !aiPrompt.includes(naiPrompts.artist)) {
+                    promptParts.push(naiPrompts.artist);
+                  }
+                  if (naiPrompts.positive && !aiPrompt.includes(naiPrompts.positive)) {
+                    promptParts.push(naiPrompts.positive);
+                  }
+                  if (aiPrompt) {
+                    promptParts.push(aiPrompt);
+                  }
+                  const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
+                  const finalNegativePrompt = naiPrompts.negative || "";
+                  const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+                  const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+                  const settings = getNovelAISettings();
+                  const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
 
-                    // 获取角色的NAI提示词配置（系统或角色专属）
-                    const naiPrompts = getCharacterNAIPrompts(chat.id);
+                  aiMessage = {
+                    ...baseMessage,
+                    type: "naiimag",
+                    prompt: aiPrompt,
+                    fullPrompt: finalPositivePrompt,
+                    negativePrompt: finalNegativePrompt,
+                    model: model,
+                    naiSettings: {
+                      resolution: settings.resolution || `${width || 1024}x${height || 1024}`,
+                      width: width || 1024,
+                      height: height || 1024,
+                      steps: settings.steps || 28,
+                      cfg_scale: settings.cfg_scale || 5,
+                      sampler: settings.sampler || "k_euler_ancestral",
+                      uc_preset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+                      quality_toggle: settings.quality_toggle !== false,
+                      smea: settings.smea,
+                      smea_dyn: settings.smea_dyn,
+                    },
+                  };
 
-                    // 构建最终的提示词：AI的prompt + 配置的提示词
-                    const aiPrompt = msgData.prompt || msgData.content || msgData.image_prompt || msgData.imagePrompt || msgData.description || "a beautiful scene";
-                    const finalPositivePrompt =
-                      aiPrompt + ", " + naiPrompts.positive;
-                    const finalNegativePrompt = naiPrompts.negative;
-
-                    console.log(
-                      `📝 使用${naiPrompts.source === "character" ? "角色专属" : "系统"}提示词配置`,
-                    );
-                    console.log("最终正面提示词:", finalPositivePrompt);
-                    console.log("最终负面提示词:", finalNegativePrompt);
-
-                    // 获取NAI设置（从localStorage读取）
-                    const apiKey = localStorage.getItem("novelai-api-key");
-                    const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-                    const model =
-                      domModel ||
-                      localStorage.getItem("novelai-model") ||
-                      "nai-diffusion-4-5-full";
-                    const settings = getNovelAISettings();
-                    if (!apiKey) {
-                      throw new Error(
-                        "NovelAI API Key未配置。请在NovelAI设置中填写API Key。",
-                      );
-                    }
-
-                    const [width, height] = settings.resolution
-                      .split("x")
-                      .map(Number);
-
-                    // ★★★ V4/V4.5 和 V3 使用不同的请求体格式 ★★★
-                    let requestBody;
-
-                    if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
-                      // V4/V4.5/V5 使用新格式
-                      requestBody = {
-                        input: finalPositivePrompt,
-                        model: model,
-                        action: "generate",
-                        parameters: {
-                          params_version: model.includes("nai-diffusion-5") ? 4 : 3,
-                          width: width,
-                          height: height,
-                          scale: settings.cfg_scale,
-                          sampler: settings.sampler,
-                          steps: settings.steps,
-                          seed:
-                            settings.seed === -1
-                              ? Math.floor(Math.random() * 9999999999)
-                              : settings.seed,
-                          n_samples: 1,
-                          ucPreset: settings.uc_preset,
-                          qualityToggle: settings.quality_toggle,
-                          autoSmea: false,
-                          dynamic_thresholding: false,
-                          controlnet_strength: 1,
-                          legacy: false,
-                          add_original_image: true,
-                          cfg_rescale: 0,
-                          noise_schedule: "karras", // V4使用karras
-                          legacy_v3_extend: false,
-                          skip_cfg_above_sigma: null,
-                          use_coords: false,
-                          legacy_uc: false,
-                          normalize_reference_strength_multiple: true,
-                          inpaintImg2ImgStrength: 1,
-                          characterPrompts: [],
-                          // V4专用提示词格式
-                          v4_prompt: {
-                            caption: {
-                              base_caption: finalPositivePrompt,
-                              char_captions: [],
-                            },
+                  const targetNaiMsg = aiMessage;
+                  (async () => {
+                    try {
+                      const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
+                      const apiKey = domKey || localStorage.getItem("novelai-api-key");
+                      if (!apiKey) {
+                        throw new Error("NovelAI API Key未配置。请在NovelAI设置中填写API Key。");
+                      }
+                      let requestBody;
+                      if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+                        requestBody = {
+                          input: finalPositivePrompt,
+                          model: model,
+                          action: "generate",
+                          parameters: {
+                            params_version: model.includes("nai-diffusion-5") ? 4 : 3,
+                            width: width || 1024,
+                            height: height || 1024,
+                            scale: settings.cfg_scale,
+                            sampler: settings.sampler,
+                            steps: settings.steps,
+                            seed: settings.seed === -1 ? Math.floor(Math.random() * 4294967295) : settings.seed,
+                            n_samples: 1,
+                            ucPreset: settings.uc_preset,
+                            qualityToggle: settings.quality_toggle,
+                            autoSmea: false,
+                            dynamic_thresholding: false,
+                            controlnet_strength: 1,
+                            legacy: false,
+                            add_original_image: true,
+                            cfg_rescale: 0,
+                            noise_schedule: "karras",
+                            legacy_v3_extend: false,
+                            skip_cfg_above_sigma: null,
                             use_coords: false,
-                            use_order: true,
-                          },
-                          // V4专用负面提示词格式
-                          v4_negative_prompt: {
-                            caption: {
-                              base_caption: finalNegativePrompt,
-                              char_captions: [],
-                            },
                             legacy_uc: false,
+                            normalize_reference_strength_multiple: true,
+                            inpaintImg2ImgStrength: 1,
+                            characterPrompts: [],
+                            v4_prompt: {
+                              caption: { base_caption: finalPositivePrompt, char_captions: [] },
+                              use_coords: false,
+                              use_order: true,
+                            },
+                            v4_negative_prompt: {
+                              caption: { base_caption: finalNegativePrompt, char_captions: [] },
+                              legacy_uc: false,
+                            },
+                            negative_prompt: finalNegativePrompt,
+                            deliberate_euler_ancestral_bug: false,
+                            prefer_brownian: true,
                           },
-                          negative_prompt: finalNegativePrompt,
-                          deliberate_euler_ancestral_bug: false,
-                          prefer_brownian: true,
-                          // 注意：不包含 stream 参数，使用标准ZIP响应而非msgpack流
-                        },
-                      };
-                    } else {
-                      // V3 及更早版本使用旧格式
-                      requestBody = {
-                        input: finalPositivePrompt,
-                        model: model,
-                        action: "generate",
-                        parameters: {
-                          width: width,
-                          height: height,
-                          scale: settings.cfg_scale,
-                          sampler: settings.sampler,
-                          steps: settings.steps,
-                          seed:
-                            settings.seed === -1
-                              ? Math.floor(Math.random() * 9999999999)
-                              : settings.seed,
-                          n_samples: 1,
-                          ucPreset: settings.uc_preset,
-                          qualityToggle: settings.quality_toggle,
-                          sm: settings.smea,
-                          sm_dyn: settings.smea_dyn,
-                          dynamic_thresholding: false,
-                          controlnet_strength: 1,
-                          legacy: false,
-                          add_original_image: false,
-                          cfg_rescale: 0,
-                          noise_schedule: "native",
-                          negative_prompt: finalNegativePrompt,
-                        },
-                      };
-                    }
-
-                    console.log("🚀 发送NAI请求:", requestBody);
-
-                    // ★★★ 根据模型选择不同的API端点 ★★★
-                    let apiUrl;
-
-                    // V4/V4.5/V5 模型使用流式端点
-                    if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
-                      apiUrl =
-                        "https://image.novelai.net/ai/generate-image-stream";
-                    } else {
-                      // V3 及更早版本使用标准端点
-                      apiUrl = "https://image.novelai.net/ai/generate-image";
-                    }
-
-                    let corsProxy = settings.cors_proxy;
-
-                    // 如果选择了自定义代理，使用自定义URL
-                    if (corsProxy === "custom") {
-                      corsProxy = settings.custom_proxy_url || "";
-                    }
-
-                    // 如果有代理，添加到URL前面
-                    if (corsProxy && corsProxy !== "") {
-                      apiUrl = corsProxy + encodeURIComponent(apiUrl);
-                    }
-
-                    const response = await fetch(apiUrl, {
-                      method: "POST",
-                      headers: {
+                        };
+                      } else {
+                        requestBody = {
+                          input: finalPositivePrompt,
+                          model: model,
+                          action: "generate",
+                          parameters: {
+                            width: width || 1024,
+                            height: height || 1024,
+                            scale: settings.cfg_scale,
+                            sampler: settings.sampler,
+                            steps: settings.steps,
+                            seed: settings.seed === -1 ? Math.floor(Math.random() * 4294967295) : settings.seed,
+                            n_samples: 1,
+                            ucPreset: settings.uc_preset,
+                            qualityToggle: settings.quality_toggle,
+                            sm: settings.smea,
+                            sm_dyn: settings.smea_dyn,
+                            dynamic_thresholding: false,
+                            controlnet_strength: 1,
+                            legacy: false,
+                            add_original_image: false,
+                            cfg_rescale: 0,
+                            noise_schedule: "native",
+                            negative_prompt: finalNegativePrompt,
+                          },
+                        };
+                      }
+                      const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+                        ? "https://image.novelai.net/ai/generate-image-stream"
+                        : "https://image.novelai.net/ai/generate-image";
+                      const corsProxy = settings.cors_proxy === "custom" ? (settings.custom_proxy_url || "") : settings.cors_proxy;
+                      const response = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, {
                         "Content-Type": "application/json",
                         Authorization: "Bearer " + apiKey,
-                      },
-                      body: JSON.stringify(requestBody),
-                    });
-
-                    console.log("Response status:", response.status);
-                    console.log("Response headers:", [
-                      ...response.headers.entries(),
-                    ]);
-
-                    if (!response.ok) {
-                      const errorText = await response.text();
-                      console.error("API错误响应:", errorText);
-                      throw new Error(
-                        `API请求失败 (${response.status}): ${errorText}`,
-                      );
+                      }, requestBody);
+                      const imageDataUrl = await parseNovelAiResponseToDataUrl(response);
+                      targetNaiMsg.imageUrl = imageDataUrl;
+                      await db.chats.put(chat);
+                      if (typeof updateNaiBubbleInDom === "function") {
+                        updateNaiBubbleInDom(chat, targetNaiMsg);
+                      }
+                      if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                        window.PeerManager.broadcastGroupMessage(chat, { ...targetNaiMsg, eventId: undefined, isMessageUpdate: true }, false);
+                      }
+                    } catch (error) {
+                      console.warn("NAI图片生成失败:", error);
                     }
-
-                    // NovelAI API返回的是ZIP文件，需要解压
-                    const contentType = response.headers.get("content-type");
-                    console.log("Content-Type:", contentType);
-
-                    // 检查是否为 SSE 流式响应
-                    let zipBlob;
-                    let imageDataUrl;
-                    if (
-                      contentType &&
-                      contentType.includes("text/event-stream")
-                    ) {
-                      console.log("检测到 SSE 流式响应，开始解析...");
-
-                      // 读取整个流
-                      const text = await response.text();
-                      console.log("收到 SSE 数据，大小:", text.length);
-
-                      // 解析 SSE 格式，提取最后的 data: 行
-                      const lines = text.trim().split("\n");
-                      let base64Data = null;
-
-                      for (let i = lines.length - 1; i >= 0; i--) {
-                        const line = lines[i].trim();
-                        if (
-                          line.startsWith("data: ") &&
-                          line !== "data: [DONE]"
-                        ) {
-                          const dataContent = line.substring(6); // 移除 'data: ' 前缀
-
-                          // 尝试解析 JSON
-                          try {
-                            const jsonData = JSON.parse(dataContent);
-
-                            // V4/V4.5/V5 流式端点：必须严格要求 event_type 为 "final" 的完整成品图像，严禁提取未去噪的预览噪点图
-                            if (
-                              jsonData.event_type === "final" &&
-                              (jsonData.image || jsonData.data)
-                            ) {
-                              base64Data = jsonData.image || jsonData.data;
-                              console.log("✅ 找到 final 事件的最终成品图片数据");
-                              break;
-                            }
-                          } catch (e) {}
-                        }
-                      }
-
-                      if (!base64Data) {
-                        throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
-                      }
-
-                      // V4.5 流式端点返回的是 PNG base64，不是 ZIP
-                      // 检查是否为 PNG (以 iVBORw0KGgo 开头) 或 JPEG (以 /9j/ 开头)
-                      const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                      const isJPEG = base64Data.startsWith("/9j/");
-
-                      if (isPNG || isJPEG) {
-                        console.log(
-                          "✅ 检测到直接的图片 base64 数据 (PNG/JPEG)",
-                        );
-                        // 将 base64 转为 Blob
-                        const binaryString = atob(base64Data);
-                        const bytes = new Uint8Array(binaryString.length);
-                        for (let i = 0; i < binaryString.length; i++) {
-                          bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        const imageBlob = new Blob([bytes], {
-                          type: isPNG ? "image/png" : "image/jpeg",
-                        });
-                        console.log(
-                          "图片 Blob 创建成功，大小:",
-                          imageBlob.size,
-                        );
-
-                        // 转换为dataURL用于后续处理
-                        const reader = new FileReader();
-                        imageDataUrl = await new Promise((resolve, reject) => {
-                          reader.onloadend = () => resolve(reader.result);
-                          reader.onerror = reject;
-                          reader.readAsDataURL(imageBlob);
-                        });
-                        console.log("✅ 图片转换成功！🎨");
-                      } else {
-                        // 否则当作 ZIP 处理
-                        console.log("当作 ZIP 文件处理...");
-                        const binaryString = atob(base64Data);
-                        const bytes = new Uint8Array(binaryString.length);
-                        for (let i = 0; i < binaryString.length; i++) {
-                          bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        zipBlob = new Blob([bytes]);
-                        console.log("ZIP Blob 大小:", zipBlob.size);
-                      }
-                    } else {
-                      // 非流式响应，直接读取
-                      zipBlob = await response.blob();
-                      console.log(
-                        "收到数据，类型:",
-                        zipBlob.type,
-                        "大小:",
-                        zipBlob.size,
-                      );
-                    }
-
-                    // 如果还没有imageDataUrl（即需要解压ZIP）
-                    if (!imageDataUrl && zipBlob) {
-                      // NovelAI始终返回ZIP格式，需要解压
-                      try {
-                        // 检查JSZip是否已加载
-                        if (typeof JSZip === "undefined") {
-                          throw new Error("JSZip库未加载，请刷新页面重试");
-                        }
-
-                        // 解压ZIP文件
-                        const zip = await JSZip.loadAsync(zipBlob);
-                        console.log("ZIP文件内容:", Object.keys(zip.files));
-
-                        // 查找第一个图片文件（通常是image_0.png）
-                        let imageFile = null;
-                        for (let filename in zip.files) {
-                          if (filename.match(/\.(png|jpg|jpeg|webp)$/i)) {
-                            imageFile = zip.files[filename];
-                            console.log("找到图片文件:", filename);
-                            break;
-                          }
-                        }
-
-                        if (!imageFile) {
-                          throw new Error("ZIP文件中未找到图片");
-                        }
-
-                        // 提取图片数据
-                        const imageBlob = await imageFile.async("blob");
-                        console.log("提取的图片大小:", imageBlob.size);
-
-                        // 创建图片URL
-                        const reader = new FileReader();
-                        imageDataUrl = await new Promise((resolve, reject) => {
-                          reader.onloadend = () => resolve(reader.result);
-                          reader.onerror = reject;
-                          reader.readAsDataURL(imageBlob);
-                        });
-                        console.log("✅ 图片解压成功！");
-                      } catch (zipError) {
-                        console.error("ZIP解压失败:", zipError);
-                        throw new Error("图片解压失败: " + zipError.message);
-                      }
-                    }
-
-                    console.log("✅ NAI图片生成成功！");
-
-                    // 创建naiimag消息
-                    aiMessage = {
-                      ...baseMessage,
-                      type: "naiimag",
-                      imageUrl: imageDataUrl,
-                      prompt: aiPrompt,
-                      fullPrompt: finalPositivePrompt, // 保存完整提示词供查看
-                    };
-                  } catch (error) {
-                    console.warn("❌ NAI图片生成失败:", error);
-                    aiMessage = {
-                      ...baseMessage,
-                      type: "naiimag",
-                      prompt: aiPrompt,
-                      fullPrompt: finalPositivePrompt,
-                      content: `[图片生成失败: ${error.message}]`,
-                    };
-                  }
+                  })();
                   break;
+                }
 
                 case "qzone_like":
                   const postToLike = await db.qzonePosts.get(
@@ -46794,9 +46772,19 @@ ${stickerContext || "无"}
                   break;
                 }
 
-                default:
-                  console.warn("收到了未知的AI指令类型:", msgData.type);
+                default: {
+                  const defaultText = String(msgData.content || msgData.message || msgData.text || msgData.reply || "").trim();
+                  if (defaultText) {
+                    aiMessage = {
+                      ...baseMessage,
+                      type: "text",
+                      content: defaultText,
+                    };
+                  } else {
+                    console.warn("收到了未知的AI指令类型:", msgData.type);
+                  }
                   break;
+                }
               }
 
               // 将渲染逻辑移出循环
@@ -46906,9 +46894,13 @@ ${stickerContext || "无"}
                 if (isCurrentlyViewingThisChat && isVisibleToMeLocal) {
                   appendMessage(aiMessage, chat);
                   playNotificationSound();
-                  await new Promise((resolve) =>
-                    setTimeout(resolve, Math.random() * 600 + 300),
-                  );
+                  if (typeof window.waitDelay === "function") {
+                    await window.waitDelay(Math.random() * 600 + 300);
+                  } else {
+                    await new Promise((resolve) =>
+                      setTimeout(resolve, Math.random() * 600 + 300),
+                    );
+                  }
                 }
               }
             }
@@ -51462,23 +51454,25 @@ ${stickerContext || "无"}
             ? window.PeerManager.getMyProfile()
             : { name: "我", avatar: defaultMyGroupAvatar, myAvatarFrame: "" };
 
+          const isPeerGroupCreate = Boolean(window.__isCreatingPeerGroup || hasPeerMember);
           const newGroupChat = {
             id: newChatId,
             name: groupName.trim(),
             isGroup: true,
-            isPeerGroup: hasPeerMember,
+            isPeerGroup: isPeerGroupCreate,
+            peerGroupId: isPeerGroupCreate ? ("pg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8)) : undefined,
             // 设置群主为当前用户
             ownerId: "user",
             members: members,
             settings: {
               myPersona: "我是谁呀。",
-              myNickname: hasPeerMember ? (myHomeProfile.name || "我") : "我",
-              myName: hasPeerMember ? (myHomeProfile.name || "我") : "我",
+              myNickname: isPeerGroupCreate ? (myHomeProfile.name || "我") : "我",
+              myName: isPeerGroupCreate ? (myHomeProfile.name || "我") : "我",
               myCocPanel: typeof getDefaultCocData === "function" ? getDefaultCocData() : null,
               maxMemory: 10,
               groupAvatar: defaultGroupAvatar,
-              myAvatar: hasPeerMember ? (myHomeProfile.avatar || defaultMyGroupAvatar) : defaultMyGroupAvatar,
-              myAvatarFrame: hasPeerMember ? (myHomeProfile.myAvatarFrame || "") : "", // 别忘了自己的头像框
+              myAvatar: isPeerGroupCreate ? (myHomeProfile.avatar || defaultMyGroupAvatar) : defaultMyGroupAvatar,
+              myAvatarFrame: isPeerGroupCreate ? (myHomeProfile.myAvatarFrame || "") : "", // 别忘了自己的头像框
               background: "",
               theme: "default",
               fontSize: 13,
@@ -64621,27 +64615,54 @@ ${stickerContext || "无"}
         let tempKeeperCharPrompts = {};
         let editingKeeperCharId = null;
 
-        function getKeeperPresets() {
+        function getKeeperPresets(chatObj = null) {
+          let localList = [];
           try {
             const raw = localStorage.getItem("chat_keeper_prompt_presets");
             if (raw) {
-              const list = JSON.parse(raw);
-              if (Array.isArray(list) && list.length > 0) return list;
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) localList = parsed;
             }
           } catch (e) {}
-          return [
-            {
-              id: "preset_default",
-              name: "默认生图指令",
-              prompt: DEFAULT_KEEPER_PROMPT,
-            },
-          ];
+          if (localList.length === 0) {
+            localList = [
+              {
+                id: "preset_default",
+                name: "默认生图指令",
+                prompt: DEFAULT_KEEPER_PROMPT,
+              },
+            ];
+          }
+          const activeChat = chatObj || (state && state.activeChatId ? state.chats[state.activeChatId] : null);
+          const sharedList = Array.isArray(activeChat?.settings?.sharedKeeperPresets) ? activeChat.settings.sharedKeeperPresets : [];
+          if (sharedList.length === 0) return localList;
+          const merged = [...localList];
+          sharedList.forEach((sp) => {
+            if (!sp || !sp.id) return;
+            const idx = merged.findIndex((lp) => lp.id === sp.id);
+            if (idx === -1) {
+              merged.push(sp);
+            } else {
+              merged[idx] = sp;
+            }
+          });
+          return merged;
         }
 
         function saveKeeperPresets(presets) {
           try {
             localStorage.setItem("chat_keeper_prompt_presets", JSON.stringify(presets));
           } catch (e) {}
+          const activeChat = state && state.activeChatId ? state.chats[state.activeChatId] : null;
+          if (activeChat && activeChat.settings) {
+            activeChat.settings.sharedKeeperPresets = presets;
+            if (typeof db !== "undefined" && db.chats) {
+              db.chats.put(activeChat).catch(() => {});
+            }
+            if (activeChat.isGroup && activeChat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+              window.PeerManager.syncGroupSettingsToPeers(activeChat);
+            }
+          }
         }
 
         function getDefaultKeeperPresetId() {
@@ -64659,12 +64680,15 @@ ${stickerContext || "无"}
           } catch (e) {}
         }
 
+        window.getKeeperPresets = getKeeperPresets;
+
         function renderKeeperPresetsUI() {
           const select = document.getElementById("keeper-prompt-preset-select");
           if (!select) return;
-          const presets = getKeeperPresets();
+          const activeChat = state && state.activeChatId ? state.chats[state.activeChatId] : null;
+          const presets = getKeeperPresets(activeChat);
           const defaultId = getDefaultKeeperPresetId();
-          const currentVal = select.value || defaultId;
+          const currentVal = (activeChat && activeChat.settings && activeChat.settings.keeperActivePresetId) || select.value || defaultId;
           let optionsHtml = '<option value="">选择预设</option>';
           optionsHtml += presets
             .map((p) => {
@@ -64698,12 +64722,19 @@ ${stickerContext || "无"}
             countInput.value = savedCount;
           }
 
+          renderKeeperPresetsUI();
+
           const promptInput = document.getElementById("keeper-prompt-input");
           if (promptInput) {
-            promptInput.value = chat.settings.keeperPrompt || DEFAULT_KEEPER_PROMPT;
+            if (chat.settings.keeperPrompt) {
+              promptInput.value = chat.settings.keeperPrompt;
+            } else {
+              const presets = getKeeperPresets(chat);
+              const defId = chat.settings.keeperActivePresetId || getDefaultKeeperPresetId();
+              const foundPreset = presets.find((p) => p.id === defId);
+              promptInput.value = (foundPreset && foundPreset.prompt) ? foundPreset.prompt : DEFAULT_KEEPER_PROMPT;
+            }
           }
-
-          renderKeeperPresetsUI();
 
           const listContainer = document.getElementById("keeper-members-list");
           if (listContainer) {
@@ -64737,16 +64768,21 @@ ${stickerContext || "无"}
                 if (isDice || isStatus || memberName === "骰子" || memberName === "系统状态栏" || memberName.includes("系统状态") || memberName.includes("骰子")) {
                   return;
                 }
-                const memberId = m.id || m.name || memberName;
+                const memberId = m.peerCode || m.id || m.name || memberName;
                 members.push({
                   id: memberId,
+                  rawId: m.id,
                   name: memberName,
                   avatar: m.avatar || (sourceChat && sourceChat.settings?.aiAvatar) || defaultAvatar,
                 });
               });
+              const myPeerCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+                ? window.PeerManager.getOrCreateMyPeerCode()
+                : "";
               const myGroupName = chat.settings?.myNickname || chat.settings?.myName || "我";
               members.push({
-                id: "me",
+                id: myPeerCode || "me",
+                rawId: "me",
                 name: myGroupName,
                 avatar: chat.settings?.myAvatar || defaultMyGroupAvatar,
               });
@@ -64755,11 +64791,13 @@ ${stickerContext || "无"}
               const mySingleName = chat.settings?.myName || chat.settings?.myNickname || "我";
               members.push({
                 id: chat.id || "ai",
+                rawId: chat.id || "ai",
                 name: aiChatName,
                 avatar: chat.avatar || defaultAvatar,
               });
               members.push({
                 id: "me",
+                rawId: "me",
                 name: mySingleName,
                 avatar: chat.settings?.myAvatar || defaultAvatar,
               });
@@ -64768,7 +64806,7 @@ ${stickerContext || "无"}
             const currentTargetId = chat.settings.keeperTargetId || (chat.isGroup ? "none" : (chat.id || "ai"));
 
             members.forEach((mem) => {
-              const isChecked = currentTargetId === mem.id;
+              const isChecked = currentTargetId === mem.id || currentTargetId === mem.rawId;
               const safeName = String(mem.name || "角色").replace(/^undefined$/i, "角色");
               const item = document.createElement("div");
               item.className = "keeper-member-item";
@@ -64792,7 +64830,7 @@ ${stickerContext || "无"}
               if (promptBtn) {
                 promptBtn.addEventListener("click", (e) => {
                   e.stopPropagation();
-                  openKeeperCharPromptModal(mem.id, safeName);
+                  openKeeperCharPromptModal(mem.id, safeName, mem.rawId);
                 });
               }
 
@@ -64803,7 +64841,7 @@ ${stickerContext || "无"}
           document.getElementById("keeper-modal").classList.add("visible");
         }
 
-        function openKeeperCharPromptModal(charId, charName) {
+        function openKeeperCharPromptModal(charId, charName, fallbackId = "") {
           editingKeeperCharId = charId;
           const title = document.getElementById("keeper-char-prompt-title");
           if (title) title.textContent = `${charName} 的提示词`;
@@ -64811,9 +64849,16 @@ ${stickerContext || "无"}
           const input = document.getElementById("keeper-char-prompt-input");
           if (input) {
             let existingPrompt = tempKeeperCharPrompts[charId];
+            if (typeof existingPrompt === "undefined" && fallbackId) {
+              existingPrompt = tempKeeperCharPrompts[fallbackId];
+            }
+            if (typeof existingPrompt === "undefined" && charName) {
+              existingPrompt = tempKeeperCharPrompts[charName];
+            }
             if (typeof existingPrompt === "undefined") {
               const chat = state.chats[state.activeChatId];
-              existingPrompt = (chat && chat.settings && chat.settings.keeperCharPrompts && chat.settings.keeperCharPrompts[charId]) || "";
+              const cp = (chat && chat.settings && chat.settings.keeperCharPrompts) || {};
+              existingPrompt = cp[charId] || (fallbackId && cp[fallbackId]) || (charName && cp[charName]) || "";
             }
             input.value = existingPrompt;
           }
@@ -64837,6 +64882,11 @@ ${stickerContext || "无"}
             chat.settings.keeperMaxMemory = (!isNaN(parsedVal) && parsedVal >= 0) ? parsedVal : (chat.settings.maxMemory || 12);
           }
 
+          const presetSelect = document.getElementById("keeper-prompt-preset-select");
+          if (presetSelect && presetSelect.value) {
+            chat.settings.keeperActivePresetId = presetSelect.value;
+          }
+
           const promptInput = document.getElementById("keeper-prompt-input");
           chat.settings.keeperPrompt = promptInput ? promptInput.value.trim() : DEFAULT_KEEPER_PROMPT;
 
@@ -64844,13 +64894,143 @@ ${stickerContext || "无"}
           chat.settings.keeperTargetId = selectedRadio ? selectedRadio.value : "none";
 
           chat.settings.keeperCharPrompts = JSON.parse(JSON.stringify(tempKeeperCharPrompts));
+          chat.settings.sharedKeeperPresets = getKeeperPresets(chat);
 
           await db.chats.put(chat);
+          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
           document.getElementById("keeper-modal").classList.remove("visible");
 
           if (typeof showCustomAlert === "function") await showCustomAlert("成功", "守密人配置已保存！");
           else alert("守密人配置已保存！");
         }
+
+        async function fetchNovelAiWithFallback(targetApiUrl, corsProxyUrl, headers, requestBody) {
+          let lastErr = null;
+          if (corsProxyUrl) {
+            try {
+              const proxiedUrl = corsProxyUrl + encodeURIComponent(targetApiUrl);
+              const res = await fetch(proxiedUrl, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(requestBody),
+              });
+              if (res.ok) return res;
+              const errTxt = await res.text().catch(() => "");
+              lastErr = new Error(`NovelAI 代理请求返回 ${res.status}: ${errTxt.slice(0, 160)}`);
+            } catch (proxyFetchErr) {
+              lastErr = proxyFetchErr;
+            }
+          }
+          try {
+            const serverProxyRes = await fetch("/api/proxy", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                url: targetApiUrl,
+                method: "POST",
+                headers,
+                body: requestBody,
+              }),
+            });
+            if (serverProxyRes.ok) return serverProxyRes;
+            const srvErrTxt = await serverProxyRes.text().catch(() => "");
+            lastErr = new Error(`NovelAI 请求失败 (${serverProxyRes.status}): ${srvErrTxt.slice(0, 160)}`);
+          } catch (srvErr) {
+            lastErr = srvErr;
+          }
+          try {
+            const directRes = await fetch(targetApiUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify(requestBody),
+            });
+            if (directRes.ok) return directRes;
+            const dirErrTxt = await directRes.text().catch(() => "");
+            throw new Error(`NovelAI 请求失败 (${directRes.status}): ${dirErrTxt.slice(0, 160)}`);
+          } catch (dirErr) {
+            throw lastErr || dirErr;
+          }
+        }
+
+        async function parseNovelAiResponseToDataUrl(res) {
+          const contentType = (res.headers.get("content-type") || "").toLowerCase();
+          if (contentType.includes("text/event-stream") || contentType.includes("text/plain")) {
+            const text = await res.text();
+            const lines = text.trim().split("\n");
+            for (let i = lines.length - 1; i >= 0; i--) {
+              const line = lines[i].trim();
+              if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                const dataContent = line.substring(6);
+                try {
+                  const jsonData = JSON.parse(dataContent);
+                  if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
+                    const base64Data = jsonData.image || jsonData.data;
+                    const isPNG = base64Data.startsWith("iVBORw0KGgo");
+                    return (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                  }
+                } catch (e) {}
+              }
+            }
+            for (let i = lines.length - 1; i >= 0; i--) {
+              const line = lines[i].trim();
+              if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                const dataContent = line.substring(6);
+                try {
+                  const jsonData = JSON.parse(dataContent);
+                  const base64Data = jsonData.image || jsonData.data;
+                  if (base64Data && base64Data.length > 1000) {
+                    const isPNG = base64Data.startsWith("iVBORw0KGgo");
+                    return (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                  }
+                } catch (e) {}
+              }
+            }
+            throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
+          } else {
+            const arrayBuffer = await res.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            if (bytes.length > 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+              const blob = new Blob([bytes], { type: "image/png" });
+              return await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+              });
+            }
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const imageFileName = Object.keys(zip.files).find((fn) => /\.(png|jpg|jpeg|webp)$/i.test(fn));
+            if (!imageFileName) throw new Error("ZIP内未找到图片文件");
+            const imageBlob = await zip.files[imageFileName].async("blob");
+            return await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.readAsDataURL(imageBlob);
+            });
+          }
+        }
+
+        function updateNaiBubbleInDom(chat, msg) {
+          if (!msg || !chat || String(state.activeChatId) !== String(chat.id)) return;
+          const msgContainer = document.getElementById("chat-messages");
+          if (!msgContainer) return;
+          const bubble = msgContainer.querySelector(`.message-bubble[data-timestamp="${msg.timestamp}"]`);
+          if (!bubble) return;
+          const contentEl = bubble.querySelector(".content");
+          if (!contentEl) return;
+
+          bubble.classList.add("is-realimag", "is-card-like");
+          const safeTitle = String(msg.fullPrompt || msg.prompt || "NovelAI生成").replace(/"/g, "&quot;");
+          const imgEl = contentEl.querySelector("img.realimag-image");
+          if (imgEl && msg.imageUrl) {
+            imgEl.src = msg.imageUrl;
+            imgEl.title = msg.fullPrompt || msg.prompt || "NovelAI生成";
+          } else {
+            contentEl.innerHTML = `<img src="${msg.imageUrl}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}">`;
+          }
+        }
+        window.updateNaiBubbleInDom = updateNaiBubbleInDom;
 
         async function handleNaiRerollForMessage(message, customPrompt, customFullPrompt) {
           if (!message || !state.activeChatId) return;
@@ -64859,8 +65039,10 @@ ${stickerContext || "无"}
 
           const baseSettings = getNovelAISettings();
           const settings = { ...baseSettings, ...(message.naiSettings || {}) };
-          const model = message.model || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
-          const apiKey = localStorage.getItem("novelai-api-key");
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const model = domModel || localStorage.getItem("novelai-model") || message.model || "nai-diffusion-4-5-full";
+          const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
+          const apiKey = domKey || localStorage.getItem("novelai-api-key");
           if (!apiKey) {
             alert("请先配置 NovelAI API Key！");
             return;
@@ -64949,11 +65131,10 @@ ${stickerContext || "无"}
               };
             }
 
-            let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+            const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
               ? "https://image.novelai.net/ai/generate-image-stream"
               : "https://image.novelai.net/ai/generate-image";
-            let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
-            if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
+            const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
             const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
             let headers = {
@@ -64966,54 +65147,15 @@ ${stickerContext || "无"}
               headers = cleanHeaders;
             }
 
-            const res = await fetch(apiUrl, {
-              method: "POST",
-              headers,
-              body: JSON.stringify(requestBody),
-            });
-            if (!res.ok) throw new Error(`NAI API Error: ${res.status}`);
-
-            const contentType = res.headers.get("content-type");
-            let imageDataUrl = null;
-
-            if (contentType && contentType.includes("text/event-stream")) {
-              const text = await res.text();
-              const lines = text.trim().split("\n");
-              for (let i = lines.length - 1; i >= 0; i--) {
-                const line = lines[i].trim();
-                if (line.startsWith("data: ") && line !== "data: [DONE]") {
-                  const dataContent = line.substring(6);
-                  try {
-                    const jsonData = JSON.parse(dataContent);
-                    if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
-                      const base64Data = jsonData.image || jsonData.data;
-                      const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                      imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
-                      break;
-                    }
-                  } catch (e) {}
-                }
-              }
-              if (!imageDataUrl) throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
-            } else {
-              const arrayBuffer = await res.arrayBuffer();
-              const zip = await JSZip.loadAsync(arrayBuffer);
-              const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg"));
-              if (imageFileName) {
-                const imageBlob = await zip.files[imageFileName].async("blob");
-                imageDataUrl = await new Promise((resolve) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result);
-                  reader.readAsDataURL(imageBlob);
-                });
-              }
-            }
+            const res = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, headers, requestBody);
+            const imageDataUrl = await parseNovelAiResponseToDataUrl(res);
 
             if (!imageDataUrl) throw new Error("无法解析生成得到的图片数据");
 
             message.imageUrl = imageDataUrl;
             message.prompt = customPrompt || message.prompt;
             message.fullPrompt = finalPositivePrompt;
+            delete message.content;
             await db.chats.put(chat);
             renderChatInterface(state.activeChatId);
             await showCustomAlert("成功", "图片已重新渲染！");
@@ -65247,17 +65389,21 @@ ${stickerContext || "无"}
             }
           }
 
-          const apiKey = localStorage.getItem("novelai-api-key");
+          const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
+          const apiKey = domKey || localStorage.getItem("novelai-api-key");
           if (!apiKey) {
             alert("请先在设置中配置 NovelAI API Key！");
             return;
           }
 
-          const model = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
           const settings = getNovelAISettings();
-          const artist = (settings.artist_prompt || "").trim();
+          const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
+          const artist = (domArtist || settings.artist_prompt || "").trim();
           const fullPositivePrompt = [promptText, defaultPromptText, artist].filter(Boolean).join(", ");
-          const fullNegativePrompt = settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry";
+          const domNeg = document.getElementById("nai-default-negative") ? document.getElementById("nai-default-negative").value.trim() : "";
+          const fullNegativePrompt = domNeg || settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry";
 
           const execBtn = document.getElementById("avatar-gen-execute-btn");
           const originalText = execBtn ? execBtn.textContent : "生图";
@@ -65320,11 +65466,10 @@ ${stickerContext || "无"}
               };
             }
 
-            let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+            const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
               ? "https://image.novelai.net/ai/generate-image-stream"
               : "https://image.novelai.net/ai/generate-image";
-            let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
-            if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
+            const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
             const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
             let headers = {
@@ -65337,48 +65482,8 @@ ${stickerContext || "无"}
               headers = cleanHeaders;
             }
 
-            const res = await fetch(apiUrl, {
-              method: "POST",
-              headers,
-              body: JSON.stringify(requestBody),
-            });
-            if (!res.ok) throw new Error(`NAI API Error: ${res.status}`);
-
-            const contentType = res.headers.get("content-type");
-            let imageDataUrl = null;
-
-            if (contentType && contentType.includes("text/event-stream")) {
-              const text = await res.text();
-              const lines = text.trim().split("\n");
-              for (let i = lines.length - 1; i >= 0; i--) {
-                const line = lines[i].trim();
-                if (line.startsWith("data: ") && line !== "data: [DONE]") {
-                  const dataContent = line.substring(6);
-                  try {
-                    const jsonData = JSON.parse(dataContent);
-                    if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
-                      const base64Data = jsonData.image || jsonData.data;
-                      const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                      imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
-                      break;
-                    }
-                  } catch (e) {}
-                }
-              }
-              if (!imageDataUrl) throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
-            } else {
-              const arrayBuffer = await res.arrayBuffer();
-              const zip = await JSZip.loadAsync(arrayBuffer);
-              const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg"));
-              if (imageFileName) {
-                const imageBlob = await zip.files[imageFileName].async("blob");
-                imageDataUrl = await new Promise((resolve) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result);
-                  reader.readAsDataURL(imageBlob);
-                });
-              }
-            }
+            const res = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, headers, requestBody);
+            const imageDataUrl = await parseNovelAiResponseToDataUrl(res);
 
             if (!imageDataUrl) throw new Error("无法解析生成得到的图片数据");
 
@@ -65530,7 +65635,7 @@ ${stickerContext || "无"}
             if (typingInd) {
               const messagesContainer = document.getElementById("chat-messages");
               const wasAtBottom = isChatScrolledNearBottom(messagesContainer);
-              typingInd.textContent = "群成员正在回复中...";
+              typingInd.textContent = "正在生成画面中...";
               typingInd.style.display = "block";
               if (messagesContainer) {
                 messagesContainer.appendChild(typingInd);
@@ -65541,6 +65646,9 @@ ${stickerContext || "无"}
             }
           }
 
+          const forcedDrawStart = Date.now();
+          let activeUsedCfg = null;
+
           try {
             console.log("执行守秘人末尾强制生图...");
             const maxMem = (chat.settings.keeperMaxMemory !== undefined && chat.settings.keeperMaxMemory !== null && !isNaN(parseInt(chat.settings.keeperMaxMemory)))
@@ -65549,7 +65657,7 @@ ${stickerContext || "无"}
             let combinedHistory = [...(chat.history || [])];
             if (Array.isArray(currentTurnMsgs)) {
               for (const item of currentTurnMsgs) {
-                if (item) {
+                if (item && item.type !== "naiimag") {
                   const text = item.content || item.message || (typeof item === "string" ? item : "");
                   if (text) {
                     combinedHistory.push({
@@ -65577,14 +65685,79 @@ ${stickerContext || "无"}
             // 1. 模组信息
             const moduleBlock = (typeof getChatModulePromptBlock === "function") ? await getChatModulePromptBlock(chat) : "";
 
-            // 2. 人设信息
+            // 2. 人设信息（群聊包含密友群聊与普通群聊：AI知道谁是守秘人，也能看到守秘人的提示词，但看不到被选为守秘人的那个人的人设，防止KP人设信息干扰思考）
+            const myPeerCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+              ? window.PeerManager.getOrCreateMyPeerCode()
+              : "";
+            const targetCharId = (chat.settings && chat.settings.keeperTargetId) ? String(chat.settings.keeperTargetId) : "none";
+            const myNickOrName = chat.settings?.myNickname || chat.settings?.myName || "我";
+
+            const isMeSelectedAsKeeper = Boolean(
+              chat.isGroup &&
+              targetCharId &&
+              targetCharId !== "none" &&
+              (
+                targetCharId === "me" ||
+                (myPeerCode && targetCharId === String(myPeerCode)) ||
+                targetCharId === myNickOrName ||
+                (chat.settings?.myName && targetCharId === String(chat.settings.myName)) ||
+                (chat.settings?.myNickname && targetCharId === String(chat.settings.myNickname))
+              )
+            );
+
+            const isSpecialNonCharacterMember = (m) => {
+              if (!m) return true;
+              const sourceChat = (m.id && state.chats[m.id]) ? state.chats[m.id] : null;
+              const isDice = m.isDice || m.roleType === "dice" || m.type === "dice" || (sourceChat && (sourceChat.isDice || sourceChat.roleType === "dice"));
+              const isStatus = m.isStatus || m.roleType === "status" || m.roleType === "system_status" || m.type === "status" || m.type === "system_status" || (sourceChat && (sourceChat.roleType === "system_status" || sourceChat.isStatus));
+              const memberName = m.groupNickname || m.name || m.originalName || m.nickname || (sourceChat && sourceChat.name) || "";
+              return Boolean(isDice || isStatus || memberName === "骰子" || memberName === "系统状态栏" || memberName.includes("系统状态") || memberName.includes("骰子"));
+            };
+
+            const isMemberSelectedAsKeeper = (m) => {
+              if (!m || !chat.isGroup || !targetCharId || targetCharId === "none") return false;
+              return Boolean(
+                (m.peerCode && String(m.peerCode) === targetCharId) ||
+                (m.id !== undefined && String(m.id) === targetCharId) ||
+                (m.name && String(m.name) === targetCharId) ||
+                (m.originalName && String(m.originalName) === targetCharId) ||
+                (m.groupNickname && String(m.groupNickname) === targetCharId)
+              );
+            };
+
+            let keeperNameForNotice = "";
+            if (chat.isGroup && targetCharId && targetCharId !== "none") {
+              if (isMeSelectedAsKeeper) {
+                keeperNameForNotice = myNickOrName;
+              } else {
+                const kpMem = (Array.isArray(chat.members) ? chat.members : []).find((m) => isMemberSelectedAsKeeper(m));
+                if (kpMem) {
+                  keeperNameForNotice = kpMem.groupNickname || kpMem.originalName || kpMem.name || "";
+                }
+              }
+            }
+
             let personaBlock = "";
             if (chat.isGroup) {
-              const memberNames = (Array.isArray(chat.members) ? chat.members : [])
-                .filter(Boolean)
-                .map((m) => `- ${m.groupNickname || m.originalName || m.name || "群成员"}: ${m.persona || "暂无人设"}`)
-                .join("\n");
-              personaBlock = `# 群成员人设:\n${memberNames}\n- 用户人设: ${chat.settings.myPersona || "普通人"}`;
+              const personaLines = [];
+              if (keeperNameForNotice) {
+                personaLines.push(`- 当前守秘人(KP): ${keeperNameForNotice}（负责主持与推动剧情，已隐藏其个人人设以防干扰）`);
+              }
+              (Array.isArray(chat.members) ? chat.members : []).forEach((m) => {
+                if (isSpecialNonCharacterMember(m)) return;
+                // 被选为守秘人的角色：不注入其人设详情，防止KP自身人设干扰思考
+                if (isMemberSelectedAsKeeper(m)) return;
+                const sourceChat = (m.id && state.chats[m.id]) ? state.chats[m.id] : null;
+                const mName = m.groupNickname || m.originalName || m.name || "群成员";
+                const mPersona = m.secretPersona || m.persona || (sourceChat && sourceChat.settings?.aiPersona) || "暂无人设";
+                personaLines.push(`- ${mName}: ${mPersona}`);
+              });
+              if (!isMeSelectedAsKeeper) {
+                personaLines.push(`- ${myNickOrName}: ${chat.settings.myPersona || "普通人"}`);
+              }
+              if (personaLines.length > 0) {
+                personaBlock = `# 群成员人设:\n${personaLines.join("\n")}`;
+              }
             } else {
               personaBlock = `# 角色人设:\n- ${chat.name}: ${chat.settings?.aiPersona || "暂无人设"}\n- 用户人设: ${chat.settings?.myPersona || "普通人"}`;
             }
@@ -65605,18 +65778,19 @@ ${stickerContext || "无"}
               }
             }
 
-            // 4. 角色专属生图提示词
+            // 4. 角色专属生图提示词（包含守秘人在内的所有角色提示词AI均可正常看到，仅排除非角色系统组件）
             let allCharPromptsBlock = "";
             const charPrompts = chat.settings.keeperCharPrompts || {};
             const promptEntries = [];
             if (chat.isGroup) {
               (Array.isArray(chat.members) ? chat.members : []).forEach((m) => {
-                if (!m) return;
-                const p = charPrompts[m.id] || charPrompts[m.name] || charPrompts[m.groupNickname] || charPrompts[m.originalName];
+                if (isSpecialNonCharacterMember(m)) return;
+                const p = (m.peerCode && charPrompts[m.peerCode]) || charPrompts[m.id] || charPrompts[m.name] || charPrompts[m.groupNickname] || charPrompts[m.originalName];
                 if (p) promptEntries.push(`- 角色【${m.groupNickname || m.originalName || m.name}】专属生图Prompt: ${p}`);
               });
-              if (charPrompts["me"]) {
-                promptEntries.push(`- 角色【${chat.settings.myNickname || chat.settings.myName || "我"}】专属生图Prompt: ${charPrompts["me"]}`);
+              const myCharPrompt = (myPeerCode && charPrompts[myPeerCode]) || charPrompts["me"] || charPrompts[chat.settings.myNickname] || charPrompts[chat.settings.myName];
+              if (myCharPrompt) {
+                promptEntries.push(`- 角色【${myNickOrName}】专属生图Prompt: ${myCharPrompt}`);
               }
             } else {
               const aiP = charPrompts[chat.id] || charPrompts["ai"] || charPrompts[chat.name];
@@ -65627,32 +65801,30 @@ ${stickerContext || "无"}
               allCharPromptsBlock = `# 各角色专属生图提示词:\n${promptEntries.join("\n")}`;
             }
 
-            // 5. 确定选中的生图发言身份
-            let keeperCharName = chat.isGroup ? "守秘人" : chat.name;
-            const targetCharId = chat.settings.keeperTargetId;
-            if (targetCharId && targetCharId !== "none") {
-              if (targetCharId === "me") {
-                keeperCharName = chat.settings.myNickname || chat.settings.myName || "我";
-              } else if (chat.isGroup) {
-                const mem = (Array.isArray(chat.members) ? chat.members : []).find((m) => m && (m.id === targetCharId || m.name === targetCharId || m.originalName === targetCharId));
-                if (mem) keeperCharName = mem.groupNickname || mem.originalName || mem.name;
-              } else {
-                keeperCharName = chat.name;
-              }
+            // 5. 获取这个群聊公共的强制生图预设与指令
+            let groupKeeperPromptText = chat.settings.keeperPrompt;
+            if (!groupKeeperPromptText) {
+              const presets = getKeeperPresets(chat);
+              const activePresetId = chat.settings.keeperActivePresetId || getDefaultKeeperPresetId();
+              const foundPreset = presets.find((p) => p.id === activePresetId);
+              groupKeeperPromptText = (foundPreset && foundPreset.prompt) ? foundPreset.prompt : DEFAULT_KEEPER_PROMPT;
             }
 
-            // 6. 提示词代码与格式指令
             const keeperInstructionBlock = `
-# 【NovelAI 生图指令任务】
-请根据当前最新剧情进展、场景环境描写以及各角色的外貌动作，发送 NovelAI 生图指令。
-本次末尾生图仅调用一次，只生成 1 张图片。
-【铁律】：除了生图指令外，禁止输出任何其他普通对话气泡或多余文字。
-你的回复必须为合法 JSON，只包含 1 条 type 为 "naiimag" 的生图字段，格式示例：
-{"type": "naiimag", "name": "${keeperCharName}", "prompt": "masterpiece, 1girl, detailed description tags..."}
+# 【NovelAI 强制生图填写格式任务】
+请根据当前最新剧情进展、场景环境描写、在场人数以及上方的生图指令规则，自主判断本轮需要生成几张图片（例如单张图填 1 个对象，若场景人数超过两人需要拆分或需要生成两张图，则输出包含多个生图对象的 JSON 数组）。
+【最高铁律】：
+1. 你的输出里只能包含生图 JSON 数据，除生图 JSON 外严禁输出任何解释、代码块标记、剧情正文或普通对话！
+2. 每个生图对象的格式必须严格为：
+{"type": "naiimag", "prompt": "masterpiece, best quality, ...英文Tag词条..."}
+3. 如果只需生成 1 张图，直接输出：
+[{"type": "naiimag", "prompt": "..."}]
+如果需要生成 2 张或多张图，输出多个对象：
+[{"type": "naiimag", "prompt": "...第一张图的英文Tag..."}, {"type": "naiimag", "prompt": "...第二张图的英文Tag..."}]
 `;
 
             const keeperSystemPrompt = [
-              chat.settings.keeperPrompt || DEFAULT_KEEPER_PROMPT,
+              groupKeeperPromptText,
               keeperInstructionBlock,
               allCharPromptsBlock,
               personaBlock,
@@ -65662,7 +65834,7 @@ ${stickerContext || "无"}
 
             const messagesForApi = [
               { role: "system", content: keeperSystemPrompt },
-              { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON。` }
+              { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请仅输出生图 JSON（不要输出任何其他内容）：` }
             ];
 
             // 7. 确定调用的 API 配置：在副API中勾选强制生图时严格调用副API，否则调用主API
@@ -65763,10 +65935,10 @@ ${stickerContext || "无"}
                 }
                 const claudePayload = {
                   model: model,
-                  max_tokens: 1024,
+                  max_tokens: 1500,
                   system: keeperSystemPrompt,
                   messages: [
-                    { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请根据以上对话与设定，严格输出生图 JSON。` }
+                    { role: "user", content: `以下是近期对话剧情（包含本次刚生成的最新回复）：\n${historyText}\n请仅输出生图 JSON（不要输出任何其他内容）：` }
                   ],
                   temperature: temperature || 0.7,
                 };
@@ -65810,10 +65982,9 @@ ${stickerContext || "无"}
               }
             }
 
-            const forcedDrawStart = Date.now();
             let rawContent = "";
             let rawFullData = null;
-            let activeUsedCfg = candidateConfigs[0];
+            activeUsedCfg = candidateConfigs[0];
             let lastKeeperErr = null;
 
             for (let i = 0; i < candidateConfigs.length; i++) {
@@ -65852,63 +66023,124 @@ ${stickerContext || "无"}
               throw lastKeeperErr;
             }
 
-            const forcedDur = ((Date.now() - forcedDrawStart) / 1000).toFixed(1) + "秒";
-            recordApiCallLog({
-              source: activeUsedCfg.isSub ? "副API" : "主API",
-              model: activeUsedCfg.model,
-              status: "成功",
-              duration: forcedDur,
-              purpose: "强制生图",
-              detail: rawContent ? rawContent.slice(0, 150) : "已生成生图指令",
-            });
-
+            // 提取所有生图提示词（支持 1 张或多张图）
             const promptsToGenerate = [];
-            try {
-              const jsonMatches = rawContent.match(/\[[\s\S]*?\]|\{[\s\S]*?\}/g) || [];
-              for (const jm of jsonMatches) {
-                try {
-                  const parsed = JSON.parse(jm);
-                  if (Array.isArray(parsed)) {
-                    parsed.forEach(item => {
-                      if (item && (item.prompt || item.content || item.description)) promptsToGenerate.push(item.prompt || item.content || item.description);
-                    });
-                  } else if (Array.isArray(parsed.images)) {
-                    parsed.images.forEach(img => {
-                      if (img && (img.prompt || img.content || img.description)) promptsToGenerate.push(img.prompt || img.content || img.description);
-                    });
-                  } else if (parsed.prompt || parsed.content || parsed.description) {
-                    promptsToGenerate.push(parsed.prompt || parsed.content || parsed.description);
-                  }
-                } catch(e) {}
-              }
-            } catch (pe) {}
+            const cleanedRaw = rawContent
+              .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+              .replace(/^```(?:json)?\s*/i, "")
+              .replace(/```\s*$/i, "")
+              .trim();
 
-            if (promptsToGenerate.length === 0) {
-              const regexPromptMatch = rawContent.match(/"prompt"\s*:\s*"([^"]+)"/i) || rawContent.match(/"description"\s*:\s*"([^"]+)"/i);
-              if (regexPromptMatch && regexPromptMatch[1]) {
-                promptsToGenerate.push(regexPromptMatch[1].trim());
-              } else {
-                const cleanPrompt = rawContent
-                  .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
-                  .replace(/^```[a-z]*\s*/i, "")
-                  .replace(/```$/i, "")
-                  .replace(/["'\n\r{}]/g, " ")
-                  .trim();
-                if (cleanPrompt) promptsToGenerate.push(cleanPrompt);
+            const pushPromptItem = (item) => {
+              if (!item) return;
+              if (typeof item === "string" && item.trim()) {
+                promptsToGenerate.push(item.trim());
+                return;
+              }
+              const p = item.prompt || item.content || item.description || item.image_prompt || item.imagePrompt;
+              if (typeof p === "string" && p.trim()) {
+                promptsToGenerate.push(p.trim());
+              }
+            };
+
+            try {
+              const directParsed = JSON.parse(cleanedRaw);
+              if (Array.isArray(directParsed)) {
+                directParsed.forEach(pushPromptItem);
+              } else if (directParsed && typeof directParsed === "object") {
+                if (Array.isArray(directParsed.images)) directParsed.images.forEach(pushPromptItem);
+                else if (Array.isArray(directParsed.prompts)) directParsed.prompts.forEach(pushPromptItem);
+                else pushPromptItem(directParsed);
+              }
+            } catch (_) {
+              const objMatches = cleanedRaw.match(/\{[^{}]*\}/g) || [];
+              for (const om of objMatches) {
+                try {
+                  const parsedObj = JSON.parse(om);
+                  pushPromptItem(parsedObj);
+                } catch (e2) {}
               }
             }
 
-            const firstPrompt = promptsToGenerate.find((p) => p && String(p).trim());
-            if (firstPrompt) {
-              await generateAndAppendKeeperNaiImage(chat, String(firstPrompt).trim());
+            if (promptsToGenerate.length === 0) {
+              const regexGlobal = /"(?:prompt|description|content)"\s*:\s*"([^"]+)"/gi;
+              let m;
+              while ((m = regexGlobal.exec(cleanedRaw)) !== null) {
+                if (m[1] && m[1].trim()) {
+                  promptsToGenerate.push(m[1].trim());
+                }
+              }
+            }
+
+            if (promptsToGenerate.length === 0) {
+              const fallbackClean = cleanedRaw
+                .replace(/["'\n\r{}\[\]]/g, " ")
+                .replace(/\btype\s*:\s*naiimag\b/gi, "")
+                .replace(/\bprompt\s*:/gi, "")
+                .trim();
+              if (fallbackClean) promptsToGenerate.push(fallbackClean);
+            }
+
+            const validPrompts = promptsToGenerate
+              .map((p) => String(p || "").trim())
+              .filter(Boolean);
+
+            if (validPrompts.length === 0) {
+              throw new Error("AI 未能输出有效的生图提示词");
+            }
+
+            // AI 填写 API 返回后，先立刻发送所有生图气泡到聊天列表中，再去调用 NovelAI 进行生图
+            if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
+              try {
+                await window.chatTurnRenderPromise[String(chat.id)];
+              } catch (e) {}
+            }
+
+            const pendingBubbles = [];
+            for (let idx = 0; idx < validPrompts.length; idx++) {
+              const singlePrompt = validPrompts[idx];
+              const pendingMsg = await createImmediateKeeperNaiBubble(chat, singlePrompt, idx);
+              pendingBubbles.push({ prompt: singlePrompt, message: pendingMsg });
+            }
+
+            let successCount = 0;
+            let lastNaiErr = null;
+            for (let idx = 0; idx < pendingBubbles.length; idx++) {
+              const item = pendingBubbles[idx];
+              const genResult = await generateAndAppendKeeperNaiImage(chat, item.prompt, item.message);
+              if (genResult && genResult.ok) {
+                successCount++;
+              } else if (genResult && genResult.error) {
+                lastNaiErr = genResult.error;
+              }
+            }
+
+            const totalDur = ((Date.now() - forcedDrawStart) / 1000).toFixed(1) + "秒";
+            const localNaiModel = (document.getElementById("novelai-model")?.value) || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+            if (successCount > 0) {
+              recordApiCallLog({
+                source: activeUsedCfg.isSub ? "副API+NAI" : "主API+NAI",
+                model: `${activeUsedCfg.model} -> ${localNaiModel}`,
+                status: "成功",
+                duration: totalDur,
+                purpose: `强制生图(${successCount}张)`,
+                detail: validPrompts.join(" | ").slice(0, 150),
+              });
             } else {
-              throw new Error("未能从返回内容中提取出有效的生图提示词");
+              recordApiCallLog({
+                source: activeUsedCfg.isSub ? "副API+NAI" : "主API+NAI",
+                model: `${activeUsedCfg.model} -> ${localNaiModel}`,
+                status: "失败",
+                duration: totalDur,
+                purpose: "强制生图",
+                detail: lastNaiErr ? String(lastNaiErr.message || lastNaiErr) : "NovelAI 生图请求失败",
+              });
             }
           } catch (err) {
             console.warn("守密人强制生图未完成:", err?.message || err);
-            const forcedDur = (typeof forcedDrawStart !== "undefined") ? (((Date.now() - forcedDrawStart) / 1000).toFixed(1) + "秒") : "0.1秒";
-            const effectiveSub = (typeof activeUsedCfg !== "undefined" && activeUsedCfg) ? activeUsedCfg.isSub : (typeof isForcedImageSub !== "undefined" ? isForcedImageSub : false);
-            const effectiveModel = (typeof activeUsedCfg !== "undefined" && activeUsedCfg && activeUsedCfg.model) ? activeUsedCfg.model : "未知模型";
+            const forcedDur = ((Date.now() - forcedDrawStart) / 1000).toFixed(1) + "秒";
+            const effectiveSub = activeUsedCfg ? activeUsedCfg.isSub : false;
+            const effectiveModel = (activeUsedCfg && activeUsedCfg.model) ? activeUsedCfg.model : "未知模型";
             recordApiCallLog({
               source: effectiveSub ? "副API" : "主API",
               model: effectiveModel,
@@ -65924,7 +66156,7 @@ ${stickerContext || "无"}
               name: chat.isGroup ? "系统消息" : chat.name,
               avatar: chat.isGroup ? defaultGroupAvatar : chat.avatar,
               senderAvatar: chat.isGroup ? defaultGroupAvatar : chat.avatar,
-              content: `[强制生图调用失败: ${err.message}]`,
+              content: `[强制生图调用失败: ${err.message || "未知错误"}]`,
               isKeeperForcedDraw: true,
               isForcedDraw: true,
               timestamp: Date.now(),
@@ -65967,65 +66199,110 @@ ${stickerContext || "无"}
           }
         }
 
-        async function generateAndAppendKeeperNaiImage(chat, aiPrompt) {
+        async function createImmediateKeeperNaiBubble(chat, aiPrompt, indexOffset = 0) {
           const naiPrompts = getCharacterNAIPrompts(chat.id);
-          const finalPositivePrompt = naiPrompts.positive ? aiPrompt + ", " + naiPrompts.positive : aiPrompt;
+          const promptParts = [];
+          if (naiPrompts.artist && !aiPrompt.includes(naiPrompts.artist)) {
+            promptParts.push(naiPrompts.artist);
+          }
+          if (naiPrompts.positive && !aiPrompt.includes(naiPrompts.positive)) {
+            promptParts.push(naiPrompts.positive);
+          }
+          if (aiPrompt) {
+            promptParts.push(aiPrompt);
+          }
+          const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
           const finalNegativePrompt = naiPrompts.negative || "";
 
+          const myPeerCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+            ? window.PeerManager.getOrCreateMyPeerCode()
+            : "";
           let senderName = chat.isGroup ? "系统消息" : chat.name;
           let senderAvatar = chat.isGroup ? defaultGroupAvatar : chat.avatar;
-          if (chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none") {
-            if (chat.settings.keeperTargetId === "me") {
-              senderName = chat.settings.myName || "我";
+          const targetId = chat.settings.keeperTargetId;
+          if (targetId && targetId !== "none") {
+            if (targetId === "me" || (myPeerCode && targetId === myPeerCode)) {
+              senderName = chat.settings.myNickname || chat.settings.myName || "我";
               senderAvatar = chat.settings.myAvatar || defaultAvatar;
             } else if (chat.isGroup) {
-              const mem = (chat.members || []).find((m) => (m.id || m.name) === chat.settings.keeperTargetId);
+              const mem = (chat.members || []).find(
+                (m) => m && (m.peerCode === targetId || (m.id || m.name) === targetId || m.groupNickname === targetId || m.originalName === targetId)
+              );
               if (mem) {
-                senderName = mem.groupNickname || mem.name;
+                senderName = mem.groupNickname || mem.originalName || mem.name;
                 senderAvatar = mem.avatar || defaultAvatar;
               }
             }
           }
 
-          const apiKey = localStorage.getItem("novelai-api-key");
-          const model = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const settings = getNovelAISettings();
+          const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
+
+          const pendingMsg = {
+            role: "assistant",
+            sender: senderName,
+            senderName: senderName,
+            name: senderName,
+            avatar: senderAvatar,
+            senderAvatar: senderAvatar,
+            type: "naiimag",
+            prompt: aiPrompt,
+            fullPrompt: finalPositivePrompt,
+            negativePrompt: finalNegativePrompt,
+            model: model,
+            naiSettings: {
+              resolution: settings.resolution || `${width || 1024}x${height || 1024}`,
+              width: width || 1024,
+              height: height || 1024,
+              steps: settings.steps || 28,
+              cfg_scale: settings.cfg_scale || 5,
+              sampler: settings.sampler || "k_euler_ancestral",
+              uc_preset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+              quality_toggle: settings.quality_toggle !== false,
+              smea: settings.smea,
+              smea_dyn: settings.smea_dyn,
+            },
+            isKeeperForcedDraw: true,
+            isForcedDraw: true,
+            timestamp: Date.now() + indexOffset * 10 + Math.floor(Math.random() * 9),
+          };
+
+          chat.history.push(pendingMsg);
+          if (state.chats) {
+            state.chats[chat.id] = chat;
+            state.chats[String(chat.id)] = chat;
+          }
+          await db.chats.put(chat);
+          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+            window.PeerManager.broadcastGroupMessage(chat, pendingMsg, false);
+          }
+          if (typeof renderChatList === "function") {
+            renderChatList();
+          }
+          const msgContainer = document.getElementById("chat-messages");
+          const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${pendingMsg.timestamp}"]`);
+          if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
+            appendMessage(pendingMsg, chat);
+          }
+          return pendingMsg;
+        }
+
+        async function generateAndAppendKeeperNaiImage(chat, aiPrompt, existingMsg = null) {
+          const targetMsg = existingMsg || await createImmediateKeeperNaiBubble(chat, aiPrompt, 0);
+          const finalPositivePrompt = targetMsg.fullPrompt || aiPrompt;
+          const finalNegativePrompt = targetMsg.negativePrompt || "";
+
+          const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
+          const apiKey = domKey || localStorage.getItem("novelai-api-key");
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const model = domModel || localStorage.getItem("novelai-model") || targetMsg.model || "nai-diffusion-4-5-full";
           const settings = getNovelAISettings();
 
           if (!apiKey) {
-            console.warn("NovelAI API Key 未配置，生成提示词卡片消息");
-            const fallbackMessage = {
-              role: "assistant",
-              sender: senderName,
-              senderName: senderName,
-              name: senderName,
-              avatar: senderAvatar,
-              senderAvatar: senderAvatar,
-              type: "naiimag",
-              imageUrl: "https://i.postimg.cc/KYr2qRCK/1.jpg",
-              prompt: aiPrompt,
-              fullPrompt: finalPositivePrompt,
-              content: `[NovelAI生图提示词: ${aiPrompt}]`,
-              isKeeperForcedDraw: true,
-              isForcedDraw: true,
-              timestamp: Date.now(),
-            };
-            if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
-              try {
-                await window.chatTurnRenderPromise[String(chat.id)];
-              } catch (e) {}
-            }
-            chat.history.push(fallbackMessage);
-            if (state.chats) {
-              state.chats[chat.id] = chat;
-              state.chats[String(chat.id)] = chat;
-            }
-            await db.chats.put(chat);
-            const msgContainer = document.getElementById("chat-messages");
-            const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${fallbackMessage.timestamp}"]`);
-            if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
-              appendMessage(fallbackMessage, chat);
-            }
-            return;
+            const noKeyErr = new Error("未配置 NovelAI API Key，请先在设置中填写 NovelAI 密钥");
+            return { ok: false, error: noKeyErr };
           }
 
           try {
@@ -66040,10 +66317,10 @@ ${stickerContext || "无"}
                   params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                   width: width || 1024,
                   height: height || 1024,
-                  scale: settings.cfg_scale || 5,
+                  scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
                   sampler: settings.sampler || "k_euler_ancestral",
-                  steps: settings.steps || 28,
-                  seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
+                  steps: settings.steps !== undefined ? settings.steps : 28,
+                  seed: (settings.seed === -1 || settings.seed === undefined) ? Math.floor(Math.random() * 4294967295) : settings.seed,
                   n_samples: 1,
                   ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
                   qualityToggle: settings.quality_toggle !== false,
@@ -66071,10 +66348,10 @@ ${stickerContext || "无"}
                 parameters: {
                   width: width || 1024,
                   height: height || 1024,
-                  scale: settings.cfg_scale || 5,
+                  scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
                   sampler: settings.sampler || "k_euler_ancestral",
-                  steps: settings.steps || 28,
-                  seed: settings.seed === -1 ? Math.floor(Math.random() * 9999999999) : settings.seed,
+                  steps: settings.steps !== undefined ? settings.steps : 28,
+                  seed: (settings.seed === -1 || settings.seed === undefined) ? Math.floor(Math.random() * 4294967295) : settings.seed,
                   n_samples: 1,
                   ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
                   qualityToggle: settings.quality_toggle !== false,
@@ -66087,11 +66364,10 @@ ${stickerContext || "无"}
               };
             }
 
-            let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+            const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
               ? "https://image.novelai.net/ai/generate-image-stream"
               : "https://image.novelai.net/ai/generate-image";
-            let corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
-            if (corsProxy) apiUrl = corsProxy + encodeURIComponent(apiUrl);
+            const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
             const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
             let headers = {
@@ -66104,143 +66380,32 @@ ${stickerContext || "无"}
               headers = cleanHeaders;
             }
 
-            const res = await fetch(apiUrl, {
-              method: "POST",
-              headers,
-              body: JSON.stringify(requestBody),
-            });
-
-            if (!res.ok) throw new Error(await res.text());
-
-            const contentType = res.headers.get("content-type");
-            let imageDataUrl = null;
-
-            if (contentType && contentType.includes("text/event-stream")) {
-              const text = await res.text();
-              const lines = text.trim().split("\n");
-              for (let i = lines.length - 1; i >= 0; i--) {
-                const line = lines[i].trim();
-                if (line.startsWith("data: ") && line !== "data: [DONE]") {
-                  const dataContent = line.substring(6);
-                  try {
-                    const jsonData = JSON.parse(dataContent);
-                    if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
-                      const base64Data = jsonData.image || jsonData.data;
-                      const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                      imageDataUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
-                      break;
-                    }
-                  } catch (e) {}
-                }
-              }
-              if (!imageDataUrl) throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
-            } else {
-              const arrayBuffer = await res.arrayBuffer();
-              const zip = await JSZip.loadAsync(arrayBuffer);
-              const imageFileName = Object.keys(zip.files).find((fn) => fn.endsWith(".png") || fn.endsWith(".jpg"));
-              if (!imageFileName) throw new Error("ZIP内未找到图片文件");
-              const imageBlob = await zip.files[imageFileName].async("blob");
-              imageDataUrl = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(imageBlob);
-              });
-            }
+            const res = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, headers, requestBody);
+            const imageDataUrl = await parseNovelAiResponseToDataUrl(res);
 
             if (!imageDataUrl) throw new Error("无法解析生图数据");
 
-            const aiMessage = {
-              role: "assistant",
-              sender: senderName,
-              senderName: senderName,
-              name: senderName,
-              avatar: senderAvatar,
-              senderAvatar: senderAvatar,
-              type: "naiimag",
-              imageUrl: imageDataUrl,
-              prompt: aiPrompt,
-              fullPrompt: finalPositivePrompt,
-              negativePrompt: finalNegativePrompt,
-              model: model,
-              naiSettings: {
-                resolution: settings.resolution || `${width || 1024}x${height || 1024}`,
-                width: width || 1024,
-                height: height || 1024,
-                steps: settings.steps || 28,
-                cfg_scale: settings.cfg_scale || 5,
-                sampler: settings.sampler || "k_euler_ancestral",
-                uc_preset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
-                quality_toggle: settings.quality_toggle !== false,
-                smea: settings.smea,
-                smea_dyn: settings.smea_dyn,
-              },
-              isKeeperForcedDraw: true,
-              isForcedDraw: true,
-              timestamp: Date.now(),
-            };
+            targetMsg.imageUrl = imageDataUrl;
 
-            if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
-              try {
-                await window.chatTurnRenderPromise[String(chat.id)];
-              } catch (e) {}
-            }
-            chat.history.push(aiMessage);
             if (state.chats) {
               state.chats[chat.id] = chat;
               state.chats[String(chat.id)] = chat;
             }
             await db.chats.put(chat);
+            updateNaiBubbleInDom(chat, targetMsg);
+            if (typeof playNotificationSound === "function" && String(state.activeChatId) === String(chat.id)) {
+              playNotificationSound();
+            }
             if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
-              window.PeerManager.broadcastGroupMessage(chat, aiMessage, false);
+              window.PeerManager.broadcastGroupMessage(chat, { ...targetMsg, eventId: undefined, isMessageUpdate: true }, false);
             }
             if (typeof renderChatList === "function") {
               renderChatList();
             }
-            const msgContainer = document.getElementById("chat-messages");
-            const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${aiMessage.timestamp}"]`);
-            if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
-              appendMessage(aiMessage, chat);
-              if (typeof playNotificationSound === "function") playNotificationSound();
-            }
+            return { ok: true };
           } catch (err) {
-            console.warn("NovelAI图片生成失败，降级显示提示词:", err);
-            const fallbackMessage = {
-              role: "assistant",
-              sender: senderName,
-              senderName: senderName,
-              name: senderName,
-              avatar: senderAvatar,
-              senderAvatar: senderAvatar,
-              type: "naiimag",
-              imageUrl: "https://i.postimg.cc/KYr2qRCK/1.jpg",
-              prompt: aiPrompt,
-              fullPrompt: finalPositivePrompt,
-              negativePrompt: finalNegativePrompt,
-              model: model,
-              content: `[图片生成异常: ${err.message || "请求失败"}]`,
-              isKeeperForcedDraw: true,
-              isForcedDraw: true,
-              timestamp: Date.now(),
-            };
-            if (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(chat.id)]) {
-              try {
-                await window.chatTurnRenderPromise[String(chat.id)];
-              } catch (e) {}
-            }
-            chat.history.push(fallbackMessage);
-            if (state.chats) {
-              state.chats[chat.id] = chat;
-              state.chats[String(chat.id)] = chat;
-            }
-            await db.chats.put(chat);
-            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
-              window.PeerManager.broadcastGroupMessage(chat, fallbackMessage, false);
-            }
-            const msgContainer = document.getElementById("chat-messages");
-            const alreadyInDom = msgContainer && msgContainer.querySelector(`[data-timestamp="${fallbackMessage.timestamp}"]`);
-            if (!alreadyInDom && String(state.activeChatId) === String(chat.id) && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
-              appendMessage(fallbackMessage, chat);
-            }
+            console.warn("NovelAI图片生成失败:", err);
+            return { ok: false, error: err };
           }
         }
 
@@ -81395,6 +81560,8 @@ ${stickerContext || "无"}
               document.getElementById("max-reply-count-input").value =
                 savedRange.max;
               // 记忆互通功能 - UI渲染逻辑
+              const memoryLinkGroupEl = document.getElementById("memory-link-group");
+              if (memoryLinkGroupEl) memoryLinkGroupEl.style.display = "";
               const memoryLinkSelectBox = document.querySelector(
                 "#memory-link-multiselect .select-box",
               );
@@ -81404,22 +81571,34 @@ ${stickerContext || "无"}
               memoryLinkCheckboxesContainer.innerHTML = ""; // 清空旧选项
 
               const isPeerGrpMemUi = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
-              const depthFormGroupEl = document.getElementById("link-memory-depth-input")?.closest(".form-group");
+              const depthRowEl = document.getElementById("link-memory-depth-row");
               if (isPeerGrpMemUi && chat.activeLineMode === "solo") {
-                if (depthFormGroupEl) depthFormGroupEl.style.display = "none";
+                if (depthRowEl) depthRowEl.style.display = "none";
                 const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
                 const isMainChecked = activeThread ? (activeThread.linkedMainGroup !== false) : true;
                 const mainDepthVal = Number(activeThread?.linkedMainDepth) || Number(chat.settings?.soloLineConfig?.mainToSoloContextCount) || 200;
+                const safeMainName = String(chat.name || "大群")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;");
                 const row = document.createElement("div");
-                row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-color); box-sizing: border-box;";
+                row.style.cssText = "display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-color); box-sizing: border-box; cursor: pointer;";
                 row.innerHTML = `
-                  <input type="number" class="moe-input solo-link-depth-input" data-solo-id="__main_group__" value="${mainDepthVal}" min="1" max="2000" style="width: 68px !important; height: 28px !important; padding: 0 6px !important; font-size: 12px !important; text-align: center !important; flex-shrink: 0 !important;" onclick="event.stopPropagation();" />
-                  <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-primary);">${chat.name || "大群"}</span>
-                  <input type="checkbox" class="solo-link-checkbox" value="__main_group__" ${isMainChecked ? "checked" : ""} style="width: 16px !important; height: 16px !important; min-width: 16px !important; min-height: 16px !important; margin: 0 !important; flex-shrink: 0 !important;" />
+                  <input type="checkbox" class="solo-link-checkbox" value="__main_group__" ${isMainChecked ? "checked" : ""} style="width: 16px !important; height: 16px !important; min-width: 16px !important; min-height: 16px !important; margin: 0 !important; padding: 0 !important; flex-shrink: 0 !important; cursor: pointer;" onclick="event.stopPropagation();" />
+                  <input type="number" class="moe-input solo-link-depth-input" data-solo-id="__main_group__" value="${mainDepthVal}" min="1" max="2000" style="width: 68px !important; height: 28px !important; padding: 0 6px !important; font-size: 12px !important; text-align: center !important; flex-shrink: 0 !important; box-sizing: border-box !important;" onclick="event.stopPropagation();" />
+                  <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-primary);">${safeMainName}</span>
                 `;
+                row.addEventListener("click", (e) => {
+                  if (e.target && e.target.tagName === "INPUT") return;
+                  const chk = row.querySelector("input.solo-link-checkbox");
+                  if (chk) {
+                    chk.checked = !chk.checked;
+                    updateMemoryLinkDisplay();
+                  }
+                });
                 memoryLinkCheckboxesContainer.appendChild(row);
               } else if (isPeerGrpMemUi) {
-                if (depthFormGroupEl) depthFormGroupEl.style.display = "none";
+                if (depthRowEl) depthRowEl.style.display = "none";
                 const allSoloThreads = typeof window.getAllGroupSoloThreads === "function" ? window.getAllGroupSoloThreads(chat) : [];
                 if (allSoloThreads.length === 0) {
                   const emptyHint = document.createElement("div");
@@ -81433,18 +81612,30 @@ ${stickerContext || "无"}
                     );
                     const isChecked = existingLink ? "checked" : "";
                     const depthVal = existingLink && existingLink.depth ? existingLink.depth : 200;
+                    const safeSoloName = String(st.name || "单线")
+                      .replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;");
                     const row = document.createElement("div");
-                    row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-color); box-sizing: border-box;";
+                    row.style.cssText = "display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-color); box-sizing: border-box; cursor: pointer;";
                     row.innerHTML = `
-                      <input type="number" class="moe-input solo-link-depth-input" data-solo-id="${st.id}" value="${depthVal}" min="1" max="2000" style="width: 68px !important; height: 28px !important; padding: 0 6px !important; font-size: 12px !important; text-align: center !important; flex-shrink: 0 !important;" onclick="event.stopPropagation();" />
-                      <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-primary);">${st.name || "单线"}</span>
-                      <input type="checkbox" class="solo-link-checkbox" value="${st.id}" ${isChecked} style="width: 16px !important; height: 16px !important; min-width: 16px !important; min-height: 16px !important; margin: 0 !important; flex-shrink: 0 !important;" />
+                      <input type="checkbox" class="solo-link-checkbox" value="${st.id}" ${isChecked} style="width: 16px !important; height: 16px !important; min-width: 16px !important; min-height: 16px !important; margin: 0 !important; padding: 0 !important; flex-shrink: 0 !important; cursor: pointer;" onclick="event.stopPropagation();" />
+                      <input type="number" class="moe-input solo-link-depth-input" data-solo-id="${st.id}" value="${depthVal}" min="1" max="2000" style="width: 68px !important; height: 28px !important; padding: 0 6px !important; font-size: 12px !important; text-align: center !important; flex-shrink: 0 !important; box-sizing: border-box !important;" onclick="event.stopPropagation();" />
+                      <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-primary);">${safeSoloName}</span>
                     `;
+                    row.addEventListener("click", (e) => {
+                      if (e.target && e.target.tagName === "INPUT") return;
+                      const chk = row.querySelector("input.solo-link-checkbox");
+                      if (chk) {
+                        chk.checked = !chk.checked;
+                        updateMemoryLinkDisplay();
+                      }
+                    });
                     memoryLinkCheckboxesContainer.appendChild(row);
                   });
                 }
               } else {
-                if (depthFormGroupEl) depthFormGroupEl.style.display = "";
+                if (depthRowEl) depthRowEl.style.display = "flex";
                 const otherChats = Object.values(state.chats).filter(
                   (c) => c.id !== chat.id,
                 );
@@ -81470,13 +81661,22 @@ ${stickerContext || "无"}
               function updateMemoryLinkDisplay() {
                 const checkedBoxes =
                   memoryLinkCheckboxesContainer.querySelectorAll(
-                    "input:checked",
+                    'input[type="checkbox"]:checked',
                   );
-                const displayText = memoryLinkSelectBox.querySelector(
-                  ".selected-options-text",
+                const displayText = document.querySelector(
+                  "#memory-link-multiselect .selected-options-text",
                 );
+                if (!displayText) return;
                 if (checkedBoxes.length === 0) {
                   displayText.textContent = "-- 点击选择 --";
+                } else if (isPeerGrpMemUi && chat.activeLineMode === "solo") {
+                  const mainDepthInp = memoryLinkCheckboxesContainer.querySelector(
+                    'input.solo-link-depth-input[data-solo-id="__main_group__"]',
+                  );
+                  const dVal = mainDepthInp ? (parseInt(mainDepthInp.value, 10) || 200) : 200;
+                  displayText.textContent = `${chat.name || "大群"} · ${dVal}条`;
+                } else if (isPeerGrpMemUi) {
+                  displayText.textContent = `已链接 ${checkedBoxes.length} 个小群`;
                 } else {
                   displayText.textContent = `已链接 ${checkedBoxes.length} 个聊天`;
                 }
@@ -81488,17 +81688,15 @@ ${stickerContext || "无"}
                 chat.settings.linkMemoryDepth || 5;
 
               // 5. 绑定事件
-              updateMemoryLinkDisplay(); // 初始化显示
-              memoryLinkCheckboxesContainer.addEventListener(
-                "change",
-                updateMemoryLinkDisplay,
-              );
+              memoryLinkCheckboxesContainer.onchange = updateMemoryLinkDisplay;
+              memoryLinkCheckboxesContainer.oninput = updateMemoryLinkDisplay;
               // 使用克隆节点技巧来防止事件重复绑定
               const newSelectBox = memoryLinkSelectBox.cloneNode(true);
               memoryLinkSelectBox.parentNode.replaceChild(
                 newSelectBox,
                 memoryLinkSelectBox,
               );
+              updateMemoryLinkDisplay(); // 初始化显示
               newSelectBox.addEventListener("click", (e) => {
                 e.stopPropagation();
                 memoryLinkCheckboxesContainer.classList.toggle("visible");
