@@ -20749,6 +20749,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
+            if (localProxyRes.body && contentType.includes("event-stream")) {
+              return {
+                ok: localProxyRes.ok,
+                status: localProxyRes.status,
+                body: localProxyRes.body,
+                headers: localProxyRes.headers,
+              };
+            }
+
             const localProxyText = await localProxyRes.text();
             return {
               ok: localProxyRes.ok,
@@ -21220,7 +21229,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   detail: fallbackRes.ok ? "回复成功" : `HTTP ${fallbackRes.status}`,
                 });
               } catch (_) {}
-              return new Response(fallbackRes.text, {
+              return new Response(fallbackRes.body !== undefined ? fallbackRes.body : fallbackRes.text, {
                 status: fallbackRes.status,
                 headers: fallbackRes.headers,
               });
@@ -21273,7 +21282,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               model: modelId,
               messages: normalizedMessages,
               temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
-              stream: isStreamActive,
+              stream: parsedBody.stream !== undefined ? parsedBody.stream : isStreamActive,
             };
 
             const fetchStartT = Date.now();
@@ -21282,7 +21291,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${cleanKey}`,
-                ...(isStreamActive ? { Accept: "text/event-stream" } : {})
+                ...(openAiPayload.stream ? { Accept: "text/event-stream" } : {})
               },
               body: JSON.stringify(openAiPayload),
               onStreamChunk: isStreamActive ? (chunk) => {
@@ -21317,6 +21326,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return new Response(errPayload, {
                 status: res.status,
                 headers: { "Content-Type": "application/json" },
+              });
+            }
+
+            if (res.body !== undefined) {
+              return new Response(res.body, {
+                status: res.status,
+                headers: res.headers,
               });
             }
 
@@ -43340,7 +43356,7 @@ ${stickerContext || "无"}
               ...messagesPayload,
             ];
 
-            const isStreamActive = !!state.apiConfig?.streamEnabled;
+            // 1. 发起请求时强制开启流式保活，防止长连接超时被掐断
             const response = isGemini
               ? await fetch(geminiConfig.url, geminiConfig.data)
               : await fetch(`${proxyUrl}/v1/chat/completions`, {
@@ -43348,56 +43364,111 @@ ${stickerContext || "无"}
                   headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${apiKey}`,
-                    ...(isStreamActive ? { Accept: "text/event-stream" } : {}),
+                    Accept: "text/event-stream",
                   },
                   body: JSON.stringify({
                     model: model,
                     messages: openAiMessages,
                     temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                    stream: isStreamActive,
+                    stream: true,
                   }),
                 });
-            if (!response.ok) {
-              let errorMsg = `API Error: ${response.status}`;
-              try {
-                // 尝试解析错误信息体为JSON
-                const errorData = await response.json();
-                // 安全地获取错误信息，如果结构不符合预期，就将整个错误对象转为字符串
-                errorMsg += ` - ${errorData?.error?.message || errorData?.message || JSON.stringify(errorData)}`;
-              } catch (jsonError) {
-                // 如果连JSON都不是，就直接读取文本
-                errorMsg += ` - ${await response.text()}`;
-              }
-              // 抛出一个包含了详细信息的错误，这样就不会在catch块里再次出错了
-              throw new Error(errorMsg);
-            }
-            const data = await response.json();
 
-            // 添加对 data 结构的安全检查，全面兼容推理模型思考字段与纯文本
-            let aiResponseContent = "";
-            let reasoningFromData = "";
-            if (isGemini) {
-              const candidate = data?.candidates?.[0];
-              if (candidate?.content?.parts && Array.isArray(candidate.content.parts)) {
-                aiResponseContent = candidate.content.parts.map(p => (typeof p.text === "string" ? p.text : "")).join("");
-              } else if (candidate?.content?.parts?.[0]?.text) {
-                aiResponseContent = candidate.content.parts[0].text;
-              }
-            } else {
-              const choice = data?.choices?.[0];
-              const msg = choice?.message || choice;
-              reasoningFromData = msg?.reasoning_content || msg?.reasoning || "";
-              if (msg?.content) {
-                if (typeof msg.content === "string") {
-                  aiResponseContent = msg.content;
-                } else if (Array.isArray(msg.content)) {
-                  aiResponseContent = msg.content.map(c => (typeof c === "string" ? c : (c?.text || JSON.stringify(c)))).join("");
+            // 2. 收到 response 后的万能解析逻辑（后台流式保活拼接 + 前台一次性返回）：
+            if (!response.ok) {
+              const errText = await response.text();
+              throw new Error(`HTTP ${response.status}: ${errText}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let rawText = "";
+            let fullContent = "";
+            let fullReasoning = "";
+            let buffer = "";
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const chunk = decoder.decode(value, { stream: true });
+              rawText += chunk;
+              buffer += chunk;
+
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || ""; // 留存最后一行可能不完整的数据
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith("data:")) continue;
+                const dataStr = trimmed.replace(/^data:\s*/, "");
+                if (dataStr === "[DONE]") continue;
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  const delta = parsed.choices?.[0]?.delta?.content 
+                             || parsed.choices?.[0]?.message?.content 
+                             || parsed.content?.[0]?.text 
+                             || "";
+                  fullContent += delta;
+                  const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
+                                      || parsed.choices?.[0]?.delta?.reasoning 
+                                      || parsed.choices?.[0]?.delta?.thinking 
+                                      || "";
+                  if (deltaReasoning) fullReasoning += deltaReasoning;
+                } catch (e) {
+                  // 忽略单行半截 JSON 解析错误，继续拼接
                 }
               }
-              if (!aiResponseContent && reasoningFromData) {
-                aiResponseContent = reasoningFromData;
+            }
+
+            // 处理最后残留的 buffer
+            if (buffer.trim().startsWith("data:")) {
+              const dataStr = buffer.trim().replace(/^data:\s*/, "");
+              if (dataStr !== "[DONE]") {
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  fullContent += (parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.message?.content || parsed.content?.[0]?.text || "");
+                  const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
+                                      || parsed.choices?.[0]?.delta?.reasoning 
+                                      || parsed.choices?.[0]?.delta?.thinking 
+                                      || "";
+                  if (deltaReasoning) fullReasoning += deltaReasoning;
+                } catch (e) {}
               }
             }
+
+            // 3. 终极兜底：如果中转站返回的根本不是 data: 流式，而是完整的普通 JSON 对象
+            let reasoningFromData = fullReasoning;
+            if (!fullContent && rawText.trim().startsWith("{")) {
+              try {
+                const jsonObj = JSON.parse(rawText.trim());
+                if (jsonObj.error) {
+                  throw new Error(jsonObj.error.message || JSON.stringify(jsonObj.error));
+                }
+                const candidateParts = jsonObj.candidates?.[0]?.content?.parts;
+                const geminiText = Array.isArray(candidateParts) ? candidateParts.map(p => (typeof p.text === "string" ? p.text : "")).join("") : (candidateParts?.[0]?.text || "");
+                fullContent = jsonObj.choices?.[0]?.message?.content 
+                           || jsonObj.choices?.[0]?.delta?.content 
+                           || jsonObj.content?.[0]?.text 
+                           || geminiText 
+                           || "";
+                reasoningFromData = jsonObj.choices?.[0]?.message?.reasoning_content 
+                                 || jsonObj.choices?.[0]?.message?.reasoning 
+                                 || fullReasoning 
+                                 || "";
+              } catch (e) {
+                throw new Error("解析返回内容失败: " + e.message);
+              }
+            }
+
+            if (!fullContent && reasoningFromData) {
+              fullContent = reasoningFromData;
+            }
+
+            if (!fullContent) {
+              throw new Error("收到空回复，原始返回前200字: " + rawText.slice(0, 200));
+            }
+
+            let aiResponseContent = fullContent;
 
             // 记录调试台日志（记录单次API调用的完整发送字段与完整返回字段）
             if (typeof recordChatDebugLog === "function") {
@@ -43409,18 +43480,9 @@ ${stickerContext || "无"}
                 temperature: state.apiConfig?.temperature || 0.8,
               }, {
                 rawContent: aiResponseContent,
-                reasoningContent: data?.choices?.[0]?.message?.reasoning_content || reasoningFromData || null,
-                fullData: data,
+                reasoningContent: reasoningFromData || null,
+                fullData: rawText,
               });
-            }
-
-            // 检查修复后的结果是否真的拿到了内容，绝不静默吞掉异常
-            if (!aiResponseContent || !aiResponseContent.trim()) {
-              if (reasoningFromData && reasoningFromData.trim()) {
-                aiResponseContent = reasoningFromData.trim();
-              } else {
-                throw new Error("模型未返回有效回复内容，请检查反代与模型配置");
-              }
             }
 
             console.log(`AI '${chat.name}' 的原始回复:`, aiResponseContent);
