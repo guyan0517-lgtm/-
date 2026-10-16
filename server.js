@@ -677,6 +677,10 @@ wss.on('connection', (ws) => {
     }
   });
 
+  ws.on('error', (err) => {
+    console.warn('[WS] Client socket error:', err.message);
+  });
+
   ws.on('close', () => {
     if (boundCode && peerClients.has(boundCode)) {
       peerClients.get(boundCode).delete(ws);
@@ -687,7 +691,20 @@ wss.on('connection', (ws) => {
   });
 });
 
+wss.on('error', (err) => {
+  console.warn('[WSS] Server error:', err.message);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught exception:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] Unhandled rejection:', reason);
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
+
 
