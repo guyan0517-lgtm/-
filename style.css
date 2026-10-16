@@ -33955,14 +33955,21 @@ select,
 
 #chat-input-actions-top.peer-group-toolbar {
   display: flex !important;
-  justify-content: center !important;
+  justify-content: safe center !important;
   align-items: center !important;
-  gap: clamp(4px, 1.6vw, 8px) !important;
-  padding: 0 !important;
+  gap: clamp(2px, 1.3vw, 6px) !important;
+  padding: 0 2px !important;
   margin: 0 auto !important;
   width: 100% !important;
+  max-width: 100% !important;
   box-sizing: border-box !important;
-  overflow: visible !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+}
+
+#chat-input-actions-top.peer-group-toolbar::-webkit-scrollbar {
+  display: none !important;
 }
 
 #chat-input-actions-top.peer-group-toolbar .chat-action-icon-btn {
@@ -34025,15 +34032,14 @@ select,
   display: flex;
   flex-direction: column;
   align-items: center;
-  border-top: 2px solid color-mix(in srgb, var(--card-bg) 75%, transparent);
-  border-left: 2px solid color-mix(in srgb, var(--card-bg) 75%, transparent);
-  border-right: 3px solid color-mix(in srgb, var(--border-color) 85%, var(--text-primary) 15%);
-  border-bottom: 4.5px solid color-mix(in srgb, var(--border-color) 85%, var(--text-primary) 15%);
+  border-top: 1.5px solid color-mix(in srgb, var(--card-bg) 65%, transparent);
+  border-left: 1.5px solid color-mix(in srgb, var(--card-bg) 65%, transparent);
+  border-right: 2px solid color-mix(in srgb, var(--mini-phone-shell-bg) 75%, var(--border-color));
+  border-bottom: 3px solid color-mix(in srgb, var(--mini-phone-shell-bg) 75%, var(--border-color));
   box-shadow:
-    0 4px 0 color-mix(in srgb, var(--border-color) 80%, var(--text-primary) 20%),
-    0 10px 22px color-mix(in srgb, var(--text-primary) 18%, transparent),
-    inset 1.5px 1.5px 0 color-mix(in srgb, var(--card-bg) 65%, transparent),
-    inset -1.5px -2.5px 0 color-mix(in srgb, var(--text-primary) 15%, transparent);
+    0 2px 0 color-mix(in srgb, var(--mini-phone-shell-bg) 70%, var(--border-color)),
+    0 8px 18px color-mix(in srgb, var(--text-primary) 7%, transparent),
+    inset 1px 1px 0 color-mix(in srgb, var(--card-bg) 50%, transparent);
   user-select: none;
 }
 
@@ -34114,10 +34120,10 @@ select,
 }
 
 #peer-mini-phone-shell.phone-theme-sakura {
-  --mini-phone-shell-bg: var(--accent-color);
+  --mini-phone-shell-bg: var(--tukey-primary, #ff9a9e);
   --mini-phone-screen-bg: var(--card-bg);
   --mini-phone-header-bg: var(--card-bg);
-  --mini-phone-sent-bg: var(--accent-color);
+  --mini-phone-sent-bg: var(--tukey-primary, #ff9a9e);
   --mini-phone-sent-text: var(--card-bg);
   --mini-phone-recv-bg: var(--secondary-bg);
   --mini-phone-recv-text: var(--text-primary);
@@ -34161,12 +34167,9 @@ select,
   width: 88px;
   height: 8px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--secondary-bg) 80%, var(--border-color) 20%);
-  border-top: 1.5px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
-  border-left: 1.5px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
-  border-right: 1px solid color-mix(in srgb, var(--card-bg) 80%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--card-bg) 80%, transparent);
-  box-shadow: inset 0 1px 2.5px color-mix(in srgb, var(--text-primary) 18%, transparent);
+  background: color-mix(in srgb, var(--card-bg) 60%, var(--border-color));
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  box-shadow: inset 0 1px 1.5px color-mix(in srgb, var(--border-color) 60%, transparent);
 }
 
 #peer-mini-phone-close-btn {
@@ -34203,15 +34206,12 @@ select,
   min-height: 0;
   padding: 6px;
   box-sizing: border-box;
-  background: var(--secondary-bg);
-  border-top: 2px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
-  border-left: 2px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
-  border-right: 1.5px solid color-mix(in srgb, var(--card-bg) 85%, transparent);
-  border-bottom: 1.5px solid color-mix(in srgb, var(--card-bg) 85%, transparent);
+  background: color-mix(in srgb, var(--card-bg) 80%, var(--secondary-bg));
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
   border-radius: 9px;
   box-shadow:
-    inset 1.5px 2px 4px color-mix(in srgb, var(--text-primary) 14%, transparent),
-    inset -1px -1px 2px color-mix(in srgb, var(--card-bg) 70%, transparent);
+    inset 1px 1px 2px color-mix(in srgb, var(--border-color) 70%, transparent),
+    inset -1px -1px 2px color-mix(in srgb, var(--card-bg) 80%, transparent);
   display: flex;
   flex-direction: column;
 }
@@ -34222,11 +34222,8 @@ select,
   min-height: 0;
   background: var(--mini-phone-screen-bg);
   border-radius: 5px;
-  border-top: 1px solid var(--border-color);
-  border-left: 1px solid var(--border-color);
-  border-right: 1px solid color-mix(in srgb, var(--card-bg) 75%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--card-bg) 75%, transparent);
-  box-shadow: inset 0 1.5px 3px color-mix(in srgb, var(--text-primary) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--border-color) 45%, transparent);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -34247,13 +34244,10 @@ select,
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--secondary-bg);
-  border-top: 1.5px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
-  border-left: 1.5px solid color-mix(in srgb, var(--border-color) 65%, var(--text-primary) 35%);
-  border-right: 1.5px solid color-mix(in srgb, var(--card-bg) 80%, transparent);
-  border-bottom: 1.5px solid color-mix(in srgb, var(--card-bg) 80%, transparent);
+  background: color-mix(in srgb, var(--card-bg) 85%, var(--secondary-bg));
+  border: 1.5px solid color-mix(in srgb, var(--border-color) 75%, transparent);
   box-shadow:
-    inset 0 1.5px 3px color-mix(in srgb, var(--text-primary) 12%, transparent),
+    inset 0 1px 2px color-mix(in srgb, var(--border-color) 50%, transparent),
     0 1px 0 color-mix(in srgb, var(--card-bg) 80%, transparent);
   cursor: pointer;
   padding: 0;

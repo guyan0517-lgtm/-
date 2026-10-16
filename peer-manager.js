@@ -3097,7 +3097,12 @@
       const groupChat = await this.findPeerGroupChatByIdAsync(data.groupId);
       if (!groupChat) return;
 
-      if (data.groupName) groupChat.name = data.groupName;
+      if (data.groupName) {
+        groupChat.name = data.groupName;
+        if (typeof window.updateSoloLineBannerUI === "function") {
+          window.updateSoloLineBannerUI(groupChat);
+        }
+      }
       if (!groupChat.settings) groupChat.settings = {};
       if (data.groupAvatar) groupChat.settings.groupAvatar = data.groupAvatar;
 
@@ -3639,8 +3644,9 @@
       }
 
       if (data.soloThreadId) {
+        msgToInsert.soloThreadId = data.soloThreadId;
         const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(groupChat) : null;
-        const localT = cfg && Array.isArray(cfg.threads) ? cfg.threads.find((t) => t.id === data.soloThreadId) : null;
+        const localT = cfg && Array.isArray(cfg.threads) ? cfg.threads.find((t) => t.id === data.soloThreadId || ("solo_" + t.id) === data.soloThreadId || t.id === ("solo_" + data.soloThreadId)) : null;
         if (localT) {
           if (!Array.isArray(localT.history)) localT.history = [];
           const updatedLocal = applyNaiMsgUpdateIfPresent(localT.history);
@@ -3649,21 +3655,32 @@
             if (!dupLocal) localT.history.push(msgToInsert);
           }
         }
-        const sharedRecs = groupChat.settings?.sharedSoloRecords?.[data.fromCode];
-        if (Array.isArray(sharedRecs)) {
-          const peerT = sharedRecs.find((t) => t && t.id === data.soloThreadId);
-          if (peerT) {
-            if (!Array.isArray(peerT.history)) peerT.history = [];
-            const updatedPeer = applyNaiMsgUpdateIfPresent(peerT.history);
-            if (!updatedPeer) {
-              const dupPeer = peerT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
-              if (!dupPeer) peerT.history.push(msgToInsert);
+        if (groupChat.settings?.sharedSoloRecords && typeof groupChat.settings.sharedSoloRecords === "object") {
+          for (const sList of Object.values(groupChat.settings.sharedSoloRecords)) {
+            if (!Array.isArray(sList)) continue;
+            const peerT = sList.find((t) => t && (t.id === data.soloThreadId || ("solo_" + t.id) === data.soloThreadId || t.id === ("solo_" + data.soloThreadId)));
+            if (peerT) {
+              if (!Array.isArray(peerT.history)) peerT.history = [];
+              const updatedPeer = applyNaiMsgUpdateIfPresent(peerT.history);
+              if (!updatedPeer) {
+                const dupPeer = peerT.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+                if (!dupPeer) peerT.history.push(msgToInsert);
+              }
+              peerT.publicHistory = peerT.history;
             }
-            peerT.publicHistory = peerT.history;
           }
         }
+        if (groupChat.viewingPeerSoloThread && (groupChat.viewingPeerSoloThread.id === data.soloThreadId || ("solo_" + groupChat.viewingPeerSoloThread.id) === data.soloThreadId || groupChat.viewingPeerSoloThread.id === ("solo_" + data.soloThreadId))) {
+          if (!Array.isArray(groupChat.viewingPeerSoloThread.history)) groupChat.viewingPeerSoloThread.history = [];
+          const updatedView = applyNaiMsgUpdateIfPresent(groupChat.viewingPeerSoloThread.history);
+          if (!updatedView) {
+            const dupView = groupChat.viewingPeerSoloThread.history.some((m) => (msgEvtId && m.eventId === msgEvtId) || (m.timestamp === msgToInsert.timestamp && m.content === msgToInsert.content));
+            if (!dupView) groupChat.viewingPeerSoloThread.history.push(msgToInsert);
+          }
+          groupChat.viewingPeerSoloThread.publicHistory = groupChat.viewingPeerSoloThread.history;
+        }
         const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(groupChat) : null;
-        if (groupChat.activeLineMode === "solo" && activeThread && activeThread.id === data.soloThreadId) {
+        if (groupChat.activeLineMode === "solo" && activeThread && (activeThread.id === data.soloThreadId || ("solo_" + activeThread.id) === data.soloThreadId || activeThread.id === ("solo_" + data.soloThreadId))) {
           const updatedActive = applyNaiMsgUpdateIfPresent(groupChat.history);
           if (updatedActive) {
             if (typeof window.updateNaiBubbleInDom === "function") {
