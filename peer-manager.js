@@ -8,7 +8,7 @@
   const TOPIC_PREFIX = "tukey_ephone_peer_v2/";
 
   const MIC_BTN_SVG = `
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block !important; width: 22px !important; height: 22px !important; color: var(--text-primary) !important; stroke: currentColor !important;">
       <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
       <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
       <line x1="12" y1="19" x2="12" y2="23"></line>
@@ -697,6 +697,16 @@
       this.refreshOnlineSoundSettingsUI();
     },
 
+    isPhoneSoundEnabled: function () {
+      return localStorage.getItem("tukey_peer_phone_sound_enabled_v1") !== "false";
+    },
+
+    togglePhoneSoundEnabled: function () {
+      const next = !this.isPhoneSoundEnabled();
+      localStorage.setItem("tukey_peer_phone_sound_enabled_v1", next ? "true" : "false");
+      this.refreshOnlineSoundSettingsUI();
+    },
+
     playPeerOnlineSound: function (forcePlay) {
       if (!forcePlay) {
         if (!this.isOnlineSoundEnabled()) return;
@@ -706,7 +716,7 @@
         const customDataUrl = localStorage.getItem("tukey_peer_online_custom_sound_v1") || "";
         if (customDataUrl && customDataUrl.startsWith("data:audio")) {
           const audio = new Audio(customDataUrl);
-          audio.volume = 0.45;
+          audio.volume = 0.225;
           audio.play().catch(() => {});
           return;
         }
@@ -726,7 +736,7 @@
         osc1.type = "sine";
         osc1.frequency.setValueAtTime(880, now);
         gain1.gain.setValueAtTime(0.001, now);
-        gain1.gain.linearRampToValueAtTime(0.14, now + 0.015);
+        gain1.gain.linearRampToValueAtTime(0.07, now + 0.015);
         gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
         osc1.connect(gain1);
         gain1.connect(ctx.destination);
@@ -739,7 +749,49 @@
         osc2.type = "sine";
         osc2.frequency.setValueAtTime(1174.66, now + 0.14);
         gain2.gain.setValueAtTime(0.001, now + 0.14);
-        gain2.gain.linearRampToValueAtTime(0.16, now + 0.155);
+        gain2.gain.linearRampToValueAtTime(0.08, now + 0.155);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.46);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.14);
+        osc2.stop(now + 0.48);
+      } catch (e) {}
+    },
+
+    playPeerPhoneSound: function (forcePlay) {
+      if (!forcePlay) {
+        if (!this.isPhoneSoundEnabled()) return;
+        if (document.hidden) return;
+      }
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!this._onlineAudioCtx) {
+          this._onlineAudioCtx = new AudioCtx();
+        }
+        const ctx = this._onlineAudioCtx;
+        if (ctx.state === "suspended") {
+          ctx.resume().catch(() => {});
+        }
+        const now = ctx.currentTime;
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(880, now);
+        gain1.gain.setValueAtTime(0.001, now);
+        gain1.gain.linearRampToValueAtTime(0.07, now + 0.015);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.23);
+
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(1174.66, now + 0.14);
+        gain2.gain.setValueAtTime(0.001, now + 0.14);
+        gain2.gain.linearRampToValueAtTime(0.08, now + 0.155);
         gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.46);
         osc2.connect(gain2);
         gain2.connect(ctx.destination);
@@ -763,6 +815,16 @@
       }
       if (clearBtn) {
         clearBtn.style.display = customDataUrl ? "inline-flex" : "none";
+      }
+
+      const phoneStatusText = document.getElementById("peer-phone-sound-status-text");
+      const phoneToggleBtn = document.getElementById("peer-phone-toggle-sound-btn");
+      const phoneEnabled = this.isPhoneSoundEnabled();
+      if (phoneStatusText) {
+        phoneStatusText.textContent = phoneEnabled ? "短信叮咚" : "已关闭";
+      }
+      if (phoneToggleBtn) {
+        phoneToggleBtn.textContent = phoneEnabled ? "开启" : "关闭";
       }
     },
 
@@ -5074,7 +5136,14 @@
       const recordPanel = document.getElementById("peer-voice-record-panel");
       const stickerPanel = document.getElementById("sticker-panel");
 
-      const isPeer = Boolean(chat && chat.roleType === "peer" && !chat.isGroup);
+      const isPeer = Boolean(
+        chat &&
+        !chat.isGroup &&
+        (chat.roleType === "peer" || Boolean(chat.peerCode) || String(chat.id || "").startsWith("peer_"))
+      );
+      if (chat && isPeer && chat.roleType !== "peer") {
+        chat.roleType = "peer";
+      }
       const isPeerGroup = Boolean(
         chat &&
         chat.isGroup &&
@@ -5119,17 +5188,23 @@
       if (isPeer) {
         if (rerollBtn) rerollBtn.style.display = "none";
         if (actionsTop) {
-          actionsTop.style.justifyContent = "center";
+          actionsTop.style.justifyContent = "flex-start";
           actionsTop.style.gap = "8px";
         }
         if (affectionBtn) affectionBtn.style.display = "none";
         if (mapBtn) mapBtn.style.display = "none";
         if (waitReplyBtn) {
+          waitReplyBtn.style.display = "flex";
+          waitReplyBtn.style.visibility = "visible";
+          waitReplyBtn.style.opacity = "1";
+          waitReplyBtn.style.pointerEvents = "auto";
+          waitReplyBtn.style.color = "var(--text-primary)";
+          waitReplyBtn.style.backgroundImage = "none";
           if (!waitReplyBtn.dataset.origHtml) {
             waitReplyBtn.dataset.origHtml = waitReplyBtn.innerHTML;
           }
           waitReplyBtn.innerHTML = MIC_BTN_SVG;
-          waitReplyBtn.title = "录音";
+          waitReplyBtn.title = "发送语音";
         }
         this.ensureVoiceRecordPanel();
         this.refreshActivePeerHeaderStatus();
@@ -5146,9 +5221,17 @@
         if (affectionBtn) {
           affectionBtn.style.display = chat && chat.isGroup ? "none" : "inline-flex";
         }
-        if (waitReplyBtn && waitReplyBtn.dataset.origHtml) {
-          waitReplyBtn.innerHTML = waitReplyBtn.dataset.origHtml;
-          waitReplyBtn.title = "等待回复";
+        if (waitReplyBtn) {
+          waitReplyBtn.style.display = "flex";
+          waitReplyBtn.style.visibility = "visible";
+          waitReplyBtn.style.opacity = "1";
+          waitReplyBtn.style.pointerEvents = "auto";
+          waitReplyBtn.style.color = "";
+          waitReplyBtn.style.backgroundImage = "";
+          if (waitReplyBtn.dataset.origHtml) {
+            waitReplyBtn.innerHTML = waitReplyBtn.dataset.origHtml;
+            waitReplyBtn.title = "等待回复";
+          }
         }
         if (recordPanel) {
           this.cancelVoiceRecording();
@@ -5157,7 +5240,7 @@
       }
 
       const chatInput = document.getElementById("chat-input");
-      const sendBtn = document.getElementById("chat-send-btn");
+      const sendBtn = document.getElementById("send-btn") || document.getElementById("chat-send-btn");
       if (chat && chat.isGroup && chat.activeLineMode === "solo") {
         const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
         const canSpeak = typeof window.canCurrentUserSpeakInSoloThread === "function" ? window.canCurrentUserSpeakInSoloThread(activeThread, chat) : true;

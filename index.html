@@ -1439,6 +1439,18 @@
                     <button type="button" class="moe-btn-small" id="peer-online-clear-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.clearCustomOnlineSound)window.PeerManager.clearCustomOnlineSound();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: none; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">清除</button>
                   </div>
                 </div>
+                <div style="margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                    <div style="width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--card-bg); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary);"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                    </div>
+                    <span id="peer-phone-sound-status-text" style="font-size: 12px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">短信叮咚</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <button type="button" class="moe-btn-small" id="peer-phone-toggle-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.togglePhoneSoundEnabled)window.PeerManager.togglePhoneSoundEnabled();" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">开启</button>
+                    <button type="button" class="moe-btn-small" id="peer-phone-test-sound-btn" onclick="if(window.PeerManager&&window.PeerManager.playPeerPhoneSound)window.PeerManager.playPeerPhoneSound(true);" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">试听</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -32756,6 +32768,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           setTimeout(scrollToBottomDirectly, 20);
           setTimeout(scrollToBottomDirectly, 100);
           renderChatPet();
+          if (window.PeerManager && typeof window.PeerManager.applyPeerChatInputUI === "function") {
+            window.PeerManager.applyPeerChatInputUI(chat);
+          }
         }
 
         function prependLoadMoreButton(container) {
@@ -81347,7 +81362,11 @@ ${stickerContext || "无"}
           if (waitReplyBtnEl) {
             waitReplyBtnEl.addEventListener("click", () => {
               const activeChat = state.chats && state.activeChatId ? state.chats[state.activeChatId] : null;
-              if (activeChat && activeChat.roleType === "peer") {
+              if (
+                activeChat &&
+                !activeChat.isGroup &&
+                (activeChat.roleType === "peer" || Boolean(activeChat.peerCode) || String(activeChat.id || "").startsWith("peer_"))
+              ) {
                 if (window.PeerManager && typeof window.PeerManager.toggleVoiceRecordPanel === "function") {
                   window.PeerManager.toggleVoiceRecordPanel();
                 }
@@ -95100,8 +95119,8 @@ ${stickerContext || "无"}
             if (changed && !skipSync) {
               saveAndSyncPhoneData(chat);
             }
-            if (newlyDeliveredToMe && typeof playNotificationSound === "function") {
-              try { playNotificationSound(); } catch (e) {}
+            if (newlyDeliveredToMe && window.PeerManager && typeof window.PeerManager.playPeerPhoneSound === "function") {
+              try { window.PeerManager.playPeerPhoneSound(); } catch (e) {}
             }
             window.updatePeerPhoneBtnUI(chat);
             const overlay = document.getElementById("peer-mini-phone-overlay");
@@ -95146,6 +95165,7 @@ ${stickerContext || "无"}
             const lineKey = getCurrentLineKey(chat);
             let out = text;
             let stateChanged = false;
+            let kpcSentToMeNow = false;
 
             if (out.includes("[手机：无信号]")) {
               pd.signalByLine[lineKey] = false;
@@ -95214,11 +95234,17 @@ ${stickerContext || "无"}
                 aiContextInjectedSender: true,
                 aiContextInjectedRecipient: true
               });
+              if (toId === myContactId && canSendNow) {
+                kpcSentToMeNow = true;
+              }
               stateChanged = true;
             }
             out = out.replace(smsRegex, "").trim();
 
             if (stateChanged) {
+              if (kpcSentToMeNow && window.PeerManager && typeof window.PeerManager.playPeerPhoneSound === "function") {
+                try { window.PeerManager.playPeerPhoneSound(); } catch (e) {}
+              }
               window.evaluatePeerPhonePendingMessages(chat);
               saveAndSyncPhoneData(chat);
               window.updatePeerPhoneBtnUI(chat);
@@ -95353,8 +95379,8 @@ ${stickerContext || "无"}
                 }
               });
               pd.messages.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-              if (gotNewUnread && typeof playNotificationSound === "function") {
-                try { playNotificationSound(); } catch (e) {}
+              if (gotNewUnread && window.PeerManager && typeof window.PeerManager.playPeerPhoneSound === "function") {
+                try { window.PeerManager.playPeerPhoneSound(); } catch (e) {}
               }
             }
 
