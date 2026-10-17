@@ -34903,6 +34903,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               .replace(/\r/g, "\n")
               .replace(/\\n/g, "\n")
               .trim();
+            const isCleanBotTextEnabled = Boolean(
+              (document.getElementById("clean-bot-text-switch") && document.getElementById("clean-bot-text-switch").checked) ||
+              (state && state.apiConfig && state.apiConfig.cleanBotTextEnabled) ||
+              (window.state && window.state.apiConfig && window.state.apiConfig.cleanBotTextEnabled)
+            );
             const quoteHasHtml = /<\/?(?:div|table|tbody|thead|tr|td|th|span|article|section|main|aside|header|footer|style|script|svg|button|form|input|select|textarea|iframe|p|h[1-6]|ul|ol|li|blockquote|pre|code|figure|figcaption|canvas|nav)\b/i.test(fullQuotedContent);
             if (isCleanBotTextEnabled && !quoteHasHtml) {
               fullQuotedContent = fullQuotedContent
@@ -35551,6 +35556,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           startPetDecayTimer();
         }
+        window.openChat = openChat;
 
         /**
          * 格式化单条消息，用于记忆互通的上下文
@@ -93654,6 +93660,9 @@ ${stickerContext || "无"}
           }
 
           window.updateSoloLineBannerUI(chat);
+          if (typeof window.onPeerPhoneLineSwitched === "function") {
+            window.onPeerPhoneLineSwitched(chat);
+          }
           refreshChatView(chat.id);
           if (window.PeerManager && typeof window.PeerManager.applyPeerChatInputUI === "function") {
             window.PeerManager.applyPeerChatInputUI(chat);
@@ -94755,7 +94764,7 @@ ${stickerContext || "无"}
             }
           }
 
-          window.evaluatePeerPhonePendingMessages = function (chat) {
+          window.evaluatePeerPhonePendingMessages = function (chat, skipSync) {
             if (!chat || !chat.isGroup || typeof window.isPeerGroupChat !== "function" || !window.isPeerGroupChat(chat)) return false;
             const pd = ensurePeerPhoneData(chat);
             if (!pd) return false;
@@ -94796,7 +94805,7 @@ ${stickerContext || "无"}
               }
             });
 
-            if (changed) {
+            if (changed && !skipSync) {
               saveAndSyncPhoneData(chat);
             }
             if (newlyDeliveredToMe && typeof playNotificationSound === "function") {
@@ -94811,7 +94820,7 @@ ${stickerContext || "无"}
           };
 
           window.onPeerPhoneStatusBarUpdated = function (chat, statusMsgObj) {
-            if (!chat || !statusMsgObj) return;
+            if (!chat || !chat.isGroup || typeof window.isPeerGroupChat !== "function" || !window.isPeerGroupChat(chat) || !statusMsgObj) return;
             const pd = ensurePeerPhoneData(chat);
             const lineKey = getCurrentLineKey(chat);
             const parsedTime = parseStatusGameTimeFromMsg(statusMsgObj, chat);
@@ -94823,31 +94832,21 @@ ${stickerContext || "无"}
           };
 
           window.onPeerPhoneLineSwitched = function (chat) {
-            if (!chat) return;
+            if (!chat || !chat.isGroup || typeof window.isPeerGroupChat !== "function" || !window.isPeerGroupChat(chat)) return;
             const pd = ensurePeerPhoneData(chat);
             const myCode = getMyPeerCodeLocal();
             const lineKey = getCurrentLineKey(chat);
+            const prevLine = pd.playerActiveLine[myCode];
             pd.playerActiveLine[myCode] = lineKey;
             const latestT = getLineLatestGameTime(chat, lineKey);
+            const prevTimeDisplay = pd.lineGameTime[lineKey] ? pd.lineGameTime[lineKey].display : "";
             if (latestT) pd.lineGameTime[lineKey] = latestT;
-            window.evaluatePeerPhonePendingMessages(chat);
-            saveAndSyncPhoneData(chat);
+            const nextTimeDisplay = pd.lineGameTime[lineKey] ? pd.lineGameTime[lineKey].display : "";
+            const msgChanged = window.evaluatePeerPhonePendingMessages(chat, true);
+            if (prevLine !== lineKey || prevTimeDisplay !== nextTimeDisplay || msgChanged) {
+              saveAndSyncPhoneData(chat);
+            }
           };
-
-          const origUpdateSoloLineBannerUI = window.updateSoloLineBannerUI;
-          if (typeof origUpdateSoloLineBannerUI === "function" && !origUpdateSoloLineBannerUI._phoneWrapped) {
-            const wrappedBanner = function (chat) {
-              const r = origUpdateSoloLineBannerUI.apply(this, arguments);
-              try {
-                if (chat && typeof window.onPeerPhoneLineSwitched === "function") {
-                  window.onPeerPhoneLineSwitched(chat);
-                }
-              } catch (e) {}
-              return r;
-            };
-            wrappedBanner._phoneWrapped = true;
-            window.updateSoloLineBannerUI = wrappedBanner;
-          }
 
           window.extractAndHandlePeerPhoneTagsInText = function (chat, text, senderName) {
             if (!chat || typeof text !== "string") return text;
@@ -95067,7 +95066,7 @@ ${stickerContext || "无"}
               }
             }
 
-            window.evaluatePeerPhonePendingMessages(chat);
+            window.evaluatePeerPhonePendingMessages(chat, true);
             window.updatePeerPhoneBtnUI(chat);
             const overlay = document.getElementById("peer-mini-phone-overlay");
             if (overlay && overlay.classList.contains("visible")) {

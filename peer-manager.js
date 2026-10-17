@@ -5202,6 +5202,16 @@
 
       this.renderFriendRequestsUI();
 
+      const modal = document.getElementById("contact-peer-modal");
+      if (modal) {
+        modal.classList.add("visible");
+        modal.style.display = "flex";
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(myCode).catch(() => {});
+      }
+
       if (groupSelect && window.db && window.db.qzoneGroups) {
         groupSelect.innerHTML = "";
         try {
@@ -5226,16 +5236,6 @@
           opt.textContent = "我的好友";
           groupSelect.appendChild(opt);
         }
-      }
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(myCode).catch(() => {});
-      }
-
-      const modal = document.getElementById("contact-peer-modal");
-      if (modal) {
-        modal.classList.add("visible");
-        modal.style.display = "flex";
       }
     },
 
