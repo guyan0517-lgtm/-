@@ -3209,10 +3209,12 @@
           <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
           <span>思维链</span>
           <div class="header-actions">
+            <button type="button" id="tc-import-btn" class="tc-btn-action">导入</button>
             <button type="button" id="tc-set-default-btn" class="tc-btn-action">设默认</button>
             <span class="action-btn" id="tc-add-preset-btn" title="新建预设">+</span>
           </div>
         </div>
+        <input type="file" id="tc-file-import-input" accept=".txt,text/plain" style="display: none;" multiple />
         <div class="list-container">
           <div id="tc-preset-list" class="tc-preset-list-container"></div>
         </div>
@@ -9995,10 +9997,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <textarea id="tc-preset-coc-input" class="moe-input" rows="4" placeholder="输入跑团模块专属指令..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
           </div>
         </div>
-        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
-          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-tc-editor-btn">关闭</button>
-          <button type="button" class="chat-mod-footer-btn primary" id="save-tc-editor-btn">保存</button>
+        <div class="modal-footer" style="display: flex; gap: 8px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color); justify-content: flex-end; align-items: center;">
+          <button type="button" class="chat-mod-footer-btn secondary" id="tc-editor-import-btn" style="flex: 1;">导入</button>
+          <button type="button" class="chat-mod-footer-btn secondary" id="tc-editor-export-btn" style="flex: 1;">导出</button>
+          <button type="button" class="chat-mod-footer-btn secondary" id="cancel-tc-editor-btn" style="flex: 1;">关闭</button>
+          <button type="button" class="chat-mod-footer-btn primary" id="save-tc-editor-btn" style="flex: 1;">保存</button>
         </div>
+        <input type="file" id="tc-editor-file-import-input" accept=".txt,text/plain" style="display: none;" />
       </div>
     </div>
 
@@ -23348,6 +23353,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             editBtn.textContent = "编辑";
             editBtn.onclick = () => openThoughtChainEditor(preset.id);
 
+            const exportBtn = document.createElement("button");
+            exportBtn.type = "button";
+            exportBtn.className = "tc-btn-action";
+            exportBtn.textContent = "导出";
+            exportBtn.onclick = () => exportThoughtChainPreset(preset.id);
+
             const delBtn = document.createElement("button");
             delBtn.type = "button";
             delBtn.className = "tc-btn-action";
@@ -23355,6 +23366,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             delBtn.onclick = () => deleteThoughtChainPreset(preset.id);
 
             actionsRow.appendChild(editBtn);
+            actionsRow.appendChild(exportBtn);
             actionsRow.appendChild(delBtn);
 
             headerRow.appendChild(actionsRow);
@@ -23474,6 +23486,168 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           await db.globalSettings.put(state.globalSettings);
           await renderThoughtChainPresets();
         }
+
+        function downloadTextFile(filename, content) {
+          const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
+
+        function formatThoughtChainAsText(preset) {
+          const name = (preset && preset.name ? preset.name : "未命名思维链").trim();
+          const general = preset && typeof preset.generalContent === "string" ? preset.generalContent : "";
+          const coc = preset && typeof preset.cocContent === "string" ? preset.cocContent : "";
+
+          let out = `=== 思维链预设 ===\n名称: ${name}\n\n=== 一般思维链内容 ===\n${general}\n`;
+          if (coc && coc.trim().length > 0) {
+            out += `\n=== 跑团模块内容 ===\n${coc}\n`;
+          }
+          return out;
+        }
+
+        function parseThoughtChainFromText(rawText, fallbackName = "导入思维链") {
+          const text = String(rawText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+          const presetHeader = "=== 思维链预设 ===";
+          const generalHeader = "=== 一般思维链内容 ===";
+          const cocHeader = "=== 跑团模块内容 ===";
+
+          if (text.includes(presetHeader) || text.includes(generalHeader)) {
+            let name = fallbackName;
+            const nameMatch = text.match(/名称:\s*([^\n\r]+)/);
+            if (nameMatch && nameMatch[1].trim()) {
+              name = nameMatch[1].trim();
+            }
+
+            let generalContent = "";
+            let cocContent = "";
+
+            const generalIndex = text.indexOf(generalHeader);
+            const cocIndex = text.indexOf(cocHeader);
+
+            if (generalIndex !== -1) {
+              const generalStart = generalIndex + generalHeader.length;
+              if (cocIndex !== -1 && cocIndex > generalIndex) {
+                generalContent = text.slice(generalStart, cocIndex);
+                cocContent = text.slice(cocIndex + cocHeader.length);
+              } else {
+                generalContent = text.slice(generalStart);
+              }
+            } else if (cocIndex !== -1) {
+              cocContent = text.slice(cocIndex + cocHeader.length);
+            }
+
+            if (generalContent.startsWith("\n")) generalContent = generalContent.slice(1);
+            if (generalContent.endsWith("\n")) generalContent = generalContent.slice(0, -1);
+            if (cocContent.startsWith("\n")) cocContent = cocContent.slice(1);
+            if (cocContent.endsWith("\n")) cocContent = cocContent.slice(0, -1);
+
+            return {
+              name: name || fallbackName,
+              generalContent,
+              cocContent,
+            };
+          }
+
+          return {
+            name: fallbackName,
+            generalContent: text,
+            cocContent: "",
+          };
+        }
+
+        async function exportThoughtChainPreset(presetId) {
+          const preset = await db.thoughtChainPresets.get(presetId);
+          if (!preset) return;
+          const txtContent = formatThoughtChainAsText(preset);
+          const safeName = (preset.name || "思维链预设").replace(/[/\\?%*:|"<>]/g, "_");
+          downloadTextFile(`${safeName}.txt`, txtContent);
+        }
+        window.exportThoughtChainPreset = exportThoughtChainPreset;
+
+        function exportCurrentThoughtChainEditor() {
+          const nameInput = document.getElementById("tc-preset-name-input");
+          const generalInput = document.getElementById("tc-preset-general-input");
+          const cocInput = document.getElementById("tc-preset-coc-input");
+
+          const name = (nameInput?.value || "").trim() || "未命名思维链";
+          const generalContent = generalInput?.value || "";
+          const cocContent = cocInput?.value || "";
+
+          const txtContent = formatThoughtChainAsText({ name, generalContent, cocContent });
+          const safeName = name.replace(/[/\\?%*:|"<>]/g, "_");
+          downloadTextFile(`${safeName}.txt`, txtContent);
+        }
+        window.exportCurrentThoughtChainEditor = exportCurrentThoughtChainEditor;
+
+        async function handleThoughtChainFileImport(event) {
+          const files = event.target.files;
+          if (!files || files.length === 0) return;
+
+          let importedCount = 0;
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fallbackName = file.name.replace(/\.[^/.]+$/, "").trim() || "导入思维链";
+            try {
+              const text = await file.text();
+              const parsed = parseThoughtChainFromText(text, fallbackName);
+              if (parsed) {
+                await db.thoughtChainPresets.add({
+                  name: parsed.name,
+                  generalContent: parsed.generalContent,
+                  cocContent: parsed.cocContent,
+                  createdAt: Date.now(),
+                });
+                importedCount++;
+              }
+            } catch (e) {
+              console.error("导入思维链文件失败:", e);
+            }
+          }
+
+          event.target.value = "";
+          if (importedCount > 0) {
+            await renderThoughtChainPresets();
+            if (typeof showCustomAlert === "function") {
+              await showCustomAlert("导入成功", `成功导入 ${importedCount} 个思维链预设`);
+            } else {
+              alert(`成功导入 ${importedCount} 个思维链预设`);
+            }
+          }
+        }
+        window.handleThoughtChainFileImport = handleThoughtChainFileImport;
+
+        async function handleThoughtChainEditorFileImport(event) {
+          const file = event.target.files && event.target.files[0];
+          if (!file) return;
+
+          const fallbackName = file.name.replace(/\.[^/.]+$/, "").trim() || "导入思维链";
+          try {
+            const text = await file.text();
+            const parsed = parseThoughtChainFromText(text, fallbackName);
+            if (parsed) {
+              const nameInput = document.getElementById("tc-preset-name-input");
+              const generalInput = document.getElementById("tc-preset-general-input");
+              const cocInput = document.getElementById("tc-preset-coc-input");
+
+              if (parsed.name && (!nameInput.value || nameInput.value.trim() === "")) {
+                nameInput.value = parsed.name;
+              }
+              if (generalInput) generalInput.value = parsed.generalContent || "";
+              if (cocInput) cocInput.value = parsed.cocContent || "";
+            }
+          } catch (e) {
+            console.error("读取思维链文件失败:", e);
+          }
+          event.target.value = "";
+        }
+        window.handleThoughtChainEditorFileImport = handleThoughtChainEditorFileImport;
 
         async function openThoughtChainBindModal() {
           if (!state.activeChatId) return;
@@ -78739,6 +78913,25 @@ ${stickerContext || "无"}
 
           const tcSetDefBtn = document.getElementById("tc-set-default-btn");
           if (tcSetDefBtn) tcSetDefBtn.addEventListener("click", setThoughtChainDefault);
+
+          const tcImportBtn = document.getElementById("tc-import-btn");
+          const tcFileInput = document.getElementById("tc-file-import-input");
+          if (tcImportBtn && tcFileInput) {
+            tcImportBtn.addEventListener("click", () => tcFileInput.click());
+            tcFileInput.addEventListener("change", handleThoughtChainFileImport);
+          }
+
+          const tcEditorImportBtn = document.getElementById("tc-editor-import-btn");
+          const tcEditorFileInput = document.getElementById("tc-editor-file-import-input");
+          if (tcEditorImportBtn && tcEditorFileInput) {
+            tcEditorImportBtn.addEventListener("click", () => tcEditorFileInput.click());
+            tcEditorFileInput.addEventListener("change", handleThoughtChainEditorFileImport);
+          }
+
+          const tcEditorExportBtn = document.getElementById("tc-editor-export-btn");
+          if (tcEditorExportBtn) {
+            tcEditorExportBtn.addEventListener("click", exportCurrentThoughtChainEditor);
+          }
 
           const openTcBindSingle = document.getElementById("open-thought-chain-bind-btn-single");
           if (openTcBindSingle) openTcBindSingle.addEventListener("click", openThoughtChainBindModal);
