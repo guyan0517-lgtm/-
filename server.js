@@ -207,7 +207,7 @@ const EPHEMERAL_EVENT_TYPES = new Set([
 function sanitizeMailboxEventsForDisk(events) {
   if (!Array.isArray(events)) return [];
   const now = Date.now();
-  const maxAgeMs = 3 * 24 * 60 * 60 * 1000;
+  const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
   return events
     .filter((item) => {
       if (!item || typeof item !== 'object') return false;
@@ -215,7 +215,7 @@ function sanitizeMailboxEventsForDisk(events) {
       if (item.timestamp && now - item.timestamp > maxAgeMs) return false;
       return true;
     })
-    .slice(-40);
+    .slice(-100);
 }
 
 function loadMailboxStoreFromDisk() {
@@ -300,8 +300,13 @@ function pushToMailbox(code, event) {
     box = box.filter(item => !(item && item.type === 'peer_ack' && item.ackEventId === event.ackEventId));
   }
   box.push(event);
-  if (box.length > 60) {
-    box = box.slice(-60);
+  if (box.length > 150) {
+    const nonEphemeral = box.filter(item => item && !EPHEMERAL_EVENT_TYPES.has(item.type));
+    if (nonEphemeral.length <= 150) {
+      box = nonEphemeral;
+    } else {
+      box = nonEphemeral.slice(-150);
+    }
   }
   peerMailboxes.set(code, box);
   if (!EPHEMERAL_EVENT_TYPES.has(event.type)) {
