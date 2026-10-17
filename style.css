@@ -476,7 +476,11 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   /* 保持内部消息气泡的flex布局 */
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
+}
+
+.message-wrapper:has(.group-sender-line) {
+  margin-top: 6px;
 }
 
 /* ▲▲▲ 替换结束 ▲▲▲ */
@@ -1324,10 +1328,42 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 .message-bubble .content {
   position: relative;
   font-size: var(--chat-font-size, 16px);
-  padding: 8px 12px;
-  line-height: 1.5;
+  padding: 7px 11px;
+  line-height: 1.45;
   word-break: break-all;
   white-space: pre-wrap;
+}
+
+.message-bubble .content p {
+  margin: 0;
+}
+
+.message-bubble .content p + p {
+  margin-top: 4px;
+}
+
+.message-bubble.is-link-share .content,
+.message-bubble.is-dating-summary .content,
+.message-bubble.is-gift-notification .content,
+.message-bubble.is-borrow-request .content,
+.message-bubble.is-book-share .content,
+.message-bubble.is-cart-share-request .content,
+.message-bubble.is-location .content,
+.message-bubble.is-voice-message .content,
+.message-bubble.is-transfer .content,
+.message-bubble.is-waimai-request .content,
+.message-bubble.is-red-packet .content,
+.message-bubble.is-ls-diary-notification .content,
+.message-bubble.is-poll .content,
+.message-bubble.is-tarot-reading .content,
+.message-bubble.is-ls-disconnect .content,
+.message-bubble.is-sticker .content,
+.message-bubble.has-image .content,
+.message-bubble.is-inventory-card .content,
+.message-bubble.is-realimag .content,
+.message-bubble.is-ai-image .content,
+.message-bubble.is-html-card .content {
+  white-space: normal;
 }
 /* ▲▲▲ 替换结束 ▲▲▲ */
 
@@ -4922,14 +4958,14 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 /* 2. 消息气泡内部的“引用消息块” */
 .quoted-message {
-  padding: 6px 10px;
-  margin-bottom: 6px;
+  padding: 5px 8px;
+  margin-bottom: 5px;
   background-color: rgba(0, 0, 0, 0.04);
   border-left: 2px solid var(--accent-color);
   border-radius: 4px;
-  font-size: 0.9em; /* 字体比正文小一点 */
-  opacity: 0.8;
-  /* (已移除 overflow: hidden;) */
+  font-size: 0.9em;
+  opacity: 0.85;
+  white-space: normal;
 }
 
 #phone-screen.dark-mode .quoted-message {
@@ -4940,6 +4976,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 .quoted-message .quoted-sender {
   font-weight: 600;
   color: var(--accent-color);
+  line-height: 1.35;
 }
 #phone-screen.dark-mode .quoted-message .quoted-sender {
   color: #a0cff1;
@@ -4947,10 +4984,10 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 .quoted-message .quoted-content {
   color: var(--text-secondary);
-  white-space: normal; /* 核心修正1: 允许文本正常换行 */
-  word-break: break-word; /* 核心修正2: 强制长单词或连续字符断开，防止溢出 */
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.4;
   display: block;
-  /* (已移除 overflow 和 text-overflow，因为我们需要多行显示而不是单行省略号) */
 }
 
 /* === 字体预览框样式 (修正后) === */

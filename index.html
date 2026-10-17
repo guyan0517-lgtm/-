@@ -34830,7 +34830,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             if (typeof formattedText === "string") {
-              formattedText = formattedText.replace(/\\n/g, "\n");
+              formattedText = formattedText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\\n/g, "\n").trim();
             }
 
             const isCleanBotTextEnabled = Boolean(
@@ -34860,6 +34860,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               if (!/<(?:br|p|div|table|blockquote|section|ul|ol|li)\b/i.test(textWithoutSystemTags)) {
                 formattedText = formattedText.replace(/\n/g, "<br>");
+              } else {
+                formattedText = formattedText
+                  .replace(/<br\s*\/?>\s*\n/gi, "<br>")
+                  .replace(/(<\/(?:p|div|blockquote|ul|ol|li|table|tr|h[1-6])>)\s*\n+/gi, "$1");
               }
               contentHtml = formattedText + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
             } else {
@@ -34894,7 +34898,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 无论是用户消息还是AI消息，只要它包含了 .quote 对象，就执行这段逻辑
           if (msg.quote) {
             // a. 直接获取完整的、未经截断的引用内容
-            let fullQuotedContent = String(msg.quote.content || "");
+            let fullQuotedContent = String(msg.quote.content || "")
+              .replace(/\r\n/g, "\n")
+              .replace(/\r/g, "\n")
+              .replace(/\\n/g, "\n")
+              .trim();
             const quoteHasHtml = /<\/?(?:div|table|tbody|thead|tr|td|th|span|article|section|main|aside|header|footer|style|script|svg|button|form|input|select|textarea|iframe|p|h[1-6]|ul|ol|li|blockquote|pre|code|figure|figcaption|canvas|nav)\b/i.test(fullQuotedContent);
             if (isCleanBotTextEnabled && !quoteHasHtml) {
               fullQuotedContent = fullQuotedContent
@@ -34902,13 +34910,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 .replace(/\n{2,}/g, "\n");
             }
 
-            // b. 构建引用块的HTML
-            quoteHtml = `
-			        <div class="quoted-message">
-			            <div class="quoted-sender">回复 ${msg.quote.senderName}:</div>
-			            <div class="quoted-content">${fullQuotedContent}</div>
-			        </div>
-			    `;
+            // b. 构建引用块的HTML（严禁首尾换行缩进，防止被 pre-wrap 渲染成空白行）
+            quoteHtml = `<div class="quoted-message"><div class="quoted-sender">回复 ${msg.quote.senderName}:</div><div class="quoted-content">${fullQuotedContent}</div></div>`;
           }
 
           if (msg.isPlayerHidden) {
@@ -34922,18 +34925,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             contentHtml = "<span></span>";
           }
 
-          // 2. 拼接最终的气泡内容
-          //    将构建好的 quoteHtml (如果存在) 和 contentHtml 组合起来
-          // --- 将头像和内容都放回气泡内部 ---
+          const compactContentHtml = typeof contentHtml === "string" ? contentHtml.trim() : contentHtml;
+
+          // 2. 拼接最终的气泡内容（.content 内部严禁换行缩进，防止 pre-wrap 撑出上下巨幅留白）
           if (thinkingHtml) {
             bubble.innerHTML = `
 			        ${avatarHtml}
 			        <div class="bubble-body-column" style="display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; min-width: 0;">
 			            ${thinkingHtml}
-			            <div class="content">
-			                ${quoteHtml}
-			                ${contentHtml}
-			            </div>
+			            <div class="content">${quoteHtml}${compactContentHtml}</div>
 			            ${musicLineHtml}
 			        </div>
 			    `;
@@ -34941,10 +34941,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             bubble.innerHTML = `
 			        ${avatarHtml}
 			        <div class="bubble-body-column" style="display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; min-width: 0;">
-			            <div class="content">
-			                ${quoteHtml}
-			                ${contentHtml}
-			            </div>
+			            <div class="content">${quoteHtml}${compactContentHtml}</div>
 			            ${musicLineHtml}
 			        </div>
 			    `;
