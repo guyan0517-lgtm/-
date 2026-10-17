@@ -76,13 +76,14 @@
 
       let savedCode = localStorage.getItem("tukey_my_peer_code");
       if (
-        !savedCode &&
         window.state &&
         window.state.globalSettings &&
         window.state.globalSettings.myPeerCode
       ) {
-        savedCode = window.state.globalSettings.myPeerCode;
-        localStorage.setItem("tukey_my_peer_code", savedCode);
+        if (!savedCode) {
+          savedCode = window.state.globalSettings.myPeerCode;
+          localStorage.setItem("tukey_my_peer_code", savedCode);
+        }
       }
 
       if (savedCode) {
@@ -108,31 +109,118 @@
     },
 
     isPeerDeletedByUser: function (peerCode) {
-      if (!peerCode) return false;
-      return this.getDeletedPeerCodes().includes(peerCode);
+      const norm = this.normalizePeerCode(peerCode);
+      if (!norm) return false;
+      const list = this.getDeletedPeerCodes();
+      return list.includes(norm) || list.includes(peerCode);
     },
 
     markPeerDeletedByUser: function (peerCode) {
-      if (!peerCode) return;
+      const norm = this.normalizePeerCode(peerCode);
+      if (!norm) return;
       try {
         const list = this.getDeletedPeerCodes();
-        if (!list.includes(peerCode)) {
-          list.push(peerCode);
-          localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(list));
+        if (!list.includes(norm)) {
+          list.push(norm);
         }
+        if (peerCode !== norm && !list.includes(peerCode)) {
+          list.push(peerCode);
+        }
+        localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(list));
+
         const backup = this.getSavedFriendsBackup();
-        if (backup[peerCode]) {
+        if (backup[norm] || backup[peerCode]) {
+          delete backup[norm];
           delete backup[peerCode];
           localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(backup));
+        }
+
+        const outMap = this.getOutgoingRequests();
+        if (outMap[norm] || outMap[peerCode]) {
+          delete outMap[norm];
+          delete outMap[peerCode];
+          const myCode = this.getOrCreateMyPeerCode();
+          localStorage.setItem("tukey_peer_out_reqs_" + myCode, JSON.stringify(outMap));
+        }
+
+        const inList = this.getIncomingRequests();
+        const filteredIn = inList.filter((r) => r && this.normalizePeerCode(r.fromCode) !== norm);
+        if (filteredIn.length !== inList.length) {
+          this.saveIncomingRequests(filteredIn);
         }
       } catch (e) {}
     },
 
     unmarkPeerDeletedByUser: function (peerCode) {
-      if (!peerCode) return;
+      const norm = this.normalizePeerCode(peerCode);
+      if (!norm) return;
       try {
-        const list = this.getDeletedPeerCodes().filter((c) => c !== peerCode);
+        const list = this.getDeletedPeerCodes().filter((c) => c !== norm && c !== peerCode);
         localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(list));
+      } catch (e) {}
+    },
+
+    notifyAndRemovePeerFriend: async function (peerCode) {
+      const norm = this.normalizePeerCode(peerCode);
+      if (!norm) return;
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      this.markPeerDeletedByUser(norm);
+      if (norm !== myCode) {
+        const rmPayload = {
+          type: "friend_remove",
+          eventId: "evt_rm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9),
+          fromCode: myCode,
+          toCode: norm,
+          timestamp: Date.now()
+        };
+        this.dispatchPacketToNetwork(norm, rmPayload, "/api/peer/send", false);
+      }
+      await this.persistPeerIdentityToGlobalSettings();
+    },
+
+    receiveFriendRemove: async function (data) {
+      const fromCode = this.normalizePeerCode(data && (data.fromCode || data.peerCode));
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      if (!fromCode || fromCode === myCode) return;
+
+      this.markPeerDeletedByUser(fromCode);
+      const peerChat = await this.findPeerChatByCodeAsync(fromCode);
+      if (peerChat) {
+        if (window.state && window.state.chats) {
+          delete window.state.chats[peerChat.id];
+          delete window.state.chats[String(peerChat.id)];
+        }
+        if (window.state && String(window.state.activeChatId) === String(peerChat.id)) {
+          window.state.activeChatId = null;
+          if (typeof window.showScreen === "function") {
+            window.showScreen("chat-list-screen");
+          }
+        }
+        if (window.db && window.db.chats) {
+          try {
+            await window.db.chats.delete(peerChat.id);
+          } catch (e) {}
+        }
+      }
+      await this.persistPeerIdentityToGlobalSettings();
+      await this.refreshAppChatAndContactsUI();
+    },
+
+    persistPeerIdentityToGlobalSettings: async function () {
+      try {
+        const myCode = this.getOrCreateMyPeerCode();
+        if (window.state && window.state.globalSettings) {
+          window.state.globalSettings.myPeerCode = myCode;
+          window.state.globalSettings.peerFriendsBackup = this.getSavedFriendsBackup();
+          window.state.globalSettings.deletedPeerCodes = this.getDeletedPeerCodes();
+        }
+        if (window.db && window.db.globalSettings) {
+          const mainSettings = (await window.db.globalSettings.get("main")) || { id: "main" };
+          mainSettings.myPeerCode = myCode;
+          mainSettings.peerFriendsBackup = this.getSavedFriendsBackup();
+          mainSettings.deletedPeerCodes = this.getDeletedPeerCodes();
+          await window.db.globalSettings.put(mainSettings);
+        }
       } catch (e) {}
     },
 
@@ -1417,12 +1505,34 @@
     },
 
     onAppDbLoaded: async function () {
-      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
-      if (window.state && window.state.globalSettings) {
-        if (!window.state.globalSettings.myPeerCode) {
-          window.state.globalSettings.myPeerCode = myCode;
+      if (
+        window.state &&
+        window.state.globalSettings &&
+        window.state.globalSettings.myPeerCode
+      ) {
+        const gsCode = this.normalizePeerCode(window.state.globalSettings.myPeerCode);
+        if (gsCode && gsCode !== this.myPeerCode) {
+          this.myPeerCode = gsCode;
+          localStorage.setItem("tukey_my_peer_code", gsCode);
+        }
+        if (
+          window.state.globalSettings.peerFriendsBackup &&
+          typeof window.state.globalSettings.peerFriendsBackup === "object"
+        ) {
+          const curBackup = this.getSavedFriendsBackup();
+          const mergedBackup = { ...window.state.globalSettings.peerFriendsBackup, ...curBackup };
+          localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(mergedBackup));
+        }
+        if (Array.isArray(window.state.globalSettings.deletedPeerCodes)) {
+          const curDel = new Set(this.getDeletedPeerCodes());
+          window.state.globalSettings.deletedPeerCodes.forEach((c) => {
+            if (c) curDel.add(c);
+          });
+          localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(Array.from(curDel)));
         }
       }
+      const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
+      await this.persistPeerIdentityToGlobalSettings();
       await this.deduplicatePeerChatsInDb();
       await this.refreshAppChatAndContactsUI();
       this.subscribeAllKnownFriendsMqtt();
@@ -1661,6 +1771,8 @@
         await this.receiveFriendRequest(data);
       } else if (data.type === "friend_accept") {
         await this.receiveFriendAccept(data);
+      } else if (data.type === "friend_remove") {
+        await this.receiveFriendRemove(data);
       } else if (data.type === "group_invite") {
         await this.receiveGroupInvite(data);
       } else if (data.type === "group_join_accept") {
@@ -2442,10 +2554,12 @@
       if (!fromCode || fromCode === myCode) return;
 
       const outMap = this.getOutgoingRequests();
-      const savedOut = outMap[fromCode] || {};
-      const peerName = data.fromName || savedOut.remarkName || "密友";
-      const remarkName = savedOut.remarkName || peerName;
-      const groupId = savedOut.groupId || (await this.ensureDefaultGroupId());
+      const savedOut = outMap[fromCode];
+      if (!savedOut && this.isPeerDeletedByUser(fromCode)) return;
+      const safeOut = savedOut || {};
+      const peerName = data.fromName || safeOut.remarkName || "密友";
+      const remarkName = safeOut.remarkName || peerName;
+      const groupId = safeOut.groupId || (await this.ensureDefaultGroupId());
 
       const peerChat = await this.createOrUpdatePeerChatSession(
         fromCode,
@@ -2660,6 +2774,9 @@
         thoughtChainEnabled: groupChat.thoughtChainEnabled !== false,
         thoughtChainId: groupChat.thoughtChainId || null,
         thoughtChainEnableCoc: groupChat.thoughtChainEnableCoc !== false,
+        thoughtChainLocks: groupChat.settings?.thoughtChainLocks && typeof groupChat.settings.thoughtChainLocks === "object"
+          ? { ...groupChat.settings.thoughtChainLocks }
+          : {},
         keeperSettings: {
           keeperForcedDraw: Boolean(groupChat.settings?.keeperForcedDraw),
           keeperMaxMemory: groupChat.settings?.keeperMaxMemory,
@@ -3135,6 +3252,7 @@
             thoughtChainEnabled: snap.thoughtChainEnabled,
             thoughtChainId: snap.thoughtChainId,
             thoughtChainEnableCoc: snap.thoughtChainEnableCoc,
+            thoughtChainLocks: snap.thoughtChainLocks,
             keeperSettings: snap.keeperSettings,
             sharedKeeperPresets: snap.sharedKeeperPresets,
             sharedSoloPayload: typeof window.buildMySharedSoloPayload === "function" ? window.buildMySharedSoloPayload(groupChat) : [],
@@ -3580,6 +3698,19 @@
       if (data.thoughtChainEnableCoc !== undefined) {
         groupChat.thoughtChainEnableCoc = data.thoughtChainEnableCoc;
       }
+      if (data.thoughtChainLocks && typeof data.thoughtChainLocks === "object") {
+        if (!groupChat.settings.thoughtChainLocks || typeof groupChat.settings.thoughtChainLocks !== "object") {
+          groupChat.settings.thoughtChainLocks = {};
+        }
+        if (data.fromCode && data.thoughtChainLocks[data.fromCode] !== undefined) {
+          groupChat.settings.thoughtChainLocks[data.fromCode] = Boolean(data.thoughtChainLocks[data.fromCode]);
+        }
+        for (const [k, v] of Object.entries(data.thoughtChainLocks)) {
+          if (k !== myCode && (k === data.fromCode || groupChat.settings.thoughtChainLocks[k] === undefined)) {
+            groupChat.settings.thoughtChainLocks[k] = Boolean(v);
+          }
+        }
+      }
       if (data.keeperSettings && typeof data.keeperSettings === "object") {
         if (data.keeperSettings.keeperForcedDraw !== undefined) {
           groupChat.settings.keeperForcedDraw = Boolean(data.keeperSettings.keeperForcedDraw);
@@ -3643,6 +3774,9 @@
           }
           if (typeof window.renderSummaryPresetsUI === "function") {
             window.renderSummaryPresetsUI();
+          }
+          if (typeof window.renderMyThoughtChainLockUI === "function") {
+            window.renderMyThoughtChainLockUI(groupChat);
           }
         }
         const sumModal = document.getElementById("summary-viewer-modal");
@@ -3775,7 +3909,7 @@
       const msgToInsert = {
         ...incomingRaw,
         eventId: msgEvtId,
-        role: "assistant",
+        role: (incomingRaw.role === "system" || incomingRaw.type === "pat_message") ? "system" : "assistant",
         isPeerUserMessage: Boolean(data.isFromHumanPeer),
         senderPeerCode: data.isFromHumanPeer ? data.fromCode : undefined,
         sender: data.senderName || incomingRaw.senderName || incomingRaw.sender || "成员",
@@ -4576,15 +4710,33 @@
       const myCode = this.getOrCreateMyPeerCode();
       if (!fromCode || (!content && !data.audioData) || fromCode === myCode) return;
 
+      if (this.isPeerDeletedByUser(fromCode)) {
+        const rmPayload = {
+          type: "friend_remove",
+          eventId: "evt_rm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9),
+          fromCode: myCode,
+          toCode: fromCode,
+          timestamp: Date.now()
+        };
+        this.transmitPacketRaw(fromCode, rmPayload, "/api/peer/send", false);
+        return;
+      }
+
       let peerChat = await this.findPeerChatByCodeAsync(fromCode);
       if (!peerChat) {
+        const backupMap = this.getSavedFriendsBackup();
+        const outMap = this.getOutgoingRequests();
+        const savedInfo = backupMap[fromCode] || outMap[fromCode];
+        if (!savedInfo) {
+          return;
+        }
         peerChat = await this.createOrUpdatePeerChatSession(
           fromCode,
-          data.senderName || "密友",
-          data.senderAvatar,
-          null,
-          data.senderName || "密友",
-          data.senderAvatarFrame || ""
+          data.senderName || savedInfo.name || "密友",
+          data.senderAvatar || savedInfo.avatar || "",
+          savedInfo.groupId || null,
+          savedInfo.remarkName || data.senderName || "密友",
+          data.senderAvatarFrame || savedInfo.avatarFrame || ""
         );
       }
 
@@ -4704,10 +4856,10 @@
       const newFrameForMe = data.peerAvatarFrame;
       const myCode = this.getOrCreateMyPeerCode();
       if (!peerCode || peerCode === myCode) return;
+      if (this.isPeerDeletedByUser(peerCode)) return;
 
       let chat = await this.findPeerChatByCodeAsync(peerCode);
       if (!chat) {
-        if (this.isPeerDeletedByUser(peerCode)) return;
         const outMap = this.getOutgoingRequests();
         const backupMap = this.getSavedFriendsBackup();
         const savedInfo = backupMap[peerCode] || outMap[peerCode];
@@ -5395,6 +5547,219 @@
       } catch (err) {}
     },
 
+    applyNewMyPeerCode: async function (newCode) {
+      const cleanCode = this.normalizePeerCode(newCode);
+      if (!cleanCode) return false;
+      const oldCode = this.myPeerCode || localStorage.getItem("tukey_my_peer_code") || "";
+
+      this.myPeerCode = cleanCode;
+      localStorage.setItem("tukey_my_peer_code", cleanCode);
+      this.seenEventIds = new Set();
+      this.loadSeenEventIds();
+
+      const codeDisplay = document.getElementById("my-peer-code-display");
+      if (codeDisplay) {
+        codeDisplay.value = cleanCode;
+      }
+
+      if (window.db && window.db.chats) {
+        try {
+          const allChats = await window.db.chats.toArray();
+          for (const c of allChats) {
+            if (!c) continue;
+            let modified = false;
+            if (c.roleType === "peer" || c.isPeerGroup) {
+              if (c.myPeerCode !== cleanCode) {
+                c.myPeerCode = cleanCode;
+                modified = true;
+              }
+              if (c.isPeerGroup && c.ownerPeerCode === oldCode && oldCode) {
+                c.ownerPeerCode = cleanCode;
+                modified = true;
+              }
+              if (
+                c.isPeerGroup &&
+                c.settings &&
+                c.settings.thoughtChainLocks &&
+                oldCode &&
+                c.settings.thoughtChainLocks[oldCode] !== undefined
+              ) {
+                c.settings.thoughtChainLocks[cleanCode] = c.settings.thoughtChainLocks[oldCode];
+                delete c.settings.thoughtChainLocks[oldCode];
+                modified = true;
+              }
+            }
+            if (modified) {
+              await window.db.chats.put(c);
+              if (window.state && window.state.chats) {
+                window.state.chats[c.id] = c;
+                window.state.chats[String(c.id)] = c;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      await this.persistPeerIdentityToGlobalSettings();
+      await this.deduplicatePeerChatsInDb();
+
+      if (this.mqttClients && this.mqttClients.length > 0) {
+        this.mqttClients.forEach((client) => {
+          try {
+            client.end(true);
+          } catch (e) {}
+        });
+        this.mqttClients = [];
+        this.mqttClient = null;
+      }
+      await this.connectMqttBroker();
+
+      if (this.ws) {
+        try {
+          this.ws.close();
+        } catch (e) {}
+      } else {
+        this.connectWebSocket();
+      }
+      this.registerViaHttp();
+      this.pollOnce();
+      this.sendOnlinePingToFriends();
+      await this.refreshAppChatAndContactsUI();
+      return true;
+    },
+
+    saveCustomMyPeerCode: async function () {
+      const codeDisplay = document.getElementById("my-peer-code-display");
+      const saveBtn = document.getElementById("save-my-peer-code-btn");
+      const rawVal = codeDisplay ? codeDisplay.value.trim() : "";
+      if (!rawVal) {
+        if (saveBtn) {
+          saveBtn.textContent = "为空";
+          setTimeout(() => {
+            if (saveBtn) saveBtn.textContent = "固定";
+          }, 1400);
+        }
+        return;
+      }
+      await this.applyNewMyPeerCode(rawVal);
+      if (saveBtn) {
+        saveBtn.textContent = "已定";
+        setTimeout(() => {
+          if (saveBtn) saveBtn.textContent = "固定";
+        }, 1500);
+      }
+    },
+
+    regenerateMyPeerCode: async function () {
+      const newCode = this.generateRandomCode();
+      const regenBtn = document.getElementById("regen-my-peer-code-btn");
+      await this.applyNewMyPeerCode(newCode);
+      if (regenBtn) {
+        regenBtn.textContent = "已换";
+        setTimeout(() => {
+          if (regenBtn) regenBtn.textContent = "换码";
+        }, 1500);
+      }
+    },
+
+    buildPeerIdentityBackupData: function () {
+      const myCode = this.getOrCreateMyPeerCode();
+      return {
+        type: "TukeyPeerIdentityBackup",
+        version: 1,
+        timestamp: Date.now(),
+        myPeerCode: myCode,
+        peerFriendsBackup: this.getSavedFriendsBackup(),
+        deletedPeerCodes: this.getDeletedPeerCodes(),
+        outgoingRequests: this.getOutgoingRequests(),
+        incomingRequests: this.getIncomingRequests(),
+        incomingGroupInvites: this.getIncomingGroupInvites()
+      };
+    },
+
+    exportPeerIdentity: function () {
+      const data = this.buildPeerIdentityBackupData();
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "密友码与通讯录_" + (data.myPeerCode || "backup") + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const expBtn = document.getElementById("export-peer-identity-btn");
+      if (expBtn) {
+        expBtn.textContent = "已导";
+        setTimeout(() => {
+          if (expBtn) expBtn.textContent = "导出";
+        }, 1500);
+      }
+    },
+
+    triggerImportPeerIdentity: function () {
+      const fileInput = document.getElementById("import-peer-identity-file");
+      if (fileInput) {
+        fileInput.value = "";
+        fileInput.click();
+      }
+    },
+
+    handleImportPeerIdentityFile: async function (inputEl) {
+      const file = inputEl && inputEl.files && inputEl.files[0];
+      if (!file) return;
+      const impBtn = document.getElementById("import-peer-identity-btn");
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const importedCode =
+          data.myPeerCode ||
+          (data.peerIdentityBackup && data.peerIdentityBackup.myPeerCode) ||
+          (data.globalSettings && data.globalSettings.myPeerCode) ||
+          "";
+        const friendsMap =
+          data.peerFriendsBackup ||
+          (data.peerIdentityBackup && data.peerIdentityBackup.peerFriendsBackup) ||
+          (data.globalSettings && data.globalSettings.peerFriendsBackup) ||
+          null;
+        const deletedArr =
+          data.deletedPeerCodes ||
+          (data.peerIdentityBackup && data.peerIdentityBackup.deletedPeerCodes) ||
+          (data.globalSettings && data.globalSettings.deletedPeerCodes) ||
+          null;
+
+        if (friendsMap && typeof friendsMap === "object") {
+          const curMap = this.getSavedFriendsBackup();
+          const mergedMap = { ...curMap, ...friendsMap };
+          localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(mergedMap));
+        }
+        if (Array.isArray(deletedArr)) {
+          localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(deletedArr));
+        }
+        if (importedCode) {
+          await this.applyNewMyPeerCode(importedCode);
+        } else {
+          await this.deduplicatePeerChatsInDb();
+          await this.refreshAppChatAndContactsUI();
+        }
+        if (impBtn) {
+          impBtn.textContent = "成功";
+          setTimeout(() => {
+            if (impBtn) impBtn.textContent = "导入";
+          }, 1500);
+        }
+      } catch (e) {
+        if (impBtn) {
+          impBtn.textContent = "失败";
+          setTimeout(() => {
+            if (impBtn) impBtn.textContent = "导入";
+          }, 1500);
+        }
+      }
+      inputEl.value = "";
+    },
+
     confirmAddPeerFriend: async function () {
       this.ensureNotificationPermission();
       const targetInput = document.getElementById("peer-target-code-input");
@@ -5433,6 +5798,8 @@
       if (!selectedGroupId) {
         selectedGroupId = await this.ensureDefaultGroupId();
       }
+
+      this.unmarkPeerDeletedByUser(targetCode);
 
       this.saveOutgoingRequest(targetCode, {
         remarkName: rawName,

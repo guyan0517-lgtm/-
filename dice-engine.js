@@ -893,6 +893,232 @@ function extractDiceCommands(rawText) {
   return commands;
 }
 
+// 拦截AI替真人玩家进行鉴定的兜底转换函数
+window.sanitizeAiHumanDiceCommands = function(rawText, chat) {
+  if (!rawText || typeof rawText !== "string" || !chat) return rawText;
+
+  const humanMap = new Map();
+  const addHumanName = (rawAlias, displayName) => {
+    const alias = String(rawAlias || "").trim();
+    if (!alias) return;
+    const lower = alias.toLowerCase();
+    if (!humanMap.has(lower)) {
+      humanMap.set(lower, String(displayName || alias).trim());
+    }
+  };
+
+  const myNick = String(chat.settings?.myNickname || "").trim();
+  const myName = String(chat.settings?.myName || "").trim();
+  const myCocName = String(chat.settings?.myCocPanel?.name || (window.myCocPanel && typeof window.myCocPanel.getData === "function" ? (window.myCocPanel.getData()?.name || "") : "")).trim();
+  const myPrimary = myNick || myName || myCocName || "我";
+
+  if (myNick) addHumanName(myNick, myNick);
+  if (myName) addHumanName(myName, myName);
+  if (myCocName) addHumanName(myCocName, myCocName);
+  addHumanName("我", myPrimary);
+  addHumanName("自己", myPrimary);
+  addHumanName("玩家", myPrimary);
+  addHumanName("调查员", myPrimary);
+
+  if (chat.isGroup && Array.isArray(chat.members)) {
+    for (const m of chat.members) {
+      if (!m) continue;
+      const mId = String(m.id || "");
+      const refChat = window.state?.chats ? window.state.chats[mId] : null;
+      const isHumanPeer = Boolean(
+        m.isPeer ||
+        m.peerId ||
+        m.isUser ||
+        mId === "user" ||
+        mId.startsWith("peer_") ||
+        (refChat && (refChat.isPeer || refChat.settings?.isPeer || refChat.peerId))
+      );
+      if (isHumanPeer) {
+        const gNick = String(m.groupNickname || "").trim();
+        const oName = String(m.originalName || m.name || "").trim();
+        const cName = String(m.cocPanel?.name || "").trim();
+        const disp = gNick || oName || cName;
+        if (gNick) addHumanName(gNick, gNick);
+        if (oName) addHumanName(oName, disp || oName);
+        if (cName) addHumanName(cName, disp || cName);
+      }
+    }
+  }
+
+  if (chat.isGroup && Array.isArray(chat.peerMembers)) {
+    for (const pm of chat.peerMembers) {
+      if (!pm) continue;
+      const pNick = String(pm.groupNickname || pm.nickname || pm.name || "").trim();
+      const pOrig = String(pm.originalName || "").trim();
+      if (pNick) addHumanName(pNick, pNick);
+      if (pOrig) addHumanName(pOrig, pNick || pOrig);
+    }
+  }
+
+  const sortedAliases = Array.from(humanMap.keys()).sort((a, b) => b.length - a.length);
+  if (sortedAliases.length === 0) return rawText;
+
+  const cleanTargetPrefix = (s) => String(s || "").trim().replace(/^[&@]|^(?:角色[:：])|^(?:目标[:：])/, "").trim();
+
+  const matchExactHuman = (token) => {
+    const cleaned = cleanTargetPrefix(token).toLowerCase();
+    if (!cleaned) return null;
+    return humanMap.get(cleaned) || null;
+  };
+
+  const transformSingleCheckCmd = (fullMatch, cmdBody) => {
+    const cleanCmd = String(cmdBody || "").trim();
+    if (!cleanCmd) return fullMatch;
+
+    // 1. 匹配 sc 理智检定
+    const scMatch = cleanCmd.match(/^sc(?:\s+([\s\S]+)|([^\s\d\+\-\/]+[\s\S]*)|$)/i);
+    if (scMatch && /^sc(?:[\s\d]|[^\x00-\x7f]|[@&])/i.test(cleanCmd)) {
+      const fullSc = String(scMatch[1] || scMatch[2] || "").trim();
+      if (!fullSc) return fullMatch;
+
+      let matchedHuman = null;
+      let scRatio = "";
+
+      const tokens = fullSc.split(/\s+/).filter(Boolean);
+      for (const tk of tokens) {
+        if (!scRatio && /^[^\/]+\/[^\s]+$/.test(tk)) {
+          scRatio = tk;
+          continue;
+        }
+        if (!matchedHuman) {
+          const exact = matchExactHuman(tk);
+          if (exact) {
+            matchedHuman = exact;
+            continue;
+          }
+        }
+      }
+
+      if (!matchedHuman) {
+        const strippedSc = cleanTargetPrefix(fullSc);
+        for (const aliasKey of sortedAliases) {
+          const lowerSc = strippedSc.toLowerCase();
+          if (lowerSc.startsWith(aliasKey)) {
+            matchedHuman = humanMap.get(aliasKey);
+            const rest = strippedSc.slice(aliasKey.length).trim();
+            const ratioMatch = rest.match(/([0-9dD\+\-\*]+\/[0-9dD\+\-\*]+)/);
+            if (ratioMatch && !scRatio) scRatio = ratioMatch[1];
+            break;
+          } else if (lowerSc.endsWith(aliasKey)) {
+            matchedHuman = humanMap.get(aliasKey);
+            const rest = strippedSc.slice(0, strippedSc.length - aliasKey.length).trim();
+            const ratioMatch = rest.match(/([0-9dD\+\-\*]+\/[0-9dD\+\-\*]+)/);
+            if (ratioMatch && !scRatio) scRatio = ratioMatch[1];
+            break;
+          }
+        }
+      }
+
+      if (!scRatio) {
+        const ratioMatch = fullSc.match(/([0-9dD\+\-\*]+\/[0-9dD\+\-\*]+)/);
+        if (ratioMatch) scRatio = ratioMatch[1];
+      }
+
+      if (matchedHuman) {
+        return scRatio
+          ? `请 ${matchedHuman} 进行 理智 鉴定 ${scRatio}`
+          : `请 ${matchedHuman} 进行 理智 鉴定`;
+      }
+      return fullMatch;
+    }
+
+    // 2. 匹配 ra / rah / rad / rc / check 检定
+    const raMatch = cleanCmd.match(/^(?:ra[hd]?|rc|check)(?:([^\s\d\+\-\*\/][^\s]*))?(?:\s+(.+))?$/i);
+    if (raMatch) {
+      const attached = raMatch[1] ? raMatch[1].trim() : "";
+      const restParams = raMatch[2] ? raMatch[2].trim() : "";
+      let matchedHuman = null;
+      let skillName = "";
+
+      if (attached) {
+        const exactAttached = matchExactHuman(attached);
+        if (exactAttached) {
+          matchedHuman = exactAttached;
+          if (restParams) {
+            const parts = restParams.split(/\s+/).filter(Boolean);
+            skillName = parts.find(p => !/^[+-]?\d+$/.test(p) && !/^[bp]\d*$/i.test(p)) || "检定";
+          } else {
+            skillName = "检定";
+          }
+        } else {
+          const cleanedAttached = cleanTargetPrefix(attached);
+          for (const aliasKey of sortedAliases) {
+            const lowerAtt = cleanedAttached.toLowerCase();
+            if (lowerAtt.startsWith(aliasKey)) {
+              const restSkill = cleanedAttached.slice(aliasKey.length).trim();
+              matchedHuman = humanMap.get(aliasKey);
+              if (restSkill && !/^[+-]?\d+$/.test(restSkill)) {
+                skillName = restSkill;
+              } else if (restParams) {
+                const parts = restParams.split(/\s+/).filter(Boolean);
+                skillName = parts.find(p => !/^[+-]?\d+$/.test(p) && !/^[bp]\d*$/i.test(p)) || "检定";
+              } else {
+                skillName = "检定";
+              }
+              break;
+            }
+          }
+          if (!matchedHuman && restParams) {
+            const parts = restParams.split(/\s+/).filter(Boolean);
+            for (const p of parts) {
+              const exactP = matchExactHuman(p);
+              if (exactP) {
+                matchedHuman = exactP;
+                skillName = cleanedAttached || "检定";
+                break;
+              }
+            }
+          }
+        }
+      } else if (restParams) {
+        const parts = restParams.split(/\s+/).filter(Boolean);
+        for (let i = 0; i < parts.length; i++) {
+          const exactP = matchExactHuman(parts[i]);
+          if (exactP) {
+            matchedHuman = exactP;
+            const otherParts = parts.filter((_, idx) => idx !== i && !/^[+-]?\d+$/.test(parts[idx]) && !/^[bp]\d*$/i.test(parts[idx]));
+            skillName = otherParts[0] || "检定";
+            break;
+          }
+        }
+        if (!matchedHuman && parts.length > 0) {
+          const firstCleaned = cleanTargetPrefix(parts[0]);
+          for (const aliasKey of sortedAliases) {
+            const lowerFirst = firstCleaned.toLowerCase();
+            if (lowerFirst.startsWith(aliasKey)) {
+              matchedHuman = humanMap.get(aliasKey);
+              const afterAlias = firstCleaned.slice(aliasKey.length).trim();
+              if (afterAlias && !/^[+-]?\d+$/.test(afterAlias)) {
+                skillName = afterAlias;
+              } else {
+                const otherParts = parts.slice(1).filter(p => !/^[+-]?\d+$/.test(p) && !/^[bp]\d*$/i.test(p));
+                skillName = otherParts[0] || "检定";
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      if (matchedHuman) {
+        return `请 ${matchedHuman} 进行 ${skillName || "检定"} 鉴定`;
+      }
+    }
+
+    return fullMatch;
+  };
+
+  const checkCmdRegex = /[.。]\s*((?:ra[hd]?|rc|check|sc)(?:[^\r\n;；.。]+|$))/gi;
+  return rawText.replace(checkCmdRegex, (fullMatch, cmdBody) => {
+    return transformSingleCheckCmd(fullMatch, cmdBody);
+  });
+};
+
 // 核心指令解析函数：支持多指令批量执行、代骰、角色名精准与模糊绑定、KP守密人安全保护、气泡内嵌指令触发
 window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
   if (!rawContent || typeof rawContent !== "string") return null;

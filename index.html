@@ -3184,9 +3184,15 @@
               <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
                 <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">我的密友码</label>
                 <div style="display: flex; gap: 6px; align-items: center; width: 100%; box-sizing: border-box;">
-                  <input type="text" id="my-peer-code-display" class="moe-input" readonly style="flex: 1 1 auto; width: 0; min-width: 0; height: 34px; padding: 0 10px; font-size: 12.5px; border-radius: 6px; cursor: pointer; background: var(--secondary-bg); font-family: monospace; box-sizing: border-box;" onclick="if(window.PeerManager)window.PeerManager.copyMyPeerCode();" />
-                  <button type="button" id="copy-my-peer-code-btn" class="moe-btn" style="flex: 0 0 52px; width: 52px; min-width: 52px; max-width: 52px; height: 34px; padding: 0; font-size: 12px; font-weight: 600; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer; white-space: nowrap;" onclick="if(window.PeerManager)window.PeerManager.copyMyPeerCode();">复制</button>
-                  <button type="button" id="regen-my-peer-code-btn" class="moe-btn" style="flex: 0 0 52px; width: 52px; min-width: 52px; max-width: 52px; height: 34px; padding: 0; font-size: 12px; font-weight: 600; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer; white-space: nowrap;" onclick="if(window.PeerManager)window.PeerManager.regenerateMyPeerCode();">换码</button>
+                  <input type="text" id="my-peer-code-display" class="moe-input" placeholder="输入或固定密友码" style="flex: 1 1 auto; width: 0; min-width: 0; height: 34px; padding: 0 10px; font-size: 12.5px; border-radius: 6px; background: var(--secondary-bg); font-family: monospace; box-sizing: border-box;" />
+                  <button type="button" id="save-my-peer-code-btn" class="moe-btn" style="flex: 0 0 44px; width: 44px; min-width: 44px; max-width: 44px; height: 34px; padding: 0; font-size: 12px; font-weight: 600; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer; white-space: nowrap;" onclick="if(window.PeerManager)window.PeerManager.saveCustomMyPeerCode();">固定</button>
+                  <button type="button" id="copy-my-peer-code-btn" class="moe-btn" style="flex: 0 0 44px; width: 44px; min-width: 44px; max-width: 44px; height: 34px; padding: 0; font-size: 12px; font-weight: 600; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer; white-space: nowrap;" onclick="if(window.PeerManager)window.PeerManager.copyMyPeerCode();">复制</button>
+                  <button type="button" id="regen-my-peer-code-btn" class="moe-btn" style="flex: 0 0 44px; width: 44px; min-width: 44px; max-width: 44px; height: 34px; padding: 0; font-size: 12px; font-weight: 600; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer; white-space: nowrap;" onclick="if(window.PeerManager)window.PeerManager.regenerateMyPeerCode();">换码</button>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center; width: 100%; box-sizing: border-box; margin-top: 2px;">
+                  <button type="button" id="export-peer-identity-btn" class="moe-btn" style="flex: 1 1 0; height: 30px; padding: 0; font-size: 12px; font-weight: 600; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer; white-space: nowrap;" onclick="if(window.PeerManager)window.PeerManager.exportPeerIdentity();">导出</button>
+                  <button type="button" id="import-peer-identity-btn" class="moe-btn" style="flex: 1 1 0; height: 30px; padding: 0; font-size: 12px; font-weight: 600; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; cursor: pointer; white-space: nowrap;" onclick="if(window.PeerManager)window.PeerManager.triggerImportPeerIdentity();">导入</button>
+                  <input type="file" id="import-peer-identity-file" accept=".json" style="display: none;" onchange="if(window.PeerManager)window.PeerManager.handleImportPeerIdentityFile(this);" />
                 </div>
               </div>
               <div class="form-group" style="display: flex; flex-direction: column; gap: 4px;">
@@ -3474,6 +3480,7 @@
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
               <button type="button" class="moe-btn" onclick="if(typeof window.closeSoloLineModal==='function')window.closeSoloLineModal();" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
+              <button type="button" id="solo-modal-watch-btn" class="moe-btn" onclick="if(typeof window.confirmWatchSoloModalSelection==='function')window.confirmWatchSoloModalSelection();" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px;">观看</button>
               <button type="button" id="solo-modal-enter-btn" class="moe-btn" onclick="if(typeof window.confirmEnterSoloModalSelection==='function')window.confirmEnterSoloModalSelection();" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: var(--card-bg); border: none; border-radius: 6px;">进入</button>
             </div>
           </div>
@@ -7362,6 +7369,25 @@
             </div>
 
             <div id="my-coc-panel-container"></div>
+            <div id="my-thought-chain-lock-container" class="coc-panel-wrapper" style="display: none; margin-top: 8px;">
+              <div id="my-tc-lock-toggle-header" class="coc-panel-toggle-header" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 6px 8px; background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color); user-select: none;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="coc-panel-title">思维链锁</span>
+                  <span class="coc-total-badge" id="my-tc-lock-status-badge">锁定</span>
+                </div>
+                <svg id="my-tc-lock-arrow" class="coc-panel-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-secondary); transition: transform 0.2s ease; transform: rotate(-90deg); flex-shrink: 0;">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+              <div id="my-tc-lock-body" class="coc-panel-body" style="display: none; margin-top: 8px;">
+                <label class="toggle-switch-label" style="padding: 6px 10px; background: var(--secondary-bg); border-radius: 6px; border: 1px solid var(--border-color); box-sizing: border-box;">
+                  <span class="toggle-switch-text" style="font-size: 13px; font-weight: 600;">我的开关</span>
+                  <input type="checkbox" id="my-tc-unlock-switch" />
+                  <span class="toggle-switch-slider"></span>
+                </label>
+                <div id="my-tc-lock-members-list" style="margin-top: 6px; display: flex; flex-direction: column; gap: 4px;"></div>
+              </div>
+            </div>
           </div>
 
           <!-- ============================== -->
@@ -27344,8 +27370,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (state.musicState && state.musicState.isActive && state.musicState.activeChatId === chat.id) {
                 await endListenTogetherSession(false);
               }
-              if (chat.roleType === "peer" && chat.peerCode && window.PeerManager && typeof window.PeerManager.markPeerDeletedByUser === "function") {
-                window.PeerManager.markPeerDeletedByUser(chat.peerCode);
+              if (chat.roleType === "peer" && chat.peerCode && window.PeerManager) {
+                if (typeof window.PeerManager.notifyAndRemovePeerFriend === "function") {
+                  await window.PeerManager.notifyAndRemovePeerFriend(chat.peerCode);
+                } else if (typeof window.PeerManager.markPeerDeletedByUser === "function") {
+                  window.PeerManager.markPeerDeletedByUser(chat.peerCode);
+                }
               }
               delete state.chats[chat.id];
               if (state.activeChatId === chat.id) state.activeChatId = null;
@@ -27935,7 +27965,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 apiKey: localStorage.getItem("novelai-api-key"),
                 settings: typeof getNovelAISettings === "function" ? getNovelAISettings() : localStorage.getItem("novelai-settings"),
               },
+              peerIdentityBackup: window.PeerManager && typeof window.PeerManager.buildPeerIdentityBackupData === "function"
+                ? window.PeerManager.buildPeerIdentityBackupData()
+                : {
+                    myPeerCode: localStorage.getItem("tukey_my_peer_code") || "",
+                    peerFriendsBackup: JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}"),
+                    deletedPeerCodes: JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]"),
+                  },
             });
+            if (backupData.globalSettings && typeof backupData.globalSettings === "object") {
+              backupData.globalSettings.myPeerCode = localStorage.getItem("tukey_my_peer_code") || backupData.globalSettings.myPeerCode || "";
+              backupData.globalSettings.peerFriendsBackup = JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}");
+              backupData.globalSettings.deletedPeerCodes = JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]");
+            }
 
             backupData.homeScreenState = {
               // --- 1. 个人资料卡 ---
@@ -28238,7 +28280,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               apiKey: localStorage.getItem("novelai-api-key"),
               settings: typeof getNovelAISettings === "function" ? getNovelAISettings() : localStorage.getItem("novelai-settings"),
             },
+            peerIdentityBackup: window.PeerManager && typeof window.PeerManager.buildPeerIdentityBackupData === "function"
+              ? window.PeerManager.buildPeerIdentityBackupData()
+              : {
+                  myPeerCode: localStorage.getItem("tukey_my_peer_code") || "",
+                  peerFriendsBackup: JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}"),
+                  deletedPeerCodes: JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]"),
+                },
           });
+          if (backupData.globalSettings && typeof backupData.globalSettings === "object") {
+            backupData.globalSettings.myPeerCode = localStorage.getItem("tukey_my_peer_code") || backupData.globalSettings.myPeerCode || "";
+            backupData.globalSettings.peerFriendsBackup = JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}");
+            backupData.globalSettings.deletedPeerCodes = JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]");
+          }
 
           // 这里省略了 homeScreenState 的详细抓取，因为它依赖 DOM 元素，
           // 自动备份时可能不在主屏幕。为了安全起见，这里仅保存 globalSettings 里的 widgetData。
@@ -28821,6 +28875,40 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     ? JSON.stringify(data.moduleDraftState)
                     : data.moduleDraftState
                 );
+              }
+
+              let restoredPeerCode =
+                (data.peerIdentityBackup && data.peerIdentityBackup.myPeerCode) ||
+                data.myPeerCode ||
+                (data.globalSettings && data.globalSettings.myPeerCode) ||
+                "";
+              if (!restoredPeerCode && Array.isArray(data.chats)) {
+                for (const c of data.chats) {
+                  if (c && c.myPeerCode && (c.roleType === "peer" || c.isPeerGroup)) {
+                    restoredPeerCode = c.myPeerCode;
+                    break;
+                  }
+                }
+              }
+              if (restoredPeerCode) {
+                localStorage.setItem("tukey_my_peer_code", restoredPeerCode);
+                if (window.PeerManager) {
+                  window.PeerManager.myPeerCode = restoredPeerCode;
+                }
+              }
+              const restoredFriendsBackup =
+                (data.peerIdentityBackup && data.peerIdentityBackup.peerFriendsBackup) ||
+                (data.globalSettings && data.globalSettings.peerFriendsBackup) ||
+                null;
+              if (restoredFriendsBackup && typeof restoredFriendsBackup === "object") {
+                localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(restoredFriendsBackup));
+              }
+              const restoredDeletedCodes =
+                (data.peerIdentityBackup && data.peerIdentityBackup.deletedPeerCodes) ||
+                (data.globalSettings && data.globalSettings.deletedPeerCodes) ||
+                null;
+              if (Array.isArray(restoredDeletedCodes)) {
+                localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(restoredDeletedCodes));
               }
             });
 
@@ -35142,15 +35230,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let thinkingHtml = "";
           const hasThinkingModule = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : Boolean(chat && chat.thoughtChainEnabled !== false && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
           if (!isUser && hasThinkingModule && extractedThinkingText && String(extractedThinkingText).trim().length > 0) {
-            const safeThinkingText = String(extractedThinkingText).replace(/\\n/g, "\n");
+            const isPeerTcLocked = typeof window.isPeerGroupThoughtChainUnlocked === "function" && !window.isPeerGroupThoughtChainUnlocked(chat);
+            const safeThinkingText = isPeerTcLocked ? "保密" : String(extractedThinkingText).replace(/\\n/g, "\n");
             const displayThinkingText = safeThinkingText.replace(/\n/g, "<br>");
+            const thinkingTitleText = isPeerTcLocked ? "思考过程 · 锁定" : "思考过程";
             thinkingHtml = `
               <details class="thought-chain-block">
                 <summary class="thought-chain-summary">
                   <svg class="thought-chain-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                   </svg>
-                  <span>思考过程</span>
+                  <span>${thinkingTitleText}</span>
                   <svg class="thought-chain-arrow" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="9 18 15 12 9 6"></polyline>
                   </svg>
@@ -38398,8 +38488,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function getPeerGroupActiveLineHumanPlayers(chat) {
           const allPlayers = getPeerGroupAllHumanPlayers(chat);
-          if (!chat || chat.activeLineMode !== "solo") {
-            return allPlayers;
+          if (!chat) return allPlayers;
+          if (chat.activeLineMode !== "solo") {
+            const activeMap = chat.settings?.peerPhoneData?.playerActiveLine || {};
+            const allSoloThreads = typeof window.getAllGroupSoloThreads === "function" ? window.getAllGroupSoloThreads(chat) : [];
+            const validSoloIds = new Set(allSoloThreads.map((t) => t && String(t.id)).filter(Boolean));
+            const mainPresent = allPlayers.filter((p) => {
+              const pLine = activeMap[p.peerCode];
+              if (pLine && pLine !== "main" && validSoloIds.has(String(pLine))) {
+                return false;
+              }
+              return true;
+            });
+            return mainPresent;
           }
           const myCode = getMyPeerCodeForStatus();
           const activeThread = chat.viewingPeerSoloThread || (typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null);
@@ -42833,6 +42934,7 @@ ${groupModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发�
 ${fullMembersList}`);
 
               const myPlayerEntry = {
+                peerCode: myGroupPeerCode || "user",
                 name: chat.settings.myName || myNickname,
                 isKp: isMyUserKeeper,
                 coc: (!isMyUserKeeper && window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel)) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : "",
@@ -42841,22 +42943,37 @@ ${fullMembersList}`);
                 gen: (!isMyUserKeeper && chat.settings.myGender) ? `- 性别：${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : "",
                 persona: isMyUserKeeper ? "当前群聊的守秘人（KP/主持人），已隐藏个人人设以防干扰思考" : (chat.settings.myPersona || "普通人"),
               };
+              const allHumanEntriesForPersona = [
+                myPlayerEntry,
+                ...peerHumanMembers.map((pm) => {
+                  const isPeerKp = isGroupMemberKeeper(pm);
+                  return {
+                    peerCode: pm.peerCode || "",
+                    name: pm.groupNickname || pm.originalName || "密友",
+                    isKp: isPeerKp,
+                    coc: (!isPeerKp && window.getCocPromptStatus && window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)}\n` : "",
+                    age: (!isPeerKp && pm.age) ? `- 年龄：${pm.age}\n` : "",
+                    birth: (!isPeerKp && pm.birthday) ? `- 生日：${pm.birthday}\n` : "",
+                    gen: (!isPeerKp && pm.gender) ? `- 性别：${pm.gender}${pm.genderNote ? " " + pm.genderNote : ""}\n` : "",
+                    persona: isPeerKp ? "当前群聊的守秘人（KP/主持人），已隐藏个人人设以防干扰思考" : (pm.secretPersona || pm.persona || "普通人"),
+                  };
+                }),
+              ];
+              const activeSoloThreadForPersona = (isPeerGrpPrompt && chat.activeLineMode === "solo" && typeof window.getActiveSoloThread === "function")
+                ? window.getActiveSoloThread(chat)
+                : null;
+              const visibleHumanEntriesForPersona = activeSoloThreadForPersona
+                ? allHumanEntriesForPersona.filter((hp) => {
+                    const allowedCodes = (Array.isArray(activeSoloThreadForPersona.playerPeerCodes) && activeSoloThreadForPersona.playerPeerCodes.length > 0)
+                      ? activeSoloThreadForPersona.playerPeerCodes
+                      : [activeSoloThreadForPersona.ownerPeerCode || myGroupPeerCode || "user"];
+                    return hp.peerCode && allowedCodes.includes(hp.peerCode);
+                  })
+                : allHumanEntriesForPersona;
               const groupMyPersonaBlock = peerHumanMembers.length > 0
-                ? window.formatPromptSection("真人玩家人设", [
-                    myPlayerEntry,
-                    ...peerHumanMembers.map((pm) => {
-                      const isPeerKp = isGroupMemberKeeper(pm);
-                      return {
-                        name: pm.groupNickname || pm.originalName || "密友",
-                        isKp: isPeerKp,
-                        coc: (!isPeerKp && window.getCocPromptStatus && window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)) ? `- COC人物面板（实时当前数值）：${window.getCocPromptStatus(pm.fullCocPanel || pm.cocPanel)}\n` : "",
-                        age: (!isPeerKp && pm.age) ? `- 年龄：${pm.age}\n` : "",
-                        birth: (!isPeerKp && pm.birthday) ? `- 生日：${pm.birthday}\n` : "",
-                        gen: (!isPeerKp && pm.gender) ? `- 性别：${pm.gender}${pm.genderNote ? " " + pm.genderNote : ""}\n` : "",
-                        persona: isPeerKp ? "当前群聊的守秘人（KP/主持人），已隐藏个人人设以防干扰思考" : (pm.secretPersona || pm.persona || "普通人"),
-                      };
-                    }),
-                  ].map((hp, idx) => `---------- 【真人玩家 ${idx + 1}：${hp.name}${hp.isKp ? " · 守秘人(KP)" : ""} 开始】 ----------\n- 姓名：${hp.name}${hp.isKp ? "\n- 身份：守秘人（KP）" : ""}\n${hp.coc}${hp.age}${hp.birth}${hp.gen}- 角色人设：\n${hp.persona}\n---------- 【真人玩家 ${idx + 1}：${hp.name} 结束】 ----------`).join("\n\n"))
+                ? (visibleHumanEntriesForPersona.length > 0
+                    ? window.formatPromptSection("真人玩家人设", visibleHumanEntriesForPersona.map((hp, idx) => `---------- 【真人玩家 ${idx + 1}：${hp.name}${hp.isKp ? " · 守秘人(KP)" : ""} 开始】 ----------\n- 姓名：${hp.name}${hp.isKp ? "\n- 身份：守秘人（KP）" : ""}\n${hp.coc}${hp.age}${hp.birth}${hp.gen}- 角色人设：\n${hp.persona}\n---------- 【真人玩家 ${idx + 1}：${hp.name} 结束】 ----------`).join("\n\n"))
+                    : "")
                 : window.formatPromptSection("我的人设", `
 - 姓名：${myPlayerEntry.name}${myPlayerEntry.isKp ? "\n- 身份：守秘人（KP）" : ""}
 ${myPlayerEntry.coc}${myPlayerEntry.age}${myPlayerEntry.birth}${myPlayerEntry.gen}- 角色人设：
@@ -42922,7 +43039,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                   if ((msg.role === "user" || msg.isPeerUserMessage) && typeof effectiveContent === "string" && isOutOfCharacterChineseBracketMsg(effectiveContent)) {
                     return null;
                   }
-                  if (msg.role === "assistant" && !msg.isPeerUserMessage) {
+                  if (msg.role === "assistant" && !msg.isPeerUserMessage && msg.type !== "pat_message") {
                     // AI消息的处理逻辑保持不变...
                     let assistantMsgObject = { type: msg.type || "text" };
                     assistantMsgObject.name = msg.senderName;
@@ -42988,6 +43105,8 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                     return {
                       role: "assistant",
                       content: `${tsPrefix}${assistantContent}`,
+                      _msgTimestamp: Number(msg.timestamp) || 0,
+                      _senderName: msg.senderName || "",
                     };
                   }
 
@@ -43004,7 +43123,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                       msg.question
                     }”, 选项：“${msg.options.join('", "')}”。你可以使用 'vote' 指令参与投票。]`;
                     // 3. 返回一个被AI识别为用户发出的、但内容是指令的消息
-                    return { role: "user", content: pollInfoText };
+                    return { role: "user", content: pollInfoText, _msgTimestamp: Number(msg.timestamp) || 0 };
                   }
 
                   // 如果不是投票，再执行原来的其他消息类型判断
@@ -43025,11 +43144,13 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                     return {
                       role: "user",
                       content: `${tsPrefix}[你收到了一张用户描述的照片，内容是：'${msg.content}']`,
+                      _msgTimestamp: Number(msg.timestamp) || 0,
                     };
                   if (msg.type === "voice_message")
                     return {
                       role: "user",
                       content: `${tsPrefix}[用户发来一条语音消息，内容是：'${msg.content}']`,
+                      _msgTimestamp: Number(msg.timestamp) || 0,
                     };
 
                   if (
@@ -43039,6 +43160,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                     return {
                       role: "user",
                       content: tsPrefix ? [{ type: "text", text: tsPrefix }, ...msg.content] : msg.content,
+                      _msgTimestamp: Number(msg.timestamp) || 0,
                     };
                   }
 
@@ -43054,13 +43176,34 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
 
                   if (msg.isPeerUserMessage) {
                     const peerSpeaker = msg.senderName || msg.sender || "密友";
-                    return { role: "user", content: `[${peerSpeaker}]: ${contentStr}` };
+                    const peerSenderId = msg.senderPeerId ? ("peer:" + String(msg.senderPeerId).replace(/^peer:/, "")) : "";
+                    return {
+                      role: "user",
+                      content: `[${peerSpeaker}]: ${contentStr}`,
+                      _msgTimestamp: Number(msg.timestamp) || 0,
+                      _senderName: peerSpeaker,
+                      _senderId: peerSenderId,
+                    };
                   }
-                  if (chat.isPeerGroup && msg.role === "user") {
-                    return { role: "user", content: `[${myNickname}]: ${contentStr}` };
+                  if ((chat.isPeerGroup || isPeerGrpPrompt) && msg.role === "user") {
+                    const myPeerCodeVal = (window.PeerManager && typeof window.PeerManager.getMyPeerCode === "function")
+                      ? (window.PeerManager.getMyPeerCode() || localStorage.getItem("ephone_my_peer_code") || "ME")
+                      : (localStorage.getItem("ephone_my_peer_code") || "ME");
+                    return {
+                      role: "user",
+                      content: `[${myNickname}]: ${contentStr}`,
+                      _msgTimestamp: Number(msg.timestamp) || 0,
+                      _senderName: myNickname,
+                      _senderId: "peer:" + myPeerCodeVal,
+                    };
                   }
 
-                  return { role: msg.role, content: contentStr };
+                  return {
+                    role: msg.role,
+                    content: contentStr,
+                    _msgTimestamp: Number(msg.timestamp) || 0,
+                    _senderName: msg.role === "user" ? myNickname : (msg.senderName || ""),
+                  };
                 })
                 .filter(Boolean);
 
@@ -43083,10 +43226,12 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                         items.push(parsedContent);
                       }
                     }
+                    const itemTs = Number(pItem._msgTimestamp) || 0;
                     if (!pendingGroupTurn) {
-                      pendingGroupTurn = { items, hasThinking };
+                      pendingGroupTurn = { items, hasThinking, maxTs: itemTs };
                     } else {
                       if (hasThinking) pendingGroupTurn.hasThinking = true;
+                      if (itemTs > pendingGroupTurn.maxTs) pendingGroupTurn.maxTs = itemTs;
                       pendingGroupTurn.items.push(...items);
                     }
                   } catch (e) {
@@ -43094,7 +43239,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                       const payload = pendingGroupTurn.hasThinking
                         ? { thinking: THOUGHT_CHAIN_FOLDED_NOTICE, chatResponse: pendingGroupTurn.items }
                         : pendingGroupTurn.items;
-                      consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload) });
+                      consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload), _msgTimestamp: pendingGroupTurn.maxTs });
                       pendingGroupTurn = null;
                     }
                     consolidatedGroupPayload.push(pItem);
@@ -43104,7 +43249,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                     const payload = pendingGroupTurn.hasThinking
                       ? { thinking: THOUGHT_CHAIN_FOLDED_NOTICE, chatResponse: pendingGroupTurn.items }
                       : pendingGroupTurn.items;
-                    consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload) });
+                    consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload), _msgTimestamp: pendingGroupTurn.maxTs });
                     pendingGroupTurn = null;
                   }
                   consolidatedGroupPayload.push(pItem);
@@ -43114,10 +43259,21 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                 const payload = pendingGroupTurn.hasThinking
                   ? { thinking: THOUGHT_CHAIN_FOLDED_NOTICE, chatResponse: pendingGroupTurn.items }
                   : pendingGroupTurn.items;
-                consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload) });
+                consolidatedGroupPayload.push({ role: "assistant", content: JSON.stringify(payload), _msgTimestamp: pendingGroupTurn.maxTs });
                 pendingGroupTurn = null;
               }
               messagesPayload = consolidatedGroupPayload;
+              if (typeof window.mergePeerPhoneSmsIntoMessagesPayload === "function") {
+                messagesPayload = window.mergePeerPhoneSmsIntoMessagesPayload(chat, messagesPayload, historySlice);
+              } else {
+                messagesPayload.forEach(p => {
+                  if (p && typeof p === "object") {
+                    delete p._msgTimestamp;
+                    delete p._senderName;
+                    delete p._senderId;
+                  }
+                });
+              }
 
               console.log(messagesPayload);
             } else {
@@ -48287,6 +48443,9 @@ ${stickerContext || "无"}
 
               // 将渲染逻辑移出循环
               if (aiMessage) {
+                if (typeof aiMessage.content === "string" && aiMessage.content && typeof window.sanitizeAiHumanDiceCommands === "function") {
+                  aiMessage.content = window.sanitizeAiHumanDiceCommands(aiMessage.content, chat);
+                }
                 if (chat.isGroup && chat.activeLineMode === "solo") {
                   const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
                   const activeTId = activeThread ? activeThread.id : (chat.settings?.soloLineConfig?.activeThreadId || null);
@@ -75192,6 +75351,12 @@ ${stickerContext || "无"}
                     // 如果表是空的，first()会返回undefined，JSON.stringify(undefined)会出问题，所以转为null
                     if (tableData === undefined) {
                       tableData = null;
+                    } else if (tableName === "globalSettings" && typeof tableData === "object") {
+                      tableData.myPeerCode = localStorage.getItem("tukey_my_peer_code") || tableData.myPeerCode || "";
+                      try {
+                        tableData.peerFriendsBackup = JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}");
+                        tableData.deletedPeerCodes = JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]");
+                      } catch (e) {}
                     }
                   } else {
                     // 如果是普通的多条记录表，就还是获取整个数组
@@ -83182,6 +83347,9 @@ ${stickerContext || "无"}
                 chat.settings.myGenderNote || "";
               if (window.myCocPanel) {
                 window.myCocPanel.setData(chat.settings.myCocPanel);
+              }
+              if (typeof window.renderMyThoughtChainLockUI === "function") {
+                window.renderMyThoughtChainLockUI(chat);
               }
               document.getElementById("my-avatar-preview").src =
                 chat.settings.myAvatar ||
@@ -93648,6 +93816,7 @@ ${stickerContext || "无"}
 
         function canCurrentUserSpeakInSoloThread(thread, chat) {
           if (!thread) return false;
+          if (chat && chat.isWatchingSoloLine) return false;
           const myCode = getMyPeerCode();
           return isUserCheckedInSoloThread(thread, myCode);
         }
@@ -93782,27 +93951,126 @@ ${stickerContext || "无"}
         function getGroupHumanPlayersList(chat) {
           const myCode = getMyPeerCode();
           const myNick = chat?.settings?.myNickname || chat?.settings?.myName || "我";
+          const myAva = chat?.settings?.myAvatar || window.defaultMyGroupAvatar || window.defaultAvatar;
           const playersMap = new Map();
-          playersMap.set(myCode, { peerCode: myCode, name: myNick });
+          playersMap.set(myCode, { peerCode: myCode, name: myNick, avatar: myAva });
 
           if (chat && Array.isArray(chat.members)) {
             chat.members.forEach((m) => {
               if (m && (m.isPeerMember || m.roleType === "peer") && m.peerCode) {
                 const pName = m.groupNickname || m.name || m.originalName || "密友";
-                playersMap.set(m.peerCode, { peerCode: m.peerCode, name: pName });
+                playersMap.set(m.peerCode, {
+                  peerCode: m.peerCode,
+                  name: pName,
+                  avatar: m.avatar || window.defaultAvatar
+                });
               }
             });
           }
           if (chat && Array.isArray(chat.settings?.peerMembers)) {
             chat.settings.peerMembers.forEach((pm) => {
               if (pm && pm.peerCode && !playersMap.has(pm.peerCode)) {
-                playersMap.set(pm.peerCode, { peerCode: pm.peerCode, name: pm.name || pm.nickname || "密友" });
+                playersMap.set(pm.peerCode, {
+                  peerCode: pm.peerCode,
+                  name: pm.name || pm.nickname || "密友",
+                  avatar: pm.avatar || window.defaultAvatar
+                });
               }
             });
           }
           return Array.from(playersMap.values());
         }
         window.getGroupHumanPlayersList = getGroupHumanPlayersList;
+
+        function isPeerGroupThoughtChainUnlocked(chat) {
+          if (!chat || !isPeerGrp(chat)) return true;
+          const players = getGroupHumanPlayersList(chat);
+          if (!players || players.length === 0) return true;
+          const locks = (chat.settings && chat.settings.thoughtChainLocks && typeof chat.settings.thoughtChainLocks === "object")
+            ? chat.settings.thoughtChainLocks
+            : {};
+          return players.every((p) => p && p.peerCode && locks[p.peerCode] === true);
+        }
+        window.isPeerGroupThoughtChainUnlocked = isPeerGroupThoughtChainUnlocked;
+
+        function renderMyThoughtChainLockUI(chat) {
+          const container = document.getElementById("my-thought-chain-lock-container");
+          if (!container) return;
+          if (!chat || !isPeerGrp(chat)) {
+            container.style.display = "none";
+            return;
+          }
+          container.style.display = "block";
+          if (!chat.settings) chat.settings = {};
+          if (!chat.settings.thoughtChainLocks || typeof chat.settings.thoughtChainLocks !== "object") {
+            chat.settings.thoughtChainLocks = {};
+          }
+          const locks = chat.settings.thoughtChainLocks;
+          const myCode = getMyPeerCode();
+          const players = getGroupHumanPlayersList(chat);
+          const allUnlocked = players.length > 0 && players.every((p) => p && p.peerCode && locks[p.peerCode] === true);
+          const unlockedCount = players.filter((p) => p && p.peerCode && locks[p.peerCode] === true).length;
+
+          const badgeEl = document.getElementById("my-tc-lock-status-badge");
+          if (badgeEl) {
+            badgeEl.textContent = allUnlocked ? "已解锁 " + unlockedCount + "/" + players.length : "锁定 " + unlockedCount + "/" + players.length;
+          }
+
+          const switchEl = document.getElementById("my-tc-unlock-switch");
+          if (switchEl) {
+            switchEl.checked = locks[myCode] === true;
+            switchEl.onchange = async function () {
+              if (!chat.settings) chat.settings = {};
+              if (!chat.settings.thoughtChainLocks || typeof chat.settings.thoughtChainLocks !== "object") {
+                chat.settings.thoughtChainLocks = {};
+              }
+              chat.settings.thoughtChainLocks[myCode] = Boolean(switchEl.checked);
+              await saveChatToDb(chat);
+              renderMyThoughtChainLockUI(chat);
+              refreshChatView(chat.id);
+              if (window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
+            };
+          }
+
+          const headerEl = document.getElementById("my-tc-lock-toggle-header");
+          const bodyEl = document.getElementById("my-tc-lock-body");
+          const arrowEl = document.getElementById("my-tc-lock-arrow");
+          if (headerEl && bodyEl && !headerEl.dataset.boundTcLockToggle) {
+            headerEl.dataset.boundTcLockToggle = "1";
+            headerEl.addEventListener("click", () => {
+              const isHidden = bodyEl.style.display === "none";
+              bodyEl.style.display = isHidden ? "block" : "none";
+              if (arrowEl) {
+                arrowEl.style.transform = isHidden ? "rotate(0deg)" : "rotate(-90deg)";
+              }
+            });
+          }
+
+          const listEl = document.getElementById("my-tc-lock-members-list");
+          if (listEl) {
+            listEl.innerHTML = players
+              .map((p) => {
+                const isUnlocked = locks[p.peerCode] === true;
+                const safeName = String(p.name || "玩家")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;");
+                return `
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden;">
+                      <img src="${p.avatar || window.defaultAvatar}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color);" />
+                      <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-primary);">${safeName}</span>
+                    </div>
+                    <span style="flex-shrink: 0; font-size: 11px; font-weight: 600; color: ${isUnlocked ? "var(--accent-color)" : "var(--text-secondary)"}; margin-left: 8px;">${isUnlocked ? "已解锁" : "上锁"}</span>
+                  </div>
+                `;
+              })
+              .join("");
+          }
+        }
+        window.renderMyThoughtChainLockUI = renderMyThoughtChainLockUI;
 
         window.buildMySharedSoloPayload = function (chat) {
           if (!isPeerGrp(chat)) return [];
@@ -93910,12 +94178,86 @@ ${stickerContext || "无"}
           }
         };
 
-        window.switchGroupLineMode = async function (targetMode, targetThreadId, peerSoloObj) {
+        function getPlayerCommittedLineKey(chat, peerCode) {
+          if (!chat) return "main";
+          const code = peerCode || getMyPeerCode();
+          const savedLine = chat.settings?.peerPhoneData?.playerActiveLine?.[code];
+          if (savedLine && savedLine !== "main") {
+            const allThreads = getAllGroupSoloThreads(chat);
+            if (allThreads.some((t) => t && String(t.id) === String(savedLine))) {
+              return String(savedLine);
+            }
+          }
+          return "main";
+        }
+        window.getPlayerCommittedLineKey = getPlayerCommittedLineKey;
+
+        function pushGroupLineSystemNotice(chat, targetLineKey, contentText) {
+          if (!chat || !contentText) return;
+          const nowTs = Date.now() + Math.floor(Math.random() * 5);
+          const sysMsg = {
+            role: "system",
+            type: "pat_message",
+            content: contentText,
+            timestamp: nowTs,
+            eventId: "sysline_" + nowTs + "_" + Math.random().toString(36).slice(2, 7)
+          };
+          if (targetLineKey && targetLineKey !== "main") {
+            sysMsg.soloThreadId = targetLineKey;
+            const cfg = ensureSoloLineConfig(chat);
+            const localT = cfg && Array.isArray(cfg.threads) ? cfg.threads.find((t) => t && String(t.id) === String(targetLineKey)) : null;
+            if (localT) {
+              if (!Array.isArray(localT.history)) localT.history = [];
+              localT.history.push(sysMsg);
+            }
+            if (chat.viewingPeerSoloThread && String(chat.viewingPeerSoloThread.id) === String(targetLineKey)) {
+              if (!Array.isArray(chat.viewingPeerSoloThread.history)) chat.viewingPeerSoloThread.history = [];
+              chat.viewingPeerSoloThread.history.push(sysMsg);
+            }
+            if (chat.settings?.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+              for (const sList of Object.values(chat.settings.sharedSoloRecords)) {
+                if (!Array.isArray(sList)) continue;
+                const matchT = sList.find((t) => t && String(t.id) === String(targetLineKey));
+                if (matchT) {
+                  if (!Array.isArray(matchT.history)) matchT.history = [];
+                  matchT.history.push(sysMsg);
+                  matchT.publicHistory = matchT.history;
+                }
+              }
+            }
+            const activeT = getActiveSoloThread(chat);
+            if (chat.activeLineMode === "solo" && activeT && String(activeT.id) === String(targetLineKey) && Array.isArray(chat.history)) {
+              if (!chat.history.includes(sysMsg)) {
+                chat.history.push(sysMsg);
+              }
+            }
+          } else {
+            if (chat.activeLineMode === "solo") {
+              if (!Array.isArray(chat.mainLineHistory)) chat.mainLineHistory = [];
+              chat.mainLineHistory.push(sysMsg);
+            } else {
+              if (!Array.isArray(chat.history)) chat.history = [];
+              chat.history.push(sysMsg);
+              if (Array.isArray(chat.mainLineHistory)) {
+                chat.mainLineHistory = [...chat.history];
+              }
+            }
+          }
+          if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+            window.PeerManager.broadcastGroupMessage(chat, sysMsg, false);
+          }
+        }
+
+        window.switchGroupLineMode = async function (targetMode, targetThreadId, peerSoloObj, options) {
           const appState = getAppState();
           const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
           if (!isPeerGrp(chat)) return;
           const cfg = ensureSoloLineConfig(chat);
           if (!cfg) return;
+          const isWatchOnly = Boolean(options && options.isWatchOnly);
+          const myCode = getMyPeerCode();
+          const myNick = chat.settings?.myNickname || chat.settings?.myName || "我";
+          const prevCommittedLine = getPlayerCommittedLineKey(chat, myCode);
 
           if (chat.activeLineMode === "solo") {
             syncCurrentSoloThreadHistory(chat);
@@ -93925,6 +94267,7 @@ ${stickerContext || "无"}
 
           if (targetMode === "main") {
             chat.activeLineMode = "main";
+            chat.isWatchingSoloLine = false;
             chat.viewingPeerSoloThread = null;
             chat.hasUnreadMainLineInSolo = false;
             if (chat.mainGroupName) {
@@ -93933,6 +94276,17 @@ ${stickerContext || "无"}
             if (Array.isArray(chat.mainLineHistory)) {
               chat.history = [...chat.mainLineHistory];
             }
+            if (!isWatchOnly) {
+              if (!chat.settings.peerPhoneData || typeof chat.settings.peerPhoneData !== "object") {
+                chat.settings.peerPhoneData = { friendships: [], messages: [], signalByLine: { main: true }, playerActiveLine: {}, lineGameTime: {} };
+              }
+              if (!chat.settings.peerPhoneData.playerActiveLine) chat.settings.peerPhoneData.playerActiveLine = {};
+              chat.settings.peerPhoneData.playerActiveLine[myCode] = "main";
+              if (prevCommittedLine && prevCommittedLine !== "main") {
+                const mainGrpTitle = chat.mainGroupName || chat.name || "大群主线";
+                pushGroupLineSystemNotice(chat, "main", `${myNick}已回到大群主线「${mainGrpTitle}」`);
+              }
+            }
           } else {
             const allThreads = getAllGroupSoloThreads(chat);
             const targetThread = peerSoloObj || allThreads.find((t) => t.id === targetThreadId) || getActiveSoloThread(chat);
@@ -93940,14 +94294,20 @@ ${stickerContext || "无"}
               await showAlertMsg("提示", "当前暂无单线，请先点击右上角新建单线");
               return false;
             }
-            if (!canCurrentUserAccessSoloThread(targetThread, chat)) {
-              await showAlertMsg("提示", "该单线为私密单线，仅创建者或参与玩家可进入");
+            const isCheckedParticipant = isUserCheckedInSoloThread(targetThread, myCode);
+            if (!isWatchOnly && !isCheckedParticipant) {
+              await showAlertMsg("提示", "你未被勾选在该单线玩家名单中，无法点击进入，请点击观看按钮");
+              return false;
+            }
+            if (isWatchOnly && !canCurrentUserAccessSoloThread(targetThread, chat) && !isCheckedParticipant) {
+              await showAlertMsg("提示", "该单线为私密单线，未公开时仅参与玩家可观看");
               return false;
             }
             if (!chat.mainGroupName) {
               chat.mainGroupName = chat.name || "群聊";
             }
             chat.activeLineMode = "solo";
+            chat.isWatchingSoloLine = isWatchOnly || !isCheckedParticipant;
             const isLocalThread = cfg.threads.some((t) => t.id === targetThread.id);
             if (!isLocalThread) {
               chat.viewingPeerSoloThread = targetThread;
@@ -93968,11 +94328,23 @@ ${stickerContext || "无"}
             if (targetThread.name) {
               chat.name = targetThread.name;
             }
+            if (!isWatchOnly) {
+              if (!chat.settings.peerPhoneData || typeof chat.settings.peerPhoneData !== "object") {
+                chat.settings.peerPhoneData = { friendships: [], messages: [], signalByLine: { main: true }, playerActiveLine: {}, lineGameTime: {} };
+              }
+              if (!chat.settings.peerPhoneData.playerActiveLine) chat.settings.peerPhoneData.playerActiveLine = {};
+              chat.settings.peerPhoneData.playerActiveLine[myCode] = String(targetThread.id);
+              if (prevCommittedLine !== String(targetThread.id)) {
+                const tTitle = targetThread.name || "单线";
+                pushGroupLineSystemNotice(chat, "main", `${myNick}已进入单线「${tTitle}」`);
+                pushGroupLineSystemNotice(chat, String(targetThread.id), `${myNick}已进入「${tTitle}」`);
+              }
+            }
           }
 
           window.updateSoloLineBannerUI(chat);
           if (typeof window.onPeerPhoneLineSwitched === "function") {
-            window.onPeerPhoneLineSwitched(chat);
+            window.onPeerPhoneLineSwitched(chat, isWatchOnly);
           }
           refreshChatView(chat.id);
           if (window.PeerManager && typeof window.PeerManager.applyPeerChatInputUI === "function") {
@@ -93999,12 +94371,13 @@ ${stickerContext || "无"}
         };
         window.selectSoloModalTab = window.selectSoloModalModeTab;
 
-        window.confirmEnterSelectedLineMode = async function () {
+        window.confirmEnterSelectedLineMode = async function (isWatchOnly) {
           const appState = getAppState();
           const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
           if (!isPeerGrp(chat)) return;
+          const watchFlag = Boolean(isWatchOnly);
           if (pendingModalMode === "main") {
-            await window.switchGroupLineMode("main");
+            await window.switchGroupLineMode("main", null, null, { isWatchOnly: watchFlag });
             window.closeSoloLineModal();
           } else {
             const allThreads = getAllGroupSoloThreads(chat);
@@ -94013,17 +94386,18 @@ ${stickerContext || "无"}
               await showAlertMsg("提示", "当前暂无单线，请先点击新建按钮创建单线");
               return;
             }
-            if (!canCurrentUserAccessSoloThread(targetThread, chat)) {
-              await showAlertMsg("提示", "该单线为私密单线，仅创建者或参与玩家可进入");
-              return;
-            }
-            const ok = await window.switchGroupLineMode("solo", targetThread.id, targetThread.isPeerThread ? targetThread : null);
+            const ok = await window.switchGroupLineMode("solo", targetThread.id, targetThread.isPeerThread ? targetThread : null, { isWatchOnly: watchFlag });
             if (ok !== false) {
               window.closeSoloLineModal();
             }
           }
         };
-        window.confirmEnterSoloModalSelection = window.confirmEnterSelectedLineMode;
+        window.confirmEnterSoloModalSelection = function () {
+          return window.confirmEnterSelectedLineMode(false);
+        };
+        window.confirmWatchSoloModalSelection = function () {
+          return window.confirmEnterSelectedLineMode(true);
+        };
 
         function renderSoloLineModalContent(chat) {
           if (!isPeerGrp(chat)) return;
@@ -94660,6 +95034,7 @@ ${stickerContext || "无"}
         (function () {
           let currentPhoneTab = "contacts"; // "contacts" | "add" | "chat"
           let activePhoneContactId = null;
+          let lastPhoneChatId = null;
 
           const MINI_PHONE_SIZE_DIMS = {
             large: { width: "284px", height: "500px" },
@@ -94711,6 +95086,16 @@ ${stickerContext || "无"}
             return "main";
           }
 
+          function getMyPhoneBoundLineKey(chat) {
+            if (!chat) return "main";
+            if (typeof window.getPlayerCommittedLineKey === "function") {
+              return window.getPlayerCommittedLineKey(chat, getMyPeerCodeLocal());
+            }
+            const myCode = getMyPeerCodeLocal();
+            const saved = chat.settings?.peerPhoneData?.playerActiveLine?.[myCode];
+            return saved || getCurrentLineKey(chat);
+          }
+
           function ensurePeerPhoneData(chat) {
             if (!chat) return null;
             if (!chat.settings) chat.settings = {};
@@ -94730,7 +95115,9 @@ ${stickerContext || "无"}
             if (!pd.playerActiveLine || typeof pd.playerActiveLine !== "object") pd.playerActiveLine = {};
             if (!pd.lineGameTime || typeof pd.lineGameTime !== "object") pd.lineGameTime = {};
             const myCode = getMyPeerCodeLocal();
-            pd.playerActiveLine[myCode] = getCurrentLineKey(chat);
+            if (!pd.playerActiveLine[myCode]) {
+              pd.playerActiveLine[myCode] = getCurrentLineKey(chat);
+            }
             return pd;
           }
 
@@ -94947,17 +95334,11 @@ ${stickerContext || "无"}
             if (!chat || !peerCode) return "main";
             const myCode = getMyPeerCodeLocal();
             if (peerCode === myCode) {
-              return getCurrentLineKey(chat);
+              return getMyPhoneBoundLineKey(chat);
             }
             const pd = ensurePeerPhoneData(chat);
             if (pd.playerActiveLine && pd.playerActiveLine[peerCode]) {
               return pd.playerActiveLine[peerCode];
-            }
-            // 检查该玩家是否正在某个单线中
-            const sharedRecs = chat.settings?.sharedSoloRecords || {};
-            if (Array.isArray(sharedRecs[peerCode]) && sharedRecs[peerCode].length > 0) {
-              const latestT = sharedRecs[peerCode][sharedRecs[peerCode].length - 1];
-              if (latestT && latestT.id) return String(latestT.id);
             }
             return "main";
           }
@@ -94989,14 +95370,32 @@ ${stickerContext || "无"}
             if (!chat || !chat.isGroup) return [];
             const st = window.state || {};
             const myCode = getMyPeerCodeLocal();
-            const myNick = chat.settings?.myNickname || chat.settings?.myName || "我";
-            const myAva = chat.settings?.myAvatar || window.defaultAvatar || "";
             const list = [];
             const seenIds = new Set();
 
+            const rawKeeperIds = [
+              chat.settings?.keeperMemberId,
+              chat.settings?.keeperTargetId,
+              chat.settings?.kpMemberId,
+              chat.settings?.kpId
+            ].map(v => String(v || "").trim()).filter(v => v && v !== "none");
+            const keeperName = String(chat.settings?.keeperName || "").trim();
+
+            const isKeeperEntry = (memberId, peerCode, nameStr) => {
+              const mId = String(memberId || "").trim();
+              const pCode = String(peerCode || "").trim();
+              const nStr = String(nameStr || "").trim();
+              if (mId && rawKeeperIds.includes(mId)) return true;
+              if (pCode && (rawKeeperIds.includes(pCode) || rawKeeperIds.includes("peer:" + pCode) || rawKeeperIds.includes("peer_" + pCode))) return true;
+              if (keeperName && nStr && nStr === keeperName) return true;
+              if (nStr && /^(kp|守秘人|守密人)$/i.test(nStr)) return true;
+              return false;
+            };
+
             // 1. 真人玩家
-            const addHuman = (peerCode, name, avatar) => {
+            const addHuman = (peerCode, name, avatar, memberId) => {
               if (!peerCode || peerCode === myCode) return;
+              if (isKeeperEntry(memberId, peerCode, name)) return;
               const cid = "peer:" + peerCode;
               if (seenIds.has(cid)) return;
               seenIds.add(cid);
@@ -95013,28 +95412,29 @@ ${stickerContext || "无"}
             if (Array.isArray(chat.members)) {
               chat.members.forEach(m => {
                 if (m && (m.isPeerMember || m.roleType === "peer") && m.peerCode) {
-                  addHuman(m.peerCode, m.groupNickname || m.name || m.originalName, m.avatar);
+                  if (m.roleType === "keeper" || m.isKeeper) return;
+                  addHuman(m.peerCode, m.groupNickname || m.name || m.originalName, m.avatar, m.id);
                 }
               });
             }
             if (Array.isArray(chat.settings?.peerMembers)) {
               chat.settings.peerMembers.forEach(pm => {
                 if (pm && pm.peerCode) {
-                  addHuman(pm.peerCode, pm.name || pm.nickname, pm.avatar);
+                  if (pm.roleType === "keeper" || pm.isKeeper) return;
+                  addHuman(pm.peerCode, pm.name || pm.nickname, pm.avatar, pm.id);
                 }
               });
             }
 
             // 2. KPC (排除守秘人、系统状态栏、骰娘)
-            const keeperId = chat.settings?.keeperMemberId || chat.settings?.keeperTargetId || "";
             if (Array.isArray(chat.members)) {
               chat.members.forEach(m => {
                 if (!m || m.isPeerMember || m.roleType === "peer" || m.peerCode) return;
                 const mName = String(m.groupNickname || m.originalName || m.name || "").trim();
                 const srcChat = st.chats ? st.chats[m.id] : null;
                 const rType = m.roleType || (srcChat && srcChat.roleType) || "";
-                if (rType === "system_status" || rType === "dice" || rType === "keeper") return;
-                if (keeperId && String(m.id) === String(keeperId)) return;
+                if (rType === "system_status" || rType === "dice" || rType === "keeper" || m.isKeeper) return;
+                if (isKeeperEntry(m.id, "", mName) || isKeeperEntry(m.id, "", m.originalName)) return;
                 if (/^(kp|守秘人|守密人|系统状态|状态栏|骰娘|骰子|dice)$/i.test(mName)) return;
                 if (/系统状态|状态栏|守秘人|守密人/.test(mName)) return;
 
@@ -95090,11 +95490,8 @@ ${stickerContext || "无"}
               if (!isLineSignalAvailable(chat, sLine)) {
                 return;
               }
+              // 发给群内AI角色的短信保持未读，等调用一次API回复让AI看到后再变为已读
               if (String(msg.toId || "").startsWith("kpc:")) {
-                msg.delivered = true;
-                msg.deliveredAt = Date.now();
-                msg.readByRecipient = true;
-                changed = true;
                 return;
               }
               if (String(msg.toId || "").startsWith("peer:")) {
@@ -95108,6 +95505,7 @@ ${stickerContext || "无"}
                 if (canGameTimeDeliver(msg.senderGameTime, rTimeObj, sameLine)) {
                   msg.delivered = true;
                   msg.deliveredAt = Date.now();
+                  msg.readByRecipient = true;
                   changed = true;
                   if (msg.toId === myContactId) {
                     newlyDeliveredToMe = true;
@@ -95138,24 +95536,37 @@ ${stickerContext || "无"}
             if (parsedTime) {
               parsedTime.updatedAt = Date.now();
               pd.lineGameTime[lineKey] = parsedTime;
+              const nowTs = Date.now();
+              pd.messages.forEach(m => {
+                if (m && String(m.fromId || "").startsWith("kpc:") && (m.senderLineKey || "main") === lineKey && Math.abs(nowTs - (Number(m.createdAt) || 0)) < 15000) {
+                  m.senderGameTime = parsedTime;
+                }
+              });
             }
             window.evaluatePeerPhonePendingMessages(chat);
           };
 
-          window.onPeerPhoneLineSwitched = function (chat) {
+          window.onPeerPhoneLineSwitched = function (chat, isWatchOnly) {
             if (!chat || !chat.isGroup || typeof window.isPeerGroupChat !== "function" || !window.isPeerGroupChat(chat)) return;
             const pd = ensurePeerPhoneData(chat);
             const myCode = getMyPeerCodeLocal();
-            const lineKey = getCurrentLineKey(chat);
+            const viewLineKey = getCurrentLineKey(chat);
             const prevLine = pd.playerActiveLine[myCode];
-            pd.playerActiveLine[myCode] = lineKey;
-            const latestT = getLineLatestGameTime(chat, lineKey);
-            const prevTimeDisplay = pd.lineGameTime[lineKey] ? pd.lineGameTime[lineKey].display : "";
-            if (latestT) pd.lineGameTime[lineKey] = latestT;
-            const nextTimeDisplay = pd.lineGameTime[lineKey] ? pd.lineGameTime[lineKey].display : "";
+            if (!isWatchOnly) {
+              pd.playerActiveLine[myCode] = viewLineKey;
+            }
+            const boundLineKey = getMyPhoneBoundLineKey(chat);
+            const latestT = getLineLatestGameTime(chat, boundLineKey);
+            const prevTimeDisplay = pd.lineGameTime[boundLineKey] ? pd.lineGameTime[boundLineKey].display : "";
+            if (latestT) pd.lineGameTime[boundLineKey] = latestT;
+            const nextTimeDisplay = pd.lineGameTime[boundLineKey] ? pd.lineGameTime[boundLineKey].display : "";
             const msgChanged = window.evaluatePeerPhonePendingMessages(chat, true);
-            if (prevLine !== lineKey || prevTimeDisplay !== nextTimeDisplay || msgChanged) {
+            if ((!isWatchOnly && prevLine !== viewLineKey) || prevTimeDisplay !== nextTimeDisplay || msgChanged) {
               saveAndSyncPhoneData(chat);
+            }
+            const overlay = document.getElementById("peer-mini-phone-overlay");
+            if (overlay && overlay.classList.contains("visible")) {
+              renderPeerMiniPhoneScreen(chat);
             }
           };
 
@@ -95204,6 +95615,17 @@ ${stickerContext || "无"}
                 toDisplayName = matchedHuman.name;
               }
 
+              // 防重复检查：避免同一回合相同内容的短信被重复插入
+              const nowTs = Date.now();
+              const isDup = pd.messages.some(existing =>
+                existing &&
+                existing.fromId === fromId &&
+                existing.toId === toId &&
+                existing.content === smsBody &&
+                Math.abs(nowTs - (Number(existing.createdAt) || 0)) < 10000
+              );
+              if (isDup) continue;
+
               // 确保双方已建立联系人关系
               if (!getFriendshipBetween(pd, fromId, toId)) {
                 pd.friendships.push({
@@ -95211,25 +95633,25 @@ ${stickerContext || "无"}
                   b: toId,
                   status: "accepted",
                   initiator: fromId,
-                  timestamp: Date.now(),
-                  statusUpdatedAt: Date.now()
+                  timestamp: nowTs,
+                  statusUpdatedAt: nowTs
                 });
               }
 
               const curTimeObj = getLineLatestGameTime(chat, lineKey);
               const canSendNow = isLineSignalAvailable(chat, lineKey);
               pd.messages.push({
-                id: "pmsg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                id: "pmsg_" + nowTs + "_" + Math.random().toString(36).slice(2, 6),
                 fromId: fromId,
                 fromName: fromDisplayName,
                 toId: toId,
                 toName: toDisplayName,
                 content: smsBody,
-                createdAt: Date.now(),
+                createdAt: nowTs,
                 senderLineKey: lineKey,
                 senderGameTime: curTimeObj,
                 delivered: canSendNow,
-                deliveredAt: canSendNow ? Date.now() : null,
+                deliveredAt: canSendNow ? nowTs : null,
                 readByRecipient: false,
                 aiContextInjectedSender: true,
                 aiContextInjectedRecipient: true
@@ -95261,55 +95683,258 @@ ${stickerContext || "无"}
             const pd = ensurePeerPhoneData(chat);
             if (!pd) return "";
             const lineKey = getCurrentLineKey(chat);
-            const activePlayers = typeof window.getPeerGroupActiveLineHumanPlayers === "function"
-              ? window.getPeerGroupActiveLineHumanPlayers(chat)
-              : [];
-            const activeContactIds = new Set(activePlayers.map(p => "peer:" + p.peerCode));
-            if (activeContactIds.size === 0) {
-              activeContactIds.add(getMyPhoneContactId());
-            }
-
             const hasSignal = isLineSignalAvailable(chat, lineKey);
-            const contextLines = [];
             let dirty = false;
 
             pd.messages.forEach(m => {
-              if (!m) return;
-              // 1. 本线路玩家发出的短信
-              if (activeContactIds.has(m.fromId) && !m.aiContextInjectedSender) {
-                const timeTag = m.senderGameTime?.display ? `在系统状态栏时间 ${m.senderGameTime.display} ` : "";
-                if (!hasSignal || !m.delivered) {
-                  contextLines.push(`- ${timeTag}玩家【${m.fromName}】尝试用手机向【${m.toName}】发送短信：“${m.content}”，当前处于待发送或等待时间同步状态。`);
-                } else {
-                  contextLines.push(`- ${timeTag}玩家【${m.fromName}】通过手机向【${m.toName}】发送了短信：“${m.content}”。`);
-                }
+              if (!m || !m.content) return;
+              const mLine = m.senderLineKey || "main";
+              const mLineSignal = isLineSignalAvailable(chat, mLine);
+
+              // 当调用API回复且有信号时，玩家发给AI角色的短信被AI看到，自动变为已读
+              if (String(m.toId || "").startsWith("kpc:") && !m.delivered && mLineSignal) {
+                m.delivered = true;
+                m.deliveredAt = Date.now();
+                m.readByRecipient = true;
                 m.aiContextInjectedSender = true;
-                dirty = true;
-              }
-              // 2. 本线路玩家刚刚收到的已送达短信
-              if (activeContactIds.has(m.toId) && m.delivered && !m.aiContextInjectedRecipient) {
-                const timeTag = m.senderGameTime?.display ? `来自时间点 ${m.senderGameTime.display} 的` : "";
-                contextLines.push(`- 玩家【${m.toName}】的手机刚刚收到了【${m.fromName}】发来的${timeTag}短信：“${m.content}”。`);
-                m.aiContextInjectedRecipient = true;
                 dirty = true;
               }
             });
 
             if (dirty) {
               saveAndSyncPhoneData(chat);
+              window.updatePeerPhoneBtnUI(chat);
+              const overlay = document.getElementById("peer-mini-phone-overlay");
+              if (overlay && overlay.classList.contains("visible")) {
+                renderPeerMiniPhoneScreen(chat);
+              }
             }
 
             const ruleLines = [
-              `1. 手机信号控制：当前线路手机信号状态为【${hasSignal ? "有信号" : "无信号"}】。当剧情中调查员进入无信号区域或信号被屏蔽时，可在回复末尾输出 [手机：无信号]；当离开无信号区域或信号恢复时，可在回复末尾输出 [手机：恢复信号]。系统仅识别 [手机：无信号] 与 [手机：恢复信号] 这两种格式，切换无信号后系统会自动拦截短信发出，恢复信号后系统会自动按系统状态栏时间放行短信。`,
-              `2. 手机短信交互：若玩家通过手机向群内非守秘人的NPC角色发送了短信，且当前有信号，该角色可在回复中附带 [手机短信：角色名->玩家名：短信回复内容]，系统会自动提取并投递到玩家的手机中。`
+              `1. 信号状态：当前【${hasSignal ? "有信号" : "无信号"}】。进入无信号区在回复末尾加 [手机：无信号]，恢复信号加 [手机：恢复信号]。`,
+              `2. 手机短信：对话历史中 [名字]→[名字]：内容 代表手机短信记录，合并在发送者消息内，只记录发送不重复记录接收。玩家发短信给群内角色且有信号时，该角色可在回复中附带 [手机短信：角色名->玩家名：回复内容] 回复。`
             ];
-            if (contextLines.length > 0) {
-              ruleLines.push(`3. 本回合手机短信动态：\n${contextLines.join("\n")}`);
-            }
 
             return typeof window.formatPromptSection === "function"
-              ? window.formatPromptSection("密友群聊手机与信号规则", ruleLines.join("\n"))
-              : `\n【密友群聊手机与信号规则】\n${ruleLines.join("\n")}\n`;
+              ? window.formatPromptSection("手机短信与信号", ruleLines.join("\n"))
+              : `\n【手机短信与信号】\n${ruleLines.join("\n")}\n`;
+          };
+
+          window.mergePeerPhoneSmsIntoMessagesPayload = function (chat, payloadList, historySlice) {
+            if (!Array.isArray(payloadList)) return payloadList;
+            const cleanupMeta = (list) => {
+              list.forEach(item => {
+                if (item && typeof item === "object") {
+                  delete item._msgTimestamp;
+                  delete item._senderName;
+                  delete item._senderId;
+                }
+              });
+              return list;
+            };
+            if (!chat || !chat.isGroup || typeof window.isPeerGroupChat !== "function" || !window.isPeerGroupChat(chat)) {
+              return cleanupMeta(payloadList);
+            }
+            const pd = ensurePeerPhoneData(chat);
+            if (!pd || !Array.isArray(pd.messages) || pd.messages.length === 0) {
+              return cleanupMeta(payloadList);
+            }
+
+            let minAllowedTs = 0;
+            if (Array.isArray(historySlice) && Array.isArray(chat.history) && chat.history.length > historySlice.length && historySlice.length > 0) {
+              const firstSliceTs = Number(historySlice[0]?.timestamp) || 0;
+              if (firstSliceTs > 0) minAllowedTs = firstSliceTs - 5000;
+            }
+
+            const seenMsgIds = new Set();
+            const validSmsList = [];
+            let dirty = false;
+
+            pd.messages.forEach(m => {
+              if (!m || !m.content) return;
+              const msgId = String(m.id || "");
+              if (msgId && seenMsgIds.has(msgId)) return;
+
+              const mLine = m.senderLineKey || "main";
+              const mLineSignal = isLineSignalAvailable(chat, mLine);
+
+              if (String(m.toId || "").startsWith("kpc:") && !m.delivered && mLineSignal) {
+                m.delivered = true;
+                m.deliveredAt = Date.now();
+                m.readByRecipient = true;
+                m.aiContextInjectedSender = true;
+                dirty = true;
+              }
+
+              // 只记录发送消息，不重复记录接收消息；只要发出时有信号或已送达即计入上下文
+              if (m.delivered || mLineSignal) {
+                const mTs = Number(m.createdAt) || 0;
+                if (minAllowedTs > 0 && mTs > 0 && mTs < minAllowedTs) return;
+                if (msgId) seenMsgIds.add(msgId);
+                validSmsList.push(m);
+                if (!m.aiContextInjectedSender) {
+                  m.aiContextInjectedSender = true;
+                  dirty = true;
+                }
+              }
+            });
+
+            if (dirty) {
+              saveAndSyncPhoneData(chat);
+              window.updatePeerPhoneBtnUI(chat);
+              const overlay = document.getElementById("peer-mini-phone-overlay");
+              if (overlay && overlay.classList.contains("visible")) {
+                renderPeerMiniPhoneScreen(chat);
+              }
+            }
+
+            if (validSmsList.length === 0) {
+              return cleanupMeta(payloadList);
+            }
+
+            validSmsList.sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0));
+
+            const matchesHumanSender = (pItem, fromId, fromName) => {
+              if (!pItem || pItem.role !== "user" || typeof pItem.content !== "string") return false;
+              if (fromId && pItem._senderId && pItem._senderId === fromId) return true;
+              if (fromName && pItem._senderName && pItem._senderName === fromName) return true;
+              if (fromName && (pItem.content.startsWith(`[${fromName}]:`) || pItem.content.startsWith(`[${fromName}]：`))) return true;
+              return false;
+            };
+
+            validSmsList.forEach(m => {
+              const fromId = String(m.fromId || "");
+              const fromName = String(m.fromName || "未知").trim();
+              const toName = String(m.toName || "未知").trim();
+              const smsLine = `[${fromName}]→[${toName}]：${m.content}`;
+              const smsTs = Number(m.createdAt) || 0;
+
+              if (!fromId.startsWith("kpc:")) {
+                // 玩家给玩家、玩家给角色：合并到上一条该玩家的消息中
+                let targetIdx = -1;
+                for (let i = payloadList.length - 1; i >= 0; i--) {
+                  const p = payloadList[i];
+                  if (matchesHumanSender(p, fromId, fromName)) {
+                    const pTs = Number(p._msgTimestamp) || 0;
+                    if (!pTs || !smsTs || pTs <= smsTs + 3000) {
+                      targetIdx = i;
+                      break;
+                    }
+                  }
+                }
+                if (targetIdx === -1) {
+                  for (let i = payloadList.length - 1; i >= 0; i--) {
+                    if (matchesHumanSender(payloadList[i], fromId, fromName)) {
+                      targetIdx = i;
+                      break;
+                    }
+                  }
+                }
+                if (targetIdx === -1) {
+                  for (let i = payloadList.length - 1; i >= 0; i--) {
+                    const p = payloadList[i];
+                    if (p && p.role === "user" && typeof p.content === "string") {
+                      const pTs = Number(p._msgTimestamp) || 0;
+                      if (!pTs || !smsTs || pTs <= smsTs + 3000) {
+                        targetIdx = i;
+                        break;
+                      }
+                    }
+                  }
+                }
+                if (targetIdx === -1) {
+                  for (let i = payloadList.length - 1; i >= 0; i--) {
+                    if (payloadList[i] && payloadList[i].role === "user" && typeof payloadList[i].content === "string") {
+                      targetIdx = i;
+                      break;
+                    }
+                  }
+                }
+
+                if (targetIdx !== -1) {
+                  const targetMsg = payloadList[targetIdx];
+                  if (!targetMsg.content.includes(smsLine)) {
+                    targetMsg.content = `${targetMsg.content}\n${smsLine}`;
+                  }
+                } else {
+                  payloadList.push({
+                    role: "user",
+                    content: smsLine,
+                    _msgTimestamp: smsTs,
+                    _senderId: fromId,
+                    _senderName: fromName
+                  });
+                }
+              } else {
+                // 角色给玩家：合并到上一条该AI角色的消息中
+                let mergedIntoAssistant = false;
+                for (let i = payloadList.length - 1; i >= 0; i--) {
+                  const p = payloadList[i];
+                  if (!p || p.role !== "assistant" || typeof p.content !== "string") continue;
+                  const pTs = Number(p._msgTimestamp) || 0;
+                  if (pTs && smsTs && pTs > smsTs + 15000) continue;
+
+                  const tsMatch = p.content.match(/^\(Timestamp: [^)]+\)\s*/);
+                  const tsPrefixStr = tsMatch ? tsMatch[0] : "";
+                  const jsonPart = tsPrefixStr ? p.content.slice(tsPrefixStr.length) : p.content;
+                  try {
+                    const parsed = JSON.parse(jsonPart);
+                    const arr = Array.isArray(parsed)
+                      ? parsed
+                      : (parsed && Array.isArray(parsed.chatResponse) ? parsed.chatResponse : null);
+                    if (arr && arr.length > 0) {
+                      let bubble = null;
+                      for (let j = arr.length - 1; j >= 0; j--) {
+                        const b = arr[j];
+                        if (b && (b.type === "text" || !b.type) && (b.name === fromName || String(b.name || "").includes(fromName))) {
+                          bubble = b;
+                          break;
+                        }
+                      }
+                      if (!bubble) {
+                        for (let j = arr.length - 1; j >= 0; j--) {
+                          const b = arr[j];
+                          if (b && (b.type === "text" || !b.type) && (typeof b.content === "string" || (b.quote_reply && typeof b.quote_reply.reply_content === "string"))) {
+                            bubble = b;
+                            break;
+                          }
+                        }
+                      }
+                      if (bubble) {
+                        if (bubble.quote_reply && typeof bubble.quote_reply.reply_content === "string") {
+                          if (!bubble.quote_reply.reply_content.includes(smsLine)) {
+                            bubble.quote_reply.reply_content = `${bubble.quote_reply.reply_content}\n${smsLine}`;
+                          }
+                        } else {
+                          const prevTxt = String(bubble.content || "");
+                          if (!prevTxt.includes(smsLine)) {
+                            bubble.content = prevTxt ? `${prevTxt}\n${smsLine}` : smsLine;
+                          }
+                        }
+                        p.content = `${tsPrefixStr}${JSON.stringify(parsed)}`;
+                        mergedIntoAssistant = true;
+                        break;
+                      }
+                    }
+                  } catch (e) {}
+                }
+
+                if (!mergedIntoAssistant) {
+                  for (let i = payloadList.length - 1; i >= 0; i--) {
+                    const p = payloadList[i];
+                    if (p && p.role === "user" && typeof p.content === "string") {
+                      if (!p.content.includes(smsLine)) {
+                        p.content = `${p.content}\n${smsLine}`;
+                      }
+                      mergedIntoAssistant = true;
+                      break;
+                    }
+                  }
+                }
+              }
+            });
+
+            return cleanupMeta(payloadList);
           };
 
           window.mergePeerPhoneDataFromPeer = function (chat, incomingPhoneData) {
@@ -95451,19 +96076,44 @@ ${stickerContext || "无"}
               .replace(/"/g, "&quot;");
           }
 
+          function formatPhoneTimeOnly(gameTimeObj) {
+            if (!gameTimeObj || typeof gameTimeObj !== "object") return "";
+            const raw = String(gameTimeObj.timeStr || gameTimeObj.rawTimeStr || gameTimeObj.display || "").trim();
+            if (!raw) return "";
+            const clockMatch = raw.match(/(?:上午|下午|早上|晚上|凌晨|中午|傍晚)?\s*\d{1,2}\s*[:：时点]\s*\d{1,2}(?:\s*分)?/);
+            if (clockMatch) {
+              return clockMatch[0].replace(/\s+/g, "");
+            }
+            const stripped = raw
+              .replace(/^\d{1,4}\s*[年/\-\.]\s*\d{1,2}\s*[月/\-\.]\s*\d{1,2}\s*[日号]?\s*/, "")
+              .replace(/^\d{1,2}\s*[月/\-\.]\s*\d{1,2}\s*[日号]?\s*/, "")
+              .replace(/^第?\s*\d+\s*[天日]\s*/, "")
+              .trim();
+            return stripped || raw;
+          }
+
           function renderPeerMiniPhoneScreen(chat) {
             const targetChat = chat || getActivePeerGroupChat();
             const screenEl = document.getElementById("peer-mini-phone-screen");
             if (!screenEl || !targetChat) return;
 
+            if (String(targetChat.id) !== String(lastPhoneChatId)) {
+              lastPhoneChatId = String(targetChat.id);
+              currentPhoneTab = "contacts";
+              activePhoneContactId = null;
+            }
+
             const pd = ensurePeerPhoneData(targetChat);
             const myId = getMyPhoneContactId();
             const myNick = targetChat.settings?.myNickname || targetChat.settings?.myName || "我";
-            const lineKey = getCurrentLineKey(targetChat);
+            const lineKey = getMyPhoneBoundLineKey(targetChat);
             const hasSignal = isLineSignalAvailable(targetChat, lineKey);
+            const latestLineTime = getLineLatestGameTime(targetChat, lineKey);
+            const isViewingSameBoundLine = lineKey === getCurrentLineKey(targetChat);
             const statusBarEl = document.getElementById("status-bar-time");
-            const statusBarTimeStr = (statusBarEl && statusBarEl.textContent && statusBarEl.textContent.trim()) ? statusBarEl.textContent.trim() : "";
-            const timeDisplayStr = statusBarTimeStr || (targetChat._lastStatusValues?.["时间"] || "12:00");
+            const statusBarTimeStr = (isViewingSameBoundLine && statusBarEl && statusBarEl.textContent && statusBarEl.textContent.trim()) ? statusBarEl.textContent.trim() : "";
+            const fallbackLastTime = isViewingSameBoundLine ? targetChat._lastStatusValues?.["时间"] : "";
+            const timeDisplayStr = formatPhoneTimeOnly(latestLineTime) || latestLineTime?.timeStr || latestLineTime?.rawTimeStr || fallbackLastTime || statusBarTimeStr || "12:00";
             const directory = getEligiblePhoneDirectory(targetChat);
             const counts = getUnreadAndPendingCounts(targetChat);
 
@@ -95475,7 +96125,7 @@ ${stickerContext || "无"}
               <div style="height: 22px; padding: 0 8px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--text-secondary); flex-shrink: 0; box-sizing: border-box;">
                 <div style="display: flex; align-items: center; gap: 4px; color: ${hasSignal ? "var(--text-primary)" : "var(--text-secondary)"};">
                   ${signalSvg}
-                  <span style="font-weight: 600;">${hasSignal ? "信号良好" : "无信号"}</span>
+                  ${hasSignal ? "" : `<span style="font-weight: 600;">无信号</span>`}
                 </div>
                 <span id="peer-mini-phone-status-time" style="font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;">${escapePhoneHtml(timeDisplayStr)}</span>
               </div>
@@ -95513,7 +96163,7 @@ ${stickerContext || "无"}
                 ? `<div style="padding: 36px 12px; text-align: center; font-size: 12px; color: var(--text-secondary);">暂无短信记录</div>`
                 : convMsgs.map(m => {
                     const isMine = m.fromId === myId;
-                    const tLabel = m.senderGameTime?.display || m.senderGameTime?.timeStr || "";
+                    const tLabel = formatPhoneTimeOnly(m.senderGameTime);
                     const readStatusLabel = isMine ? (m.delivered ? "已读" : "未读") : "";
                     return `
                       <div class="peer-phone-msg-row" style="align-items: ${isMine ? "flex-end" : "flex-start"};">
@@ -95537,7 +96187,7 @@ ${stickerContext || "无"}
                   ${msgsHtml}
                 </div>
                 <div style="padding: 6px 8px; background: var(--mini-phone-header-bg); border-top: 1px solid var(--border-color); display: flex; align-items: center; gap: 6px; flex-shrink: 0; box-sizing: border-box;">
-                  <input type="text" id="peer-phone-msg-input" class="moe-input" placeholder="${hasSignal ? "输入短信内容..." : "当前无信号，发送后待机..."}" style="flex: 1; min-width: 0; height: 30px; padding: 0 8px; font-size: 12px; margin: 0; box-sizing: border-box;" />
+                  <input type="text" id="peer-phone-msg-input" class="moe-input" placeholder="" style="flex: 1; min-width: 0; height: 30px; padding: 0 8px; font-size: 12px; margin: 0; box-sizing: border-box;" />
                   <button type="button" id="peer-phone-msg-send-btn" class="moe-btn" style="height: 30px; padding: 0 10px; font-size: 12px; background: var(--accent-color); color: var(--card-bg); border: none; border-radius: 6px; flex-shrink: 0;">发送</button>
                 </div>
               `;
@@ -95561,7 +96211,7 @@ ${stickerContext || "无"}
                 const txt = inputEl.value.trim();
                 if (!txt) return;
                 inputEl.value = "";
-                const curLine = getCurrentLineKey(targetChat);
+                const curLine = getMyPhoneBoundLineKey(targetChat);
                 const curGameTime = getLineLatestGameTime(targetChat, curLine);
                 const newMsg = {
                   id: "pmsg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
@@ -95651,7 +96301,7 @@ ${stickerContext || "无"}
                         </div>
                         <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
                           <span style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapePhoneHtml(item.name)}</span>
-                          <span style="font-size: 10.5px; color: var(--text-secondary);">${item.isHuman ? "玩家" : "角色"}</span>
+                          <span style="font-size: 10.5px; color: var(--text-secondary);">${item.isHuman ? "调查员" : "角色"}</span>
                         </div>
                         <div style="flex-shrink: 0;">${actionBtnHtml}</div>
                       </div>
@@ -95749,7 +96399,7 @@ ${stickerContext || "无"}
                         <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
                           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
                             <span style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapePhoneHtml(c.name)}</span>
-                            <span style="font-size: 10px; color: var(--text-secondary); flex-shrink: 0;">${escapePhoneHtml(lastMsg?.senderGameTime?.timeStr || "")}</span>
+                            <span style="font-size: 10px; color: var(--text-secondary); flex-shrink: 0;">${escapePhoneHtml(formatPhoneTimeOnly(lastMsg?.senderGameTime))}</span>
                           </div>
                           <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapePhoneHtml(lastPreview)}</span>
                         </div>
