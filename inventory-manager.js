@@ -2931,10 +2931,10 @@ HTML设计与排版核心规范：
     }
 
     lines.push("\n# 道具发放与使用互动规则");
-    lines.push("1. 获得道具：当剧情中角色调查发现、搜刮、获得礼物、交易购买或向你索要物品时，请在返回的JSON消息数组中添加一个独立的 give_item 消息对象，并明确填写 target 获得者名字，且必须在 item 内提供生图英文 prompt 提示词以便生成头像：");
-    lines.push('```json\n{\n  "type": "give_item",\n  "target": "获得者的名字",\n  "item": {\n    "name": "物品名称",\n    "desc": "生动的物品外观和作用介绍",\n    "category": "prop",\n    "effect": "如 HP+1 或 SAN+5 等",\n    "damageBonus": "1D6",\n    "content": "线索的内部正文",\n    "prompt": "1item, detailed object description, masterpiece, best quality, e.g. 1item, antique pocket watch, golden gears, masterpiece"\n  }\n}\n```');
+    lines.push("1. 获得道具：当剧情中角色调查发现、搜刮、获得礼物、交易购买或向你索要物品时，请在返回的消息列表中添加一个独立的 give_item 消息对象，并明确填写 target 获得者名字，且必须在 item 内提供生图英文 prompt 提示词以便生成头像：");
+    lines.push('{\n  "type": "give_item",\n  "target": "获得者的名字",\n  "item": {\n    "name": "物品名称",\n    "desc": "生动的物品外观和作用介绍",\n    "category": "prop",\n    "effect": "如 HP+1 或 SAN+5 等",\n    "damageBonus": "1D6",\n    "content": "线索的内部正文",\n    "prompt": "1item, detailed object description, masterpiece, best quality, e.g. 1item, antique pocket watch, golden gears, masterpiece"\n  }\n}');
     lines.push("2. 道具使用与数值加减判定：当玩家在对话中申请使用道具时，请根据玩家的动作描述判断道具是作用于使用者自己还是作用于其他目标角色。若同意使用申请且该道具具有数值效果，请输出 apply_item_effect 消息：");
-    lines.push('```json\n{\n  "type": "apply_item_effect",\n  "target": "实际生效的角色名",\n  "key": "hp",\n  "delta": -2,\n  "approved": true\n}\n```');
+    lines.push('{\n  "type": "apply_item_effect",\n  "target": "实际生效的角色名",\n  "key": "hp",\n  "delta": -2,\n  "approved": true\n}');
     lines.push("若涉及多个属性或技能修改，也可以使用 changes 数组，例如修改 hp、san、mp、力量、克苏鲁神话 等任意属性或技能。系统会自动静默更新该角色的面板数值。");
     lines.push("3. 非数值效果：如果道具的功能是非数值描述，例如抵御一次死亡、消除疲惫等，请直接在剧情对话中进行生动演绎与回应，无需输出 apply_item_effect 指令。");
     const raw = lines.join("\n");

@@ -20687,21 +20687,55 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         })();
 
         // 后台保活音频自动激活：确保发起 API 请求或切换后台时保活音轨处于运行态，防止移动端/浏览器后台冻结网络与 JS 线程
+        let _keepAliveAudioCtx = null;
+        const _SILENT_WAV_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
         function ensureBackgroundKeepAlive() {
           try {
-            const audio = document.getElementById("keep-alive-audio");
-            if (audio && audio.paused) {
+            const audio = document.getElementById("strong-keep-alive-player") || document.getElementById("keep-alive-audio");
+            if (audio) {
+              if (!audio.src || audio.error) {
+                audio.src = _SILENT_WAV_URI;
+              }
+              audio.loop = true;
               audio.volume = 0.01;
-              const playPromise = audio.play();
-              if (playPromise && typeof playPromise.catch === "function") {
-                playPromise.catch(() => {});
+              if (audio.paused) {
+                const playPromise = audio.play();
+                if (playPromise && typeof playPromise.catch === "function") {
+                  playPromise.catch(() => {
+                    try {
+                      if (audio.src !== _SILENT_WAV_URI) {
+                        audio.src = _SILENT_WAV_URI;
+                        audio.play().catch(() => {});
+                      }
+                    } catch (_) {}
+                  });
+                }
+              }
+            }
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+              if (!_keepAliveAudioCtx) {
+                _keepAliveAudioCtx = new AudioCtx();
+                const osc = _keepAliveAudioCtx.createOscillator();
+                const gain = _keepAliveAudioCtx.createGain();
+                gain.gain.value = 0.0001;
+                osc.connect(gain);
+                gain.connect(_keepAliveAudioCtx.destination);
+                osc.start();
+              }
+              if (_keepAliveAudioCtx.state === "suspended") {
+                _keepAliveAudioCtx.resume().catch(() => {});
               }
             }
           } catch (_) {}
         }
         window.ensureBackgroundKeepAlive = ensureBackgroundKeepAlive;
-        document.addEventListener("pointerdown", ensureBackgroundKeepAlive, { once: true, passive: true });
-        document.addEventListener("keydown", ensureBackgroundKeepAlive, { once: true, passive: true });
+        document.addEventListener("pointerdown", ensureBackgroundKeepAlive, { passive: true });
+        document.addEventListener("touchstart", ensureBackgroundKeepAlive, { passive: true });
+        document.addEventListener("keydown", ensureBackgroundKeepAlive, { passive: true });
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) ensureBackgroundKeepAlive();
+        });
 
         async function requestLlmapiWithFallback(targetUrl, options = {}) {
           ensureBackgroundKeepAlive();
@@ -23971,7 +24005,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "3. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将意图分析、环境观察、角色心理推演、回复策略规划等所有思考内容，完整合并写入这一条全局顶级的 \"thinking\" 字段中。\n" +
               "4. 绝对禁止在具体对象内部包含 thinking 字段：绝对禁止在各个动作、道具、状态栏或文本消息对象内部各自夹带 thinking 字段！下方的 chatResponse 数组中，每一个具体消息对象只保留其自身字段，所有气泡按顺序装入同一个 chatResponse 数组，严禁拆分成多个并列代码块。\n" +
               "5. 标准填写代码结构示例：\n" +
-              "```json\n" +
               "{\n" +
               "  \"thinking\": \"1.最高协议核对：确认无规则冲突；2.场景流速判定：当前处于交互场景，保持驻留不主动结算；3.回复规划：渲染场景氛围并推进当前动作；4.自检完毕，开始生成。\",\n" +
               "  \"chatResponse\": [\n" +
@@ -23982,7 +24015,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "    }\n" +
               "  ]\n" +
               "}\n" +
-              "```\n" +
               (preset ? "\n预设名称：" + preset.name + "\n" : "");
             if (preset && preset.generalContent) {
               block += "\n---------- 【思维链通用规则设定开始】 ----------\n" + preset.generalContent + "\n---------- 【思维链通用规则设定结束】 ----------\n";
@@ -24141,8 +24173,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   `2. 真相与全局背景的判断：整个模组的全局核心真相与总纲带团全程有用，应当保持开启；而如果是某个特定小章节、小故事的局部真相，带完该小故事并进入下一个小故事后如果已经没有用处，可以关闭。\n` +
                   `3. 角色与猫人设的动态判断：当前场景若无猫或某NPC出现、模组本章节内容也无需该角色出场，可以将其人设章节关闭；后续章节若发现有猫或该角色出场互动，应在进入新章节时及时开启。\n` +
                   `4. 已探索完的旧章节处理：当某个小章节或场景已带完且后续完全不再需要其线索时，可将其放入 closeChapterIds 中关闭。若尚不确定是否还有用，则保留开启。\n` +
-                  `5. 显式输出管理指令代码：在回复内容的最开头或最末尾，完整输出以下JSON指令代码：\n` +
-                  `   \`{"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\`\n` +
+                  `5. 显式输出管理指令代码：在返回的消息列表中包含以下独立指令对象：\n` +
+                  `   {"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\n` +
                   `6. 换章触发点：当当前章节剧情已真正进行到末尾，并且玩家明确表示同意推进时，输出上述指令代码。\n` +
                   `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其开关权限，绝不可关闭或覆盖它们。\n` +
                   `---------- 【模组章节自动切换与按需管理规则结束】 ----------\n\n`;
@@ -24155,8 +24187,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   `2. 真相与全局背景的判断：整个模组的全局核心真相与总纲带团全程有用，应提请保持开启；如果是特定小章节的局部真相，带完并进入下一小故事后不再有用，可提请关闭。\n` +
                   `3. 角色与猫人设的动态判断：当前场景若无猫或NPC出现且无需出场，可提请关闭；后续章节若有猫或角色出现，应在新章节提请开启。\n` +
                   `4. 已探索完的旧章节处理：微观小事件或场景探索完毕且后续不再需要时，可提请关闭。\n` +
-                  `5. 显式输出提请指令代码：在回复正文最后完整输出以下JSON指令代码：\n` +
-                  `   \`{"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\`\n` +
+                  `5. 显式输出提请指令代码：在返回的消息列表中包含以下独立指令对象：\n` +
+                  `   {"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\n` +
                   `6. 换章触发点：当当前章节剧情已带完，并且玩家明确表示同意推进时提请切换。系统会展示继续按钮供玩家确认。\n` +
                   `7. 用户手动勾选的其他非管辖章节为用户专属掌控，你不具备其提请关闭权限，不可覆盖。\n` +
                   `---------- 【模组章节半自动切换与按需管理规则结束】 ----------\n\n`;
@@ -42532,12 +42564,17 @@ ${templateFieldLines || '      "状态": "正常"'}
 ]`}`);
 
               const isPeerGrpPrompt = Boolean(typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+              const groupModuleSwitchCmd = (chat.activeModuleId && chat.moduleSwitchMode === "auto")
+                ? `- 自动开关与切换模组章节: 根据剧情进展自行判断需要开启哪些管辖章节、关闭哪些已完结无用章节，发送 {"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\n`
+                : ((chat.activeModuleId && chat.moduleSwitchMode === "semi")
+                  ? `- 提请开关与切换模组章节: 根据剧情进展自行判断需要开启哪些管辖章节、关闭哪些已完结无用章节，发送 {"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\n`
+                  : "");
               const groupCommandBlock = window.formatPromptSection("指令", `
-${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
+${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${statusSenderName}", "fields": {...}}\n` : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
+- 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
 - 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_sender": "被引用者名字", "target_content": "被引用消息原文", "reply_content": "回复文本内容"}${isPeerGrpPrompt ? "。针对某个玩家做出的检定结果进行判定或回应时，AI必须使用引用回复引注该玩家的检定消息" : ""}
-${isPeerGrpPrompt ? `- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}\n` : ""}${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "name": "角色名", "target": "获得者名字或ID，给用户填'我'或用户ID/名字", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
-- 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
-${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}`);
+${isPeerGrpPrompt ? `- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}\n` : ""}${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
+${groupModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}`);
 
               const groupWhisperRuleBlock = isPeerGrpPrompt
                 ? window.formatPromptSection("无痕私密对话规范", `当当前信息为某个人的侦查结果、聆听结果、某个HO位的秘密、只有特定PC能看见的画面时，则必须使用私密内容（在消息对象中加上 "visibleTo": ["目标玩家群昵称"]）。且私密内容的范围仅仅包含可以被称作隐私的、短小的信息，即在模组中有标注的或者是检定的结果。而像其他不属于隐私的内容，比如场景描写、共通的场景描写、对话细节动作等，如果要进行描写的话，需要再分一个公共的气泡，否则另一个人将完全不知道这个场景发生了什么，就会缺少开头和结果，所以绝对不能误判。`)
@@ -42599,6 +42636,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                 groupCommandBlock,
                 groupWhisperRuleBlock,
                 groupStatusRuleBlock,
+                inventoryPromptBlock,
                 groupMembersBlock,
                 groupMyPersonaBlock,
                 groupPeerPlayersPersonaBlock,
@@ -42607,7 +42645,6 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                 moduleChaptersPromptBlock,
                 mapPromptBlock,
                 dicePromptBlock,
-                inventoryPromptBlock,
                 combatPromptStr,
                 announcementContext,
                 summaryContext,
@@ -43131,12 +43168,17 @@ ${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
   "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n    "thoughts": "心声内容..."\n  }` : `null`}
 }`}`);
 
+              const singleModuleSwitchCmd = (chat.activeModuleId && chat.moduleSwitchMode === "auto")
+                ? `- 自动开关与切换模组章节: 根据剧情进展自行判断需要开启哪些管辖章节、关闭哪些已完结无用章节，发送 {"type": "manage_chapters", "openChapterIds": ["要开启的章节ID"], "closeChapterIds": ["要关闭的章节ID"], "summary": "简述调整"}\n`
+                : ((chat.activeModuleId && chat.moduleSwitchMode === "semi")
+                  ? `- 提请开关与切换模组章节: 根据剧情进展自行判断需要开启哪些管辖章节、关闭哪些已完结无用章节，发送 {"type": "suggest_manage_chapters", "openChapterIds": ["建议开启的章节ID"], "closeChapterIds": ["建议关闭的章节ID"], "summary": "简述调整"}\n`
+                  : "");
               const singleCommandBlock = window.formatPromptSection("指令", `
+- 赠送或发放道具与线索: {"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
 - 发送文本: {"type": "text", "content": "你好呀！"}
 - 发送语音: {"type": "voice_message", "content": "语音的文字内容..."}
 - 发送表情: {"type": "sticker", "sticker_name": "表情的名字"}，表情名必须在表情列表中，禁止杜撰
-${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 赠送或发放道具与线索: {"type": "give_item", "target": "我", "item": {"name": "物品名称", "desc": "物品外观与作用描述", "category": "prop", "effect": "如 HP+1", "content": "若为线索填详细内容", "prompt": "1item, detailed description, masterpiece"}}
-${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "详细的英文描述词..."}` : ""}`);
+${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}${singleModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "详细的英文描述词..."}` : ""}`);
 
               const singleMyPersonaBlock = window.formatPromptSection("我的人设", `
 对话者档案与COC面板:
@@ -43153,6 +43195,7 @@ ${stickerContext || "无"}
 
               systemPrompt = [
                 singlePersonaBlock,
+                inventoryPromptBlock,
                 singleMyPersonaBlock,
                 singleFormatBlock,
                 singleCommandBlock,
@@ -43161,7 +43204,6 @@ ${stickerContext || "无"}
                 moduleChaptersPromptBlock,
                 mapPromptBlock,
                 dicePromptBlock,
-                inventoryPromptBlock,
                 summaryContext,
                 singleContextBlock
               ].filter(Boolean).join("\n");
@@ -43964,8 +44006,8 @@ ${stickerContext || "无"}
               if (isStatusBubble(item)) {
                 return false;
               }
-              const text = String(item.content || item.message || "").trim();
-              if (text || item.imageUrl || item.image || item.payload || item.type?.includes("image") || item.type?.includes("share") || item.type?.includes("card") || item.type === "naiimag" || item.type === "sticker" || item.type === "voice_message" || item.type === "transfer" || item.type === "waimai_request") {
+              const text = String(item.content || item.message || item.reply_content || (item.quote_reply && item.quote_reply.reply_content) || "").trim();
+              if (text || item.imageUrl || item.image || item.payload || item.type?.includes("image") || item.type?.includes("share") || item.type?.includes("card") || item.type === "naiimag" || item.type === "sticker" || item.type === "voice_message" || item.type === "transfer" || item.type === "waimai_request" || item.type === "quote_reply" || Boolean(item.quote_reply)) {
                 return true;
               }
               return false;
@@ -43974,7 +44016,7 @@ ${stickerContext || "无"}
               let item = messagesArray[i];
               if (!item) continue;
 
-              let text = String(item.content || item.message || item.text || item.reply || "");
+              let text = String(item.content || item.message || item.text || item.reply || item.reply_content || (item.quote_reply && item.quote_reply.reply_content) || "");
               if (text && item.content === undefined && item.message === undefined) {
                 item.content = text;
                 item.message = text;
@@ -44013,8 +44055,9 @@ ${stickerContext || "无"}
               const isChapterSwitchType = item.type === "suggest_switch_chapter" || item.type === "switch_chapter" || item.type === "suggest_manage_chapters" || item.type === "manage_chapters";
               const isInventoryType = item.type === "give_item" || item.type === "gift_item" || item.type === "obtain_item" || item.type === "inventory_card" || item.type === "apply_item_effect" || item.type === "transfer_item" || Boolean(item.give_item);
               const isStatusType = item.type === "system_status" || item.type === "status_bar" || Boolean(item.fields) || Boolean(item.values);
+              const isQuoteOrCombatType = item.type === "quote_reply" || Boolean(item.quote_reply) || item.type === "suggest_combat" || item.type === "combat_join" || item.type === "combat_end";
 
-              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.prompt && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType && !isInventoryType && !isStatusType) {
+              if (!text.trim() && !item.image && !item.imageUrl && !item.payload && !item.prompt && !item.type?.includes("image") && !item.type?.includes("share") && !item.type?.includes("card") && item.type !== "naiimag" && item.type !== "sticker" && item.type !== "transfer" && item.type !== "waimai_request" && !isChapterSwitchType && !isInventoryType && !isStatusType && !isQuoteOrCombatType) {
                 continue;
               }
 
@@ -44361,7 +44404,7 @@ ${stickerContext || "无"}
               }
 
               if (msgData.content === undefined && msgData.message === undefined) {
-                const fallbackTxt = msgData.text || msgData.reply || msgData.body || "";
+                const fallbackTxt = msgData.text || msgData.reply || msgData.body || msgData.reply_content || (msgData.quote_reply && msgData.quote_reply.reply_content) || "";
                 if (fallbackTxt) {
                   msgData.content = fallbackTxt;
                   msgData.message = fallbackTxt;
@@ -44369,7 +44412,9 @@ ${stickerContext || "无"}
               }
 
               if (!msgData.type) {
-                if (chat.isGroup && msgData.name && (msgData.message || msgData.content)) {
+                if (msgData.quote_reply || msgData.reply_content) {
+                  msgData.type = "quote_reply";
+                } else if (chat.isGroup && msgData.name && (msgData.message || msgData.content)) {
                   msgData.type = "text";
                 } else if (msgData.content || msgData.message) {
                   msgData.type = "text";
@@ -47612,6 +47657,9 @@ ${stickerContext || "无"}
                       if (isPeerGroupChatInstance(chat) && typeof window.extractAndHandlePeerPhoneTagsInText === "function") {
                         cleanMsgText = window.extractAndHandlePeerPhoneTagsInText(chat, cleanMsgText, msgData.name || chat.name);
                       }
+                      if (!cleanMsgText.trim() && msgData.quote_reply && msgData.quote_reply.reply_content) {
+                        cleanMsgText = String(msgData.quote_reply.reply_content).trim();
+                      }
                       if (!cleanMsgText.trim()) {
                         continue;
                       }
@@ -48019,7 +48067,7 @@ ${stickerContext || "无"}
                 }
 
                 const isVisibleToMeLocal = typeof isMessageVisibleToCurrentUser === "function" ? isMessageVisibleToCurrentUser(aiMessage, chat) : true;
-                if ((!isViewingThisChat || document.hidden) && isVisibleToMeLocal) {
+                if ((!isViewingThisChat || document.hidden) && isVisibleToMeLocal && aiMessage.type !== "system_status") {
                   let notificationText;
                   switch (aiMessage.type) {
                     case "transfer":
@@ -48068,7 +48116,7 @@ ${stickerContext || "无"}
                   if (chat.isGroup) {
                     // 如果是群聊，尝试根据消息发送者名字找到对应的成员头像
                     const member = (chat.members || []).find(
-                      (m) => m.originalName === aiMessage.senderName,
+                      (m) => m.originalName === aiMessage.senderName || m.groupNickname === aiMessage.senderName,
                     );
                     if (member) {
                       senderAvatarForNotify = member.avatar;
@@ -48082,7 +48130,7 @@ ${stickerContext || "无"}
                     chatId,
                     finalNotifText.substring(0, 60) +
                       (finalNotifText.length > 60 ? "..." : ""),
-                    senderAvatarForNotify, // <--- 传入这个新参数
+                    senderAvatarForNotify,
                   );
                 }
 
@@ -48101,16 +48149,18 @@ ${stickerContext || "无"}
                   chat.unreadCount = 0;
                 }
 
-                // 2. 只有在当前正在查看此聊天界面时，才执行追加到 DOM
+                // 2. 只有在当前正在查看此聊天界面时，才执行追加到 DOM；处于后台时不等待逐条延迟，立即完成全部渲染与推送
                 if (isCurrentlyViewingThisChat && isVisibleToMeLocal) {
                   appendMessage(aiMessage, chat);
-                  playNotificationSound();
-                  if (typeof window.waitDelay === "function") {
-                    await window.waitDelay(Math.random() * 600 + 300);
-                  } else {
-                    await new Promise((resolve) =>
-                      setTimeout(resolve, Math.random() * 600 + 300),
-                    );
+                  if (!document.hidden) {
+                    playNotificationSound();
+                    if (typeof window.waitDelay === "function") {
+                      await window.waitDelay(Math.random() * 600 + 300);
+                    } else {
+                      await new Promise((resolve) =>
+                        setTimeout(resolve, Math.random() * 600 + 300),
+                      );
+                    }
                   }
                 }
               }
