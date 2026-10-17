@@ -1326,7 +1326,8 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   font-size: var(--chat-font-size, 16px);
   padding: 8px 12px;
   line-height: 1.5;
-  word-break: break-word; /* 核心修正: 强制长单词或URL换行，防止撑破气泡 */
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 /* ▲▲▲ 替换结束 ▲▲▲ */
 
@@ -30437,7 +30438,7 @@ select:focus-visible {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   line-height: 1.5;
-  word-break: break-word;
+  word-break: break-all;
   white-space: pre-wrap;
   color: var(--text-primary);
   font-size: 12px;

@@ -34631,6 +34631,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               bubble.classList.add("is-html-card");
             }
 
+            if (typeof formattedText === "string") {
+              formattedText = formattedText.replace(/\\n/g, "\n");
+            }
+
             // 如果包含 HTML 标签（如 blockquote, b, br, div, n, a 等），直接渲染为 HTML；若纯文本换行则转为 <br>
             // 注意：排除系统动态插入的插图槽位、地点标签、配乐条等系统节点，保证包含插图时的文本换行正常生效
             if (/<[a-zA-Z][\s\S]*>/i.test(formattedText)) {
@@ -34652,7 +34656,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let thinkingHtml = "";
           const hasThinkingModule = typeof isChatThoughtChainActive === "function" ? isChatThoughtChainActive(chat) : Boolean(chat && chat.thoughtChainEnabled !== false && (chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId)));
           if (!isUser && hasThinkingModule && extractedThinkingText && String(extractedThinkingText).trim().length > 0) {
-            const displayThinkingText = String(extractedThinkingText).replace(/\n/g, "<br>");
+            const safeThinkingText = String(extractedThinkingText).replace(/\\n/g, "\n");
+            const displayThinkingText = safeThinkingText.replace(/\n/g, "<br>");
             thinkingHtml = `
               <details class="thought-chain-block">
                 <summary class="thought-chain-summary">
@@ -34664,7 +34669,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     <polyline points="9 18 15 12 9 6"></polyline>
                   </svg>
                 </summary>
-                <div class="thought-chain-content">${displayThinkingText}</div>
+                <div class="thought-chain-content" style="white-space: pre-wrap; word-break: break-all;">${displayThinkingText}</div>
               </details>
             `;
           }
