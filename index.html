@@ -9520,8 +9520,7 @@
     <audio
       id="strong-keep-alive-player"
       loop
-      preload="none"
-      src="https://files.catbox.moe/7jn7bp.mp3"
+      preload="auto"
     ></audio>
 
     <div id="create-post-modal" class="modal">
@@ -20633,13 +20632,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let worker = null;
           const pendingCallbacks = new Map();
           let seqId = 1;
+          let heartbeatActiveCount = 0;
           try {
             const blob = new Blob([
-              'self.onmessage = function(e) { const d = e.data; setTimeout(function() { self.postMessage(d.id); }, d.ms); };'
+              'let hbTimer = null; self.onmessage = function(e) { const d = e.data; if (!d) return; if (d.cmd === "start_hb") { if (!hbTimer) hbTimer = setInterval(function() { self.postMessage({ type: "hb" }); }, 400); return; } if (d.cmd === "stop_hb") { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } return; } setTimeout(function() { self.postMessage(d.id); }, d.ms); };'
             ], { type: 'application/javascript' });
             worker = new Worker(URL.createObjectURL(blob));
             worker.onmessage = function(e) {
-              const id = e.data;
+              const data = e.data;
+              if (data && typeof data === "object" && data.type === "hb") {
+                return;
+              }
+              const id = data;
               const entry = pendingCallbacks.get(id);
               if (entry) {
                 pendingCallbacks.delete(id);
@@ -20651,10 +20655,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             worker = null;
           }
 
+          window.startBackgroundWorkerHeartbeat = function() {
+            heartbeatActiveCount++;
+            if (worker && heartbeatActiveCount === 1) {
+              try { worker.postMessage({ cmd: "start_hb" }); } catch (_) {}
+            }
+          };
+
+          window.stopBackgroundWorkerHeartbeat = function() {
+            heartbeatActiveCount = Math.max(0, heartbeatActiveCount - 1);
+            if (worker && heartbeatActiveCount === 0) {
+              try { worker.postMessage({ cmd: "stop_hb" }); } catch (_) {}
+            }
+          };
+
           window.waitDelay = function(ms) {
             const delayMs = Math.max(0, Number(ms) || 0);
             if (delayMs <= 0) return Promise.resolve();
-            if (document.hidden && delayMs <= 3000) {
+            if (document.hidden || document.visibilityState === "hidden") {
               return Promise.resolve();
             }
             return new Promise((resolve) => {
@@ -20670,7 +20688,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 resolve();
               };
               const onVisChange = () => {
-                if (!document.hidden && Date.now() - startTime >= Math.min(delayMs, 300)) {
+                if (document.hidden || document.visibilityState === "hidden" || Date.now() - startTime >= Math.min(delayMs, 300)) {
                   finish();
                 }
               };
@@ -20686,18 +20704,57 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
         })();
 
-        // 后台保活音频自动激活：确保发起 API 请求或切换后台时保活音轨处于运行态，防止移动端/浏览器后台冻结网络与 JS 线程
+        // 后台保活音频自动激活：生成 1 秒真实极微幅 PCM WAV 音频并配合 Web Locks 与 Worker 心跳，防止切后台时浏览器挂起网络与 JS 线程
         let _keepAliveAudioCtx = null;
-        const _SILENT_WAV_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+        const _SILENT_WAV_URI = (function createOneSecondKeepAliveWav() {
+          try {
+            const sampleRate = 8000;
+            const numSamples = sampleRate;
+            const dataSize = numSamples * 2;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+            const writeStr = (offset, str) => {
+              for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+            };
+            writeStr(0, "RIFF");
+            view.setUint32(4, 36 + dataSize, true);
+            writeStr(8, "WAVE");
+            writeStr(12, "fmt ");
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeStr(36, "data");
+            view.setUint32(40, dataSize, true);
+            for (let i = 0; i < numSamples; i++) {
+              view.setInt16(44 + i * 2, (i & 1) ? 1 : -1, true);
+            }
+            const bytes = new Uint8Array(buffer);
+            let binary = "";
+            const chunkSize = 4096;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+              binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            return "data:audio/wav;base64," + btoa(binary);
+          } catch (_) {
+            return "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+          }
+        })();
+
         function ensureBackgroundKeepAlive() {
           try {
             const audio = document.getElementById("strong-keep-alive-player") || document.getElementById("keep-alive-audio");
             if (audio) {
-              if (!audio.src || audio.error) {
+              const curSrc = audio.getAttribute("src") || audio.src || "";
+              if (!curSrc || curSrc.includes("catbox.moe") || audio.error) {
                 audio.src = _SILENT_WAV_URI;
               }
               audio.loop = true;
               audio.volume = 0.01;
+              audio.muted = false;
               if (audio.paused) {
                 const playPromise = audio.play();
                 if (playPromise && typeof playPromise.catch === "function") {
@@ -20705,6 +20762,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     try {
                       if (audio.src !== _SILENT_WAV_URI) {
                         audio.src = _SILENT_WAV_URI;
+                        audio.volume = 0.01;
                         audio.play().catch(() => {});
                       }
                     } catch (_) {}
@@ -20730,11 +20788,42 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           } catch (_) {}
         }
         window.ensureBackgroundKeepAlive = ensureBackgroundKeepAlive;
+
+        window.acquireBackgroundTaskKeepAlive = function() {
+          ensureBackgroundKeepAlive();
+          if (typeof window.startBackgroundWorkerHeartbeat === "function") {
+            window.startBackgroundWorkerHeartbeat();
+          }
+          let releaseLock = null;
+          if (navigator.locks && typeof navigator.locks.request === "function") {
+            try {
+              navigator.locks.request("ephone_bg_ai_task_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), () => {
+                return new Promise((resolve) => {
+                  releaseLock = resolve;
+                });
+              }).catch(() => {});
+            } catch (_) {}
+          }
+          let released = false;
+          return function release() {
+            if (released) return;
+            released = true;
+            if (typeof window.stopBackgroundWorkerHeartbeat === "function") {
+              window.stopBackgroundWorkerHeartbeat();
+            }
+            if (typeof releaseLock === "function") {
+              try { releaseLock(); } catch (_) {}
+              releaseLock = null;
+            }
+          };
+        };
+
         document.addEventListener("pointerdown", ensureBackgroundKeepAlive, { passive: true });
         document.addEventListener("touchstart", ensureBackgroundKeepAlive, { passive: true });
+        document.addEventListener("click", ensureBackgroundKeepAlive, { passive: true });
         document.addEventListener("keydown", ensureBackgroundKeepAlive, { passive: true });
         document.addEventListener("visibilitychange", () => {
-          if (document.hidden) ensureBackgroundKeepAlive();
+          ensureBackgroundKeepAlive();
         });
 
         async function requestLlmapiWithFallback(targetUrl, options = {}) {
@@ -29585,7 +29674,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           messageContent,
           specificAvatarUrl = null,
         ) {
-          const chat = state.chats[chatId];
+          const chat =
+            (state.chats && (state.chats[chatId] || state.chats[String(chatId)] || state.chats[Number(chatId)])) ||
+            (state.chats && Object.values(state.chats).find((c) => c && String(c.id) === String(chatId)));
           if (!chat) return;
 
           // 1. 准备通知数据
@@ -29608,70 +29699,73 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 document
                   .getElementById("chat-interface-screen")
                   .classList.contains("active") &&
-                String(state.activeChatId) === String(chatId),
+                String(state.activeChatId) === String(chat.id),
             );
 
-          // 2. 当处于后台时，发送外置系统弹窗通知
-          if (document.hidden) {
+          const isBackgroundState = Boolean(
+            document.hidden || document.visibilityState === "hidden"
+          );
+
+          // 2. 当处于后台时，立即发送外置系统弹窗通知
+          if (isBackgroundState) {
             playNotificationSound();
             const isSystemNotifyEnabled =
               state.globalSettings.enableSystemNotifications !== false;
 
             if (isSystemNotifyEnabled) {
+              const uniqueTag = "ai_msg_" + chatId + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
               if (
                 window.PeerManager &&
                 typeof window.PeerManager.triggerMobileSystemNotification ===
                   "function"
               ) {
-                await window.PeerManager.triggerMobileSystemNotification(
+                window.PeerManager.triggerMobileSystemNotification(
                   notifName,
                   messageContent,
                   avatarUrl,
                   {
-                    chatId: String(chatId),
-                    tag: "ai_msg_" + chatId + "_" + Date.now(),
+                    chatId: String(chat.id),
+                    tag: uniqueTag,
                   },
                 );
-                return;
-              }
+              } else {
+                const hasPermission =
+                  "Notification" in window &&
+                  Notification.permission === "granted";
+                if (hasPermission) {
+                  const safeIcon =
+                    avatarUrl && !avatarUrl.startsWith("data:")
+                      ? avatarUrl
+                      : "./icon-192.png";
+                  const options = {
+                    body: messageContent,
+                    icon: safeIcon,
+                    tag: uniqueTag,
+                    renotify: true,
+                    silent: false,
+                    vibrate: [200, 100, 200],
+                    badge: "./icon-192.png",
+                    data: { chatId: String(chat.id) },
+                  };
 
-              const hasPermission =
-                "Notification" in window &&
-                Notification.permission === "granted";
-              if (hasPermission) {
-                const safeIcon =
-                  avatarUrl && !avatarUrl.startsWith("data:")
-                    ? avatarUrl
-                    : "./icon-192.png";
-                const options = {
-                  body: messageContent,
-                  icon: safeIcon,
-                  tag: "ai_msg_" + chatId + "_" + Date.now(),
-                  renotify: true,
-                  silent: false,
-                  vibrate: [200, 100, 200],
-                  badge: "./icon-192.png",
-                  data: { chatId: String(chatId) },
-                };
-
-                try {
-                  if ("serviceWorker" in navigator) {
-                    const reg =
-                      await navigator.serviceWorker.getRegistration();
-                    if (reg && typeof reg.showNotification === "function") {
-                      await reg.showNotification(notifName, options);
+                  try {
+                    if ("serviceWorker" in navigator) {
+                      const reg =
+                        await navigator.serviceWorker.getRegistration();
+                      if (reg && typeof reg.showNotification === "function") {
+                        await reg.showNotification(notifName, options);
+                      } else {
+                        new Notification(notifName, options);
+                      }
                     } else {
                       new Notification(notifName, options);
                     }
-                  } else {
-                    new Notification(notifName, options);
+                  } catch (e) {
+                    console.error("系统通知发送失败:", e.message);
                   }
-                } catch (e) {
-                  console.error("系统通知发送失败:", e.message);
                 }
               }
             }
-            return;
           }
 
           // 3. 当处于前台时，不显示外置弹窗，仅在未打开当前聊天框时显示内置顶部横幅弹窗
@@ -40996,6 +41090,10 @@ ${recentHistoryText}
           window.activeGeneratingChats[String(chat.id)] = true;
           window.activeGeneratingChats[chatId] = true;
 
+          const releaseBgKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
+            ? window.acquireBackgroundTaskKeepAlive()
+            : null;
+
           const initialHeaderTitle = document.getElementById("chat-header-title");
           const initialTypingInd = document.getElementById("typing-indicator");
           const chatScreenEl = document.getElementById("chat-interface-screen");
@@ -41034,6 +41132,9 @@ ${recentHistoryText}
                 renderChatList();
               }
             } finally {
+              if (typeof releaseBgKeepAlive === "function") {
+                try { releaseBgKeepAlive(); } catch (_) {}
+              }
               delete window.activeGeneratingChats[chatId];
               if (initialHeaderTitle && state.activeChatId === chatId) {
                 initialHeaderTitle.textContent = typeof window.getEffectiveChatDisplayTitle === "function"
@@ -41764,6 +41865,9 @@ ${recentHistoryText}
               await db.chats.put(chat);
               appendMessage(errorMessage, chat);
             } finally {
+              if (typeof releaseBgKeepAlive === "function") {
+                try { releaseBgKeepAlive(); } catch (_) {}
+              }
               if (chatHeaderTitle && state.chats[chatId]) {
                 chatHeaderTitle.style.opacity = 0;
                 setTimeout(() => {
@@ -43852,6 +43956,9 @@ ${stickerContext || "无"}
             ];
 
             // 1. 发起请求时强制开启流式保活，防止长连接超时被掐断
+            if (typeof ensureBackgroundKeepAlive === "function") {
+              ensureBackgroundKeepAlive();
+            }
             const response = isGemini
               ? await fetch(geminiConfig.url, geminiConfig.data)
               : await fetch(`${proxyUrl}/v1/chat/completions`, {
@@ -48205,7 +48312,14 @@ ${stickerContext || "无"}
                 }
 
                 const isVisibleToMeLocal = typeof isMessageVisibleToCurrentUser === "function" ? isMessageVisibleToCurrentUser(aiMessage, chat) : true;
-                if ((!isViewingThisChat || document.hidden) && isVisibleToMeLocal && aiMessage.type !== "system_status") {
+                const isCurrentlyViewingThisChat =
+                  document.getElementById("chat-interface-screen")?.classList.contains("active") &&
+                  String(state.activeChatId) === String(chat.id);
+                const isAppInBackground = Boolean(
+                  document.hidden || document.visibilityState === "hidden"
+                );
+
+                if ((!isCurrentlyViewingThisChat || isAppInBackground) && isVisibleToMeLocal && aiMessage.type !== "system_status") {
                   let notificationText;
                   switch (aiMessage.type) {
                     case "transfer":
@@ -48265,16 +48379,12 @@ ${stickerContext || "无"}
                   }
 
                   showNotification(
-                    chatId,
+                    chat.id,
                     finalNotifText.substring(0, 60) +
                       (finalNotifText.length > 60 ? "..." : ""),
                     senderAvatarForNotify,
                   );
                 }
-
-                const isCurrentlyViewingThisChat =
-                  document.getElementById("chat-interface-screen")?.classList.contains("active") &&
-                  String(state.activeChatId) === String(chat.id);
 
                 if (!isCurrentlyViewingThisChat) {
                   if (isVisibleToMeLocal) {
@@ -48290,7 +48400,7 @@ ${stickerContext || "无"}
                 // 2. 只有在当前正在查看此聊天界面时，才执行追加到 DOM；处于后台时不等待逐条延迟，立即完成全部渲染与推送
                 if (isCurrentlyViewingThisChat && isVisibleToMeLocal) {
                   appendMessage(aiMessage, chat);
-                  if (!document.hidden) {
+                  if (!isAppInBackground) {
                     playNotificationSound();
                     if (typeof window.waitDelay === "function") {
                       await window.waitDelay(Math.random() * 600 + 300);
@@ -48577,6 +48687,9 @@ ${stickerContext || "无"}
               }
             }
           } finally {
+            if (typeof releaseBgKeepAlive === "function") {
+              try { releaseBgKeepAlive(); } catch (_) {}
+            }
             const isPeerGrpFinally = Boolean(chat && chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
             const isKeeperDrawingFinally = !!(window.activeGeneratingKeeperDraw && (window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[chatId]));
             if (isPeerGrpFinally && !isKeeperDrawingFinally && window.PeerManager && typeof window.PeerManager.broadcastTypingStatus === "function") {
@@ -78783,17 +78896,8 @@ ${stickerContext || "无"}
           window.renderWallpaperScreenProxy = renderWallpaperScreen;
           window.renderWorldBookScreenProxy = renderWorldBookScreen;
           const keepAliveUnlocker = () => {
-            const player = document.getElementById("strong-keep-alive-player");
-            if (player) {
-              player.volume = 0; // 确保静音
-              player
-                .play()
-                .then(() => {
-                  console.log("🔥 强力保活模式已激活：静音音频正在循环播放");
-                })
-                .catch((e) => {
-                  console.warn("保活启动失败 (需用户交互):", e);
-                });
+            if (typeof ensureBackgroundKeepAlive === "function") {
+              ensureBackgroundKeepAlive();
             }
             document.removeEventListener("click", keepAliveUnlocker);
             document.removeEventListener("touchstart", keepAliveUnlocker);

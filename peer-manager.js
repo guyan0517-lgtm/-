@@ -1708,38 +1708,42 @@
           avatarUrl && !avatarUrl.startsWith("data:")
             ? avatarUrl
             : "./icon-192.png";
-        const tag = (meta && meta.tag) || "peer_msg_" + Date.now();
+        const tag = (meta && meta.tag) || "peer_msg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
         const notifData = {
           chatId: (meta && meta.chatId) || "",
           openRequests: Boolean(meta && meta.openRequests)
         };
 
         if ("serviceWorker" in navigator) {
+          try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg && typeof reg.showNotification === "function") {
+              await reg.showNotification(title, {
+                body: body,
+                icon: safeIcon,
+                badge: "./icon-192.png",
+                tag: tag,
+                renotify: true,
+                silent: false,
+                vibrate: [200, 100, 200],
+                data: notifData
+              });
+              return;
+            }
+          } catch (_) {}
           if (navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({
-              type: "SHOW_PEER_NOTIFICATION",
-              title: title,
-              body: body,
-              icon: safeIcon,
-              tag: tag,
-              chatId: notifData.chatId,
-              openRequests: notifData.openRequests
-            });
-            return;
-          }
-          const reg = await navigator.serviceWorker.getRegistration();
-          if (reg && typeof reg.showNotification === "function") {
-            await reg.showNotification(title, {
-              body: body,
-              icon: safeIcon,
-              badge: "./icon-192.png",
-              tag: tag,
-              renotify: true,
-              silent: false,
-              vibrate: [200, 100, 200],
-              data: notifData
-            });
-            return;
+            try {
+              navigator.serviceWorker.controller.postMessage({
+                type: "SHOW_PEER_NOTIFICATION",
+                title: title,
+                body: body,
+                icon: safeIcon,
+                tag: tag,
+                chatId: notifData.chatId,
+                openRequests: notifData.openRequests
+              });
+              return;
+            } catch (_) {}
           }
         }
         new Notification(title, {
