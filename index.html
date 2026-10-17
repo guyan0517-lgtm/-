@@ -1207,6 +1207,18 @@
                   </label>
                 </label>
               </div>
+              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
+                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
+                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">人机净化</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="clean-bot-text-switch" />
+                    <span class="slider"></span>
+                  </label>
+                </label>
+                <p style="font-size: 12px; color: var(--text-secondary, #888); margin-top: 4px; line-height: 1.4;">
+                  自动清洗正文英文标点与多余双换行（推荐开启）
+                </p>
+              </div>
             </div>
           </div>
 
@@ -3205,12 +3217,14 @@
       </div>
 
       <div id="thought-chain-screen" class="screen">
-        <div class="header">
-          <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
-          <span>思维链</span>
-          <div class="header-actions">
-            <button type="button" id="tc-import-btn" class="tc-btn-action">导入</button>
-            <button type="button" id="tc-set-default-btn" class="tc-btn-action">设默认</button>
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <span class="back-btn" onclick="showScreen('home-screen')" style="display: flex; align-items: center; flex-shrink: 0;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
+            <button type="button" id="tc-set-default-btn" class="tc-btn-action" style="height: 26px; padding: 0 10px; font-size: 12px; white-space: nowrap; flex-shrink: 0;">设默认</button>
+          </div>
+          <span style="flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 600;">思维链</span>
+          <div class="header-actions" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <button type="button" id="tc-import-btn" class="tc-btn-action" style="height: 26px; padding: 0 10px; font-size: 12px; white-space: nowrap; flex-shrink: 0;">导入</button>
             <span class="action-btn" id="tc-add-preset-btn" title="新建预设">+</span>
           </div>
         </div>
@@ -23956,8 +23970,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "2. 语言规范：thinking 字段内部的思考内容必须全程使用中文书写，严禁使用其他语言。\n" +
               "3. 从头到尾唯一一整条：从头到尾的思维链必须且只能有这一整条，绝对禁止拆分为多条，也绝对禁止各写一段！你必须将意图分析、环境观察、角色心理推演、回复策略规划等所有思考内容，完整合并写入这一条全局顶级的 \"thinking\" 字段中。\n" +
               "4. 绝对禁止在具体对象内部包含 thinking 字段：绝对禁止在各个动作、道具、状态栏或文本消息对象内部各自夹带 thinking 字段！下方的 chatResponse 数组中，每一个具体消息对象只保留其自身字段，所有气泡按顺序装入同一个 chatResponse 数组，严禁拆分成多个并列代码块。\n" +
-              "5. 绝对禁止在外围裸露输出：绝对禁止在 JSON 代码块外围输出任何思维链文字或无包裹的思考内容，所有思维链必须严格作为 \"thinking\" 字段的值包裹在 JSON 根对象内部。\n" +
-              "6. 标准填写代码结构示例：\n" +
+              "5. 标准填写代码结构示例：\n" +
               "```json\n" +
               "{\n" +
               "  \"thinking\": \"1.最高协议核对：确认无规则冲突；2.场景流速判定：当前处于交互场景，保持驻留不主动结算；3.回复规划：渲染场景氛围并推进当前动作；4.自检完毕，开始生成。\",\n" +
@@ -31087,6 +31100,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
+          const cleanBotSwitch = document.getElementById("clean-bot-text-switch");
+          if (cleanBotSwitch) {
+            cleanBotSwitch.checked = !!state.apiConfig.cleanBotTextEnabled;
+            cleanBotSwitch.onchange = () => {
+              state.apiConfig.cleanBotTextEnabled = cleanBotSwitch.checked;
+              if (typeof db !== "undefined" && db.apiConfig) {
+                db.apiConfig.put(state.apiConfig);
+              }
+            };
+          }
+
           const realTimeSwitch = document.getElementById("real-time-cognition-switch");
           if (realTimeSwitch) {
             realTimeSwitch.checked = state.apiConfig.realTimeCognitionEnabled !== false;
@@ -34809,6 +34833,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               formattedText = formattedText.replace(/\\n/g, "\n");
             }
 
+            const isCleanBotTextEnabled = Boolean(
+              (document.getElementById("clean-bot-text-switch") && document.getElementById("clean-bot-text-switch").checked) ||
+              (state && state.apiConfig && state.apiConfig.cleanBotTextEnabled) ||
+              (window.state && window.state.apiConfig && window.state.apiConfig.cleanBotTextEnabled)
+            );
+
+            // 【HTML 智能检测与放行】：包含 HTML 标签特征时原封不动直接放行，绝对不准压缩或替换
+            const hasHtmlCardTags = isFullHtmlCard ||
+              msg.type === "clue_html" ||
+              msg.isHtmlCard === true ||
+              /<\/?(?:div|table|tbody|thead|tr|td|th|span|article|section|main|aside|header|footer|style|script|svg|button|form|input|select|textarea|iframe|p|h[1-6]|ul|ol|li|blockquote|pre|code|figure|figcaption|canvas|nav)\b/i.test(formattedText);
+
+            if (isCleanBotTextEnabled && typeof formattedText === "string" && !hasHtmlCardTags) {
+              formattedText = formattedText.replace(/([\u4e00-\u9fa5]),/g, "$1，");
+              formattedText = formattedText.replace(/\n{2,}/g, "\n");
+            }
+
             // 如果包含 HTML 标签（如 blockquote, b, br, div, n, a 等），直接渲染为 HTML；若纯文本换行则转为 <br>
             // 注意：排除系统动态插入的插图槽位、地点标签、配乐条等系统节点，保证包含插图时的文本换行正常生效
             if (/<[a-zA-Z][\s\S]*>/i.test(formattedText)) {
@@ -34853,7 +34894,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 无论是用户消息还是AI消息，只要它包含了 .quote 对象，就执行这段逻辑
           if (msg.quote) {
             // a. 直接获取完整的、未经截断的引用内容
-            const fullQuotedContent = String(msg.quote.content || "");
+            let fullQuotedContent = String(msg.quote.content || "");
+            const quoteHasHtml = /<\/?(?:div|table|tbody|thead|tr|td|th|span|article|section|main|aside|header|footer|style|script|svg|button|form|input|select|textarea|iframe|p|h[1-6]|ul|ol|li|blockquote|pre|code|figure|figcaption|canvas|nav)\b/i.test(fullQuotedContent);
+            if (isCleanBotTextEnabled && !quoteHasHtml) {
+              fullQuotedContent = fullQuotedContent
+                .replace(/([\u4e00-\u9fa5]),/g, "$1，")
+                .replace(/\n{2,}/g, "\n");
+            }
 
             // b. 构建引用块的HTML
             quoteHtml = `
@@ -81185,6 +81232,8 @@ ${stickerContext || "无"}
               };
               const streamSwitch = document.getElementById("api-stream-switch");
               state.apiConfig.streamEnabled = streamSwitch ? streamSwitch.checked : false;
+              const cleanBotSwitch = document.getElementById("clean-bot-text-switch");
+              state.apiConfig.cleanBotTextEnabled = cleanBotSwitch ? cleanBotSwitch.checked : false;
               const cognitionSwitch = document.getElementById("real-time-cognition-switch");
               state.apiConfig.realTimeCognitionEnabled = cognitionSwitch ? cognitionSwitch.checked : true;
               const globalMusicSwitch = document.getElementById("global-ai-music-switch");
