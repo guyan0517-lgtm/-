@@ -2777,6 +2777,9 @@
         thoughtChainLocks: groupChat.settings?.thoughtChainLocks && typeof groupChat.settings.thoughtChainLocks === "object"
           ? { ...groupChat.settings.thoughtChainLocks }
           : {},
+        trpgRoleMap: groupChat.settings?.trpgRoleMap && typeof groupChat.settings.trpgRoleMap === "object"
+          ? { ...groupChat.settings.trpgRoleMap }
+          : {},
         keeperSettings: {
           keeperForcedDraw: Boolean(groupChat.settings?.keeperForcedDraw),
           keeperMaxMemory: groupChat.settings?.keeperMaxMemory,
@@ -3253,6 +3256,7 @@
             thoughtChainId: snap.thoughtChainId,
             thoughtChainEnableCoc: snap.thoughtChainEnableCoc,
             thoughtChainLocks: snap.thoughtChainLocks,
+            trpgRoleMap: snap.trpgRoleMap,
             keeperSettings: snap.keeperSettings,
             sharedKeeperPresets: snap.sharedKeeperPresets,
             sharedSoloPayload: typeof window.buildMySharedSoloPayload === "function" ? window.buildMySharedSoloPayload(groupChat) : [],
@@ -3709,6 +3713,16 @@
           if (k !== myCode && (k === data.fromCode || groupChat.settings.thoughtChainLocks[k] === undefined)) {
             groupChat.settings.thoughtChainLocks[k] = Boolean(v);
           }
+        }
+      }
+      if (data.trpgRoleMap && typeof data.trpgRoleMap === "object") {
+        groupChat.settings.trpgRoleMap = { ...data.trpgRoleMap };
+        if (myCode && data.trpgRoleMap[myCode] !== undefined) {
+          groupChat.settings.myTrpgRole = data.trpgRoleMap[myCode];
+        }
+        const memberScreen = document.getElementById("member-management-screen");
+        if (memberScreen && memberScreen.classList.contains("active") && typeof window.renderMemberManagementList === "function") {
+          window.renderMemberManagementList();
         }
       }
       if (data.keeperSettings && typeof data.keeperSettings === "object") {

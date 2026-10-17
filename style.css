@@ -16146,90 +16146,130 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 /* --- 【全新】群成员管理列表样式 --- */
 #member-management-list .member-management-item {
-  background-color: var(--secondary-bg);
+  background-color: var(--card-bg);
 }
 
 /* 单个成员项 */
 .member-management-item {
   display: flex;
   align-items: center;
-  padding: 10px 15px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-color);
+  box-sizing: border-box;
 }
 
 .member-management-item .avatar {
   width: 40px;
   height: 40px;
-  border-radius: 6px; /* 方形圆角头像 */
-  margin-right: 12px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
 }
 
-/* 成员信息（昵称、头衔、身份） */
+/* 成员信息 */
 .member-management-item .info {
-  flex-grow: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow: hidden;
 }
 .member-management-item .info .name {
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
 }
 .member-management-item .info .tags {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
-/* 身份标签（群主/管理员） */
+/* 身份标签 */
 .member-management-item .role-tag {
   font-size: 10px;
+  line-height: 1.2;
   padding: 2px 6px;
   border-radius: 4px;
-  font-weight: bold;
-  color: white;
+  font-weight: 600;
+  color: var(--card-bg);
+  background-color: var(--accent-color);
+  flex-shrink: 0;
 }
 .role-tag.owner {
-  background-color: #ffc107;
-} /* 黄色 */
+  background-color: var(--accent-color);
+}
 .role-tag.admin {
-  background-color: #28a745;
-} /* 绿色 */
+  background-color: var(--text-secondary);
+}
 
 /* 头衔标签 */
 .member-management-item .title-tag {
-  font-size: 11px;
-  color: #FFFFFF !important;
-  background-color: var(--accent-color, #4A7A68) !important;
-  border: 1px solid var(--accent-color, #4A7A68) !important;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--card-bg) !important;
+  background-color: var(--accent-color) !important;
+  border: 1px solid var(--accent-color) !important;
   padding: 2px 6px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 #phone-screen.dark-mode .member-management-item .title-tag {
-  background-color: var(--accent-color, #4A7A68) !important;
-  color: #FFFFFF !important;
-  border-color: var(--accent-color, #4A7A68) !important;
+  background-color: var(--accent-color) !important;
+  color: var(--card-bg) !important;
+  border-color: var(--accent-color) !important;
 }
 
 /* 操作按钮 */
 .member-management-item .actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
 }
 .member-management-item .actions button {
-  padding: 5px 10px;
+  height: 28px;
+  padding: 0 10px;
   font-size: 12px;
-  border-radius: 5px;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
   cursor: pointer;
   border: 1px solid var(--border-color);
-  background-color: #f8f9fa;
+  background-color: var(--secondary-bg);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: opacity 0.15s ease;
+}
+.member-management-item .actions button:active {
+  opacity: 0.75;
 }
 #phone-screen.dark-mode .member-management-item .actions button {
-  background-color: #3e3e42;
-  border-color: #545458;
+  background-color: var(--secondary-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
 .member-management-item .actions button.danger {
-  border-color: #ff4d4f;
-  color: #ff4d4f;
+  border-color: var(--border-color);
+  background-color: var(--secondary-bg);
+  color: var(--text-secondary);
 }
 
 /* --- 【全新】聊天界面内的身份/头衔标签 --- */

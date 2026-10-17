@@ -6081,6 +6081,33 @@
         <button id="create-new-member-btn">创建群内新成员</button>
         <button id="ai-generate-members-btn">✨ AI 生成成员</button>
       </div>
+
+      <div id="trpg-role-modal" class="modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 10050; align-items: center; justify-content: center; padding: 16px;">
+        <div class="modal-content" style="width: 100%; max-width: 300px; border-radius: 12px; padding: 0; overflow: hidden; background: var(--card-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+            <span id="trpg-role-modal-title" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">身份</span>
+            <button type="button" onclick="if(window.closeTrpgRoleModal)window.closeTrpgRoleModal();" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
+          </div>
+          <div style="padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; margin: 0;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-primary);">选择身份</label>
+              <select id="trpg-role-select-input" class="moe-input" style="width: 100%; height: 36px; line-height: 20px; font-size: 13px; border-radius: 6px; padding: 4px 10px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box; text-align: left;">
+                <option value="">无</option>
+                <option value="KPC">KPC</option>
+                <option value="HO1">HO1</option>
+                <option value="HO2">HO2</option>
+                <option value="HO3">HO3</option>
+                <option value="HO4">HO4</option>
+                <option value="PC">PC</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
+            <button type="button" class="moe-btn" onclick="if(window.closeTrpgRoleModal)window.closeTrpgRoleModal();" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
+            <button type="button" class="moe-btn" onclick="if(window.confirmTrpgRoleModal)window.confirmTrpgRoleModal();" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: var(--card-bg); border: none; border-radius: 6px;">保存</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 微博用户人设与职业设置模态框 -->
@@ -24322,6 +24349,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
+            block = applyChatTrpgRoleReplacements(chat, block);
             return window.formatPromptSection("模组", block);
           } catch (e) {
             console.error("加载模组章节错误:", e);
@@ -24329,6 +24357,92 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
         window.getChatModulePromptBlock = getChatModulePromptBlock;
+
+        function getMemberTrpgRoleInChat(chat, member) {
+          if (!chat || !chat.settings || !member) return "";
+          const roleMap = chat.settings.trpgRoleMap || {};
+          const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+            ? window.PeerManager.getOrCreateMyPeerCode()
+            : "";
+          if (member.id === "user") {
+            if (myCode && roleMap[myCode]) return String(roleMap[myCode]).toUpperCase();
+            if (roleMap["user"]) return String(roleMap["user"]).toUpperCase();
+            if (chat.settings.myTrpgRole) return String(chat.settings.myTrpgRole).toUpperCase();
+            return "";
+          }
+          if (member.peerCode && roleMap[member.peerCode]) {
+            return String(roleMap[member.peerCode]).toUpperCase();
+          }
+          if (member.id !== undefined && roleMap[String(member.id)]) {
+            return String(roleMap[String(member.id)]).toUpperCase();
+          }
+          if (member.trpgRole) {
+            return String(member.trpgRole).toUpperCase();
+          }
+          return "";
+        }
+        window.getMemberTrpgRoleInChat = getMemberTrpgRoleInChat;
+
+        function applyChatTrpgRoleReplacements(chat, rawText) {
+          if (!chat || !chat.isGroup || !rawText || typeof rawText !== "string") return rawText;
+          const roleToName = {};
+          const userObj = {
+            id: "user",
+            groupNickname: chat.settings?.myNickname || chat.settings?.myName || "我"
+          };
+          const allList = [userObj, ...(chat.members || [])];
+          allList.forEach((m) => {
+            if (!m) return;
+            const r = getMemberTrpgRoleInChat(chat, m);
+            if (!r) return;
+            const mName = (
+              m.groupNickname ||
+              m.originalName ||
+              (typeof state !== "undefined" && state.chats && state.chats[m.id] ? state.chats[m.id].name : "") ||
+              ""
+            ).trim();
+            if (mName) {
+              roleToName[r] = mName;
+            }
+          });
+
+          const activeRoles = Object.keys(roleToName);
+          if (activeRoles.length === 0) return rawText;
+
+          let text = rawText;
+          const placeholders = {};
+
+          if (roleToName["KPC"]) {
+            placeholders["__TRPG_ROLE_KPC__"] = roleToName["KPC"];
+            text = text.replace(/(?<![a-zA-Z])kpc(?![a-zA-Z0-9])/gi, "__TRPG_ROLE_KPC__");
+          }
+          if (roleToName["HO1"]) {
+            placeholders["__TRPG_ROLE_HO1__"] = roleToName["HO1"];
+            text = text.replace(/(?<![a-zA-Z])(?:ho\s*[1一]|pc\s*[1一])(?![0-9a-zA-Z])/gi, "__TRPG_ROLE_HO1__");
+          }
+          if (roleToName["HO2"]) {
+            placeholders["__TRPG_ROLE_HO2__"] = roleToName["HO2"];
+            text = text.replace(/(?<![a-zA-Z])(?:ho\s*[2二]|pc\s*[2二])(?![0-9a-zA-Z])/gi, "__TRPG_ROLE_HO2__");
+          }
+          if (roleToName["HO3"]) {
+            placeholders["__TRPG_ROLE_HO3__"] = roleToName["HO3"];
+            text = text.replace(/(?<![a-zA-Z])(?:ho\s*[3三]|pc\s*[3三])(?![0-9a-zA-Z])/gi, "__TRPG_ROLE_HO3__");
+          }
+          if (roleToName["HO4"]) {
+            placeholders["__TRPG_ROLE_HO4__"] = roleToName["HO4"];
+            text = text.replace(/(?<![a-zA-Z])(?:ho\s*[4四]|pc\s*[4四])(?![0-9a-zA-Z])/gi, "__TRPG_ROLE_HO4__");
+          }
+          if (roleToName["PC"]) {
+            placeholders["__TRPG_ROLE_PC__"] = roleToName["PC"];
+            text = text.replace(/(?<![a-zA-Z])pc(?![0-9一二三四]|(?![pP][cC])[a-zA-Z])/gi, "__TRPG_ROLE_PC__");
+          }
+
+          for (const [ph, targetName] of Object.entries(placeholders)) {
+            text = text.split(ph).join(targetName);
+          }
+          return text;
+        }
+        window.applyChatTrpgRoleReplacements = applyChatTrpgRoleReplacements;
 
         async function getChatMapPromptBlock(chat) {
           if (!chat) return { prompt: "", tokenCount: 0 };
@@ -24340,17 +24454,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const locListText = locations.map((l, idx) => {
               const hierarchy = l.parent ? `所属: ${l.parent}` : "顶级地点";
               const descPart = l.desc ? `\n  简介: ${l.desc}` : "";
-              const condPart = (l.condition || l.entryCondition) ? `\n  进入条件: ${l.condition || l.entryCondition}` : "";
-              const itemsPart = (l.items || l.clues || l.clue || l.yields) ? `\n  可产出道具与线索: ${l.items || l.clues || l.clue || l.yields}` : "";
-              return `---------- 【地点 ${idx + 1}：层级${l.level} - ${l.name}（${hierarchy}）开始】 ----------${descPart}${condPart}${itemsPart}\n---------- 【地点 ${idx + 1}：${l.name} 结束】 ----------`;
+              return `---------- 【地点 ${idx + 1}：层级${l.level} - ${l.name}（${hierarchy}）开始】 ----------${descPart}\n---------- 【地点 ${idx + 1}：${l.name} 结束】 ----------`;
             }).join("\n");
 
             const rawMapPrompt = `当前探索地点库与地图信息：\n${locListText}\n\n` +
               `---------- 【带团与地点探索准则】 ----------\n` +
-              `1. 【地点进入条件】：若地点设定了进入条件（如需要特定房间钥匙、特定道具或通过检定），只有当玩家持有对应道具或达成条件时才允许其进入该地点；若未达成条件，应自然描述门锁/阻碍并提示玩家寻找道具。\n` +
-              `2. 【道具与线索探索获得】：当玩家在对应地点展开深入探索调查时，根据该地点的产出设定适时给出对应道具与线索。\n` +
-              `3. AI带团推进剧情进入新地点时，请自动在系统状态栏更新[地点]为完整层级路径（如：一级地点-二级地点-具体地点），接下来去哪里的指向由AI结合剧情自行判断并填写，无需玩家手动干预。`;
-            const prompt = window.formatPromptSection("地点与地图", rawMapPrompt);
+              `1. AI带团推进剧情进入新地点时，请自动在系统状态栏更新[地点]为完整层级路径（如：一级地点-二级地点-具体地点），接下来去哪里的指向由AI结合剧情自行判断并填写，无需玩家手动干预。`;
+            const replacedMapPrompt = applyChatTrpgRoleReplacements(chat, rawMapPrompt);
+            const prompt = window.formatPromptSection("地点与地图", replacedMapPrompt);
             const tokenCount = Math.ceil(prompt.length * 0.7);
             return { prompt, tokenCount };
           } catch(err) {
@@ -40284,7 +40395,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const { posX, posY } = computeNodeSvgCoords(matchedNode, svgRoot);
 
               playersAtNode.forEach((pItem, idx) => {
-                const offsetX = playersAtNode.length > 1 ? (idx - (playersAtNode.length - 1) / 2) * 28 : 0;
+                const countAtNode = playersAtNode.length;
+                const stepX = countAtNode === 2 ? 52 : 46;
+                const offsetX = countAtNode > 1 ? (idx - (countAtNode - 1) / 2) * stepX : 0;
+                const offsetY = countAtNode > 1 ? (idx % 2 === 0 ? -7 : 9) : 0;
+                const finalX = Math.max(24, Math.min(516, posX + offsetX));
+                const finalY = Math.max(28, Math.min(386, posY + offsetY));
                 const pIdx = Math.max(0, playerLocList.findIndex((x) => x.peerCode === pItem.peerCode));
                 const pColor = pItem.isMe ? pinColor : paletteColors[pIdx % paletteColors.length];
                 const safeLabel = String(pItem.name || "玩家").slice(0, 6)
@@ -40314,7 +40430,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (svgRoot) {
                     const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
                     beaconG.setAttribute("class", "current-location-beacon");
-                    beaconG.setAttribute("transform", `translate(${posX + offsetX}, ${posY - 10})`);
+                    beaconG.setAttribute("transform", `translate(${finalX}, ${finalY - 10})`);
                     beaconG.setAttribute("style", "pointer-events: none;");
                     const badgeW = Math.max(28, safeLabel.length * 10 + 10);
                     beaconG.innerHTML = `
@@ -40330,7 +40446,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (svgRoot) {
                     const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
                     beaconG.setAttribute("class", "current-location-beacon");
-                    beaconG.setAttribute("transform", `translate(${posX + offsetX}, ${posY - 8})`);
+                    beaconG.setAttribute("transform", `translate(${finalX}, ${finalY - 8})`);
                     beaconG.setAttribute("style", "pointer-events: none;");
 
                     const imgEl = document.createElementNS("http://www.w3.org/2000/svg", "image");
@@ -40362,7 +40478,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 } else if (svgRoot) {
                   const beaconG = document.createElementNS("http://www.w3.org/2000/svg", "g");
                   beaconG.setAttribute("class", "current-location-beacon");
-                  beaconG.setAttribute("transform", `translate(${posX + offsetX}, ${posY - 12})`);
+                  beaconG.setAttribute("transform", `translate(${finalX}, ${finalY - 12})`);
                   beaconG.setAttribute("style", "pointer-events: none;");
                   const badgeW = Math.max(28, safeLabel.length * 10 + 10);
                   beaconG.innerHTML = `
@@ -53375,9 +53491,13 @@ ${stickerContext || "无"}
           const titleTag = titleText
             ? `<span class="title-tag">${titleText}</span>`
             : "";
+          const trpgRoleText = typeof getMemberTrpgRoleInChat === "function" ? getMemberTrpgRoleInChat(chat, member) : "";
+          const trpgRoleTag = trpgRoleText
+            ? `<span class="title-tag">${trpgRoleText}</span>`
+            : "";
           // 如果被禁言，显示一个特殊的标签
           const muteTag = member.isMuted
-            ? '<span class="group-title-tag" style="color: #ff3b30; background-color: #ffe5e5;">🚫已禁言</span>'
+            ? '<span class="group-title-tag" style="color: var(--text-secondary); background-color: var(--secondary-bg); border: 1px solid var(--border-color);">已禁言</span>'
             : "";
 
           // --- 动态生成按钮HTML ---
@@ -53386,23 +53506,16 @@ ${stickerContext || "无"}
           // 用户自己的按钮
           if (member.id === "user") {
             actionsHtml += `<button class="action-btn" data-action="set-nickname" data-member-id="user">改名</button>`;
-            // 用户被禁言时，显示“解除禁言”按钮
             if (member.isMuted) {
-              actionsHtml += `<button class="action-btn" data-action="unmute-self" data-member-id="user">解除禁言</button>`;
+              actionsHtml += `<button class="action-btn" data-action="unmute-self" data-member-id="user">解禁</button>`;
             }
           }
 
-          // 管理员和群主的操作按钮
           if (canManageTitle) {
             actionsHtml += `<button class="action-btn" data-action="set-title" data-member-id="${member.id}">头衔</button>`;
           }
-          if (canManageAdmin) {
-            const adminActionText = isThisMemberAdmin ? "取消管理" : "设为管理";
-            actionsHtml += `<button class="action-btn" data-action="toggle-admin" data-member-id="${member.id}">${adminActionText}</button>`;
-          }
-          if (isCurrentUserOwner && member.id !== "user") {
-            actionsHtml += `<button class="action-btn" data-action="transfer-owner" data-member-id="${member.id}">转让</button>`;
-          }
+          actionsHtml += `<button class="action-btn" data-action="set-trpg-role" data-member-id="${member.id}">身份</button>`;
+
           // 禁言/解禁按钮
           if (canMute) {
             const muteButtonText = member.isMuted ? "解禁" : "禁言";
@@ -53423,6 +53536,7 @@ ${stickerContext || "无"}
 			            <div class="tags">
 			                ${roleTag}
 			                ${titleTag}
+			                ${trpgRoleTag}
 			                ${muteTag}
 			            </div>
 			        </div>
@@ -53430,6 +53544,114 @@ ${stickerContext || "无"}
 			    `;
           return item;
         }
+
+        let currentEditingTrpgRoleMemberId = null;
+
+        function openTrpgRoleModal(memberId) {
+          const chat = state.chats[state.activeChatId];
+          if (!chat || !chat.isGroup) return;
+          currentEditingTrpgRoleMemberId = String(memberId);
+          let targetMember = null;
+          let targetName = "成员";
+          if (String(memberId) === "user") {
+            targetMember = { id: "user" };
+            targetName = chat.settings?.myNickname || chat.settings?.myName || "我";
+          } else {
+            targetMember = (chat.members || []).find((m) => String(m.id) === String(memberId));
+            if (!targetMember) return;
+            targetName = targetMember.groupNickname || targetMember.originalName || (state.chats[targetMember.id]?.name) || "成员";
+          }
+          const curRole = getMemberTrpgRoleInChat(chat, targetMember);
+          const titleEl = document.getElementById("trpg-role-modal-title");
+          if (titleEl) {
+            titleEl.textContent = "身份 - " + targetName;
+          }
+          const selectEl = document.getElementById("trpg-role-select-input");
+          if (selectEl) {
+            selectEl.value = curRole || "";
+          }
+          const modal = document.getElementById("trpg-role-modal");
+          if (modal) {
+            modal.classList.add("visible");
+            modal.style.display = "flex";
+          }
+        }
+        window.openTrpgRoleModal = openTrpgRoleModal;
+
+        function closeTrpgRoleModal() {
+          const modal = document.getElementById("trpg-role-modal");
+          if (modal) {
+            modal.classList.remove("visible");
+            modal.style.display = "none";
+          }
+          currentEditingTrpgRoleMemberId = null;
+        }
+        window.closeTrpgRoleModal = closeTrpgRoleModal;
+
+        async function confirmTrpgRoleModal() {
+          const chat = state.chats[state.activeChatId];
+          if (!chat || !chat.isGroup || !currentEditingTrpgRoleMemberId) {
+            closeTrpgRoleModal();
+            return;
+          }
+          const selectEl = document.getElementById("trpg-role-select-input");
+          const newRole = selectEl ? String(selectEl.value || "").trim().toUpperCase() : "";
+          if (!chat.settings) chat.settings = {};
+          if (!chat.settings.trpgRoleMap || typeof chat.settings.trpgRoleMap !== "object") {
+            chat.settings.trpgRoleMap = {};
+          }
+          const roleMap = chat.settings.trpgRoleMap;
+          const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+            ? window.PeerManager.getOrCreateMyPeerCode()
+            : "";
+
+          if (newRole) {
+            for (const k of Object.keys(roleMap)) {
+              if (String(roleMap[k]).toUpperCase() === newRole) {
+                delete roleMap[k];
+              }
+            }
+            if (String(chat.settings.myTrpgRole || "").toUpperCase() === newRole) {
+              chat.settings.myTrpgRole = "";
+            }
+            (chat.members || []).forEach((m) => {
+              if (m && String(m.trpgRole || "").toUpperCase() === newRole) {
+                m.trpgRole = "";
+              }
+            });
+          }
+
+          if (currentEditingTrpgRoleMemberId === "user") {
+            chat.settings.myTrpgRole = newRole;
+            if (newRole) {
+              roleMap["user"] = newRole;
+              if (myCode) roleMap[myCode] = newRole;
+            } else {
+              delete roleMap["user"];
+              if (myCode) delete roleMap[myCode];
+            }
+          } else {
+            const member = (chat.members || []).find((m) => String(m.id) === currentEditingTrpgRoleMemberId);
+            if (member) {
+              member.trpgRole = newRole;
+              if (newRole) {
+                roleMap[String(member.id)] = newRole;
+                if (member.peerCode) roleMap[member.peerCode] = newRole;
+              } else {
+                delete roleMap[String(member.id)];
+                if (member.peerCode) delete roleMap[member.peerCode];
+              }
+            }
+          }
+
+          await db.chats.put(chat);
+          if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+            window.PeerManager.syncGroupSettingsToPeers(chat);
+          }
+          closeTrpgRoleModal();
+          renderMemberManagementList();
+        }
+        window.confirmTrpgRoleModal = confirmTrpgRoleModal;
 
         /**
          * 处理禁言/解禁群成员
@@ -91273,11 +91495,15 @@ ${stickerContext || "无"}
 
               if (!action || !memberId) return;
 
+              if (action === "set-trpg-role") {
+                openTrpgRoleModal(memberId);
+                return;
+              }
+
               // --- 处理用户自己的按钮 ---
               if (memberId === "user") {
                 if (action === "set-nickname") handleSetUserNickname();
                 if (action === "set-title") handleSetUserTitle();
-                // 用户点击自己的“解禁”按钮
                 if (action === "unmute-self") {
                   handleUserUnmute();
                 }
@@ -91298,7 +91524,7 @@ ${stickerContext || "无"}
                 case "remove-member":
                   removeMemberFromGroup(memberId);
                   break;
-                case "mute-member": // 禁言/解禁统一走这里
+                case "mute-member":
                   handleMuteMember(memberId);
                   break;
               }
