@@ -29923,11 +29923,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             // 修复真实换行符与末尾逗号后再试
             try {
               const fixedNewlines = s
-                .replace(/,\s*}/g, "}")
+                .replace(/,\s*([}\]])/g, "$1")
                 .replace(/\r?\n/g, "\\n");
               const p2 = JSON.parse(fixedNewlines);
               if (p2 && typeof p2 === "object") return p2;
             } catch (_) {}
+
+            // 如果这是个包含 chatResponse 或 messages 数组的外层大对象，绝对不能用单条正则把它拍扁吞掉，返回 null 让上层走数组剥离
+            if (/"(?:chatResponse|messages)"\s*:\s*\[/i.test(s)) {
+              return null;
+            }
 
             // 正则兜底提取常见字段（防止 AI 在台词内使用未转义英文双引号导致最后一条消息解析失败被吞）
             const extracted = {};
@@ -29935,15 +29940,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (typeMatch) extracted.type = typeMatch[1].trim();
             const nameMatch = s.match(/"(?:name|sender|senderName|speaker)"\s*:\s*"([^"]+)"/i);
             if (nameMatch) extracted.name = nameMatch[1].trim();
+            const targetMatch = s.match(/"(?:target_content|targetContent|quoted_content)"\s*:\s*"([\s\S]*?)"\s*,\s*"/i);
+            if (targetMatch) extracted.target_content = targetMatch[1].trim();
             const promptMatch = s.match(/"(?:prompt|imagePrompt|naiPrompt)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (promptMatch) extracted.prompt = promptMatch[1].trim();
 
-            const contentFieldMatch = s.match(/"(?:content|message|text|reply)"\s*:\s*"([\s\S]*)"\s*(?:,\s*"(?:type|name|sender|visibleTo|thinking)"[\s\S]*|\s*}$)/i);
+            // 如果包含 system_status 的 fields 对象，尝试单独提取 fields
+            if (extracted.type === "system_status" || /"fields"\s*:\s*\{/i.test(s)) {
+              const fieldsMatch = s.match(/"fields"\s*:\s*(\{[\s\S]*?\})\s*}/);
+              if (fieldsMatch) {
+                try {
+                  extracted.fields = JSON.parse(fieldsMatch[1].replace(/\r?\n/g, "\\n"));
+                  if (!extracted.type) extracted.type = "system_status";
+                  return extracted;
+                } catch (_) {}
+              }
+            }
+
+            const contentFieldMatch = s.match(/"(?:content|message|text|reply|reply_content)"\s*:\s*"([\s\S]*)"\s*(?:,\s*"(?:type|name|sender|visibleTo|thinking|target_content)"[\s\S]*|\s*}$)/i);
             if (contentFieldMatch) {
               let val = contentFieldMatch[1];
               // 剥离尾随的其他已知键值对
-              val = val.replace(/"\s*,\s*"(?:type|name|sender|senderName|visibleTo|visible_to|thinking)"\s*:\s*[\s\S]*$/i, "");
-              extracted.content = val.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+              val = val.replace(/"\s*,\s*"(?:type|name|sender|senderName|visibleTo|visible_to|thinking|target_content|targetContent)"\s*:\s*[\s\S]*$/i, "");
+              const cleanVal = val.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+              extracted.content = cleanVal;
+              if (extracted.type === "quote_reply") {
+                extracted.reply_content = cleanVal;
+              }
               if (!extracted.type) extracted.type = "text";
               return extracted;
             }
@@ -29959,14 +29982,73 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             trimmedContent = codeBlockMatch[1].trim();
           }
 
+          // 方案1.5：如果整体是一个带有 thinking 和 chatResponse/messages 的外层对象，但因为内部换行符或未转义双引号导致外层 JSON.parse 失败，
+          // 先尝试把真实换行转义后再整体解析一次；若仍失败，则直接剥离出 thinking 和 chatResponse 数组内部的内容进行逐条扫描！
+          let preExtractedThinking = "";
+          if (trimmedContent.startsWith("{") && /"(?:chatResponse|messages)"\s*:\s*\[/i.test(trimmedContent)) {
+            try {
+              const fixedOuter = trimmedContent
+                .replace(/,\s*([}\]])/g, "$1")
+                .replace(/\r?\n/g, "\\n");
+              const parsedOuter = JSON.parse(fixedOuter);
+              if (parsedOuter && typeof parsedOuter === "object") {
+                const arr = Array.isArray(parsedOuter.chatResponse)
+                  ? parsedOuter.chatResponse
+                  : Array.isArray(parsedOuter.messages)
+                  ? parsedOuter.messages
+                  : null;
+                if (arr) {
+                  if (parsedOuter.thinking && typeof parsedOuter.thinking === "string") {
+                    arr.unshift({ type: "thinking", content: parsedOuter.thinking.trim() });
+                  }
+                  return arr;
+                }
+              }
+            } catch (_) {}
+
+            // 外层整体 JSON.parse 依然失败（通常因为 thinking 或某条消息内有未转义双引号）：
+            // 单独提取 thinking 文本，然后把扫描范围精准缩小到 chatResponse / messages 的方括号内部！
+            const arrayKeyMatch = trimmedContent.match(/"(?:chatResponse|messages)"\s*:\s*\[/i);
+            if (arrayKeyMatch) {
+              const arrayStartIdx = arrayKeyMatch.index + arrayKeyMatch[0].length;
+              const beforeArrayStr = trimmedContent.substring(0, arrayKeyMatch.index);
+              const thMatch = beforeArrayStr.match(/"thinking"\s*:\s*"([\s\S]*)"\s*,?\s*$/i);
+              if (thMatch && thMatch[1]) {
+                preExtractedThinking = thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+              }
+              const lastBracketIdx = trimmedContent.lastIndexOf("]");
+              if (lastBracketIdx > arrayStartIdx) {
+                trimmedContent = trimmedContent.substring(arrayStartIdx, lastBracketIdx).trim();
+              } else {
+                trimmedContent = trimmedContent.substring(arrayStartIdx).trim();
+              }
+            }
+          }
+
           // 方案2：尝试作为标准的单一JSON数组解析（仅当整个字符串本身就是一个完整数组且首尾之外没有多余块时）
           if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
             try {
               const parsed = JSON.parse(trimmedContent);
               if (Array.isArray(parsed) && parsed.length > 0) {
+                if (preExtractedThinking) {
+                  parsed.unshift({ type: "thinking", content: preExtractedThinking });
+                }
                 return parsed;
               }
-            } catch (e) {}
+            } catch (e) {
+              try {
+                const fixedArr = trimmedContent
+                  .replace(/,\s*([}\]])/g, "$1")
+                  .replace(/\r?\n/g, "\\n");
+                const parsed2 = JSON.parse(fixedArr);
+                if (Array.isArray(parsed2) && parsed2.length > 0) {
+                  if (preExtractedThinking) {
+                    parsed2.unshift({ type: "thinking", content: preExtractedThinking });
+                  }
+                  return parsed2;
+                }
+              } catch (_) {}
+            }
           }
 
           // 方案3：深度括号匹配提取所有独立的JSON对象，并保留前后伴随的正文文本
@@ -30054,6 +30136,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } else {
                 finalItems.push({ type: "text", content: cleanAfter });
               }
+            }
+            if (preExtractedThinking) {
+              finalItems.unshift({ type: "thinking", content: preExtractedThinking });
             }
             return finalItems;
           }
