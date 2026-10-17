@@ -4117,7 +4117,7 @@
             } else {
               const isLocalGen = !!(
                 (window.activeGeneratingChats && (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)])) ||
-                (window.activeGeneratingKeeperDraw && (window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[String(chat.id)]))
+                (window.activeKeeperWaitingBubble && (window.activeKeeperWaitingBubble[chat.id] || window.activeKeeperWaitingBubble[String(chat.id)]))
               );
               if (!isLocalGen) {
                 typingInd.style.display = "none";
