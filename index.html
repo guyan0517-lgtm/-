@@ -29902,6 +29902,38 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 移除思维链标签
           trimmedContent = trimmedContent.replace(/<(?:think|thought|thinking)>[\s\S]*?<\/(?:think|thought|thinking)>/gi, "").trim();
 
+          // 内部辅助函数：仅将双引号字符串内部的真实换行符转义为 \n，保留结构性换行符
+          function escapeNewlinesInsideQuotes(str) {
+            let out = "";
+            let inStr = false;
+            let esc = false;
+            for (let i = 0; i < str.length; i++) {
+              const ch = str[i];
+              if (esc) {
+                out += ch;
+                esc = false;
+                continue;
+              }
+              if (ch === "\\" && inStr) {
+                out += ch;
+                esc = true;
+                continue;
+              }
+              if (ch === '"') {
+                inStr = !inStr;
+                out += ch;
+                continue;
+              }
+              if (inStr && (ch === "\n" || ch === "\r")) {
+                if (ch === "\r" && str[i + 1] === "\n") i++;
+                out += "\\n";
+                continue;
+              }
+              out += ch;
+            }
+            return out;
+          }
+
           // 内部辅助函数：宽容解析单个 JSON 对象（支持未转义换行符、末尾多余逗号、内容中夹杂未转义双引号等）
           function tryParseLooseJsonObject(rawStr) {
             if (!rawStr) return null;
@@ -29920,11 +29952,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (p && typeof p === "object") return p;
             } catch (_) {}
 
-            // 修复真实换行符与末尾逗号后再试
+            // 修复字符串内部真实换行符与末尾逗号后再试
             try {
-              const fixedNewlines = s
-                .replace(/,\s*([}\]])/g, "$1")
-                .replace(/\r?\n/g, "\\n");
+              const fixedNewlines = escapeNewlinesInsideQuotes(s).replace(/,\s*([}\]])/g, "$1");
               const p2 = JSON.parse(fixedNewlines);
               if (p2 && typeof p2 === "object") return p2;
             } catch (_) {}
@@ -29934,13 +29964,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return null;
             }
 
+            // 如果只是单独的 thinking 对象
+            if (/^\{\s*"thinking"\s*:/i.test(s) && !/"(?:content|message|text|reply|reply_content|fields)"\s*:/i.test(s)) {
+              const thOnly = s.match(/"thinking"\s*:\s*"([\s\S]*)"\s*\}$/i);
+              if (thOnly) {
+                return { type: "thinking", content: thOnly[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim() };
+              }
+            }
+
             // 正则兜底提取常见字段（防止 AI 在台词内使用未转义英文双引号导致最后一条消息解析失败被吞）
             const extracted = {};
             const typeMatch = s.match(/"type"\s*:\s*"([^"]+)"/i);
             if (typeMatch) extracted.type = typeMatch[1].trim();
             const nameMatch = s.match(/"(?:name|sender|senderName|speaker)"\s*:\s*"([^"]+)"/i);
             if (nameMatch) extracted.name = nameMatch[1].trim();
-            const targetMatch = s.match(/"(?:target_content|targetContent|quoted_content)"\s*:\s*"([\s\S]*?)"\s*,\s*"/i);
+            const tsMatch = s.match(/"(?:target_timestamp|targetTimestamp)"\s*:\s*"?(\d+)"?/i);
+            if (tsMatch) extracted.target_timestamp = Number(tsMatch[1]);
+            const tSenderMatch = s.match(/"(?:target_sender|targetSender)"\s*:\s*"([^"]+)"/i);
+            if (tSenderMatch) extracted.target_sender = tSenderMatch[1].trim();
+            const targetMatch = s.match(/"(?:target_content|targetContent|quoted_content)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (targetMatch) extracted.target_content = targetMatch[1].trim();
             const promptMatch = s.match(/"(?:prompt|imagePrompt|naiPrompt)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (promptMatch) extracted.prompt = promptMatch[1].trim();
@@ -29950,24 +29992,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const fieldsMatch = s.match(/"fields"\s*:\s*(\{[\s\S]*?\})\s*}/);
               if (fieldsMatch) {
                 try {
-                  extracted.fields = JSON.parse(fieldsMatch[1].replace(/\r?\n/g, "\\n"));
+                  extracted.fields = JSON.parse(escapeNewlinesInsideQuotes(fieldsMatch[1]).replace(/,\s*([}\]])/g, "$1"));
                   if (!extracted.type) extracted.type = "system_status";
                   return extracted;
                 } catch (_) {}
               }
             }
 
-            const contentFieldMatch = s.match(/"(?:content|message|text|reply|reply_content)"\s*:\s*"([\s\S]*)"\s*(?:,\s*"(?:type|name|sender|visibleTo|thinking|target_content)"[\s\S]*|\s*}$)/i);
+            const knownKeysPattern = "(?:type|name|sender|senderName|speaker|visibleTo|visible_to|thinking|target_content|targetContent|target_timestamp|targetTimestamp|target_sender|targetSender|quote|quote_reply|quoted_content|status|emotion|avatar)";
+            const contentFieldMatch = s.match(new RegExp(`"(?:content|message|text|reply|reply_content)"\\s*:\\s*"([\\s\\S]*)"\\s*(?:,\\s*"${knownKeysPattern}"[\\s\\S]*|\\s*}$)`, "i"));
             if (contentFieldMatch) {
               let val = contentFieldMatch[1];
               // 剥离尾随的其他已知键值对
-              val = val.replace(/"\s*,\s*"(?:type|name|sender|senderName|visibleTo|visible_to|thinking|target_content|targetContent)"\s*:\s*[\s\S]*$/i, "");
+              val = val.replace(new RegExp(`"\\s*,\\s*"${knownKeysPattern}"\\s*:\\s*[\\s\\S]*$`, "i"), "");
               const cleanVal = val.replace(/\\n/g, "\n").replace(/\\"/g, '"');
               extracted.content = cleanVal;
-              if (extracted.type === "quote_reply") {
+              if (extracted.type === "quote_reply" || extracted.target_timestamp || extracted.target_content) {
                 extracted.reply_content = cleanVal;
               }
-              if (!extracted.type) extracted.type = "text";
+              if (!extracted.type) {
+                extracted.type = (extracted.target_timestamp || extracted.target_content) ? "quote_reply" : "text";
+              }
               return extracted;
             }
             if (extracted.type || extracted.prompt || extracted.name) {
@@ -29983,13 +30028,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           // 方案1.5：如果整体是一个带有 thinking 和 chatResponse/messages 的外层对象，但因为内部换行符或未转义双引号导致外层 JSON.parse 失败，
-          // 先尝试把真实换行转义后再整体解析一次；若仍失败，则直接剥离出 thinking 和 chatResponse 数组内部的内容进行逐条扫描！
+          // 先尝试把字符串内部真实换行转义后再整体解析一次；若仍失败，则直接剥离出 thinking 和 chatResponse 数组内部的内容进行逐条扫描！
           let preExtractedThinking = "";
           if (trimmedContent.startsWith("{") && /"(?:chatResponse|messages)"\s*:\s*\[/i.test(trimmedContent)) {
             try {
-              const fixedOuter = trimmedContent
-                .replace(/,\s*([}\]])/g, "$1")
-                .replace(/\r?\n/g, "\\n");
+              const fixedOuter = escapeNewlinesInsideQuotes(trimmedContent).replace(/,\s*([}\]])/g, "$1");
               const parsedOuter = JSON.parse(fixedOuter);
               if (parsedOuter && typeof parsedOuter === "object") {
                 const arr = Array.isArray(parsedOuter.chatResponse)
@@ -30007,20 +30050,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } catch (_) {}
 
             // 外层整体 JSON.parse 依然失败（通常因为 thinking 或某条消息内有未转义双引号）：
-            // 单独提取 thinking 文本，然后把扫描范围精准缩小到 chatResponse / messages 的方括号内部！
+            // 单独提取 thinking 文本，然后把扫描范围精准缩小到 chatResponse / messages 的方括号（保留首尾方括号以便方案2尝试整体数组解析）！
             const arrayKeyMatch = trimmedContent.match(/"(?:chatResponse|messages)"\s*:\s*\[/i);
             if (arrayKeyMatch) {
-              const arrayStartIdx = arrayKeyMatch.index + arrayKeyMatch[0].length;
+              const bracketOpenIdx = trimmedContent.indexOf("[", arrayKeyMatch.index);
               const beforeArrayStr = trimmedContent.substring(0, arrayKeyMatch.index);
               const thMatch = beforeArrayStr.match(/"thinking"\s*:\s*"([\s\S]*)"\s*,?\s*$/i);
               if (thMatch && thMatch[1]) {
                 preExtractedThinking = thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
               }
               const lastBracketIdx = trimmedContent.lastIndexOf("]");
-              if (lastBracketIdx > arrayStartIdx) {
-                trimmedContent = trimmedContent.substring(arrayStartIdx, lastBracketIdx).trim();
-              } else {
-                trimmedContent = trimmedContent.substring(arrayStartIdx).trim();
+              if (bracketOpenIdx !== -1 && lastBracketIdx > bracketOpenIdx) {
+                trimmedContent = trimmedContent.substring(bracketOpenIdx, lastBracketIdx + 1).trim();
+              } else if (bracketOpenIdx !== -1) {
+                trimmedContent = trimmedContent.substring(bracketOpenIdx + 1).trim();
               }
             }
           }
@@ -30037,9 +30080,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             } catch (e) {
               try {
-                const fixedArr = trimmedContent
-                  .replace(/,\s*([}\]])/g, "$1")
-                  .replace(/\r?\n/g, "\\n");
+                const fixedArr = escapeNewlinesInsideQuotes(trimmedContent).replace(/,\s*([}\]])/g, "$1");
                 const parsed2 = JSON.parse(fixedArr);
                 if (Array.isArray(parsed2) && parsed2.length > 0) {
                   if (preExtractedThinking) {
@@ -47428,19 +47469,23 @@ ${stickerContext || "无"}
 
                 case "quote_reply": {
                   const qObj = (msgData.quote_reply && typeof msgData.quote_reply === "object") ? msgData.quote_reply : msgData;
-                  const qTargetTs = qObj.target_timestamp || msgData.target_timestamp;
-                  const qTargetContent = String(qObj.target_content || msgData.target_content || "").trim();
-                  const qTargetSender = String(qObj.target_sender || msgData.target_sender || "").trim();
-                  const qReplyContent = String(qObj.reply_content || msgData.reply_content || msgData.content || "").trim();
+                  const rawTargetTs = qObj.target_timestamp || qObj.targetTimestamp || msgData.target_timestamp || msgData.targetTimestamp;
+                  const qTargetTs = rawTargetTs ? String(rawTargetTs).replace(/\D/g, "") : "";
+                  const qTargetContent = String(qObj.target_content || qObj.targetContent || qObj.quoted_content || msgData.target_content || msgData.targetContent || msgData.quoted_content || (typeof msgData.quote === "string" ? msgData.quote : "") || "").trim();
+                  const qTargetSender = String(qObj.target_sender || qObj.targetSender || msgData.target_sender || msgData.targetSender || "").trim();
+                  const qReplyContent = String(qObj.reply_content || msgData.reply_content || msgData.content || msgData.message || msgData.text || "").trim();
+                  if (!qReplyContent) {
+                    continue;
+                  }
                   let originalMessage = null;
                   if (qTargetTs) {
                     originalMessage = (chat.history || []).find(
-                      (m) => m.timestamp == qTargetTs,
+                      (m) => String(m.timestamp) === qTargetTs || m.timestamp == rawTargetTs,
                     );
                   }
                   if (!originalMessage && qTargetContent) {
                     originalMessage = (chat.history || []).slice().reverse().find(
-                      (m) => typeof m.content === "string" && (m.content.includes(qTargetContent) || qTargetContent.includes(m.content))
+                      (m) => typeof m.content === "string" && m.content.trim() && (m.content.includes(qTargetContent) || qTargetContent.includes(m.content))
                     );
                   }
                   if (!originalMessage && qTargetSender) {
@@ -47448,6 +47493,9 @@ ${stickerContext || "无"}
                       const mSender = m.senderName || (m.role === "user" ? (chat.settings?.myNickname || "我") : chat.name);
                       return mSender === qTargetSender || String(mSender).includes(qTargetSender);
                     });
+                  }
+                  if (!originalMessage && !qTargetSender && !qTargetContent) {
+                    originalMessage = (chat.history || []).slice().reverse().find((m) => m.role === "user" && typeof m.content === "string" && m.content.trim());
                   }
                   if (originalMessage) {
                     const quoteContext = {
@@ -47472,8 +47520,8 @@ ${stickerContext || "无"}
                       content: qReplyContent,
                       quote: {
                         timestamp: Date.now(),
-                        senderName: qTargetSender || "群成员",
-                        content: qTargetContent || "（检定/消息）",
+                        senderName: qTargetSender || (chat.settings?.myNickname || "我"),
+                        content: qTargetContent || "（消息）",
                       },
                     };
                   } else {
@@ -47742,8 +47790,8 @@ ${stickerContext || "无"}
                       if (isPeerGroupChatInstance(chat) && typeof window.extractAndHandlePeerPhoneTagsInText === "function") {
                         cleanMsgText = window.extractAndHandlePeerPhoneTagsInText(chat, cleanMsgText, msgData.name || chat.name);
                       }
-                      if (!cleanMsgText.trim() && msgData.quote_reply && msgData.quote_reply.reply_content) {
-                        cleanMsgText = String(msgData.quote_reply.reply_content).trim();
+                      if (!cleanMsgText.trim() && (msgData.reply_content || (msgData.quote_reply && msgData.quote_reply.reply_content))) {
+                        cleanMsgText = String(msgData.reply_content || msgData.quote_reply.reply_content).trim();
                       }
                       if (!cleanMsgText.trim()) {
                         continue;
@@ -47758,17 +47806,20 @@ ${stickerContext || "无"}
                         }
                       }
                       aiMessage = { ...baseMessage, content: cleanMsgText };
-                      if (msgData.quote_reply && typeof msgData.quote_reply === "object" && !aiMessage.quote) {
-                        const qTargetTs = msgData.quote_reply.target_timestamp;
-                        const qTargetContent = String(msgData.quote_reply.target_content || "").trim();
-                        const qTargetSender = String(msgData.quote_reply.target_sender || "").trim();
+                      const hasQuoteInfo = (msgData.quote_reply && typeof msgData.quote_reply === "object") || msgData.target_timestamp || msgData.targetTimestamp || msgData.target_content || msgData.targetContent || msgData.quoted_content || (typeof msgData.quote === "string" && msgData.quote.trim());
+                      if (hasQuoteInfo && !aiMessage.quote) {
+                        const qSource = (msgData.quote_reply && typeof msgData.quote_reply === "object") ? msgData.quote_reply : msgData;
+                        const rawTargetTs = qSource.target_timestamp || qSource.targetTimestamp || msgData.target_timestamp || msgData.targetTimestamp;
+                        const qTargetTs = rawTargetTs ? String(rawTargetTs).replace(/\D/g, "") : "";
+                        const qTargetContent = String(qSource.target_content || qSource.targetContent || qSource.quoted_content || msgData.target_content || msgData.targetContent || msgData.quoted_content || (typeof msgData.quote === "string" ? msgData.quote : "") || "").trim();
+                        const qTargetSender = String(qSource.target_sender || qSource.targetSender || msgData.target_sender || msgData.targetSender || "").trim();
                         let origMsg = null;
                         if (qTargetTs) {
-                          origMsg = (chat.history || []).find((m) => m.timestamp == qTargetTs);
+                          origMsg = (chat.history || []).find((m) => String(m.timestamp) === qTargetTs || m.timestamp == rawTargetTs);
                         }
                         if (!origMsg && qTargetContent) {
                           origMsg = (chat.history || []).slice().reverse().find(
-                            (m) => typeof m.content === "string" && (m.content.includes(qTargetContent) || qTargetContent.includes(m.content))
+                            (m) => typeof m.content === "string" && m.content.trim() && (m.content.includes(qTargetContent) || qTargetContent.includes(m.content))
                           );
                         }
                         if (!origMsg && qTargetSender) {
@@ -47777,13 +47828,15 @@ ${stickerContext || "无"}
                             return mSender === qTargetSender || String(mSender).includes(qTargetSender);
                           });
                         }
-                        aiMessage.quote = {
-                          timestamp: origMsg ? origMsg.timestamp : (qTargetTs || Date.now()),
-                          senderName: origMsg ? (origMsg.senderName || (origMsg.role === "user" ? (chat.settings?.myNickname || "我") : chat.name)) : (qTargetSender || "群成员"),
-                          content: origMsg ? String(origMsg.content || "") : qTargetContent,
-                        };
-                        if (msgData.quote_reply.reply_content) {
-                          aiMessage.content = msgData.quote_reply.reply_content;
+                        if (origMsg || qTargetContent || qTargetSender) {
+                          aiMessage.quote = {
+                            timestamp: origMsg ? origMsg.timestamp : (Number(qTargetTs) || Date.now()),
+                            senderName: origMsg ? (origMsg.senderName || (origMsg.role === "user" ? (chat.settings?.myNickname || "我") : chat.name)) : (qTargetSender || (chat.settings?.myNickname || "我")),
+                            content: origMsg ? String(origMsg.content || "") : qTargetContent,
+                          };
+                        }
+                        if (qSource.reply_content) {
+                          aiMessage.content = qSource.reply_content;
                         }
                       }
                     }
