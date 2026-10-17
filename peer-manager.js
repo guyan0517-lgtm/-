@@ -1319,13 +1319,21 @@
             }
             this.syncAllPeerPresenceUI();
           }
+          let nextPollDelay = 60;
           if (data && Array.isArray(data.events) && data.events.length > 0) {
+            const batchAckIds = data.events
+              .map((evt) => (evt && evt.eventId ? evt.eventId : null))
+              .filter(Boolean);
+            if (batchAckIds.length > 0) {
+              this.ackEventsToServer(batchAckIds);
+            }
             data.events.forEach((evt) => this.enqueueIncomingEvent(evt));
+            nextPollDelay = 450;
           }
           this._isPollingNow = false;
           setTimeout(() => {
             this.pollOnce();
-          }, 20);
+          }, nextPollDelay);
         })
         .catch(() => {
           if (abortTimer) clearTimeout(abortTimer);
@@ -1451,8 +1459,12 @@
 
       const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const toCode = this.normalizePeerCode(evt.toCode);
-      if (toCode && toCode !== myCode) return;
+      if (toCode && toCode !== myCode) {
+        if (evt.eventId) this.ackEventsToServer([evt.eventId]);
+        return;
+      }
       if (Array.isArray(evt.targetCodes) && !evt.targetCodes.map((c) => this.normalizePeerCode(c)).includes(myCode)) {
+        if (evt.eventId) this.ackEventsToServer([evt.eventId]);
         return;
       }
 
@@ -1819,28 +1831,38 @@
     },
 
     refreshAppChatAndContactsUI: async function () {
-      if (typeof window.renderChatListProxy === "function") {
-        try {
-          await window.renderChatListProxy();
-        } catch (e) {}
-      } else if (typeof window.renderChatList === "function") {
-        try {
-          await window.renderChatList();
-        } catch (e) {}
+      if (this._refreshAppUITimer) {
+        clearTimeout(this._refreshAppUITimer);
       }
-      const contactsView = document.getElementById("contacts-view");
-      const contactsScreen = document.getElementById("contacts-screen");
-      const isContactsActive = Boolean(
-        (contactsView && contactsView.classList.contains("active")) ||
-        (contactsScreen && contactsScreen.classList.contains("active"))
-      );
-      if (isContactsActive) {
-        if (typeof window.renderContactsScreen === "function") {
-          try {
-            await window.renderContactsScreen();
-          } catch (e) {}
-        }
-      }
+      return new Promise((resolve) => {
+        this._refreshAppUITimer = setTimeout(async () => {
+          this._refreshAppUITimer = null;
+          if (typeof window.renderChatListProxy === "function") {
+            try {
+              await window.renderChatListProxy();
+            } catch (e) {}
+          } else if (typeof window.renderChatList === "function") {
+            try {
+              await window.renderChatList();
+            } catch (e) {}
+          }
+          const contactsView = document.getElementById("contacts-view");
+          const contactsScreen = document.getElementById("contacts-screen");
+          const isContactsActive = Boolean(
+            (contactsView && contactsView.classList.contains("active")) ||
+            (contactsScreen && contactsScreen.classList.contains("active"))
+          );
+          if (isContactsActive) {
+            if (typeof window.renderContactsScreen === "function") {
+              try {
+                await window.renderContactsScreen();
+              } catch (e) {}
+            }
+          }
+          this.syncAllPeerPresenceUI();
+          resolve();
+        }, 120);
+      });
     },
 
     deduplicatePeerChatsInDb: async function () {

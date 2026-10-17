@@ -195,20 +195,53 @@ const peerMailboxes = new Map();
 const peerProfiles = new Map();
 const peerLastPoll = new Map();
 
+const EPHEMERAL_EVENT_TYPES = new Set([
+  'online_ping',
+  'online_pong',
+  'offline_ping',
+  'peer_presence',
+  'group_typing_status',
+  'peer_ack'
+]);
+
+function sanitizeMailboxEventsForDisk(events) {
+  if (!Array.isArray(events)) return [];
+  const now = Date.now();
+  const maxAgeMs = 3 * 24 * 60 * 60 * 1000;
+  return events
+    .filter((item) => {
+      if (!item || typeof item !== 'object') return false;
+      if (EPHEMERAL_EVENT_TYPES.has(item.type)) return false;
+      if (item.timestamp && now - item.timestamp > maxAgeMs) return false;
+      return true;
+    })
+    .slice(-40);
+}
+
 function loadMailboxStoreFromDisk() {
   try {
     if (fs.existsSync(MAILBOX_STORE_PATH)) {
       const raw = fs.readFileSync(MAILBOX_STORE_PATH, 'utf8');
       const parsed = JSON.parse(raw);
+      let needsResave = false;
       if (parsed && parsed.mailboxes && typeof parsed.mailboxes === 'object') {
         for (const [k, v] of Object.entries(parsed.mailboxes)) {
-          if (Array.isArray(v)) peerMailboxes.set(k, v);
+          if (Array.isArray(v)) {
+            const cleaned = sanitizeMailboxEventsForDisk(v);
+            if (cleaned.length !== v.length) needsResave = true;
+            if (cleaned.length > 0) {
+              peerMailboxes.set(k, cleaned);
+            }
+          }
         }
       }
       if (parsed && parsed.profiles && typeof parsed.profiles === 'object') {
         for (const [k, v] of Object.entries(parsed.profiles)) {
           if (v && typeof v === 'object') peerProfiles.set(k, v);
         }
+      }
+      if (needsResave) {
+        scheduleSaveMailboxStore();
       }
     }
   } catch (e) {
@@ -224,7 +257,10 @@ function scheduleSaveMailboxStore() {
       const mailboxesObj = {};
       for (const [k, v] of peerMailboxes.entries()) {
         if (Array.isArray(v) && v.length > 0) {
-          mailboxesObj[k] = v;
+          const cleaned = sanitizeMailboxEventsForDisk(v);
+          if (cleaned.length > 0) {
+            mailboxesObj[k] = cleaned;
+          }
         }
       }
       const profilesObj = {};
@@ -237,7 +273,7 @@ function scheduleSaveMailboxStore() {
     } catch (e) {
       console.warn('[PeerStore] Save warning:', e.message);
     }
-  }, 800);
+  }, 1200);
 }
 
 loadMailboxStoreFromDisk();
@@ -264,11 +300,11 @@ function pushToMailbox(code, event) {
     box = box.filter(item => !(item && item.type === 'peer_ack' && item.ackEventId === event.ackEventId));
   }
   box.push(event);
-  if (box.length > 200) {
-    box.shift();
+  if (box.length > 60) {
+    box = box.slice(-60);
   }
   peerMailboxes.set(code, box);
-  if (event.type !== 'group_typing_status') {
+  if (!EPHEMERAL_EVENT_TYPES.has(event.type)) {
     scheduleSaveMailboxStore();
   }
 
