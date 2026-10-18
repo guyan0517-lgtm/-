@@ -34622,6 +34622,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const realTimeSwitch = document.getElementById("real-time-cognition-switch");
           if (realTimeSwitch) {
             realTimeSwitch.checked = state.apiConfig.realTimeCognitionEnabled !== false;
+            realTimeSwitch.onchange = () => {
+              state.apiConfig.realTimeCognitionEnabled = realTimeSwitch.checked;
+              if (typeof db !== "undefined" && db.apiConfig) {
+                db.apiConfig.put(state.apiConfig);
+              }
+            };
           }
           const globalMusicSwitch = document.getElementById("global-ai-music-switch");
           if (globalMusicSwitch) {
@@ -39126,6 +39132,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           // added by lrq 251029 在每条消息记录前添加发送日期时间
+          const isCog = typeof state !== "undefined" && state.apiConfig ? state.apiConfig.realTimeCognitionEnabled !== false : true;
+          if (!isCog) {
+            return `${senderName}: ${contentText}`;
+          }
           const date = new Date(msg.timestamp);
           const formattedDate = date.toLocaleString(); // 格式化为本地时间字符串
           return `${formattedDate} ${senderName}: ${contentText}`;
@@ -45881,15 +45891,7 @@ ${recentHistoryText}
             let tcHeaderPromptBlock = await getThoughtChainHeaderBlock(chat);
             let thoughtChainPromptBlock = await getThoughtChainPromptBlock(chat);
             const usedMashuCanonicalKeys = getUsedMashuCanonicalKeys(tcHeaderPromptBlock + "\n" + thoughtChainPromptBlock);
-            const historyContextLines = Array.isArray(historySlice)
-              ? historySlice
-                  .filter((msg) => msg && !msg.isHidden && msg.type !== "summary")
-                  .map((msg) => `  - ${formatMessageForContext(msg, chat)}`)
-                  .join("\n")
-              : "";
-            const historyPromptBlock = historyContextLines
-              ? window.formatPromptSection("上下文", `近期对话上下文记录：\n${historyContextLines}`)
-              : "";
+            let historyPromptBlock = "";
             const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
             const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次回复二到四的气泡最佳，单气泡在屏幕内显示为2/3~3/4最佳。必须率先渲染情绪氛围，具体细节的描写场景，再进行人物细节描写，切勿为了缩减字数而删去场景描写的内容。\n需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。【注意，此处规则的含义为剧情不可跳跃过多，而并非缩减剧情的细节描写或场景细节】\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。`;
             const keeperPromptBlock = isKeeperAssigned ? window.formatPromptSection("带团", keeperPrefixInstruction) : "";
@@ -46311,7 +46313,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                 peerPersona: peerOnlyPersonaBlock,
                 aiPersona: groupMembersBlock,
                 worldBook: worldBookContent,
-                history: historyPromptBlock,
+                history: "{{上下文}}",
                 summary: summaryContext,
                 linkedMemory: linkedMemoryContext,
                 moduleChapters: moduleChaptersPromptBlock,
@@ -46954,7 +46956,7 @@ ${stickerContext || "无"}
                 peerPersona: "",
                 aiPersona: singlePersonaBlock,
                 worldBook: worldBookContent,
-                history: historyPromptBlock,
+                history: "{{上下文}}",
                 summary: summaryContext,
                 linkedMemory: linkedMemoryContext,
                 moduleChapters: moduleChaptersPromptBlock,
@@ -47407,13 +47409,13 @@ ${stickerContext || "无"}
               }
             }
 
-            const isMusicActive = Boolean(state.musicState && (state.musicState.isActive || state.musicState.isPlaying));
-            if (isMusicActive) {
+            if (isMusicContextAllowed) {
               const currentTrack =
-                state.musicState.currentIndex > -1 && Array.isArray(state.musicState.playlist)
+                state.musicState && state.musicState.currentIndex > -1 && Array.isArray(state.musicState.playlist)
                   ? state.musicState.playlist[state.musicState.currentIndex]
                   : null;
               const isAudioPlaying = Boolean(
+                state.musicState &&
                 state.musicState.isPlaying &&
                 currentTrack &&
                 !currentTrack.isKeepAlive &&
@@ -47436,6 +47438,63 @@ ${stickerContext || "无"}
                   }
                 }
               }
+            }
+
+            if (usedMashuCanonicalKeys.has("history")) {
+              let lastUserPayloadIdx = -1;
+              for (let i = messagesPayload.length - 1; i >= 0; i--) {
+                const m = messagesPayload[i];
+                if (m && m.role === "user") {
+                  const c = typeof m.content === "string" ? m.content.trim() : "";
+                  if (!c.startsWith("==================================================") && !c.startsWith("[系统消息]")) {
+                    lastUserPayloadIdx = i;
+                    break;
+                  }
+                }
+              }
+              const contextPayloadBlocks = [];
+              messagesPayload.forEach((msg, idx) => {
+                if (!msg) return;
+                const cTrim = typeof msg.content === "string" ? msg.content.trim() : "";
+                if (cTrim.startsWith("==================================================")) return;
+                const role = msg.role || "user";
+                let roleTitle = role === "system" ? "系统提示与全部注入词" : (role === "user" ? "用户输入" : (role === "assistant" ? "助手历史回复" : role));
+                let rawContent = "";
+                if (typeof msg.content === "string") {
+                  rawContent = msg.content;
+                } else if (Array.isArray(msg.content)) {
+                  rawContent = msg.content.map(p => typeof p === "string" ? p : (p?.text ? p.text : JSON.stringify(p, null, 2))).join("\n");
+                } else if (typeof msg.content === "object" && msg.content !== null) {
+                  rawContent = JSON.stringify(msg.content, null, 2);
+                } else {
+                  rawContent = String(msg.content || "");
+                }
+                if (role === "user") {
+                  let musicHeaderLine = "";
+                  if (rawContent.startsWith("▷用户正在播放音乐：")) {
+                    const firstNl = rawContent.indexOf("\n");
+                    if (firstNl !== -1) {
+                      musicHeaderLine = rawContent.substring(0, firstNl).trim();
+                      rawContent = rawContent.substring(firstNl + 1);
+                    } else {
+                      musicHeaderLine = rawContent.trim();
+                      rawContent = "";
+                    }
+                  } else if (msg._musicPlayingLabel) {
+                    musicHeaderLine = String(msg._musicPlayingLabel).trim();
+                  }
+                  if (idx === lastUserPayloadIdx && musicHeaderLine) {
+                    const cleanTag = musicHeaderLine.startsWith("▷") ? musicHeaderLine : `▷${musicHeaderLine}`;
+                    roleTitle = `用户输入 ${cleanTag}`;
+                  }
+                }
+                contextPayloadBlocks.push(`=== 第 ${idx + 2} 块消息 · ${roleTitle} ===\n${rawContent}`);
+              });
+              historyPromptBlock = contextPayloadBlocks.length > 0
+                ? window.formatPromptSection("上下文", contextPayloadBlocks.join("\n\n"))
+                : "";
+              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, { history: historyPromptBlock });
+              systemPrompt = replaceMashuPlaceholdersInText(systemPrompt, { history: historyPromptBlock });
             }
 
             // 在上下文最后一条消息之后附带本轮天气与幸运系统消息
