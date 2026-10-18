@@ -3479,7 +3479,6 @@
               </div>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-              <button type="button" class="moe-btn" onclick="if(typeof window.closeSoloLineModal==='function')window.closeSoloLineModal();" style="height: 30px; padding: 0 14px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px;">取消</button>
               <button type="button" id="solo-modal-watch-btn" class="moe-btn" onclick="if(typeof window.confirmWatchSoloModalSelection==='function')window.confirmWatchSoloModalSelection();" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px;">观看</button>
               <button type="button" id="solo-modal-enter-btn" class="moe-btn" onclick="if(typeof window.confirmEnterSoloModalSelection==='function')window.confirmEnterSoloModalSelection();" style="height: 30px; padding: 0 16px; font-size: 12px; background: var(--accent-color); color: var(--card-bg); border: none; border-radius: 6px;">进入</button>
             </div>
@@ -31397,10 +31396,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           // 如果因为字符串内部未转义引号导致扫描结束时 startIdx 仍未闭合，尝试兜底按行或末尾闭合提取
           if (startIdx !== -1 && startIdx < trimmedContent.length) {
-            const tailCandidate = trimmedContent.substring(startIdx);
-            const tailParsed = tryParseLooseJsonObject(tailCandidate);
-            if (tailParsed && typeof tailParsed === "object") {
-              results.push({ item: tailParsed, start: startIdx, end: trimmedContent.length });
+            const alreadyCovered = results.some(r => startIdx >= r.start && startIdx < r.end);
+            if (!alreadyCovered) {
+              const tailCandidate = trimmedContent.substring(startIdx);
+              const tailParsed = tryParseLooseJsonObject(tailCandidate);
+              if (tailParsed && typeof tailParsed === "object") {
+                results.push({ item: tailParsed, start: startIdx, end: trimmedContent.length });
+              }
             }
           }
 
@@ -31418,25 +31420,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (results.length > 0) {
             const finalItems = [];
+            const isJsonWrapperResidue = (str) => {
+              if (!str) return true;
+              const s = str.trim();
+              if (!s) return true;
+              if (/^[\[\]\{\},:\s"']+$/i.test(s)) return true;
+              if (/^(?:\{\s*)?["']?(?:chatResponse|messages|response|data|items|result)["']?\s*:\s*\[?\s*$/i.test(s)) return true;
+              if (/^\]?\s*\}?\s*$/i.test(s)) return true;
+              return false;
+            };
+            const isDuplicateOfExtractedResult = (rawStr) => {
+              const cleanRaw = rawStr.trim();
+              if (!cleanRaw) return true;
+              return results.some(r => {
+                if (!r || !r.item) return false;
+                const itemTxt = String(r.item.content || r.item.message || r.item.text || r.item.reply_content || (r.item.quote_reply && r.item.quote_reply.reply_content) || "").trim();
+                return itemTxt && (itemTxt === cleanRaw || (cleanRaw.includes(itemTxt) && /^[\s\{\}\[\]",:a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(cleanRaw) && /["'](?:type|content|message|name)["']\s*:/.test(cleanRaw)));
+              });
+            };
             let lastPos = 0;
             for (const r of results) {
-              const textBefore = trimmedContent.substring(lastPos, r.start)
-                .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-              const cleanBefore = textBefore.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
-              if (cleanBefore) {
-                finalItems.push({ type: "text", content: cleanBefore });
+              if (r.start > lastPos) {
+                const textBefore = trimmedContent.substring(lastPos, r.start)
+                  .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+                const cleanBefore = textBefore.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
+                if (cleanBefore && !isJsonWrapperResidue(cleanBefore)) {
+                  const beforeObj = tryParseLooseJsonObject(cleanBefore);
+                  if (beforeObj && typeof beforeObj === "object") {
+                    finalItems.push(beforeObj);
+                  } else if (!isDuplicateOfExtractedResult(cleanBefore)) {
+                    finalItems.push({ type: "text", content: cleanBefore });
+                  }
+                }
               }
               finalItems.push(r.item);
-              lastPos = r.end;
+              if (r.end > lastPos) lastPos = r.end;
             }
             const textAfter = trimmedContent.substring(lastPos)
                 .replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
             const cleanAfter = textAfter.replace(/^[\[\],\s]+|[\[\],\s]+$/g, "").trim();
-            if (cleanAfter) {
+            if (cleanAfter && !isJsonWrapperResidue(cleanAfter)) {
               const tailObj = tryParseLooseJsonObject(cleanAfter);
-              if (tailObj) {
+              if (tailObj && typeof tailObj === "object") {
                 finalItems.push(tailObj);
-              } else {
+              } else if (!isDuplicateOfExtractedResult(cleanAfter)) {
                 finalItems.push({ type: "text", content: cleanAfter });
               }
             }
@@ -36734,11 +36761,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function appendMessage(msg, chat, isInitialLoad = false) {
           if (msg && !isInitialLoad) {
-            if (!msg.timestamp) msg.timestamp = Date.now();
-            if (window.lastAssignedMessageTimestamp && msg.timestamp <= window.lastAssignedMessageTimestamp) {
-              msg.timestamp = window.lastAssignedMessageTimestamp + 1;
+            if (!msg.timestamp) {
+              let nextTs = Date.now();
+              if (window.lastAssignedMessageTimestamp && nextTs <= window.lastAssignedMessageTimestamp) {
+                nextTs = window.lastAssignedMessageTimestamp + 1;
+              }
+              msg.timestamp = nextTs;
             }
-            window.lastAssignedMessageTimestamp = msg.timestamp;
+            if (chat && Array.isArray(chat.history)) {
+              const hasTimestampCollision = chat.history.some(
+                (m) => m && m !== msg && m.timestamp === msg.timestamp
+              );
+              if (hasTimestampCollision) {
+                const maxHistTs = chat.history.reduce((max, m) => (m && typeof m.timestamp === "number" && m.timestamp > max ? m.timestamp : max), 0);
+                msg.timestamp = Math.max(Date.now(), window.lastAssignedMessageTimestamp || 0, maxHistTs) + 1;
+              }
+            }
+            window.lastAssignedMessageTimestamp = Math.max(window.lastAssignedMessageTimestamp || 0, msg.timestamp);
             if (chat && Array.isArray(chat.history)) {
               const existsInHist = chat.history.some(
                 (m) => m === msg || (m && m.timestamp === msg.timestamp && m.content === msg.content && m.type === msg.type)
@@ -36752,6 +36791,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
           const messagesContainer = document.getElementById("chat-messages");
+          if (!messagesContainer) return;
+          if (!isInitialLoad && msg && msg.timestamp) {
+            const existingBubble = messagesContainer.querySelector(`.message-wrapper[data-timestamp="${msg.timestamp}"]`);
+            if (existingBubble) {
+              return;
+            }
+          }
           const wasNearBottom = isInitialLoad ? true : isChatScrolledNearBottom(messagesContainer);
           const messageEl = createMessageElement(msg, chat);
 
@@ -45629,6 +45675,28 @@ ${stickerContext || "无"}
                 continue;
               }
 
+              const itemSigType = String(item.type || "text").trim();
+              const itemSigSender = String(item.name || item.senderName || "").trim();
+              const itemSigText = text.trim();
+              const itemSigMedia = String(item.imageUrl || item.image || item.prompt || item.imagePrompt || item.naiPrompt || item.meaning || "").trim();
+              const itemSigExtra = (item.quote_reply || item.payload || item.fields || item.values || item.give_item)
+                ? JSON.stringify(item.quote_reply || item.payload || item.fields || item.values || item.give_item)
+                : "";
+              const isDuplicateInTurn = filteredMessages.some((prev) => {
+                if (!prev) return false;
+                const prevType = String(prev.type || "text").trim();
+                const prevSender = String(prev.name || prev.senderName || "").trim();
+                const prevText = String(prev.content || prev.message || prev.text || prev.reply || prev.reply_content || (prev.quote_reply && prev.quote_reply.reply_content) || "").trim();
+                const prevMedia = String(prev.imageUrl || prev.image || prev.prompt || prev.imagePrompt || prev.naiPrompt || prev.meaning || "").trim();
+                const prevExtra = (prev.quote_reply || prev.payload || prev.fields || prev.values || prev.give_item)
+                  ? JSON.stringify(prev.quote_reply || prev.payload || prev.fields || prev.values || prev.give_item)
+                  : "";
+                return prevType === itemSigType && prevSender === itemSigSender && prevText === itemSigText && prevMedia === itemSigMedia && prevExtra === itemSigExtra;
+              });
+              if (isDuplicateInTurn) {
+                continue;
+              }
+
               filteredMessages.push(item);
             }
 
@@ -46066,10 +46134,16 @@ ${stickerContext || "无"}
                 : (typeof rawVisibleField === "string" && rawVisibleField.trim()
                   ? rawVisibleField.split(/[,，、]/).map(normalizeVisibleTarget).filter(Boolean)
                   : null);
+              const assignedMsgTs = Math.max(
+                messageTimestamp++,
+                (window.lastAssignedMessageTimestamp || 0) + 1
+              );
+              messageTimestamp = assignedMsgTs + 1;
+              window.lastAssignedMessageTimestamp = assignedMsgTs;
               const baseMessage = {
                 role: "assistant",
                 senderName: msgData.name || chat.name,
-                timestamp: messageTimestamp++,
+                timestamp: assignedMsgTs,
                 thinking: msgData.thinking || null,
                 ...(parsedVisibleTo && parsedVisibleTo.length > 0 ? { visibleTo: parsedVisibleTo } : {}),
               };
