@@ -101,6 +101,7 @@
     if (!targetName) return;
     const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
     if (typeof state !== "undefined" && state.chats) {
+      const changedChats = [];
       for (const chat of Object.values(state.chats)) {
         if (!chat) continue;
         let chatChanged = false;
@@ -126,46 +127,13 @@
             }
           });
         }
-        if (chatChanged && dbInstance && dbInstance.chats) {
-          await dbInstance.chats.put(chat).catch(() => {});
+        if (chatChanged) {
+          changedChats.push(chat);
         }
       }
-    }
-    if (dbInstance && dbInstance.chats) {
-      try {
-        const allChats = await dbInstance.chats.toArray();
-        for (const chat of allChats) {
-          let chatChanged = false;
-          const syncList = (list) => {
-            if (!Array.isArray(list)) return;
-            list.forEach(i => {
-              if (i && i.name && i.name.trim() === targetName && i.avatar !== newAvatar) {
-                i.avatar = newAvatar;
-                chatChanged = true;
-              }
-            });
-          };
-          syncList(chat.inventory);
-          syncList(chat.aiInventory);
-          if (Array.isArray(chat.members)) {
-            chat.members.forEach(m => syncList(m.inventory));
-          }
-          if (Array.isArray(chat.history)) {
-            chat.history.forEach(m => {
-              if (m && m.type === "inventory_card" && m.item && m.item.name && m.item.name.trim() === targetName && m.item.avatar !== newAvatar) {
-                m.item.avatar = newAvatar;
-                chatChanged = true;
-              }
-            });
-          }
-          if (chatChanged) {
-            await dbInstance.chats.put(chat).catch(() => {});
-            if (typeof state !== "undefined" && state?.chats && state.chats[chat.id]) {
-              state.chats[chat.id] = chat;
-            }
-          }
-        }
-      } catch (e) {}
+      if (changedChats.length > 0 && dbInstance && dbInstance.chats) {
+        Promise.all(changedChats.map(c => dbInstance.chats.put(c).catch(() => {}))).catch(() => {});
+      }
     }
   };
   window.syncItemAvatarGlobally = syncItemAvatarGlobally;
@@ -682,10 +650,11 @@
           try {
             const domAvatars = document.querySelectorAll(`[data-avatar-id="${item.id}"], [data-avatar-name="${item.name}"]`);
             domAvatars.forEach(el => {
-              el.innerHTML = `<img src="${compressedB64}" alt="${item.name || "物品"}">`;
+              el.innerHTML = `<img src="${compressedB64}" decoding="async" alt="${item.name || "物品"}">`;
               el.onclick = (e) => {
                 e.stopPropagation();
-                if (typeof openFullImageModal === "function") openFullImageModal(compressedB64);
+                const viewerFn = window.openImageViewer || window.openFullImageModal || (typeof openImageViewer === "function" ? openImageViewer : null);
+                if (typeof viewerFn === "function") viewerFn(compressedB64);
               };
             });
           } catch (domErr) {}
@@ -745,16 +714,9 @@
     if (!avatarBoxEl || !item) return;
     let pressTimer = null;
     let isLongPressed = false;
-
-    const startPress = () => {
-      isLongPressed = false;
-      if (pressTimer) clearTimeout(pressTimer);
-      pressTimer = setTimeout(() => {
-        isLongPressed = true;
-        pressTimer = null;
-        openNovelAiGenModalForItem(item, onSaveCallback);
-      }, 500);
-    };
+    let startX = 0;
+    let startY = 0;
+    let lastTouchTs = 0;
 
     const cancelPress = () => {
       if (pressTimer) {
@@ -763,20 +725,59 @@
       }
     };
 
-    avatarBoxEl.addEventListener("mousedown", startPress);
-    avatarBoxEl.addEventListener("touchstart", startPress, { passive: true });
-    avatarBoxEl.addEventListener("mouseup", cancelPress);
-    avatarBoxEl.addEventListener("mouseleave", cancelPress);
-    avatarBoxEl.addEventListener("touchend", cancelPress);
-    avatarBoxEl.addEventListener("touchcancel", cancelPress);
+    const startPress = (e) => {
+      if (e && e.type === "mousedown") {
+        if (Date.now() - lastTouchTs < 600) return;
+        if (e.button !== undefined && e.button !== 0) return;
+      }
+      if (e && e.type === "touchstart") {
+        lastTouchTs = Date.now();
+        const t = e.touches && e.touches[0];
+        if (t) {
+          startX = t.clientX;
+          startY = t.clientY;
+        }
+      }
+      isLongPressed = false;
+      cancelPress();
+      pressTimer = setTimeout(() => {
+        isLongPressed = true;
+        pressTimer = null;
+        openNovelAiGenModalForItem(item, onSaveCallback);
+      }, 500);
+    };
+
+    const movePress = (e) => {
+      if (!pressTimer) return;
+      const t = e && e.touches && e.touches[0];
+      if (t && (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10)) {
+        cancelPress();
+      }
+    };
+
+    avatarBoxEl.onmousedown = startPress;
+    avatarBoxEl.ontouchstart = startPress;
+    avatarBoxEl.ontouchmove = movePress;
+    avatarBoxEl.onmouseup = cancelPress;
+    avatarBoxEl.onmouseleave = cancelPress;
+    avatarBoxEl.ontouchend = cancelPress;
+    avatarBoxEl.ontouchcancel = cancelPress;
+    avatarBoxEl.oncontextmenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
 
     avatarBoxEl.onclick = (e) => {
       e.stopPropagation();
-      if (isLongPressed) return;
-      if (item.avatar && typeof openFullImageModal === "function") {
-        openFullImageModal(item.avatar);
-      } else {
-        openNovelAiGenModalForItem(item, onSaveCallback);
+      if (isLongPressed) {
+        isLongPressed = false;
+        return;
+      }
+      if (item.avatar) {
+        const viewerFn = window.openImageViewer || window.openFullImageModal || (typeof openImageViewer === "function" ? openImageViewer : null);
+        if (typeof viewerFn === "function") {
+          viewerFn(item.avatar);
+        }
       }
     };
   }
@@ -890,6 +891,7 @@
         const img = document.createElement("img");
         img.src = item.avatar;
         img.alt = item.name;
+        img.decoding = "async";
         avatarBox.appendChild(img);
       } else {
         avatarBox.innerHTML = `
@@ -2115,7 +2117,14 @@ HTML设计与排版核心规范：
   function updateAvatarPreviewElement(element, avatarData) {
     if (!element) return;
     if (avatarData) {
-      element.innerHTML = `<img src="${avatarData}" alt="Avatar">`;
+      const existingImg = element.querySelector("img");
+      if (existingImg) {
+        if (existingImg.getAttribute("src") !== avatarData) {
+          existingImg.src = avatarData;
+        }
+      } else {
+        element.innerHTML = `<img src="${avatarData}" decoding="async" alt="Avatar">`;
+      }
     } else {
       avatarBoxSvg(element);
     }
@@ -2163,11 +2172,15 @@ HTML设计与排版核心规范：
       targetInventory = getEditingTargetInventory();
     }
 
-    const effectiveAvatar = pendingAvatarBase64 || (typeof findExistingItemAvatar === "function" ? findExistingItemAvatar(name) : "") || "";
+    let avatarActuallyChanged = false;
 
     if (editingInventoryItemId) {
       const item = targetInventory.find(it => it.id === editingInventoryItemId);
       if (item) {
+        const oldAvatar = item.avatar || "";
+        const oldName = item.name || "";
+        const effectiveAvatar = pendingAvatarBase64 || oldAvatar || (oldName !== name && typeof findExistingItemAvatar === "function" ? findExistingItemAvatar(name) : "") || "";
+        avatarActuallyChanged = Boolean(effectiveAvatar && effectiveAvatar !== oldAvatar);
         item.name = name;
         item.desc = desc;
         item.effect = effect;
@@ -2177,11 +2190,13 @@ HTML设计与排版核心规范：
         item.damageBonus = damageBonus;
         item.dbBonus = dbBonus;
         item.content = content;
-        if (effectiveAvatar && typeof syncItemAvatarGlobally === "function") {
-          await syncItemAvatarGlobally(name, effectiveAvatar);
+        if (avatarActuallyChanged && typeof syncItemAvatarGlobally === "function") {
+          syncItemAvatarGlobally(name, effectiveAvatar).catch(() => {});
         }
       }
     } else {
+      const effectiveAvatar = pendingAvatarBase64 || (typeof findExistingItemAvatar === "function" ? findExistingItemAvatar(name) : "") || "";
+      avatarActuallyChanged = Boolean(pendingAvatarBase64);
       const newItem = {
         id: "inv_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
         name: name,
@@ -2198,15 +2213,13 @@ HTML设计与排版核心规范：
         createdAt: Date.now(),
       };
       targetInventory.push(newItem);
-      if (effectiveAvatar && typeof syncItemAvatarGlobally === "function") {
-        await syncItemAvatarGlobally(name, effectiveAvatar);
+      if (avatarActuallyChanged && typeof syncItemAvatarGlobally === "function") {
+        syncItemAvatarGlobally(name, effectiveAvatar).catch(() => {});
       }
     }
 
-    const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
-    if (dbInstance && dbInstance.chats) {
-      await dbInstance.chats.put(chat);
-    }
+    const modal = document.getElementById("inventory-item-edit-modal");
+    if (modal) modal.classList.remove("visible");
 
     if (editingTargetChar) {
       renderCharacterInventoryList(getEditingTargetInventory());
@@ -2214,8 +2227,10 @@ HTML设计与排版核心规范：
       renderInventoryList();
     }
 
-    const modal = document.getElementById("inventory-item-edit-modal");
-    if (modal) modal.classList.remove("visible");
+    const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+    if (dbInstance && dbInstance.chats && chat) {
+      dbInstance.chats.put(chat).catch(() => {});
+    }
   }
 
   // 线索悬浮提示反馈组件
@@ -3178,18 +3193,53 @@ HTML设计与排版核心规范：
     const avatarPreview = document.getElementById("inv-edit-avatar-preview");
     if (avatarPreview) {
       let pressTimer = null;
-      avatarPreview.onmousedown = avatarPreview.ontouchstart = (e) => {
+      let isLongPressed = false;
+      let lastTouchTs = 0;
+
+      const cancelEditPress = () => {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+      };
+
+      const startEditPress = (e) => {
+        if (e && e.type === "mousedown") {
+          if (Date.now() - lastTouchTs < 600) return;
+          if (e.button !== undefined && e.button !== 0) return;
+        }
+        if (e && e.type === "touchstart") {
+          lastTouchTs = Date.now();
+        }
+        isLongPressed = false;
+        cancelEditPress();
         pressTimer = setTimeout(() => {
+          isLongPressed = true;
           pressTimer = null;
           openNovelAiGenModal();
         }, 500);
       };
-      avatarPreview.onmouseup = avatarPreview.ontouchend = (e) => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-          if (pendingAvatarBase64 && typeof openFullImageModal === "function") {
-            openFullImageModal(pendingAvatarBase64);
+
+      avatarPreview.onmousedown = startEditPress;
+      avatarPreview.ontouchstart = startEditPress;
+      avatarPreview.onmouseup = cancelEditPress;
+      avatarPreview.onmouseleave = cancelEditPress;
+      avatarPreview.ontouchend = cancelEditPress;
+      avatarPreview.ontouchcancel = cancelEditPress;
+      avatarPreview.oncontextmenu = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      avatarPreview.onclick = (e) => {
+        e.stopPropagation();
+        if (isLongPressed) {
+          isLongPressed = false;
+          return;
+        }
+        if (pendingAvatarBase64) {
+          const viewerFn = window.openImageViewer || window.openFullImageModal || (typeof openImageViewer === "function" ? openImageViewer : null);
+          if (typeof viewerFn === "function") {
+            viewerFn(pendingAvatarBase64);
           }
         }
       };

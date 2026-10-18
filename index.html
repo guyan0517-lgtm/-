@@ -20826,17 +20826,30 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         })();
 
-        function ensureBackgroundKeepAlive() {
+        let _lastKeepAliveCheckTs = 0;
+        let _keepAliveSrcConfigured = false;
+        function ensureBackgroundKeepAlive(evt) {
+          const now = Date.now();
+          if (evt && evt.type === "keydown" && now - _lastKeepAliveCheckTs < 4000) {
+            return;
+          }
+          if (now - _lastKeepAliveCheckTs < 1500 && _keepAliveSrcConfigured) {
+            return;
+          }
+          _lastKeepAliveCheckTs = now;
           try {
             const audio = document.getElementById("strong-keep-alive-player") || document.getElementById("keep-alive-audio");
             if (audio) {
-              const curSrc = audio.getAttribute("src") || audio.src || "";
-              if (!curSrc || curSrc.includes("catbox.moe") || audio.error) {
-                audio.src = _SILENT_WAV_URI;
+              if (!_keepAliveSrcConfigured || audio.error) {
+                const curSrc = audio.getAttribute("src") || "";
+                if (!curSrc || curSrc.includes("catbox.moe") || audio.error) {
+                  audio.src = _SILENT_WAV_URI;
+                }
+                audio.loop = true;
+                audio.volume = 0.01;
+                audio.muted = false;
+                _keepAliveSrcConfigured = true;
               }
-              audio.loop = true;
-              audio.volume = 0.01;
-              audio.muted = false;
               if (audio.paused) {
                 const playPromise = audio.play();
                 if (playPromise && typeof playPromise.catch === "function") {
@@ -23758,42 +23771,65 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           let activeSuggestIdx = 0;
           let currentTriggerState = null;
+          let syncTimer = null;
+          let isImeComposing = false;
 
           const syncToTextarea = () => {
+            if (syncTimer) {
+              clearTimeout(syncTimer);
+              syncTimer = null;
+            }
             const val = serializeTcRichEditorNode(richEl, true);
             textareaEl.value = val;
             if (typeof onValueChange === "function") {
               onValueChange(val);
             }
-            if (val === "" && richEl.querySelectorAll(".tc-inline-mashu-bubble").length === 0 && richEl.innerHTML !== "") {
+            if (val === "" && !richEl.querySelector(".tc-inline-mashu-bubble") && richEl.innerHTML !== "") {
               richEl.innerHTML = "";
             }
           };
 
+          const scheduleSyncToTextarea = () => {
+            if (syncTimer) clearTimeout(syncTimer);
+            syncTimer = setTimeout(() => {
+              syncTimer = null;
+              if (!isImeComposing) {
+                syncToTextarea();
+              }
+            }, 120);
+          };
+
           const syncFromTextarea = () => {
+            if (syncTimer) {
+              clearTimeout(syncTimer);
+              syncTimer = null;
+            }
             const raw = String(textareaEl.value || "");
             richEl.innerHTML = "";
             if (!raw) return;
             const regex = /\{\{麻薯-([^}\n]+)\}\}/g;
             let lastIndex = 0;
             let match;
+            const frag = document.createDocumentFragment();
             while ((match = regex.exec(raw)) !== null) {
               const tagInner = match[1].trim();
               if (tagInner) {
                 if (match.index > lastIndex) {
-                  richEl.appendChild(document.createTextNode(raw.slice(lastIndex, match.index)));
+                  frag.appendChild(document.createTextNode(raw.slice(lastIndex, match.index)));
                 }
-                richEl.appendChild(createMashuBubbleElement(tagInner, syncToTextarea));
-                richEl.appendChild(document.createTextNode("\u200B"));
+                frag.appendChild(createMashuBubbleElement(tagInner, syncToTextarea));
+                frag.appendChild(document.createTextNode("\u200B"));
                 lastIndex = regex.lastIndex;
               }
             }
             if (lastIndex < raw.length) {
-              richEl.appendChild(document.createTextNode(raw.slice(lastIndex)));
+              frag.appendChild(document.createTextNode(raw.slice(lastIndex)));
             }
+            richEl.appendChild(frag);
           };
 
           const hideSuggest = () => {
+            if (!suggestBox.classList.contains("visible") && !currentTriggerState) return;
             suggestBox.classList.remove("visible");
             suggestBox.innerHTML = "";
             currentTriggerState = null;
@@ -23858,6 +23894,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const offset = range.startOffset;
             const textVal = textNode.nodeValue || "";
             const before = textVal.slice(0, offset);
+            if (!before.includes("{{")) {
+              hideSuggest();
+              return;
+            }
             const after = textVal.slice(offset);
 
             const completeMatch = before.match(/\{\{麻薯-([^}\n]+)\}\}$/);
@@ -23945,9 +23985,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             suggestBox.classList.add("visible");
           };
 
-          richEl.addEventListener("input", () => {
-            syncToTextarea();
+          richEl.addEventListener("compositionstart", () => {
+            isImeComposing = true;
+          });
+
+          richEl.addEventListener("compositionend", () => {
+            isImeComposing = false;
+            scheduleSyncToTextarea();
             checkTriggerAndRenderSuggest();
+          });
+
+          richEl.addEventListener("input", () => {
+            scheduleSyncToTextarea();
+            if (!isImeComposing) {
+              checkTriggerAndRenderSuggest();
+            }
           });
 
           richEl.addEventListener("keyup", (e) => {
@@ -23957,7 +24009,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
 
           richEl.addEventListener("mouseup", () => {
-            setTimeout(checkTriggerAndRenderSuggest, 10);
+            if (suggestBox.classList.contains("visible") || (richEl.textContent && richEl.textContent.includes("{{"))) {
+              setTimeout(checkTriggerAndRenderSuggest, 10);
+            }
           });
 
           richEl.addEventListener("blur", () => {
@@ -24120,11 +24174,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
         }
 
-        function renderTcEditorGroupsAndEntries() {
+        function renderTcEditorGroupsOnly() {
           const groupsContainer = document.getElementById("tc-groups-list");
-          const entriesContainer = document.getElementById("tc-entries-list");
-          if (!groupsContainer || !entriesContainer) return;
-
+          if (!groupsContainer) return;
           groupsContainer.innerHTML = "";
           if (currentTcEditorGroups.length === 0) {
             const emptyEl = document.createElement("div");
@@ -24151,7 +24203,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               nameInput.value = grp.name || "";
               nameInput.oninput = (e) => {
                 currentTcEditorGroups[idx].name = e.target.value;
-                updateTcEntryGroupSelectOptions();
+                updateTcEntryGroupSelectOptions(grp.id, e.target.value);
               };
 
               const delBtn = document.createElement("button");
@@ -24160,6 +24212,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               delBtn.style.flexShrink = "0";
               delBtn.textContent = "删除";
               delBtn.onclick = () => {
+                flushAllTcRichEditors();
                 const removedId = grp.id;
                 currentTcEditorGroups.splice(idx, 1);
                 currentTcEditorEntries.forEach((ent) => {
@@ -24174,6 +24227,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               groupsContainer.appendChild(row);
             });
           }
+        }
+
+        function renderTcEditorGroupsAndEntries() {
+          const groupsContainer = document.getElementById("tc-groups-list");
+          const entriesContainer = document.getElementById("tc-entries-list");
+          if (!groupsContainer || !entriesContainer) return;
+
+          flushAllTcRichEditors();
+          renderTcEditorGroupsOnly();
 
           entriesContainer.innerHTML = "";
           if (currentTcEditorEntries.length === 0) {
@@ -24221,6 +24283,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               });
               groupSelect.value = ent.groupId || "";
               groupSelect.onchange = (e) => {
+                flushAllTcRichEditors();
                 currentTcEditorEntries[idx].groupId = e.target.value;
                 renderTcEditorGroupsAndEntries();
               };
@@ -24231,6 +24294,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               delBtn.style.flexShrink = "0";
               delBtn.textContent = "删除";
               delBtn.onclick = () => {
+                flushAllTcRichEditors();
                 currentTcEditorEntries.splice(idx, 1);
                 renderTcEditorGroupsAndEntries();
               };
@@ -24323,9 +24387,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
-        function updateTcEntryGroupSelectOptions() {
+        function updateTcEntryGroupSelectOptions(changedGroupId = null, changedGroupName = null) {
           const entriesContainer = document.getElementById("tc-entries-list");
           if (!entriesContainer) return;
+          if (changedGroupId) {
+            const displayLabel = (changedGroupName || "").trim() || "未命名";
+            const matchingOpts = entriesContainer.querySelectorAll(`.tc-sub-select option[value="${changedGroupId}"]`);
+            matchingOpts.forEach((opt) => {
+              opt.textContent = displayLabel;
+            });
+            const matchingTitles = entriesContainer.querySelectorAll(`.tc-entry-group-title[data-group-id="${changedGroupId}"]`);
+            matchingTitles.forEach((titleEl) => {
+              titleEl.textContent = displayLabel;
+            });
+            return;
+          }
           const selects = entriesContainer.querySelectorAll(".tc-sub-select");
           selects.forEach((sel) => {
             const entryIdx = Number(sel.dataset.entryIdx);
@@ -24371,13 +24447,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 enabled: true,
                 collapsed: false,
               });
-              renderTcEditorGroupsAndEntries();
+              renderTcEditorGroupsOnly();
+              updateTcEntryGroupSelectOptions();
             };
           }
 
           const addEntryBtn = document.getElementById("tc-add-entry-btn");
           if (addEntryBtn) {
             addEntryBtn.onclick = () => {
+              flushAllTcRichEditors();
               currentTcEditorEntries.push({
                 id: "tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                 key: "",
@@ -94741,6 +94819,8 @@ ${stickerContext || "无"}
         void modal.offsetWidth;
         modal.classList.add("visible");
       }
+      window.openImageViewer = openImageViewer;
+      window.openFullImageModal = openImageViewer;
 
       function closeImageViewer() {
         const modal = document.getElementById("image-viewer-modal");
@@ -94755,6 +94835,7 @@ ${stickerContext || "无"}
           }
         }, 260);
       }
+      window.closeImageViewer = closeImageViewer;
 
       document.addEventListener("DOMContentLoaded", () => {
         const modal = document.getElementById("image-viewer-modal");
