@@ -23504,6 +23504,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         let selectedThoughtChainBindId = null;
 
         async function openThoughtChainScreen() {
+          if (typeof bindThoughtChainEvents === "function") {
+            bindThoughtChainEvents();
+          }
           showScreen("thought-chain-screen");
           await renderThoughtChainPresets();
         }
@@ -23655,11 +23658,34 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return k;
         }
 
+        function isBuiltinMashuTagName(rawName) {
+          const clean = normalizeTcPlaceholderKey(rawName).replace(/^麻薯-/, "").trim();
+          if (!clean) return false;
+          return MASHU_ALIAS_TO_CANONICAL.has(clean);
+        }
+
+        function findMatchingCustomTcEntry(rawName) {
+          const rawTrim = String(rawName || "").trim();
+          if (!rawTrim) return null;
+          const clean = normalizeTcPlaceholderKey(rawTrim).replace(/^麻薯-/, "").trim();
+          for (let i = 0; i < currentTcEditorEntries.length; i++) {
+            const ent = currentTcEditorEntries[i];
+            if (!ent || !ent.key) continue;
+            const entRaw = String(ent.key || "").trim();
+            if (!entRaw) continue;
+            if (entRaw === rawTrim) return ent;
+            const entClean = normalizeTcPlaceholderKey(entRaw).replace(/^麻薯-/, "").trim();
+            if (clean && entClean && entClean === clean) return ent;
+          }
+          return null;
+        }
+
         function getAllMashuSuggestOptions() {
           const list = TC_BUILTIN_MASHU_TAGS.map((item) => ({
             name: item.name,
             desc: item.desc,
             aliases: item.aliases || [],
+            isCustom: false,
           }));
           const existingNames = new Set(list.map((i) => i.name));
           currentTcEditorEntries.forEach((ent) => {
@@ -23671,6 +23697,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 name: cleanKey,
                 desc: "自定义思维链条目",
                 aliases: [],
+                isCustom: true,
               });
             }
           });
@@ -23678,13 +23705,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         function isKnownMashuTagName(rawName) {
-          const clean = String(rawName || "").replace(/^麻薯-/, "").trim();
-          if (!clean) return false;
-          if (MASHU_ALIAS_TO_CANONICAL.has(clean)) return true;
-          return currentTcEditorEntries.some((ent) => {
-            if (!ent || !ent.key) return false;
-            return normalizeTcPlaceholderKey(ent.key).replace(/^麻薯-/, "").trim() === clean;
-          });
+          return isBuiltinMashuTagName(rawName) || Boolean(findMatchingCustomTcEntry(rawName));
         }
 
         function serializeTcRichEditorNode(node, isRoot = true) {
@@ -23713,11 +23734,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return out;
         }
 
-        function createMashuBubbleElement(tagName, syncFn) {
-          const cleanName = String(tagName || "").replace(/^麻薯-/, "").trim();
-          const fullTag = `{{麻薯-${cleanName}}}`;
+        function createMashuBubbleElement(tagName, syncFn, explicitFullTag = null) {
+          const cleanName = normalizeTcPlaceholderKey(tagName).replace(/^麻薯-/, "").trim() || String(tagName || "").trim();
+          const isBuiltin = isBuiltinMashuTagName(cleanName);
+          const customEnt = !isBuiltin ? findMatchingCustomTcEntry(tagName) : null;
+          const isCustom = Boolean(customEnt);
+          let fullTag = explicitFullTag;
+          if (!fullTag) {
+            fullTag = isCustom ? `{{${cleanName}}}` : `{{麻薯-${cleanName}}}`;
+          }
           const span = document.createElement("span");
-          span.className = "tc-inline-mashu-bubble";
+          span.className = "tc-inline-mashu-bubble" + (isCustom ? " is-custom-entry" : "");
           span.contentEditable = "false";
           span.dataset.mashuTag = fullTag;
 
@@ -23738,6 +23765,82 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           span.appendChild(textSpan);
           span.appendChild(removeBtn);
           return span;
+        }
+
+        function escapeRegExpForTc(str) {
+          return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        }
+
+        function buildTcRichFragmentFromText(rawText, syncFn, includePlainCustomKeys = true) {
+          const frag = document.createDocumentFragment();
+          const text = String(rawText || "");
+          if (!text) return { frag, lastInsertedNode: null };
+
+          const customRawKeys = [];
+          if (includePlainCustomKeys) {
+            const seenRaw = new Set();
+            currentTcEditorEntries.forEach((ent) => {
+              if (!ent || !ent.key) return;
+              const rk = String(ent.key || "").trim();
+              if (rk && !seenRaw.has(rk)) {
+                seenRaw.add(rk);
+                customRawKeys.push(rk);
+              }
+            });
+            customRawKeys.sort((a, b) => b.length - a.length);
+          }
+
+          let patternParts = ["\\{\\{[^}\\n]+\\}\\}"];
+          customRawKeys.forEach((rk) => {
+            patternParts.push(escapeRegExpForTc(rk));
+          });
+          const masterRegex = new RegExp(patternParts.join("|"), "g");
+
+          let lastIndex = 0;
+          let match;
+          let lastInsertedNode = null;
+
+          while ((match = masterRegex.exec(text)) !== null) {
+            const fullToken = match[0];
+            let shouldBubble = false;
+            let tagInner = fullToken;
+
+            if (fullToken.startsWith("{{") && fullToken.endsWith("}}")) {
+              const inner = fullToken.slice(2, -2).trim();
+              if (inner.startsWith("麻薯-")) {
+                tagInner = inner.replace(/^麻薯-/, "").trim();
+                if (tagInner) shouldBubble = true;
+              } else if (isKnownMashuTagName(inner)) {
+                tagInner = inner;
+                shouldBubble = true;
+              }
+            } else if (findMatchingCustomTcEntry(fullToken)) {
+              tagInner = fullToken;
+              shouldBubble = true;
+            }
+
+            if (shouldBubble) {
+              if (match.index > lastIndex) {
+                const tn = document.createTextNode(text.slice(lastIndex, match.index));
+                frag.appendChild(tn);
+                lastInsertedNode = tn;
+              }
+              const bNode = createMashuBubbleElement(tagInner, syncFn, fullToken);
+              const zNode = document.createTextNode("\u200B");
+              frag.appendChild(bNode);
+              frag.appendChild(zNode);
+              lastInsertedNode = zNode;
+              lastIndex = masterRegex.lastIndex;
+            }
+          }
+
+          if (lastIndex < text.length) {
+            const tailNode = document.createTextNode(text.slice(lastIndex));
+            frag.appendChild(tailNode);
+            lastInsertedNode = tailNode;
+          }
+
+          return { frag, lastInsertedNode };
         }
 
         function attachMashuRichEditor(textareaEl, onValueChange) {
@@ -23807,24 +23910,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const raw = String(textareaEl.value || "");
             richEl.innerHTML = "";
             if (!raw) return;
-            const regex = /\{\{麻薯-([^}\n]+)\}\}/g;
-            let lastIndex = 0;
-            let match;
-            const frag = document.createDocumentFragment();
-            while ((match = regex.exec(raw)) !== null) {
-              const tagInner = match[1].trim();
-              if (tagInner) {
-                if (match.index > lastIndex) {
-                  frag.appendChild(document.createTextNode(raw.slice(lastIndex, match.index)));
-                }
-                frag.appendChild(createMashuBubbleElement(tagInner, syncToTextarea));
-                frag.appendChild(document.createTextNode("\u200B"));
-                lastIndex = regex.lastIndex;
-              }
-            }
-            if (lastIndex < raw.length) {
-              frag.appendChild(document.createTextNode(raw.slice(lastIndex)));
-            }
+            const { frag } = buildTcRichFragmentFromText(raw, syncToTextarea, !isEntryBox);
             richEl.appendChild(frag);
           };
 
@@ -23836,7 +23922,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             activeSuggestIdx = 0;
           };
 
-          const applyMashuSelection = (chosenName) => {
+          const applyMashuSelection = (chosenName, explicitFullTag = null) => {
             if (!currentTriggerState || !currentTriggerState.textNode || !richEl.contains(currentTriggerState.textNode)) {
               hideSuggest();
               return;
@@ -23852,7 +23938,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return;
             }
 
-            const bubbleNode = createMashuBubbleElement(chosenName, syncToTextarea);
+            const bubbleNode = createMashuBubbleElement(chosenName, syncToTextarea, explicitFullTag);
             const afterNode = document.createTextNode("\u200B" + afterStr);
 
             if (beforeStr) {
@@ -23894,20 +23980,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const offset = range.startOffset;
             const textVal = textNode.nodeValue || "";
             const before = textVal.slice(0, offset);
-            if (!before.includes("{{")) {
-              hideSuggest();
-              return;
-            }
             const after = textVal.slice(offset);
 
-            const completeMatch = before.match(/\{\{麻薯-([^}\n]+)\}\}$/);
-            if (completeMatch && isKnownMashuTagName(completeMatch[1].trim())) {
-              currentTriggerState = {
-                textNode,
-                startOffset: completeMatch.index,
-                endOffset: offset,
-              };
-              applyMashuSelection(completeMatch[1].trim());
+            const completeMatch = before.match(/\{\{([^}\n]+)\}\}$/);
+            if (completeMatch) {
+              const rawInner = completeMatch[1].trim();
+              const strippedInner = rawInner.replace(/^麻薯-/, "").trim();
+              if (strippedInner && isKnownMashuTagName(strippedInner)) {
+                currentTriggerState = {
+                  textNode,
+                  startOffset: completeMatch.index,
+                  endOffset: offset,
+                };
+                applyMashuSelection(strippedInner, completeMatch[0]);
+                return;
+              }
+            }
+
+            if (!isEntryBox && !before.includes("{{")) {
+              const customRawKeys = [];
+              currentTcEditorEntries.forEach((ent) => {
+                if (!ent || !ent.key) return;
+                const rk = String(ent.key || "").trim();
+                if (rk.length >= 2) customRawKeys.push(rk);
+              });
+              customRawKeys.sort((a, b) => b.length - a.length);
+              for (let i = 0; i < customRawKeys.length; i++) {
+                const rk = customRawKeys[i];
+                if (before.endsWith(rk)) {
+                  const isPrefixOfLonger = customRawKeys.some((other) => other !== rk && other.startsWith(rk));
+                  if (!isPrefixOfLonger) {
+                    currentTriggerState = {
+                      textNode,
+                      startOffset: offset - rk.length,
+                      endOffset: offset,
+                    };
+                    applyMashuSelection(rk, rk);
+                    return;
+                  }
+                }
+              }
+            }
+
+            if (!before.includes("{{")) {
+              hideSuggest();
               return;
             }
 
@@ -23915,13 +24031,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let startOffset = -1;
             let endOffset = offset;
 
-            const emptyBraceAfterMatch = before.match(/\{\{麻薯-\}\}$/);
+            const emptyBraceAfterMatch = before.match(/\{\{(?:麻薯-)?\}\}$/);
             if (emptyBraceAfterMatch) {
               query = "";
               startOffset = emptyBraceAfterMatch.index;
               endOffset = offset;
             } else {
-              const openMatch = before.match(/\{\{麻薯-([^}\n]*)$/);
+              const openMatch = before.match(/\{\{(?:麻薯-)?([^}\n]*)$/);
               if (openMatch) {
                 query = openMatch[1];
                 startOffset = openMatch.index;
@@ -23963,7 +24079,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               row.className = "tc-mashu-suggest-item" + (i === activeSuggestIdx ? " active" : "");
 
               const badge = document.createElement("span");
-              badge.className = "tc-mashu-suggest-badge";
+              badge.className = "tc-mashu-suggest-badge" + (opt.isCustom ? " is-custom-entry" : "");
               badge.textContent = opt.name;
 
               const desc = document.createElement("span");
@@ -24018,6 +24134,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             setTimeout(() => {
               hideSuggest();
               syncToTextarea();
+              if (!isEntryBox) {
+                syncFromTextarea();
+              }
             }, 150);
           });
 
@@ -24030,32 +24149,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const range = sel.getRangeAt(0);
             range.deleteContents();
 
-            const frag = document.createDocumentFragment();
-            const regex = /\{\{麻薯-([^}\n]+)\}\}/g;
-            let lastIdx = 0;
-            let m;
-            let lastInsertedNode = null;
-            while ((m = regex.exec(text)) !== null) {
-              const tagInner = m[1].trim();
-              if (tagInner) {
-                if (m.index > lastIdx) {
-                  const tn = document.createTextNode(text.slice(lastIdx, m.index));
-                  frag.appendChild(tn);
-                  lastInsertedNode = tn;
-                }
-                const bNode = createMashuBubbleElement(tagInner, syncToTextarea);
-                const zNode = document.createTextNode("\u200B");
-                frag.appendChild(bNode);
-                frag.appendChild(zNode);
-                lastInsertedNode = zNode;
-                lastIdx = regex.lastIndex;
-              }
-            }
-            if (lastIdx < text.length) {
-              const tailNode = document.createTextNode(text.slice(lastIdx));
-              frag.appendChild(tailNode);
-              lastInsertedNode = tailNode;
-            }
+            const { frag, lastInsertedNode } = buildTcRichFragmentFromText(text, syncToTextarea, !isEntryBox);
 
             range.insertNode(frag);
             if (lastInsertedNode) {
@@ -24163,6 +24257,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (cocInput) attachMashuRichEditor(cocInput);
         }
 
+        function refreshStaticTcRichEditorsDisplay() {
+          const ids = ["tc-preset-header-input", "tc-preset-general-input", "tc-preset-coc-input"];
+          ids.forEach((id) => {
+            const ta = document.getElementById(id);
+            if (ta) {
+              if (typeof ta._syncToTextarea === "function") ta._syncToTextarea();
+              if (typeof ta._syncFromTextarea === "function") ta._syncFromTextarea();
+            }
+          });
+        }
+
         function flushAllTcRichEditors() {
           const modal = document.getElementById("thought-chain-editor-modal");
           if (!modal) return;
@@ -24229,12 +24334,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
-        function renderTcEditorGroupsAndEntries() {
+        function renderTcEditorGroupsAndEntries(shouldFlushFirst = true) {
           const groupsContainer = document.getElementById("tc-groups-list");
           const entriesContainer = document.getElementById("tc-entries-list");
           if (!groupsContainer || !entriesContainer) return;
 
-          flushAllTcRichEditors();
+          if (shouldFlushFirst) {
+            flushAllTcRichEditors();
+          }
           renderTcEditorGroupsOnly();
 
           entriesContainer.innerHTML = "";
@@ -24244,7 +24351,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             emptyEl.textContent = "暂无条目";
             entriesContainer.appendChild(emptyEl);
           } else {
-            const buildEntryCard = (ent, idx) => {
+            const buildEntryCard = (ent, idx, siblingList = null, siblingPos = -1) => {
               const card = document.createElement("div");
               card.className = "tc-entry-item-card";
 
@@ -24259,6 +24366,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 currentTcEditorEntries[idx].enabled = e.target.checked;
               };
 
+              let keyRefreshTimer = null;
               const keyInput = document.createElement("input");
               keyInput.type = "text";
               keyInput.className = "moe-input tc-sub-input";
@@ -24266,6 +24374,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               keyInput.value = ent.key || "";
               keyInput.oninput = (e) => {
                 currentTcEditorEntries[idx].key = e.target.value;
+                if (keyRefreshTimer) clearTimeout(keyRefreshTimer);
+                keyRefreshTimer = setTimeout(() => {
+                  refreshStaticTcRichEditorsDisplay();
+                }, 380);
+              };
+              keyInput.onchange = () => {
+                if (keyRefreshTimer) clearTimeout(keyRefreshTimer);
+                refreshStaticTcRichEditorsDisplay();
               };
 
               const groupSelect = document.createElement("select");
@@ -24285,23 +24401,61 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               groupSelect.onchange = (e) => {
                 flushAllTcRichEditors();
                 currentTcEditorEntries[idx].groupId = e.target.value;
-                renderTcEditorGroupsAndEntries();
+                renderTcEditorGroupsAndEntries(false);
+              };
+
+              const upBtn = document.createElement("button");
+              upBtn.type = "button";
+              upBtn.className = "tc-btn-action tc-entry-move-btn";
+              upBtn.title = "上移";
+              upBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
+              const canMoveUp = Array.isArray(siblingList) && siblingPos > 0;
+              upBtn.disabled = !canMoveUp;
+              upBtn.onclick = () => {
+                if (!canMoveUp) return;
+                flushAllTcRichEditors();
+                const prevIdx = siblingList[siblingPos - 1].idx;
+                const temp = currentTcEditorEntries[prevIdx];
+                currentTcEditorEntries[prevIdx] = currentTcEditorEntries[idx];
+                currentTcEditorEntries[idx] = temp;
+                renderTcEditorGroupsAndEntries(false);
+              };
+
+              const downBtn = document.createElement("button");
+              downBtn.type = "button";
+              downBtn.className = "tc-btn-action tc-entry-move-btn";
+              downBtn.title = "下移";
+              downBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+              const canMoveDown = Array.isArray(siblingList) && siblingPos >= 0 && siblingPos < siblingList.length - 1;
+              downBtn.disabled = !canMoveDown;
+              downBtn.onclick = () => {
+                if (!canMoveDown) return;
+                flushAllTcRichEditors();
+                const nextIdx = siblingList[siblingPos + 1].idx;
+                const temp = currentTcEditorEntries[nextIdx];
+                currentTcEditorEntries[nextIdx] = currentTcEditorEntries[idx];
+                currentTcEditorEntries[idx] = temp;
+                renderTcEditorGroupsAndEntries(false);
               };
 
               const delBtn = document.createElement("button");
               delBtn.type = "button";
               delBtn.className = "tc-btn-action";
               delBtn.style.flexShrink = "0";
+              delBtn.style.padding = "0 8px";
               delBtn.textContent = "删除";
               delBtn.onclick = () => {
                 flushAllTcRichEditors();
                 currentTcEditorEntries.splice(idx, 1);
-                renderTcEditorGroupsAndEntries();
+                renderTcEditorGroupsAndEntries(false);
+                refreshStaticTcRichEditorsDisplay();
               };
 
               topRow.appendChild(cb);
               topRow.appendChild(keyInput);
               topRow.appendChild(groupSelect);
+              topRow.appendChild(upBtn);
+              topRow.appendChild(downBtn);
               topRow.appendChild(delBtn);
 
               const contentArea = document.createElement("textarea");
@@ -24370,8 +24524,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const groupBody = document.createElement("div");
               groupBody.className = "tc-entry-group-body";
-              groupEntries.forEach(({ ent, idx }) => {
-                groupBody.appendChild(buildEntryCard(ent, idx));
+              groupEntries.forEach(({ ent, idx }, pos) => {
+                groupBody.appendChild(buildEntryCard(ent, idx, groupEntries, pos));
               });
 
               groupBox.appendChild(groupHeader);
@@ -24379,10 +24533,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               entriesContainer.appendChild(groupBox);
             });
 
+            const ungroupedEntries = [];
             currentTcEditorEntries.forEach((ent, idx) => {
               if (!ent.groupId || !validGroupIds.has(ent.groupId)) {
-                entriesContainer.appendChild(buildEntryCard(ent, idx));
+                ungroupedEntries.push({ ent, idx });
               }
+            });
+            ungroupedEntries.forEach(({ ent, idx }, pos) => {
+              entriesContainer.appendChild(buildEntryCard(ent, idx, ungroupedEntries, pos));
             });
           }
         }
@@ -24431,41 +24589,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         async function openThoughtChainEditor(presetId = null) {
           editingThoughtChainId = presetId;
+          if (typeof bindThoughtChainEvents === "function") {
+            bindThoughtChainEvents();
+          }
           const modal = document.getElementById("thought-chain-editor-modal");
           const titleEl = document.getElementById("tc-editor-modal-title");
           const nameInput = document.getElementById("tc-preset-name-input");
           const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
           const cocInput = document.getElementById("tc-preset-coc-input");
-
-          const addGroupBtn = document.getElementById("tc-add-group-btn");
-          if (addGroupBtn) {
-            addGroupBtn.onclick = () => {
-              currentTcEditorGroups.push({
-                id: "tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-                name: "",
-                enabled: true,
-                collapsed: false,
-              });
-              renderTcEditorGroupsOnly();
-              updateTcEntryGroupSelectOptions();
-            };
-          }
-
-          const addEntryBtn = document.getElementById("tc-add-entry-btn");
-          if (addEntryBtn) {
-            addEntryBtn.onclick = () => {
-              flushAllTcRichEditors();
-              currentTcEditorEntries.push({
-                id: "tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-                key: "",
-                groupId: "",
-                enabled: true,
-                content: "",
-              });
-              renderTcEditorGroupsAndEntries();
-            };
-          }
 
           if (presetId) {
             const preset = await db.thoughtChainPresets.get(presetId);
@@ -24493,9 +24625,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           syncStaticTcRichEditors();
-          renderTcEditorGroupsAndEntries();
+          renderTcEditorGroupsAndEntries(false);
           modal.classList.add("visible");
         }
+        window.openThoughtChainEditor = openThoughtChainEditor;
 
         async function saveThoughtChainPreset() {
           flushAllTcRichEditors();
@@ -24504,15 +24637,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const generalInput = document.getElementById("tc-preset-general-input");
           const cocInput = document.getElementById("tc-preset-coc-input");
 
-          const name = nameInput.value.trim();
+          const name = nameInput ? nameInput.value.trim() : "";
           if (!name) {
-            alert("请输入预设名称");
+            if (typeof showCustomAlert === "function") {
+              await showCustomAlert("提示", "请输入预设名称");
+            } else {
+              alert("请输入预设名称");
+            }
             return;
           }
 
           const headerContent = headerInput ? headerInput.value : "";
-          const generalContent = generalInput.value;
-          const cocContent = cocInput.value;
+          const generalContent = generalInput ? generalInput.value : "";
+          const cocContent = cocInput ? cocInput.value : "";
           const groups = currentTcEditorGroups.map((g) => ({
             id: g.id || ("tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
             name: String(g.name || "").trim(),
@@ -24539,7 +24676,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               await db.thoughtChainPresets.put(preset);
             }
           } else {
-            const existing = await db.thoughtChainPresets.where("name").equals(name).first();
+            const allPresets = (await db.thoughtChainPresets.toArray()) || [];
+            const existing = allPresets.find((p) => p && String(p.name || "").trim() === name);
             if (existing) {
               existing.headerContent = headerContent;
               existing.generalContent = generalContent;
@@ -24563,6 +24701,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           document.getElementById("thought-chain-editor-modal").classList.remove("visible");
           await renderThoughtChainPresets();
         }
+        window.saveThoughtChainPreset = saveThoughtChainPreset;
 
         async function deleteThoughtChainPreset(presetId) {
           const preset = await db.thoughtChainPresets.get(presetId);
@@ -24577,11 +24716,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             await renderThoughtChainPresets();
           }
         }
+        window.deleteThoughtChainPreset = deleteThoughtChainPreset;
 
         async function setThoughtChainDefault() {
           const presets = (await db.thoughtChainPresets.toArray()) || [];
           if (presets.length === 0) {
-            alert("暂无思维链预设，请先新建预设");
+            if (typeof showCustomAlert === "function") {
+              await showCustomAlert("提示", "暂无思维链预设，请先新建预设");
+            } else {
+              alert("暂无思维链预设，请先新建预设");
+            }
             return;
           }
 
@@ -24593,6 +24737,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const chosen = await showChoiceModal("设置默认思维链", choices);
           if (chosen === null) return;
 
+          if (!state.globalSettings) {
+            state.globalSettings = (await db.globalSettings.get("main")) || { id: "main" };
+          }
+
           if (chosen === "none") {
             state.globalSettings.defaultThoughtChainId = null;
           } else {
@@ -24602,6 +24750,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           await db.globalSettings.put(state.globalSettings);
           await renderThoughtChainPresets();
         }
+        window.setThoughtChainDefault = setThoughtChainDefault;
 
         function downloadTextFile(filename, content) {
           const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
@@ -24805,7 +24954,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               currentTcEditorGroups = Array.isArray(parsed.groups) ? parsed.groups : [];
               currentTcEditorEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
               syncStaticTcRichEditors();
-              renderTcEditorGroupsAndEntries();
+              renderTcEditorGroupsAndEntries(false);
             }
           } catch (e) {
             console.error("读取思维链文件失败:", e);
@@ -24984,6 +25133,123 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           document.getElementById("thought-chain-bind-modal").classList.remove("visible");
         }
         window.openThoughtChainBindModal = openThoughtChainBindModal;
+        window.saveThoughtChainBind = saveThoughtChainBind;
+
+        function bindThoughtChainEvents() {
+          const tcAddBtn = document.getElementById("tc-add-preset-btn");
+          if (tcAddBtn) {
+            tcAddBtn.onclick = () => openThoughtChainEditor(null);
+          }
+
+          const tcSetDefBtn = document.getElementById("tc-set-default-btn");
+          if (tcSetDefBtn) {
+            tcSetDefBtn.onclick = () => setThoughtChainDefault();
+          }
+
+          const tcImportBtn = document.getElementById("tc-import-btn");
+          const tcFileInput = document.getElementById("tc-file-import-input");
+          if (tcImportBtn && tcFileInput) {
+            tcImportBtn.onclick = () => {
+              tcFileInput.value = "";
+              tcFileInput.click();
+            };
+            tcFileInput.onchange = handleThoughtChainFileImport;
+          }
+
+          const addGroupBtn = document.getElementById("tc-add-group-btn");
+          if (addGroupBtn) {
+            addGroupBtn.onclick = () => {
+              currentTcEditorGroups.push({
+                id: "tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                name: "",
+                enabled: true,
+                collapsed: false,
+              });
+              renderTcEditorGroupsOnly();
+              updateTcEntryGroupSelectOptions();
+            };
+          }
+
+          const addEntryBtn = document.getElementById("tc-add-entry-btn");
+          if (addEntryBtn) {
+            addEntryBtn.onclick = () => {
+              flushAllTcRichEditors();
+              currentTcEditorEntries.push({
+                id: "tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                key: "",
+                groupId: "",
+                enabled: true,
+                content: "",
+              });
+              renderTcEditorGroupsAndEntries(false);
+            };
+          }
+
+          const tcEditorImportBtn = document.getElementById("tc-editor-import-btn");
+          const tcEditorFileInput = document.getElementById("tc-editor-file-import-input");
+          if (tcEditorImportBtn && tcEditorFileInput) {
+            tcEditorImportBtn.onclick = () => {
+              tcEditorFileInput.value = "";
+              tcEditorFileInput.click();
+            };
+            tcEditorFileInput.onchange = handleThoughtChainEditorFileImport;
+          }
+
+          const tcEditorExportBtn = document.getElementById("tc-editor-export-btn");
+          if (tcEditorExportBtn) {
+            tcEditorExportBtn.onclick = () => exportCurrentThoughtChainEditor();
+          }
+
+          const closeTcEditorBtn = document.getElementById("close-tc-editor-modal-btn");
+          if (closeTcEditorBtn) {
+            closeTcEditorBtn.onclick = () => {
+              document.getElementById("thought-chain-editor-modal").classList.remove("visible");
+            };
+          }
+
+          const cancelTcEditorBtn = document.getElementById("cancel-tc-editor-btn");
+          if (cancelTcEditorBtn) {
+            cancelTcEditorBtn.onclick = () => {
+              document.getElementById("thought-chain-editor-modal").classList.remove("visible");
+            };
+          }
+
+          const saveTcEditorBtn = document.getElementById("save-tc-editor-btn");
+          if (saveTcEditorBtn) {
+            saveTcEditorBtn.onclick = () => saveThoughtChainPreset();
+          }
+
+          const openTcBindSingle = document.getElementById("open-thought-chain-bind-btn-single");
+          if (openTcBindSingle) {
+            openTcBindSingle.onclick = () => openThoughtChainBindModal();
+          }
+
+          const openTcBindGroup = document.getElementById("open-thought-chain-bind-btn-group");
+          if (openTcBindGroup) {
+            openTcBindGroup.onclick = () => openThoughtChainBindModal();
+          }
+
+          const closeTcBindBtn = document.getElementById("close-thought-chain-bind-modal-btn");
+          if (closeTcBindBtn) {
+            closeTcBindBtn.onclick = () => {
+              document.getElementById("thought-chain-bind-modal").classList.remove("visible");
+            };
+          }
+
+          const cancelTcBindBtn = document.getElementById("cancel-thought-chain-bind-btn");
+          if (cancelTcBindBtn) {
+            cancelTcBindBtn.onclick = () => {
+              document.getElementById("thought-chain-bind-modal").classList.remove("visible");
+            };
+          }
+
+          const saveTcBindBtn = document.getElementById("save-thought-chain-bind-btn");
+          if (saveTcBindBtn) {
+            saveTcBindBtn.onclick = () => saveThoughtChainBind();
+          }
+        }
+        window.bindThoughtChainEvents = bindThoughtChainEvents;
+        bindThoughtChainEvents();
 
         function isChatThoughtChainActive(chat) {
           if (!chat || chat.thoughtChainEnabled === false) return false;
@@ -25131,9 +25397,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           let result = rawText;
-          preset.entries.forEach((ent) => {
+          const sortedEntries = [...preset.entries].sort((a, b) => {
+            const ka = String(a && a.key ? a.key : "").trim().length;
+            const kb = String(b && b.key ? b.key : "").trim().length;
+            return kb - ka;
+          });
+          sortedEntries.forEach((ent) => {
             if (!ent) return;
-            const cleanKey = normalizeTcPlaceholderKey(ent.key);
+            const rawKey = String(ent.key || "").trim();
+            const cleanKey = normalizeTcPlaceholderKey(rawKey);
             if (!cleanKey) return;
             const strippedKey = cleanKey.replace(/^麻薯-/, "").trim();
             const isEntryEnabled = ent.enabled !== false;
@@ -25150,6 +25422,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (result.includes(token2)) {
                 result = result.split(token2).join(replacement);
               }
+            }
+            if (rawKey && rawKey !== token1 && rawKey !== token2 && result.includes(rawKey)) {
+              result = result.split(rawKey).join(replacement);
             }
           });
           return result;
@@ -81233,36 +81508,9 @@ ${stickerContext || "无"}
           });
 
           // 思维链 模块事件绑定
-          const tcAddBtn = document.getElementById("tc-add-preset-btn");
-          if (tcAddBtn) tcAddBtn.addEventListener("click", () => openThoughtChainEditor());
-
-          const tcSetDefBtn = document.getElementById("tc-set-default-btn");
-          if (tcSetDefBtn) tcSetDefBtn.addEventListener("click", setThoughtChainDefault);
-
-          const tcImportBtn = document.getElementById("tc-import-btn");
-          const tcFileInput = document.getElementById("tc-file-import-input");
-          if (tcImportBtn && tcFileInput) {
-            tcImportBtn.addEventListener("click", () => tcFileInput.click());
-            tcFileInput.addEventListener("change", handleThoughtChainFileImport);
+          if (typeof bindThoughtChainEvents === "function") {
+            bindThoughtChainEvents();
           }
-
-          const tcEditorImportBtn = document.getElementById("tc-editor-import-btn");
-          const tcEditorFileInput = document.getElementById("tc-editor-file-import-input");
-          if (tcEditorImportBtn && tcEditorFileInput) {
-            tcEditorImportBtn.addEventListener("click", () => tcEditorFileInput.click());
-            tcEditorFileInput.addEventListener("change", handleThoughtChainEditorFileImport);
-          }
-
-          const tcEditorExportBtn = document.getElementById("tc-editor-export-btn");
-          if (tcEditorExportBtn) {
-            tcEditorExportBtn.addEventListener("click", exportCurrentThoughtChainEditor);
-          }
-
-          const openTcBindSingle = document.getElementById("open-thought-chain-bind-btn-single");
-          if (openTcBindSingle) openTcBindSingle.addEventListener("click", openThoughtChainBindModal);
-
-          const openTcBindGroup = document.getElementById("open-thought-chain-bind-btn-group");
-          if (openTcBindGroup) openTcBindGroup.addEventListener("click", openThoughtChainBindModal);
 
           // 守密人 模块事件绑定
           const openKeeperSingle = document.getElementById("open-keeper-panel-btn-single");
@@ -81407,31 +81655,9 @@ ${stickerContext || "无"}
             });
           }
 
-          const closeTcEditorBtn = document.getElementById("close-tc-editor-modal-btn");
-          if (closeTcEditorBtn) closeTcEditorBtn.addEventListener("click", () => {
-            document.getElementById("thought-chain-editor-modal").classList.remove("visible");
-          });
-
-          const cancelTcEditorBtn = document.getElementById("cancel-tc-editor-btn");
-          if (cancelTcEditorBtn) cancelTcEditorBtn.addEventListener("click", () => {
-            document.getElementById("thought-chain-editor-modal").classList.remove("visible");
-          });
-
-          const saveTcEditorBtn = document.getElementById("save-tc-editor-btn");
-          if (saveTcEditorBtn) saveTcEditorBtn.addEventListener("click", saveThoughtChainPreset);
-
-          const closeTcBindBtn = document.getElementById("close-thought-chain-bind-modal-btn");
-          if (closeTcBindBtn) closeTcBindBtn.addEventListener("click", () => {
-            document.getElementById("thought-chain-bind-modal").classList.remove("visible");
-          });
-
-          const cancelTcBindBtn = document.getElementById("cancel-thought-chain-bind-btn");
-          if (cancelTcBindBtn) cancelTcBindBtn.addEventListener("click", () => {
-            document.getElementById("thought-chain-bind-modal").classList.remove("visible");
-          });
-
-          const saveTcBindBtn = document.getElementById("save-thought-chain-bind-btn");
-          if (saveTcBindBtn) saveTcBindBtn.addEventListener("click", saveThoughtChainBind);
+          if (typeof bindThoughtChainEvents === "function") {
+            bindThoughtChainEvents();
+          }
 
           // 头像生图 模块事件绑定
           const genAiAvatarBtn = document.getElementById("gen-ai-avatar-btn");
@@ -94928,6 +95154,9 @@ ${stickerContext || "无"}
         window.openThoughtChainScreen = async function () {
           const lsModal = document.getElementById("ls-char-selector-modal");
           if (lsModal) lsModal.classList.remove("visible");
+          if (typeof bindThoughtChainEvents === "function") {
+            bindThoughtChainEvents();
+          }
           showScreen("thought-chain-screen");
           if (typeof renderThoughtChainPresets === "function") {
             await renderThoughtChainPresets();
