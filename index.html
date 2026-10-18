@@ -25808,6 +25808,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         async function saveThoughtChainPreset() {
           flushAllTcRichEditors();
+          syncTcEntriesOrderByBubbles();
           const nameInput = document.getElementById("tc-preset-name-input");
           const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
@@ -26078,6 +26079,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function exportCurrentThoughtChainEditor() {
           flushAllTcRichEditors();
+          syncTcEntriesOrderByBubbles();
           const nameInput = document.getElementById("tc-preset-name-input");
           const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
@@ -26087,6 +26089,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const headerContent = headerInput?.value || "";
           const generalContent = generalInput?.value || "";
           const cocContent = cocInput?.value || "";
+          const groups = currentTcEditorGroups.map((g, idx) => ({
+            id: g.id || ("tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
+            name: String(g.name || "").trim(),
+            color: String(g.color || TC_WATERCOLOR_PALETTE[idx % TC_WATERCOLOR_PALETTE.length]),
+            enabled: g.enabled !== false,
+            collapsed: Boolean(g.collapsed),
+          }));
+          const entries = currentTcEditorEntries.map((e) => ({
+            id: e.id || ("tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
+            key: String(e.key || "").trim(),
+            groupId: String(e.groupId || ""),
+            enabled: e.enabled !== false,
+            collapsed: Boolean(e.collapsed),
+            content: String(e.content || ""),
+          }));
 
           const txtContent = formatThoughtChainAsText({
             name,
@@ -26096,8 +26113,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             headerCollapsed: Boolean(currentTcSectionFoldState.headerCollapsed),
             generalCollapsed: Boolean(currentTcSectionFoldState.generalCollapsed),
             groupsCollapsed: Boolean(currentTcSectionFoldState.groupsCollapsed),
-            groups: currentTcEditorGroups,
-            entries: currentTcEditorEntries,
+            groups,
+            entries,
           });
           const safeName = name.replace(/[/\\?%*:|"<>]/g, "_");
           downloadTextFile(`${safeName}.txt`, txtContent);
@@ -26188,6 +26205,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               });
               currentTcEditorGroups = Array.isArray(parsed.groups) ? parsed.groups : [];
               currentTcEditorEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+              [
+                { switchBtnId: "tc-switch-header-btn", ta: headerInput },
+                { switchBtnId: "tc-switch-general-btn", ta: generalInput },
+              ].forEach(({ switchBtnId, ta }) => {
+                if (ta && typeof ta._setPreviewMode === "function") {
+                  ta._setPreviewMode(false);
+                }
+                const sBtn = document.getElementById(switchBtnId);
+                if (sBtn) sBtn.classList.remove("primary");
+              });
               syncStaticTcRichEditors();
               renderTcEditorGroupsAndEntries(false);
             }
