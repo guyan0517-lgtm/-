@@ -21836,6 +21836,16 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   height: 100% !important;
   overflow: hidden !important;
 }
+#group-screen {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+#group-screen > .header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+}
 #phone-screen.dark-mode #group-screen,
 #phone-screen.dark-mode #post-screen {
   background: #111 !important;
@@ -21850,13 +21860,12 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
   display: flex !important;
   flex-direction: column !important;
   background: transparent !important;
-  flex: 1 1 0% !important;
-  height: 0 !important;
+  flex: 1 0 auto !important;
+  height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
-  overflow-y: auto !important;
+  overflow-y: visible !important;
   overflow-x: hidden !important;
-  -webkit-overflow-scrolling: touch !important;
   box-sizing: border-box !important;
 }
 
@@ -22677,16 +22686,14 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 
 #fanfic-preference-bar {
   height: auto !important;
-  overflow: hidden !important;
+  overflow: visible !important;
 }
 
 #fanfic-bar-content {
   height: auto !important;
-  max-height: 250px !important;
-  overflow-y: auto !important;
+  max-height: 2000px !important;
+  overflow-y: visible !important;
   overflow-x: hidden !important;
-  overscroll-behavior: contain !important;
-  -webkit-overflow-scrolling: touch !important;
 }
 
 #fanfic-bar-content.collapsed {
@@ -30468,6 +30475,81 @@ select:focus-visible {
   border-color: var(--accent-color);
 }
 
+.tc-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tc-sub-checkbox {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+  cursor: pointer;
+  accent-color: var(--accent-color);
+  box-sizing: border-box;
+}
+
+.tc-sub-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px !important;
+  padding: 4px 8px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.tc-sub-select {
+  width: auto !important;
+  min-width: 76px;
+  max-width: 110px;
+  height: 32px !important;
+  line-height: 1.4 !important;
+  padding: 0 20px 0 8px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  text-align: left;
+  vertical-align: middle;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  color: var(--text-primary);
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.tc-entry-item-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background-color: var(--secondary-bg);
+  box-sizing: border-box;
+}
+
+.tc-entry-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  padding: 6px 8px !important;
+  margin: 0 !important;
+}
+
 /* Thought Chain Collapsible Bubble Styles */
 .thought-chain-block {
   background-color: transparent !important;
@@ -33015,6 +33097,7 @@ select,
 }
 
 .inventory-item-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -33029,6 +33112,27 @@ select,
 
 .inventory-item-row:hover {
   border-color: var(--accent-color);
+}
+
+.inv-item-seq-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: var(--card-bg);
+  border: 1px solid var(--card-bg);
+  font-size: 9px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 2;
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 .inventory-avatar-box {

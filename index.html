@@ -2247,7 +2247,7 @@
                 <button type="button" id="add-choice-dice-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加骰子</button>
                 <button type="button" id="add-choice-status-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加系统状态栏</button>
                 <button type="button" id="dropdown-choice-peer-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加密友</button>
-                <button type="button" id="dropdown-choice-group-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;" onclick="const d=document.getElementById('add-contact-dropdown');if(d)d.style.display='none';if(typeof openContactPickerForGroupCreate==='function')openContactPickerForGroupCreate(true);">建群</button>
+                <button type="button" id="dropdown-choice-group-btn" class="dropdown-item" style="display: none; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;" onclick="const d=document.getElementById('add-contact-dropdown');if(d)d.style.display='none';if(typeof openContactPickerForGroupCreate==='function')openContactPickerForGroupCreate(true);">建群</button>
               </div>
             </div>
           </div>
@@ -7551,7 +7551,7 @@
               >
               <span class="tag"
                 >token:
-                <span id="context-token-count-display">-- 字</span></span
+                <span id="context-token-count-display">--</span></span
               >
             </div>
           </div>
@@ -10067,12 +10067,30 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <input type="text" id="tc-preset-name-input" class="moe-input" placeholder="输入预设名称" style="width: 100%; box-sizing: border-box;" />
           </div>
           <div class="form-group" style="margin-bottom: 14px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">头部</label>
+            <textarea id="tc-preset-header-input" class="moe-input" rows="4" placeholder="输入注入在最前方的头部内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom: 14px;">
             <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">一般思维链内容</label>
             <textarea id="tc-preset-general-input" class="moe-input" rows="6" placeholder="输入思维链指导规则、思考步骤等内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
           </div>
           <div class="form-group" style="margin-bottom: 14px;">
             <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">跑团模块内容</label>
             <textarea id="tc-preset-coc-input" class="moe-input" rows="4" placeholder="输入跑团模块专属指令..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">分组</label>
+              <button type="button" class="tc-btn-action" id="tc-add-group-btn" style="flex-shrink: 0;">添加</button>
+            </div>
+            <div id="tc-groups-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+          </div>
+          <div class="form-group" style="margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">条目</label>
+              <button type="button" class="tc-btn-action" id="tc-add-entry-btn" style="flex-shrink: 0;">添加</button>
+            </div>
+            <div id="tc-entries-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
           </div>
         </div>
         <div class="modal-footer" style="display: flex; gap: 8px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color); justify-content: flex-end; align-items: center;">
@@ -23582,34 +23600,239 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           container.appendChild(fragment);
         }
 
+        let currentTcEditorGroups = [];
+        let currentTcEditorEntries = [];
+
+        function normalizeTcPlaceholderKey(rawKey) {
+          let k = String(rawKey || "").trim();
+          if (k.startsWith("{{") && k.endsWith("}}")) {
+            k = k.slice(2, -2).trim();
+          }
+          return k;
+        }
+
+        function renderTcEditorGroupsAndEntries() {
+          const groupsContainer = document.getElementById("tc-groups-list");
+          const entriesContainer = document.getElementById("tc-entries-list");
+          if (!groupsContainer || !entriesContainer) return;
+
+          groupsContainer.innerHTML = "";
+          if (currentTcEditorGroups.length === 0) {
+            const emptyEl = document.createElement("div");
+            emptyEl.style.cssText = "font-size: 12px; color: var(--text-secondary); padding: 6px 2px;";
+            emptyEl.textContent = "暂无分组";
+            groupsContainer.appendChild(emptyEl);
+          } else {
+            currentTcEditorGroups.forEach((grp, idx) => {
+              const row = document.createElement("div");
+              row.className = "tc-sub-row";
+
+              const cb = document.createElement("input");
+              cb.type = "checkbox";
+              cb.className = "tc-sub-checkbox";
+              cb.checked = grp.enabled !== false;
+              cb.onchange = (e) => {
+                currentTcEditorGroups[idx].enabled = e.target.checked;
+              };
+
+              const nameInput = document.createElement("input");
+              nameInput.type = "text";
+              nameInput.className = "moe-input tc-sub-input";
+              nameInput.placeholder = "分组名称";
+              nameInput.value = grp.name || "";
+              nameInput.oninput = (e) => {
+                currentTcEditorGroups[idx].name = e.target.value;
+                updateTcEntryGroupSelectOptions();
+              };
+
+              const delBtn = document.createElement("button");
+              delBtn.type = "button";
+              delBtn.className = "tc-btn-action";
+              delBtn.style.flexShrink = "0";
+              delBtn.textContent = "删除";
+              delBtn.onclick = () => {
+                const removedId = grp.id;
+                currentTcEditorGroups.splice(idx, 1);
+                currentTcEditorEntries.forEach((ent) => {
+                  if (ent.groupId === removedId) ent.groupId = "";
+                });
+                renderTcEditorGroupsAndEntries();
+              };
+
+              row.appendChild(cb);
+              row.appendChild(nameInput);
+              row.appendChild(delBtn);
+              groupsContainer.appendChild(row);
+            });
+          }
+
+          entriesContainer.innerHTML = "";
+          if (currentTcEditorEntries.length === 0) {
+            const emptyEl = document.createElement("div");
+            emptyEl.style.cssText = "font-size: 12px; color: var(--text-secondary); padding: 6px 2px;";
+            emptyEl.textContent = "暂无条目";
+            entriesContainer.appendChild(emptyEl);
+          } else {
+            currentTcEditorEntries.forEach((ent, idx) => {
+              const card = document.createElement("div");
+              card.className = "tc-entry-item-card";
+
+              const topRow = document.createElement("div");
+              topRow.className = "tc-sub-row";
+
+              const cb = document.createElement("input");
+              cb.type = "checkbox";
+              cb.className = "tc-sub-checkbox";
+              cb.checked = ent.enabled !== false;
+              cb.onchange = (e) => {
+                currentTcEditorEntries[idx].enabled = e.target.checked;
+              };
+
+              const keyInput = document.createElement("input");
+              keyInput.type = "text";
+              keyInput.className = "moe-input tc-sub-input";
+              keyInput.placeholder = "指代词";
+              keyInput.value = ent.key || "";
+              keyInput.oninput = (e) => {
+                currentTcEditorEntries[idx].key = e.target.value;
+              };
+
+              const groupSelect = document.createElement("select");
+              groupSelect.className = "moe-input tc-sub-select";
+              const defaultOpt = document.createElement("option");
+              defaultOpt.value = "";
+              defaultOpt.textContent = "无分组";
+              groupSelect.appendChild(defaultOpt);
+              currentTcEditorGroups.forEach((g) => {
+                const opt = document.createElement("option");
+                opt.value = g.id;
+                opt.textContent = g.name || "未命名";
+                groupSelect.appendChild(opt);
+              });
+              groupSelect.value = ent.groupId || "";
+              groupSelect.onchange = (e) => {
+                currentTcEditorEntries[idx].groupId = e.target.value;
+              };
+
+              const delBtn = document.createElement("button");
+              delBtn.type = "button";
+              delBtn.className = "tc-btn-action";
+              delBtn.style.flexShrink = "0";
+              delBtn.textContent = "删除";
+              delBtn.onclick = () => {
+                currentTcEditorEntries.splice(idx, 1);
+                renderTcEditorGroupsAndEntries();
+              };
+
+              topRow.appendChild(cb);
+              topRow.appendChild(keyInput);
+              topRow.appendChild(groupSelect);
+              topRow.appendChild(delBtn);
+
+              const contentArea = document.createElement("textarea");
+              contentArea.className = "moe-input tc-entry-textarea";
+              contentArea.rows = 3;
+              contentArea.placeholder = "输入该指代词对应的正文内容...";
+              contentArea.value = ent.content || "";
+              contentArea.oninput = (e) => {
+                currentTcEditorEntries[idx].content = e.target.value;
+              };
+
+              card.appendChild(topRow);
+              card.appendChild(contentArea);
+              entriesContainer.appendChild(card);
+            });
+          }
+        }
+
+        function updateTcEntryGroupSelectOptions() {
+          const entriesContainer = document.getElementById("tc-entries-list");
+          if (!entriesContainer) return;
+          const selects = entriesContainer.querySelectorAll(".tc-sub-select");
+          selects.forEach((sel, idx) => {
+            const currentVal = currentTcEditorEntries[idx] ? (currentTcEditorEntries[idx].groupId || "") : "";
+            sel.innerHTML = "";
+            const defaultOpt = document.createElement("option");
+            defaultOpt.value = "";
+            defaultOpt.textContent = "无分组";
+            sel.appendChild(defaultOpt);
+            currentTcEditorGroups.forEach((g) => {
+              const opt = document.createElement("option");
+              opt.value = g.id;
+              opt.textContent = g.name || "未命名";
+              sel.appendChild(opt);
+            });
+            sel.value = currentVal;
+          });
+        }
+
         async function openThoughtChainEditor(presetId = null) {
           editingThoughtChainId = presetId;
           const modal = document.getElementById("thought-chain-editor-modal");
           const titleEl = document.getElementById("tc-editor-modal-title");
           const nameInput = document.getElementById("tc-preset-name-input");
+          const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
           const cocInput = document.getElementById("tc-preset-coc-input");
+
+          const addGroupBtn = document.getElementById("tc-add-group-btn");
+          if (addGroupBtn) {
+            addGroupBtn.onclick = () => {
+              currentTcEditorGroups.push({
+                id: "tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                name: "",
+                enabled: true,
+              });
+              renderTcEditorGroupsAndEntries();
+            };
+          }
+
+          const addEntryBtn = document.getElementById("tc-add-entry-btn");
+          if (addEntryBtn) {
+            addEntryBtn.onclick = () => {
+              currentTcEditorEntries.push({
+                id: "tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                key: "",
+                groupId: "",
+                enabled: true,
+                content: "",
+              });
+              renderTcEditorGroupsAndEntries();
+            };
+          }
 
           if (presetId) {
             const preset = await db.thoughtChainPresets.get(presetId);
             if (preset) {
               titleEl.textContent = "编辑思维链";
               nameInput.value = preset.name || "";
+              if (headerInput) headerInput.value = preset.headerContent || "";
               generalInput.value = preset.generalContent || "";
               cocInput.value = preset.cocContent || "";
+              currentTcEditorGroups = Array.isArray(preset.groups)
+                ? preset.groups.map((g) => ({ ...g }))
+                : [];
+              currentTcEditorEntries = Array.isArray(preset.entries)
+                ? preset.entries.map((e) => ({ ...e }))
+                : [];
             }
           } else {
             titleEl.textContent = "新建思维链";
             nameInput.value = "";
+            if (headerInput) headerInput.value = "";
             generalInput.value = "";
             cocInput.value = "";
+            currentTcEditorGroups = [];
+            currentTcEditorEntries = [];
           }
 
+          renderTcEditorGroupsAndEntries();
           modal.classList.add("visible");
         }
 
         async function saveThoughtChainPreset() {
           const nameInput = document.getElementById("tc-preset-name-input");
+          const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
           const cocInput = document.getElementById("tc-preset-coc-input");
 
@@ -23619,28 +23842,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return;
           }
 
+          const headerContent = headerInput ? headerInput.value : "";
           const generalContent = generalInput.value;
           const cocContent = cocInput.value;
+          const groups = currentTcEditorGroups.map((g) => ({
+            id: g.id || ("tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
+            name: String(g.name || "").trim(),
+            enabled: g.enabled !== false,
+          }));
+          const entries = currentTcEditorEntries.map((e) => ({
+            id: e.id || ("tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
+            key: String(e.key || "").trim(),
+            groupId: String(e.groupId || ""),
+            enabled: e.enabled !== false,
+            content: String(e.content || ""),
+          }));
 
           if (editingThoughtChainId) {
             const preset = await db.thoughtChainPresets.get(editingThoughtChainId);
             if (preset) {
               preset.name = name;
+              preset.headerContent = headerContent;
               preset.generalContent = generalContent;
               preset.cocContent = cocContent;
+              preset.groups = groups;
+              preset.entries = entries;
               await db.thoughtChainPresets.put(preset);
             }
           } else {
             const existing = await db.thoughtChainPresets.where("name").equals(name).first();
             if (existing) {
+              existing.headerContent = headerContent;
               existing.generalContent = generalContent;
               existing.cocContent = cocContent;
+              existing.groups = groups;
+              existing.entries = entries;
               await db.thoughtChainPresets.put(existing);
             } else {
               await db.thoughtChainPresets.add({
                 name,
+                headerContent,
                 generalContent,
                 cocContent,
+                groups,
+                entries,
                 createdAt: Date.now(),
               });
             }
@@ -23703,12 +23948,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function formatThoughtChainAsText(preset) {
           const name = (preset && preset.name ? preset.name : "未命名思维链").trim();
+          const header = preset && typeof preset.headerContent === "string" ? preset.headerContent : "";
           const general = preset && typeof preset.generalContent === "string" ? preset.generalContent : "";
           const coc = preset && typeof preset.cocContent === "string" ? preset.cocContent : "";
+          const groups = preset && Array.isArray(preset.groups) ? preset.groups : [];
+          const entries = preset && Array.isArray(preset.entries) ? preset.entries : [];
 
-          let out = `=== 思维链预设 ===\n名称: ${name}\n\n=== 一般思维链内容 ===\n${general}\n`;
+          let out = `=== 思维链预设 ===\n名称: ${name}\n`;
+          if (header && header.trim().length > 0) {
+            out += `\n=== 头部 ===\n${header}\n`;
+          }
+          out += `\n=== 一般思维链内容 ===\n${general}\n`;
           if (coc && coc.trim().length > 0) {
             out += `\n=== 跑团模块内容 ===\n${coc}\n`;
+          }
+          if (groups.length > 0 || entries.length > 0) {
+            out += `\n=== 条目与分组数据 ===\n${JSON.stringify({ groups, entries })}\n`;
           }
           return out;
         }
@@ -23717,50 +23972,70 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const text = String(rawText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
           const presetHeader = "=== 思维链预设 ===";
+          const topHeader = "=== 头部 ===";
           const generalHeader = "=== 一般思维链内容 ===";
           const cocHeader = "=== 跑团模块内容 ===";
+          const metaHeader = "=== 条目与分组数据 ===";
 
-          if (text.includes(presetHeader) || text.includes(generalHeader)) {
+          if (text.includes(presetHeader) || text.includes(generalHeader) || text.includes(topHeader)) {
             let name = fallbackName;
             const nameMatch = text.match(/名称:\s*([^\n\r]+)/);
             if (nameMatch && nameMatch[1].trim()) {
               name = nameMatch[1].trim();
             }
 
+            let headerContent = "";
             let generalContent = "";
             let cocContent = "";
+            let groups = [];
+            let entries = [];
 
-            const generalIndex = text.indexOf(generalHeader);
-            const cocIndex = text.indexOf(cocHeader);
+            const markers = [
+              { key: "header", token: topHeader, index: text.indexOf(topHeader) },
+              { key: "general", token: generalHeader, index: text.indexOf(generalHeader) },
+              { key: "coc", token: cocHeader, index: text.indexOf(cocHeader) },
+              { key: "meta", token: metaHeader, index: text.indexOf(metaHeader) },
+            ]
+              .filter((m) => m.index !== -1)
+              .sort((a, b) => a.index - b.index);
 
-            if (generalIndex !== -1) {
-              const generalStart = generalIndex + generalHeader.length;
-              if (cocIndex !== -1 && cocIndex > generalIndex) {
-                generalContent = text.slice(generalStart, cocIndex);
-                cocContent = text.slice(cocIndex + cocHeader.length);
-              } else {
-                generalContent = text.slice(generalStart);
+            for (let i = 0; i < markers.length; i++) {
+              const cur = markers[i];
+              const next = markers[i + 1];
+              const startPos = cur.index + cur.token.length;
+              let chunk = next ? text.slice(startPos, next.index) : text.slice(startPos);
+              if (chunk.startsWith("\n")) chunk = chunk.slice(1);
+              if (chunk.endsWith("\n")) chunk = chunk.slice(0, -1);
+
+              if (cur.key === "header") headerContent = chunk;
+              else if (cur.key === "general") generalContent = chunk;
+              else if (cur.key === "coc") cocContent = chunk;
+              else if (cur.key === "meta") {
+                try {
+                  const parsedMeta = JSON.parse(chunk.trim());
+                  if (parsedMeta && Array.isArray(parsedMeta.groups)) groups = parsedMeta.groups;
+                  if (parsedMeta && Array.isArray(parsedMeta.entries)) entries = parsedMeta.entries;
+                } catch (e) {}
               }
-            } else if (cocIndex !== -1) {
-              cocContent = text.slice(cocIndex + cocHeader.length);
             }
-
-            if (generalContent.startsWith("\n")) generalContent = generalContent.slice(1);
-            if (generalContent.endsWith("\n")) generalContent = generalContent.slice(0, -1);
-            if (cocContent.startsWith("\n")) cocContent = cocContent.slice(1);
-            if (cocContent.endsWith("\n")) cocContent = cocContent.slice(0, -1);
 
             return {
               name: name || fallbackName,
+              headerContent,
               generalContent,
               cocContent,
+              groups,
+              entries,
             };
           }
 
           return {
             name: fallbackName,
+            headerContent: "",
             generalContent: text,
             cocContent: "",
+            groups: [],
+            entries: [],
           };
         }
 
@@ -23775,14 +24050,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function exportCurrentThoughtChainEditor() {
           const nameInput = document.getElementById("tc-preset-name-input");
+          const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
           const cocInput = document.getElementById("tc-preset-coc-input");
 
           const name = (nameInput?.value || "").trim() || "未命名思维链";
+          const headerContent = headerInput?.value || "";
           const generalContent = generalInput?.value || "";
           const cocContent = cocInput?.value || "";
 
-          const txtContent = formatThoughtChainAsText({ name, generalContent, cocContent });
+          const txtContent = formatThoughtChainAsText({
+            name,
+            headerContent,
+            generalContent,
+            cocContent,
+            groups: currentTcEditorGroups,
+            entries: currentTcEditorEntries,
+          });
           const safeName = name.replace(/[/\\?%*:|"<>]/g, "_");
           downloadTextFile(`${safeName}.txt`, txtContent);
         }
@@ -23802,8 +24086,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (parsed) {
                 await db.thoughtChainPresets.add({
                   name: parsed.name,
-                  generalContent: parsed.generalContent,
-                  cocContent: parsed.cocContent,
+                  headerContent: parsed.headerContent || "",
+                  generalContent: parsed.generalContent || "",
+                  cocContent: parsed.cocContent || "",
+                  groups: Array.isArray(parsed.groups) ? parsed.groups : [],
+                  entries: Array.isArray(parsed.entries) ? parsed.entries : [],
                   createdAt: Date.now(),
                 });
                 importedCount++;
@@ -23835,14 +24122,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const parsed = parseThoughtChainFromText(text, fallbackName);
             if (parsed) {
               const nameInput = document.getElementById("tc-preset-name-input");
+              const headerInput = document.getElementById("tc-preset-header-input");
               const generalInput = document.getElementById("tc-preset-general-input");
               const cocInput = document.getElementById("tc-preset-coc-input");
 
               if (parsed.name && (!nameInput.value || nameInput.value.trim() === "")) {
                 nameInput.value = parsed.name;
               }
+              if (headerInput) headerInput.value = parsed.headerContent || "";
               if (generalInput) generalInput.value = parsed.generalContent || "";
               if (cocInput) cocInput.value = parsed.cocContent || "";
+              currentTcEditorGroups = Array.isArray(parsed.groups) ? parsed.groups : [];
+              currentTcEditorEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+              renderTcEditorGroupsAndEntries();
             }
           } catch (e) {
             console.error("读取思维链文件失败:", e);
@@ -24139,19 +24431,70 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return `\n==================================================\n【${title} 开始】\n${trimmed}\n【${title} 结束】\n==================================================\n`;
         };
 
+        async function getActiveThoughtChainPreset(chat) {
+          if (!isChatThoughtChainActive(chat)) return null;
+          const presetId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId);
+          let preset = null;
+          if (presetId) {
+            try {
+              preset = await db.thoughtChainPresets.get(presetId);
+            } catch (e) {}
+            if (!preset && Array.isArray(chat.settings?.sharedThoughtChains)) {
+              preset = chat.settings.sharedThoughtChains.find(p => String(p.id) === String(presetId));
+            }
+          }
+          return preset;
+        }
+
+        function resolveThoughtChainEntries(rawText, preset) {
+          if (!rawText || typeof rawText !== "string") return "";
+          if (!preset || !Array.isArray(preset.entries) || preset.entries.length === 0) return rawText;
+
+          const groupEnabledMap = new Map();
+          if (Array.isArray(preset.groups)) {
+            preset.groups.forEach((g) => {
+              if (g && g.id) {
+                groupEnabledMap.set(String(g.id), g.enabled !== false);
+              }
+            });
+          }
+
+          let result = rawText;
+          preset.entries.forEach((ent) => {
+            if (!ent) return;
+            const cleanKey = normalizeTcPlaceholderKey(ent.key);
+            if (!cleanKey) return;
+            const isEntryEnabled = ent.enabled !== false;
+            const isGroupEnabled = ent.groupId && groupEnabledMap.has(String(ent.groupId))
+              ? groupEnabledMap.get(String(ent.groupId))
+              : true;
+            const replacement = (isEntryEnabled && isGroupEnabled) ? String(ent.content || "") : "";
+            const token = `{{${cleanKey}}}`;
+            if (result.includes(token)) {
+              result = result.split(token).join(replacement);
+            }
+          });
+          return result;
+        }
+
+        async function getThoughtChainHeaderBlock(chat) {
+          if (!isChatThoughtChainActive(chat)) return "";
+          try {
+            const preset = await getActiveThoughtChainPreset(chat);
+            if (!preset || !preset.headerContent) return "";
+            const resolvedHeader = resolveThoughtChainEntries(preset.headerContent, preset).trim();
+            if (!resolvedHeader) return "";
+            return window.formatPromptSection("头部", resolvedHeader);
+          } catch (e) {
+            console.error("加载思维链头部错误:", e);
+            return "";
+          }
+        }
+
         async function getThoughtChainPromptBlock(chat) {
           if (!isChatThoughtChainActive(chat)) return "";
           try {
-            const presetId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId);
-            let preset = null;
-            if (presetId) {
-              try {
-                preset = await db.thoughtChainPresets.get(presetId);
-              } catch (e) {}
-              if (!preset && Array.isArray(chat.settings?.sharedThoughtChains)) {
-                preset = chat.settings.sharedThoughtChains.find(p => String(p.id) === String(presetId));
-              }
-            }
+            const preset = await getActiveThoughtChainPreset(chat);
             let block = "---------- 【思维链填写规范与顶级字段代码定义】 ----------\n" +
               "思维链代码结构与全局唯一性规则：\n" +
               "1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 \"thinking\" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，绝对禁止直接输出在JSON代码外部，绝对禁止写在消息正文气泡中，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n" +
@@ -24171,10 +24514,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "}\n" +
               (preset ? "\n预设名称：" + preset.name + "\n" : "");
             if (preset && preset.generalContent) {
-              block += "\n---------- 【思维链通用规则设定开始】 ----------\n" + preset.generalContent + "\n---------- 【思维链通用规则设定结束】 ----------\n";
+              const resolvedGeneral = resolveThoughtChainEntries(preset.generalContent, preset);
+              if (resolvedGeneral.trim()) {
+                block += "\n---------- 【思维链通用规则设定开始】 ----------\n" + resolvedGeneral + "\n---------- 【思维链通用规则设定结束】 ----------\n";
+              }
             }
             if (chat.thoughtChainEnableCoc !== false && preset && preset.cocContent) {
-              block += "\n---------- 【跑团模块思考规则开始】 ----------\n" + preset.cocContent + "\n---------- 【跑团模块思考规则结束】 ----------\n";
+              const resolvedCoc = resolveThoughtChainEntries(preset.cocContent, preset);
+              if (resolvedCoc.trim()) {
+                block += "\n---------- 【跑团模块思考规则开始】 ----------\n" + resolvedCoc + "\n---------- 【跑团模块思考规则结束】 ----------\n";
+              }
             }
             return window.formatPromptSection("思维链", block);
           } catch (e) {
@@ -24283,26 +24632,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 });
                 block += `---------- 【模组插图原位注入规则结束】 ----------\n\n`;
               }
-            }
-
-            // 模组剧情配乐规则
-            const isModuleMusicAllowed = (((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false));
-            if (isModuleMusicAllowed && Array.isArray(mod.musicList) && mod.musicList.length > 0) {
-              block += `---------- 【模组剧情配乐规则开始】 ----------\n` +
-                `当前模组配置了特定情景配乐。当带团推进到对应剧情、气氛或场景时，在叙述中原样附带对应的音乐标签，系统会自动为玩家播放应景音乐。\n` +
-                `模组配乐清单：\n`;
-              mod.musicList.forEach((m) => {
-                let sName = (m.name || m.keyword || '曲目').trim();
-                sName = sName.replace(/^\[(?:音乐|BGM|背景音乐|音效|bgm|music|标签)[:：]\s*/i, '')
-                             .replace(/[\]】》\)\s]+$/g, '')
-                             .replace(/^[\[【《\(\s]+/g, '')
-                             .trim();
-                if (!sName || sName.includes('推荐曲名') || sName.includes('背景音乐') || sName.includes('战斗音乐')) return;
-                const sTag = `[音乐: ${sName}]`;
-                const sScene = m.scene || '剧情气氛';
-                block += `- 标签 ${sTag}：用于 ${sScene}，曲目 ${sName}\n`;
-              });
-              block += `---------- 【模组剧情配乐规则结束】 ----------\n\n`;
             }
 
             // 章节切换模式提示词注入（自动模式与半自动模式）
@@ -44228,6 +44557,11 @@ ${stickerContext || "无"}
               systemPrompt = soloPrepend + window.formatPromptSection("带团", keeperPrefixInstruction) + "\n\n" + systemPrompt;
             }
 
+            const tcHeaderPromptBlock = await getThoughtChainHeaderBlock(chat);
+            if (tcHeaderPromptBlock) {
+              systemPrompt = tcHeaderPromptBlock + "\n\n" + systemPrompt;
+            }
+
             let isGemini = proxyUrl === GEMINI_API_URL;
             let geminiConfig = toGeminiRequestData(
               model,
@@ -48753,6 +49087,8 @@ ${stickerContext || "无"}
                 const dm = (chat.members || []).find(
                   (m) =>
                     m.roleType === "dice" ||
+                    m.isDiceBot ||
+                    m.isDice ||
                     (state.chats[m.id] && state.chats[m.id].roleType === "dice"),
                 );
                 if (dm) {
@@ -48780,7 +49116,7 @@ ${stickerContext || "无"}
 
                   if (aiMsg.sender === diceRole.name || aiMsg.senderName === diceRole.name) continue;
 
-                  const aiDiceCmdPattern = /(?:^|[\r\n])\s*[.。]\s*(?:r[ahd]?|rc|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw)\b/i;
+                  const aiDiceCmdPattern = /(?:^|[\r\n])\s*[.。]\s*(?:r[ahdv]?|rc|rcv|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw)/i;
                   if (aiDiceCmdPattern.test(rawContent)) {
                     aiMsg._diceProcessed = true;
                     let senderName = aiMsg.senderName || aiMsg.name || chat.name || "AI";
@@ -48856,6 +49192,23 @@ ${stickerContext || "无"}
                       }
                       if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
                         window.PeerManager.broadcastGroupMessage(chat, diceMsg, false);
+                      }
+                      if (Array.isArray(diceRes.extraMessages) && diceRes.extraMessages.length > 0) {
+                        for (const exMsg of diceRes.extraMessages) {
+                          if (chat.isGroup && chat.activeLineMode === "solo") {
+                            const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
+                            const activeTId = activeThread ? activeThread.id : (chat.settings?.soloLineConfig?.activeThreadId || null);
+                            exMsg.soloThreadId = activeTId;
+                            exMsg.isSoloMessage = true;
+                          }
+                          chat.history.push(exMsg);
+                          if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                            window.PeerManager.broadcastGroupMessage(chat, exMsg, false);
+                          }
+                        }
+                      }
+                      if (diceRes.persistChat && chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                        window.PeerManager.syncGroupSettingsToPeers(chat);
                       }
                       await incrementMessageCount(chatId);
                       const isCurrentlyViewing =
@@ -52268,7 +52621,7 @@ ${stickerContext || "无"}
               try {
                 const result = await getTokenDetailedBreakdown(state.activeChatId);
                 if (result) {
-                  tokenDisplay.textContent = `${result.totalTokens} Tokens`;
+                  tokenDisplay.textContent = `${result.totalTokens}`;
                 }
               } catch (e) {}
             }
@@ -70198,8 +70551,11 @@ ${stickerContext || "无"}
           });
 
           let tcPromptText = "";
+          if (typeof getThoughtChainHeaderBlock === "function") {
+            tcPromptText += await getThoughtChainHeaderBlock(chat);
+          }
           if (typeof getThoughtChainPromptBlock === "function") {
-            tcPromptText = await getThoughtChainPromptBlock(chat);
+            tcPromptText += await getThoughtChainPromptBlock(chat);
           }
           breakdown.push({
             name: "思维链预设",
@@ -77591,8 +77947,20 @@ ${stickerContext || "无"}
           customViewer.style.display = "none";
           textViewer.style.display = "block";
 
+          let sanitizedAuroraContent = book.content || "";
+          sanitizedAuroraContent = sanitizedAuroraContent
+            .replace(/"([^"\n]*)"/g, "“$1”")
+            .replace(/\(([^)\n]*[\u4e00-\u9fa5][^)\n]*)\)/g, "（$1）")
+            .replace(/\.{3,}/g, "……")
+            .replace(/--+/g, "——")
+            .replace(/([\u4e00-\u9fa50-9”’）】])\s*,\s*/g, "$1，")
+            .replace(/([\u4e00-\u9fa5”’）】])\s*\.(?!\d|\.)/g, "$1。")
+            .replace(/([\u4e00-\u9fa50-9”’）】])\s*!\s*/g, "$1！")
+            .replace(/([\u4e00-\u9fa50-9”’）】])\s*\?\s*/g, "$1？")
+            .replace(/([\u4e00-\u9fa5”’）】])\s*;\s*/g, "$1；")
+            .replace(/([\u4e00-\u9fa5”’）】])\s*:\s*/g, "$1：");
           document.getElementById("aurora-text-body").textContent =
-            book.content;
+            sanitizedAuroraContent;
 
           // 因为是从书架打开的，所以隐藏“保存”按钮
           saveBtn.style.display = "none";
@@ -81685,6 +82053,8 @@ ${stickerContext || "无"}
                 const dm = (chat.members || []).find(
                   (m) =>
                     m.roleType === "dice" ||
+                    m.isDiceBot ||
+                    m.isDice ||
                     (state.chats[m.id] && state.chats[m.id].roleType === "dice"),
                 );
                 if (dm) {
@@ -81699,7 +82069,7 @@ ${stickerContext || "无"}
                 }
               }
 
-              const diceCmdPattern = /(?:^|[\r\n])\s*[.。]\s*(?:r[ahd]?|rc|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw)\b/i;
+              const diceCmdPattern = /(?:^|[\r\n])\s*[.。]\s*(?:r[ahdv]?|rc|rcv|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw)/i;
               if (
                 diceRole &&
                 diceCmdPattern.test(content) &&
@@ -81734,12 +82104,25 @@ ${stickerContext || "无"}
                   };
                   chat.history.push(diceMsg);
                   await incrementMessageCount(state.activeChatId);
-                  await db.chats.put(chat);
                   appendMessage(diceMsg, chat);
-                  renderChatList();
                   if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
                     window.PeerManager.broadcastGroupMessage(chat, diceMsg, false);
                   }
+                  if (Array.isArray(diceRes.extraMessages) && diceRes.extraMessages.length > 0) {
+                    for (const exMsg of diceRes.extraMessages) {
+                      chat.history.push(exMsg);
+                      await incrementMessageCount(state.activeChatId);
+                      appendMessage(exMsg, chat);
+                      if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                        window.PeerManager.broadcastGroupMessage(chat, exMsg, false);
+                      }
+                    }
+                  }
+                  if (diceRes.persistChat && chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                    window.PeerManager.syncGroupSettingsToPeers(chat);
+                  }
+                  await db.chats.put(chat);
+                  renderChatList();
                   return; // 命中骰子指令，由骰子角色本地回复，不走 AI
                 }
               }
@@ -83130,15 +83513,15 @@ ${stickerContext || "无"}
                         (sum, item) => sum + item.count,
                         0,
                       );
-                      tokenDisplay.textContent = `${totalCount.toLocaleString()} 字`;
+                      tokenDisplay.textContent = `${totalCount.toLocaleString()}`;
                     } else if (result && typeof result.totalTokens === "number") {
-                      tokenDisplay.textContent = `${result.totalTokens.toLocaleString()} 字`;
+                      tokenDisplay.textContent = `${result.totalTokens.toLocaleString()}`;
                     } else {
-                      tokenDisplay.textContent = "0 字";
+                      tokenDisplay.textContent = "0";
                     }
                   } catch (err) {
                     console.error("计算字数失败:", err);
-                    tokenDisplay.textContent = "0 字";
+                    tokenDisplay.textContent = "0";
                   }
                 };
 
@@ -84385,7 +84768,8 @@ ${stickerContext || "无"}
 
             const memberInvBtn = document.getElementById("member-inventory-btn");
             if (memberInvBtn) {
-              const isDiceOrStatus = isStatusRole || isPeerHuman || member.isDiceBot || member.roleType === "system_status" || member.roleType === "dice" || member.isDice;
+              const isPeerGroupChat = Boolean(chat && chat.isGroup && (chat.isPeerGroup || chat.peerGroupId));
+              const isDiceOrStatus = isStatusRole || isPeerHuman || isPeerGroupChat || member.isDiceBot || member.roleType === "system_status" || member.roleType === "dice" || member.isDice;
               memberInvBtn.style.display = isDiceOrStatus ? "none" : "";
             }
 
@@ -93775,7 +94159,7 @@ ${stickerContext || "无"}
               const result = await getTokenDetailedBreakdown(state.activeChatId);
               if (result && result.items) {
                 const totalCount = result.items.reduce((sum, item) => sum + item.count, 0);
-                tokenDisplay.textContent = `${totalCount} Tokens`;
+                tokenDisplay.textContent = `${totalCount}`;
               }
             }
 

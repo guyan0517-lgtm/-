@@ -2620,7 +2620,8 @@
           gender: (groupChat.settings && groupChat.settings.myGender) || "",
           genderNote: (groupChat.settings && groupChat.settings.myGenderNote) || "",
           cocPanel: this.sanitizeCocPanelForPeerUI(groupChat.settings && groupChat.settings.myCocPanel),
-          secretPersona: (groupChat.settings && groupChat.settings.myPersona) || ""
+          secretPersona: (groupChat.settings && groupChat.settings.myPersona) || "",
+          inventory: Array.isArray(groupChat.inventory) ? JSON.parse(JSON.stringify(groupChat.inventory)) : []
         }
       ];
 
@@ -2640,7 +2641,8 @@
               gender: m.gender || "",
               genderNote: m.genderNote || "",
               cocPanel: this.sanitizeCocPanelForPeerUI(m.cocPanel),
-              secretPersona: m.secretPersona || ""
+              secretPersona: m.secretPersona || "",
+              inventory: Array.isArray(m.inventory) ? JSON.parse(JSON.stringify(m.inventory)) : []
             });
           }
         } else {
@@ -2952,6 +2954,7 @@
           gender: hp.gender || "",
           genderNote: hp.genderNote || "",
           cocPanel: this.sanitizeCocPanelForPeerUI(hp.cocPanel),
+          inventory: Array.isArray(hp.inventory) ? hp.inventory : [],
           isAdmin: false,
           groupTitle: ""
         });
@@ -3373,6 +3376,7 @@
             gender: hp.gender || "",
             genderNote: hp.genderNote || "",
             cocPanel: this.sanitizeCocPanelForPeerUI(hp.cocPanel),
+            inventory: Array.isArray(hp.inventory) ? hp.inventory : [],
             isAdmin: false,
             groupTitle: ""
           };
@@ -3395,6 +3399,9 @@
             existing.cocPanel = this.sanitizeCocPanelForPeerUI(hp.cocPanel);
             existing.secretPersona = hp.secretPersona || "";
             existing.persona = "";
+            if (Array.isArray(hp.inventory)) {
+              existing.inventory = hp.inventory;
+            }
           }
         }
       }
@@ -3944,6 +3951,48 @@
         }
         return null;
       };
+
+      if (msgToInsert.type === "inventory_card" && msgToInsert.stolenItemId) {
+        const stolenId = msgToInsert.stolenItemId;
+        const stolenName = msgToInsert.item && msgToInsert.item.name;
+        const removeFromList = (list) => {
+          if (!Array.isArray(list)) return;
+          let idx = list.findIndex((it) => it && it.id === stolenId);
+          if (idx === -1 && stolenName) {
+            idx = list.findIndex((it) => it && it.name === stolenName);
+          }
+          if (idx !== -1) list.splice(idx, 1);
+        };
+        if (msgToInsert.stealFromPeerCode && msgToInsert.stealFromPeerCode === myCode) {
+          if (!Array.isArray(groupChat.inventory)) groupChat.inventory = [];
+          removeFromList(groupChat.inventory);
+          if (typeof window.renderInventoryList === "function") {
+            try { window.renderInventoryList(); } catch (_) {}
+          }
+        } else if (msgToInsert.stealFromPeerCode && Array.isArray(groupChat.members)) {
+          const vMem = groupChat.members.find((m) => m && m.peerCode === msgToInsert.stealFromPeerCode);
+          if (vMem && Array.isArray(vMem.inventory)) {
+            removeFromList(vMem.inventory);
+          }
+        }
+        if (msgToInsert.stealToPeerCode && msgToInsert.stealToPeerCode === myCode && msgToInsert.item) {
+          if (!Array.isArray(groupChat.inventory)) groupChat.inventory = [];
+          if (!groupChat.inventory.some((it) => it && it.id === msgToInsert.item.id)) {
+            groupChat.inventory.push(msgToInsert.item);
+          }
+          if (typeof window.renderInventoryList === "function") {
+            try { window.renderInventoryList(); } catch (_) {}
+          }
+        } else if (msgToInsert.stealToPeerCode && msgToInsert.item && Array.isArray(groupChat.members)) {
+          const aMem = groupChat.members.find((m) => m && m.peerCode === msgToInsert.stealToPeerCode);
+          if (aMem) {
+            if (!Array.isArray(aMem.inventory)) aMem.inventory = [];
+            if (!aMem.inventory.some((it) => it && it.id === msgToInsert.item.id)) {
+              aMem.inventory.push(msgToInsert.item);
+            }
+          }
+        }
+      }
 
       if (msgToInsert.type === "system_status" || msgToInsert.playerLocations) {
         if (!groupChat.settings) groupChat.settings = {};

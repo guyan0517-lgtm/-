@@ -56,6 +56,9 @@
     if (dbInstance && dbInstance.chats) {
       await dbInstance.chats.put(chat);
     }
+    if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+      window.PeerManager.syncGroupSettingsToPeers(chat);
+    }
   }
 
   // 道具图片去重检索：优先检索当前会话、其他所有群聊或全局道具库中是否已有同名道具图片
@@ -535,6 +538,9 @@
     if (dbInstance && dbInstance.chats) {
       await dbInstance.chats.put(chat);
     }
+    if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+      window.PeerManager.syncGroupSettingsToPeers(chat);
+    }
     renderInventoryList();
     if (typeof renderGlobalInventoryList === "function") {
       renderGlobalInventoryList();
@@ -835,15 +841,11 @@
     if (!listContainer) return;
 
     const inventory = getCurrentChatInventory();
-    
-    // 过滤分类
-    let filtered = inventory.slice();
-    if (currentInventoryTab !== "all") {
-      filtered = filtered.filter(item => item.category === currentInventoryTab);
-    }
+    const activeChat = (typeof state !== "undefined" && state.activeChatId && state.chats) ? state.chats[state.activeChatId] : null;
+    const isPeerGroupChat = Boolean(activeChat && activeChat.isGroup && (activeChat.isPeerGroup || activeChat.peerGroupId));
 
-    // 排序：星标置顶排在最前，其次按创建时间倒序
-    filtered.sort((a, b) => {
+    // 计算全量排序后的背包序号，确保分栏下序号也与背包实际顺序一致
+    const sortedFull = inventory.slice().sort((a, b) => {
       const aPinned = a.isPinned ? 1 : 0;
       const bPinned = b.isPinned ? 1 : 0;
       if (aPinned !== bPinned) {
@@ -851,6 +853,12 @@
       }
       return (b.createdAt || 0) - (a.createdAt || 0);
     });
+    
+    // 过滤分类
+    let filtered = sortedFull.slice();
+    if (currentInventoryTab !== "all") {
+      filtered = filtered.filter(item => item.category === currentInventoryTab);
+    }
 
     listContainer.innerHTML = "";
 
@@ -866,6 +874,14 @@
       const row = document.createElement("div");
       row.className = "inventory-item-row";
       row.dataset.id = item.id;
+
+      if (isPeerGroupChat) {
+        const seqIdx = sortedFull.findIndex(it => it && it.id === item.id);
+        const seqBadge = document.createElement("span");
+        seqBadge.className = "inv-item-seq-badge";
+        seqBadge.textContent = String(seqIdx !== -1 ? seqIdx + 1 : 1);
+        row.appendChild(seqBadge);
+      }
 
       // 左侧头像或占位图
       const avatarBox = document.createElement("div");
@@ -1431,6 +1447,9 @@ HTML设计与排版核心规范：
     if (dbInstance && dbInstance.chats) {
       await dbInstance.chats.put(chat);
     }
+    if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+      window.PeerManager.syncGroupSettingsToPeers(chat);
+    }
 
     renderInventoryList();
   }
@@ -1545,8 +1564,8 @@ HTML设计与排版核心规范：
       chatContent.appendChild(mySec);
     }
 
-    // 2. 成员道具或AI道具
-    if (chatItem.isGroup && Array.isArray(chatItem.members)) {
+    // 2. 成员道具或AI道具（密友群聊中不展示其他任何人的背包）
+    if (chatItem.isGroup && !(chatItem.isPeerGroup || chatItem.peerGroupId) && Array.isArray(chatItem.members)) {
       chatItem.members.forEach(member => {
         if (member.id === "user" || member.isDiceBot || member.roleType === "system_status" || member.roleType === "dice" || member.isDice) return;
         const mItems = Array.isArray(member.inventory) ? member.inventory : [];
@@ -1719,7 +1738,7 @@ HTML设计与排版核心规范：
           });
         });
       }
-      if (c.isGroup && Array.isArray(c.members)) {
+      if (c.isGroup && !(c.isPeerGroup || c.peerGroupId) && Array.isArray(c.members)) {
         c.members.forEach(m => {
           if (m.id === "user" || m.isDiceBot || m.roleType === "system_status") return;
           if (Array.isArray(m.inventory)) {
@@ -1756,6 +1775,7 @@ HTML设计与排版核心规范：
     if (typeof state === "undefined" || !state.activeChatId) return;
     const chat = state.chats[state.activeChatId];
     if (!chat) return;
+    if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId)) return;
 
     let targetName = "角色";
     let targetInventory = [];

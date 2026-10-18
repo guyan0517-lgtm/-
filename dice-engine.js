@@ -859,8 +859,8 @@ function extractDiceCommands(rawText) {
   const commands = [];
   const lines = rawText.split(/\r?\n/);
 
-  const cmdPrefixPattern = /^[.。]\s*(?:r[ahd]?|rc|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw|w\b|nn|sn|ob|set)/i;
-  const embeddedPattern = /[.。]\s*(?:r[ahd]?|rc|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw|w\b|nn|sn|ob|set)(?:[^\r\n;；.。]+|$)/gi;
+  const cmdPrefixPattern = /^[.。]\s*(?:r[ahdv]?|rc|rcv|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw|w\b|nn|sn|ob|set)/i;
+  const embeddedPattern = /[.。]\s*(?:r[ahdv]?|rc|rcv|check|st|sc|hp|mp|san|en|ti|li|coc(?:[567])?|dnd(?:5)?|jrrp|rules?|help|bot|weather|tarot|draw|w\b|nn|sn|ob|set)(?:[^\r\n;；.。]+|$)/gi;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -1417,7 +1417,200 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
     if (!cmdLine || typeof cmdLine !== "string") return null;
     const cleanCmd = cmdLine.trim();
 
-    // 1. 技能/属性检定 .ra [角色名] 技能名 [临时数值] [b/p] 或 .ra 技能名 或 .ra 属性 临时数值 或 .ra 临时数值 或 .rc
+    // 0. 属性/技能对抗检定：支持 .rav / .rcv 或 .ra / .rc 中包含 vs / 对抗 / pk
+    const isExplicitRav = /^(?:rav|rcv)(?:[^\s\d\+\-\*\/]|[\s])/i.test(cleanCmd);
+    const isRaWithVs = /^(?:ra|rc|check)(?:[^\s\d\+\-\*\/]|[\s])/i.test(cleanCmd) && /(?:\s+(?:vs|pk)\s+|\s*对抗\s*)/i.test(cleanCmd);
+    if (isExplicitRav || isRaWithVs) {
+      const bodyAfterCmd = cleanCmd.replace(/^(?:rav|rcv|ra|rc|check)/i, "").trim();
+      if (bodyAfterCmd) {
+        const ensureCharCoc = (charObj) => {
+          let coc = charObj && charObj.cocPanel;
+          if (!coc || !coc.skills || Object.keys(coc.skills).length === 0) {
+            if (charObj && (charObj.isUser || charObj.id === "user")) {
+              coc = (senderInfo && senderInfo.cocPanel) || chat.settings?.myCocPanel || (window.myCocPanel && typeof window.myCocPanel.getData === "function" ? window.myCocPanel.getData() : null) || (window.state?.chats && Object.values(window.state.chats).find(c => c.settings?.myCocPanel)?.settings?.myCocPanel);
+            } else if (charObj && chat.isGroup && Array.isArray(chat.members)) {
+              const mem = chat.members.find(m => m.id === charObj.id || m.groupNickname === charObj.name || m.originalName === charObj.name);
+              if (mem && mem.cocPanel) coc = mem.cocPanel;
+            }
+            if (!coc && chat.settings?.aiCocPanel) coc = chat.settings.aiCocPanel;
+          }
+          if (!coc) coc = (typeof getDefaultCocData === "function") ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} };
+          if (!coc.stats) coc.stats = {};
+          if (!coc.skills || Object.keys(coc.skills).length === 0) {
+            const defData = (typeof getDefaultCocData === "function") ? getDefaultCocData() : { skills: {} };
+            coc.skills = { ...(defData.skills || {}), ...(coc.skills || {}) };
+          }
+          return coc;
+        };
+
+        const rollSingleSide = (charObj, skName, valOverride, bp) => {
+          const coc = ensureCharCoc(charObj);
+          let val = (valOverride !== null && !isNaN(valOverride)) ? valOverride : resolveCocSkillOrStat(coc, skName || "力量");
+          if (isNaN(val) || val === null) val = 50;
+          let roll = Math.floor(Math.random() * 100) + 1;
+          const lowBp = (bp || "").toLowerCase();
+          if (lowBp.startsWith("b")) {
+            const cnt = parseInt(lowBp.slice(1), 10) || 1;
+            const u = roll % 10;
+            const tens = [Math.floor(roll / 10)];
+            for (let i = 0; i < cnt; i++) tens.push(Math.floor(Math.random() * 10));
+            const minT = Math.min(...tens);
+            roll = (minT === 0 && u === 0) ? 100 : (minT * 10 + u);
+          } else if (lowBp.startsWith("p")) {
+            const cnt = parseInt(lowBp.slice(1), 10) || 1;
+            const u = roll % 10;
+            const tens = [Math.floor(roll / 10)];
+            for (let i = 0; i < cnt; i++) tens.push(Math.floor(Math.random() * 10));
+            const maxT = Math.max(...tens);
+            roll = (maxT === 0 && u === 0) ? 100 : (maxT * 10 + u);
+          }
+          let level = "失败";
+          let rank = 0;
+          if (roll === 1) {
+            level = "大成功";
+            rank = 4;
+          } else if (roll === 100 || (val >= 50 && roll >= 96)) {
+            level = "大失败";
+            rank = -1;
+          } else if (roll <= Math.floor(val / 5)) {
+            level = "极难成功";
+            rank = 3;
+          } else if (roll <= Math.floor(val / 2)) {
+            level = "困难成功";
+            rank = 2;
+          } else if (roll <= val) {
+            level = "常规成功";
+            rank = 1;
+          }
+          return {
+            name: charObj ? charObj.name : "角色",
+            skill: skName || "属性",
+            val,
+            roll,
+            level,
+            rank
+          };
+        };
+
+        const getDefaultOpponent = () => {
+          if (!chat.isGroup) {
+            return {
+              id: chat.id,
+              name: chat.settings?.remarkName || chat.settings?.aiName || chat.name || "对方",
+              isUser: false,
+              cocPanel: chat.settings?.aiCocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} })
+            };
+          }
+          if (Array.isArray(chat.members)) {
+            const other = chat.members.find(m => m && !m.isDiceBot && m.roleType !== "dice" && m.roleType !== "system_status" && !m.isDice && m.id !== defaultSenderId && (m.groupNickname || m.originalName) !== defaultSenderName);
+            if (other) {
+              return {
+                id: other.id,
+                name: other.groupNickname || other.originalName || "对手",
+                isUser: false,
+                cocPanel: other.cocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} })
+              };
+            }
+          }
+          return resolveTarget(null);
+        };
+
+        const parseSideTokens = (tokens, defaultChar, fallbackSkill) => {
+          let charObj = defaultChar;
+          let skName = fallbackSkill || "";
+          let valOvr = null;
+          let bp = "";
+          if (!tokens || tokens.length === 0) {
+            return { charObj: charObj || resolveTarget(null), skName: skName || "力量", valOvr, bp };
+          }
+          let idx = 0;
+          const maybeChar = findTargetCharacter(tokens[0]);
+          if (maybeChar) {
+            charObj = maybeChar;
+            idx = 1;
+          }
+          for (let i = idx; i < tokens.length; i++) {
+            const tk = tokens[i];
+            if (/^[+-]?\d+$/.test(tk)) {
+              valOvr = parseInt(tk, 10);
+            } else if (/^[bp]\d*$/i.test(tk)) {
+              bp = tk;
+            } else if (!skName || skName === fallbackSkill) {
+              const maybeC2 = (i === idx && !maybeChar) ? findTargetCharacter(tk) : null;
+              if (maybeC2) {
+                charObj = maybeC2;
+              } else {
+                skName = tk;
+              }
+            }
+          }
+          return {
+            charObj: charObj || resolveTarget(null),
+            skName: skName || fallbackSkill || "力量",
+            valOvr,
+            bp
+          };
+        };
+
+        let sideAConf = null;
+        let sideBConf = null;
+
+        if (/(?:\s+(?:vs|pk)\s+|\s*对抗\s*)/i.test(bodyAfterCmd)) {
+          const vsParts = bodyAfterCmd.split(/(?:\s+(?:vs|pk)\s+|\s*对抗\s*)/i).map(s => s.trim()).filter(Boolean);
+          const leftTokens = (vsParts[0] || "").split(/\s+/).filter(Boolean);
+          const rightTokens = (vsParts[1] || "").split(/\s+/).filter(Boolean);
+          sideAConf = parseSideTokens(leftTokens, resolveTarget(null), "力量");
+          sideBConf = parseSideTokens(rightTokens, getDefaultOpponent(), sideAConf.skName);
+        } else {
+          const allTokens = bodyAfterCmd.split(/\s+/).filter(Boolean);
+          if (allTokens.length >= 3 && findTargetCharacter(allTokens[0]) && findTargetCharacter(allTokens[2])) {
+            sideAConf = parseSideTokens(allTokens.slice(0, 2), resolveTarget(null), "力量");
+            sideBConf = parseSideTokens(allTokens.slice(2), getDefaultOpponent(), sideAConf.skName);
+          } else if (allTokens.length >= 2 && !findTargetCharacter(allTokens[0]) && findTargetCharacter(allTokens[1])) {
+            // .rav 力量 张三 [敏捷]
+            sideAConf = parseSideTokens([allTokens[0]], resolveTarget(null), "力量");
+            sideBConf = parseSideTokens(allTokens.slice(1), getDefaultOpponent(), sideAConf.skName);
+          } else if (allTokens.length >= 2 && findTargetCharacter(allTokens[0]) && !findTargetCharacter(allTokens[1])) {
+            // .rav 张三 力量 [敏捷]
+            const oppChar = findTargetCharacter(allTokens[0]);
+            sideAConf = parseSideTokens([allTokens[1]], resolveTarget(null), "力量");
+            sideBConf = parseSideTokens(allTokens.slice(2), oppChar, sideAConf.skName);
+          } else {
+            sideAConf = parseSideTokens(allTokens.slice(0, 1), resolveTarget(null), "力量");
+            sideBConf = parseSideTokens(allTokens.slice(1), getDefaultOpponent(), sideAConf.skName);
+          }
+        }
+
+        const resA = rollSingleSide(sideAConf.charObj, sideAConf.skName, sideAConf.valOvr, sideAConf.bp);
+        const resB = rollSingleSide(sideBConf.charObj, sideBConf.skName, sideBConf.valOvr, sideBConf.bp);
+
+        let outcomeText = "";
+        if (resA.rank <= 0 && resB.rank <= 0) {
+          outcomeText = "双方均失败，对抗平局";
+        } else if (resA.rank > resB.rank) {
+          outcomeText = `【${resA.name}】对抗胜出`;
+        } else if (resB.rank > resA.rank) {
+          outcomeText = `【${resB.name}】对抗胜出`;
+        } else {
+          if (resA.val > resB.val) {
+            outcomeText = `成功等级相同，【${resA.name}】因属性/技能值更高 (${resA.val} > ${resB.val}) 胜出`;
+          } else if (resB.val > resA.val) {
+            outcomeText = `成功等级相同，【${resB.name}】因属性/技能值更高 (${resB.val} > ${resA.val}) 胜出`;
+          } else if (resA.roll < resB.roll) {
+            outcomeText = `成功等级与数值均相同，【${resA.name}】因出目更优 (${resA.roll} < ${resB.roll}) 胜出`;
+          } else if (resB.roll < resA.roll) {
+            outcomeText = `成功等级与数值均相同，【${resB.name}】因出目更优 (${resB.roll} < ${resA.roll}) 胜出`;
+          } else {
+            outcomeText = "双方完全平局";
+          }
+        }
+
+        const text = `🎲 【属性对抗】${resA.name} (${resA.skill}) VS ${resB.name} (${resB.skill})\n▸ ${resA.name} 【${resA.skill}】：1D100 = ${resA.roll} / ${resA.val} 【${resA.level}】\n▸ ${resB.name} 【${resB.skill}】：1D100 = ${resB.roll} / ${resB.val} 【${resB.level}】\n▸ 对抗结果：${outcomeText}`;
+        return { handled: true, text };
+      }
+    }
+
+    // 1. 技能/属性检定 .ra [角色名] 技能名 [临时数值] [b/p] 或 .ra 妙手 真人名字 或 .ra 技能名 或 .ra 属性 临时数值 或 .ra 临时数值 或 .rc
     const raMatch = cleanCmd.match(/^(?:ra|rc|check)(?:([^\s\d\+\-\*\/][^\s]*))?(?:\s+(.+))?$/i);
     if (raMatch) {
       let attached = raMatch[1] ? raMatch[1].trim() : "";
@@ -1426,37 +1619,77 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
       let skillName = "";
       let targetValOverride = null;
       let bpMod = "";
+      let stealVictimMember = null;
+
+      const findStealVictimMember = (rawName) => {
+        if (!chat || !chat.isGroup || !Array.isArray(chat.members) || !rawName) return null;
+        const q = String(rawName).trim().replace(/^[&@]|^(?:角色[:：])|^(?:目标[:：])/, "").trim().toLowerCase();
+        if (!q) return null;
+        return chat.members.find(m => {
+          if (!m || m.isDiceBot || m.roleType === "dice" || m.roleType === "system_status" || m.isDice) return false;
+          const gn = (m.groupNickname || "").trim().toLowerCase();
+          const on = (m.originalName || "").trim().toLowerCase();
+          const nm = (m.name || "").trim().toLowerCase();
+          const id = String(m.id || "").trim().toLowerCase();
+          return gn === q || on === q || nm === q || id === q;
+        }) || null;
+      };
+
+      const isSleightSkill = (s) => {
+        const cleanS = String(s || "").trim();
+        return cleanS === "妙手" || cleanS === "扒窃" || cleanS === "偷窃" || cleanS === "顺手牵羊";
+      };
 
       if (attached) {
-        const charFound = findTargetCharacter(attached);
-        if (charFound) {
-          target = charFound;
-          if (restParams) {
-            const parts = restParams.split(/\s+/).filter(Boolean);
-            skillName = parts[0] || "检定";
-            for (const p of parts.slice(1)) {
-              if (/^[+-]?\d+$/.test(p)) targetValOverride = parseInt(p, 10);
-              else if (/^[bp]\d*$/i.test(p)) bpMod = p;
-            }
-          } else {
-            skillName = "检定";
+        if (isSleightSkill(attached) && restParams) {
+          // .ra妙手 真人名字 [数值] [b/p]
+          target = resolveTarget(null);
+          skillName = attached;
+          const parts = restParams.split(/\s+/).filter(Boolean);
+          for (const p of parts) {
+            if (/^[+-]?\d+$/.test(p)) targetValOverride = parseInt(p, 10);
+            else if (/^[bp]\d*$/i.test(p)) bpMod = p;
+            else if (!stealVictimMember) stealVictimMember = findStealVictimMember(p);
           }
         } else {
-          target = resolveTarget(null); // 不带人名，默认发送者
-          skillName = attached;
-          if (restParams) {
-            const parts = restParams.split(/\s+/).filter(Boolean);
-            for (const p of parts) {
-              if (/^[+-]?\d+$/.test(p)) targetValOverride = parseInt(p, 10);
-              else if (/^[bp]\d*$/i.test(p)) bpMod = p;
+          const charFound = findTargetCharacter(attached);
+          if (charFound) {
+            target = charFound;
+            if (restParams) {
+              const parts = restParams.split(/\s+/).filter(Boolean);
+              skillName = parts[0] || "检定";
+              for (const p of parts.slice(1)) {
+                if (/^[+-]?\d+$/.test(p)) targetValOverride = parseInt(p, 10);
+                else if (/^[bp]\d*$/i.test(p)) bpMod = p;
+              }
+            } else {
+              skillName = "检定";
+            }
+          } else {
+            target = resolveTarget(null); // 不带人名，默认发送者
+            skillName = attached;
+            if (restParams) {
+              const parts = restParams.split(/\s+/).filter(Boolean);
+              for (const p of parts) {
+                if (/^[+-]?\d+$/.test(p)) targetValOverride = parseInt(p, 10);
+                else if (/^[bp]\d*$/i.test(p)) bpMod = p;
+              }
             }
           }
         }
       } else if (restParams) {
         const parts = restParams.split(/\s+/).filter(Boolean);
         if (parts.length > 0) {
-          // 显式前缀如 @张三、角色:张三
-          if (/^[&@]|^(?:角色[:：])|^(?:目标[:：])/.test(parts[0])) {
+          if (isSleightSkill(parts[0]) && parts.length >= 2) {
+            // .ra 妙手 真人名字 [数值] [b/p]
+            target = resolveTarget(null);
+            skillName = parts[0];
+            for (const p of parts.slice(1)) {
+              if (/^[+-]?\d+$/.test(p)) targetValOverride = parseInt(p, 10);
+              else if (/^[bp]\d*$/i.test(p)) bpMod = p;
+              else if (!stealVictimMember) stealVictimMember = findStealVictimMember(p);
+            }
+          } else if (/^[&@]|^(?:角色[:：])|^(?:目标[:：])/.test(parts[0])) {
             const charFound = findTargetCharacter(parts[0]);
             target = charFound || resolveTarget(null);
             const remaining = parts.slice(1);
@@ -1564,14 +1797,95 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
           level = "常规成功";
         }
 
-        const text = formatDiceTemplate(templates.check || DEFAULT_DICE_TEMPLATES.check, {
+        let text = formatDiceTemplate(templates.check || DEFAULT_DICE_TEMPLATES.check, {
           角色名: target.name,
           技能: skillName,
           结果: rollDetail,
           技能数值: skillVal,
           成功等级: level
         });
-        return { handled: true, text };
+
+        const extraMessages = [];
+        let persistChat = false;
+
+        // 妙手偷取真人背包判定：仅在群聊且有骰子时生效
+        if (stealVictimMember && chat && chat.isGroup && diceInfo) {
+          const victimDisplayName = stealVictimMember.groupNickname || stealVictimMember.originalName || stealVictimMember.name || "目标";
+          const isCheckSuccess = ["大成功", "极难成功", "困难成功", "常规成功"].includes(level);
+          if (isCheckSuccess) {
+            const rawVictimInv = Array.isArray(stealVictimMember.inventory) ? stealVictimMember.inventory : [];
+            const sortedVictimInv = rawVictimInv.slice().sort((a, b) => {
+              const aPinned = a && a.isPinned ? 1 : 0;
+              const bPinned = b && b.isPinned ? 1 : 0;
+              if (aPinned !== bPinned) return bPinned - aPinned;
+              return ((b && b.createdAt) || 0) - ((a && a.createdAt) || 0);
+            });
+            const itemCount = sortedVictimInv.length;
+            if (itemCount === 0) {
+              text += `\n🎲 妙手目标【${victimDisplayName}】背包内暂无物品，未能偷到任何道具。`;
+            } else {
+              const stealRoll = Math.floor(Math.random() * itemCount) + 1;
+              const pickedItem = sortedVictimInv[stealRoll - 1];
+              if (pickedItem) {
+                const origIdx = stealVictimMember.inventory.findIndex(it => it && it.id === pickedItem.id);
+                if (origIdx !== -1) {
+                  stealVictimMember.inventory.splice(origIdx, 1);
+                }
+                const stolenCopy = {
+                  ...pickedItem,
+                  source: `妙手偷取自 ${victimDisplayName}`,
+                  createdAt: Date.now()
+                };
+                if (target.isUser || target.id === "user") {
+                  if (!Array.isArray(chat.inventory)) chat.inventory = [];
+                  chat.inventory.push(stolenCopy);
+                  if (typeof window.renderInventoryList === "function") {
+                    try { window.renderInventoryList(); } catch (_) {}
+                  }
+                } else if (Array.isArray(chat.members)) {
+                  const actorMem = chat.members.find(m => m && (m.id === target.id || m.groupNickname === target.name || m.originalName === target.name));
+                  if (actorMem) {
+                    if (!Array.isArray(actorMem.inventory)) actorMem.inventory = [];
+                    actorMem.inventory.push(stolenCopy);
+                  }
+                }
+
+                text += `\n🎲 妙手检定成功！自动掷骰：1D${itemCount} = ${stealRoll}，从【${victimDisplayName}】背包中摸出了第 ${stealRoll} 号物品【${stolenCopy.name}】！`;
+
+                const myCode = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function")
+                  ? window.PeerManager.getOrCreateMyPeerCode()
+                  : "";
+                const actorPeerCode = (target.isUser || target.id === "user")
+                  ? myCode
+                  : (chat.members.find(m => m && m.id === target.id)?.peerCode || "");
+
+                extraMessages.push({
+                  id: "msg_" + (Date.now() + 1) + "_" + Math.random().toString(36).substr(2, 4),
+                  role: "assistant",
+                  type: "inventory_card",
+                  actionType: "obtain",
+                  sender: diceInfo.name || "骰娘",
+                  senderName: diceInfo.name || "骰娘",
+                  name: diceInfo.name || "骰娘",
+                  avatar: diceInfo.avatar,
+                  senderAvatar: diceInfo.avatar,
+                  targetName: target.name,
+                  stealFromPeerCode: stealVictimMember.peerCode || "",
+                  stealFromMemberId: stealVictimMember.id || "",
+                  stealToPeerCode: actorPeerCode || "",
+                  stealToMemberId: target.id || "",
+                  stolenItemId: pickedItem.id || "",
+                  item: stolenCopy,
+                  content: `[${target.name} 获得了道具“${stolenCopy.name}”]`,
+                  timestamp: Date.now() + 1
+                });
+                persistChat = true;
+              }
+            }
+          }
+        }
+
+        return { handled: true, text, extraMessages, persistChat };
       }
     }
 
@@ -2330,6 +2644,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
 
   // 批量遍历执行提取到的所有指令
   const results = [];
+  const allExtraMessages = [];
   let combinedHtml = "";
   let anyPersist = false;
 
@@ -2339,6 +2654,9 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
       results.push(res.text);
       if (res.html) combinedHtml += res.html;
       if (res.persistChat) anyPersist = true;
+      if (Array.isArray(res.extraMessages) && res.extraMessages.length > 0) {
+        allExtraMessages.push(...res.extraMessages);
+      }
     }
   }
 
@@ -2347,7 +2665,8 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
       handled: true,
       text: results.join("\n"),
       html: combinedHtml || null,
-      persistChat: anyPersist
+      persistChat: anyPersist,
+      extraMessages: allExtraMessages
     };
   }
 

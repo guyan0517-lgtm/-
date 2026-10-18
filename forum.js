@@ -491,6 +491,77 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * 书架书籍自动标点净化：将英文标点转为中文标点，保留原有空行
+   */
+  function sanitizeBookshelfPunctuation(rawText) {
+    if (!rawText || typeof rawText !== "string") return rawText;
+    let cleanedText = rawText;
+
+    const protectedTokens = [];
+    cleanedText = cleanedText.replace(
+      /(https?:\/\/[^\s"'<>]+|<[^>]+>)/g,
+      (m) => {
+        const idx = protectedTokens.length;
+        protectedTokens.push(m);
+        return `@@BOOK_PROT_${idx}@@`;
+      }
+    );
+
+    cleanedText = cleanedText.replace(/"([^"\n]*)"/g, "“$1”");
+    let openDoubleQuote = true;
+    cleanedText = cleanedText.replace(/"/g, () => {
+      const q = openDoubleQuote ? "“" : "”";
+      openDoubleQuote = !openDoubleQuote;
+      return q;
+    });
+
+    cleanedText = cleanedText.replace(
+      /(^|[^a-zA-Z0-9])'([^'\n]*[^\x00-\x7F][^'\n]*)'(?![a-zA-Z0-9])/g,
+      "$1‘$2’"
+    );
+
+    cleanedText = cleanedText.replace(
+      /\(([^)\n]*[\u4e00-\u9fa5][^)\n]*)\)/g,
+      "（$1）"
+    );
+    cleanedText = cleanedText.replace(
+      /\[([^\]\n]*[\u4e00-\u9fa5][^\]\n]*)\]/g,
+      "【$1】"
+    );
+
+    cleanedText = cleanedText
+      .replace(/\.{3,}/g, "……")
+      .replace(/--+/g, "——")
+      .replace(/([\u4e00-\u9fa50-9”’）】])\s*,\s*/g, "$1，")
+      .replace(/,\s*(?=[\u4e00-\u9fa5“‘（【])/g, "，")
+      .replace(/([\u4e00-\u9fa5”’）】])\s*\.(?!\d|\.)/g, "$1。")
+      .replace(/([\u4e00-\u9fa50-9”’）】])\s*!\s*/g, "$1！")
+      .replace(/!\s*(?=[\u4e00-\u9fa5“‘（【])/g, "！")
+      .replace(/\?\s*(?=[\u4e00-\u9fa5“‘（【])/g, "？")
+      .replace(/([\u4e00-\u9fa50-9”’）】])\s*\?\s*/g, "$1？")
+      .replace(/([\u4e00-\u9fa5”’）】])\s*;\s*/g, "$1；")
+      .replace(/;\s*(?=[\u4e00-\u9fa5“‘（【])/g, "；")
+      .replace(/([\u4e00-\u9fa5”’）】])\s*:\s*/g, "$1：")
+      .replace(/:\s*(?=[\u4e00-\u9fa5“‘（【])/g, "：");
+
+    cleanedText = cleanedText.replace(/@@BOOK_PROT_(\d+)@@/g, (_, idx) => {
+      return protectedTokens[Number(idx)] || "";
+    });
+
+    return cleanedText;
+  }
+
+  function formatBookshelfParagraphsHtml(text) {
+    const sanitized = sanitizeBookshelfPunctuation(text || "");
+    if (!sanitized) return "";
+    return sanitized
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((line) => (line.trim() === "" ? "<p><br></p>" : `<p>${line}</p>`))
+      .join("");
+  }
+
+  /**
    * 渲染小组内的帖子列表：长篇小说自动折叠合并，短篇单独显示
    */
   async function renderGroupPosts(groupId) {
@@ -780,11 +851,14 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }
 
-    const cleanBody = (post.content || "").replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim();
+    const cleanBody = sanitizeBookshelfPunctuation(
+      (post.content || "").replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim()
+    );
+    const cleanTitle = sanitizeBookshelfPunctuation(post.title || "");
 
     contentEl.innerHTML = `
         <div class="post-detail-header">
-            <h1 class="post-main-title">${post.title}</h1>
+            <h1 class="post-main-title">${cleanTitle}</h1>
             <div class="post-user-info-row">
                 <img src="${authorAvatarUrl}" class="post-author-avatar">
                 <div class="post-detail-meta-group">
@@ -1332,8 +1406,8 @@ ${worldviewContext}
           // --- 3. 保存帖子时，也保存AI原创的分类 ---
           const newPost = {
             groupId: groupId,
-            title: postData.title,
-            content: postData.content,
+            title: sanitizeBookshelfPunctuation(postData.title || ""),
+            content: sanitizeBookshelfPunctuation(postData.content || ""),
             author: postData.author,
             timestamp: Date.now() + totalPosts,
             categories: postData.categories || [], // 保存原创分类
@@ -1541,18 +1615,20 @@ ${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心�
         throw new Error("AI返回了无效的JSON格式。");
       }
 
-      let seriesTitle = (parsed.seriesTitle || `${char1Name}与${char2Name}`).replace(/[《》]/g, "").trim();
+      let seriesTitle = sanitizeBookshelfPunctuation((parsed.seriesTitle || `${char1Name}与${char2Name}`).replace(/[《》]/g, "").trim());
       if (!seriesTitle || seriesTitle === "旧日微光" || seriesTitle === "未命名" || seriesTitle === "无题") {
         seriesTitle = `${char1Name}与${char2Name}的往事`;
       }
-      const chapterTitle = (parsed.chapterTitle || "第一章").replace(/^第\d+章\s*/i, "").trim();
+      const chapterTitle = sanitizeBookshelfPunctuation((parsed.chapterTitle || "第一章").replace(/^第\d+章\s*/i, "").trim());
       const rawChapterContent =
         parsed.chapterContent ||
         parsed.story ||
         parsed.content ||
         "这一章的正文生成失败，请重试。";
-      const chapterContent = rawChapterContent.replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim();
-      const chapterSummary = parsed.chapterSummary || "";
+      const chapterContent = sanitizeBookshelfPunctuation(
+        rawChapterContent.replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim()
+      );
+      const chapterSummary = sanitizeBookshelfPunctuation(parsed.chapterSummary || "");
       const baseCategories = Array.isArray(parsed.categories)
         ? parsed.categories
         : [];
@@ -1884,8 +1960,8 @@ ${chapterSummaries || "暂无摘要"}
 
     const newPost = {
       groupId: window.activeGroupId, // 【修改】这里必须用 window.activeGroupId
-      title: title,
-      content: content,
+      title: sanitizeBookshelfPunctuation(title),
+      content: sanitizeBookshelfPunctuation(content),
       author: state.qzoneSettings.nickname || "我",
       timestamp: Date.now(),
       categories: categories,
@@ -2527,8 +2603,8 @@ ${JSON.stringify(publicFigures, null, 2)}
           // --- ▼▼▼ 【核心新增】保存分类数据 ---
           const newPost = {
             groupId: groupId,
-            title: postData.title,
-            content: postData.content,
+            title: sanitizeBookshelfPunctuation(postData.title || ""),
+            content: sanitizeBookshelfPunctuation(postData.content || ""),
             author: postData.author,
             timestamp: Date.now() + totalPosts,
             categories: postData.categories || [], // 保存分类
@@ -2664,8 +2740,8 @@ ${JSON.stringify(publicFigures, null, 2)}
         // --- ▼▼▼ 【核心新增】保存分类数据 ---
         const newPost = {
           groupId: groupId,
-          title: postData.title,
-          content: postData.content,
+          title: sanitizeBookshelfPunctuation(postData.title || ""),
+          content: sanitizeBookshelfPunctuation(postData.content || ""),
           author: postingChar.name,
           timestamp: Date.now(),
           categories: postData.categories || [], // 保存分类
@@ -2961,14 +3037,16 @@ ${customPromptRequirement}
         throw new Error("AI返回了无效的JSON格式。");
       }
 
-      const chapterTitle = (parsed.chapterTitle || `第${nextIndex}章`).replace(/^第\d+章\s*/i, "").trim();
+      const chapterTitle = sanitizeBookshelfPunctuation((parsed.chapterTitle || `第${nextIndex}章`).replace(/^第\d+章\s*/i, "").trim());
       const rawChapterContent =
         parsed.chapterContent ||
         parsed.story ||
         parsed.content ||
         "本章生成失败，请重试。";
-      const chapterContent = rawChapterContent.replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim();
-      const chapterSummary = parsed.chapterSummary || "";
+      const chapterContent = sanitizeBookshelfPunctuation(
+        rawChapterContent.replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim()
+      );
+      const chapterSummary = sanitizeBookshelfPunctuation(parsed.chapterSummary || "");
       const baseCategories = Array.isArray(parsed.categories)
         ? parsed.categories
         : [];
