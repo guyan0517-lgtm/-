@@ -10095,7 +10095,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <div class="form-group" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">分组</label>
-              <button type="button" class="tc-btn-action" id="tc-add-group-btn" style="flex-shrink: 0;">添加</button>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" class="tc-btn-action" id="tc-add-group-btn" style="flex-shrink: 0;">添加</button>
+                <button type="button" class="tc-btn-action" id="tc-toggle-groups-btn" style="flex-shrink: 0;">折叠</button>
+              </div>
             </div>
             <div id="tc-groups-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
           </div>
@@ -24271,6 +24274,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (val === "" && !richEl.querySelector(".tc-inline-mashu-bubble") && richEl.innerHTML !== "") {
               richEl.innerHTML = "";
             }
+            if (!isEntryBox && typeof updateTcEntryLocateIcons === "function") {
+              updateTcEntryLocateIcons();
+            }
           };
 
           const scheduleSyncToTextarea = () => {
@@ -24647,6 +24653,101 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (typeof ta._syncFromTextarea === "function") ta._syncFromTextarea();
             }
           });
+          if (typeof updateTcEntryLocateIcons === "function") {
+            updateTcEntryLocateIcons();
+          }
+        }
+
+        function findMatchingBubblesForTcEntry(rawKey) {
+          const clean = normalizeTcPlaceholderKey(rawKey).replace(/^麻薯-/, "").trim();
+          const rawTrim = String(rawKey || "").trim();
+          if (!clean && !rawTrim) return [];
+
+          const matches = [];
+          const sections = [
+            { taId: "tc-preset-header-input", bodyId: "tc-preset-header-body", btnId: "tc-toggle-header-btn" },
+            { taId: "tc-preset-general-input", bodyId: "tc-preset-general-body", btnId: "tc-toggle-general-btn" },
+          ];
+          sections.forEach((sec) => {
+            const ta = document.getElementById(sec.taId);
+            if (!ta || !ta._richEl) return;
+            const bubbles = ta._richEl.querySelectorAll(".tc-inline-mashu-bubble");
+            bubbles.forEach((b) => {
+              const tag = String(b.dataset.mashuTag || "").trim();
+              const tagClean = normalizeTcPlaceholderKey(tag).replace(/^麻薯-/, "").trim();
+              const textContent = (b.textContent || "").trim();
+              if (
+                (clean && (tagClean === clean || textContent === clean)) ||
+                (rawTrim && (tag === rawTrim || textContent === rawTrim))
+              ) {
+                matches.push({ bubble: b, richEl: ta._richEl, bodyId: sec.bodyId, btnId: sec.btnId });
+              }
+            });
+          });
+          return matches;
+        }
+
+        function updateTcEntryLocateIcons() {
+          const entriesContainer = document.getElementById("tc-entries-list");
+          if (!entriesContainer) return;
+          const locateBtns = entriesContainer.querySelectorAll(".tc-entry-locate-btn");
+          locateBtns.forEach((btn) => {
+            const entryIdx = Number(btn.dataset.entryIdx);
+            const ent = !isNaN(entryIdx) ? currentTcEditorEntries[entryIdx] : null;
+            const key = ent ? ent.key : "";
+            const found = key ? findMatchingBubblesForTcEntry(key) : [];
+            btn.style.display = found.length > 0 ? "inline-flex" : "none";
+          });
+        }
+
+        let lastLocatedBubbleCycleMap = {};
+
+        function locateAndCenterTcEntryBubble(rawKey) {
+          const found = findMatchingBubblesForTcEntry(rawKey);
+          if (found.length === 0) return;
+
+          const keyId = String(rawKey || "").trim();
+          const nextIdx = ((lastLocatedBubbleCycleMap[keyId] || 0) % found.length);
+          lastLocatedBubbleCycleMap[keyId] = nextIdx + 1;
+
+          const target = found[nextIdx];
+          if (!target || !target.bubble || !target.richEl) return;
+
+          const bodyEl = document.getElementById(target.bodyId);
+          const btnEl = document.getElementById(target.btnId);
+          if (bodyEl && bodyEl.style.display === "none") {
+            bodyEl.style.display = "block";
+            if (btnEl) btnEl.textContent = "折叠";
+          }
+
+          const { bubble, richEl } = target;
+          const modalBody = richEl.closest(".modal-body");
+
+          requestAnimationFrame(() => {
+            const richRect = richEl.getBoundingClientRect();
+            const bubbleRect = bubble.getBoundingClientRect();
+            const offsetInsideRich = (bubbleRect.top - richRect.top) + richEl.scrollTop;
+            const targetRichScroll = Math.max(0, offsetInsideRich - (richEl.clientHeight / 2) + (bubbleRect.height / 2));
+            richEl.scrollTo({ top: targetRichScroll, behavior: "smooth" });
+
+            if (modalBody) {
+              const modalRect = modalBody.getBoundingClientRect();
+              const updatedRichRect = richEl.getBoundingClientRect();
+              const richCenterInModal = (updatedRichRect.top - modalRect.top) + modalBody.scrollTop + (updatedRichRect.height / 2);
+              const targetModalScroll = Math.max(0, richCenterInModal - (modalBody.clientHeight / 2));
+              modalBody.scrollTo({ top: targetModalScroll, behavior: "smooth" });
+            }
+
+            const origTransform = bubble.style.transform;
+            const origBoxShadow = bubble.style.boxShadow;
+            bubble.style.transition = "transform 0.2s ease, box-shadow 0.2s ease";
+            bubble.style.transform = "scale(1.16)";
+            bubble.style.boxShadow = "0 0 0 3px color-mix(in srgb, var(--accent-color) 35%, transparent)";
+            setTimeout(() => {
+              bubble.style.transform = origTransform;
+              bubble.style.boxShadow = origBoxShadow;
+            }, 650);
+          });
         }
 
         function flushAllTcRichEditors() {
@@ -24815,7 +24916,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const keyInput = document.createElement("input");
               keyInput.type = "text";
               keyInput.className = "moe-input tc-sub-input";
-              keyInput.style.flex = "2 1 0%";
+              keyInput.style.flex = "1 1 0%";
               keyInput.placeholder = "指代词";
               keyInput.value = ent.key || "";
               keyInput.oninput = (e) => {
@@ -24830,58 +24931,72 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 refreshStaticTcRichEditorsDisplay();
               };
 
-              let copyPressTimer = null;
-              const clearCopyPress = () => {
-                if (copyPressTimer) {
-                  clearTimeout(copyPressTimer);
-                  copyPressTimer = null;
-                }
+              const doCopyEntryKey = async () => {
+                const textToCopy = (keyInput.value || "").trim();
+                if (!textToCopy) return;
+                try {
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(textToCopy);
+                  } else {
+                    const tempTa = document.createElement("textarea");
+                    tempTa.value = textToCopy;
+                    tempTa.style.cssText = "position:fixed;left:-9999px;top:-9999px;";
+                    document.body.appendChild(tempTa);
+                    tempTa.select();
+                    document.execCommand("copy");
+                    tempTa.remove();
+                  }
+                  const origBorder = keyInput.style.borderColor;
+                  keyInput.style.borderColor = "var(--accent-color)";
+                  setTimeout(() => {
+                    keyInput.style.borderColor = origBorder;
+                  }, 450);
+                } catch (err) {}
               };
-              const startCopyPress = () => {
-                clearCopyPress();
-                copyPressTimer = setTimeout(async () => {
-                  const textToCopy = (keyInput.value || "").trim();
-                  if (!textToCopy) return;
-                  try {
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                      await navigator.clipboard.writeText(textToCopy);
-                    } else {
-                      const tempTa = document.createElement("textarea");
-                      tempTa.value = textToCopy;
-                      tempTa.style.cssText = "position:fixed;left:-9999px;top:-9999px;";
-                      document.body.appendChild(tempTa);
-                      tempTa.select();
-                      document.execCommand("copy");
-                      tempTa.remove();
-                    }
-                    const origBorder = keyInput.style.borderColor;
-                    keyInput.style.borderColor = "var(--accent-color)";
-                    setTimeout(() => {
-                      keyInput.style.borderColor = origBorder;
-                    }, 450);
-                  } catch (err) {}
-                }, 500);
-              };
-              keyInput.addEventListener("mousedown", (e) => {
-                if (e.button !== 0) return;
-                startCopyPress();
+
+              keyInput.addEventListener("dblclick", () => {
+                doCopyEntryKey();
               });
-              keyInput.addEventListener("mouseup", clearCopyPress);
-              keyInput.addEventListener("mouseleave", clearCopyPress);
-              keyInput.addEventListener("touchstart", startCopyPress, { passive: true });
-              keyInput.addEventListener("touchend", clearCopyPress);
-              keyInput.addEventListener("touchcancel", clearCopyPress);
-              keyInput.addEventListener("touchmove", clearCopyPress, { passive: true });
+
+              let lastTapTime = 0;
+              keyInput.addEventListener("touchend", () => {
+                const now = Date.now();
+                if (now - lastTapTime < 300) {
+                  lastTapTime = 0;
+                  doCopyEntryKey();
+                } else {
+                  lastTapTime = now;
+                }
+              });
+
+              const rightTailWrap = document.createElement("div");
+              rightTailWrap.style.cssText = "width: 104px; min-width: 104px; height: 32px; display: flex; align-items: center; gap: 5px; flex-shrink: 0; box-sizing: border-box;";
+
+              const locateBtn = document.createElement("button");
+              locateBtn.type = "button";
+              locateBtn.className = "tc-btn-action tc-entry-move-btn tc-entry-locate-btn";
+              locateBtn.dataset.entryIdx = String(idx);
+              locateBtn.title = "定位到气泡";
+              locateBtn.style.display = "none";
+              locateBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>`;
+              locateBtn.onclick = (e) => {
+                e.stopPropagation();
+                locateAndCenterTcEntryBubble(currentTcEditorEntries[idx].key);
+              };
 
               const foldBlankArea = document.createElement("div");
-              foldBlankArea.style.cssText = "flex: 1 1 0%; min-width: 48px; height: 32px; cursor: pointer; user-select: none; box-sizing: border-box;";
+              foldBlankArea.style.cssText = "flex: 1 1 0%; height: 32px; cursor: pointer; user-select: none; box-sizing: border-box;";
+
+              rightTailWrap.appendChild(locateBtn);
+              rightTailWrap.appendChild(foldBlankArea);
 
               topRow.appendChild(cb);
               topRow.appendChild(keyInput);
-              topRow.appendChild(foldBlankArea);
+              topRow.appendChild(rightTailWrap);
 
               const secondRow = document.createElement("div");
               secondRow.className = "tc-sub-row";
+              secondRow.style.paddingLeft = "23px";
 
               const groupSelect = document.createElement("select");
               groupSelect.className = "moe-input tc-sub-select";
@@ -25121,6 +25236,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             ungroupedEntries.forEach(({ ent, idx }, pos) => {
               entriesContainer.appendChild(buildEntryCard(ent, idx, ungroupedEntries, pos));
             });
+            updateTcEntryLocateIcons();
           }
         }
 
@@ -25205,19 +25321,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           syncStaticTcRichEditors();
           const staticSections = [
-            { btnId: "tc-toggle-header-btn", bodyId: "tc-preset-header-body" },
-            { btnId: "tc-toggle-general-btn", bodyId: "tc-preset-general-body" },
-            { btnId: "tc-toggle-coc-btn", bodyId: "tc-preset-coc-body" },
+            { btnId: "tc-toggle-header-btn", bodyId: "tc-preset-header-body", displayShow: "block" },
+            { btnId: "tc-toggle-general-btn", bodyId: "tc-preset-general-body", displayShow: "block" },
+            { btnId: "tc-toggle-coc-btn", bodyId: "tc-preset-coc-body", displayShow: "block" },
+            { btnId: "tc-toggle-groups-btn", bodyId: "tc-groups-list", displayShow: "flex" },
           ];
-          staticSections.forEach(({ btnId, bodyId }) => {
+          staticSections.forEach(({ btnId, bodyId, displayShow }) => {
             const btn = document.getElementById(btnId);
             const body = document.getElementById(bodyId);
             if (btn && body) {
-              body.style.display = "block";
+              body.style.display = displayShow || "block";
               btn.textContent = "折叠";
               btn.onclick = () => {
                 const isHidden = body.style.display === "none";
-                body.style.display = isHidden ? "block" : "none";
+                body.style.display = isHidden ? (displayShow || "block") : "none";
                 btn.textContent = isHidden ? "折叠" : "展开";
               };
             }
@@ -25857,6 +25974,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const addGroupBtn = document.getElementById("tc-add-group-btn");
           if (addGroupBtn) {
             addGroupBtn.onclick = () => {
+              const groupsListEl = document.getElementById("tc-groups-list");
+              const toggleGroupsBtn = document.getElementById("tc-toggle-groups-btn");
+              if (groupsListEl && groupsListEl.style.display === "none") {
+                groupsListEl.style.display = "flex";
+                if (toggleGroupsBtn) toggleGroupsBtn.textContent = "折叠";
+              }
               currentTcEditorGroups.push({
                 id: "tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                 name: "",
