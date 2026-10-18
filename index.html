@@ -25497,12 +25497,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               titleEl.dataset.groupId = grp.id;
               titleEl.textContent = grp.name || "未命名";
 
-              const addInGroupBtn = document.createElement("button");
-              addInGroupBtn.type = "button";
-              addInGroupBtn.className = "tc-btn-action";
-              addInGroupBtn.style.flexShrink = "0";
-              addInGroupBtn.textContent = "添加";
-              addInGroupBtn.onclick = (e) => {
+              const handleAddEntryToGroup = (e) => {
                 if (e) e.stopPropagation();
                 flushAllTcRichEditors();
                 grp.collapsed = false;
@@ -25515,6 +25510,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 });
                 renderTcEditorGroupsAndEntries(false);
               };
+
+              const addInGroupBtn = document.createElement("button");
+              addInGroupBtn.type = "button";
+              addInGroupBtn.className = "tc-btn-action";
+              addInGroupBtn.style.flexShrink = "0";
+              addInGroupBtn.textContent = "添加";
+              addInGroupBtn.onclick = handleAddEntryToGroup;
 
               const foldBtn = document.createElement("button");
               foldBtn.type = "button";
@@ -25594,6 +25596,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               groupEntries.forEach(({ ent, idx }, pos) => {
                 groupBody.appendChild(buildEntryCard(ent, idx, groupEntries, pos));
               });
+
+              const bottomAddRow = document.createElement("div");
+              bottomAddRow.style.cssText = "display: flex; justify-content: flex-end; align-items: center;";
+              const bottomAddInGroupBtn = document.createElement("button");
+              bottomAddInGroupBtn.type = "button";
+              bottomAddInGroupBtn.className = "tc-btn-action";
+              bottomAddInGroupBtn.style.flexShrink = "0";
+              bottomAddInGroupBtn.textContent = "添加";
+              bottomAddInGroupBtn.onclick = handleAddEntryToGroup;
+              bottomAddRow.appendChild(bottomAddInGroupBtn);
+              groupBody.appendChild(bottomAddRow);
 
               groupBox.appendChild(groupHeader);
               groupBox.appendChild(groupBody);
