@@ -23673,7 +23673,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             emptyEl.textContent = "暂无条目";
             entriesContainer.appendChild(emptyEl);
           } else {
-            currentTcEditorEntries.forEach((ent, idx) => {
+            const buildEntryCard = (ent, idx) => {
               const card = document.createElement("div");
               card.className = "tc-entry-item-card";
 
@@ -23699,6 +23699,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const groupSelect = document.createElement("select");
               groupSelect.className = "moe-input tc-sub-select";
+              groupSelect.dataset.entryIdx = String(idx);
               const defaultOpt = document.createElement("option");
               defaultOpt.value = "";
               defaultOpt.textContent = "无分组";
@@ -23712,6 +23713,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               groupSelect.value = ent.groupId || "";
               groupSelect.onchange = (e) => {
                 currentTcEditorEntries[idx].groupId = e.target.value;
+                renderTcEditorGroupsAndEntries();
               };
 
               const delBtn = document.createElement("button");
@@ -23740,7 +23742,71 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               card.appendChild(topRow);
               card.appendChild(contentArea);
-              entriesContainer.appendChild(card);
+              return card;
+            };
+
+            const validGroupIds = new Set(currentTcEditorGroups.map((g) => g.id));
+
+            currentTcEditorGroups.forEach((grp) => {
+              const groupEntries = [];
+              currentTcEditorEntries.forEach((ent, idx) => {
+                if (ent.groupId === grp.id) {
+                  groupEntries.push({ ent, idx });
+                }
+              });
+
+              if (groupEntries.length === 0) return;
+
+              const groupBox = document.createElement("div");
+              groupBox.className = "tc-entry-group-box" + (grp.collapsed ? " collapsed" : "");
+
+              const groupHeader = document.createElement("div");
+              groupHeader.className = "tc-entry-group-header";
+
+              const iconWrap = document.createElement("span");
+              iconWrap.className = "tc-entry-group-icon";
+              iconWrap.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+
+              const titleEl = document.createElement("span");
+              titleEl.className = "tc-entry-group-title";
+              titleEl.dataset.groupId = grp.id;
+              titleEl.textContent = grp.name || "未命名";
+
+              const foldBtn = document.createElement("button");
+              foldBtn.type = "button";
+              foldBtn.className = "tc-btn-action";
+              foldBtn.style.flexShrink = "0";
+              foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
+
+              const toggleFold = (e) => {
+                if (e) e.stopPropagation();
+                grp.collapsed = !grp.collapsed;
+                groupBox.classList.toggle("collapsed", grp.collapsed);
+                foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
+              };
+
+              groupHeader.onclick = toggleFold;
+              foldBtn.onclick = toggleFold;
+
+              groupHeader.appendChild(iconWrap);
+              groupHeader.appendChild(titleEl);
+              groupHeader.appendChild(foldBtn);
+
+              const groupBody = document.createElement("div");
+              groupBody.className = "tc-entry-group-body";
+              groupEntries.forEach(({ ent, idx }) => {
+                groupBody.appendChild(buildEntryCard(ent, idx));
+              });
+
+              groupBox.appendChild(groupHeader);
+              groupBox.appendChild(groupBody);
+              entriesContainer.appendChild(groupBox);
+            });
+
+            currentTcEditorEntries.forEach((ent, idx) => {
+              if (!ent.groupId || !validGroupIds.has(ent.groupId)) {
+                entriesContainer.appendChild(buildEntryCard(ent, idx));
+              }
             });
           }
         }
@@ -23749,8 +23815,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const entriesContainer = document.getElementById("tc-entries-list");
           if (!entriesContainer) return;
           const selects = entriesContainer.querySelectorAll(".tc-sub-select");
-          selects.forEach((sel, idx) => {
-            const currentVal = currentTcEditorEntries[idx] ? (currentTcEditorEntries[idx].groupId || "") : "";
+          selects.forEach((sel) => {
+            const entryIdx = Number(sel.dataset.entryIdx);
+            const currentVal = !isNaN(entryIdx) && currentTcEditorEntries[entryIdx] ? (currentTcEditorEntries[entryIdx].groupId || "") : "";
             sel.innerHTML = "";
             const defaultOpt = document.createElement("option");
             defaultOpt.value = "";
@@ -23763,6 +23830,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               sel.appendChild(opt);
             });
             sel.value = currentVal;
+          });
+          const groupTitles = entriesContainer.querySelectorAll(".tc-entry-group-title");
+          groupTitles.forEach((titleEl) => {
+            const gid = titleEl.dataset.groupId;
+            const grp = currentTcEditorGroups.find((g) => g.id === gid);
+            if (grp) {
+              titleEl.textContent = grp.name || "未命名";
+            }
           });
         }
 
@@ -23782,6 +23857,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 id: "tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                 name: "",
                 enabled: true,
+                collapsed: false,
               });
               renderTcEditorGroupsAndEntries();
             };
@@ -23849,6 +23925,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             id: g.id || ("tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
             name: String(g.name || "").trim(),
             enabled: g.enabled !== false,
+            collapsed: Boolean(g.collapsed),
           }));
           const entries = currentTcEditorEntries.map((e) => ({
             id: e.id || ("tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),

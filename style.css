@@ -30550,6 +30550,69 @@ select:focus-visible {
   margin: 0 !important;
 }
 
+.tc-entry-group-box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background-color: var(--card-bg);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.tc-entry-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background-color: var(--secondary-bg);
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.tc-entry-group-icon {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+}
+
+.tc-entry-group-box.collapsed .tc-entry-group-icon {
+  transform: rotate(-90deg);
+}
+
+.tc-entry-group-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-entry-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--card-bg);
+  box-sizing: border-box;
+}
+
+.tc-entry-group-box.collapsed .tc-entry-group-body {
+  display: none;
+}
+
 /* Thought Chain Collapsible Bubble Styles */
 .thought-chain-block {
   background-color: transparent !important;
