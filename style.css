@@ -30710,10 +30710,30 @@ select:focus-visible {
 }
 
 .tc-inline-mashu-bubble.is-custom-entry.is-disabled-entry {
-  background-color: var(--secondary-bg) !important;
-  border-color: var(--border-color) !important;
+  filter: grayscale(48%) brightness(0.92);
+  opacity: 0.62;
+}
+
+.tc-btn-action.tc-entry-locate-btn {
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 22px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--accent-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.tc-btn-action.tc-entry-locate-btn:disabled {
   color: var(--text-secondary) !important;
-  opacity: 0.56;
+  opacity: 0.38 !important;
+  cursor: default !important;
 }
 
 .tc-inline-entry-preview-block {
@@ -30731,8 +30751,14 @@ select:focus-visible {
   white-space: pre-wrap;
   word-break: break-word;
   box-sizing: border-box;
+  outline: none;
+  cursor: text;
   content-visibility: auto;
   contain-intrinsic-size: auto 48px;
+}
+
+.tc-inline-entry-preview-block:focus {
+  border-color: var(--accent-color);
 }
 
 .tc-inline-mashu-text {
