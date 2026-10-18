@@ -23603,12 +23603,522 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         let currentTcEditorGroups = [];
         let currentTcEditorEntries = [];
 
+        const TC_BUILTIN_MASHU_TAGS = [
+          { name: "我的人设", canonical: "myPersona", desc: "我的PC人设与属性面板", aliases: ["PC人设", "我的pc人设", "我的PC人设"] },
+          { name: "真人人设", canonical: "peerPersona", desc: "其他真人玩家人设与面板", aliases: ["其他真人人设", "真人玩家人设"] },
+          { name: "对方人设", canonical: "aiPersona", desc: "AI角色或群成员人设档案", aliases: ["AI人设", "群成员人设", "角色人设", "人设"] },
+          { name: "世界书", canonical: "worldBook", desc: "绑定的世界观与设定集", aliases: ["世界设定", "世界观"] },
+          { name: "上下文", canonical: "history", desc: "近期聊天历史对话记录", aliases: ["历史消息", "聊天记录", "近期消息"] },
+          { name: "长期记忆", canonical: "summary", desc: "历史总结与长期回忆", aliases: ["历史总结", "总结"] },
+          { name: "记忆互通", canonical: "linkedMemory", desc: "关联窗口或主线互通记忆", aliases: ["互通记忆"] },
+          { name: "模组章节", canonical: "moduleChapters", desc: "跑团模组开启章节正文", aliases: ["模组", "跑团模组"] },
+          { name: "区域地图", canonical: "map", desc: "当前探索地图与地点详情", aliases: ["地图"] },
+          { name: "背包线索", canonical: "inventory", desc: "当前持有的道具与线索栏", aliases: ["物品栏", "背包", "道具线索"] },
+          { name: "掷骰指令", canonical: "dice", desc: "内置骰娘与属性检定指令", aliases: ["骰娘指令", "检定指令"] },
+          { name: "战斗状态", canonical: "combat", desc: "跑团战斗轮先攻与状态", aliases: ["战斗轮", "战斗"] },
+          { name: "分线设定", canonical: "soloLine", desc: "群聊单线分支独立规则", aliases: ["单线设定", "分线"] },
+          { name: "群聊公告", canonical: "announcement", desc: "本群置顶群公告规则", aliases: ["群公告"] },
+          { name: "好感系统", canonical: "affection", desc: "各角色当前好感度数值", aliases: ["好感度"] },
+          { name: "当前情境", canonical: "context", desc: "时间感知表情包与分享上下文", aliases: ["情境", "环境感知"] },
+          { name: "输出格式", canonical: "format", desc: "系统JSON输出结构规范", aliases: ["格式", "格式规范"] },
+          { name: "操作指令", canonical: "command", desc: "系统可用动作与特殊指令", aliases: ["指令", "动作指令"] },
+          { name: "状态规范", canonical: "statusRule", desc: "系统状态栏输出规范", aliases: ["状态栏", "状态栏规范", "状态"] },
+          { name: "私密规范", canonical: "whisperRule", desc: "群聊无痕私密对话规则", aliases: ["无痕私密对话规范", "私密对话"] },
+          { name: "带团守则", canonical: "keeper", desc: "守秘人单回合带团守则", aliases: ["带团", "守秘人守则"] },
+        ];
+
+        const MASHU_ALIAS_TO_CANONICAL = new Map();
+        TC_BUILTIN_MASHU_TAGS.forEach((item) => {
+          MASHU_ALIAS_TO_CANONICAL.set(item.name, item.canonical);
+          if (Array.isArray(item.aliases)) {
+            item.aliases.forEach((al) => MASHU_ALIAS_TO_CANONICAL.set(al, item.canonical));
+          }
+        });
+
         function normalizeTcPlaceholderKey(rawKey) {
           let k = String(rawKey || "").trim();
           if (k.startsWith("{{") && k.endsWith("}}")) {
             k = k.slice(2, -2).trim();
           }
           return k;
+        }
+
+        function getAllMashuSuggestOptions() {
+          const list = TC_BUILTIN_MASHU_TAGS.map((item) => ({
+            name: item.name,
+            desc: item.desc,
+            aliases: item.aliases || [],
+          }));
+          const existingNames = new Set(list.map((i) => i.name));
+          currentTcEditorEntries.forEach((ent) => {
+            if (!ent || !ent.key) return;
+            const cleanKey = normalizeTcPlaceholderKey(ent.key).replace(/^麻薯-/, "").trim();
+            if (cleanKey && !existingNames.has(cleanKey) && !MASHU_ALIAS_TO_CANONICAL.has(cleanKey)) {
+              existingNames.add(cleanKey);
+              list.push({
+                name: cleanKey,
+                desc: "自定义思维链条目",
+                aliases: [],
+              });
+            }
+          });
+          return list;
+        }
+
+        function isKnownMashuTagName(rawName) {
+          const clean = String(rawName || "").replace(/^麻薯-/, "").trim();
+          if (!clean) return false;
+          if (MASHU_ALIAS_TO_CANONICAL.has(clean)) return true;
+          return currentTcEditorEntries.some((ent) => {
+            if (!ent || !ent.key) return false;
+            return normalizeTcPlaceholderKey(ent.key).replace(/^麻薯-/, "").trim() === clean;
+          });
+        }
+
+        function serializeTcRichEditorNode(node, isRoot = true) {
+          let out = "";
+          const children = node.childNodes;
+          for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            if (child.nodeType === Node.TEXT_NODE) {
+              out += (child.nodeValue || "").replace(/\u200B/g, "");
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+              if (child.dataset && child.dataset.mashuTag) {
+                out += child.dataset.mashuTag;
+              } else if (child.tagName === "BR") {
+                if (!(i === children.length - 1 && isRoot)) {
+                  out += "\n";
+                }
+              } else {
+                const isBlock = child.tagName === "DIV" || child.tagName === "P";
+                if (isBlock && out.length > 0 && !out.endsWith("\n")) {
+                  out += "\n";
+                }
+                out += serializeTcRichEditorNode(child, false);
+              }
+            }
+          }
+          return out;
+        }
+
+        function createMashuBubbleElement(tagName, syncFn) {
+          const cleanName = String(tagName || "").replace(/^麻薯-/, "").trim();
+          const fullTag = `{{麻薯-${cleanName}}}`;
+          const span = document.createElement("span");
+          span.className = "tc-inline-mashu-bubble";
+          span.contentEditable = "false";
+          span.dataset.mashuTag = fullTag;
+
+          const textSpan = document.createElement("span");
+          textSpan.className = "tc-inline-mashu-text";
+          textSpan.textContent = cleanName;
+
+          const removeBtn = document.createElement("span");
+          removeBtn.className = "tc-inline-mashu-remove";
+          removeBtn.innerHTML = `<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="3" y1="3" x2="9" y2="9"></line><line x1="9" y1="3" x2="3" y2="9"></line></svg>`;
+          removeBtn.onmousedown = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            span.remove();
+            if (typeof syncFn === "function") syncFn();
+          };
+
+          span.appendChild(textSpan);
+          span.appendChild(removeBtn);
+          return span;
+        }
+
+        function attachMashuRichEditor(textareaEl, onValueChange) {
+          if (!textareaEl) return;
+          if (textareaEl._mashuRichAttached && typeof textareaEl._syncFromTextarea === "function") {
+            textareaEl._syncFromTextarea();
+            return;
+          }
+
+          const wrap = document.createElement("div");
+          wrap.className = "tc-rich-editor-wrap";
+          textareaEl.parentNode.insertBefore(wrap, textareaEl);
+          wrap.appendChild(textareaEl);
+          textareaEl.style.display = "none";
+
+          const richEl = document.createElement("div");
+          const isEntryBox = textareaEl.classList.contains("tc-entry-textarea");
+          richEl.className = "moe-input tc-rich-textarea" + (isEntryBox ? " tc-entry-rich-textarea" : "");
+          richEl.contentEditable = "true";
+          richEl.setAttribute("data-placeholder", textareaEl.getAttribute("placeholder") || "");
+          const rowsAttr = Number(textareaEl.getAttribute("rows")) || 4;
+          if (!isEntryBox) {
+            richEl.style.minHeight = (rowsAttr >= 6 ? 112 : 78) + "px";
+          }
+
+          const suggestBox = document.createElement("div");
+          suggestBox.className = "tc-mashu-suggest-box";
+
+          wrap.appendChild(richEl);
+          wrap.appendChild(suggestBox);
+
+          let activeSuggestIdx = 0;
+          let currentTriggerState = null;
+
+          const syncToTextarea = () => {
+            const val = serializeTcRichEditorNode(richEl, true);
+            textareaEl.value = val;
+            if (typeof onValueChange === "function") {
+              onValueChange(val);
+            }
+            if (val === "" && richEl.querySelectorAll(".tc-inline-mashu-bubble").length === 0 && richEl.innerHTML !== "") {
+              richEl.innerHTML = "";
+            }
+          };
+
+          const syncFromTextarea = () => {
+            const raw = String(textareaEl.value || "");
+            richEl.innerHTML = "";
+            if (!raw) return;
+            const regex = /\{\{麻薯-([^}\n]+)\}\}/g;
+            let lastIndex = 0;
+            let match;
+            while ((match = regex.exec(raw)) !== null) {
+              const tagInner = match[1].trim();
+              if (tagInner) {
+                if (match.index > lastIndex) {
+                  richEl.appendChild(document.createTextNode(raw.slice(lastIndex, match.index)));
+                }
+                richEl.appendChild(createMashuBubbleElement(tagInner, syncToTextarea));
+                richEl.appendChild(document.createTextNode("\u200B"));
+                lastIndex = regex.lastIndex;
+              }
+            }
+            if (lastIndex < raw.length) {
+              richEl.appendChild(document.createTextNode(raw.slice(lastIndex)));
+            }
+          };
+
+          const hideSuggest = () => {
+            suggestBox.classList.remove("visible");
+            suggestBox.innerHTML = "";
+            currentTriggerState = null;
+            activeSuggestIdx = 0;
+          };
+
+          const applyMashuSelection = (chosenName) => {
+            if (!currentTriggerState || !currentTriggerState.textNode || !richEl.contains(currentTriggerState.textNode)) {
+              hideSuggest();
+              return;
+            }
+            const { textNode, startOffset, endOffset } = currentTriggerState;
+            const fullText = textNode.nodeValue || "";
+            const beforeStr = fullText.slice(0, startOffset);
+            const afterStr = fullText.slice(endOffset);
+
+            const parent = textNode.parentNode;
+            if (!parent) {
+              hideSuggest();
+              return;
+            }
+
+            const bubbleNode = createMashuBubbleElement(chosenName, syncToTextarea);
+            const afterNode = document.createTextNode("\u200B" + afterStr);
+
+            if (beforeStr) {
+              textNode.nodeValue = beforeStr;
+              parent.insertBefore(bubbleNode, textNode.nextSibling);
+              parent.insertBefore(afterNode, bubbleNode.nextSibling);
+            } else {
+              parent.insertBefore(bubbleNode, textNode);
+              parent.insertBefore(afterNode, bubbleNode.nextSibling);
+              parent.removeChild(textNode);
+            }
+
+            const sel = window.getSelection();
+            if (sel) {
+              const newRange = document.createRange();
+              newRange.setStart(afterNode, 1);
+              newRange.collapse(true);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+            }
+
+            hideSuggest();
+            syncToTextarea();
+          };
+
+          const checkTriggerAndRenderSuggest = () => {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) {
+              hideSuggest();
+              return;
+            }
+            const range = sel.getRangeAt(0);
+            if (!range.collapsed || !richEl.contains(range.startContainer) || range.startContainer.nodeType !== Node.TEXT_NODE) {
+              hideSuggest();
+              return;
+            }
+
+            const textNode = range.startContainer;
+            const offset = range.startOffset;
+            const textVal = textNode.nodeValue || "";
+            const before = textVal.slice(0, offset);
+            const after = textVal.slice(offset);
+
+            const completeMatch = before.match(/\{\{麻薯-([^}\n]+)\}\}$/);
+            if (completeMatch && isKnownMashuTagName(completeMatch[1].trim())) {
+              currentTriggerState = {
+                textNode,
+                startOffset: completeMatch.index,
+                endOffset: offset,
+              };
+              applyMashuSelection(completeMatch[1].trim());
+              return;
+            }
+
+            let query = null;
+            let startOffset = -1;
+            let endOffset = offset;
+
+            const emptyBraceAfterMatch = before.match(/\{\{麻薯-\}\}$/);
+            if (emptyBraceAfterMatch) {
+              query = "";
+              startOffset = emptyBraceAfterMatch.index;
+              endOffset = offset;
+            } else {
+              const openMatch = before.match(/\{\{麻薯-([^}\n]*)$/);
+              if (openMatch) {
+                query = openMatch[1];
+                startOffset = openMatch.index;
+                if (after.startsWith("}}")) {
+                  endOffset = offset + 2;
+                } else if (after.startsWith("}")) {
+                  endOffset = offset + 1;
+                } else {
+                  endOffset = offset;
+                }
+              }
+            }
+
+            if (query === null || startOffset === -1) {
+              hideSuggest();
+              return;
+            }
+
+            const qTrim = query.trim();
+            const allOpts = getAllMashuSuggestOptions();
+            const filtered = allOpts.filter((opt) => {
+              if (!qTrim) return true;
+              if (opt.name.includes(qTrim) || opt.desc.includes(qTrim)) return true;
+              if (Array.isArray(opt.aliases) && opt.aliases.some((a) => a.includes(qTrim))) return true;
+              return false;
+            });
+
+            if (filtered.length === 0) {
+              hideSuggest();
+              return;
+            }
+
+            currentTriggerState = { textNode, startOffset, endOffset, filtered };
+            if (activeSuggestIdx >= filtered.length) activeSuggestIdx = 0;
+
+            suggestBox.innerHTML = "";
+            filtered.forEach((opt, i) => {
+              const row = document.createElement("div");
+              row.className = "tc-mashu-suggest-item" + (i === activeSuggestIdx ? " active" : "");
+
+              const badge = document.createElement("span");
+              badge.className = "tc-mashu-suggest-badge";
+              badge.textContent = opt.name;
+
+              const desc = document.createElement("span");
+              desc.className = "tc-mashu-suggest-desc";
+              desc.textContent = opt.desc;
+
+              row.appendChild(badge);
+              row.appendChild(desc);
+
+              row.onmousedown = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                applyMashuSelection(opt.name);
+              };
+
+              suggestBox.appendChild(row);
+            });
+
+            suggestBox.classList.add("visible");
+          };
+
+          richEl.addEventListener("input", () => {
+            syncToTextarea();
+            checkTriggerAndRenderSuggest();
+          });
+
+          richEl.addEventListener("keyup", (e) => {
+            if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
+              checkTriggerAndRenderSuggest();
+            }
+          });
+
+          richEl.addEventListener("mouseup", () => {
+            setTimeout(checkTriggerAndRenderSuggest, 10);
+          });
+
+          richEl.addEventListener("blur", () => {
+            setTimeout(() => {
+              hideSuggest();
+              syncToTextarea();
+            }, 150);
+          });
+
+          richEl.addEventListener("paste", (e) => {
+            e.preventDefault();
+            const text = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+            if (!text) return;
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            const range = sel.getRangeAt(0);
+            range.deleteContents();
+
+            const frag = document.createDocumentFragment();
+            const regex = /\{\{麻薯-([^}\n]+)\}\}/g;
+            let lastIdx = 0;
+            let m;
+            let lastInsertedNode = null;
+            while ((m = regex.exec(text)) !== null) {
+              const tagInner = m[1].trim();
+              if (tagInner) {
+                if (m.index > lastIdx) {
+                  const tn = document.createTextNode(text.slice(lastIdx, m.index));
+                  frag.appendChild(tn);
+                  lastInsertedNode = tn;
+                }
+                const bNode = createMashuBubbleElement(tagInner, syncToTextarea);
+                const zNode = document.createTextNode("\u200B");
+                frag.appendChild(bNode);
+                frag.appendChild(zNode);
+                lastInsertedNode = zNode;
+                lastIdx = regex.lastIndex;
+              }
+            }
+            if (lastIdx < text.length) {
+              const tailNode = document.createTextNode(text.slice(lastIdx));
+              frag.appendChild(tailNode);
+              lastInsertedNode = tailNode;
+            }
+
+            range.insertNode(frag);
+            if (lastInsertedNode) {
+              const newRange = document.createRange();
+              newRange.setStartAfter(lastInsertedNode);
+              newRange.collapse(true);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+            }
+            syncToTextarea();
+            checkTriggerAndRenderSuggest();
+          });
+
+          richEl.addEventListener("keydown", (e) => {
+            if (suggestBox.classList.contains("visible") && currentTriggerState && Array.isArray(currentTriggerState.filtered)) {
+              const items = currentTriggerState.filtered;
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                activeSuggestIdx = (activeSuggestIdx + 1) % items.length;
+                checkTriggerAndRenderSuggest();
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                activeSuggestIdx = (activeSuggestIdx - 1 + items.length) % items.length;
+                checkTriggerAndRenderSuggest();
+                return;
+              }
+              if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                const chosen = items[activeSuggestIdx] || items[0];
+                if (chosen) {
+                  applyMashuSelection(chosen.name);
+                }
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                hideSuggest();
+                return;
+              }
+            }
+
+            if (e.key === "Enter") {
+              e.preventDefault();
+              const sel = window.getSelection();
+              if (!sel || sel.rangeCount === 0) return;
+              const range = sel.getRangeAt(0);
+              range.deleteContents();
+              const nlNode = document.createTextNode("\n\u200B");
+              range.insertNode(nlNode);
+              const newRange = document.createRange();
+              newRange.setStart(nlNode, 2);
+              newRange.collapse(true);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+              syncToTextarea();
+              hideSuggest();
+              return;
+            }
+
+            if (e.key === "Backspace") {
+              const sel = window.getSelection();
+              if (sel && sel.rangeCount > 0) {
+                const range = sel.getRangeAt(0);
+                if (range.collapsed) {
+                  const sc = range.startContainer;
+                  const so = range.startOffset;
+                  if (sc.nodeType === Node.TEXT_NODE) {
+                    const beforeClean = (sc.nodeValue || "").slice(0, so).replace(/\u200B/g, "");
+                    if (beforeClean === "" && sc.previousSibling && sc.previousSibling.classList && sc.previousSibling.classList.contains("tc-inline-mashu-bubble")) {
+                      e.preventDefault();
+                      sc.previousSibling.remove();
+                      syncToTextarea();
+                      hideSuggest();
+                      return;
+                    }
+                  } else if (sc === richEl && so > 0) {
+                    const prev = richEl.childNodes[so - 1];
+                    if (prev && prev.classList && prev.classList.contains("tc-inline-mashu-bubble")) {
+                      e.preventDefault();
+                      prev.remove();
+                      syncToTextarea();
+                      hideSuggest();
+                      return;
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          textareaEl._mashuRichAttached = true;
+          textareaEl._syncFromTextarea = syncFromTextarea;
+          textareaEl._syncToTextarea = syncToTextarea;
+          syncFromTextarea();
+        }
+
+        function syncStaticTcRichEditors() {
+          const headerInput = document.getElementById("tc-preset-header-input");
+          const generalInput = document.getElementById("tc-preset-general-input");
+          const cocInput = document.getElementById("tc-preset-coc-input");
+          if (headerInput) attachMashuRichEditor(headerInput);
+          if (generalInput) attachMashuRichEditor(generalInput);
+          if (cocInput) attachMashuRichEditor(cocInput);
+        }
+
+        function flushAllTcRichEditors() {
+          const modal = document.getElementById("thought-chain-editor-modal");
+          if (!modal) return;
+          const textareas = modal.querySelectorAll("textarea");
+          textareas.forEach((ta) => {
+            if (typeof ta._syncToTextarea === "function") {
+              ta._syncToTextarea();
+            }
+          });
         }
 
         function renderTcEditorGroupsAndEntries() {
@@ -23742,6 +24252,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               card.appendChild(topRow);
               card.appendChild(contentArea);
+              attachMashuRichEditor(contentArea, (val) => {
+                currentTcEditorEntries[idx].content = val;
+              });
               return card;
             };
 
@@ -23902,11 +24415,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             currentTcEditorEntries = [];
           }
 
+          syncStaticTcRichEditors();
           renderTcEditorGroupsAndEntries();
           modal.classList.add("visible");
         }
 
         async function saveThoughtChainPreset() {
+          flushAllTcRichEditors();
           const nameInput = document.getElementById("tc-preset-name-input");
           const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
@@ -24126,6 +24641,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.exportThoughtChainPreset = exportThoughtChainPreset;
 
         function exportCurrentThoughtChainEditor() {
+          flushAllTcRichEditors();
           const nameInput = document.getElementById("tc-preset-name-input");
           const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
@@ -24211,6 +24727,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (cocInput) cocInput.value = parsed.cocContent || "";
               currentTcEditorGroups = Array.isArray(parsed.groups) ? parsed.groups : [];
               currentTcEditorEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+              syncStaticTcRichEditors();
               renderTcEditorGroupsAndEntries();
             }
           } catch (e) {
@@ -24541,17 +25058,51 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (!ent) return;
             const cleanKey = normalizeTcPlaceholderKey(ent.key);
             if (!cleanKey) return;
+            const strippedKey = cleanKey.replace(/^麻薯-/, "").trim();
             const isEntryEnabled = ent.enabled !== false;
             const isGroupEnabled = ent.groupId && groupEnabledMap.has(String(ent.groupId))
               ? groupEnabledMap.get(String(ent.groupId))
               : true;
             const replacement = (isEntryEnabled && isGroupEnabled) ? String(ent.content || "") : "";
-            const token = `{{${cleanKey}}}`;
-            if (result.includes(token)) {
-              result = result.split(token).join(replacement);
+            const token1 = `{{${cleanKey}}}`;
+            if (result.includes(token1)) {
+              result = result.split(token1).join(replacement);
+            }
+            if (strippedKey) {
+              const token2 = `{{麻薯-${strippedKey}}}`;
+              if (result.includes(token2)) {
+                result = result.split(token2).join(replacement);
+              }
             }
           });
           return result;
+        }
+
+        function getUsedMashuCanonicalKeys(text) {
+          const used = new Set();
+          if (!text || typeof text !== "string") return used;
+          const regex = /\{\{麻薯-([^}\n]+)\}\}/g;
+          let m;
+          while ((m = regex.exec(text)) !== null) {
+            const tagName = m[1].trim();
+            const canonical = MASHU_ALIAS_TO_CANONICAL.get(tagName);
+            if (canonical) {
+              used.add(canonical);
+            }
+          }
+          return used;
+        }
+
+        function replaceMashuPlaceholdersInText(text, mashuBlocksMap) {
+          if (!text || typeof text !== "string") return "";
+          return text.replace(/\{\{麻薯-([^}\n]+)\}\}/g, (fullMatch, innerName) => {
+            const tagName = String(innerName || "").trim();
+            const canonical = MASHU_ALIAS_TO_CANONICAL.get(tagName);
+            if (canonical && mashuBlocksMap && Object.prototype.hasOwnProperty.call(mashuBlocksMap, canonical)) {
+              return String(mashuBlocksMap[canonical] || "");
+            }
+            return fullMatch;
+          });
         }
 
         async function getThoughtChainHeaderBlock(chat) {
@@ -43105,7 +43656,21 @@ ${recentHistoryText}
               }
             }
 
-            const thoughtChainPromptBlock = await getThoughtChainPromptBlock(chat);
+            let tcHeaderPromptBlock = await getThoughtChainHeaderBlock(chat);
+            let thoughtChainPromptBlock = await getThoughtChainPromptBlock(chat);
+            const usedMashuCanonicalKeys = getUsedMashuCanonicalKeys(tcHeaderPromptBlock + "\n" + thoughtChainPromptBlock);
+            const historyContextLines = Array.isArray(historySlice)
+              ? historySlice
+                  .filter((msg) => msg && !msg.isHidden && msg.type !== "summary")
+                  .map((msg) => `  - ${formatMessageForContext(msg, chat)}`)
+                  .join("\n")
+              : "";
+            const historyPromptBlock = historyContextLines
+              ? window.formatPromptSection("上下文", `近期对话上下文记录：\n${historyContextLines}`)
+              : "";
+            const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
+            const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次回复二到四的气泡最佳，单气泡在屏幕内显示为2/3~3/4最佳。必须率先渲染情绪氛围，具体细节的描写场景，再进行人物细节描写，切勿为了缩减字数而删去场景描写的内容。\n需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。【注意，此处规则的含义为剧情不可跳跃过多，而并非缩减剧情的细节描写或场景细节】\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。`;
+            const keeperPromptBlock = isKeeperAssigned ? window.formatPromptSection("带团", keeperPrefixInstruction) : "";
             const moduleChaptersPromptBlock = await getChatModulePromptBlock(chat);
             const mapPromptObj = await getChatMapPromptBlock(chat);
             const mapPromptBlock = typeof mapPromptObj === "object" ? (mapPromptObj.prompt || "") : (mapPromptObj || "");
@@ -43492,14 +44057,19 @@ ${fullMembersList}`);
                     return hp.peerCode && allowedCodes.includes(hp.peerCode);
                   })
                 : allHumanEntriesForPersona;
+              const myAlonePersonaBlock = window.formatPromptSection("我的人设", `
+- 姓名：${myPlayerEntry.name}${myPlayerEntry.isKp ? "\n- 身份：守秘人（KP）" : ""}
+${myPlayerEntry.coc}${myPlayerEntry.age}${myPlayerEntry.birth}${myPlayerEntry.gen}- 角色人设：
+${myPlayerEntry.persona}`);
+              const peerOnlyEntriesForPersona = visibleHumanEntriesForPersona.filter((hp) => hp !== myPlayerEntry);
+              const peerOnlyPersonaBlock = peerOnlyEntriesForPersona.length > 0
+                ? window.formatPromptSection("真人玩家人设", peerOnlyEntriesForPersona.map((hp, idx) => `---------- 【真人玩家 ${idx + 1}：${hp.name}${hp.isKp ? " · 守秘人(KP)" : ""} 开始】 ----------\n- 姓名：${hp.name}${hp.isKp ? "\n- 身份：守秘人（KP）" : ""}\n${hp.coc}${hp.age}${hp.birth}${hp.gen}- 角色人设：\n${hp.persona}\n---------- 【真人玩家 ${idx + 1}：${hp.name} 结束】 ----------`).join("\n\n"))
+                : "";
               const groupMyPersonaBlock = peerHumanMembers.length > 0
                 ? (visibleHumanEntriesForPersona.length > 0
                     ? window.formatPromptSection("真人玩家人设", visibleHumanEntriesForPersona.map((hp, idx) => `---------- 【真人玩家 ${idx + 1}：${hp.name}${hp.isKp ? " · 守秘人(KP)" : ""} 开始】 ----------\n- 姓名：${hp.name}${hp.isKp ? "\n- 身份：守秘人（KP）" : ""}\n${hp.coc}${hp.age}${hp.birth}${hp.gen}- 角色人设：\n${hp.persona}\n---------- 【真人玩家 ${idx + 1}：${hp.name} 结束】 ----------`).join("\n\n"))
                     : "")
-                : window.formatPromptSection("我的人设", `
-- 姓名：${myPlayerEntry.name}${myPlayerEntry.isKp ? "\n- 身份：守秘人（KP）" : ""}
-${myPlayerEntry.coc}${myPlayerEntry.age}${myPlayerEntry.birth}${myPlayerEntry.gen}- 角色人设：
-${myPlayerEntry.persona}`);
+                : myAlonePersonaBlock;
 
               const groupPeerPlayersPersonaBlock = "";
 
@@ -43514,27 +44084,61 @@ ${stickerContext}
 ${isCognitionEnabled ? `\n- 情景感知: 注意当前时间是 ${currentTime}。\n` : ""}
 ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下方的单线对话历史，继续在此单线分支中进行独立互动。" : "现在，请根据以上所有规则和下方的对话历史，继续这场群聊。"}`);
 
+              const groupMashuMap = {
+                myPersona: myAlonePersonaBlock,
+                peerPersona: peerOnlyPersonaBlock,
+                aiPersona: groupMembersBlock,
+                worldBook: worldBookContent,
+                history: historyPromptBlock,
+                summary: summaryContext,
+                linkedMemory: linkedMemoryContext,
+                moduleChapters: moduleChaptersPromptBlock,
+                map: mapPromptBlock,
+                inventory: inventoryPromptBlock,
+                dice: dicePromptBlock,
+                combat: combatPromptStr,
+                soloLine: soloLinePromptStr,
+                announcement: announcementContext,
+                affection: groupAffectionBlock,
+                context: groupContextBlock,
+                format: groupFormatBlock,
+                command: groupCommandBlock,
+                statusRule: groupStatusRuleBlock,
+                whisperRule: groupWhisperRuleBlock,
+                keeper: keeperPromptBlock,
+              };
+              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, groupMashuMap);
+              thoughtChainPromptBlock = replaceMashuPlaceholdersInText(thoughtChainPromptBlock, groupMashuMap);
+
+              const hasSplitPersonaTakeover = usedMashuCanonicalKeys.has("myPersona") || usedMashuCanonicalKeys.has("peerPersona");
+              const effectiveGroupMyPersona = hasSplitPersonaTakeover
+                ? (usedMashuCanonicalKeys.has("myPersona") ? "" : myAlonePersonaBlock)
+                : groupMyPersonaBlock;
+              const effectiveGroupPeerPersona = hasSplitPersonaTakeover
+                ? (usedMashuCanonicalKeys.has("peerPersona") ? "" : peerOnlyPersonaBlock)
+                : groupPeerPlayersPersonaBlock;
+
               systemPrompt = [
-                soloLinePromptStr,
-                groupFormatBlock,
-                groupCommandBlock,
-                groupWhisperRuleBlock,
-                groupStatusRuleBlock,
-                inventoryPromptBlock,
-                groupMembersBlock,
-                groupMyPersonaBlock,
-                groupPeerPlayersPersonaBlock,
+                usedMashuCanonicalKeys.has("soloLine") ? "" : soloLinePromptStr,
+                usedMashuCanonicalKeys.has("format") ? "" : groupFormatBlock,
+                usedMashuCanonicalKeys.has("command") ? "" : groupCommandBlock,
+                usedMashuCanonicalKeys.has("whisperRule") ? "" : groupWhisperRuleBlock,
+                usedMashuCanonicalKeys.has("statusRule") ? "" : groupStatusRuleBlock,
+                usedMashuCanonicalKeys.has("inventory") ? "" : inventoryPromptBlock,
+                usedMashuCanonicalKeys.has("aiPersona") ? "" : groupMembersBlock,
+                effectiveGroupMyPersona,
+                effectiveGroupPeerPersona,
                 thoughtChainPromptBlock,
-                worldBookContent,
-                moduleChaptersPromptBlock,
-                mapPromptBlock,
-                dicePromptBlock,
-                combatPromptStr,
-                announcementContext,
-                summaryContext,
-                linkedMemoryContext,
-                groupAffectionBlock,
-                groupContextBlock
+                usedMashuCanonicalKeys.has("worldBook") ? "" : worldBookContent,
+                usedMashuCanonicalKeys.has("moduleChapters") ? "" : moduleChaptersPromptBlock,
+                usedMashuCanonicalKeys.has("map") ? "" : mapPromptBlock,
+                usedMashuCanonicalKeys.has("dice") ? "" : dicePromptBlock,
+                usedMashuCanonicalKeys.has("combat") ? "" : combatPromptStr,
+                usedMashuCanonicalKeys.has("announcement") ? "" : announcementContext,
+                usedMashuCanonicalKeys.has("summary") ? "" : summaryContext,
+                usedMashuCanonicalKeys.has("linkedMemory") ? "" : linkedMemoryContext,
+                usedMashuCanonicalKeys.has("affection") ? "" : groupAffectionBlock,
+                usedMashuCanonicalKeys.has("context") ? "" : groupContextBlock
               ].filter(Boolean).join("\n");
 
               messagesPayload = historySlice
@@ -44034,7 +44638,7 @@ ${envContext ? `\n客观环境参考：\n${envContext}` : ''}
 - 姓名: ${chat.name}
 ${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.aiCocPanel) ? `- COC人物面板（实时当前数值）: ${window.getCocPromptStatus(chat.settings.aiCocPanel)}\n` : ""}${chat.settings.age ? `- 年龄: ${chat.settings.age}\n` : ""}${chat.settings.birthday ? `- 生日: ${chat.settings.birthday}\n` : ""}${chat.settings.gender ? `- 性别: ${chat.settings.gender}${chat.settings.genderNote ? " " + chat.settings.genderNote : ""}\n` : ""}- 核心人设:
 ${chat.settings.aiPersona || "暂无设定"}
-${npcContext ? `- 世界观/NPC: ${npcContext}\n` : ""}${systemStatusPromptBlock}
+${npcContext ? `- 世界观/NPC: ${npcContext}\n` : ""}${usedMashuCanonicalKeys.has("statusRule") ? "" : systemStatusPromptBlock}
 `);
 
               const singleFormatBlock = window.formatPromptSection("格式", `
@@ -44109,26 +44713,59 @@ ${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAi
 ${window.getCocPromptStatus && window.getCocPromptStatus(chat.settings.myCocPanel) ? `- COC人物面板（实时当前数值）: ${window.getCocPromptStatus(chat.settings.myCocPanel)}\n` : ""}${chat.settings.myAge ? `- 年龄: ${chat.settings.myAge}\n` : ""}${chat.settings.myBirthday ? `- 生日: ${chat.settings.myBirthday}\n` : ""}${chat.settings.myGender ? `- 性别: ${chat.settings.myGender}${chat.settings.myGenderNote ? " " + chat.settings.myGenderNote : ""}\n` : ""}- 角色人设:
 ${chat.settings.myPersona || "普通人"}`);
 
+              const singleAffectionRaw = (chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0)
+                ? `角色好感度设定:\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。`
+                : "";
+              const singleAffectionBlock = singleAffectionRaw
+                ? window.formatPromptSection("角色好感度系统", singleAffectionRaw)
+                : "";
+
               const singleContextBlock = window.formatPromptSection("情境", `
-${linkedMemoryContext}
-${(chat.settings?.affectionEnabled && Array.isArray(chat.settings?.affectionList) && chat.settings.affectionList.length > 0) ? `\n角色好感度设定:\n当前各角色好感度数值如下：\n${chat.settings.affectionList.map(a => `- ${a.name}: 好感度 ${a.affection ?? 50}`).join("\n")}\n请在互动中结合当前好感度水平展开相应的对话反应与态度。\n` : ""}
+${usedMashuCanonicalKeys.has("linkedMemory") ? "" : linkedMemoryContext}
+${(!usedMashuCanonicalKeys.has("affection") && singleAffectionRaw) ? `\n${singleAffectionRaw}\n` : ""}
 - 可用表情包:
 ${stickerContext || "无"}
 现在，请根据以上所有规则和下方的对话历史，继续进行对话。`);
 
+              const singleMashuMap = {
+                myPersona: singleMyPersonaBlock,
+                peerPersona: "",
+                aiPersona: singlePersonaBlock,
+                worldBook: worldBookContent,
+                history: historyPromptBlock,
+                summary: summaryContext,
+                linkedMemory: linkedMemoryContext,
+                moduleChapters: moduleChaptersPromptBlock,
+                map: mapPromptBlock,
+                inventory: inventoryPromptBlock,
+                dice: dicePromptBlock,
+                combat: "",
+                soloLine: "",
+                announcement: "",
+                affection: singleAffectionBlock,
+                context: singleContextBlock,
+                format: singleFormatBlock,
+                command: singleCommandBlock,
+                statusRule: systemStatusPromptBlock,
+                whisperRule: "",
+                keeper: keeperPromptBlock,
+              };
+              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, singleMashuMap);
+              thoughtChainPromptBlock = replaceMashuPlaceholdersInText(thoughtChainPromptBlock, singleMashuMap);
+
               systemPrompt = [
-                singlePersonaBlock,
-                inventoryPromptBlock,
-                singleMyPersonaBlock,
-                singleFormatBlock,
-                singleCommandBlock,
+                usedMashuCanonicalKeys.has("aiPersona") ? "" : singlePersonaBlock,
+                usedMashuCanonicalKeys.has("inventory") ? "" : inventoryPromptBlock,
+                usedMashuCanonicalKeys.has("myPersona") ? "" : singleMyPersonaBlock,
+                usedMashuCanonicalKeys.has("format") ? "" : singleFormatBlock,
+                usedMashuCanonicalKeys.has("command") ? "" : singleCommandBlock,
                 thoughtChainPromptBlock,
-                worldBookContent,
-                moduleChaptersPromptBlock,
-                mapPromptBlock,
-                dicePromptBlock,
-                summaryContext,
-                singleContextBlock
+                usedMashuCanonicalKeys.has("worldBook") ? "" : worldBookContent,
+                usedMashuCanonicalKeys.has("moduleChapters") ? "" : moduleChaptersPromptBlock,
+                usedMashuCanonicalKeys.has("map") ? "" : mapPromptBlock,
+                usedMashuCanonicalKeys.has("dice") ? "" : dicePromptBlock,
+                usedMashuCanonicalKeys.has("summary") ? "" : summaryContext,
+                usedMashuCanonicalKeys.has("context") ? "" : singleContextBlock
               ].filter(Boolean).join("\n");
               // 构建单人聊天的messagesPayload
               messagesPayload = historySlice
@@ -44627,14 +45264,14 @@ ${stickerContext || "无"}
             }
 
             // 守秘人前置提示词注入逻辑
-            const isKeeperAssigned = !!(chat.settings && chat.settings.keeperTargetId && chat.settings.keeperTargetId !== "none");
-            if (isKeeperAssigned) {
-              const keeperPrefixInstruction = `你现在正在模拟QQ跑团的守秘人，你需要明确自己的目的，不是为了多快的推进剧情，而是让玩家充分的和kpc进行互动，因此所有能互动，能插入新的对话，能拓展对话的地方，你都得停下来允许kpc和PC进行互动对话，而不是急于将一个模组内所有的对话全说完。\n·当你判断现在正在带团时，你必须遵循单回合行动原则：KP一次回复二到四的气泡最佳，单气泡在屏幕内显示为2/3~3/4最佳。必须率先渲染情绪氛围，具体细节的描写场景，再进行人物细节描写，切勿为了缩减字数而删去场景描写的内容。\n需要分四个及以上气泡时，说明一回合带团剧情内容太多，适当删减后续剧情。【注意，此处规则的含义为剧情不可跳跃过多，而并非缩减剧情的细节描写或场景细节】\n·当现在并不是跑团模式或PC要求下皮进行沟通等测试模式时，你可以不受以上规则约束。`;
-              const soloPrepend = (chat.activeLineMode === "solo" && soloLinePromptStr) ? (soloLinePromptStr + "\n\n") : "";
-              systemPrompt = soloPrepend + window.formatPromptSection("带团", keeperPrefixInstruction) + "\n\n" + systemPrompt;
+            if (isKeeperAssigned && !usedMashuCanonicalKeys.has("keeper")) {
+              const soloLineForKeeper = (chat.isGroup && chat.activeLineMode === "solo" && !usedMashuCanonicalKeys.has("soloLine") && typeof window.getSoloLinePromptBlock === "function")
+                ? (window.getSoloLinePromptBlock(chat) || "")
+                : "";
+              const soloPrepend = soloLineForKeeper ? (soloLineForKeeper + "\n\n") : "";
+              systemPrompt = soloPrepend + keeperPromptBlock + "\n\n" + systemPrompt;
             }
 
-            const tcHeaderPromptBlock = await getThoughtChainHeaderBlock(chat);
             if (tcHeaderPromptBlock) {
               systemPrompt = tcHeaderPromptBlock + "\n\n" + systemPrompt;
             }
