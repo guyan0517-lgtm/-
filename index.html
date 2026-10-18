@@ -10068,7 +10068,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <div class="form-group" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">头部</label>
-              <button type="button" class="tc-btn-action" id="tc-toggle-header-btn" style="flex-shrink: 0;">折叠</button>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" class="tc-btn-action" id="tc-switch-header-btn" style="flex-shrink: 0;">切换</button>
+                <button type="button" class="tc-btn-action" id="tc-toggle-header-btn" style="flex-shrink: 0;">折叠</button>
+              </div>
             </div>
             <div id="tc-preset-header-body">
               <textarea id="tc-preset-header-input" class="moe-input" rows="4" placeholder="输入注入在最前方的头部内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
@@ -10077,7 +10080,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <div class="form-group" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">一般思维链内容</label>
-              <button type="button" class="tc-btn-action" id="tc-toggle-general-btn" style="flex-shrink: 0;">折叠</button>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" class="tc-btn-action" id="tc-switch-general-btn" style="flex-shrink: 0;">切换</button>
+                <button type="button" class="tc-btn-action" id="tc-toggle-general-btn" style="flex-shrink: 0;">折叠</button>
+              </div>
             </div>
             <div id="tc-preset-general-body">
               <textarea id="tc-preset-general-input" class="moe-input" rows="6" placeholder="输入思维链指导规则、思考步骤等内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
@@ -23930,6 +23936,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return isBuiltinMashuTagName(rawName) || Boolean(findMatchingCustomTcEntry(rawName));
         }
 
+        function isTcCustomEntryActive(ent) {
+          if (!ent || ent.enabled === false) return false;
+          if (ent.groupId) {
+            const grp = currentTcEditorGroups.find((g) => g && g.id === ent.groupId);
+            if (grp && grp.enabled === false) return false;
+          }
+          return true;
+        }
+
         function serializeTcRichEditorNode(node, isRoot = true) {
           let out = "";
           const children = node.childNodes;
@@ -23938,6 +23953,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (child.nodeType === Node.TEXT_NODE) {
               out += (child.nodeValue || "").replace(/\u200B/g, "");
             } else if (child.nodeType === Node.ELEMENT_NODE) {
+              if (child.classList && child.classList.contains("tc-inline-entry-preview-block")) {
+                continue;
+              }
               if (child.dataset && child.dataset.mashuTag) {
                 out += child.dataset.mashuTag;
               } else if (child.tagName === "BR") {
@@ -23961,12 +23979,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const isBuiltin = isBuiltinMashuTagName(cleanName);
           const customEnt = !isBuiltin ? findMatchingCustomTcEntry(tagName) : null;
           const isCustom = Boolean(customEnt);
+          const isActiveCustom = isCustom ? isTcCustomEntryActive(customEnt) : true;
           let fullTag = explicitFullTag;
           if (!fullTag) {
             fullTag = isCustom ? `{{${cleanName}}}` : `{{麻薯-${cleanName}}}`;
           }
           const span = document.createElement("span");
-          span.className = "tc-inline-mashu-bubble" + (isCustom ? " is-custom-entry" : "");
+          span.className = "tc-inline-mashu-bubble" + (isCustom ? " is-custom-entry" : "") + (isCustom && !isActiveCustom ? " is-disabled-entry" : "");
           span.contentEditable = "false";
           span.dataset.mashuTag = fullTag;
 
@@ -23986,11 +24005,58 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           let dragTimer = null;
           let isDragging = false;
+          let hasMoved = false;
           let ghostEl = null;
           let dropCaretEl = null;
           let currentDropRange = null;
           let startX = 0;
           let startY = 0;
+
+          const placeCaretOutsideBubble = (clientX) => {
+            const richContainer = span.closest(".tc-rich-textarea");
+            if (!richContainer || !span.parentNode) return;
+            const rect = span.getBoundingClientRect();
+            const isLeftHalf = clientX < rect.left + rect.width / 2;
+            const parent = span.parentNode;
+            let targetTextNode = null;
+            let targetOffset = 0;
+
+            if (isLeftHalf) {
+              const prev = span.previousSibling;
+              if (prev && prev.nodeType === Node.TEXT_NODE) {
+                targetTextNode = prev;
+                targetOffset = (prev.nodeValue || "").length;
+              } else {
+                const zNode = document.createTextNode("\u200B");
+                parent.insertBefore(zNode, span);
+                targetTextNode = zNode;
+                targetOffset = 1;
+              }
+            } else {
+              const next = span.nextSibling;
+              if (next && next.nodeType === Node.TEXT_NODE) {
+                targetTextNode = next;
+                targetOffset = (next.nodeValue || "").startsWith("\u200B") ? 1 : 0;
+              } else {
+                const zNode = document.createTextNode("\u200B");
+                parent.insertBefore(zNode, span.nextSibling);
+                targetTextNode = zNode;
+                targetOffset = 1;
+              }
+            }
+
+            if (document.activeElement !== richContainer) {
+              richContainer.focus();
+            }
+            const sel = window.getSelection();
+            if (sel && targetTextNode) {
+              const newRange = document.createRange();
+              newRange.setStart(targetTextNode, targetOffset);
+              newRange.collapse(true);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+            }
+          };
 
           const getPointRange = (clientX, clientY) => {
             if (document.caretRangeFromPoint) {
@@ -24072,6 +24138,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const startDrag = (clientX, clientY) => {
             isDragging = true;
+            const sel = window.getSelection();
+            if (sel) sel.removeAllRanges();
             span.style.opacity = "0.35";
 
             const rect = span.getBoundingClientRect();
@@ -24094,6 +24162,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const cy = pt.clientY;
             if (!isDragging) {
               if (Math.abs(cx - startX) > 6 || Math.abs(cy - startY) > 6) {
+                hasMoved = true;
                 cleanupDrag();
               }
               return;
@@ -24103,6 +24172,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
 
           const onEnd = (ev) => {
+            const pt = (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0] : ev;
+            const endX = pt && typeof pt.clientX === "number" ? pt.clientX : startX;
             if (isDragging && currentDropRange) {
               if (ev.cancelable) ev.preventDefault();
               ev.stopPropagation();
@@ -24113,21 +24184,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   nextSib.remove();
                 }
                 currentDropRange.insertNode(span);
+                const zNodeBefore = (!span.previousSibling || span.previousSibling.nodeType !== Node.TEXT_NODE)
+                  ? document.createTextNode("\u200B")
+                  : null;
+                if (zNodeBefore && span.parentNode) {
+                  span.parentNode.insertBefore(zNodeBefore, span);
+                }
                 const zNode = document.createTextNode("\u200B");
                 if (span.parentNode) {
                   span.parentNode.insertBefore(zNode, span.nextSibling);
                 }
                 if (typeof syncFn === "function") syncFn();
               }
+            } else if (!isDragging && !hasMoved) {
+              placeCaretOutsideBubble(endX);
             }
             cleanupDrag();
           };
 
           const onPointerStart = (ev) => {
-            if (ev.type === "mousedown" && ev.button !== 0) return;
+            if (ev.type === "mousedown") {
+              if (ev.button !== 0) return;
+              ev.preventDefault();
+            }
             const pt = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
             startX = pt.clientX;
             startY = pt.clientY;
+            hasMoved = false;
             cleanupDrag();
             window.addEventListener("mousemove", onMove, true);
             window.addEventListener("mouseup", onEnd, true);
@@ -24139,6 +24222,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }, 500);
           };
 
+          span.addEventListener("contextmenu", (ev) => {
+            ev.preventDefault();
+          });
+          span.addEventListener("selectstart", (ev) => {
+            ev.preventDefault();
+          });
           span.addEventListener("mousedown", onPointerStart);
           span.addEventListener("touchstart", onPointerStart, { passive: true });
 
@@ -24202,6 +24291,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const tn = document.createTextNode(text.slice(lastIndex, match.index));
                 frag.appendChild(tn);
                 lastInsertedNode = tn;
+              } else if (!lastInsertedNode || lastInsertedNode.nodeType !== Node.TEXT_NODE) {
+                const leadZ = document.createTextNode("\u200B");
+                frag.appendChild(leadZ);
+                lastInsertedNode = leadZ;
               }
               const bNode = createMashuBubbleElement(tagInner, syncFn, fullToken);
               const zNode = document.createTextNode("\u200B");
@@ -24299,6 +24392,65 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (!raw) return;
             const { frag } = buildTcRichFragmentFromText(raw, syncToTextarea, !isEntryBox);
             richEl.appendChild(frag);
+            if (richEl._isPreviewMode && typeof renderPreviewBlocksInRichEl === "function") {
+              renderPreviewBlocksInRichEl();
+            }
+          };
+
+          const clearPreviewBlocksInRichEl = () => {
+            richEl.querySelectorAll(".tc-inline-entry-preview-block").forEach((el) => el.remove());
+          };
+
+          const renderPreviewBlocksInRichEl = () => {
+            clearPreviewBlocksInRichEl();
+            if (!richEl._isPreviewMode) return;
+            const bubbles = richEl.querySelectorAll(".tc-inline-mashu-bubble.is-custom-entry");
+            bubbles.forEach((b) => {
+              const rawTag = b.dataset.mashuTag || b.textContent || "";
+              const ent = findMatchingCustomTcEntry(rawTag);
+              const isAct = isTcCustomEntryActive(ent);
+              b.classList.toggle("is-disabled-entry", !isAct);
+              if (ent && isAct) {
+                const bodyText = String(ent.content || "").trim();
+                if (bodyText) {
+                  const previewEl = document.createElement("div");
+                  previewEl.className = "tc-inline-entry-preview-block";
+                  previewEl.contentEditable = "false";
+                  if (ent.groupId) {
+                    const grpColor = getTcGroupColorById(ent.groupId);
+                    if (grpColor) {
+                      previewEl.style.borderLeftColor = grpColor;
+                    }
+                  }
+                  previewEl.textContent = bodyText;
+                  const insertAfterNode = (b.nextSibling && b.nextSibling.nodeType === Node.TEXT_NODE && b.nextSibling.nodeValue === "\u200B")
+                    ? b.nextSibling
+                    : b;
+                  if (insertAfterNode.parentNode) {
+                    insertAfterNode.parentNode.insertBefore(previewEl, insertAfterNode.nextSibling);
+                  }
+                }
+              }
+            });
+          };
+
+          const setPreviewMode = (enable) => {
+            const nextState = Boolean(enable);
+            if (nextState) {
+              hideSuggest();
+              if (typeof flushAllTcRichEditors === "function") {
+                flushAllTcRichEditors();
+              } else {
+                syncToTextarea();
+              }
+              richEl._isPreviewMode = true;
+              richEl.contentEditable = "false";
+              renderPreviewBlocksInRichEl();
+            } else {
+              richEl._isPreviewMode = false;
+              clearPreviewBlocksInRichEl();
+              richEl.contentEditable = "true";
+            }
           };
 
           const hideSuggest = () => {
@@ -24359,6 +24511,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
             const range = sel.getRangeAt(0);
             if (!range.collapsed || !richEl.contains(range.startContainer) || range.startContainer.nodeType !== Node.TEXT_NODE) {
+              hideSuggest();
+              return;
+            }
+            const insideExistingBubble = range.startContainer.parentElement
+              ? range.startContainer.parentElement.closest(".tc-inline-mashu-bubble")
+              : null;
+            if (insideExistingBubble) {
               hideSuggest();
               return;
             }
@@ -24521,9 +24680,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             setTimeout(() => {
               hideSuggest();
               syncToTextarea();
-              if (!isEntryBox) {
-                syncFromTextarea();
-              }
             }, 150);
           });
 
@@ -24632,7 +24788,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           textareaEl._mashuRichAttached = true;
           textareaEl._syncFromTextarea = syncFromTextarea;
           textareaEl._syncToTextarea = syncToTextarea;
+          textareaEl._setPreviewMode = setPreviewMode;
+          textareaEl._renderPreviewBlocks = renderPreviewBlocksInRichEl;
           syncFromTextarea();
+        }
+
+        function updateStaticTcBubblesActiveState() {
+          const ids = ["tc-preset-header-input", "tc-preset-general-input"];
+          ids.forEach((id) => {
+            const ta = document.getElementById(id);
+            if (!ta || !ta._richEl) return;
+            const bubbles = ta._richEl.querySelectorAll(".tc-inline-mashu-bubble.is-custom-entry");
+            bubbles.forEach((b) => {
+              const rawTag = b.dataset.mashuTag || b.textContent || "";
+              const ent = findMatchingCustomTcEntry(rawTag);
+              const isAct = isTcCustomEntryActive(ent);
+              b.classList.toggle("is-disabled-entry", !isAct);
+            });
+            if (ta._richEl._isPreviewMode && typeof ta._renderPreviewBlocks === "function") {
+              ta._renderPreviewBlocks();
+            }
+          });
         }
 
         function syncStaticTcRichEditors() {
@@ -24784,6 +24960,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               cb.checked = grp.enabled !== false;
               cb.onchange = (e) => {
                 currentTcEditorGroups[idx].enabled = e.target.checked;
+                updateStaticTcBubblesActiveState();
               };
 
               const nameInput = document.createElement("input");
@@ -24910,6 +25087,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               cb.checked = ent.enabled !== false;
               cb.onchange = (e) => {
                 currentTcEditorEntries[idx].enabled = e.target.checked;
+                updateStaticTcBubblesActiveState();
               };
 
               let keyRefreshTimer = null;
@@ -25320,6 +25498,32 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           syncStaticTcRichEditors();
+          const switchConfigs = [
+            { switchBtnId: "tc-switch-header-btn", taId: "tc-preset-header-input", bodyId: "tc-preset-header-body", foldBtnId: "tc-toggle-header-btn" },
+            { switchBtnId: "tc-switch-general-btn", taId: "tc-preset-general-input", bodyId: "tc-preset-general-body", foldBtnId: "tc-toggle-general-btn" },
+          ];
+          switchConfigs.forEach(({ switchBtnId, taId, bodyId, foldBtnId }) => {
+            const sBtn = document.getElementById(switchBtnId);
+            const ta = document.getElementById(taId);
+            if (ta && typeof ta._setPreviewMode === "function") {
+              ta._setPreviewMode(false);
+            }
+            if (sBtn) {
+              sBtn.classList.remove("primary");
+              sBtn.onclick = () => {
+                if (!ta || !ta._richEl || typeof ta._setPreviewMode !== "function") return;
+                const body = document.getElementById(bodyId);
+                const fBtn = document.getElementById(foldBtnId);
+                if (body && body.style.display === "none") {
+                  body.style.display = "block";
+                  if (fBtn) fBtn.textContent = "折叠";
+                }
+                const nextMode = !ta._richEl._isPreviewMode;
+                ta._setPreviewMode(nextMode);
+                sBtn.classList.toggle("primary", nextMode);
+              };
+            }
+          });
           const staticSections = [
             { btnId: "tc-toggle-header-btn", bodyId: "tc-preset-header-body", displayShow: "block" },
             { btnId: "tc-toggle-general-btn", bodyId: "tc-preset-general-body", displayShow: "block" },
