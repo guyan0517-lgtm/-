@@ -24484,7 +24484,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (!preset || !preset.headerContent) return "";
             const resolvedHeader = resolveThoughtChainEntries(preset.headerContent, preset).trim();
             if (!resolvedHeader) return "";
-            return window.formatPromptSection("头部", resolvedHeader);
+            return resolvedHeader + "\n";
           } catch (e) {
             console.error("加载思维链头部错误:", e);
             return "";
