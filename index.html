@@ -26450,11 +26450,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.handleThoughtChainEditorFileImport = handleThoughtChainEditorFileImport;
 
+        async function refreshChatSettingsTokenDisplay(chatId) {
+          const targetId = chatId || state.activeChatId;
+          if (!targetId) return;
+          const tokenDisplay = document.getElementById("context-token-count-display");
+          if (tokenDisplay && typeof getTokenDetailedBreakdown === "function") {
+            try {
+              const result = await getTokenDetailedBreakdown(targetId);
+              if (result && Array.isArray(result.items)) {
+                const totalCount = result.items.reduce((sum, item) => sum + item.count, 0);
+                tokenDisplay.textContent = `${totalCount.toLocaleString()}`;
+              }
+            } catch (e) {}
+          }
+        }
+
         async function syncModifiedPresetFromBindModal(preset, chat, isPeerGrp) {
           if (!preset || !preset.id) return;
           try {
             if (typeof db !== "undefined" && db.thoughtChainPresets) {
-              const localPreset = await db.thoughtChainPresets.get(preset.id);
+              let localPreset = await db.thoughtChainPresets.get(preset.id);
+              if (!localPreset && !isNaN(Number(preset.id))) {
+                localPreset = await db.thoughtChainPresets.get(Number(preset.id));
+              }
+              if (!localPreset) {
+                const allLocal = (await db.thoughtChainPresets.toArray()) || [];
+                localPreset = allLocal.find(p => p && String(p.id) === String(preset.id));
+              }
               if (localPreset) {
                 localPreset.groups = preset.groups;
                 localPreset.entries = preset.entries;
@@ -26467,7 +26489,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (exIdx >= 0) {
               chat.settings.sharedThoughtChains[exIdx] = preset;
             }
+            if (typeof db !== "undefined" && db.chats) {
+              try {
+                await db.chats.put(chat);
+              } catch (e) {}
+            }
           }
+          await refreshChatSettingsTokenDisplay(chat ? chat.id : state.activeChatId);
         }
 
         async function openThoughtChainBindModal() {
@@ -26515,7 +26543,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           const presets = Array.from(mergedMap.values());
 
-          selectedThoughtChainBindId = chat.thoughtChainId || null;
+          selectedThoughtChainBindId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId) || null;
 
           const renderSelectedPresetGroupsAndEntries = async () => {
             listEl.innerHTML = "";
@@ -26716,6 +26744,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (isPeerGrp && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
             window.PeerManager.syncGroupSettingsToPeers(chat);
           }
+          await refreshChatSettingsTokenDisplay(chat.id);
           document.getElementById("thought-chain-bind-modal").classList.remove("visible");
         }
         window.openThoughtChainBindModal = openThoughtChainBindModal;
@@ -26966,11 +26995,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const presetId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId);
           let preset = null;
           if (presetId) {
-            try {
-              preset = await db.thoughtChainPresets.get(presetId);
-            } catch (e) {}
+            const isPeerGrp = typeof window.isPeerGroupChat === "function"
+              ? window.isPeerGroupChat(chat)
+              : Boolean(chat && chat.isGroup && chat.isPeerGroup);
+            if (isPeerGrp && Array.isArray(chat.settings?.sharedThoughtChains)) {
+              preset = chat.settings.sharedThoughtChains.find(p => p && String(p.id) === String(presetId)) || null;
+            }
+            if (!preset) {
+              try {
+                preset = await db.thoughtChainPresets.get(presetId);
+                if (!preset && !isNaN(Number(presetId))) {
+                  preset = await db.thoughtChainPresets.get(Number(presetId));
+                }
+                if (!preset) {
+                  const allPresets = (await db.thoughtChainPresets.toArray()) || [];
+                  preset = allPresets.find(p => p && String(p.id) === String(presetId)) || null;
+                }
+              } catch (e) {}
+            }
             if (!preset && Array.isArray(chat.settings?.sharedThoughtChains)) {
-              preset = chat.settings.sharedThoughtChains.find(p => String(p.id) === String(presetId));
+              preset = chat.settings.sharedThoughtChains.find(p => p && String(p.id) === String(presetId)) || null;
             }
           }
           return preset;
@@ -73427,11 +73471,34 @@ ${stickerContext || "无"}
           });
 
           let tcPromptText = "";
-          if (typeof getThoughtChainHeaderBlock === "function") {
-            tcPromptText += await getThoughtChainHeaderBlock(chat);
-          }
-          if (typeof getThoughtChainPromptBlock === "function") {
-            tcPromptText += await getThoughtChainPromptBlock(chat);
+          if (typeof getActiveThoughtChainPreset === "function") {
+            const activeTcPreset = await getActiveThoughtChainPreset(chat);
+            if (activeTcPreset) {
+              const groupEnabledMap = new Map();
+              if (Array.isArray(activeTcPreset.groups)) {
+                activeTcPreset.groups.forEach((g) => {
+                  if (g && g.id) {
+                    groupEnabledMap.set(String(g.id), g.enabled !== false);
+                  }
+                });
+              }
+              if (Array.isArray(activeTcPreset.entries) && activeTcPreset.entries.length > 0) {
+                const enabledEntryTexts = [];
+                activeTcPreset.entries.forEach((ent) => {
+                  if (!ent || ent.enabled === false) return;
+                  const isGroupEnabled = ent.groupId && groupEnabledMap.has(String(ent.groupId))
+                    ? groupEnabledMap.get(String(ent.groupId))
+                    : true;
+                  if (!isGroupEnabled) return;
+                  if (ent.content) {
+                    enabledEntryTexts.push(String(ent.content));
+                  }
+                });
+                tcPromptText = enabledEntryTexts.join("");
+              } else {
+                tcPromptText = String(activeTcPreset.headerContent || "") + String(activeTcPreset.generalContent || "");
+              }
+            }
           }
           breakdown.push({
             name: "思维链预设",
@@ -86692,6 +86759,10 @@ ${stickerContext || "无"}
                   世界书: "#4ECDC4",
                   表情包定义: "#FFD93D",
                   "长期记忆(总结)": "#45B7D1",
+                  模组章节: "#54A0FF",
+                  思维链预设: "#FF9F43",
+                  "游戏模组/面板": "#00D2D3",
+                  地图: "#5F27CD",
                   "短期记忆(用户)": "#96CEB4",
                   "短期记忆(AI)": "#A8E6CF",
                   优化消息: "#9B59B6",
