@@ -23896,16 +23896,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const rawTrim = String(rawName || "").trim();
           if (!rawTrim) return null;
           const clean = normalizeTcPlaceholderKey(rawTrim).replace(/^麻薯-/, "").trim();
+          let fallbackMatch = null;
           for (let i = 0; i < currentTcEditorEntries.length; i++) {
             const ent = currentTcEditorEntries[i];
             if (!ent || !ent.key) continue;
             const entRaw = String(ent.key || "").trim();
             if (!entRaw) continue;
-            if (entRaw === rawTrim) return ent;
             const entClean = normalizeTcPlaceholderKey(entRaw).replace(/^麻薯-/, "").trim();
-            if (clean && entClean && entClean === clean) return ent;
+            if (entRaw === rawTrim || (clean && entClean && entClean === clean)) {
+              if (isTcCustomEntryActive(ent)) {
+                return ent;
+              }
+              if (!fallbackMatch) {
+                fallbackMatch = ent;
+              }
+            }
           }
-          return null;
+          return fallbackMatch;
         }
 
         function getAllMashuSuggestOptions() {
@@ -23976,9 +23983,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function createMashuBubbleElement(tagName, syncFn, explicitFullTag = null) {
           const cleanName = normalizeTcPlaceholderKey(tagName).replace(/^麻薯-/, "").trim() || String(tagName || "").trim();
-          const isBuiltin = isBuiltinMashuTagName(cleanName);
-          const customEnt = !isBuiltin ? findMatchingCustomTcEntry(tagName) : null;
-          const isCustom = Boolean(customEnt);
+          const hasExplicitMashuPrefix = String(explicitFullTag || tagName || "").includes("麻薯-");
+          const customEnt = !hasExplicitMashuPrefix ? findMatchingCustomTcEntry(tagName) : null;
+          const isBuiltin = isBuiltinMashuTagName(cleanName) && !customEnt;
+          const isCustom = Boolean(customEnt) && !isBuiltin;
           const isActiveCustom = isCustom ? isTcCustomEntryActive(customEnt) : true;
           let fullTag = explicitFullTag;
           if (!fullTag) {
@@ -24252,7 +24260,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             currentTcEditorEntries.forEach((ent) => {
               if (!ent || !ent.key) return;
               const rk = String(ent.key || "").trim();
-              if (rk && !seenRaw.has(rk)) {
+              if (rk.length >= 2 && !seenRaw.has(rk)) {
                 seenRaw.add(rk);
                 customRawKeys.push(rk);
               }
@@ -24570,8 +24578,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const textNode = range.startContainer;
             const offset = range.startOffset;
             const textVal = textNode.nodeValue || "";
-            const before = textVal.slice(0, offset);
-            const after = textVal.slice(offset);
+            const windowStart = Math.max(0, offset - 120);
+            const before = textVal.slice(windowStart, offset);
+            const after = textVal.slice(offset, offset + 10);
 
             const completeMatch = before.match(/\{\{([^}\n]+)\}\}$/);
             if (completeMatch) {
@@ -24580,7 +24589,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (strippedInner && isKnownMashuTagName(strippedInner)) {
                 currentTriggerState = {
                   textNode,
-                  startOffset: completeMatch.index,
+                  startOffset: windowStart + completeMatch.index,
                   endOffset: offset,
                 };
                 applyMashuSelection(strippedInner, completeMatch[0]);
@@ -24625,13 +24634,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const emptyBraceAfterMatch = before.match(/\{\{(?:麻薯-)?\}\}$/);
             if (emptyBraceAfterMatch) {
               query = "";
-              startOffset = emptyBraceAfterMatch.index;
+              startOffset = windowStart + emptyBraceAfterMatch.index;
               endOffset = offset;
             } else {
               const openMatch = before.match(/\{\{(?:麻薯-)?([^}\n]*)$/);
               if (openMatch) {
                 query = openMatch[1];
-                startOffset = openMatch.index;
+                startOffset = windowStart + openMatch.index;
                 if (after.startsWith("}}")) {
                   endOffset = offset + 2;
                 } else if (after.startsWith("}")) {
@@ -24716,9 +24725,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
 
           richEl.addEventListener("mouseup", () => {
-            if (suggestBox.classList.contains("visible") || (richEl.textContent && richEl.textContent.includes("{{"))) {
-              setTimeout(checkTriggerAndRenderSuggest, 10);
-            }
+            setTimeout(checkTriggerAndRenderSuggest, 10);
           });
 
           richEl.addEventListener("blur", () => {
@@ -24730,12 +24737,31 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           richEl.addEventListener("paste", (e) => {
             e.preventDefault();
-            const text = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+            const rawClip = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+            const text = rawClip.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
             if (!text) return;
             const sel = window.getSelection();
             if (!sel || sel.rangeCount === 0) return;
             const range = sel.getRangeAt(0);
+            const previewBlockAnc = range.startContainer.nodeType === Node.ELEMENT_NODE
+              ? range.startContainer.closest(".tc-inline-entry-preview-block")
+              : (range.startContainer.parentElement ? range.startContainer.parentElement.closest(".tc-inline-entry-preview-block") : null);
             range.deleteContents();
+
+            if (previewBlockAnc) {
+              const tn = document.createTextNode(text);
+              range.insertNode(tn);
+              const newRange = document.createRange();
+              newRange.setStartAfter(tn);
+              newRange.collapse(true);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+              if (typeof previewBlockAnc._syncEntryContent === "function") {
+                previewBlockAnc._syncEntryContent();
+              }
+              hideSuggest();
+              return;
+            }
 
             const { frag, lastInsertedNode } = buildTcRichFragmentFromText(text, syncToTextarea, !isEntryBox);
 
@@ -24748,7 +24774,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               sel.addRange(newRange);
             }
             syncToTextarea();
-            checkTriggerAndRenderSuggest();
+            hideSuggest();
           });
 
           richEl.addEventListener("keydown", (e) => {
@@ -24926,20 +24952,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             bubbles.forEach((b) => {
               const rawTag = String(b.dataset.mashuTag || b.textContent || "").trim();
               if (!rawTag) return;
-              const ent = findMatchingCustomTcEntry(rawTag);
-              if (ent && !rankMap.has(ent)) {
-                rankMap.set(ent, nextRank++);
-              }
+              const cleanTag = normalizeTcPlaceholderKey(rawTag).replace(/^麻薯-/, "").trim();
+              currentTcEditorEntries.forEach((ent) => {
+                if (!ent || !ent.key || rankMap.has(ent)) return;
+                const entRaw = String(ent.key || "").trim();
+                const entClean = normalizeTcPlaceholderKey(entRaw).replace(/^麻薯-/, "").trim();
+                if (entRaw === rawTag || (cleanTag && entClean && entClean === cleanTag)) {
+                  rankMap.set(ent, nextRank++);
+                }
+              });
             });
           });
           return rankMap;
         }
 
-        function syncTcEntriesOrderByBubbles() {
+        function syncTcEntriesOrderByBubbles(prebuiltRankMap = null) {
           if (!Array.isArray(currentTcEditorEntries) || currentTcEditorEntries.length <= 1) {
             return false;
           }
-          const rankMap = getTcBubbleRankMap();
+          const rankMap = prebuiltRankMap || getTcBubbleRankMap();
           const validGroupIds = new Set(currentTcEditorGroups.map((g) => g && g.id).filter(Boolean));
           const bucketIndices = new Map();
           const bucketItems = new Map();
@@ -24996,14 +25027,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           isUpdatingTcLocateIcons = true;
           try {
+            const rankMap = getTcBubbleRankMap();
             let statusChanged = false;
             const locateBtns = entriesContainer.querySelectorAll(".tc-entry-locate-btn");
             locateBtns.forEach((btn) => {
               const entryIdx = Number(btn.dataset.entryIdx);
               const ent = !isNaN(entryIdx) ? currentTcEditorEntries[entryIdx] : null;
-              const key = ent ? ent.key : "";
-              const found = key ? findMatchingBubblesForTcEntry(key) : [];
-              const nextDisabled = found.length === 0;
+              const nextDisabled = !(ent && rankMap.has(ent));
               btn.style.display = "inline-flex";
               if (btn.disabled !== nextDisabled) {
                 btn.disabled = nextDisabled;
@@ -25011,7 +25041,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             });
 
-            const orderChanged = syncTcEntriesOrderByBubbles();
+            const orderChanged = syncTcEntriesOrderByBubbles(rankMap);
             if ((orderChanged || statusChanged) && !entriesContainer.contains(document.activeElement)) {
               renderTcEditorGroupsAndEntries(false);
             }
@@ -25308,12 +25338,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const secondRow = document.createElement("div");
               secondRow.className = "tc-sub-row";
 
+              const isLoadedInText = Boolean(
+                (siblingList && siblingList[siblingPos] && siblingList[siblingPos].isLoadedInText) ||
+                rankMap.has(ent)
+              );
+
               const locateBtn = document.createElement("button");
               locateBtn.type = "button";
               locateBtn.className = "tc-btn-action tc-entry-locate-btn";
               locateBtn.dataset.entryIdx = String(idx);
               locateBtn.title = "定位到气泡";
-              locateBtn.disabled = true;
+              locateBtn.disabled = !isLoadedInText;
               locateBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>`;
               locateBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -25341,8 +25376,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 renderTcEditorGroupsAndEntries(false);
                 refreshStaticTcRichEditorsDisplay();
               };
-
-              const isLoadedInText = Boolean(siblingList && siblingList[siblingPos] && siblingList[siblingPos].isLoadedInText);
 
               const upBtn = document.createElement("button");
               upBtn.type = "button";
