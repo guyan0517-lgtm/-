@@ -24033,9 +24033,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         const TC_BUILTIN_MASHU_TAGS = [
-          { name: "我的人设", canonical: "myPersona", desc: "我的PC人设与属性面板", aliases: ["PC人设", "我的pc人设", "我的PC人设"] },
+          { name: "我的人设", canonical: "myPersona", desc: "我的PC人设与属性面板", aliases: ["PC人设", "我的pc人设", "我的PC人设", "用户设定", "用户人设", "我的设定"] },
           { name: "真人人设", canonical: "peerPersona", desc: "其他真人玩家人设与面板", aliases: ["其他真人人设", "真人玩家人设"] },
-          { name: "对方人设", canonical: "aiPersona", desc: "AI角色或群成员人设档案", aliases: ["AI人设", "群成员人设", "角色人设", "人设"] },
+          { name: "对方人设", canonical: "aiPersona", desc: "AI角色或群成员人设档案", aliases: ["AI人设", "群成员人设", "角色人设", "人设", "角色设定", "他的人设", "她的人设", "TA的人设"] },
           { name: "世界书", canonical: "worldBook", desc: "绑定的世界观与设定集", aliases: ["世界设定", "世界观"] },
           { name: "上下文", canonical: "history", desc: "近期聊天历史对话记录", aliases: ["历史消息", "聊天记录", "近期消息"] },
           { name: "长期记忆", canonical: "summary", desc: "历史总结与长期回忆", aliases: ["历史总结", "总结"] },
@@ -24474,11 +24474,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (inner.startsWith("麻薯-")) {
                 tagInner = inner.replace(/^麻薯-/, "").trim();
                 if (tagInner) shouldBubble = true;
-              } else if (isKnownMashuTagName(inner)) {
+              } else if (isBuiltinMashuTagName(inner) || (includePlainCustomKeys && Boolean(findMatchingCustomTcEntry(inner)))) {
                 tagInner = inner;
                 shouldBubble = true;
               }
-            } else if (findMatchingCustomTcEntry(fullToken)) {
+            } else if (includePlainCustomKeys && findMatchingCustomTcEntry(fullToken)) {
               tagInner = fullToken;
               shouldBubble = true;
             }
@@ -24775,7 +24775,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (completeMatch) {
               const rawInner = completeMatch[1].trim();
               const strippedInner = rawInner.replace(/^麻薯-/, "").trim();
-              if (strippedInner && isKnownMashuTagName(strippedInner)) {
+              const canConvertBubble = isEntryBox
+                ? isBuiltinMashuTagName(strippedInner)
+                : isKnownMashuTagName(strippedInner);
+              if (strippedInner && canConvertBubble) {
                 currentTriggerState = {
                   textNode,
                   startOffset: windowStart + completeMatch.index,
@@ -24846,7 +24849,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             const qTrim = query.trim();
-            const allOpts = getAllMashuSuggestOptions();
+            const allOpts = getAllMashuSuggestOptions().filter((opt) => !isEntryBox || !opt.isCustom);
             const filtered = allOpts.filter((opt) => {
               if (!qTrim) return true;
               if (opt.name.includes(qTrim) || opt.desc.includes(qTrim)) return true;
@@ -26484,10 +26487,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
           } catch (e) {}
-          if (isPeerGrp && chat && chat.settings && Array.isArray(chat.settings.sharedThoughtChains)) {
-            const exIdx = chat.settings.sharedThoughtChains.findIndex(t => t && String(t.id) === String(preset.id));
-            if (exIdx >= 0) {
-              chat.settings.sharedThoughtChains[exIdx] = preset;
+          if (chat) {
+            const masterSwitch = document.getElementById("tc-enable-master-switch");
+            chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : (chat.thoughtChainEnabled !== false);
+            chat.thoughtChainId = preset.id;
+            if (!chat.settings) chat.settings = {};
+            chat.settings.thinkingPresetId = preset.id;
+            if (state.globalSettings) state.globalSettings.defaultThoughtChainId = preset.id;
+            if (isPeerGrp && chat.settings && Array.isArray(chat.settings.sharedThoughtChains)) {
+              const exIdx = chat.settings.sharedThoughtChains.findIndex(t => t && String(t.id) === String(preset.id));
+              if (exIdx >= 0) {
+                chat.settings.sharedThoughtChains[exIdx] = preset;
+              }
+            }
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
             }
             if (typeof db !== "undefined" && db.chats) {
               try {
@@ -26524,6 +26539,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (masterSwitch) {
             masterSwitch.checked = chat.thoughtChainEnabled !== false;
+            masterSwitch.onchange = async () => {
+              chat.thoughtChainEnabled = masterSwitch.checked;
+              if (selectedThoughtChainBindId) {
+                chat.thoughtChainId = selectedThoughtChainBindId;
+              }
+              if (state.chats) {
+                state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
+              }
+              if (typeof db !== "undefined" && db.chats) {
+                try {
+                  await db.chats.put(chat);
+                } catch (e) {}
+              }
+              await refreshChatSettingsTokenDisplay(chat.id);
+            };
           }
 
           const mergedMap = new Map();
@@ -26543,7 +26574,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           const presets = Array.from(mergedMap.values());
 
-          selectedThoughtChainBindId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId) || null;
+          selectedThoughtChainBindId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId) || (presets.length === 1 ? presets[0].id : null);
+          if (selectedThoughtChainBindId && !chat.thoughtChainId) {
+            chat.thoughtChainId = selectedThoughtChainBindId;
+            if (!chat.settings) chat.settings = {};
+            chat.settings.thinkingPresetId = selectedThoughtChainBindId;
+            chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : (chat.thoughtChainEnabled !== false);
+            if (state.chats) {
+              state.chats[chat.id] = chat;
+              state.chats[String(chat.id)] = chat;
+            }
+            if (typeof db !== "undefined" && db.chats) {
+              try {
+                await db.chats.put(chat);
+              } catch (e) {}
+            }
+            await refreshChatSettingsTokenDisplay(chat.id);
+          }
 
           const renderSelectedPresetGroupsAndEntries = async () => {
             listEl.innerHTML = "";
@@ -26685,7 +26732,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const matched = presets.find(p => String(p.id) === String(chosen));
                 selectedThoughtChainBindId = matched ? matched.id : (isNaN(Number(chosen)) ? chosen : Number(chosen));
               }
+              chat.thoughtChainId = selectedThoughtChainBindId;
+              if (!chat.settings) chat.settings = {};
+              chat.settings.thinkingPresetId = selectedThoughtChainBindId;
+              if (state.globalSettings) state.globalSettings.defaultThoughtChainId = selectedThoughtChainBindId;
+              chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
+              if (state.chats) {
+                state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
+              }
+              if (typeof db !== "undefined" && db.chats) {
+                try {
+                  await db.chats.put(chat);
+                } catch (e) {}
+              }
               await renderSelectedPresetGroupsAndEntries();
+              await refreshChatSettingsTokenDisplay(chat.id);
             };
           }
 
@@ -26713,6 +26775,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const masterSwitch = document.getElementById("tc-enable-master-switch");
           chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
           chat.thoughtChainId = selectedThoughtChainBindId;
+          if (!chat.settings) chat.settings = {};
+          chat.settings.thinkingPresetId = selectedThoughtChainBindId;
+          if (state.globalSettings) state.globalSettings.defaultThoughtChainId = selectedThoughtChainBindId;
 
           const isPeerGrp = typeof window.isPeerGroupChat === "function"
             ? window.isPeerGroupChat(chat)
@@ -26875,7 +26940,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function isChatThoughtChainActive(chat) {
           if (!chat || chat.thoughtChainEnabled === false) return false;
-          return Boolean(chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId) || chat.thoughtChainEnabled === true);
+          return true;
         }
 
         const THOUGHT_CHAIN_FOLDED_NOTICE = "已折叠历史思考";
@@ -26994,10 +27059,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!isChatThoughtChainActive(chat)) return null;
           const presetId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId);
           let preset = null;
+          const isPeerGrp = typeof window.isPeerGroupChat === "function"
+            ? window.isPeerGroupChat(chat)
+            : Boolean(chat && chat.isGroup && chat.isPeerGroup);
           if (presetId) {
-            const isPeerGrp = typeof window.isPeerGroupChat === "function"
-              ? window.isPeerGroupChat(chat)
-              : Boolean(chat && chat.isGroup && chat.isPeerGroup);
             if (isPeerGrp && Array.isArray(chat.settings?.sharedThoughtChains)) {
               preset = chat.settings.sharedThoughtChains.find(p => p && String(p.id) === String(presetId)) || null;
             }
@@ -27016,6 +27081,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (!preset && Array.isArray(chat.settings?.sharedThoughtChains)) {
               preset = chat.settings.sharedThoughtChains.find(p => p && String(p.id) === String(presetId)) || null;
             }
+          }
+          if (!preset && !isPeerGrp) {
+            try {
+              const allPresets = (await db.thoughtChainPresets.toArray()) || [];
+              if (allPresets.length > 0) {
+                preset = allPresets[0];
+              }
+            } catch (e) {}
           }
           return preset;
         }
@@ -27050,19 +27123,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               ? groupEnabledMap.get(String(ent.groupId))
               : true;
             const replacement = (isEntryEnabled && isGroupEnabled) ? String(ent.content || "") : "";
-            const token1 = `{{${cleanKey}}}`;
-            if (result.includes(token1)) {
-              result = result.split(token1).join(replacement);
-            }
-            if (strippedKey) {
-              const token2 = `{{麻薯-${strippedKey}}}`;
-              if (result.includes(token2)) {
-                result = result.split(token2).join(replacement);
+            const candidateTokens = [
+              `{{${cleanKey}}}`,
+              strippedKey ? `{{麻薯-${strippedKey}}}` : "",
+              strippedKey ? `{{${strippedKey}}}` : "",
+              rawKey,
+              cleanKey,
+              strippedKey,
+            ].filter(Boolean);
+            const seenTokens = new Set();
+            candidateTokens.forEach((tok) => {
+              if (seenTokens.has(tok)) return;
+              seenTokens.add(tok);
+              if (result.includes(tok)) {
+                result = result.split(tok).join(replacement);
               }
-            }
-            if (rawKey && rawKey !== token1 && rawKey !== token2 && result.includes(rawKey)) {
-              result = result.split(rawKey).join(replacement);
-            }
+            });
           });
           return result;
         }
@@ -27070,7 +27146,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function getUsedMashuCanonicalKeys(text) {
           const used = new Set();
           if (!text || typeof text !== "string") return used;
-          const regex = /\{\{麻薯-([^}\n]+)\}\}/g;
+          const regex = /\{\{\s*(?:麻薯[-—_:\s]*)?([^}\n]+?)\s*\}\}/g;
           let m;
           while ((m = regex.exec(text)) !== null) {
             const tagName = m[1].trim();
@@ -27084,7 +27160,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function replaceMashuPlaceholdersInText(text, mashuBlocksMap) {
           if (!text || typeof text !== "string") return "";
-          return text.replace(/\{\{麻薯-([^}\n]+)\}\}/g, (fullMatch, innerName) => {
+          return text.replace(/\{\{\s*(?:麻薯[-—_:\s]*)?([^}\n]+?)\s*\}\}/g, (fullMatch, innerName) => {
             const tagName = String(innerName || "").trim();
             const canonical = MASHU_ALIAS_TO_CANONICAL.get(tagName);
             if (canonical && mashuBlocksMap && Object.prototype.hasOwnProperty.call(mashuBlocksMap, canonical)) {
@@ -27101,7 +27177,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (!preset || !preset.headerContent) return "";
             const resolvedHeader = resolveThoughtChainEntries(preset.headerContent, preset).trim();
             if (!resolvedHeader) return "";
-            return resolvedHeader + "\n";
+            return resolvedHeader;
           } catch (e) {
             console.error("加载思维链头部错误:", e);
             return "";
@@ -27112,6 +27188,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!isChatThoughtChainActive(chat)) return "";
           try {
             const preset = await getActiveThoughtChainPreset(chat);
+            if (!preset) return "";
             let block = "---------- 【思维链填写规范与顶级字段代码定义】 ----------\n" +
               "思维链代码结构与全局唯一性规则：\n" +
               "1. 字段位置与格式定义：根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 \"thinking\" 键后面的英文双引号内部，类型为纯文本字符串。双引号内部直接书写你的思考推演文本，绝对禁止直接输出在JSON代码外部，绝对禁止写在消息正文气泡中，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡。\n" +
@@ -27129,8 +27206,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "    }\n" +
               "  ]\n" +
               "}\n" +
-              (preset ? "\n预设名称：" + preset.name + "\n" : "");
-            if (preset && preset.generalContent) {
+              (preset.name ? "\n预设名称：" + preset.name + "\n" : "");
+            if (preset.generalContent) {
               const resolvedGeneral = resolveThoughtChainEntries(preset.generalContent, preset);
               if (resolvedGeneral.trim()) {
                 block += "\n---------- 【思维链通用规则设定开始】 ----------\n" + resolvedGeneral + "\n---------- 【思维链通用规则设定结束】 ----------\n";
@@ -44379,6 +44456,12 @@ ${recentHistoryText}
                   dbChat.activeLineMode = "solo";
                   dbChat.viewingPeerSoloThread = chat.viewingPeerSoloThread;
                   dbChat.history = chat.history;
+                }
+                if (chat && chat.thoughtChainId !== undefined && dbChat.thoughtChainId !== chat.thoughtChainId) {
+                  dbChat.thoughtChainId = chat.thoughtChainId;
+                }
+                if (chat && chat.thoughtChainEnabled !== undefined && dbChat.thoughtChainEnabled !== chat.thoughtChainEnabled) {
+                  dbChat.thoughtChainEnabled = chat.thoughtChainEnabled;
                 }
                 if (!state.chats) state.chats = {};
                 state.chats[dbChat.id] = dbChat;
