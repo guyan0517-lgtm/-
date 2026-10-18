@@ -10066,16 +10066,31 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <input type="text" id="tc-preset-name-input" class="moe-input" placeholder="输入预设名称" style="width: 100%; box-sizing: border-box;" />
           </div>
           <div class="form-group" style="margin-bottom: 14px;">
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">头部</label>
-            <textarea id="tc-preset-header-input" class="moe-input" rows="4" placeholder="输入注入在最前方的头部内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">头部</label>
+              <button type="button" class="tc-btn-action" id="tc-toggle-header-btn" style="flex-shrink: 0;">折叠</button>
+            </div>
+            <div id="tc-preset-header-body">
+              <textarea id="tc-preset-header-input" class="moe-input" rows="4" placeholder="输入注入在最前方的头部内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+            </div>
           </div>
           <div class="form-group" style="margin-bottom: 14px;">
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">一般思维链内容</label>
-            <textarea id="tc-preset-general-input" class="moe-input" rows="6" placeholder="输入思维链指导规则、思考步骤等内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">一般思维链内容</label>
+              <button type="button" class="tc-btn-action" id="tc-toggle-general-btn" style="flex-shrink: 0;">折叠</button>
+            </div>
+            <div id="tc-preset-general-body">
+              <textarea id="tc-preset-general-input" class="moe-input" rows="6" placeholder="输入思维链指导规则、思考步骤等内容..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+            </div>
           </div>
-          <div class="form-group" style="margin-bottom: 14px;">
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">跑团模块内容</label>
-            <textarea id="tc-preset-coc-input" class="moe-input" rows="4" placeholder="输入跑团模块专属指令..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+          <div class="form-group" style="margin-bottom: 14px; display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">跑团模块内容</label>
+              <button type="button" class="tc-btn-action" id="tc-toggle-coc-btn" style="flex-shrink: 0;">折叠</button>
+            </div>
+            <div id="tc-preset-coc-body">
+              <textarea id="tc-preset-coc-input" class="moe-input" rows="4" placeholder="输入跑团模块专属指令..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 13px; line-height: 1.5;"></textarea>
+            </div>
           </div>
           <div class="form-group" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -10087,9 +10102,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <div class="form-group" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0;">条目</label>
-              <button type="button" class="tc-btn-action" id="tc-add-entry-btn" style="flex-shrink: 0;">添加</button>
             </div>
             <div id="tc-entries-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 8px;">
+              <button type="button" class="tc-btn-action" id="tc-add-entry-btn" style="flex-shrink: 0;">添加</button>
+            </div>
           </div>
         </div>
         <div class="modal-footer" style="display: flex; gap: 8px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color); justify-content: flex-end; align-items: center;">
@@ -10113,12 +10130,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">启用思维链</span>
             <input type="checkbox" id="tc-enable-master-switch" style="cursor: pointer; width: 18px; height: 18px; margin: 0;" />
           </div>
-          <div style="background: var(--secondary-bg); padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; border: 1px solid var(--border-color);">
-            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">当前配置思维链</div>
-            <div id="tc-current-bound-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary);">无</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--secondary-bg); padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; border: 1px solid var(--border-color);">
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">当前配置思维链</div>
+              <div id="tc-current-bound-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">无</div>
+            </div>
+            <button type="button" class="tc-btn-action" id="tc-bind-choose-preset-btn" style="flex-shrink: 0;">选择</button>
           </div>
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">选择思维链预设</span>
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">分类与条目</span>
             <button type="button" id="import-shared-tc-btn" class="moe-btn-mini" style="display: none; height: 26px; padding: 0 8px; font-size: 11px; white-space: nowrap; flex-shrink: 0;">导入</button>
           </div>
           <div id="tc-preset-select-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
@@ -23588,12 +23608,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             editBtn.textContent = "编辑";
             editBtn.onclick = () => openThoughtChainEditor(preset.id);
 
-            const exportBtn = document.createElement("button");
-            exportBtn.type = "button";
-            exportBtn.className = "tc-btn-action";
-            exportBtn.textContent = "导出";
-            exportBtn.onclick = () => exportThoughtChainPreset(preset.id);
-
             const delBtn = document.createElement("button");
             delBtn.type = "button";
             delBtn.className = "tc-btn-action";
@@ -23601,7 +23615,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             delBtn.onclick = () => deleteThoughtChainPreset(preset.id);
 
             actionsRow.appendChild(editBtn);
-            actionsRow.appendChild(exportBtn);
             actionsRow.appendChild(delBtn);
 
             headerRow.appendChild(actionsRow);
@@ -23617,6 +23630,212 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         let currentTcEditorGroups = [];
         let currentTcEditorEntries = [];
+
+        const TC_WATERCOLOR_PALETTE = [
+          "#e06c75", "#d19a66", "#e5c07b", "#98c379", "#56b6c2", "#61afef",
+          "#c678dd", "#be5046", "#d87093", "#7ec8a3", "#5c9fd8", "#9a7fd1",
+          "#e68a73", "#8abeb7", "#b294bb", "#cc6666", "#81a2be", "#a3be8c"
+        ];
+
+        function pickRandomTcGroupColor() {
+          const used = new Set(currentTcEditorGroups.map(g => g && g.color).filter(Boolean));
+          const unused = TC_WATERCOLOR_PALETTE.filter(c => !used.has(c));
+          const pool = unused.length > 0 ? unused : TC_WATERCOLOR_PALETTE;
+          return pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        function getTcGroupColorById(groupId) {
+          if (!groupId) return "";
+          const grp = currentTcEditorGroups.find(g => g && String(g.id) === String(groupId));
+          return (grp && grp.color) ? String(grp.color) : "";
+        }
+
+        function hslToHexForTc(h, s, l) {
+          l /= 100;
+          const a = (s * Math.min(l, 1 - l)) / 100;
+          const f = (n) => {
+            const k = (n + h / 30) % 12;
+            const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+            return Math.round(255 * color).toString(16).padStart(2, "0");
+          };
+          return `#${f(0)}${f(8)}${f(4)}`;
+        }
+
+        let activeTcColorPopover = null;
+        let activeTcColorOutsideHandler = null;
+
+        function closeTcGroupColorPickerPopover() {
+          if (activeTcColorPopover) {
+            activeTcColorPopover.remove();
+            activeTcColorPopover = null;
+          }
+          if (activeTcColorOutsideHandler) {
+            document.removeEventListener("mousedown", activeTcColorOutsideHandler, true);
+            activeTcColorOutsideHandler = null;
+          }
+        }
+
+        function openTcGroupColorPickerPopover(anchorBtn, currentColor, onSelectColor) {
+          closeTcGroupColorPickerPopover();
+
+          const pop = document.createElement("div");
+          pop.className = "tc-color-picker-popover";
+
+          const titleRow = document.createElement("div");
+          titleRow.style.cssText = "display: flex; justify-content: space-between; align-items: center;";
+          const titleLabel = document.createElement("span");
+          titleLabel.style.cssText = "font-size: 12px; font-weight: 600; color: var(--text-primary);";
+          titleLabel.textContent = "选择分组颜色";
+
+          const previewSwatch = document.createElement("span");
+          previewSwatch.className = "tc-group-color-swatch";
+          previewSwatch.style.cursor = "default";
+          const previewInner = document.createElement("span");
+          previewInner.className = "tc-group-color-swatch-inner";
+          previewInner.style.backgroundColor = currentColor || TC_WATERCOLOR_PALETTE[0];
+          previewSwatch.appendChild(previewInner);
+
+          titleRow.appendChild(titleLabel);
+          titleRow.appendChild(previewSwatch);
+          pop.appendChild(titleRow);
+
+          const grid = document.createElement("div");
+          grid.className = "tc-color-picker-grid";
+
+          let hueVal = 210;
+          let lightVal = 62;
+
+          const applyColor = (hex) => {
+            if (!hex) return;
+            previewInner.style.backgroundColor = hex;
+            hexInput.value = hex;
+            grid.querySelectorAll(".tc-color-picker-pan").forEach((pan) => {
+              pan.classList.toggle("active", pan.dataset.color === hex.toLowerCase());
+            });
+            if (typeof onSelectColor === "function") {
+              onSelectColor(hex);
+            }
+          };
+
+          TC_WATERCOLOR_PALETTE.forEach((col) => {
+            const pan = document.createElement("button");
+            pan.type = "button";
+            pan.className = "tc-color-picker-pan" + (String(currentColor || "").toLowerCase() === col.toLowerCase() ? " active" : "");
+            pan.dataset.color = col.toLowerCase();
+            const core = document.createElement("span");
+            core.className = "tc-color-picker-pan-core";
+            core.style.backgroundColor = col;
+            pan.appendChild(core);
+            pan.onclick = (e) => {
+              e.stopPropagation();
+              applyColor(col);
+            };
+            grid.appendChild(pan);
+          });
+          pop.appendChild(grid);
+
+          const hueRow = document.createElement("div");
+          hueRow.className = "tc-color-slider-row";
+          const hueLabel = document.createElement("span");
+          hueLabel.className = "tc-color-slider-label";
+          hueLabel.textContent = "色相";
+          const hueRange = document.createElement("input");
+          hueRange.type = "range";
+          hueRange.className = "tc-color-range-input";
+          hueRange.min = "0";
+          hueRange.max = "360";
+          hueRange.value = String(hueVal);
+          hueRange.style.background = "linear-gradient(to right, #e06c75, #e5c07b, #98c379, #56b6c2, #61afef, #c678dd, #e06c75)";
+          hueRow.appendChild(hueLabel);
+          hueRow.appendChild(hueRange);
+          pop.appendChild(hueRow);
+
+          const lightRow = document.createElement("div");
+          lightRow.className = "tc-color-slider-row";
+          const lightLabel = document.createElement("span");
+          lightLabel.className = "tc-color-slider-label";
+          lightLabel.textContent = "深浅";
+          const lightRange = document.createElement("input");
+          lightRange.type = "range";
+          lightRange.className = "tc-color-range-input";
+          lightRange.min = "35";
+          lightRange.max = "78";
+          lightRange.value = String(lightVal);
+          const updateLightBg = () => {
+            lightRange.style.background = `linear-gradient(to right, hsl(${hueVal}, 65%, 35%), hsl(${hueVal}, 65%, 60%), hsl(${hueVal}, 65%, 78%))`;
+          };
+          updateLightBg();
+          lightRow.appendChild(lightLabel);
+          lightRow.appendChild(lightRange);
+          pop.appendChild(lightRow);
+
+          const onSliderInput = () => {
+            hueVal = Number(hueRange.value) || 0;
+            lightVal = Number(lightRange.value) || 60;
+            updateLightBg();
+            const hex = hslToHexForTc(hueVal, 62, lightVal);
+            applyColor(hex);
+          };
+          hueRange.oninput = onSliderInput;
+          lightRange.oninput = onSliderInput;
+
+          const bottomRow = document.createElement("div");
+          bottomRow.className = "tc-sub-row";
+          const hexInput = document.createElement("input");
+          hexInput.type = "text";
+          hexInput.className = "moe-input tc-sub-input";
+          hexInput.value = currentColor || TC_WATERCOLOR_PALETTE[0];
+          hexInput.placeholder = "#61afef";
+          hexInput.oninput = (e) => {
+            const val = e.target.value.trim();
+            if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+              applyColor(val);
+            }
+          };
+
+          const doneBtn = document.createElement("button");
+          doneBtn.type = "button";
+          doneBtn.className = "tc-btn-action primary";
+          doneBtn.style.flexShrink = "0";
+          doneBtn.textContent = "确定";
+          doneBtn.onclick = (e) => {
+            e.stopPropagation();
+            closeTcGroupColorPickerPopover();
+          };
+
+          bottomRow.appendChild(hexInput);
+          bottomRow.appendChild(doneBtn);
+          pop.appendChild(bottomRow);
+
+          document.body.appendChild(pop);
+          activeTcColorPopover = pop;
+
+          const rect = anchorBtn.getBoundingClientRect();
+          const popWidth = 226;
+          const popHeight = pop.offsetHeight || 220;
+          let left = rect.left + rect.width / 2 - popWidth / 2;
+          if (left < 12) left = 12;
+          if (left + popWidth > window.innerWidth - 12) {
+            left = window.innerWidth - popWidth - 12;
+          }
+          let top = rect.bottom + 6;
+          if (top + popHeight > window.innerHeight - 12) {
+            top = Math.max(12, rect.top - popHeight - 6);
+          }
+          pop.style.left = left + "px";
+          pop.style.top = top + "px";
+
+          activeTcColorOutsideHandler = (ev) => {
+            if (activeTcColorPopover && !activeTcColorPopover.contains(ev.target) && !anchorBtn.contains(ev.target)) {
+              closeTcGroupColorPickerPopover();
+            }
+          };
+          setTimeout(() => {
+            if (activeTcColorOutsideHandler) {
+              document.addEventListener("mousedown", activeTcColorOutsideHandler, true);
+            }
+          }, 0);
+        }
 
         const TC_BUILTIN_MASHU_TAGS = [
           { name: "我的人设", canonical: "myPersona", desc: "我的PC人设与属性面板", aliases: ["PC人设", "我的pc人设", "我的PC人设"] },
@@ -23748,22 +23967,178 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           span.contentEditable = "false";
           span.dataset.mashuTag = fullTag;
 
+          if (customEnt && customEnt.groupId) {
+            const grpColor = getTcGroupColorById(customEnt.groupId);
+            if (grpColor) {
+              span.style.borderColor = grpColor;
+              span.style.color = grpColor;
+              span.style.backgroundColor = `color-mix(in srgb, ${grpColor} 12%, var(--card-bg))`;
+            }
+          }
+
           const textSpan = document.createElement("span");
           textSpan.className = "tc-inline-mashu-text";
           textSpan.textContent = cleanName;
+          span.appendChild(textSpan);
 
-          const removeBtn = document.createElement("span");
-          removeBtn.className = "tc-inline-mashu-remove";
-          removeBtn.innerHTML = `<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="3" y1="3" x2="9" y2="9"></line><line x1="9" y1="3" x2="3" y2="9"></line></svg>`;
-          removeBtn.onmousedown = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            span.remove();
-            if (typeof syncFn === "function") syncFn();
+          let dragTimer = null;
+          let isDragging = false;
+          let ghostEl = null;
+          let dropCaretEl = null;
+          let currentDropRange = null;
+          let startX = 0;
+          let startY = 0;
+
+          const getPointRange = (clientX, clientY) => {
+            if (document.caretRangeFromPoint) {
+              return document.caretRangeFromPoint(clientX, clientY);
+            }
+            if (document.caretPositionFromPoint) {
+              const pos = document.caretPositionFromPoint(clientX, clientY);
+              if (pos && pos.offsetNode) {
+                const r = document.createRange();
+                r.setStart(pos.offsetNode, pos.offset);
+                r.collapse(true);
+                return r;
+              }
+            }
+            return null;
           };
 
-          span.appendChild(textSpan);
-          span.appendChild(removeBtn);
+          const cleanupDrag = () => {
+            if (dragTimer) {
+              clearTimeout(dragTimer);
+              dragTimer = null;
+            }
+            if (ghostEl) {
+              ghostEl.remove();
+              ghostEl = null;
+            }
+            if (dropCaretEl) {
+              dropCaretEl.remove();
+              dropCaretEl = null;
+            }
+            span.style.opacity = "";
+            isDragging = false;
+            currentDropRange = null;
+            window.removeEventListener("mousemove", onMove, true);
+            window.removeEventListener("mouseup", onEnd, true);
+            window.removeEventListener("touchmove", onMove, true);
+            window.removeEventListener("touchend", onEnd, true);
+            window.removeEventListener("touchcancel", onEnd, true);
+          };
+
+          const updateGhostAndCaret = (clientX, clientY) => {
+            if (!ghostEl) return;
+            ghostEl.style.transform = `translate3d(${clientX - ghostEl._offsetX}px, ${clientY - ghostEl._offsetY}px, 0) scale(1.06)`;
+            const richContainer = span.closest(".tc-rich-textarea");
+            if (!richContainer) return;
+
+            ghostEl.style.display = "none";
+            const r = getPointRange(clientX, clientY);
+            ghostEl.style.display = "inline-flex";
+
+            if (r && richContainer.contains(r.startContainer) && !span.contains(r.startContainer)) {
+              const bubbleAnc = r.startContainer.nodeType === Node.ELEMENT_NODE
+                ? r.startContainer.closest(".tc-inline-mashu-bubble")
+                : (r.startContainer.parentElement ? r.startContainer.parentElement.closest(".tc-inline-mashu-bubble") : null);
+              if (bubbleAnc && bubbleAnc !== span) {
+                const bRect = bubbleAnc.getBoundingClientRect();
+                const adjRange = document.createRange();
+                if (clientX < bRect.left + bRect.width / 2) {
+                  adjRange.setStartBefore(bubbleAnc);
+                } else {
+                  adjRange.setStartAfter(bubbleAnc);
+                }
+                adjRange.collapse(true);
+                currentDropRange = adjRange;
+              } else if (!bubbleAnc) {
+                currentDropRange = r;
+              }
+              if (currentDropRange && dropCaretEl) {
+                const cRect = currentDropRange.getBoundingClientRect();
+                if (cRect && (cRect.height > 0 || cRect.top > 0)) {
+                  dropCaretEl.style.display = "block";
+                  dropCaretEl.style.left = `${cRect.left}px`;
+                  dropCaretEl.style.top = `${cRect.top}px`;
+                  dropCaretEl.style.height = `${Math.max(16, cRect.height || 18)}px`;
+                }
+              }
+            }
+          };
+
+          const startDrag = (clientX, clientY) => {
+            isDragging = true;
+            span.style.opacity = "0.35";
+
+            const rect = span.getBoundingClientRect();
+            ghostEl = span.cloneNode(true);
+            ghostEl.style.cssText += `;position:fixed;left:0;top:0;margin:0;z-index:100050;pointer-events:none;opacity:0.92;box-shadow:0 4px 12px rgba(0,0,0,0.18);transform:translate3d(${rect.left}px,${rect.top}px,0) scale(1.06);`;
+            ghostEl._offsetX = rect.width / 2;
+            ghostEl._offsetY = rect.height / 2;
+            document.body.appendChild(ghostEl);
+
+            dropCaretEl = document.createElement("div");
+            dropCaretEl.style.cssText = "position:fixed;z-index:100049;width:2px;background:var(--accent-color);pointer-events:none;display:none;border-radius:1px;";
+            document.body.appendChild(dropCaretEl);
+
+            updateGhostAndCaret(clientX, clientY);
+          };
+
+          const onMove = (ev) => {
+            const pt = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+            const cx = pt.clientX;
+            const cy = pt.clientY;
+            if (!isDragging) {
+              if (Math.abs(cx - startX) > 6 || Math.abs(cy - startY) > 6) {
+                cleanupDrag();
+              }
+              return;
+            }
+            if (ev.cancelable) ev.preventDefault();
+            updateGhostAndCaret(cx, cy);
+          };
+
+          const onEnd = (ev) => {
+            if (isDragging && currentDropRange) {
+              if (ev.cancelable) ev.preventDefault();
+              ev.stopPropagation();
+              const richContainer = span.closest(".tc-rich-textarea");
+              if (richContainer && richContainer.contains(currentDropRange.startContainer) && !span.contains(currentDropRange.startContainer)) {
+                const nextSib = span.nextSibling;
+                if (nextSib && nextSib.nodeType === Node.TEXT_NODE && nextSib.nodeValue === "\u200B") {
+                  nextSib.remove();
+                }
+                currentDropRange.insertNode(span);
+                const zNode = document.createTextNode("\u200B");
+                if (span.parentNode) {
+                  span.parentNode.insertBefore(zNode, span.nextSibling);
+                }
+                if (typeof syncFn === "function") syncFn();
+              }
+            }
+            cleanupDrag();
+          };
+
+          const onPointerStart = (ev) => {
+            if (ev.type === "mousedown" && ev.button !== 0) return;
+            const pt = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+            startX = pt.clientX;
+            startY = pt.clientY;
+            cleanupDrag();
+            window.addEventListener("mousemove", onMove, true);
+            window.addEventListener("mouseup", onEnd, true);
+            window.addEventListener("touchmove", onMove, { capture: true, passive: false });
+            window.addEventListener("touchend", onEnd, true);
+            window.addEventListener("touchcancel", onEnd, true);
+            dragTimer = setTimeout(() => {
+              startDrag(startX, startY);
+            }, 500);
+          };
+
+          span.addEventListener("mousedown", onPointerStart);
+          span.addEventListener("touchstart", onPointerStart, { passive: true });
+
           return span;
         }
 
@@ -23845,7 +24220,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function attachMashuRichEditor(textareaEl, onValueChange) {
           if (!textareaEl) return;
+          const isEntryBox = textareaEl.classList.contains("tc-entry-textarea");
+          const rowsAttr = Number(textareaEl.getAttribute("rows")) || 4;
+          const defaultHeight = isEntryBox ? "62px" : (rowsAttr >= 6 ? "168px" : "78px");
+
           if (textareaEl._mashuRichAttached && typeof textareaEl._syncFromTextarea === "function") {
+            if (textareaEl._richEl) {
+              textareaEl._richEl.style.height = defaultHeight;
+              textareaEl._richEl.scrollTop = 0;
+            }
             textareaEl._syncFromTextarea();
             return;
           }
@@ -23857,14 +24240,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           textareaEl.style.display = "none";
 
           const richEl = document.createElement("div");
-          const isEntryBox = textareaEl.classList.contains("tc-entry-textarea");
           richEl.className = "moe-input tc-rich-textarea" + (isEntryBox ? " tc-entry-rich-textarea" : "");
           richEl.contentEditable = "true";
           richEl.setAttribute("data-placeholder", textareaEl.getAttribute("placeholder") || "");
-          const rowsAttr = Number(textareaEl.getAttribute("rows")) || 4;
-          if (!isEntryBox) {
-            richEl.style.minHeight = (rowsAttr >= 6 ? 112 : 78) + "px";
-          }
+          richEl.style.minHeight = defaultHeight;
+          richEl.style.height = defaultHeight;
+          textareaEl._richEl = richEl;
 
           const suggestBox = document.createElement("div");
           suggestBox.className = "tc-mashu-suggest-box";
@@ -24290,6 +24671,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             groupsContainer.appendChild(emptyEl);
           } else {
             currentTcEditorGroups.forEach((grp, idx) => {
+              if (!grp.color) {
+                grp.color = TC_WATERCOLOR_PALETTE[idx % TC_WATERCOLOR_PALETTE.length];
+              }
               const row = document.createElement("div");
               row.className = "tc-sub-row";
 
@@ -24304,11 +24688,68 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const nameInput = document.createElement("input");
               nameInput.type = "text";
               nameInput.className = "moe-input tc-sub-input";
+              nameInput.style.flex = "1 1 0%";
               nameInput.placeholder = "分组名称";
               nameInput.value = grp.name || "";
               nameInput.oninput = (e) => {
                 currentTcEditorGroups[idx].name = e.target.value;
                 updateTcEntryGroupSelectOptions(grp.id, e.target.value);
+              };
+
+              const colorBtn = document.createElement("button");
+              colorBtn.type = "button";
+              colorBtn.className = "tc-group-color-swatch";
+              colorBtn.title = "选择分组颜色";
+              const colorInner = document.createElement("span");
+              colorInner.className = "tc-group-color-swatch-inner";
+              colorInner.style.backgroundColor = grp.color;
+              colorBtn.appendChild(colorInner);
+              colorBtn.onclick = (e) => {
+                e.stopPropagation();
+                openTcGroupColorPickerPopover(colorBtn, currentTcEditorGroups[idx].color, (newHex) => {
+                  currentTcEditorGroups[idx].color = newHex;
+                  colorInner.style.backgroundColor = newHex;
+                  refreshStaticTcRichEditorsDisplay();
+                  const modal = document.getElementById("thought-chain-editor-modal");
+                  if (modal) {
+                    modal.querySelectorAll("textarea.tc-entry-textarea").forEach((ta) => {
+                      if (typeof ta._syncToTextarea === "function") ta._syncToTextarea();
+                      if (typeof ta._syncFromTextarea === "function") ta._syncFromTextarea();
+                    });
+                  }
+                });
+              };
+
+              const upBtn = document.createElement("button");
+              upBtn.type = "button";
+              upBtn.className = "tc-btn-action tc-entry-move-btn";
+              upBtn.title = "上移";
+              upBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
+              const canMoveUp = idx > 0;
+              upBtn.disabled = !canMoveUp;
+              upBtn.onclick = () => {
+                if (!canMoveUp) return;
+                flushAllTcRichEditors();
+                const temp = currentTcEditorGroups[idx - 1];
+                currentTcEditorGroups[idx - 1] = currentTcEditorGroups[idx];
+                currentTcEditorGroups[idx] = temp;
+                renderTcEditorGroupsAndEntries(false);
+              };
+
+              const downBtn = document.createElement("button");
+              downBtn.type = "button";
+              downBtn.className = "tc-btn-action tc-entry-move-btn";
+              downBtn.title = "下移";
+              downBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+              const canMoveDown = idx < currentTcEditorGroups.length - 1;
+              downBtn.disabled = !canMoveDown;
+              downBtn.onclick = () => {
+                if (!canMoveDown) return;
+                flushAllTcRichEditors();
+                const temp = currentTcEditorGroups[idx + 1];
+                currentTcEditorGroups[idx + 1] = currentTcEditorGroups[idx];
+                currentTcEditorGroups[idx] = temp;
+                renderTcEditorGroupsAndEntries(false);
               };
 
               const delBtn = document.createElement("button");
@@ -24324,10 +24765,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (ent.groupId === removedId) ent.groupId = "";
                 });
                 renderTcEditorGroupsAndEntries();
+                refreshStaticTcRichEditorsDisplay();
               };
 
               row.appendChild(cb);
               row.appendChild(nameInput);
+              row.appendChild(colorBtn);
+              row.appendChild(upBtn);
+              row.appendChild(downBtn);
               row.appendChild(delBtn);
               groupsContainer.appendChild(row);
             });
@@ -24370,6 +24815,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const keyInput = document.createElement("input");
               keyInput.type = "text";
               keyInput.className = "moe-input tc-sub-input";
+              keyInput.style.flex = "2 1 0%";
               keyInput.placeholder = "指代词";
               keyInput.value = ent.key || "";
               keyInput.oninput = (e) => {
@@ -24383,6 +24829,59 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (keyRefreshTimer) clearTimeout(keyRefreshTimer);
                 refreshStaticTcRichEditorsDisplay();
               };
+
+              let copyPressTimer = null;
+              const clearCopyPress = () => {
+                if (copyPressTimer) {
+                  clearTimeout(copyPressTimer);
+                  copyPressTimer = null;
+                }
+              };
+              const startCopyPress = () => {
+                clearCopyPress();
+                copyPressTimer = setTimeout(async () => {
+                  const textToCopy = (keyInput.value || "").trim();
+                  if (!textToCopy) return;
+                  try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      await navigator.clipboard.writeText(textToCopy);
+                    } else {
+                      const tempTa = document.createElement("textarea");
+                      tempTa.value = textToCopy;
+                      tempTa.style.cssText = "position:fixed;left:-9999px;top:-9999px;";
+                      document.body.appendChild(tempTa);
+                      tempTa.select();
+                      document.execCommand("copy");
+                      tempTa.remove();
+                    }
+                    const origBorder = keyInput.style.borderColor;
+                    keyInput.style.borderColor = "var(--accent-color)";
+                    setTimeout(() => {
+                      keyInput.style.borderColor = origBorder;
+                    }, 450);
+                  } catch (err) {}
+                }, 500);
+              };
+              keyInput.addEventListener("mousedown", (e) => {
+                if (e.button !== 0) return;
+                startCopyPress();
+              });
+              keyInput.addEventListener("mouseup", clearCopyPress);
+              keyInput.addEventListener("mouseleave", clearCopyPress);
+              keyInput.addEventListener("touchstart", startCopyPress, { passive: true });
+              keyInput.addEventListener("touchend", clearCopyPress);
+              keyInput.addEventListener("touchcancel", clearCopyPress);
+              keyInput.addEventListener("touchmove", clearCopyPress, { passive: true });
+
+              const foldBlankArea = document.createElement("div");
+              foldBlankArea.style.cssText = "flex: 1 1 0%; min-width: 48px; height: 32px; cursor: pointer; user-select: none; box-sizing: border-box;";
+
+              topRow.appendChild(cb);
+              topRow.appendChild(keyInput);
+              topRow.appendChild(foldBlankArea);
+
+              const secondRow = document.createElement("div");
+              secondRow.className = "tc-sub-row";
 
               const groupSelect = document.createElement("select");
               groupSelect.className = "moe-input tc-sub-select";
@@ -24402,6 +24901,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 flushAllTcRichEditors();
                 currentTcEditorEntries[idx].groupId = e.target.value;
                 renderTcEditorGroupsAndEntries(false);
+                refreshStaticTcRichEditorsDisplay();
               };
 
               const upBtn = document.createElement("button");
@@ -24451,12 +24951,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 refreshStaticTcRichEditorsDisplay();
               };
 
-              topRow.appendChild(cb);
-              topRow.appendChild(keyInput);
-              topRow.appendChild(groupSelect);
-              topRow.appendChild(upBtn);
-              topRow.appendChild(downBtn);
-              topRow.appendChild(delBtn);
+              secondRow.appendChild(groupSelect);
+              secondRow.appendChild(upBtn);
+              secondRow.appendChild(downBtn);
+              secondRow.appendChild(delBtn);
 
               const contentArea = document.createElement("textarea");
               contentArea.className = "moe-input tc-entry-textarea";
@@ -24468,10 +24966,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
 
               card.appendChild(topRow);
+              card.appendChild(secondRow);
               card.appendChild(contentArea);
               attachMashuRichEditor(contentArea, (val) => {
                 currentTcEditorEntries[idx].content = val;
               });
+
+              const editorWrap = contentArea.parentNode !== card ? contentArea.parentNode : contentArea;
+              if (ent.collapsed) {
+                editorWrap.style.display = "none";
+              }
+              foldBlankArea.onclick = () => {
+                currentTcEditorEntries[idx].collapsed = !currentTcEditorEntries[idx].collapsed;
+                editorWrap.style.display = currentTcEditorEntries[idx].collapsed ? "none" : "";
+              };
+
               return card;
             };
 
@@ -24502,24 +25011,94 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               titleEl.dataset.groupId = grp.id;
               titleEl.textContent = grp.name || "未命名";
 
+              const addInGroupBtn = document.createElement("button");
+              addInGroupBtn.type = "button";
+              addInGroupBtn.className = "tc-btn-action";
+              addInGroupBtn.style.flexShrink = "0";
+              addInGroupBtn.textContent = "添加";
+              addInGroupBtn.onclick = (e) => {
+                if (e) e.stopPropagation();
+                flushAllTcRichEditors();
+                grp.collapsed = false;
+                currentTcEditorEntries.push({
+                  id: "tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                  key: "",
+                  groupId: grp.id,
+                  enabled: false,
+                  content: "",
+                });
+                renderTcEditorGroupsAndEntries(false);
+              };
+
               const foldBtn = document.createElement("button");
               foldBtn.type = "button";
               foldBtn.className = "tc-btn-action";
               foldBtn.style.flexShrink = "0";
               foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
 
+              let longPressTimer = null;
+              let longPressTriggered = false;
+
+              const clearLongPress = () => {
+                if (longPressTimer) {
+                  clearTimeout(longPressTimer);
+                  longPressTimer = null;
+                }
+              };
+
+              const triggerBatchToggleEntries = () => {
+                longPressTriggered = true;
+                flushAllTcRichEditors();
+                const hasExpanded = groupEntries.some(({ ent }) => !ent.collapsed);
+                const nextCollapsed = hasExpanded;
+                groupEntries.forEach(({ idx }) => {
+                  if (currentTcEditorEntries[idx]) {
+                    currentTcEditorEntries[idx].collapsed = nextCollapsed;
+                  }
+                });
+                grp.collapsed = false;
+                renderTcEditorGroupsAndEntries(false);
+              };
+
+              groupHeader.addEventListener("mousedown", (e) => {
+                if (e.button !== 0 || e.target.closest("button")) return;
+                longPressTriggered = false;
+                clearLongPress();
+                longPressTimer = setTimeout(triggerBatchToggleEntries, 500);
+              });
+              groupHeader.addEventListener("mouseup", clearLongPress);
+              groupHeader.addEventListener("mouseleave", clearLongPress);
+
+              groupHeader.addEventListener("touchstart", (e) => {
+                if (e.target.closest("button")) return;
+                longPressTriggered = false;
+                clearLongPress();
+                longPressTimer = setTimeout(triggerBatchToggleEntries, 500);
+              }, { passive: true });
+              groupHeader.addEventListener("touchend", clearLongPress);
+              groupHeader.addEventListener("touchcancel", clearLongPress);
+              groupHeader.addEventListener("touchmove", clearLongPress, { passive: true });
+
               const toggleFold = (e) => {
                 if (e) e.stopPropagation();
+                if (longPressTriggered) {
+                  longPressTriggered = false;
+                  return;
+                }
                 grp.collapsed = !grp.collapsed;
                 groupBox.classList.toggle("collapsed", grp.collapsed);
                 foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
               };
 
               groupHeader.onclick = toggleFold;
-              foldBtn.onclick = toggleFold;
+              foldBtn.onclick = (e) => {
+                longPressTriggered = false;
+                toggleFold(e);
+              };
 
               groupHeader.appendChild(iconWrap);
               groupHeader.appendChild(titleEl);
+              groupHeader.appendChild(addInGroupBtn);
               groupHeader.appendChild(foldBtn);
 
               const groupBody = document.createElement("div");
@@ -24625,6 +25204,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           syncStaticTcRichEditors();
+          const staticSections = [
+            { btnId: "tc-toggle-header-btn", bodyId: "tc-preset-header-body" },
+            { btnId: "tc-toggle-general-btn", bodyId: "tc-preset-general-body" },
+            { btnId: "tc-toggle-coc-btn", bodyId: "tc-preset-coc-body" },
+          ];
+          staticSections.forEach(({ btnId, bodyId }) => {
+            const btn = document.getElementById(btnId);
+            const body = document.getElementById(bodyId);
+            if (btn && body) {
+              body.style.display = "block";
+              btn.textContent = "折叠";
+              btn.onclick = () => {
+                const isHidden = body.style.display === "none";
+                body.style.display = isHidden ? "block" : "none";
+                btn.textContent = isHidden ? "折叠" : "展开";
+              };
+            }
+          });
           renderTcEditorGroupsAndEntries(false);
           modal.classList.add("visible");
         }
@@ -24650,9 +25247,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const headerContent = headerInput ? headerInput.value : "";
           const generalContent = generalInput ? generalInput.value : "";
           const cocContent = cocInput ? cocInput.value : "";
-          const groups = currentTcEditorGroups.map((g) => ({
+          const groups = currentTcEditorGroups.map((g, idx) => ({
             id: g.id || ("tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
             name: String(g.name || "").trim(),
+            color: String(g.color || TC_WATERCOLOR_PALETTE[idx % TC_WATERCOLOR_PALETTE.length]),
             enabled: g.enabled !== false,
             collapsed: Boolean(g.collapsed),
           }));
@@ -24661,6 +25259,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             key: String(e.key || "").trim(),
             groupId: String(e.groupId || ""),
             enabled: e.enabled !== false,
+            collapsed: Boolean(e.collapsed),
             content: String(e.content || ""),
           }));
 
@@ -24963,6 +25562,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.handleThoughtChainEditorFileImport = handleThoughtChainEditorFileImport;
 
+        async function syncModifiedPresetFromBindModal(preset, chat, isPeerGrp) {
+          if (!preset || !preset.id) return;
+          try {
+            if (typeof db !== "undefined" && db.thoughtChainPresets) {
+              const localPreset = await db.thoughtChainPresets.get(preset.id);
+              if (localPreset) {
+                localPreset.groups = preset.groups;
+                localPreset.entries = preset.entries;
+                await db.thoughtChainPresets.put(localPreset);
+              }
+            }
+          } catch (e) {}
+          if (isPeerGrp && chat && chat.settings && Array.isArray(chat.settings.sharedThoughtChains)) {
+            const exIdx = chat.settings.sharedThoughtChains.findIndex(t => t && String(t.id) === String(preset.id));
+            if (exIdx >= 0) {
+              chat.settings.sharedThoughtChains[exIdx] = preset;
+            }
+          }
+        }
+
         async function openThoughtChainBindModal() {
           if (!state.activeChatId) return;
           const chat = state.chats[state.activeChatId];
@@ -24971,6 +25590,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const modal = document.getElementById("thought-chain-bind-modal");
           const masterSwitch = document.getElementById("tc-enable-master-switch");
           const currentNameEl = document.getElementById("tc-current-bound-name");
+          const chooseBtn = document.getElementById("tc-bind-choose-preset-btn");
           const listEl = document.getElementById("tc-preset-select-list");
           const importTcBtn = document.getElementById("import-shared-tc-btn");
 
@@ -24990,7 +25610,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             masterSwitch.checked = chat.thoughtChainEnabled !== false;
           }
 
-          listEl.innerHTML = "";
           const mergedMap = new Map();
           if (isPeerGrp) {
             if (Array.isArray(chat.settings?.sharedThoughtChains)) {
@@ -25008,67 +25627,153 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           const presets = Array.from(mergedMap.values());
 
-          let currentPresetName = "无";
-          if (chat.thoughtChainId) {
-            const currentPreset = mergedMap.get(String(chat.thoughtChainId)) || (!isPeerGrp ? (await db.thoughtChainPresets.get(chat.thoughtChainId)) : null);
-            if (currentPreset) {
-              currentPresetName = currentPreset.name;
-            }
-          }
-          currentNameEl.textContent = currentPresetName;
-
           selectedThoughtChainBindId = chat.thoughtChainId || null;
-          let selectedCocEnable = chat.thoughtChainEnableCoc !== false;
 
-          const noneItem = document.createElement("div");
-          noneItem.className = `tc-bind-card ${!selectedThoughtChainBindId ? "selected" : ""}`;
-          noneItem.innerHTML = `
-            <div style="display:flex; align-items:center; gap:8px;">
-              <input type="radio" name="tc_bind_radio" value="none" ${!selectedThoughtChainBindId ? "checked" : ""} style="cursor:pointer;" />
-              <span style="font-size:13px; font-weight:600; color:var(--text-primary);">无</span>
-            </div>
-          `;
+          const renderSelectedPresetGroupsAndEntries = async () => {
+            listEl.innerHTML = "";
+            let activePreset = null;
+            if (selectedThoughtChainBindId) {
+              activePreset = mergedMap.get(String(selectedThoughtChainBindId)) || (!isPeerGrp ? (await db.thoughtChainPresets.get(selectedThoughtChainBindId)) : null);
+            }
+            if (currentNameEl) {
+              currentNameEl.textContent = activePreset ? activePreset.name : "无";
+            }
 
-          noneItem.onclick = () => {
-            selectedThoughtChainBindId = null;
-            document.querySelectorAll("#tc-preset-select-list .tc-bind-card").forEach(el => el.classList.remove("selected"));
-            noneItem.classList.add("selected");
-            const radio = noneItem.querySelector('input[type="radio"]');
-            if (radio) radio.checked = true;
-          };
-          listEl.appendChild(noneItem);
+            if (!activePreset) {
+              listEl.innerHTML = `<div style="font-size: 12px; color: var(--text-secondary); text-align: center; padding: 20px 10px;">未选择思维链预设，点击右上角选择按钮进行配置</div>`;
+              return;
+            }
 
-          presets.forEach((preset) => {
-            const item = document.createElement("div");
-            const isChecked = String(selectedThoughtChainBindId) === String(preset.id);
-            item.className = `tc-bind-card ${isChecked ? "selected" : ""}`;
+            const pGroups = Array.isArray(activePreset.groups) ? activePreset.groups : [];
+            const pEntries = Array.isArray(activePreset.entries) ? activePreset.entries : [];
 
-            item.innerHTML = `
-              <div style="display:flex; align-items:center; justify-content:space-between;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <input type="radio" name="tc_bind_radio" value="${preset.id}" ${isChecked ? "checked" : ""} style="cursor:pointer;" />
-                  <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${preset.name}</span>
-                </div>
-              </div>
-              <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;" onclick="event.stopPropagation();">
-                <label style="font-size:12px; color:var(--text-secondary); display:flex; align-items:center; gap:4px; cursor:pointer;">
-                  <input type="checkbox" class="tc-coc-checkbox" data-preset-id="${preset.id}" ${selectedCocEnable ? "checked" : ""} />
-                  跑团模块
-                </label>
-              </div>
-            `;
+            if (pGroups.length === 0 && pEntries.length === 0) {
+              listEl.innerHTML = `<div style="font-size: 12px; color: var(--text-secondary); text-align: center; padding: 20px 10px;">该思维链预设暂无分类与条目</div>`;
+              return;
+            }
 
-            item.onclick = () => {
-              selectedThoughtChainBindId = preset.id;
-              document.querySelectorAll("#tc-preset-select-list .tc-bind-card").forEach(el => el.classList.remove("selected"));
-              item.classList.add("selected");
-              const radio = item.querySelector('input[type="radio"]');
-              if (radio) radio.checked = true;
+            const buildBindEntryRow = (ent) => {
+              const row = document.createElement("label");
+              row.className = "tc-sub-row";
+              row.style.cssText = "padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer;";
+
+              const cb = document.createElement("input");
+              cb.type = "checkbox";
+              cb.className = "tc-sub-checkbox";
+              cb.checked = ent.enabled !== false;
+              cb.onchange = async (e) => {
+                ent.enabled = e.target.checked;
+                await syncModifiedPresetFromBindModal(activePreset, chat, isPeerGrp);
+              };
+
+              const keySpan = document.createElement("span");
+              keySpan.style.cssText = "flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+              keySpan.textContent = ent.key || "未命名条目";
+
+              row.appendChild(cb);
+              row.appendChild(keySpan);
+              return row;
             };
 
-            listEl.appendChild(item);
-          });
+            const validGroupIds = new Set(pGroups.map(g => g && g.id).filter(Boolean));
 
+            pGroups.forEach((grp, gIdx) => {
+              if (!grp) return;
+              const grpEntries = pEntries.filter(ent => ent && ent.groupId === grp.id);
+
+              const groupBox = document.createElement("div");
+              groupBox.className = "tc-entry-group-box" + (grp.collapsed ? " collapsed" : "");
+
+              const groupHeader = document.createElement("div");
+              groupHeader.className = "tc-entry-group-header";
+
+              const grpCb = document.createElement("input");
+              grpCb.type = "checkbox";
+              grpCb.className = "tc-sub-checkbox";
+              grpCb.checked = grp.enabled !== false;
+              grpCb.onclick = (e) => e.stopPropagation();
+              grpCb.onchange = async (e) => {
+                grp.enabled = e.target.checked;
+                await syncModifiedPresetFromBindModal(activePreset, chat, isPeerGrp);
+              };
+
+              const swatch = document.createElement("span");
+              swatch.className = "tc-group-color-swatch";
+              swatch.style.cssText = "width: 18px; min-width: 18px; height: 18px; cursor: default;";
+              const swatchInner = document.createElement("span");
+              swatchInner.className = "tc-group-color-swatch-inner";
+              swatchInner.style.backgroundColor = grp.color || TC_WATERCOLOR_PALETTE[gIdx % TC_WATERCOLOR_PALETTE.length];
+              swatch.appendChild(swatchInner);
+
+              const titleEl = document.createElement("span");
+              titleEl.className = "tc-entry-group-title";
+              titleEl.textContent = grp.name || "未命名分类";
+
+              const foldBtn = document.createElement("button");
+              foldBtn.type = "button";
+              foldBtn.className = "tc-btn-action";
+              foldBtn.style.flexShrink = "0";
+              foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
+
+              const toggleFold = async (e) => {
+                if (e) e.stopPropagation();
+                grp.collapsed = !grp.collapsed;
+                groupBox.classList.toggle("collapsed", grp.collapsed);
+                foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
+                await syncModifiedPresetFromBindModal(activePreset, chat, isPeerGrp);
+              };
+
+              groupHeader.onclick = toggleFold;
+              foldBtn.onclick = toggleFold;
+
+              groupHeader.appendChild(grpCb);
+              groupHeader.appendChild(swatch);
+              groupHeader.appendChild(titleEl);
+              groupHeader.appendChild(foldBtn);
+
+              const groupBody = document.createElement("div");
+              groupBody.className = "tc-entry-group-body";
+              if (grpEntries.length === 0) {
+                const emptyTip = document.createElement("div");
+                emptyTip.style.cssText = "font-size: 11px; color: var(--text-secondary); padding: 4px 2px;";
+                emptyTip.textContent = "该分类下暂无条目";
+                groupBody.appendChild(emptyTip);
+              } else {
+                grpEntries.forEach(ent => {
+                  groupBody.appendChild(buildBindEntryRow(ent));
+                });
+              }
+
+              groupBox.appendChild(groupHeader);
+              groupBox.appendChild(groupBody);
+              listEl.appendChild(groupBox);
+            });
+
+            const ungrouped = pEntries.filter(ent => ent && (!ent.groupId || !validGroupIds.has(ent.groupId)));
+            ungrouped.forEach(ent => {
+              listEl.appendChild(buildBindEntryRow(ent));
+            });
+          };
+
+          if (chooseBtn) {
+            chooseBtn.onclick = async () => {
+              const choices = [
+                { text: "无", value: "none" },
+                ...presets.map((p) => ({ text: p.name, value: String(p.id) })),
+              ];
+              const chosen = await showChoiceModal("选择思维链", choices);
+              if (chosen === null) return;
+              if (chosen === "none") {
+                selectedThoughtChainBindId = null;
+              } else {
+                const matched = presets.find(p => String(p.id) === String(chosen));
+                selectedThoughtChainBindId = matched ? matched.id : (isNaN(Number(chosen)) ? chosen : Number(chosen));
+              }
+              await renderSelectedPresetGroupsAndEntries();
+            };
+          }
+
+          await renderSelectedPresetGroupsAndEntries();
           modal.classList.add("visible");
         }
 
@@ -25092,13 +25797,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const masterSwitch = document.getElementById("tc-enable-master-switch");
           chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
           chat.thoughtChainId = selectedThoughtChainBindId;
-
-          if (selectedThoughtChainBindId) {
-            const cb = document.querySelector(`.tc-coc-checkbox[data-preset-id="${selectedThoughtChainBindId}"]`);
-            chat.thoughtChainEnableCoc = cb ? cb.checked : true;
-          } else {
-            chat.thoughtChainEnableCoc = true;
-          }
 
           const isPeerGrp = typeof window.isPeerGroupChat === "function"
             ? window.isPeerGroupChat(chat)
@@ -25162,6 +25860,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               currentTcEditorGroups.push({
                 id: "tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                 name: "",
+                color: pickRandomTcGroupColor(),
                 enabled: true,
                 collapsed: false,
               });
@@ -25178,7 +25877,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 id: "tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                 key: "",
                 groupId: "",
-                enabled: true,
+                enabled: false,
                 content: "",
               });
               renderTcEditorGroupsAndEntries(false);
@@ -25497,12 +26196,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const resolvedGeneral = resolveThoughtChainEntries(preset.generalContent, preset);
               if (resolvedGeneral.trim()) {
                 block += "\n---------- 【思维链通用规则设定开始】 ----------\n" + resolvedGeneral + "\n---------- 【思维链通用规则设定结束】 ----------\n";
-              }
-            }
-            if (chat.thoughtChainEnableCoc !== false && preset && preset.cocContent) {
-              const resolvedCoc = resolveThoughtChainEntries(preset.cocContent, preset);
-              if (resolvedCoc.trim()) {
-                block += "\n---------- 【跑团模块思考规则开始】 ----------\n" + resolvedCoc + "\n---------- 【跑团模块思考规则结束】 ----------\n";
               }
             }
             return window.formatPromptSection("思维链", block);
