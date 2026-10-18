@@ -65187,11 +65187,21 @@ ${stickerContext || "无"}
                 file.name.replace(/\.[^/.]+$/, ""),
               );
               if (name && name.trim()) {
-                const base64Url = await new Promise((resolve) => {
+                let base64Url = await new Promise((resolve) => {
                   const reader = new FileReader();
                   reader.onload = (e) => resolve(e.target.result);
                   reader.readAsDataURL(file);
                 });
+
+                const isGif = file.type === "image/gif" || (typeof base64Url === "string" && base64Url.startsWith("data:image/gif"));
+                if (!isGif && typeof compressImage === "function" && typeof base64Url === "string" && base64Url.length > 100000) {
+                  try {
+                    const compressed = await compressImage(base64Url, 0.86, 640);
+                    if (compressed && compressed.length < base64Url.length) {
+                      base64Url = compressed;
+                    }
+                  } catch (_) {}
+                }
 
                 const stickerData = { name: name.trim(), url: base64Url };
                 if (type !== "exclusive") {
@@ -68126,6 +68136,24 @@ ${stickerContext || "无"}
           }
         }
 
+        async function finalizeGeneratedImageDataUrl(rawDataUrl) {
+          if (!rawDataUrl || typeof rawDataUrl !== "string" || !rawDataUrl.startsWith("data:image")) {
+            return rawDataUrl;
+          }
+          if (rawDataUrl.startsWith("data:image/gif")) {
+            return rawDataUrl;
+          }
+          if (typeof compressImage === "function" && rawDataUrl.length > 250000) {
+            try {
+              const compressed = await compressImage(rawDataUrl, 0.88, 1440);
+              if (compressed && compressed.startsWith("data:image") && compressed.length < rawDataUrl.length) {
+                return compressed;
+              }
+            } catch (_) {}
+          }
+          return rawDataUrl;
+        }
+
         async function parseNovelAiResponseToDataUrl(res) {
           const contentType = (res.headers.get("content-type") || "").toLowerCase();
           if (contentType.includes("text/event-stream") || contentType.includes("text/plain")) {
@@ -68140,7 +68168,8 @@ ${stickerContext || "无"}
                   if (jsonData.event_type === "final" && (jsonData.image || jsonData.data)) {
                     const base64Data = jsonData.image || jsonData.data;
                     const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                    return (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                    const rawUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                    return await finalizeGeneratedImageDataUrl(rawUrl);
                   }
                 } catch (e) {}
               }
@@ -68154,7 +68183,8 @@ ${stickerContext || "无"}
                   const base64Data = jsonData.image || jsonData.data;
                   if (base64Data && base64Data.length > 1000) {
                     const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                    return (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                    const rawUrl = (isPNG ? "data:image/png;base64," : "data:image/jpeg;base64,") + base64Data;
+                    return await finalizeGeneratedImageDataUrl(rawUrl);
                   }
                 } catch (e) {}
               }
@@ -68165,21 +68195,23 @@ ${stickerContext || "无"}
             const bytes = new Uint8Array(arrayBuffer);
             if (bytes.length > 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
               const blob = new Blob([bytes], { type: "image/png" });
-              return await new Promise((resolve) => {
+              const rawUrl = await new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result);
                 reader.readAsDataURL(blob);
               });
+              return await finalizeGeneratedImageDataUrl(rawUrl);
             }
             const zip = await JSZip.loadAsync(arrayBuffer);
             const imageFileName = Object.keys(zip.files).find((fn) => /\.(png|jpg|jpeg|webp)$/i.test(fn));
             if (!imageFileName) throw new Error("ZIP内未找到图片文件");
             const imageBlob = await zip.files[imageFileName].async("blob");
-            return await new Promise((resolve) => {
+            const rawUrl = await new Promise((resolve) => {
               const reader = new FileReader();
               reader.onloadend = () => resolve(reader.result);
               reader.readAsDataURL(imageBlob);
             });
+            return await finalizeGeneratedImageDataUrl(rawUrl);
           }
         }
 
@@ -73324,31 +73356,40 @@ ${stickerContext || "无"}
           };
 
           if (dbInstance) {
-            // 1. 聊天对话中的图片（严格仅统计对话消息图片，排除头像、道具与战斗配图）
+            // 1. 聊天对话中的图片（包含主线与密友群聊单线，排除头像、道具与战斗配图）
             try {
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
-                chats.forEach(c => {
-                  if (Array.isArray(c.history)) {
-                    c.history.forEach(msg => {
-                      if (!msg) return;
-                      if (msg.type && (msg.type.startsWith("combat") || msg.type === "combat_card" || msg.type === "inventory_card")) return;
-                      let hasPart = false;
-                      if (Array.isArray(msg.content)) {
-                        msg.content.forEach(part => {
-                          if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
-                            categories.images.count++;
-                            categories.images.bytes += new Blob([part.image_url.url]).size;
-                            hasPart = true;
-                          }
-                        });
-                      }
-                      if (!hasPart) {
-                        const mImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && msg.content.startsWith("data:image") ? msg.content : "") || msg.image;
-                        if (mImg && typeof mImg === "string" && mImg.startsWith("data:image")) {
+                const scanMsgListImages = (msgList) => {
+                  if (!Array.isArray(msgList)) return;
+                  msgList.forEach(msg => {
+                    if (!msg) return;
+                    if (msg.type && (msg.type.startsWith("combat") || msg.type === "combat_card" || msg.type === "inventory_card")) return;
+                    let hasPart = false;
+                    if (Array.isArray(msg.content)) {
+                      msg.content.forEach(part => {
+                        if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
                           categories.images.count++;
-                          categories.images.bytes += new Blob([mImg]).size;
+                          categories.images.bytes += new Blob([part.image_url.url]).size;
+                          hasPart = true;
                         }
+                      });
+                    }
+                    if (!hasPart) {
+                      const mImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && msg.content.startsWith("data:image") ? msg.content : "") || msg.image;
+                      if (mImg && typeof mImg === "string" && mImg.startsWith("data:image")) {
+                        categories.images.count++;
+                        categories.images.bytes += new Blob([mImg]).size;
+                      }
+                    }
+                  });
+                };
+                chats.forEach(c => {
+                  scanMsgListImages(c.history);
+                  if (c.soloLines && typeof c.soloLines === "object") {
+                    Object.values(c.soloLines).forEach(lineObj => {
+                      if (lineObj && Array.isArray(lineObj.history)) {
+                        scanMsgListImages(lineObj.history);
                       }
                     });
                   }
@@ -73416,7 +73457,7 @@ ${stickerContext || "无"}
               }
             } catch(e) {}
 
-            // 3. 模组数据（包含模组插图、章节与文本）
+            // 3. 模组数据（包含模组插图、章节、原始底稿与文本）
             try {
               if (dbInstance.moduleImages) {
                 const modImgs = await dbInstance.moduleImages.toArray();
@@ -73439,6 +73480,13 @@ ${stickerContext || "无"}
                 chaps.forEach(ch => {
                   categories.modules.count++;
                   categories.modules.bytes += getStrBytes(ch);
+                });
+              }
+              if (dbInstance.moduleRawFiles) {
+                const rawFiles = await dbInstance.moduleRawFiles.toArray();
+                rawFiles.forEach(rf => {
+                  categories.modules.count++;
+                  categories.modules.bytes += getStrBytes(rf);
                 });
               }
             } catch(e) {}
@@ -73503,7 +73551,7 @@ ${stickerContext || "无"}
               }
             } catch(e) {}
 
-            // 6. 头像分类（包含聊天头像、成员头像、相册与立绘）
+            // 6. 头像分类（包含聊天头像、成员头像、空间相册、说说配图、表情包与立绘）
             try {
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
@@ -73554,6 +73602,23 @@ ${stickerContext || "无"}
                   }
                 });
               }
+              if (dbInstance.qzonePhotos) {
+                const qPhotos = await dbInstance.qzonePhotos.toArray();
+                qPhotos.forEach(p => {
+                  const dUrl = p.dataUrl || p.url;
+                  if (dUrl) {
+                    categories.avatars.count++;
+                    categories.avatars.bytes += getStrBytes(p);
+                  }
+                });
+              }
+              if (dbInstance.qzonePosts) {
+                const qPosts = await dbInstance.qzonePosts.toArray();
+                qPosts.forEach(post => {
+                  categories.avatars.count++;
+                  categories.avatars.bytes += getStrBytes(post);
+                });
+              }
               if (dbInstance.userStickers) {
                 const stickers = await dbInstance.userStickers.toArray();
                 stickers.forEach(s => {
@@ -73585,15 +73650,25 @@ ${stickerContext || "无"}
               }
             } catch(e) {}
 
-            // 7. 聊天数据（纯文本会话与备份）
+            // 7. 聊天数据（纯文本会话、单线纯文本与备份）
             try {
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
+                const extractNonImgText = (msgList) => {
+                  if (!Array.isArray(msgList)) return "";
+                  return msgList.map(m => (m?.content && typeof m.content === "string" && !m.content.startsWith("data:image") ? m.content : "")).join("");
+                };
                 chats.forEach(c => {
-                  const hist = c.history || [];
-                  const textHist = hist.map(m => (m?.content && typeof m.content === "string" && !m.content.startsWith("data:image") ? m.content : "")).join("");
+                  let textBytes = getStrBytes(extractNonImgText(c.history)) + getStrBytes(c.settings);
+                  if (c.soloLines && typeof c.soloLines === "object") {
+                    Object.values(c.soloLines).forEach(lineObj => {
+                      if (lineObj && Array.isArray(lineObj.history)) {
+                        textBytes += getStrBytes(extractNonImgText(lineObj.history));
+                      }
+                    });
+                  }
                   categories.chat.count += 1;
-                  categories.chat.bytes += getStrBytes(textHist) + getStrBytes(c.settings);
+                  categories.chat.bytes += textBytes;
                 });
               }
               if (dbInstance.chatBackups) {
@@ -73616,22 +73691,30 @@ ${stickerContext || "无"}
             try {
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
+                const scanAudioInList = (msgs) => {
+                  if (!Array.isArray(msgs)) return;
+                  msgs.forEach(m => {
+                    if (!m) return;
+                    let mAudioBytes = 0;
+                    if (m.audioHex) mAudioBytes += getStrBytes(m.audioHex);
+                    if (m.audioData) mAudioBytes += getStrBytes(m.audioData);
+                    if (m.quoteAudioHex) mAudioBytes += getStrBytes(m.quoteAudioHex);
+                    if (m.quoteAudioData) mAudioBytes += getStrBytes(m.quoteAudioData);
+                    if (m.audioUrl && typeof m.audioUrl === "string" && (m.audioUrl.startsWith("data:audio") || m.audioUrl.length > 200)) {
+                      mAudioBytes += getStrBytes(m.audioUrl);
+                    }
+                    if (mAudioBytes > 0) {
+                      categories.audio.count++;
+                      categories.audio.bytes += mAudioBytes;
+                    }
+                  });
+                };
                 chats.forEach(c => {
-                  const msgs = c.history || c.messages || [];
-                  if (Array.isArray(msgs)) {
-                    msgs.forEach(m => {
-                      if (!m) return;
-                      let mAudioBytes = 0;
-                      if (m.audioHex) mAudioBytes += getStrBytes(m.audioHex);
-                      if (m.audioData) mAudioBytes += getStrBytes(m.audioData);
-                      if (m.quoteAudioHex) mAudioBytes += getStrBytes(m.quoteAudioHex);
-                      if (m.quoteAudioData) mAudioBytes += getStrBytes(m.quoteAudioData);
-                      if (m.audioUrl && typeof m.audioUrl === "string" && (m.audioUrl.startsWith("data:audio") || m.audioUrl.length > 200)) {
-                        mAudioBytes += getStrBytes(m.audioUrl);
-                      }
-                      if (mAudioBytes > 0) {
-                        categories.audio.count++;
-                        categories.audio.bytes += mAudioBytes;
+                  scanAudioInList(c.history || c.messages || []);
+                  if (c.soloLines && typeof c.soloLines === "object") {
+                    Object.values(c.soloLines).forEach(lineObj => {
+                      if (lineObj && Array.isArray(lineObj.history)) {
+                        scanAudioInList(lineObj.history);
                       }
                     });
                   }
@@ -73662,10 +73745,82 @@ ${stickerContext || "无"}
                 categories.audio.count += musics.length;
                 musics.forEach(m => { categories.audio.bytes += getStrBytes(m); });
               }
+              if (dbInstance.musicLibrary) {
+                const mLib = await dbInstance.musicLibrary.toArray();
+                mLib.forEach(m => {
+                  const b = getStrBytes(m);
+                  if (b > 200) {
+                    categories.audio.count++;
+                    categories.audio.bytes += b;
+                  }
+                });
+              }
+            } catch(e) {}
+
+            // 10. 数据库中的桌面预设、主题、字体、世界书、记忆与收藏等
+            try {
+              if (dbInstance.homeScreenPresets) {
+                const hPresets = await dbInstance.homeScreenPresets.toArray();
+                hPresets.forEach(hp => {
+                  categories.page.count++;
+                  categories.page.bytes += getStrBytes(hp);
+                });
+              }
+              if (dbInstance.themes) {
+                const themes = await dbInstance.themes.toArray();
+                themes.forEach(t => {
+                  categories.page.count++;
+                  categories.page.bytes += getStrBytes(t);
+                });
+              }
+              if (dbInstance.fontPresets) {
+                const fPresets = await dbInstance.fontPresets.toArray();
+                fPresets.forEach(fp => {
+                  categories.page.count++;
+                  categories.page.bytes += getStrBytes(fp);
+                });
+              }
+              if (dbInstance.bubbleStylePresets) {
+                const bPresets = await dbInstance.bubbleStylePresets.toArray();
+                bPresets.forEach(bp => {
+                  categories.page.count++;
+                  categories.page.bytes += getStrBytes(bp);
+                });
+              }
+              if (dbInstance.globalSettings) {
+                const gSettings = await dbInstance.globalSettings.toArray();
+                gSettings.forEach(gs => {
+                  categories.page.count++;
+                  categories.page.bytes += getStrBytes(gs);
+                });
+              }
+              const otherDbTables = [
+                "worldBooks",
+                "memories",
+                "favorites",
+                "personaPresets",
+                "thoughtChainPresets",
+                "datingScenes",
+                "datingPresets",
+                "datingHistory",
+                "scriptKillScripts",
+                "ludoQuestionBanks",
+                "ludoQuestions",
+                "callRecords"
+              ];
+              for (const tName of otherDbTables) {
+                if (dbInstance[tName]) {
+                  const rows = await dbInstance[tName].toArray();
+                  if (rows.length > 0) {
+                    categories.other.count += rows.length;
+                    rows.forEach(r => { categories.other.bytes += getStrBytes(r); });
+                  }
+                }
+              }
             } catch(e) {}
           }
 
-          // 7. 页面与本地缓存分类（按键名精准划分页面配置与其他缓存）
+          // 11. 页面与本地缓存分类（按键名精准划分页面配置与其他缓存）
           try {
             const pageKeyPattern = /(desktop|theme|custom|profile|widget|app_|wallpaper|darkreader|ephone-|tukey_|layout|ui_)/i;
             for (let i = 0; i < localStorage.length; i++) {
@@ -73869,8 +74024,12 @@ ${stickerContext || "无"}
                           item.size = new Blob([compressed]).size;
                           item.isCompressed = true;
 
-                          if (item.field === "history_array" && Array.isArray(chat.history)) {
-                            const msg = (item.timestamp ? chat.history.find(m => m.timestamp === item.timestamp) : null) || chat.history[item.msgIndex];
+                          const targetHistory = (item.soloKey && chat.soloLines && chat.soloLines[item.soloKey] && Array.isArray(chat.soloLines[item.soloKey].history))
+                            ? chat.soloLines[item.soloKey].history
+                            : chat.history;
+
+                          if ((item.field === "history_array" || item.field === "solo_history_array") && Array.isArray(targetHistory)) {
+                            const msg = (item.timestamp ? targetHistory.find(m => m.timestamp === item.timestamp) : null) || targetHistory[item.msgIndex];
                             if (msg && Array.isArray(msg.content)) {
                               const part = msg.content[item.partIndex] || msg.content.find(p => p.type === "image_url");
                               if (part && part.image_url) {
@@ -73899,8 +74058,8 @@ ${stickerContext || "无"}
                             chat.settings.miniMapSvg = compressed;
                             chatChanged = true;
                             successCount++;
-                          } else if (Array.isArray(chat.history)) {
-                            const msg = (item.timestamp ? chat.history.find(m => m.timestamp === item.timestamp) : null) || chat.history[item.msgIndex];
+                          } else if (Array.isArray(targetHistory)) {
+                            const msg = (item.timestamp ? targetHistory.find(m => m.timestamp === item.timestamp) : null) || targetHistory[item.msgIndex];
                             if (msg) {
                               if (msg.imageUrl) msg.imageUrl = compressed;
                               if (msg.url) msg.url = compressed;
@@ -74301,6 +74460,48 @@ ${stickerContext || "无"}
                 sp.dataUrl = newUrl;
                 await dbInstance.datingSprites.put(sp);
               }
+            } else if (item.table === "qzonePhotos" && item.recordId && dbInstance.qzonePhotos) {
+              if (!newUrl) {
+                await dbInstance.qzonePhotos.delete(item.recordId);
+              } else {
+                const qp = await dbInstance.qzonePhotos.get(item.recordId);
+                if (qp) {
+                  if (qp.dataUrl) qp.dataUrl = newUrl;
+                  if (qp.url) qp.url = newUrl;
+                  await dbInstance.qzonePhotos.put(qp);
+                }
+              }
+            } else if (item.table === "qzonePosts" && item.recordId && dbInstance.qzonePosts) {
+              if (!newUrl && item.field === "post_record") {
+                await dbInstance.qzonePosts.delete(item.recordId);
+              } else {
+                const post = await dbInstance.qzonePosts.get(item.recordId);
+                if (post) {
+                  if (typeof item.imgIndex === "number" && Array.isArray(post.images)) {
+                    if (newUrl) post.images[item.imgIndex] = newUrl;
+                    else post.images.splice(item.imgIndex, 1);
+                  } else if (post.imageUrl) {
+                    post.imageUrl = newUrl;
+                  }
+                  await dbInstance.qzonePosts.put(post);
+                }
+              }
+            } else if (item.table === "homeScreenPresets" && item.recordId && dbInstance.homeScreenPresets) {
+              if (!newUrl) {
+                await dbInstance.homeScreenPresets.delete(item.recordId);
+              }
+            } else if (item.table === "fontPresets" && item.recordId && dbInstance.fontPresets) {
+              if (!newUrl) {
+                await dbInstance.fontPresets.delete(item.recordId);
+              }
+            } else if (item.table === "themes" && item.recordId && dbInstance.themes) {
+              if (!newUrl) {
+                await dbInstance.themes.delete(item.recordId);
+              }
+            } else if (item.table === "moduleRawFiles" && item.recordId && dbInstance.moduleRawFiles) {
+              if (!newUrl) {
+                await dbInstance.moduleRawFiles.delete(item.recordId);
+              }
             }
           } catch (e) {
             console.warn("保存压缩数据失败:", e);
@@ -74504,13 +74705,14 @@ ${stickerContext || "无"}
             }
           }
 
-          // 2. 图片分类扫描（严格仅统计聊天对话中的图片，排除头像、道具、战斗与地图）
+          // 2. 图片分类扫描（包含主线对话与密友群聊单线中的图片，排除头像、道具、战斗与地图）
           if (currentStorageCategory === "images" || currentStorageCategory === "all") {
             try {
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
-                chats.forEach(chat => {
-                  const history = chat.history || [];
+                const scanHistoryForImages = (chat, history, soloKey = "", soloLabel = "") => {
+                  if (!Array.isArray(history)) return;
+                  const originPrefix = soloLabel ? `聊天《${chat.name}》单线[${soloLabel}]` : `聊天《${chat.name}》`;
                   history.forEach((msg, mIdx) => {
                     if (!msg) return;
                     if (msg.type && (msg.type.startsWith("combat") || msg.type === "combat_card" || msg.type === "inventory_card")) return;
@@ -74519,16 +74721,17 @@ ${stickerContext || "无"}
                       msg.content.forEach((part, pIdx) => {
                         if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
                           loadedStorageImagesList.push({
-                            id: "chat_msg_part_" + chat.id + "_" + (msg.timestamp || mIdx) + "_" + pIdx,
+                            id: "chat_msg_part_" + chat.id + "_" + (soloKey || "main") + "_" + (msg.timestamp || mIdx) + "_" + pIdx,
                             type: "image",
                             table: "chats",
                             recordId: chat.id,
-                            field: "history_array",
+                            soloKey: soloKey || undefined,
+                            field: soloKey ? "solo_history_array" : "history_array",
                             msgIndex: mIdx,
                             partIndex: pIdx,
                             timestamp: msg.timestamp,
                             name: "聊天消息图片",
-                            origin: `聊天《${chat.name}》消息配图`,
+                            origin: `${originPrefix}消息配图`,
                             size: new Blob([part.image_url.url]).size,
                             dataUrl: part.image_url.url,
                             isCompressed: !!(msg._compressed || part._compressed),
@@ -74542,15 +74745,16 @@ ${stickerContext || "无"}
                       const msgImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && msg.content.startsWith("data:image") ? msg.content : "") || msg.image;
                       if (msgImg && typeof msgImg === "string" && msgImg.startsWith("data:image")) {
                         loadedStorageImagesList.push({
-                          id: "chat_msg_img_" + chat.id + "_" + (msg.timestamp || mIdx),
+                          id: "chat_msg_img_" + chat.id + "_" + (soloKey || "main") + "_" + (msg.timestamp || mIdx),
                           type: "image",
                           table: "chats",
                           recordId: chat.id,
-                          field: "history",
+                          soloKey: soloKey || undefined,
+                          field: soloKey ? "solo_history" : "history",
                           msgIndex: mIdx,
                           timestamp: msg.timestamp,
                           name: "聊天消息图片",
-                          origin: `聊天《${chat.name}》消息配图`,
+                          origin: `${originPrefix}消息配图`,
                           size: new Blob([msgImg]).size,
                           dataUrl: msgImg,
                           isCompressed: !!msg._compressed,
@@ -74559,6 +74763,16 @@ ${stickerContext || "无"}
                       }
                     }
                   });
+                };
+                chats.forEach(chat => {
+                  scanHistoryForImages(chat, chat.history || []);
+                  if (chat.soloLines && typeof chat.soloLines === "object") {
+                    Object.entries(chat.soloLines).forEach(([sKey, sObj]) => {
+                      if (sObj && Array.isArray(sObj.history)) {
+                        scanHistoryForImages(chat, sObj.history, sKey, sObj.title || sObj.memberName || sKey);
+                      }
+                    });
+                  }
                 });
               }
             } catch(e) {
@@ -74695,6 +74909,60 @@ ${stickerContext || "无"}
                       origin: `相册照片: ${p.title || '未命名'}`,
                       size: new Blob([dUrl]).size,
                       dataUrl: dUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.qzonePhotos) {
+                const qPhotos = await dbInstance.qzonePhotos.toArray();
+                qPhotos.forEach(p => {
+                  const dUrl = p.dataUrl || p.url;
+                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "qzone_photo_" + p.id,
+                      type: "avatar",
+                      table: "qzonePhotos",
+                      recordId: p.id,
+                      name: p.title || "空间相册图片",
+                      origin: `空间相册: ${p.title || '照片'}`,
+                      size: new Blob([dUrl]).size,
+                      dataUrl: dUrl,
+                      selected: false
+                    });
+                  }
+                });
+              }
+              if (dbInstance.qzonePosts) {
+                const qPosts = await dbInstance.qzonePosts.toArray();
+                qPosts.forEach(post => {
+                  if (Array.isArray(post.images)) {
+                    post.images.forEach((imgStr, imgIdx) => {
+                      if (imgStr && typeof imgStr === "string" && imgStr.startsWith("data:image")) {
+                        loadedStorageImagesList.push({
+                          id: "qzone_post_img_" + post.id + "_" + imgIdx,
+                          type: "avatar",
+                          table: "qzonePosts",
+                          recordId: post.id,
+                          imgIndex: imgIdx,
+                          name: "空间动态配图",
+                          origin: `空间动态配图: ${(post.text || post.content || '动态').slice(0, 14)}`,
+                          size: new Blob([imgStr]).size,
+                          dataUrl: imgStr,
+                          selected: false
+                        });
+                      }
+                    });
+                  } else if (post.imageUrl && typeof post.imageUrl === "string" && post.imageUrl.startsWith("data:image")) {
+                    loadedStorageImagesList.push({
+                      id: "qzone_post_single_" + post.id,
+                      type: "avatar",
+                      table: "qzonePosts",
+                      recordId: post.id,
+                      name: "空间动态配图",
+                      origin: `空间动态配图: ${(post.text || post.content || '动态').slice(0, 14)}`,
+                      size: new Blob([post.imageUrl]).size,
+                      dataUrl: post.imageUrl,
                       selected: false
                     });
                   }
@@ -74899,15 +75167,41 @@ ${stickerContext || "无"}
                   });
                 });
               }
+              if (dbInstance.moduleRawFiles) {
+                const rawFiles = await dbInstance.moduleRawFiles.toArray();
+                rawFiles.forEach(rf => {
+                  loadedStorageImagesList.push({
+                    id: "mod_raw_" + rf.id,
+                    type: "module",
+                    table: "moduleRawFiles",
+                    recordId: rf.id,
+                    name: rf.fileName || rf.name || "模组原始底稿",
+                    origin: `模组原始文件底稿: ${rf.fileName || rf.name || rf.id}`,
+                    size: getStrBytes(rf),
+                    dataUrl: "",
+                    selected: false
+                  });
+                });
+              }
             } catch(e) {}
           }
 
           // 7. 聊天分类扫描
-          if (currentStorageCategory === "chat") {
+          if (currentStorageCategory === "chat" || currentStorageCategory === "all") {
             try {
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
                 chats.forEach(c => {
+                  let soloBytes = 0;
+                  let soloCount = 0;
+                  if (c.soloLines && typeof c.soloLines === "object") {
+                    Object.values(c.soloLines).forEach(lineObj => {
+                      if (lineObj && Array.isArray(lineObj.history)) {
+                        soloBytes += getStrBytes(lineObj.history);
+                        soloCount += lineObj.history.length;
+                      }
+                    });
+                  }
                   loadedStorageImagesList.push({
                     id: "chat_" + c.id,
                     type: "chat",
@@ -74915,8 +75209,8 @@ ${stickerContext || "无"}
                     recordId: c.id,
                     action: "deleteChat",
                     name: c.name || "聊天",
-                    origin: `聊天会话: ${c.name} ${c.history?.length || 0}条消息`,
-                    size: getStrBytes(c.history) + getStrBytes(c.settings),
+                    origin: `聊天会话: ${c.name} ${c.history?.length || 0}条主线${soloCount > 0 ? ' + ' + soloCount + '条单线' : ''}`,
+                    size: getStrBytes(c.history) + getStrBytes(c.settings) + soloBytes,
                     dataUrl: c.settings?.aiAvatar || "",
                     selected: false
                   });
@@ -74943,7 +75237,7 @@ ${stickerContext || "无"}
           }
 
           // 8. 论坛分类扫描
-          if (currentStorageCategory === "forum") {
+          if (currentStorageCategory === "forum" || currentStorageCategory === "all") {
             try {
               if (dbInstance.forumPosts) {
                 const posts = await dbInstance.forumPosts.toArray();
@@ -75070,9 +75364,59 @@ ${stickerContext || "无"}
             }
           }
 
-          // 10. 页面/其他分类扫描
-          if (currentStorageCategory === "other" || currentStorageCategory === "page") {
+          // 10. 页面/其他分类扫描（包含桌面预设、字体预设、主题、世界书及本地缓存）
+          if (currentStorageCategory === "other" || currentStorageCategory === "page" || currentStorageCategory === "all") {
             try {
+              if (currentStorageCategory === "page" || currentStorageCategory === "all") {
+                if (dbInstance.homeScreenPresets) {
+                  const hPresets = await dbInstance.homeScreenPresets.toArray();
+                  hPresets.forEach(hp => {
+                    loadedStorageImagesList.push({
+                      id: "home_preset_" + hp.id,
+                      type: "page",
+                      table: "homeScreenPresets",
+                      recordId: hp.id,
+                      name: hp.name || "桌面预设",
+                      origin: `桌面预设副本: ${hp.name || '未命名'}`,
+                      size: getStrBytes(hp),
+                      dataUrl: hp.wallpaper && hp.wallpaper.startsWith("data:image") ? hp.wallpaper : "",
+                      selected: false
+                    });
+                  });
+                }
+                if (dbInstance.fontPresets) {
+                  const fPresets = await dbInstance.fontPresets.toArray();
+                  fPresets.forEach(fp => {
+                    loadedStorageImagesList.push({
+                      id: "font_preset_" + fp.id,
+                      type: "page",
+                      table: "fontPresets",
+                      recordId: fp.id,
+                      name: fp.name || "字体预设",
+                      origin: `字体预设文件: ${fp.name || '未命名'}`,
+                      size: getStrBytes(fp),
+                      dataUrl: "",
+                      selected: false
+                    });
+                  });
+                }
+                if (dbInstance.themes) {
+                  const themes = await dbInstance.themes.toArray();
+                  themes.forEach(t => {
+                    loadedStorageImagesList.push({
+                      id: "theme_preset_" + t.id,
+                      type: "page",
+                      table: "themes",
+                      recordId: t.id,
+                      name: t.name || "主题预设",
+                      origin: `主题预设: ${t.name || '未命名'}`,
+                      size: getStrBytes(t),
+                      dataUrl: "",
+                      selected: false
+                    });
+                  });
+                }
+              }
               const pageKeyPattern = /(desktop|theme|custom|profile|widget|app_|wallpaper|darkreader|ephone-|tukey_|layout|ui_)/i;
               for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -76350,7 +76694,10 @@ ${stickerContext || "无"}
                   }
 
                   ctx.drawImage(img, 0, 0, width, height);
-                  let compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+                  let compressedBase64 = canvas.toDataURL("image/webp", quality);
+                  if (!compressedBase64 || !compressedBase64.startsWith("data:image/webp")) {
+                    compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+                  }
 
                   canvas.width = 0;
                   canvas.height = 0;
@@ -87470,11 +87817,21 @@ ${stickerContext || "无"}
 
                 if (name && name.trim()) {
                   // 用户确认命名，读取文件内容并准备保存
-                  const base64Url = await new Promise((resolve) => {
+                  let base64Url = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (e) => resolve(e.target.result);
                     reader.readAsDataURL(file);
                   });
+
+                  const isGif = file.type === "image/gif" || (typeof base64Url === "string" && base64Url.startsWith("data:image/gif"));
+                  if (!isGif && typeof compressImage === "function" && typeof base64Url === "string" && base64Url.length > 100000) {
+                    try {
+                      const compressed = await compressImage(base64Url, 0.86, 640);
+                      if (compressed && compressed.length < base64Url.length) {
+                        base64Url = compressed;
+                      }
+                    } catch (_) {}
+                  }
 
                   newStickers.push({
                     id: "sticker_" + (Date.now() + newStickers.length),
