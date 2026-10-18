@@ -25336,6 +25336,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               foldBlankArea.onclick = () => {
                 currentTcEditorEntries[idx].collapsed = !currentTcEditorEntries[idx].collapsed;
                 editorWrap.style.display = currentTcEditorEntries[idx].collapsed ? "none" : "";
+                persistTcFoldStateToDb();
               };
 
               return card;
@@ -25415,6 +25416,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 });
                 grp.collapsed = false;
                 renderTcEditorGroupsAndEntries(false);
+                persistTcFoldStateToDb();
               };
 
               groupHeader.addEventListener("mousedown", (e) => {
@@ -25445,6 +25447,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 grp.collapsed = !grp.collapsed;
                 groupBox.classList.toggle("collapsed", grp.collapsed);
                 foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
+                persistTcFoldStateToDb();
               };
 
               groupHeader.onclick = toggleFold;
@@ -25524,6 +25527,36 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
         }
 
+        let currentTcSectionFoldState = {
+          headerCollapsed: false,
+          generalCollapsed: false,
+          groupsCollapsed: false,
+        };
+
+        async function persistTcFoldStateToDb() {
+          if (!editingThoughtChainId) return;
+          try {
+            const preset = await db.thoughtChainPresets.get(editingThoughtChainId);
+            if (!preset) return;
+            preset.headerCollapsed = Boolean(currentTcSectionFoldState.headerCollapsed);
+            preset.generalCollapsed = Boolean(currentTcSectionFoldState.generalCollapsed);
+            preset.groupsCollapsed = Boolean(currentTcSectionFoldState.groupsCollapsed);
+            if (Array.isArray(preset.groups) && Array.isArray(currentTcEditorGroups)) {
+              preset.groups = preset.groups.map((pg, i) => {
+                const matchGrp = currentTcEditorGroups.find((g) => g && pg && g.id && g.id === pg.id) || currentTcEditorGroups[i];
+                return matchGrp ? { ...pg, collapsed: Boolean(matchGrp.collapsed) } : pg;
+              });
+            }
+            if (Array.isArray(preset.entries) && Array.isArray(currentTcEditorEntries)) {
+              preset.entries = preset.entries.map((pe, i) => {
+                const matchEnt = currentTcEditorEntries.find((e) => e && pe && e.id && e.id === pe.id) || currentTcEditorEntries[i];
+                return matchEnt ? { ...pe, collapsed: Boolean(matchEnt.collapsed) } : pe;
+              });
+            }
+            await db.thoughtChainPresets.put(preset);
+          } catch (e) {}
+        }
+
         async function openThoughtChainEditor(presetId = null) {
           editingThoughtChainId = presetId;
           if (typeof bindThoughtChainEvents === "function") {
@@ -25544,6 +25577,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (headerInput) headerInput.value = preset.headerContent || "";
               generalInput.value = preset.generalContent || "";
               cocInput.value = preset.cocContent || "";
+              currentTcSectionFoldState = {
+                headerCollapsed: Boolean(preset.headerCollapsed),
+                generalCollapsed: Boolean(preset.generalCollapsed),
+                groupsCollapsed: Boolean(preset.groupsCollapsed),
+              };
               currentTcEditorGroups = Array.isArray(preset.groups)
                 ? preset.groups.map((g) => ({ ...g }))
                 : [];
@@ -25557,16 +25595,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (headerInput) headerInput.value = "";
             generalInput.value = "";
             cocInput.value = "";
+            currentTcSectionFoldState = {
+              headerCollapsed: false,
+              generalCollapsed: false,
+              groupsCollapsed: false,
+            };
             currentTcEditorGroups = [];
             currentTcEditorEntries = [];
           }
 
           syncStaticTcRichEditors();
           const switchConfigs = [
-            { switchBtnId: "tc-switch-header-btn", taId: "tc-preset-header-input", bodyId: "tc-preset-header-body", foldBtnId: "tc-toggle-header-btn" },
-            { switchBtnId: "tc-switch-general-btn", taId: "tc-preset-general-input", bodyId: "tc-preset-general-body", foldBtnId: "tc-toggle-general-btn" },
+            { switchBtnId: "tc-switch-header-btn", taId: "tc-preset-header-input", bodyId: "tc-preset-header-body", foldBtnId: "tc-toggle-header-btn", foldKey: "headerCollapsed" },
+            { switchBtnId: "tc-switch-general-btn", taId: "tc-preset-general-input", bodyId: "tc-preset-general-body", foldBtnId: "tc-toggle-general-btn", foldKey: "generalCollapsed" },
           ];
-          switchConfigs.forEach(({ switchBtnId, taId, bodyId, foldBtnId }) => {
+          switchConfigs.forEach(({ switchBtnId, taId, bodyId, foldBtnId, foldKey }) => {
             const sBtn = document.getElementById(switchBtnId);
             const ta = document.getElementById(taId);
             if (ta && typeof ta._setPreviewMode === "function") {
@@ -25581,6 +25624,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (body && body.style.display === "none") {
                   body.style.display = "block";
                   if (fBtn) fBtn.textContent = "折叠";
+                  if (foldKey) {
+                    currentTcSectionFoldState[foldKey] = false;
+                    persistTcFoldStateToDb();
+                  }
                 }
                 const nextMode = !ta._richEl._isPreviewMode;
                 ta._setPreviewMode(nextMode);
@@ -25589,21 +25636,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           });
           const staticSections = [
-            { btnId: "tc-toggle-header-btn", bodyId: "tc-preset-header-body", displayShow: "block" },
-            { btnId: "tc-toggle-general-btn", bodyId: "tc-preset-general-body", displayShow: "block" },
-            { btnId: "tc-toggle-coc-btn", bodyId: "tc-preset-coc-body", displayShow: "block" },
-            { btnId: "tc-toggle-groups-btn", bodyId: "tc-groups-list", displayShow: "flex" },
+            { btnId: "tc-toggle-header-btn", bodyId: "tc-preset-header-body", displayShow: "block", foldKey: "headerCollapsed" },
+            { btnId: "tc-toggle-general-btn", bodyId: "tc-preset-general-body", displayShow: "block", foldKey: "generalCollapsed" },
+            { btnId: "tc-toggle-coc-btn", bodyId: "tc-preset-coc-body", displayShow: "block", foldKey: null },
+            { btnId: "tc-toggle-groups-btn", bodyId: "tc-groups-list", displayShow: "flex", foldKey: "groupsCollapsed" },
           ];
-          staticSections.forEach(({ btnId, bodyId, displayShow }) => {
+          staticSections.forEach(({ btnId, bodyId, displayShow, foldKey }) => {
             const btn = document.getElementById(btnId);
             const body = document.getElementById(bodyId);
             if (btn && body) {
-              body.style.display = displayShow || "block";
-              btn.textContent = "折叠";
+              const isCollapsed = foldKey ? Boolean(currentTcSectionFoldState[foldKey]) : false;
+              body.style.display = isCollapsed ? "none" : (displayShow || "block");
+              btn.textContent = isCollapsed ? "展开" : "折叠";
               btn.onclick = () => {
                 const isHidden = body.style.display === "none";
-                body.style.display = isHidden ? (displayShow || "block") : "none";
-                btn.textContent = isHidden ? "折叠" : "展开";
+                const nextCollapsed = !isHidden;
+                body.style.display = nextCollapsed ? "none" : (displayShow || "block");
+                btn.textContent = nextCollapsed ? "展开" : "折叠";
+                if (foldKey) {
+                  currentTcSectionFoldState[foldKey] = nextCollapsed;
+                  persistTcFoldStateToDb();
+                }
               };
             }
           });
@@ -25632,6 +25685,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const headerContent = headerInput ? headerInput.value : "";
           const generalContent = generalInput ? generalInput.value : "";
           const cocContent = cocInput ? cocInput.value : "";
+          const headerCollapsed = Boolean(currentTcSectionFoldState.headerCollapsed);
+          const generalCollapsed = Boolean(currentTcSectionFoldState.generalCollapsed);
+          const groupsCollapsed = Boolean(currentTcSectionFoldState.groupsCollapsed);
           const groups = currentTcEditorGroups.map((g, idx) => ({
             id: g.id || ("tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
             name: String(g.name || "").trim(),
@@ -25655,6 +25711,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               preset.headerContent = headerContent;
               preset.generalContent = generalContent;
               preset.cocContent = cocContent;
+              preset.headerCollapsed = headerCollapsed;
+              preset.generalCollapsed = generalCollapsed;
+              preset.groupsCollapsed = groupsCollapsed;
               preset.groups = groups;
               preset.entries = entries;
               await db.thoughtChainPresets.put(preset);
@@ -25666,6 +25725,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               existing.headerContent = headerContent;
               existing.generalContent = generalContent;
               existing.cocContent = cocContent;
+              existing.headerCollapsed = headerCollapsed;
+              existing.generalCollapsed = generalCollapsed;
+              existing.groupsCollapsed = groupsCollapsed;
               existing.groups = groups;
               existing.entries = entries;
               await db.thoughtChainPresets.put(existing);
@@ -25675,6 +25737,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 headerContent,
                 generalContent,
                 cocContent,
+                headerCollapsed,
+                generalCollapsed,
+                groupsCollapsed,
                 groups,
                 entries,
                 createdAt: Date.now(),
@@ -25764,8 +25829,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (coc && coc.trim().length > 0) {
             out += `\n=== 跑团模块内容 ===\n${coc}\n`;
           }
-          if (groups.length > 0 || entries.length > 0) {
-            out += `\n=== 条目与分组数据 ===\n${JSON.stringify({ groups, entries })}\n`;
+          if (groups.length > 0 || entries.length > 0 || preset?.headerCollapsed || preset?.generalCollapsed || preset?.groupsCollapsed) {
+            out += `\n=== 条目与分组数据 ===\n${JSON.stringify({
+              headerCollapsed: Boolean(preset?.headerCollapsed),
+              generalCollapsed: Boolean(preset?.generalCollapsed),
+              groupsCollapsed: Boolean(preset?.groupsCollapsed),
+              groups,
+              entries,
+            })}\n`;
           }
           return out;
         }
@@ -25789,6 +25860,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let headerContent = "";
             let generalContent = "";
             let cocContent = "";
+            let headerCollapsed = false;
+            let generalCollapsed = false;
+            let groupsCollapsed = false;
             let groups = [];
             let entries = [];
 
@@ -25815,8 +25889,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               else if (cur.key === "meta") {
                 try {
                   const parsedMeta = JSON.parse(chunk.trim());
-                  if (parsedMeta && Array.isArray(parsedMeta.groups)) groups = parsedMeta.groups;
-                  if (parsedMeta && Array.isArray(parsedMeta.entries)) entries = parsedMeta.entries;
+                  if (parsedMeta) {
+                    headerCollapsed = Boolean(parsedMeta.headerCollapsed);
+                    generalCollapsed = Boolean(parsedMeta.generalCollapsed);
+                    groupsCollapsed = Boolean(parsedMeta.groupsCollapsed);
+                    if (Array.isArray(parsedMeta.groups)) groups = parsedMeta.groups;
+                    if (Array.isArray(parsedMeta.entries)) entries = parsedMeta.entries;
+                  }
                 } catch (e) {}
               }
             }
@@ -25826,6 +25905,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               headerContent,
               generalContent,
               cocContent,
+              headerCollapsed,
+              generalCollapsed,
+              groupsCollapsed,
               groups,
               entries,
             };
@@ -25836,6 +25918,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             headerContent: "",
             generalContent: text,
             cocContent: "",
+            headerCollapsed: false,
+            generalCollapsed: false,
+            groupsCollapsed: false,
             groups: [],
             entries: [],
           };
@@ -25867,6 +25952,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             headerContent,
             generalContent,
             cocContent,
+            headerCollapsed: Boolean(currentTcSectionFoldState.headerCollapsed),
+            generalCollapsed: Boolean(currentTcSectionFoldState.generalCollapsed),
+            groupsCollapsed: Boolean(currentTcSectionFoldState.groupsCollapsed),
             groups: currentTcEditorGroups,
             entries: currentTcEditorEntries,
           });
@@ -25892,6 +25980,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   headerContent: parsed.headerContent || "",
                   generalContent: parsed.generalContent || "",
                   cocContent: parsed.cocContent || "",
+                  headerCollapsed: Boolean(parsed.headerCollapsed),
+                  generalCollapsed: Boolean(parsed.generalCollapsed),
+                  groupsCollapsed: Boolean(parsed.groupsCollapsed),
                   groups: Array.isArray(parsed.groups) ? parsed.groups : [],
                   entries: Array.isArray(parsed.entries) ? parsed.entries : [],
                   createdAt: Date.now(),
@@ -25935,6 +26026,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (headerInput) headerInput.value = parsed.headerContent || "";
               if (generalInput) generalInput.value = parsed.generalContent || "";
               if (cocInput) cocInput.value = parsed.cocContent || "";
+              currentTcSectionFoldState = {
+                headerCollapsed: Boolean(parsed.headerCollapsed),
+                generalCollapsed: Boolean(parsed.generalCollapsed),
+                groupsCollapsed: Boolean(parsed.groupsCollapsed),
+              };
+              const staticApply = [
+                { btnId: "tc-toggle-header-btn", bodyId: "tc-preset-header-body", displayShow: "block", foldKey: "headerCollapsed" },
+                { btnId: "tc-toggle-general-btn", bodyId: "tc-preset-general-body", displayShow: "block", foldKey: "generalCollapsed" },
+                { btnId: "tc-toggle-groups-btn", bodyId: "tc-groups-list", displayShow: "flex", foldKey: "groupsCollapsed" },
+              ];
+              staticApply.forEach(({ btnId, bodyId, displayShow, foldKey }) => {
+                const btn = document.getElementById(btnId);
+                const body = document.getElementById(bodyId);
+                if (btn && body) {
+                  const isCollapsed = Boolean(currentTcSectionFoldState[foldKey]);
+                  body.style.display = isCollapsed ? "none" : displayShow;
+                  btn.textContent = isCollapsed ? "展开" : "折叠";
+                }
+              });
               currentTcEditorGroups = Array.isArray(parsed.groups) ? parsed.groups : [];
               currentTcEditorEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
               syncStaticTcRichEditors();
