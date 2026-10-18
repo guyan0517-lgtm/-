@@ -5413,12 +5413,12 @@
           waitReplyBtn.style.visibility = "visible";
           waitReplyBtn.style.opacity = "1";
           waitReplyBtn.style.pointerEvents = "auto";
-          waitReplyBtn.style.color = "var(--text-primary)";
-          waitReplyBtn.style.backgroundImage = "none";
-          if (!waitReplyBtn.dataset.origHtml) {
-            waitReplyBtn.dataset.origHtml = waitReplyBtn.innerHTML;
+          waitReplyBtn.style.color = "";
+          waitReplyBtn.style.backgroundImage = "";
+          if (waitReplyBtn.dataset.origHtml) {
+            waitReplyBtn.innerHTML = waitReplyBtn.dataset.origHtml;
+            delete waitReplyBtn.dataset.origHtml;
           }
-          waitReplyBtn.innerHTML = MIC_BTN_SVG;
           waitReplyBtn.title = "发送语音";
         }
         this.ensureVoiceRecordPanel();
@@ -5445,8 +5445,9 @@
           waitReplyBtn.style.backgroundImage = "";
           if (waitReplyBtn.dataset.origHtml) {
             waitReplyBtn.innerHTML = waitReplyBtn.dataset.origHtml;
-            waitReplyBtn.title = "等待回复";
+            delete waitReplyBtn.dataset.origHtml;
           }
+          waitReplyBtn.title = "等待回复";
         }
         if (recordPanel) {
           this.cancelVoiceRecording();

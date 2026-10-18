@@ -20951,6 +20951,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         });
 
         async function requestLlmapiWithFallback(targetUrl, options = {}) {
+          const releaseKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
+            ? window.acquireBackgroundTaskKeepAlive()
+            : null;
           ensureBackgroundKeepAlive();
           const finalUrl = formatChatCompletionUrl(targetUrl);
           const method = options.method || "POST";
@@ -20970,9 +20973,70 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => {
-            controller.abort(new Error("请求超时：已等待超过7分钟未收到模型回复，连接已切断"));
-          }, 480000);
+          if (options.signal) {
+            if (options.signal.aborted) {
+              controller.abort(options.signal.reason);
+            } else {
+              options.signal.addEventListener("abort", () => controller.abort(options.signal.reason), { once: true });
+            }
+          }
+          let timeoutId = null;
+          const resetTimeout = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+              controller.abort(new Error("请求超时：已等待超过8分钟未收到模型数据，连接已切断"));
+            }, 480000);
+          };
+          resetTimeout();
+
+          const parseSseTextToSynthesized = (rawSseText, finishReasonOverride) => {
+            let fullText = "";
+            let fullThinking = "";
+            let finishReason = finishReasonOverride || "stop";
+            const lines = String(rawSseText || "").split("\n");
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith("data:")) continue;
+              const dataStr = trimmed.slice(5).trim();
+              if (dataStr === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(dataStr);
+                const choice = parsed.choices?.[0];
+                if (choice?.finish_reason) finishReason = choice.finish_reason;
+                const delta = choice?.delta || {};
+                const deltaContent =
+                  delta.content ||
+                  choice?.message?.content ||
+                  parsed.content?.[0]?.text ||
+                  (parsed.candidates?.[0]?.content?.parts
+                    ? parsed.candidates[0].content.parts.map((p) => p.text || "").join("")
+                    : "") ||
+                  "";
+                const deltaReasoning =
+                  delta.reasoning_content ||
+                  delta.reasoning ||
+                  delta.thinking ||
+                  choice?.message?.reasoning_content ||
+                  "";
+                if (deltaContent) fullText += deltaContent;
+                if (deltaReasoning) fullThinking += deltaReasoning;
+              } catch (_) {}
+            }
+            if (!fullText && !fullThinking) return null;
+            return {
+              choices: [
+                {
+                  index: 0,
+                  message: {
+                    role: "assistant",
+                    content: fullText,
+                    reasoning_content: fullThinking || undefined,
+                  },
+                  finish_reason: finishReason,
+                },
+              ],
+            };
+          };
 
           try {
             let res = null;
@@ -20991,7 +21055,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
-            if (!res && !isStaticHost) {
+            if ((!res || res.status === 502 || res.status === 503 || res.status === 504) && !isStaticHost && !controller.signal.aborted) {
               try {
                 const proxyRes = await origFetch("/api/proxy", {
                   method: "POST",
@@ -21004,23 +21068,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     body: method !== "GET" && method !== "HEAD" ? parsedBody : undefined,
                   }),
                 });
-                if (proxyRes.ok || (proxyRes.status !== 405 && proxyRes.status !== 404)) {
+                if (proxyRes.ok || !res || (proxyRes.status !== 405 && proxyRes.status !== 404)) {
                   res = proxyRes;
                 }
               } catch (_) {}
             }
 
             if (!res) {
-              clearTimeout(timeoutId);
+              if (timeoutId) clearTimeout(timeoutId);
               console.error(`HTTP 错误 [${method}] (请求地址: ${finalUrl}): ${directErr?.message || "网络请求失败"}`);
               throw directErr || new Error("网络请求失败，无法连接到目标服务");
             }
 
-            clearTimeout(timeoutId);
-
             const contentType = res.headers.get("content-type") || "";
 
             if (!res.ok) {
+              if (timeoutId) clearTimeout(timeoutId);
               let errText = "";
               try {
                 errText = await res.text();
@@ -21036,41 +21099,106 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
-            // 流式数据处理与实时分片回调
-            if (options.onStreamChunk && res.body && contentType.includes("event-stream")) {
+            // 流式数据处理与实时分片回调（无论是否传入 onStreamChunk，都将 SSE 流安全拼接为完整/截断保留的 JSON，防止中途断流丢弃内容）
+            if (res.body && contentType.includes("event-stream")) {
               const reader = res.body.getReader();
               const decoder = new TextDecoder();
               let fullText = "";
               let fullThinking = "";
               let buffer = "";
+              let rawStreamText = "";
+              let finishReason = "stop";
+              let streamInterruptedErr = null;
 
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || "";
-
-                for (const line of lines) {
-                  const trimmed = line.trim();
-                  if (!trimmed || !trimmed.startsWith("data:")) continue;
-                  const dataStr = trimmed.slice(5).trim();
-                  if (dataStr === "[DONE]") continue;
-                  try {
-                    const parsed = JSON.parse(dataStr);
-                    const delta = parsed.choices?.[0]?.delta || {};
-                    const deltaContent = delta.content || "";
-                    const deltaReasoning = delta.reasoning_content || delta.reasoning || "";
-                    if (deltaContent) fullText += deltaContent;
-                    if (deltaReasoning) fullThinking += deltaReasoning;
+              const processSseLine = (line) => {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith("data:")) return;
+                const dataStr = trimmed.slice(5).trim();
+                if (dataStr === "[DONE]") return;
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  const choice = parsed.choices?.[0];
+                  if (choice?.finish_reason) {
+                    finishReason = choice.finish_reason;
+                  }
+                  const delta = choice?.delta || {};
+                  const deltaContent =
+                    delta.content ||
+                    choice?.message?.content ||
+                    parsed.content?.[0]?.text ||
+                    (parsed.candidates?.[0]?.content?.parts
+                      ? parsed.candidates[0].content.parts.map((p) => p.text || "").join("")
+                      : "") ||
+                    "";
+                  const deltaReasoning =
+                    delta.reasoning_content ||
+                    delta.reasoning ||
+                    delta.thinking ||
+                    choice?.message?.reasoning_content ||
+                    "";
+                  if (deltaContent) fullText += deltaContent;
+                  if (deltaReasoning) fullThinking += deltaReasoning;
+                  if (typeof options.onStreamChunk === "function" && (deltaContent || deltaReasoning)) {
                     options.onStreamChunk({
                       content: fullText,
                       thinking: fullThinking,
                       deltaContent,
                       deltaReasoning,
                     });
-                  } catch (_) {}
+                  }
+                } catch (_) {}
+              };
+
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  resetTimeout();
+                  ensureBackgroundKeepAlive();
+                  if (done) {
+                    const tail = decoder.decode();
+                    if (tail) {
+                      buffer += tail;
+                      rawStreamText += tail;
+                    }
+                    break;
+                  }
+                  const chunkStr = decoder.decode(value, { stream: true });
+                  buffer += chunkStr;
+                  rawStreamText += chunkStr;
+                  const lines = buffer.split("\n");
+                  buffer = lines.pop() || "";
+
+                  for (const line of lines) {
+                    processSseLine(line);
+                  }
                 }
+              } catch (streamErr) {
+                streamInterruptedErr = streamErr;
+                finishReason = "length";
+                console.warn("[流式保活] 传输中途截断或连接断开，保留已接收到的全部内容:", streamErr);
+              } finally {
+                if (timeoutId) clearTimeout(timeoutId);
+              }
+
+              if (buffer.trim()) {
+                const leftoverLines = buffer.split("\n");
+                for (const line of leftoverLines) {
+                  processSseLine(line);
+                }
+                buffer = "";
+              }
+
+              if (!fullText && !fullThinking && rawStreamText.trim().startsWith("{")) {
+                return {
+                  ok: true,
+                  status: 200,
+                  text: rawStreamText.trim(),
+                  headers: new Headers({ "Content-Type": "application/json" }),
+                };
+              }
+
+              if (streamInterruptedErr && !fullText && !fullThinking) {
+                throw streamInterruptedErr;
               }
 
               const synthesized = {
@@ -21082,6 +21210,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       content: fullText,
                       reasoning_content: fullThinking || undefined,
                     },
+                    finish_reason: finishReason,
                   },
                 ],
               };
@@ -21089,20 +21218,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ok: true,
                 status: 200,
                 text: JSON.stringify(synthesized),
-                headers: res.headers,
+                headers: new Headers({ "Content-Type": "application/json" }),
               };
             }
 
-            if (res.body && contentType.includes("event-stream")) {
-              return {
-                ok: res.ok,
-                status: res.status,
-                body: res.body,
-                headers: res.headers,
-              };
+            let resText = "";
+            try {
+              resText = await res.text();
+            } finally {
+              if (timeoutId) clearTimeout(timeoutId);
             }
 
-            const resText = await res.text();
+            if (resText && (resText.trim().startsWith("data:") || resText.includes("\ndata:"))) {
+              const sseSynthesized = parseSseTextToSynthesized(resText);
+              if (sseSynthesized) {
+                return {
+                  ok: true,
+                  status: 200,
+                  text: JSON.stringify(sseSynthesized),
+                  headers: new Headers({ "Content-Type": "application/json" }),
+                };
+              }
+            }
+
             return {
               ok: res.ok,
               status: res.status,
@@ -21110,11 +21248,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               headers: res.headers,
             };
           } catch (err) {
-            clearTimeout(timeoutId);
-            if (err.name === "AbortError" || controller.signal.aborted) {
-              throw new Error("请求超时：已等待超过7分钟未收到模型回复，连接已切断，请检查网络或模型服务状态");
+            if (timeoutId) clearTimeout(timeoutId);
+            if ((err.name === "AbortError" || controller.signal.aborted) && !(options.signal && options.signal.aborted)) {
+              throw new Error("请求超时：已等待超过8分钟未收到模型数据，连接已切断，请检查网络或模型服务状态");
             }
             throw err;
+          } finally {
+            if (typeof releaseKeepAlive === "function") {
+              releaseKeepAlive();
+            }
           }
         }
         window.requestLlmapiWithFallback = requestLlmapiWithFallback;
@@ -21551,17 +21693,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             ).trim();
 
             const isStreamActive = !!apiCfg.streamEnabled;
+            const isTinyCheck = Boolean(parsedBody && parsedBody.max_tokens && parsedBody.max_tokens <= 10);
 
             if (!isClaudeOrLlmapi && protocol === "default") {
               const fetchStartT = Date.now();
-              const fallbackRes = await requestLlmapiWithFallback(urlStr, {
-                ...init,
+              let initForDefault = { ...init };
+              const callerPassedStreamFalse = parsedBody && parsedBody.stream === false;
+              if (urlStr.includes("/chat/completions") && parsedBody && Array.isArray(parsedBody.messages) && !isTinyCheck) {
+                const streamBody = { ...parsedBody, stream: true };
+                initForDefault.body = JSON.stringify(streamBody);
+                initForDefault.headers = {
+                  ...(init && init.headers ? init.headers : {}),
+                  Accept: "text/event-stream",
+                };
+              }
+              let fallbackRes = await requestLlmapiWithFallback(urlStr, {
+                ...initForDefault,
                 onStreamChunk: isStreamActive ? (chunk) => {
                   if (typeof window.onAiStreamTokenReceived === "function") {
                     window.onAiStreamTokenReceived(chunk);
                   }
                 } : undefined,
               });
+              if (!fallbackRes.ok && callerPassedStreamFalse && fallbackRes.status === 400) {
+                fallbackRes = await requestLlmapiWithFallback(urlStr, {
+                  ...init,
+                });
+              }
               const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
               try {
                 recordApiCallLog({
@@ -21610,33 +21768,49 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             let rawMessages = parsedBody.messages;
-            // 如果原请求因某原因构造了 Gemini contents 格式，则转回 OpenAI messages
+            // 如果原请求因某原因构造了 Gemini contents 格式，则转回 OpenAI messages（同时保留内联图片）
             if (!Array.isArray(rawMessages) && Array.isArray(parsedBody.contents)) {
               rawMessages = [];
               if (parsedBody.systemInstruction?.parts?.[0]?.text) {
                 rawMessages.push({ role: "system", content: parsedBody.systemInstruction.parts[0].text });
               }
               for (const c of parsedBody.contents) {
-                const text = Array.isArray(c.parts) ? c.parts.map(p => p.text || "").join("\n") : "";
-                rawMessages.push({
-                  role: c.role === "model" ? "assistant" : "user",
-                  content: text
-                });
+                const role = c.role === "model" ? "assistant" : "user";
+                if (Array.isArray(c.parts) && c.parts.some(p => p && p.inlineData && p.inlineData.data)) {
+                  const contentArr = [];
+                  for (const p of c.parts) {
+                    if (p.text) {
+                      contentArr.push({ type: "text", text: p.text });
+                    } else if (p.inlineData && p.inlineData.data) {
+                      const mime = p.inlineData.mimeType || "image/jpeg";
+                      contentArr.push({
+                        type: "image_url",
+                        image_url: { url: `data:${mime};base64,${p.inlineData.data}` },
+                      });
+                    }
+                  }
+                  rawMessages.push({ role, content: contentArr });
+                } else {
+                  const text = Array.isArray(c.parts) ? c.parts.map(p => p.text || "").join("\n") : "";
+                  rawMessages.push({ role, content: text });
+                }
               }
             }
 
             const normalizedMessages = normalizeMessagesForClaudeRelay(rawMessages);
+            const callerExplicitNonStream = parsedBody && parsedBody.stream === false;
 
             const openAiPayload = {
               model: modelId,
               messages: normalizedMessages,
               temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
-              stream: parsedBody.stream !== undefined ? parsedBody.stream : isStreamActive,
+              stream: !isTinyCheck ? true : (parsedBody.stream !== undefined ? parsedBody.stream : isStreamActive),
             };
 
             const fetchStartT = Date.now();
-            const res = await requestLlmapiWithFallback(targetUrl, {
+            let res = await requestLlmapiWithFallback(targetUrl, {
               method: "POST",
+              signal: init?.signal,
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${cleanKey}`,
@@ -21649,6 +21823,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               } : undefined,
             });
+            if (!res.ok && callerExplicitNonStream && res.status === 400) {
+              const nonStreamPayload = { ...openAiPayload, stream: false };
+              res = await requestLlmapiWithFallback(targetUrl, {
+                method: "POST",
+                signal: init?.signal,
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${cleanKey}`,
+                },
+                body: JSON.stringify(nonStreamPayload),
+              });
+            }
 
             if (!res.ok) {
               const errMsg = extractApiErrorMessage(res.status, res.text);
@@ -43367,6 +43553,137 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.buildProceduralMiniMapSvg = buildProceduralMiniMapSvg;
 
+        function salvageMiniMapSvgCode(rawText) {
+          if (!rawText || typeof rawText !== "string") return "";
+          let cleaned = rawText.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
+          const fullMatch = cleaned.match(/<svg[\s\S]*?<\/svg>/i);
+          if (fullMatch) {
+            let svg = fullMatch[0];
+            if (!svg.includes("viewBox=")) {
+              const wMatch = svg.match(/width=["']?(\d+)["']?/i);
+              const hMatch = svg.match(/height=["']?(\d+)["']?/i);
+              const w = wMatch ? wMatch[1] : 540;
+              const h = hMatch ? hMatch[1] : 400;
+              svg = svg.replace(/<svg\b/i, `<svg viewBox="0 0 ${w} ${h}"`);
+            }
+            return svg;
+          }
+
+          const startIdx = cleaned.search(/<svg\b/i);
+          if (startIdx === -1) return "";
+          let partial = cleaned.substring(startIdx);
+
+          const unclosedCommentIdx = partial.lastIndexOf("<!--");
+          if (unclosedCommentIdx !== -1 && partial.indexOf("-->", unclosedCommentIdx) === -1) {
+            partial = partial.substring(0, unclosedCommentIdx);
+          }
+
+          const lastGt = partial.lastIndexOf(">");
+          if (lastGt === -1) return "";
+          partial = partial.substring(0, lastGt + 1);
+
+          const unclosedStyleStart = partial.search(/<style\b[^>]*>(?![\s\S]*<\/style>)/i);
+          if (unclosedStyleStart !== -1) {
+            partial = partial.substring(0, unclosedStyleStart);
+          }
+
+          const stack = [];
+          const containerTags = new Set([
+            "defs",
+            "style",
+            "lineargradient",
+            "radialgradient",
+            "pattern",
+            "clippath",
+            "mask",
+            "filter",
+            "symbol",
+            "g",
+            "text",
+            "tspan",
+            "a",
+            "switch",
+            "foreignobject"
+          ]);
+          const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9:_-]*)\b[^>]*>/g;
+          let m;
+          while ((m = tagRegex.exec(partial)) !== null) {
+            const fullTag = m[0];
+            const tagName = m[1];
+            const lower = tagName.toLowerCase();
+            if (lower === "svg") continue;
+            if (fullTag.endsWith("/>")) continue;
+            if (fullTag.startsWith("</")) {
+              for (let i = stack.length - 1; i >= 0; i--) {
+                if (stack[i].toLowerCase() === lower) {
+                  stack.splice(i, 1);
+                  break;
+                }
+              }
+            } else if (containerTags.has(lower)) {
+              stack.push(tagName);
+            }
+          }
+
+          while (stack.length > 0) {
+            const unclosedTag = stack.pop();
+            partial += `</${unclosedTag}>`;
+          }
+          partial += "</svg>";
+
+          if (!partial.includes("viewBox=")) {
+            const wMatch = partial.match(/width=["']?(\d+)["']?/i);
+            const hMatch = partial.match(/height=["']?(\d+)["']?/i);
+            const w = wMatch ? wMatch[1] : 540;
+            const h = hMatch ? hMatch[1] : 400;
+            partial = partial.replace(/<svg\b/i, `<svg viewBox="0 0 ${w} ${h}"`);
+          }
+          return partial;
+        }
+        window.salvageMiniMapSvgCode = salvageMiniMapSvgCode;
+
+        async function extractAiTextFromResponse(resp, isGemini) {
+          const rawText = await resp.text();
+          if (!rawText) return "";
+          const trimmed = rawText.trim();
+          if (trimmed.startsWith("{")) {
+            try {
+              const respData = JSON.parse(trimmed);
+              if (isGemini && respData?.candidates?.[0]?.content?.parts) {
+                return respData.candidates[0].content.parts.map(p => p.text || "").join("");
+              }
+              return (
+                respData?.choices?.[0]?.message?.content ||
+                respData?.choices?.[0]?.delta?.content ||
+                respData?.content?.[0]?.text ||
+                respData?.candidates?.[0]?.content?.parts?.[0]?.text ||
+                ""
+              );
+            } catch (_) {}
+          }
+          if (trimmed.startsWith("data:") || trimmed.includes("\ndata:")) {
+            let acc = "";
+            const lines = trimmed.split("\n");
+            for (const line of lines) {
+              const t = line.trim();
+              if (!t.startsWith("data:")) continue;
+              const dStr = t.slice(5).trim();
+              if (dStr === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(dStr);
+                const chunk =
+                  parsed.choices?.[0]?.delta?.content ||
+                  parsed.choices?.[0]?.message?.content ||
+                  parsed.content?.[0]?.text ||
+                  "";
+                if (chunk) acc += chunk;
+              } catch (_) {}
+            }
+            if (acc) return acc;
+          }
+          return rawText;
+        }
+
         async function generateChatMiniMapSvg(styleName = "自适应", targetChatId = null, abortSignal = null) {
           const resolvedChatId = targetChatId || state.activeChatId;
           if (!resolvedChatId) return;
@@ -43504,7 +43821,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               let requestHeaders = isGemini
                 ? { "Content-Type": "application/json" }
-                : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}` };
+                : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, Accept: "text/event-stream" };
 
               const geminiImageParts = [];
               const openaiImageParts = [];
@@ -43549,7 +43866,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       { role: "user", content: openaiImageParts.length > 0 ? [{ type: "text", text: prompt }, ...openaiImageParts] : prompt }
                     ],
                     temperature: mapTemperature,
-                    stream: false
+                    stream: true
                   };
 
               const fetchOptions = {
@@ -43563,16 +43880,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const resp = await fetch(requestUrl, fetchOptions);
 
               if (resp.ok) {
-                const respData = await resp.json();
-                svgCode = isGemini
-                  ? respData?.candidates?.[0]?.content?.parts?.[0]?.text
-                  : respData?.choices?.[0]?.message?.content;
-
-                if (svgCode) {
-                  svgCode = svgCode.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
-                  const svgMatch = svgCode.match(/<svg[\s\S]*?<\/svg>/i);
-                  if (svgMatch) {
-                    svgCode = svgMatch[0];
+                const rawAiText = await extractAiTextFromResponse(resp, isGemini);
+                if (rawAiText) {
+                  const salvaged = salvageMiniMapSvgCode(rawAiText);
+                  if (salvaged) {
+                    svgCode = salvaged;
                     generationSucceeded = true;
                   }
                 }
@@ -43689,7 +44001,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           let requestHeaders = isGemini
             ? { "Content-Type": "application/json" }
-            : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}` };
+            : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, Accept: "text/event-stream" };
 
           let requestBody = isGemini
             ? {
@@ -43704,7 +44016,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   { role: "user", content: prompt }
                 ],
                 temperature: 0.3,
-                stream: false
+                stream: true
               };
 
           const resp = await fetch(requestUrl, {
@@ -43715,26 +44027,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           let newSvgCode = "";
           if (resp.ok) {
-            const respData = await resp.json();
-            newSvgCode = isGemini
-              ? respData?.candidates?.[0]?.content?.parts?.[0]?.text
-              : respData?.choices?.[0]?.message?.content;
-
-            if (newSvgCode) {
-              newSvgCode = newSvgCode.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
-              const svgMatch = newSvgCode.match(/<svg[\s\S]*?<\/svg>/i);
-              if (svgMatch) {
-                newSvgCode = svgMatch[0];
-              } else if (newSvgCode.includes("<svg") && !newSvgCode.includes("</svg>")) {
-                newSvgCode = newSvgCode + "</svg>";
-              }
-              if (!newSvgCode.includes("viewBox=")) {
-                const wMatch = newSvgCode.match(/width=["']?(\d+)["']?/i);
-                const hMatch = newSvgCode.match(/height=["']?(\d+)["']?/i);
-                const w = wMatch ? wMatch[1] : 540;
-                const h = hMatch ? hMatch[1] : 400;
-                newSvgCode = newSvgCode.replace(/<svg\b/i, `<svg viewBox="0 0 ${w} ${h}"`);
-              }
+            const rawAiText = await extractAiTextFromResponse(resp, isGemini);
+            if (rawAiText) {
+              newSvgCode = salvageMiniMapSvgCode(rawAiText);
             }
           } else {
             const errData = await resp.json().catch(() => null);
@@ -47124,37 +47419,44 @@ ${stickerContext || "无"}
             let fullReasoning = "";
             let buffer = "";
 
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              const chunk = decoder.decode(value, { stream: true });
-              rawText += chunk;
-              buffer += chunk;
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                rawText += chunk;
+                buffer += chunk;
 
-              const lines = buffer.split("\n");
-              buffer = lines.pop() || ""; // 留存最后一行可能不完整的数据
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || ""; // 留存最后一行可能不完整的数据
 
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith("data:")) continue;
-                const dataStr = trimmed.replace(/^data:\s*/, "");
-                if (dataStr === "[DONE]") continue;
-                try {
-                  const parsed = JSON.parse(dataStr);
-                  const delta = parsed.choices?.[0]?.delta?.content 
-                             || parsed.choices?.[0]?.message?.content 
-                             || parsed.content?.[0]?.text 
-                             || "";
-                  fullContent += delta;
-                  const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
-                                      || parsed.choices?.[0]?.delta?.reasoning 
-                                      || parsed.choices?.[0]?.delta?.thinking 
-                                      || "";
-                  if (deltaReasoning) fullReasoning += deltaReasoning;
-                } catch (e) {
-                  // 忽略单行半截 JSON 解析错误，继续拼接
+                for (const line of lines) {
+                  const trimmed = line.trim();
+                  if (!trimmed || !trimmed.startsWith("data:")) continue;
+                  const dataStr = trimmed.replace(/^data:\s*/, "");
+                  if (dataStr === "[DONE]") continue;
+                  try {
+                    const parsed = JSON.parse(dataStr);
+                    const delta = parsed.choices?.[0]?.delta?.content 
+                               || parsed.choices?.[0]?.message?.content 
+                               || parsed.content?.[0]?.text 
+                               || "";
+                    fullContent += delta;
+                    const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
+                                        || parsed.choices?.[0]?.delta?.reasoning 
+                                        || parsed.choices?.[0]?.delta?.thinking 
+                                        || "";
+                    if (deltaReasoning) fullReasoning += deltaReasoning;
+                  } catch (e) {
+                    // 忽略单行半截 JSON 解析错误，继续拼接
+                  }
                 }
               }
+            } catch (streamReadErr) {
+              if (!fullContent && !fullReasoning && !rawText.trim()) {
+                throw streamReadErr;
+              }
+              console.warn("流式读取中途截断，保留已接收到的内容:", streamReadErr);
             }
 
             // 处理最后残留的 buffer

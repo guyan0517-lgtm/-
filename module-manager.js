@@ -2308,7 +2308,8 @@
         ? { 'Content-Type': 'application/json' }
         : {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`
+            Authorization: `Bearer ${apiKey}`,
+            Accept: 'text/event-stream'
           };
 
       let requestBody;
@@ -2351,43 +2352,66 @@
             { role: 'user', content: userContent }
           ],
           temperature: parseFloat(temperature) || 0.2,
-          stream: false
+          stream: true
         };
       }
 
-      let lastError = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const response = await fetch(requestUrl, {
-            method: 'POST',
-            headers: requestHeaders,
-            body: JSON.stringify(requestBody)
-          });
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: requestHeaders,
+        body: JSON.stringify(requestBody)
+      });
 
-          if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(`API 响应错误 ${response.status}: ${errBody}`);
-          }
-
-          const resData = await response.json();
-          let resText = '';
-          if (isGemini) {
-            resText = resData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          } else {
-            resText = resData.choices?.[0]?.message?.content || '';
-          }
-          if (!resText || !resText.trim()) {
-            throw new Error('AI 未返回有效内容，请检查模型响应');
-          }
-          return resText;
-        } catch (e) {
-          lastError = e;
-          if (attempt === 0) {
-            await new Promise(r => setTimeout(r, 1200));
-          }
-        }
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`API 响应错误 ${response.status}: ${errBody}`);
       }
-      throw lastError || new Error('网络请求异常');
+
+      const rawText = await response.text();
+      let resText = '';
+      const trimmed = (rawText || '').trim();
+      if (trimmed.startsWith('{')) {
+        try {
+          const resData = JSON.parse(trimmed);
+          if (isGemini) {
+            const parts = resData.candidates?.[0]?.content?.parts;
+            resText = Array.isArray(parts) ? parts.map(p => p.text || '').join('') : (parts?.[0]?.text || '');
+          } else {
+            resText =
+              resData.choices?.[0]?.message?.content ||
+              resData.choices?.[0]?.delta?.content ||
+              resData.content?.[0]?.text ||
+              resData.candidates?.[0]?.content?.parts?.[0]?.text ||
+              '';
+          }
+        } catch (jsonErr) {
+          resText = rawText;
+        }
+      } else if (trimmed.startsWith('data:') || trimmed.includes('\ndata:')) {
+        const lines = trimmed.split('\n');
+        for (const line of lines) {
+          const t = line.trim();
+          if (!t.startsWith('data:')) continue;
+          const dStr = t.slice(5).trim();
+          if (dStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(dStr);
+            const delta =
+              parsed.choices?.[0]?.delta?.content ||
+              parsed.choices?.[0]?.message?.content ||
+              parsed.content?.[0]?.text ||
+              '';
+            if (delta) resText += delta;
+          } catch (_) {}
+        }
+      } else {
+        resText = rawText;
+      }
+
+      if (!resText || !resText.trim()) {
+        throw new Error('AI 未返回有效内容，请检查模型响应');
+      }
+      return resText;
     },
 
     async getLocationsByModuleId(moduleId) {
