@@ -24915,18 +24915,109 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return matches;
         }
 
+        function getTcBubbleRankMap() {
+          const rankMap = new Map();
+          let nextRank = 0;
+          const sections = ["tc-preset-header-input", "tc-preset-general-input"];
+          sections.forEach((taId) => {
+            const ta = document.getElementById(taId);
+            if (!ta || !ta._richEl) return;
+            const bubbles = ta._richEl.querySelectorAll(".tc-inline-mashu-bubble");
+            bubbles.forEach((b) => {
+              const rawTag = String(b.dataset.mashuTag || b.textContent || "").trim();
+              if (!rawTag) return;
+              const ent = findMatchingCustomTcEntry(rawTag);
+              if (ent && !rankMap.has(ent)) {
+                rankMap.set(ent, nextRank++);
+              }
+            });
+          });
+          return rankMap;
+        }
+
+        function syncTcEntriesOrderByBubbles() {
+          if (!Array.isArray(currentTcEditorEntries) || currentTcEditorEntries.length <= 1) {
+            return false;
+          }
+          const rankMap = getTcBubbleRankMap();
+          const validGroupIds = new Set(currentTcEditorGroups.map((g) => g && g.id).filter(Boolean));
+          const bucketIndices = new Map();
+          const bucketItems = new Map();
+
+          currentTcEditorEntries.forEach((ent, idx) => {
+            const bKey = (ent && ent.groupId && validGroupIds.has(ent.groupId)) ? ent.groupId : "__ungrouped__";
+            if (!bucketIndices.has(bKey)) {
+              bucketIndices.set(bKey, []);
+              bucketItems.set(bKey, []);
+            }
+            bucketIndices.get(bKey).push(idx);
+            bucketItems.get(bKey).push({ ent, origIdx: idx });
+          });
+
+          let changed = false;
+          const nextEntries = currentTcEditorEntries.slice();
+
+          bucketItems.forEach((items, bKey) => {
+            if (items.length <= 1) return;
+            const sorted = items.slice().sort((a, b) => {
+              const aHas = rankMap.has(a.ent);
+              const bHas = rankMap.has(b.ent);
+              if (aHas && bHas) {
+                return rankMap.get(a.ent) - rankMap.get(b.ent);
+              }
+              if (aHas && !bHas) return -1;
+              if (!aHas && bHas) return 1;
+              return a.origIdx - b.origIdx;
+            });
+            const indices = bucketIndices.get(bKey);
+            for (let i = 0; i < indices.length; i++) {
+              const targetIdx = indices[i];
+              if (nextEntries[targetIdx] !== sorted[i].ent) {
+                nextEntries[targetIdx] = sorted[i].ent;
+                changed = true;
+              }
+            }
+          });
+
+          if (changed) {
+            for (let i = 0; i < currentTcEditorEntries.length; i++) {
+              currentTcEditorEntries[i] = nextEntries[i];
+            }
+          }
+          return changed;
+        }
+
+        let isUpdatingTcLocateIcons = false;
+
         function updateTcEntryLocateIcons() {
+          if (isUpdatingTcLocateIcons) return;
           const entriesContainer = document.getElementById("tc-entries-list");
           if (!entriesContainer) return;
-          const locateBtns = entriesContainer.querySelectorAll(".tc-entry-locate-btn");
-          locateBtns.forEach((btn) => {
-            const entryIdx = Number(btn.dataset.entryIdx);
-            const ent = !isNaN(entryIdx) ? currentTcEditorEntries[entryIdx] : null;
-            const key = ent ? ent.key : "";
-            const found = key ? findMatchingBubblesForTcEntry(key) : [];
-            btn.style.display = "inline-flex";
-            btn.disabled = found.length === 0;
-          });
+
+          isUpdatingTcLocateIcons = true;
+          try {
+            let statusChanged = false;
+            const locateBtns = entriesContainer.querySelectorAll(".tc-entry-locate-btn");
+            locateBtns.forEach((btn) => {
+              const entryIdx = Number(btn.dataset.entryIdx);
+              const ent = !isNaN(entryIdx) ? currentTcEditorEntries[entryIdx] : null;
+              const key = ent ? ent.key : "";
+              const found = key ? findMatchingBubblesForTcEntry(key) : [];
+              const nextDisabled = found.length === 0;
+              btn.style.display = "inline-flex";
+              if (btn.disabled !== nextDisabled) {
+                btn.disabled = nextDisabled;
+                statusChanged = true;
+              }
+            });
+
+            const orderChanged = syncTcEntriesOrderByBubbles();
+            if ((orderChanged || statusChanged) && !entriesContainer.contains(document.activeElement)) {
+              renderTcEditorGroupsAndEntries(false);
+            }
+          } finally {
+            isUpdatingTcLocateIcons = false;
+          }
         }
 
         let lastLocatedBubbleCycleMap = {};
@@ -25118,6 +25209,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (shouldFlushFirst) {
             flushAllTcRichEditors();
           }
+          syncTcEntriesOrderByBubbles();
           renderTcEditorGroupsOnly();
 
           entriesContainer.innerHTML = "";
@@ -25127,6 +25219,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             emptyEl.textContent = "暂无条目";
             entriesContainer.appendChild(emptyEl);
           } else {
+            const rankMap = getTcBubbleRankMap();
             const buildEntryCard = (ent, idx, siblingList = null, siblingPos = -1) => {
               const card = document.createElement("div");
               card.className = "tc-entry-item-card";
@@ -25249,12 +25342,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 refreshStaticTcRichEditorsDisplay();
               };
 
+              const isLoadedInText = Boolean(siblingList && siblingList[siblingPos] && siblingList[siblingPos].isLoadedInText);
+
               const upBtn = document.createElement("button");
               upBtn.type = "button";
               upBtn.className = "tc-btn-action tc-entry-move-btn";
               upBtn.title = "上移";
               upBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
-              const canMoveUp = Array.isArray(siblingList) && siblingPos > 0;
+              const canMoveUp = !isLoadedInText && Array.isArray(siblingList) && siblingPos > 0 && !siblingList[siblingPos - 1].isLoadedInText;
               upBtn.disabled = !canMoveUp;
               upBtn.onclick = () => {
                 if (!canMoveUp) return;
@@ -25271,7 +25366,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               downBtn.className = "tc-btn-action tc-entry-move-btn";
               downBtn.title = "下移";
               downBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
-              const canMoveDown = Array.isArray(siblingList) && siblingPos >= 0 && siblingPos < siblingList.length - 1;
+              const canMoveDown = !isLoadedInText && Array.isArray(siblingList) && siblingPos >= 0 && siblingPos < siblingList.length - 1 && !siblingList[siblingPos + 1].isLoadedInText;
               downBtn.disabled = !canMoveDown;
               downBtn.onclick = () => {
                 if (!canMoveDown) return;
@@ -25348,7 +25443,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const groupEntries = [];
               currentTcEditorEntries.forEach((ent, idx) => {
                 if (ent.groupId === grp.id) {
-                  groupEntries.push({ ent, idx });
+                  groupEntries.push({ ent, idx, isLoadedInText: rankMap.has(ent) });
                 }
               });
 
@@ -25475,7 +25570,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const ungroupedEntries = [];
             currentTcEditorEntries.forEach((ent, idx) => {
               if (!ent.groupId || !validGroupIds.has(ent.groupId)) {
-                ungroupedEntries.push({ ent, idx });
+                ungroupedEntries.push({ ent, idx, isLoadedInText: rankMap.has(ent) });
               }
             });
             ungroupedEntries.forEach(({ ent, idx }, pos) => {
