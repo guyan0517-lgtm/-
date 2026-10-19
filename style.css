@@ -284,6 +284,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 .list-container {
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -23355,6 +23356,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 .moe-settings-body {
   padding: 20px !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   flex-grow: 1;
 }
 
