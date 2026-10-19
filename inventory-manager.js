@@ -1137,10 +1137,14 @@
         } catch (e) {}
       }
 
-      const useSubApi = Boolean(state.apiConfig && state.apiConfig.subApiUses && state.apiConfig.subApiUses.optimize && state.apiConfig.subApiKey);
-      let proxyUrl = useSubApi ? (state.apiConfig.subProxyUrl || "https://api.openai.com") : (state.apiConfig?.proxyUrl || "https://api.openai.com");
-      let apiKey = useSubApi ? state.apiConfig.subApiKey : (state.apiConfig?.apiKey || "");
-      let model = useSubApi ? (state.apiConfig.subModel || "gpt-4o-mini") : (state.apiConfig?.model || "gpt-4o-mini");
+      const apiCfg = typeof window.getEffectiveApiConfig === "function" ? window.getEffectiveApiConfig("optimize") : (state.apiConfig || {});
+      const useSubApi = Boolean(apiCfg.isSub);
+      let proxyUrl = apiCfg.proxyUrl || "https://api.openai.com";
+      let apiKey = apiCfg.apiKey || "";
+      let model = apiCfg.model || "gpt-4o-mini";
+      if (!apiKey) {
+        throw new Error(useSubApi ? "请先在API设置中配置副API Key" : "请先在API设置中配置主API Key");
+      }
 
       const prompt = `请为以下线索道具重新设计一个高度仿真、小巧精致、拟物的HTML片段：
 线索名称：${item.name}
@@ -2557,23 +2561,29 @@ HTML设计与排版核心规范：
     }
 
     try {
-      const useSubApi = Boolean(state.apiConfig.subApiUses && state.apiConfig.subApiUses.optimize && state.apiConfig.subApiKey);
-      let proxyUrl = useSubApi ? (state.apiConfig.subProxyUrl || "https://api.openai.com") : (state.apiConfig.proxyUrl || "https://api.openai.com");
-      let apiKey = useSubApi ? state.apiConfig.subApiKey : (state.apiConfig.apiKey || "");
-      let model = useSubApi ? (state.apiConfig.subModel || "gpt-4o-mini") : (state.apiConfig.model || "gpt-4o-mini");
+      const apiCfg = typeof window.getEffectiveApiConfig === "function" ? window.getEffectiveApiConfig("draw") : (state.apiConfig || {});
+      const useSubApi = Boolean(apiCfg.isSub);
+      let proxyUrl = apiCfg.proxyUrl || "https://api.openai.com";
+      let apiKey = apiCfg.apiKey || "";
+      let model = apiCfg.model || "gpt-4o-mini";
+      if (!apiKey) {
+        throw new Error(useSubApi ? "请先在API设置中配置副API Key" : "请先在API设置中配置主API Key");
+      }
 
       const systemPrompt = "你是一个二次元与跑团道具插画描述词专家。请根据提供的物品名称和简介，输出一段适合NovelAI或Stable Diffusion绘图的英文tag提示词。只输出纯英文tag以逗号分隔，不要输出任何解释、代码块或中文。必须包含物体主体、质感、光影、masterpiece, best quality。";
       const userContent = `物品名称：${itemName}，物品作用简介：${itemDesc}`;
 
       let response = null;
-      let isGemini = proxyUrl === (typeof GEMINI_API_URL !== "undefined" ? GEMINI_API_URL : "");
+      let isGemini = proxyUrl === (typeof GEMINI_API_URL !== "undefined" ? GEMINI_API_URL : "") || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
       if (isGemini && typeof toGeminiRequestData === "function") {
         let geminiConfig = toGeminiRequestData(model, apiKey, systemPrompt, [{ role: "user", content: userContent }], isGemini);
         if (geminiConfig) {
           response = await fetch(geminiConfig.url, geminiConfig.data);
         }
       } else {
-        response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+        const cleanedProxy = proxyUrl.replace(/\/+$/, "");
+        const reqUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : (cleanedProxy.includes("/chat/completions") ? cleanedProxy : `${cleanedProxy}/v1/chat/completions`);
+        response = await fetch(reqUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -2761,10 +2771,14 @@ HTML设计与排版核心规范：
         } catch (e) {}
       }
 
-      const useSubApi = Boolean(state.apiConfig.subApiUses && state.apiConfig.subApiUses.optimize && state.apiConfig.subApiKey);
-      let proxyUrl = useSubApi ? (state.apiConfig.subProxyUrl || "https://api.openai.com") : (state.apiConfig.proxyUrl || "https://api.openai.com");
-      let apiKey = useSubApi ? state.apiConfig.subApiKey : (state.apiConfig.apiKey || "");
-      let model = useSubApi ? (state.apiConfig.subModel || "gpt-4o-mini") : (state.apiConfig.model || "gpt-4o-mini");
+      const apiCfg = typeof window.getEffectiveApiConfig === "function" ? window.getEffectiveApiConfig("optimize") : (state.apiConfig || {});
+      const useSubApi = Boolean(apiCfg.isSub);
+      let proxyUrl = apiCfg.proxyUrl || "https://api.openai.com";
+      let apiKey = apiCfg.apiKey || "";
+      let model = apiCfg.model || "gpt-4o-mini";
+      if (!apiKey) {
+        throw new Error(useSubApi ? "请先在API设置中配置副API Key" : "请先在API设置中配置主API Key");
+      }
 
       const systemPrompt = `你是一个跑团与推理记录专家。请将用户提供的对话文本提取整理为一个精致的线索类物品，返回一个JSON对象。
 要求格式：
@@ -2785,14 +2799,16 @@ HTML设计与排版核心规范：
       const userText = `${moduleContext ? moduleContext + "\n" : ""}待整理消息文本：\n${rawContent}`;
 
       let response = null;
-      let isGemini = proxyUrl === (typeof GEMINI_API_URL !== "undefined" ? GEMINI_API_URL : "");
+      let isGemini = proxyUrl === (typeof GEMINI_API_URL !== "undefined" ? GEMINI_API_URL : "") || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
       if (isGemini && typeof toGeminiRequestData === "function") {
         let geminiConfig = toGeminiRequestData(model, apiKey, systemPrompt, [{ role: "user", content: userText }], isGemini);
         if (geminiConfig) {
           response = await fetch(geminiConfig.url, geminiConfig.data);
         }
       } else {
-        response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+        const cleanedProxy = proxyUrl.replace(/\/+$/, "");
+        const reqUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : (cleanedProxy.includes("/chat/completions") ? cleanedProxy : `${cleanedProxy}/v1/chat/completions`);
+        response = await fetch(reqUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

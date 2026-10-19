@@ -21660,21 +21660,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             // 判断是主 API 还是副 API
-            const mainProxy = String(apiCfg.proxyUrl || "").trim();
-            const subProxy = String(apiCfg.subProxyUrl || "").trim();
+            const mainProxy = String(apiCfg.proxyUrl || document.getElementById("proxy-url")?.value || "").trim().replace(/\/+$/, "");
+            const subProxy = String(apiCfg.subProxyUrl || document.getElementById("sub-proxy-url")?.value || "").trim().replace(/\/+$/, "");
+            const mainKey = String(apiCfg.apiKey || document.getElementById("api-key")?.value || "").trim();
+            const subKey = String(apiCfg.subApiKey || document.getElementById("sub-api-key")?.value || "").trim();
+            const mainModel = String(apiCfg.model || document.getElementById("model-select")?.value || "").trim();
+            const subModel = String(apiCfg.subModel || document.getElementById("sub-model-select")?.value || "").trim();
             let isSubCall = false;
-            if (subProxy && subProxy !== mainProxy && urlStr.startsWith(subProxy)) {
+            if (window.__subApiCallWindowUntil && Date.now() <= window.__subApiCallWindowUntil) {
               isSubCall = true;
+              window.__subApiCallWindowUntil = 0;
+            } else if (subProxy && subProxy !== mainProxy && urlStr.startsWith(subProxy)) {
+              isSubCall = true;
+            } else if (subKey && subKey !== mainKey && init && init.headers) {
+              const authH = typeof init.headers.get === "function"
+                ? (init.headers.get("Authorization") || init.headers.get("authorization") || "")
+                : (init.headers.Authorization || init.headers.authorization || "");
+              if (authH && authH.includes(subKey)) {
+                isSubCall = true;
+              }
             }
-
-            const protocol = isSubCall
-              ? (apiCfg.subApiProtocol || "default")
-              : (apiCfg.apiProtocol || "default");
-
-            const isClaudeOrLlmapi =
-              protocol === "claude" ||
-              /llmapi/i.test(urlStr) ||
-              /llmapi/i.test(isSubCall ? subProxy : mainProxy);
 
             // 提前解析请求体与模型名称，供控制台日志与请求转发层安全访问
             let parsedBody = {};
@@ -21683,6 +21688,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 parsedBody = JSON.parse(init.body);
               } catch (_) {}
             }
+
+            if (!isSubCall && subModel && subModel !== mainModel && parsedBody && parsedBody.model === subModel) {
+              isSubCall = true;
+            }
+
+            const protocol = isSubCall
+              ? (apiCfg.subApiProtocol || document.getElementById("sub-api-protocol-select")?.value || "default")
+              : (apiCfg.apiProtocol || document.getElementById("api-protocol-select")?.value || "default");
+
+            const isClaudeOrLlmapi =
+              protocol === "claude" ||
+              /llmapi/i.test(urlStr) ||
+              /llmapi/i.test(isSubCall ? subProxy : mainProxy);
 
             const domModel = document.getElementById(isSubCall ? "sub-model-select" : "model-select")?.value?.trim() || "";
             const modelId = String(
@@ -32788,23 +32806,44 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function getEffectiveApiConfig(purpose) {
           const cfg = (state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
           const uses = cfg.subApiUses || {};
-          // 仅当传入了 purpose、且在副 API 用途列表中勾选了该项时，切实切换并调用副 API
-          if (purpose && uses[purpose]) {
-            const effectiveSubKey = (cfg.subApiKey && cfg.subApiKey.trim()) || (cfg.apiKey && cfg.apiKey.trim()) || "";
+          const domIdMap = {
+            summary: "sub-api-use-summary",
+            fanfic: "sub-api-use-fanfic",
+            module: "sub-api-use-module",
+            optimize: "sub-api-use-optimize",
+            draw: "sub-api-use-draw",
+            forcedImage: "sub-api-use-forced-image",
+            map: "sub-api-use-map",
+          };
+          const domCheckbox = purpose && domIdMap[purpose] ? document.getElementById(domIdMap[purpose]) : null;
+          const isPurposeSubChecked = Boolean(purpose && ((domCheckbox && domCheckbox.checked) || uses[purpose]));
+
+          // 仅当传入了 purpose、且在副 API 用途列表中勾选了该项时，严格调用副 API，绝不回退主 API
+          if (isPurposeSubChecked) {
+            const domSubProxy = document.getElementById("sub-proxy-url")?.value?.trim() || "";
+            const domSubKey = document.getElementById("sub-api-key")?.value?.trim() || "";
+            const domSubModel = document.getElementById("sub-model-select")?.value?.trim() || "";
+            const domSubTemp = document.getElementById("sub-temperature-slider")?.value;
+            const domSubProto = document.getElementById("sub-api-protocol-select")?.value;
+            window.__subApiCallWindowUntil = Date.now() + 500;
             return {
-              proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || cfg.proxyUrl || "https://api.openai.com",
-              apiKey: (cfg.subApiKey && cfg.subApiKey.trim()) ? cfg.subApiKey.trim() : effectiveSubKey,
-              model: (cfg.subModel && cfg.subModel.trim()) || cfg.model || "gpt-4",
-              temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (parseFloat(cfg.temperature) || 0.8),
-              apiProtocol: cfg.subApiProtocol || "default",
+              proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || domSubProxy || "https://api.openai.com",
+              apiKey: (cfg.subApiKey && cfg.subApiKey.trim()) || domSubKey || "",
+              model: (cfg.subModel && cfg.subModel.trim()) || domSubModel || "gpt-4o-mini",
+              temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (domSubTemp ? parseFloat(domSubTemp) : 0.8),
+              apiProtocol: cfg.subApiProtocol || domSubProto || "default",
               isSub: true,
             };
           }
-          // 默认全局所有功能、小窗、模块统一调用主 API
+          window.__subApiCallWindowUntil = 0;
+          const domMainProxy = document.getElementById("proxy-url")?.value?.trim() || "";
+          const domMainKey = document.getElementById("api-key")?.value?.trim() || "";
+          const domMainModel = document.getElementById("model-select")?.value?.trim() || "";
+          // 未勾选副 API 时严格调用主 API
           return {
-            proxyUrl: cfg.proxyUrl || "https://api.openai.com",
-            apiKey: cfg.apiKey || "",
-            model: cfg.model || "gpt-4",
+            proxyUrl: (cfg.proxyUrl && cfg.proxyUrl.trim()) || domMainProxy || "https://api.openai.com",
+            apiKey: (cfg.apiKey && cfg.apiKey.trim()) || domMainKey || "",
+            model: (cfg.model && cfg.model.trim()) || domMainModel || "gpt-4",
             temperature: cfg.temperature !== undefined ? parseFloat(cfg.temperature) : 0.8,
             apiProtocol: cfg.apiProtocol || "default",
             isSub: false,
@@ -40248,10 +40287,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         async function generateContextMapFromAI(chat) {
           const apiConfig = (typeof getEffectiveApiConfig === "function")
-            ? getEffectiveApiConfig("character")
+            ? getEffectiveApiConfig("map")
             : ((state && state.apiConfig) || (window.state && window.state.apiConfig) || {});
 
           const { proxyUrl, apiKey, model } = apiConfig;
+          if (!apiKey || !apiKey.trim()) {
+            throw new Error(apiConfig.isSub ? "请先在API设置中配置有效的副API Key" : "请先在API设置中配置有效的主API Key");
+          }
 
           const history = chat.history || [];
           const recentMsgs = history.slice(-35).map((m) => {
@@ -40700,6 +40742,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const apiCfg = (typeof getEffectiveApiConfig === "function") ? getEffectiveApiConfig("draw") : (state.apiConfig || {});
               const { proxyUrl, apiKey, model } = apiCfg;
+              if (!apiKey || !apiKey.trim()) {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", apiCfg.isSub ? "请先在API设置中配置副API Key" : "请先在API设置中配置主API Key");
+                }
+                return;
+              }
               const isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
               const effectiveKey = typeof getRandomValue === "function" ? getRandomValue(apiKey) : (apiKey ? apiKey.split(",")[0].trim() : "");
 
@@ -43941,7 +43989,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let generationSucceeded = false;
           let generationError = null;
 
-          if (apiKey && apiKey.trim() !== "") {
+          if (!apiKey || apiKey.trim() === "") {
+            generationError = new Error(apiConfig.isSub ? "请先在API设置中配置有效的副API Key" : "请先在API设置中配置有效的主API Key");
+          } else {
             try {
               let isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
               let cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
@@ -44120,7 +44170,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const { proxyUrl, apiKey, model } = apiConfig;
 
           if (!apiKey || apiKey.trim() === "") {
-            throw new Error("请先在API设置中配置有效的 API Key");
+            throw new Error(apiConfig.isSub ? "请先在API设置中配置有效的副API Key" : "请先在API设置中配置有效的主API Key");
           }
 
           let isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
@@ -55572,13 +55622,14 @@ ${stickerContext || "无"}
             return;
           }
 
-          const useSubApi = Boolean(state.apiConfig.subApiUses && state.apiConfig.subApiUses.optimize && state.apiConfig.subApiKey);
-          let proxyUrl = useSubApi ? (state.apiConfig.subProxyUrl || "https://api.openai.com") : (state.apiConfig.proxyUrl || "https://api.openai.com");
-          let apiKey = useSubApi ? state.apiConfig.subApiKey : (state.apiConfig.apiKey || "");
-          let model = useSubApi ? (state.apiConfig.subModel || "gpt-4o-mini") : (state.apiConfig.model || "gpt-4o-mini");
+          const apiCfg = typeof getEffectiveApiConfig === "function" ? getEffectiveApiConfig("optimize") : (state.apiConfig || {});
+          const useSubApi = Boolean(apiCfg.isSub);
+          let proxyUrl = apiCfg.proxyUrl || "https://api.openai.com";
+          let apiKey = apiCfg.apiKey || "";
+          let model = apiCfg.model || "gpt-4o-mini";
 
           if (!apiKey) {
-            await showCustomAlert("提示", useSubApi ? "请先在API设置中配置副API Key。" : "请先在API设置中配置 API Key。");
+            await showCustomAlert("提示", useSubApi ? "请先在API设置中配置副API Key。" : "请先在API设置中配置主API Key。");
             return;
           }
 
@@ -55594,7 +55645,7 @@ ${stickerContext || "无"}
               { role: "user", content: rawContent },
             ];
 
-            let isGemini = proxyUrl === GEMINI_API_URL;
+            let isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
             let response = null;
             if (isGemini) {
               let geminiConfig = typeof toGeminiRequestData === "function"
@@ -55604,7 +55655,9 @@ ${stickerContext || "无"}
                 response = await fetch(geminiConfig.url, geminiConfig.data);
               }
             } else {
-              response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+              const cleanedProxy = proxyUrl.replace(/\/+$/, "");
+              const reqUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : (cleanedProxy.includes("/chat/completions") ? cleanedProxy : `${cleanedProxy}/v1/chat/completions`);
+              response = await fetch(reqUrl, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -68802,10 +68855,11 @@ ${stickerContext || "无"}
          */
         async function generateSummary(chatId, specificMessages = null) {
           const chat = state.chats[chatId];
-          const { proxyUrl, apiKey, model } = state.apiConfig;
+          const apiCfg = typeof getEffectiveApiConfig === "function" ? getEffectiveApiConfig("summary") : state.apiConfig;
+          const { proxyUrl, apiKey, model } = apiCfg;
 
           if (!proxyUrl || !apiKey || !model) {
-            throw new Error("API未配置，无法生成总结。");
+            throw new Error(apiCfg.isSub ? "副API未配置，无法生成总结。" : "主API未配置，无法生成总结。");
           }
 
           const summarySettings = chat.settings.summary;
@@ -69409,10 +69463,12 @@ ${stickerContext || "无"}
             return;
           }
 
-          const { proxyUrl, apiKey, model } = state.apiConfig;
+          const apiCfg = typeof getEffectiveApiConfig === "function" ? getEffectiveApiConfig("summary") : state.apiConfig;
+          const { proxyUrl, apiKey, model } = apiCfg;
           if (!proxyUrl || !apiKey || !model) {
-            if (typeof showCustomAlert === "function") await showCustomAlert("提示", "API未配置无法进行总结");
-            else alert("API未配置无法进行总结");
+            const msg = apiCfg.isSub ? "副API未配置无法进行总结" : "主API未配置无法进行总结";
+            if (typeof showCustomAlert === "function") await showCustomAlert("提示", msg);
+            else alert(msg);
             return;
           }
 
@@ -70678,8 +70734,9 @@ ${stickerContext || "无"}
             const { proxyUrl, apiKey, model, temperature } = apiCfg;
 
             if (!apiKey) {
-              if (typeof showCustomAlert === "function") await showCustomAlert("提示", "未配置 API Key，请先前往设置填写。");
-              else alert("未配置 API Key，请先前往设置填写。");
+              const keyMsg = apiCfg.isSub ? "未配置副 API Key，请先前往设置填写。" : "未配置主 API Key，请先前往设置填写。";
+              if (typeof showCustomAlert === "function") await showCustomAlert("提示", keyMsg);
+              else alert(keyMsg);
               return;
             }
 
@@ -70689,7 +70746,9 @@ ${stickerContext || "无"}
               const geminiConfig = toGeminiRequestData(model, apiKey, systemPrompt, messagesForApi, isGemini, temperature);
               response = await fetch(geminiConfig.url, geminiConfig.data);
             } else {
-              response = await fetch(`${proxyUrl}/v1/chat/completions`, {
+              const cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
+              const reqUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : (cleanedProxy.includes("/chat/completions") ? cleanedProxy : `${cleanedProxy}/v1/chat/completions`);
+              response = await fetch(reqUrl, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -71237,10 +71296,10 @@ ${stickerContext || "无"}
             const domMainProto = document.getElementById("api-protocol-select")?.value;
 
             const subTargetCfg = {
-              proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || domSubProxy || (cfg.proxyUrl && cfg.proxyUrl.trim()) || "https://api.openai.com",
+              proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || domSubProxy || "https://api.openai.com",
               apiKey: (cfg.subApiKey && cfg.subApiKey.trim()) || domSubKey || "",
-              model: (cfg.subModel && cfg.subModel.trim()) || domSubModel || cfg.model || "gpt-4o",
-              temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (domSubTemp ? parseFloat(domSubTemp) : (parseFloat(cfg.temperature) || 0.8)),
+              model: (cfg.subModel && cfg.subModel.trim()) || domSubModel || "gpt-4o-mini",
+              temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (domSubTemp ? parseFloat(domSubTemp) : 0.8),
               apiProtocol: cfg.subApiProtocol || domSubProto || "default",
               isSub: true,
             };
@@ -71254,23 +71313,15 @@ ${stickerContext || "无"}
               isSub: false,
             };
 
-            const candidateConfigs = [];
-            if (isForcedImageSub) {
-              if (subTargetCfg.apiKey) candidateConfigs.push(subTargetCfg);
-              if (mainTargetCfg.apiKey) candidateConfigs.push(mainTargetCfg);
-            } else {
-              if (mainTargetCfg.apiKey) candidateConfigs.push(mainTargetCfg);
-              if (subTargetCfg.apiKey) candidateConfigs.push(subTargetCfg);
-            }
-            if (candidateConfigs.length === 0) {
-              candidateConfigs.push(isForcedImageSub ? subTargetCfg : mainTargetCfg);
-            }
+            // 严格按照勾选状态只调用对应API，失败绝不回退到另一个API
+            const candidateConfigs = [isForcedImageSub ? subTargetCfg : mainTargetCfg];
 
             async function requestKeeperLlm(targetCfg) {
               const { proxyUrl, apiKey, model, temperature } = targetCfg;
               if (!apiKey) {
                 throw new Error(targetCfg.isSub ? "未配置副 API Key，请先在设置中填写密钥" : "未配置主 API Key，无法执行生图");
               }
+              window.__subApiCallWindowUntil = targetCfg.isSub ? (Date.now() + 500) : 0;
               const targetUrl = formatChatCompletionUrl(proxyUrl);
               const isGemini = targetUrl === GEMINI_API_URL || targetUrl.includes("generativelanguage.googleapis.com");
 

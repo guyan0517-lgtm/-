@@ -287,16 +287,19 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * 辅助函数：统一 AI 接口调用与容错
    */
-  async function callAiForForum(prompt, systemInstruction = "") {
-    const { proxyUrl, apiKey, model } = state.apiConfig;
+  async function callAiForForum(prompt, systemInstruction = "", purpose = "") {
+    const apiCfg = (purpose && typeof window.getEffectiveApiConfig === "function")
+      ? window.getEffectiveApiConfig(purpose)
+      : state.apiConfig;
+    const { proxyUrl, apiKey, model } = apiCfg;
     if (!proxyUrl || !apiKey || !model) {
-      throw new Error("请先配置API！");
+      throw new Error(apiCfg.isSub ? "请先配置副API！" : "请先配置主API！");
     }
 
     const isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
     const cleanedProxy = (proxyUrl || "https://api.openai.com").trim().replace(/\/+$/, "");
     const effectiveKey = (typeof getRandomValue === "function" ? getRandomValue(apiKey) : (apiKey.includes(",") ? apiKey.split(",")[0].trim() : apiKey.trim())).trim();
-    const tempVal = parseFloat(state.apiConfig.temperature);
+    const tempVal = parseFloat(apiCfg.temperature !== undefined ? apiCfg.temperature : state.apiConfig.temperature);
     const safeTemp = (!isNaN(tempVal) && tempVal >= 0 && tempVal <= 2) ? tempVal : 0.7;
     const cleanModel = (model || "gemini-1.5-flash").replace(/^models\//i, "").trim();
 
@@ -1483,9 +1486,10 @@ ${worldviewContext}
       return;
     }
 
-    const { proxyUrl, apiKey, model } = state.apiConfig;
+    const apiCfg = typeof window.getEffectiveApiConfig === "function" ? window.getEffectiveApiConfig("fanfic") : state.apiConfig;
+    const { proxyUrl, apiKey, model } = apiCfg;
     if (!proxyUrl || !apiKey || !model) {
-      alert("请先配置API！");
+      alert(apiCfg.isSub ? "请先配置副API！" : "请先配置主API！");
       return;
     }
 
@@ -1544,9 +1548,10 @@ ${worldviewContext}
       `为【${char1Name}x${char2Name}】创作长篇连载的第一章...`,
     );
 
-    const { proxyUrl, apiKey, model } = state.apiConfig;
+    const apiCfg = typeof window.getEffectiveApiConfig === "function" ? window.getEffectiveApiConfig("fanfic") : state.apiConfig;
+    const { proxyUrl, apiKey, model } = apiCfg;
     if (!proxyUrl || !apiKey || !model) {
-      alert("请先配置API！");
+      alert(apiCfg.isSub ? "请先配置副API！" : "请先配置主API！");
       return;
     }
 
@@ -1606,7 +1611,7 @@ ${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心�
 请严格只返回上述纯 JSON 对象。`;
 
     try {
-      const rawContent = await callAiForForum(prompt);
+      const rawContent = await callAiForForum(prompt, "", "fanfic");
       let parsed;
       try {
         parsed = extractAndParseJson(rawContent);
@@ -1713,7 +1718,8 @@ ${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心�
   }
 
   async function generateSeriesShareSummary(series, chapters, latestChapter) {
-    const { proxyUrl, apiKey, model } = state.apiConfig;
+    const apiCfg = typeof window.getEffectiveApiConfig === "function" ? window.getEffectiveApiConfig("fanfic") : state.apiConfig;
+    const { proxyUrl, apiKey, model } = apiCfg;
     if (!proxyUrl || !apiKey || !model) {
       return {
         summary: series.worldview || "这是一部正在连载的故事。",
@@ -2938,10 +2944,11 @@ ${JSON.stringify(publicFigures, null, 2)}
       return;
     }
 
-    const { proxyUrl, apiKey, model } = state.apiConfig;
+    const apiCfg = typeof window.getEffectiveApiConfig === "function" ? window.getEffectiveApiConfig("fanfic") : state.apiConfig;
+    const { proxyUrl, apiKey, model } = apiCfg;
     if (!proxyUrl || !apiKey || !model) {
       ongoingSeriesTasks.delete(seriesId);
-      await showCustomAlert("提示", "请先在API设置中配置接口与密钥！");
+      await showCustomAlert("提示", apiCfg.isSub ? "请先在API设置中配置副API接口与密钥！" : "请先在API设置中配置主API接口与密钥！");
       return;
     }
 
@@ -3028,7 +3035,7 @@ ${customPromptRequirement}
 请严格只返回纯 JSON 对象。`;
 
     try {
-      const rawContent = await callAiForForum(prompt);
+      const rawContent = await callAiForForum(prompt, "", "fanfic");
       let parsed;
       try {
         parsed = extractAndParseJson(rawContent);

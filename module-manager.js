@@ -2288,14 +2288,14 @@
             ? window.getEffectiveApiConfig('module')
             : (stateObj.apiConfig || {}));
 
-      const proxyUrl = apiCfg.proxyUrl || stateObj.apiConfig?.proxyUrl || "https://api.openai.com";
-      const apiKey = apiCfg.apiKey || stateObj.apiConfig?.apiKey || "";
-      const model = apiCfg.model || stateObj.apiConfig?.model || "gpt-3.5-turbo";
+      const proxyUrl = apiCfg.proxyUrl || (apiCfg.isSub ? "https://api.openai.com" : (stateObj.apiConfig?.proxyUrl || "https://api.openai.com"));
+      const apiKey = apiCfg.apiKey || (apiCfg.isSub ? "" : (stateObj.apiConfig?.apiKey || ""));
+      const model = apiCfg.model || (apiCfg.isSub ? "gpt-4o-mini" : (stateObj.apiConfig?.model || "gpt-3.5-turbo"));
       const temperature = apiCfg.temperature !== undefined ? apiCfg.temperature : (stateObj.apiConfig?.temperature || 0.2);
 
       if (!apiKey) {
         console.warn('[模组] 未配置 API Key');
-        throw new Error('未检测到 API Key，请先在API设置中配置主 API 密钥与模型');
+        throw new Error(apiCfg.isSub ? '未检测到副 API Key，请先在API设置中配置副 API 密钥与模型' : '未检测到主 API Key，请先在API设置中配置主 API 密钥与模型');
       }
       const GEMINI_URL = global.GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models';
       const isGemini = proxyUrl === GEMINI_URL;
