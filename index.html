@@ -3448,32 +3448,32 @@
           ></div>
         </div>
 
-        <!-- 单线弹窗 -->
+        <!-- 小群弹窗 -->
         <div class="modal" id="solo-line-modal" style="display: none; z-index: 10000;">
           <div class="modal-content" style="width: 340px; max-width: 92vw; max-height: 85vh; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 14px; padding: 0; overflow: hidden; border: 1px solid var(--border-color);">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; background: var(--secondary-bg);">
-              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">单线</span>
+              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">小群</span>
               <button type="button" onclick="if(typeof window.closeSoloLineModal==='function')window.closeSoloLineModal();" style="background: transparent; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
             </div>
             <div style="flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
-              <!-- 主线 / 单线快速切换 -->
+              <!-- 大群 / 小群快速切换 -->
               <div style="display: flex; gap: 8px; align-items: center;">
-                <button type="button" id="solo-modal-mode-main-btn" class="moe-btn" onclick="if(typeof window.selectSoloModalTab==='function')window.selectSoloModalTab('main');" style="flex: 1; height: 32px; font-size: 12.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">主线</button>
-                <button type="button" id="solo-modal-mode-solo-btn" class="moe-btn" onclick="if(typeof window.selectSoloModalTab==='function')window.selectSoloModalTab('solo');" style="flex: 1; height: 32px; font-size: 12.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">单线</button>
+                <button type="button" id="solo-modal-mode-main-btn" class="moe-btn" onclick="if(typeof window.selectSoloModalTab==='function')window.selectSoloModalTab('main');" style="flex: 1; height: 32px; font-size: 12.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">大群</button>
+                <button type="button" id="solo-modal-mode-solo-btn" class="moe-btn" onclick="if(typeof window.selectSoloModalTab==='function')window.selectSoloModalTab('solo');" style="flex: 1; height: 32px; font-size: 12.5px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary);">小群</button>
               </div>
 
-              <!-- 单线列表与玩家设置（仅在选中“单线”标签时显示，主线标签下隐藏） -->
+              <!-- 小群列表与玩家设置 -->
               <div id="solo-threads-section" style="display: none; flex-direction: column; gap: 10px;">
                 <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 0;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0;">单线列表</label>
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0;">小群列表</label>
                     <button type="button" class="moe-btn" onclick="if(typeof window.createNewSoloThread==='function')window.createNewSoloThread();" style="height: 24px; padding: 0 8px; font-size: 11px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px;">新建</button>
                   </div>
                   <div id="solo-threads-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
                 </div>
 
                 <div class="form-group" id="solo-thread-players-section" style="display: none; flex-direction: column; gap: 6px; margin-bottom: 0;">
-                  <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0;">单线玩家</label>
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0;">小群玩家</label>
                   <div id="solo-thread-players-list" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
                 </div>
               </div>
@@ -39147,7 +39147,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             senderName = chat.isGroup ? chat.settings.myNickname || "我" : "我";
           } else {
             // assistant
-            senderName = msg.senderName || chat.name;
+            senderName = msg.senderName || (chat.isGroup ? (chat.mainGroupName || chat.name) : chat.name);
           }
 
           let contentText = "";
@@ -39171,7 +39171,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           // added by lrq 251029 在每条消息记录前添加发送日期时间
-          const isCog = typeof state !== "undefined" && state.apiConfig ? state.apiConfig.realTimeCognitionEnabled !== false : true;
+          const isPeerGrpChat = Boolean(chat && chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+          const isCog = typeof state !== "undefined" && state.apiConfig
+            ? (isPeerGrpChat ? state.apiConfig.realTimeCognitionEnabled === true : state.apiConfig.realTimeCognitionEnabled !== false)
+            : !isPeerGrpChat;
           if (!isCog) {
             return `${senderName}: ${contentText}`;
           }
@@ -45824,7 +45827,10 @@ ${recentHistoryText}
               }
             }
 
-            const isCognitionEnabled = state.apiConfig?.realTimeCognitionEnabled !== false;
+            const isPeerGrpForCog = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+            const isCognitionEnabled = isPeerGrpForCog
+              ? (state.apiConfig?.realTimeCognitionEnabled === true)
+              : (state.apiConfig?.realTimeCognitionEnabled !== false);
             let currentTime = "";
             let timeContext = "";
             if (isCognitionEnabled) {
@@ -46019,7 +46025,7 @@ ${recentHistoryText}
                     const formattedSolo = recentSolo
                       .map((msg) => `  - ${formatMessageForContext(msg, chat)}`)
                       .join("\n");
-                    return `==================== 【单线「${matchedSolo.name || "单线"}」上下文开始】 ====================\n${formattedSolo}\n==================== 【单线「${matchedSolo.name || "单线"}」上下文结束】 ====================`;
+                    return `==================== 【小群「${matchedSolo.name || "小群"}」上下文开始】 ====================\n${formattedSolo}\n==================== 【小群「${matchedSolo.name || "小群"}」上下文结束】 ====================`;
                   }
 
                   const linkedChat = state.chats[link.chatId];
@@ -71863,7 +71869,7 @@ ${stickerContext || "无"}
 
                 const isSoloSummary = Boolean(summary.soloThreadId);
                 const canAccessSolo = !isSoloSummary || (typeof window.isUserInSoloSummary === "function" ? window.isUserInSoloSummary(summary, chat) : true);
-                const safeSoloName = String(summary.soloThreadName || "单线")
+                const safeSoloName = String(summary.soloThreadName || "小群")
                   .replace(/&/g, "&amp;")
                   .replace(/</g, "&lt;")
                   .replace(/>/g, "&gt;");
@@ -87328,6 +87334,12 @@ ${stickerContext || "无"}
               }
 
               // --- 加载表单数据 ---
+              const isPeerGrpMemUi = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+              const isInSoloModeUi = Boolean(isPeerGrpMemUi && chat.activeLineMode === "solo");
+              const chatNameLabelEl = document.getElementById("chat-name-label");
+              if (chatNameLabelEl) {
+                chatNameLabelEl.textContent = isInSoloModeUi ? "小群名" : (chat.isGroup ? "群名" : "备注名");
+              }
               document.getElementById("chat-name-input").value = typeof window.getEffectiveChatDisplayTitle === "function"
                 ? window.getEffectiveChatDisplayTitle(chat)
                 : chat.name;
@@ -87386,14 +87398,14 @@ ${stickerContext || "无"}
               );
               memoryLinkCheckboxesContainer.innerHTML = ""; // 清空旧选项
 
-              const isPeerGrpMemUi = Boolean(chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
               const depthRowEl = document.getElementById("link-memory-depth-row");
+              const mainGroupDisplayName = chat.mainGroupName || chat.name || "大群";
               if (isPeerGrpMemUi && chat.activeLineMode === "solo") {
                 if (depthRowEl) depthRowEl.style.display = "none";
                 const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
                 const isMainChecked = activeThread ? (activeThread.linkedMainGroup !== false) : true;
                 const mainDepthVal = Number(activeThread?.linkedMainDepth) || Number(chat.settings?.soloLineConfig?.mainToSoloContextCount) || 200;
-                const safeMainName = String(chat.name || "大群")
+                const safeMainName = String(mainGroupDisplayName)
                   .replace(/&/g, "&amp;")
                   .replace(/</g, "&lt;")
                   .replace(/>/g, "&gt;");
@@ -87419,7 +87431,7 @@ ${stickerContext || "无"}
                 if (allSoloThreads.length === 0) {
                   const emptyHint = document.createElement("div");
                   emptyHint.style.cssText = "padding: 12px; text-align: center; font-size: 12px; color: var(--text-secondary);";
-                  emptyHint.textContent = "当前暂无单人线";
+                  emptyHint.textContent = "当前暂无小群";
                   memoryLinkCheckboxesContainer.appendChild(emptyHint);
                 } else {
                   allSoloThreads.forEach((st) => {
@@ -87428,7 +87440,7 @@ ${stickerContext || "无"}
                     );
                     const isChecked = existingLink ? "checked" : "";
                     const depthVal = existingLink && existingLink.depth ? existingLink.depth : 200;
-                    const safeSoloName = String(st.name || "单线")
+                    const safeSoloName = String(st.name || "小群")
                       .replace(/&/g, "&amp;")
                       .replace(/</g, "&lt;")
                       .replace(/>/g, "&gt;");
@@ -87490,7 +87502,7 @@ ${stickerContext || "无"}
                     'input.solo-link-depth-input[data-solo-id="__main_group__"]',
                   );
                   const dVal = mainDepthInp ? (parseInt(mainDepthInp.value, 10) || 200) : 200;
-                  displayText.textContent = `${chat.name || "大群"} · ${dVal}条`;
+                  displayText.textContent = `${mainGroupDisplayName} · ${dVal}条`;
                 } else if (isPeerGrpMemUi) {
                   displayText.textContent = `已链接 ${checkedBoxes.length} 个小群`;
                 } else {
@@ -89040,8 +89052,24 @@ ${stickerContext || "无"}
                 const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
                 if (activeThread) {
                   activeThread.name = newName;
+                  if (chat.settings?.soloLineConfig && Array.isArray(chat.settings.soloLineConfig.threads)) {
+                    const localT = chat.settings.soloLineConfig.threads.find((t) => t && t.id === activeThread.id);
+                    if (localT) localT.name = newName;
+                  }
+                  if (chat.viewingPeerSoloThread && chat.viewingPeerSoloThread.id === activeThread.id) {
+                    chat.viewingPeerSoloThread.name = newName;
+                  }
+                  if (chat.settings?.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+                    for (const sList of Object.values(chat.settings.sharedSoloRecords)) {
+                      if (!Array.isArray(sList)) continue;
+                      const matchT = sList.find((t) => t && (t.id === activeThread.id || ("solo_" + t.id) === activeThread.id));
+                      if (matchT) matchT.name = newName;
+                    }
+                  }
                 }
-                chat.name = newName;
+                if (chat.mainGroupName) {
+                  chat.name = chat.mainGroupName;
+                }
               } else {
                 chat.name = newName;
                 if (chat.isGroup) {
@@ -89073,13 +89101,35 @@ ${stickerContext || "无"}
                   ? window.getActiveSoloThread(chat)
                   : null;
                 const parsedDepth = Math.max(1, parseInt(mainDepthInp ? mainDepthInp.value : "200", 10) || 200);
+                const isMainLinked = mainChk ? Boolean(mainChk.checked) : true;
                 if (activeThread) {
-                  activeThread.linkedMainGroup = mainChk ? Boolean(mainChk.checked) : true;
+                  activeThread.linkedMainGroup = isMainLinked;
                   activeThread.linkedMainDepth = parsedDepth;
+                  if (chat.settings?.soloLineConfig && Array.isArray(chat.settings.soloLineConfig.threads)) {
+                    const localT = chat.settings.soloLineConfig.threads.find((t) => t && t.id === activeThread.id);
+                    if (localT) {
+                      localT.linkedMainGroup = isMainLinked;
+                      localT.linkedMainDepth = parsedDepth;
+                    }
+                  }
+                  if (chat.viewingPeerSoloThread && chat.viewingPeerSoloThread.id === activeThread.id) {
+                    chat.viewingPeerSoloThread.linkedMainGroup = isMainLinked;
+                    chat.viewingPeerSoloThread.linkedMainDepth = parsedDepth;
+                  }
+                  if (chat.settings?.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+                    for (const sList of Object.values(chat.settings.sharedSoloRecords)) {
+                      if (!Array.isArray(sList)) continue;
+                      const matchT = sList.find((t) => t && (t.id === activeThread.id || ("solo_" + t.id) === activeThread.id));
+                      if (matchT) {
+                        matchT.linkedMainGroup = isMainLinked;
+                        matchT.linkedMainDepth = parsedDepth;
+                      }
+                    }
+                  }
                 }
                 if (chat.settings.soloLineConfig) {
                   chat.settings.soloLineConfig.mainToSoloContextCount = parsedDepth;
-                  chat.settings.soloLineConfig.mainToSoloMode = (mainChk && !mainChk.checked) ? "none" : "count";
+                  chat.settings.soloLineConfig.mainToSoloMode = !isMainLinked ? "none" : "count";
                 }
               } else if (isPeerOrSoloGroupSave) {
                 const checkedSoloBoxes = document.querySelectorAll(
@@ -97891,6 +97941,7 @@ ${stickerContext || "无"}
           if (!isPeerGrp(chat)) {
             return (chat.history || []).filter((m) => m && m.type === "summary");
           }
+          const allThreads = getAllGroupSoloThreads(chat);
           const summaryMap = new Map();
           const addFromList = (list, threadMeta) => {
             if (!Array.isArray(list)) return;
@@ -97899,11 +97950,17 @@ ${stickerContext || "无"}
               const copy = { ...m };
               if (threadMeta && !copy.soloThreadId) {
                 copy.soloThreadId = threadMeta.id;
-                copy.soloThreadName = threadMeta.name || "单线";
+                copy.soloThreadName = threadMeta.name || "小群";
                 copy.soloOwnerPeerCode = threadMeta.ownerPeerCode;
                 copy.soloPlayerPeerCodes = Array.isArray(threadMeta.playerPeerCodes)
                   ? [...threadMeta.playerPeerCodes]
                   : [threadMeta.ownerPeerCode];
+              }
+              if (copy.soloThreadId) {
+                const matchedT = threadMeta || allThreads.find((t) => t && t.id === copy.soloThreadId);
+                if (matchedT && matchedT.name) {
+                  copy.soloThreadName = matchedT.name;
+                }
               }
               const existing = summaryMap.get(copy.timestamp);
               if (!existing || (!existing.soloThreadId && copy.soloThreadId)) {
@@ -97918,7 +97975,6 @@ ${stickerContext || "无"}
           if (chat.activeLineMode !== "solo" && Array.isArray(chat.history)) {
             addFromList(chat.history, null);
           }
-          const allThreads = getAllGroupSoloThreads(chat);
           allThreads.forEach((t) => {
             addFromList(t.history, t);
           });
@@ -98296,7 +98352,7 @@ ${stickerContext || "无"}
 
           if (targetMode === "main") {
             chat.activeLineMode = "main";
-            chat.isWatchingSoloLine = false;
+            chat.isWatchingSoloLine = Boolean(isWatchOnly && prevCommittedLine !== "main");
             chat.viewingPeerSoloThread = null;
             chat.hasUnreadMainLineInSolo = false;
             if (chat.mainGroupName) {
@@ -98320,16 +98376,16 @@ ${stickerContext || "无"}
             const allThreads = getAllGroupSoloThreads(chat);
             const targetThread = peerSoloObj || allThreads.find((t) => t.id === targetThreadId) || getActiveSoloThread(chat);
             if (!targetThread) {
-              await showAlertMsg("提示", "当前暂无单线，请先点击右上角新建单线");
+              await showAlertMsg("提示", "当前暂无小群，请先点击右上角新建小群");
               return false;
             }
             const isCheckedParticipant = isUserCheckedInSoloThread(targetThread, myCode);
             if (!isWatchOnly && !isCheckedParticipant) {
-              await showAlertMsg("提示", "你未被勾选在该单线玩家名单中，无法点击进入，请点击观看按钮");
+              await showAlertMsg("提示", "你未被勾选在该小群玩家名单中，无法点击进入，请点击观看按钮");
               return false;
             }
             if (isWatchOnly && !canCurrentUserAccessSoloThread(targetThread, chat) && !isCheckedParticipant) {
-              await showAlertMsg("提示", "该单线为私密单线，未公开时仅参与玩家可观看");
+              await showAlertMsg("提示", "该小群为私密小群，未公开时仅参与玩家可观看");
               return false;
             }
             if (!chat.mainGroupName) {
@@ -98354,9 +98410,6 @@ ${stickerContext || "无"}
               chat.history = [...localThread.history];
               syncCurrentSoloThreadHistory(chat);
             }
-            if (targetThread.name) {
-              chat.name = targetThread.name;
-            }
             if (!isWatchOnly) {
               if (!chat.settings.peerPhoneData || typeof chat.settings.peerPhoneData !== "object") {
                 chat.settings.peerPhoneData = { friendships: [], messages: [], signalByLine: { main: true }, playerActiveLine: {}, lineGameTime: {} };
@@ -98364,8 +98417,8 @@ ${stickerContext || "无"}
               if (!chat.settings.peerPhoneData.playerActiveLine) chat.settings.peerPhoneData.playerActiveLine = {};
               chat.settings.peerPhoneData.playerActiveLine[myCode] = String(targetThread.id);
               if (prevCommittedLine !== String(targetThread.id)) {
-                const tTitle = targetThread.name || "单线";
-                pushGroupLineSystemNotice(chat, "main", `${myNick}已进入单线「${tTitle}」`);
+                const tTitle = targetThread.name || "小群";
+                pushGroupLineSystemNotice(chat, "main", `${myNick}已进入小群「${tTitle}」`);
                 pushGroupLineSystemNotice(chat, String(targetThread.id), `${myNick}已进入「${tTitle}」`);
               }
             }
@@ -98412,7 +98465,7 @@ ${stickerContext || "无"}
             const allThreads = getAllGroupSoloThreads(chat);
             const targetThread = allThreads.find((t) => t.id === pendingSelectedThreadId) || allThreads[0];
             if (!targetThread) {
-              await showAlertMsg("提示", "当前暂无单线，请先点击新建按钮创建单线");
+              await showAlertMsg("提示", "当前暂无小群，请先点击新建按钮创建小群");
               return;
             }
             const ok = await window.switchGroupLineMode("solo", targetThread.id, targetThread.isPeerThread ? targetThread : null, { isWatchOnly: watchFlag });
@@ -98427,6 +98480,27 @@ ${stickerContext || "无"}
         window.confirmWatchSoloModalSelection = function () {
           return window.confirmEnterSelectedLineMode(true);
         };
+
+        function updateSoloModalActionButtons(chat) {
+          const enterBtn = document.getElementById("solo-modal-enter-btn");
+          if (!enterBtn || !chat) return;
+          const myCode = getMyPeerCode();
+          const committedLineKey = getPlayerCommittedLineKey(chat, myCode);
+          const activeSolo = chat.activeLineMode === "solo" ? getActiveSoloThread(chat) : null;
+          const currentViewingKey = chat.activeLineMode === "solo"
+            ? (activeSolo ? String(activeSolo.id) : "")
+            : "main";
+          const isWatchingElsewhere = Boolean(chat.isWatchingSoloLine) || (committedLineKey && currentViewingKey !== String(committedLineKey));
+          let shouldShowReturn = false;
+          if (isWatchingElsewhere) {
+            if (pendingModalMode === "main") {
+              shouldShowReturn = committedLineKey === "main";
+            } else if (pendingSelectedThreadId) {
+              shouldShowReturn = String(pendingSelectedThreadId) === String(committedLineKey);
+            }
+          }
+          enterBtn.textContent = shouldShowReturn ? "返回" : "进入";
+        }
 
         function renderSoloLineModalContent(chat) {
           if (!isPeerGrp(chat)) return;
@@ -98450,6 +98524,7 @@ ${stickerContext || "无"}
             soloContentEl.style.display = isSoloTab ? "flex" : "none";
           }
           if (!isSoloTab) {
+            updateSoloModalActionButtons(chat);
             return;
           }
 
@@ -98459,6 +98534,7 @@ ${stickerContext || "无"}
             const accessible = allThreads.find((t) => canCurrentUserAccessSoloThread(t, chat));
             pendingSelectedThreadId = accessible ? accessible.id : (allThreads[0] ? allThreads[0].id : null);
           }
+          updateSoloModalActionButtons(chat);
 
           const listEl = document.getElementById("solo-threads-list");
           if (listEl) {
@@ -98466,7 +98542,7 @@ ${stickerContext || "无"}
             if (allThreads.length === 0) {
               const emptyDiv = document.createElement("div");
               emptyDiv.style.cssText = "padding: 16px 10px; text-align: center; font-size: 12px; color: var(--text-secondary); background: var(--secondary-bg); border: 1px dashed var(--border-color); border-radius: 8px;";
-              emptyDiv.textContent = "暂无单线，请点击右上角新建";
+              emptyDiv.textContent = "暂无小群，请点击右上角新建";
               listEl.appendChild(emptyDiv);
             }
             allThreads.forEach((t) => {
@@ -98478,7 +98554,7 @@ ${stickerContext || "无"}
               const msgCount = (chat.activeLineMode === "solo" && cfg.activeThreadId === t.id)
                 ? (chat.history ? chat.history.length : 0)
                 : (t.history ? t.history.length : 0);
-              const safeName = String(t.name || "单线")
+              const safeName = String(t.name || "小群")
                 .replace(/&/g, "&amp;")
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;");
@@ -98513,7 +98589,7 @@ ${stickerContext || "无"}
 
               row.querySelector(`[data-solo-select="${t.id}"]`).onclick = () => {
                 if (!canAccess) {
-                  showAlertMsg("提示", "该单线为私密单线，仅勾选参与的玩家可进入");
+                  showAlertMsg("提示", "该小群为私密小群，仅勾选参与的玩家可进入");
                   return;
                 }
                 pendingSelectedThreadId = t.id;
@@ -98538,12 +98614,9 @@ ${stickerContext || "无"}
                 if (renameBtn) {
                   renameBtn.onclick = async (e) => {
                     e.stopPropagation();
-                    const nextName = await askPrompt("修改单线名称", "请输入新的单线名称", localT.name || "单线");
+                    const nextName = await askPrompt("修改小群名称", "请输入新的小群名称", localT.name || "小群");
                     if (nextName && nextName.trim()) {
                       localT.name = nextName.trim();
-                      if (chat.activeLineMode === "solo" && cfg.activeThreadId === localT.id) {
-                        chat.name = localT.name;
-                      }
                       window.updateSoloLineBannerUI(chat);
                       renderSoloLineModalContent(chat);
                       if (typeof window.renderChatList === "function") window.renderChatList();
@@ -98558,7 +98631,7 @@ ${stickerContext || "无"}
                 if (clearBtn) {
                   clearBtn.onclick = async (e) => {
                     e.stopPropagation();
-                    const ok = await askConfirm("清空单线", `确定清空单线「${localT.name}」的对话记录吗？`);
+                    const ok = await askConfirm("清空小群", `确定清空小群「${localT.name}」的对话记录吗？`);
                     if (!ok) return;
                     localT.history = [];
                     if (chat.activeLineMode === "solo" && !chat.viewingPeerSoloThread && cfg.activeThreadId === localT.id) {
@@ -98576,7 +98649,7 @@ ${stickerContext || "无"}
                 if (delBtn) {
                   delBtn.onclick = async (e) => {
                     e.stopPropagation();
-                    const ok = await askConfirm("删除单线", `确定删除单线「${localT.name}」吗？`);
+                    const ok = await askConfirm("删除小群", `确定删除小群「${localT.name}」吗？`);
                     if (!ok) return;
                     cfg.threads = cfg.threads.filter((item) => item.id !== localT.id);
                     if (cfg.activeThreadId === localT.id) {
@@ -98691,7 +98764,7 @@ ${stickerContext || "无"}
           const chat = appState.chats ? appState.chats[appState.activeChatId] : null;
           if (!isPeerGrp(chat)) return;
           const cfg = ensureSoloLineConfig(chat);
-          const name = await askPrompt("新建单线", "请输入单线名称", `单线 ${cfg.threads.length + 1}`);
+          const name = await askPrompt("新建小群", "请输入小群名称", `小群 ${cfg.threads.length + 1}`);
           if (!name || !name.trim()) return;
           const myCode = getMyPeerCode();
           const myNick = chat.settings?.myNickname || chat.settings?.myName || "我";

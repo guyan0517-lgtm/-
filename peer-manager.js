@@ -2199,11 +2199,24 @@
             const onlyGrp = list[0];
             if (onlyGrp && window.state && window.state.chats) {
               const existingGrpMem = window.state.chats[onlyGrp.id] || window.state.chats[String(onlyGrp.id)];
-              if (existingGrpMem && Array.isArray(existingGrpMem.history) && existingGrpMem.history.length > 0) {
-                const merged = mergeChatHistories(existingGrpMem.history, onlyGrp.history);
-                if (merged.length > (onlyGrp.history || []).length) {
-                  onlyGrp.history = merged;
-                  try { await window.db.chats.put(onlyGrp); } catch (_) {}
+              if (existingGrpMem) {
+                if (existingGrpMem.activeLineMode === "solo") {
+                  onlyGrp.activeLineMode = existingGrpMem.activeLineMode;
+                  onlyGrp.isWatchingSoloLine = existingGrpMem.isWatchingSoloLine;
+                  onlyGrp.viewingPeerSoloThread = existingGrpMem.viewingPeerSoloThread;
+                  onlyGrp.mainGroupName = existingGrpMem.mainGroupName || onlyGrp.mainGroupName || onlyGrp.name;
+                  onlyGrp.mainLineHistory = Array.isArray(existingGrpMem.mainLineHistory) ? existingGrpMem.mainLineHistory : onlyGrp.mainLineHistory;
+                  onlyGrp.history = Array.isArray(existingGrpMem.history) ? existingGrpMem.history : onlyGrp.history;
+                  if (existingGrpMem.settings && existingGrpMem.settings.soloLineConfig) {
+                    if (!onlyGrp.settings) onlyGrp.settings = {};
+                    onlyGrp.settings.soloLineConfig = existingGrpMem.settings.soloLineConfig;
+                  }
+                } else if (Array.isArray(existingGrpMem.history) && existingGrpMem.history.length > 0) {
+                  const merged = mergeChatHistories(existingGrpMem.history, onlyGrp.history);
+                  if (merged.length > (onlyGrp.history || []).length) {
+                    onlyGrp.history = merged;
+                    try { await window.db.chats.put(onlyGrp); } catch (_) {}
+                  }
                 }
               }
               window.state.chats[onlyGrp.id] = onlyGrp;
@@ -2219,11 +2232,18 @@
           });
           const primary = list[0];
           primary.myPeerCode = myCode;
+          const existingPrimaryMem = window.state && window.state.chats && (window.state.chats[primary.id] || window.state.chats[String(primary.id)]);
           const mergedHistory = [];
           const seenKeys = new Set();
           for (const chatItem of list) {
             const memGrp = window.state && window.state.chats && (window.state.chats[chatItem.id] || window.state.chats[String(chatItem.id)]);
-            const combinedGrpHist = memGrp ? mergeChatHistories(memGrp.history, chatItem.history) : (chatItem.history || []);
+            const baseHist = (memGrp && memGrp.activeLineMode === "solo" && Array.isArray(memGrp.mainLineHistory))
+              ? memGrp.mainLineHistory
+              : (memGrp ? memGrp.history : []);
+            const itemHist = (chatItem.activeLineMode === "solo" && Array.isArray(chatItem.mainLineHistory))
+              ? chatItem.mainLineHistory
+              : (chatItem.history || []);
+            const combinedGrpHist = mergeChatHistories(baseHist, itemHist);
             for (const msg of combinedGrpHist) {
               if (!msg) continue;
               const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
@@ -2234,7 +2254,16 @@
             }
           }
           mergedHistory.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-          primary.history = mergedHistory;
+          if (existingPrimaryMem && existingPrimaryMem.activeLineMode === "solo") {
+            primary.activeLineMode = existingPrimaryMem.activeLineMode;
+            primary.isWatchingSoloLine = existingPrimaryMem.isWatchingSoloLine;
+            primary.viewingPeerSoloThread = existingPrimaryMem.viewingPeerSoloThread;
+            primary.mainGroupName = existingPrimaryMem.mainGroupName || primary.mainGroupName || primary.name;
+            primary.mainLineHistory = mergedHistory;
+            primary.history = Array.isArray(existingPrimaryMem.history) ? existingPrimaryMem.history : primary.history;
+          } else {
+            primary.history = mergedHistory;
+          }
           await window.db.chats.put(primary);
           if (window.state && window.state.chats) {
             window.state.chats[primary.id] = primary;
@@ -2744,7 +2773,7 @@
 
       return {
         sharedGroupId: sharedGroupId,
-        groupName: groupChat.name || "我们的群聊",
+        groupName: groupChat.mainGroupName || groupChat.name || "我们的群聊",
         groupAvatar: grpAva,
         humanPeers: humanPeers,
         aiMembers: aiMembers,
@@ -3323,7 +3352,10 @@
       if (!groupChat) return;
 
       if (data.groupName) {
-        groupChat.name = data.groupName;
+        groupChat.mainGroupName = data.groupName;
+        if (groupChat.activeLineMode !== "solo") {
+          groupChat.name = data.groupName;
+        }
         if (typeof window.updateSoloLineBannerUI === "function") {
           window.updateSoloLineBannerUI(groupChat);
         }
