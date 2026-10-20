@@ -285,7 +285,55 @@ document.addEventListener("DOMContentLoaded", () => {
   // forum.js
 
   /**
-   * 辅助函数：统一 AI 接口调用与容错
+   * 辅助函数：检测同人文/书架生成内容是否在半途被截断
+   */
+  function isFanficOutputTruncated(text, finishReason, streamInterrupted) {
+    if (!text || !text.trim()) return false;
+    if (
+      streamInterrupted ||
+      finishReason === "length" ||
+      finishReason === "max_tokens" ||
+      finishReason === "MAX_TOKENS"
+    ) {
+      return true;
+    }
+    const cleaned = text
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/g, "")
+      .trim();
+    if ((cleaned.startsWith("{") || cleaned.includes('"chapterContent"')) && !cleaned.endsWith("}")) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 辅助函数：将续写分片与已生成内容无缝拼接并去重重叠字符
+   */
+  function stitchContinuationText(accumulated, nextRaw) {
+    if (!nextRaw) return accumulated;
+    let nextClean = String(nextRaw)
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/g, "");
+    if (!nextClean.trim()) return accumulated;
+
+    let base = String(accumulated).replace(/\s*```$/g, "");
+
+    const maxOverlap = Math.min(120, base.length, nextClean.length);
+    for (let len = maxOverlap; len >= 3; len--) {
+      const candidate = nextClean.slice(0, len);
+      if (base.endsWith(candidate)) {
+        nextClean = nextClean.slice(len);
+        break;
+      }
+    }
+
+    return base + nextClean;
+  }
+
+  /**
+   * 辅助函数：统一 AI 接口调用与容错（含断流/截断自动续写）
    */
   async function callAiForForum(prompt, systemInstruction = "", purpose = "") {
     const apiCfg = (purpose && typeof window.getEffectiveApiConfig === "function")
@@ -302,79 +350,88 @@ document.addEventListener("DOMContentLoaded", () => {
     const tempVal = parseFloat(apiCfg.temperature !== undefined ? apiCfg.temperature : state.apiConfig.temperature);
     const safeTemp = (!isNaN(tempVal) && tempVal >= 0 && tempVal <= 2) ? tempVal : 0.7;
     const cleanModel = (model || "gemini-1.5-flash").replace(/^models\//i, "").trim();
+    const desiredMaxTokens = purpose === "fanfic" ? 8192 : undefined;
 
-    if (isGemini) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${effectiveKey}`;
-      const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: safeTemp
-        },
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-        ]
-      };
-      if (systemInstruction) {
-        payload.systemInstruction = { parts: [{ text: systemInstruction }] };
-      }
-      let response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok && (response.status === 400 || response.status === 404)) {
-        const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${effectiveKey}`;
-        const fallbackPayload = {
-          contents: [{ role: "user", parts: [{ text: (systemInstruction ? systemInstruction + "\n\n" : "") + prompt }] }]
+    const requestSingleTurn = async (messagesList) => {
+      if (isGemini) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${effectiveKey}`;
+        const contents = messagesList
+          .filter((m) => m.role !== "system")
+          .map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+          }));
+        const payload = {
+          contents,
+          generationConfig: {
+            temperature: safeTemp,
+            ...(desiredMaxTokens ? { maxOutputTokens: desiredMaxTokens } : {}),
+          },
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+          ]
         };
-        const retryRes = await fetch(fallbackUrl, {
+        if (systemInstruction) {
+          payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+        }
+        let response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(fallbackPayload)
+          body: JSON.stringify(payload)
         });
-        if (retryRes.ok) response = retryRes;
-      }
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        throw new Error(`API请求失败: ${response.status} ${errText}`);
-      }
-      const data = await response.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      return rawText;
-    } else {
-      const requestUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : (cleanedProxy.includes("/chat/completions") ? cleanedProxy : `${cleanedProxy}/v1/chat/completions`);
-      const messages = [];
-      if (systemInstruction) {
-        messages.push({ role: "system", content: systemInstruction });
-      }
-      messages.push({ role: "user", content: prompt });
+        if (!response.ok && (response.status === 400 || response.status === 404)) {
+          const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${effectiveKey}`;
+          const combinedText = messagesList.map((m) => m.content).join("\n\n");
+          const fallbackPayload = {
+            contents: [{ role: "user", parts: [{ text: (systemInstruction ? systemInstruction + "\n\n" : "") + combinedText }] }]
+          };
+          const retryRes = await fetch(fallbackUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(fallbackPayload)
+          });
+          if (retryRes.ok) response = retryRes;
+        }
+        if (!response.ok) {
+          const errText = await response.text().catch(() => "");
+          throw new Error(`API请求失败: ${response.status} ${errText}`);
+        }
+        const data = await response.json();
+        const rawText =
+          data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") ||
+          data?.choices?.[0]?.message?.content ||
+          "";
+        const finishReason =
+          data?.candidates?.[0]?.finishReason ||
+          data?.choices?.[0]?.finish_reason ||
+          "stop";
+        const streamInterrupted = Boolean(data?.choices?.[0]?.stream_interrupted);
+        return { text: rawText, finishReason, streamInterrupted };
+      } else {
+        const requestUrl = cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : (cleanedProxy.includes("/chat/completions") ? cleanedProxy : `${cleanedProxy}/v1/chat/completions`);
+        const messages = [];
+        if (systemInstruction) {
+          messages.push({ role: "system", content: systemInstruction });
+        }
+        for (const m of messagesList) {
+          messages.push({ role: m.role, content: m.content });
+        }
 
-      const bodyPayload = {
-        model: cleanModel,
-        messages: messages
-      };
-      
-      const isO1O3 = cleanModel.toLowerCase().startsWith("o1") || cleanModel.toLowerCase().startsWith("o3") || cleanModel.toLowerCase().includes("reasoner");
-      if (!isO1O3) {
-        bodyPayload.temperature = safeTemp;
-      }
+        const bodyPayload = {
+          model: cleanModel,
+          messages: messages,
+          ...(desiredMaxTokens ? { max_tokens: desiredMaxTokens } : {}),
+        };
 
-      let response = await fetch(requestUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${effectiveKey}`
-        },
-        body: JSON.stringify(bodyPayload)
-      });
+        const isO1O3 = cleanModel.toLowerCase().startsWith("o1") || cleanModel.toLowerCase().startsWith("o3") || cleanModel.toLowerCase().includes("reasoner");
+        if (!isO1O3) {
+          bodyPayload.temperature = safeTemp;
+        }
 
-      if (!response.ok && (response.status === 400 || response.status === 422)) {
-        delete bodyPayload.temperature;
-        bodyPayload.messages = [{ role: "user", content: (systemInstruction ? systemInstruction + "\n\n" : "") + prompt }];
-        response = await fetch(requestUrl, {
+        let response = await fetch(requestUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -384,7 +441,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         if (!response.ok && (response.status === 400 || response.status === 422)) {
-          bodyPayload.model = model;
+          delete bodyPayload.temperature;
+          delete bodyPayload.max_tokens;
+          const mergedPrompt = messagesList.map((m) => m.content).join("\n\n");
+          bodyPayload.messages = [{ role: "user", content: (systemInstruction ? systemInstruction + "\n\n" : "") + mergedPrompt }];
           response = await fetch(requestUrl, {
             method: "POST",
             headers: {
@@ -393,17 +453,70 @@ document.addEventListener("DOMContentLoaded", () => {
             },
             body: JSON.stringify(bodyPayload)
           });
+
+          if (!response.ok && (response.status === 400 || response.status === 422)) {
+            bodyPayload.model = model;
+            response = await fetch(requestUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${effectiveKey}`
+              },
+              body: JSON.stringify(bodyPayload)
+            });
+          }
+        }
+
+        if (!response.ok) {
+          const errText = await response.text().catch(() => "");
+          throw new Error(`API请求失败: ${response.status} ${errText}`);
+        }
+        const data = await response.json();
+        const rawText = data?.choices?.[0]?.message?.content || "";
+        const finishReason = data?.choices?.[0]?.finish_reason || "stop";
+        const streamInterrupted = Boolean(data?.choices?.[0]?.stream_interrupted);
+        return { text: rawText, finishReason, streamInterrupted };
+      }
+    };
+
+    const firstTurn = await requestSingleTurn([{ role: "user", content: prompt }]);
+    let accumulatedText = firstTurn.text || "";
+    let lastFinishReason = firstTurn.finishReason;
+    let lastInterrupted = firstTurn.streamInterrupted;
+
+    if (purpose === "fanfic") {
+      let continueRound = 0;
+      const maxContinueRounds = 3;
+      while (
+        continueRound < maxContinueRounds &&
+        isFanficOutputTruncated(accumulatedText, lastFinishReason, lastInterrupted)
+      ) {
+        continueRound++;
+        const tailAnchor = accumulatedText
+          .replace(/\s*```$/g, "")
+          .slice(-60);
+        const continuationPrompt = `你的上一条输出在半途被切断了，断在：「${tailAnchor}」\n请严格紧接在上面最后一个字之后继续往下写，把尚未写完的章节正文完整写完，并补全剩余的 JSON 字段（如 categories、comments）以及最外层的闭合大括号 }。注意：严禁重复已经输出过的文字，严禁输出任何解释或代码块开头，直接输出紧接中断处的后续字符。`;
+
+        try {
+          const nextTurn = await requestSingleTurn([
+            { role: "user", content: prompt },
+            { role: "assistant", content: accumulatedText },
+            { role: "user", content: continuationPrompt },
+          ]);
+          if (!nextTurn.text || !nextTurn.text.trim()) {
+            break;
+          }
+          accumulatedText = stitchContinuationText(accumulatedText, nextTurn.text);
+          lastFinishReason = nextTurn.finishReason;
+          lastInterrupted = nextTurn.streamInterrupted;
+        } catch (contErr) {
+          console.warn("自动续写请求中断，保留已有内容:", contErr);
+          break;
         }
       }
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        throw new Error(`API请求失败: ${response.status} ${errText}`);
-      }
-      const data = await response.json();
-      const rawText = data?.choices?.[0]?.message?.content || "";
-      return rawText;
     }
+
+    return accumulatedText;
   }
 
   /**
@@ -459,17 +572,46 @@ document.addEventListener("DOMContentLoaded", () => {
     const isFinishedMatch = cleaned.match(/"isFinished"\s*:\s*(true|false)/i);
     if (isFinishedMatch) result.isFinished = isFinishedMatch[1].toLowerCase() === "true";
 
-    const contentMatch = cleaned.match(/"(?:chapterContent|story|content)"\s*:\s*"([\s\S]*?)"(?:\s*,\s*"(?:categories|comments|isFinished)")/);
-    if (contentMatch) {
-      result.chapterContent = contentMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
-    } else {
-      const rawContentMatch = cleaned.match(/"(?:chapterContent|story|content)"\s*:\s*"([\s\S]*)/);
-      if (rawContentMatch) {
-        let body = rawContentMatch[1];
-        body = body.replace(/"\s*,?\s*"(?:categories|comments|isFinished)[\s\S]*$/, "");
-        body = body.replace(/"\s*\}?\s*$/, "");
-        result.chapterContent = body.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    const categoriesMatch = cleaned.match(/"categories"\s*:\s*\[([\s\S]*?)\]/);
+    if (categoriesMatch) {
+      const tags = [];
+      const tagRegex = /"([^"]+)"/g;
+      let tm;
+      while ((tm = tagRegex.exec(categoriesMatch[1])) !== null) {
+        if (tm[1].trim()) tags.push(tm[1].trim());
       }
+      if (tags.length > 0) result.categories = tags;
+    }
+
+    const commentsBlockMatch = cleaned.match(/"comments"\s*:\s*\[([\s\S]*?)\](?=\s*[,}])/);
+    if (commentsBlockMatch) {
+      const extractedComments = [];
+      const itemRegex = /\{\s*"author"\s*:\s*"([^"]*)"\s*,\s*"content"\s*:\s*"([\s\S]*?)"\s*\}/g;
+      let cm;
+      while ((cm = itemRegex.exec(commentsBlockMatch[1])) !== null) {
+        extractedComments.push({
+          author: cm[1] || "读者",
+          content: cm[2].replace(/\\n/g, "\n").replace(/\\"/g, '"'),
+        });
+      }
+      if (extractedComments.length > 0) result.comments = extractedComments;
+    }
+
+    let contentStartMatch = cleaned.match(/"chapterContent"\s*:\s*"/);
+    if (!contentStartMatch) {
+      contentStartMatch = cleaned.match(/"(?:story|content)"\s*:\s*"/);
+    }
+    if (contentStartMatch) {
+      const startPos = contentStartMatch.index + contentStartMatch[0].length;
+      let body = cleaned.slice(startPos);
+      const nextKeyRegex = /"\s*,\s*"(?:categories|comments|isFinished|chapterSummary|summary|seriesTitle|chapterTitle)"\s*:/;
+      const nextKeyMatch = nextKeyRegex.exec(body);
+      if (nextKeyMatch) {
+        body = body.slice(0, nextKeyMatch.index);
+      } else {
+        body = body.replace(/"\s*\}?\s*$/, "");
+      }
+      result.chapterContent = body.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\"/g, '"');
     }
 
     // 终极保底：如果解析不到 JSON，直接把整段文字清洗作为正文，绝不白屏或报错打断

@@ -20992,17 +20992,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const parseSseTextToSynthesized = (rawSseText, finishReasonOverride) => {
             let fullText = "";
             let fullThinking = "";
-            let finishReason = finishReasonOverride || "stop";
+            let sawDone = false;
+            let sawFinish = null;
             const lines = String(rawSseText || "").split("\n");
             for (const line of lines) {
               const trimmed = line.trim();
               if (!trimmed || !trimmed.startsWith("data:")) continue;
               const dataStr = trimmed.slice(5).trim();
-              if (dataStr === "[DONE]") continue;
+              if (dataStr === "[DONE]") {
+                sawDone = true;
+                continue;
+              }
               try {
                 const parsed = JSON.parse(dataStr);
                 const choice = parsed.choices?.[0];
-                if (choice?.finish_reason) finishReason = choice.finish_reason;
+                if (choice?.finish_reason) {
+                  sawFinish = choice.finish_reason;
+                } else if (parsed.stop_reason === "max_tokens" || parsed.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+                  sawFinish = "length";
+                }
                 const delta = choice?.delta || {};
                 const deltaContent =
                   delta.content ||
@@ -21023,6 +21031,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (_) {}
             }
             if (!fullText && !fullThinking) return null;
+            const finalFinishReason = finishReasonOverride || sawFinish || (sawDone ? "stop" : "length");
             return {
               choices: [
                 {
@@ -21032,7 +21041,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     content: fullText,
                     reasoning_content: fullThinking || undefined,
                   },
-                  finish_reason: finishReason,
+                  finish_reason: finalFinishReason,
                 },
               ],
             };
@@ -21108,18 +21117,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               let buffer = "";
               let rawStreamText = "";
               let finishReason = "stop";
+              let sawFinishReason = null;
+              let sawDoneMarker = false;
               let streamInterruptedErr = null;
 
               const processSseLine = (line) => {
                 const trimmed = line.trim();
                 if (!trimmed || !trimmed.startsWith("data:")) return;
                 const dataStr = trimmed.slice(5).trim();
-                if (dataStr === "[DONE]") return;
+                if (dataStr === "[DONE]") {
+                  sawDoneMarker = true;
+                  return;
+                }
                 try {
                   const parsed = JSON.parse(dataStr);
                   const choice = parsed.choices?.[0];
                   if (choice?.finish_reason) {
+                    sawFinishReason = choice.finish_reason;
                     finishReason = choice.finish_reason;
+                  } else if (parsed.stop_reason === "max_tokens" || parsed.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+                    sawFinishReason = "length";
+                    finishReason = "length";
                   }
                   const delta = choice?.delta || {};
                   const deltaContent =
@@ -21188,6 +21206,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 buffer = "";
               }
 
+              if (!streamInterruptedErr && !sawDoneMarker && !sawFinishReason) {
+                finishReason = "length";
+              }
+
               if (!fullText && !fullThinking && rawStreamText.trim().startsWith("{")) {
                 return {
                   ok: true,
@@ -21211,6 +21233,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       reasoning_content: fullThinking || undefined,
                     },
                     finish_reason: finishReason,
+                    stream_interrupted: Boolean(streamInterruptedErr || (!sawDoneMarker && !sawFinishReason)),
                   },
                 ],
               };
@@ -21823,6 +21846,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               messages: normalizedMessages,
               temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
               stream: !isTinyCheck ? true : (parsedBody.stream !== undefined ? parsedBody.stream : isStreamActive),
+              ...(parsedBody.max_tokens ? { max_tokens: parsedBody.max_tokens } : {}),
             };
 
             const fetchStartT = Date.now();
@@ -21841,8 +21865,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               } : undefined,
             });
+            if (!res.ok && (res.status === 400 || res.status === 422) && openAiPayload.max_tokens) {
+              const noMaxTokensPayload = { ...openAiPayload };
+              delete noMaxTokensPayload.max_tokens;
+              res = await requestLlmapiWithFallback(targetUrl, {
+                method: "POST",
+                signal: init?.signal,
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${cleanKey}`,
+                  ...(noMaxTokensPayload.stream ? { Accept: "text/event-stream" } : {})
+                },
+                body: JSON.stringify(noMaxTokensPayload),
+              });
+            }
             if (!res.ok && callerExplicitNonStream && res.status === 400) {
               const nonStreamPayload = { ...openAiPayload, stream: false };
+              delete nonStreamPayload.max_tokens;
               res = await requestLlmapiWithFallback(targetUrl, {
                 method: "POST",
                 signal: init?.signal,
