@@ -4236,5 +4236,88 @@ ${customPromptRequirement}
     });
   }
 
+  function getActiveReaderScrollContainer() {
+    const postScreen = document.getElementById("post-screen");
+    if (postScreen && postScreen.classList.contains("active")) {
+      const postDetailContent = document.getElementById("post-detail-content");
+      if (postDetailContent) return postDetailContent;
+    }
+    const auroraOverlay = document.getElementById("aurora-player-overlay");
+    const auroraTextViewer = document.getElementById("aurora-text-viewer");
+    if (
+      auroraOverlay &&
+      auroraOverlay.style.display !== "none" &&
+      auroraTextViewer &&
+      auroraTextViewer.style.display !== "none"
+    ) {
+      return auroraTextViewer;
+    }
+    return null;
+  }
+
+  function scrollActiveReaderByVolume(direction) {
+    const container = getActiveReaderScrollContainer();
+    if (!container) return false;
+    const viewHeight = container.clientHeight || window.innerHeight || 600;
+    const distance = Math.round(viewHeight * (2 / 3));
+    const delta = direction === "up" ? -distance : distance;
+    if (typeof container.scrollBy === "function") {
+      container.scrollBy({ top: delta, behavior: "smooth" });
+    } else {
+      container.scrollTop += delta;
+    }
+    return true;
+  }
+
+  function handleReaderVolumeKey(e) {
+    const container = getActiveReaderScrollContainer();
+    if (!container) return;
+    const key = e.key || "";
+    const code = e.code || "";
+    const keyCode = e.keyCode || e.which || 0;
+    const isVolumeUp =
+      key === "AudioVolumeUp" ||
+      key === "VolumeUp" ||
+      code === "AudioVolumeUp" ||
+      code === "VolumeUp" ||
+      keyCode === 175 ||
+      keyCode === 24;
+    const isVolumeDown =
+      key === "AudioVolumeDown" ||
+      key === "VolumeDown" ||
+      code === "AudioVolumeDown" ||
+      code === "VolumeDown" ||
+      keyCode === 174 ||
+      keyCode === 25;
+
+    if (isVolumeUp) {
+      e.preventDefault();
+      e.stopPropagation();
+      scrollActiveReaderByVolume("up");
+    } else if (isVolumeDown) {
+      e.preventDefault();
+      e.stopPropagation();
+      scrollActiveReaderByVolume("down");
+    }
+  }
+
+  window.addEventListener("keydown", handleReaderVolumeKey, {
+    capture: true,
+    passive: false,
+  });
+
+  document.addEventListener("volumeupbutton", (e) => {
+    if (scrollActiveReaderByVolume("up") && e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
+  });
+
+  document.addEventListener("volumedownbutton", (e) => {
+    if (scrollActiveReaderByVolume("down") && e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
+  });
+
   // ▲▲▲ 论坛事件监听器结束 ▲▲▲
 });
+

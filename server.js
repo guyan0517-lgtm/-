@@ -116,6 +116,85 @@ app.post('/api/merge-pdf', async (req, res) => {
   }
 });
 
+app.post('/api/upload-image-bed', async (req, res) => {
+  try {
+    const { dataUrl, filename = 'sticker.png' } = req.body || {};
+    if (!dataUrl || typeof dataUrl !== 'string') {
+      return res.status(400).json({ error: '缺少图片数据' });
+    }
+
+    let mimeType = 'image/png';
+    let base64Data = dataUrl;
+    const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (match) {
+      mimeType = match[1];
+      base64Data = match[2];
+    } else if (dataUrl.includes(',')) {
+      base64Data = dataUrl.split(',')[1];
+    }
+
+    const extMap = {
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/webp': 'webp'
+    };
+    const ext = extMap[mimeType] || 'png';
+    let safeName = String(filename || 'sticker').replace(/[^a-zA-Z0-9._-]/g, '_');
+    if (!/\.[a-zA-Z0-9]+$/.test(safeName)) {
+      safeName += '.' + ext;
+    }
+
+    const buffer = Buffer.from(base64Data, 'base64');
+    const blob = new Blob([buffer], { type: mimeType });
+    const form = new FormData();
+    form.append('gallery', '');
+    form.append('optsize', '0');
+    form.append('expire', '0');
+    form.append('numfiles', '1');
+    form.append('upload_session', String(Date.now()) + Math.random().toString().substring(1));
+    form.append('file', blob, safeName);
+
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+    const upRes = await fetch('https://postimages.org/json', {
+      method: 'POST',
+      headers: {
+        'User-Agent': ua,
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://postimages.org/'
+      },
+      body: form
+    });
+
+    if (!upRes.ok) {
+      return res.status(502).json({ error: '图床上传请求失败: ' + upRes.status });
+    }
+
+    const upJson = await upRes.json();
+    const pageUrl = upJson && (upJson.url || upJson.image);
+    if (!pageUrl) {
+      return res.status(502).json({ error: '图床未返回有效页面地址' });
+    }
+
+    const galRes = await fetch(pageUrl, {
+      headers: { 'User-Agent': ua }
+    });
+    const galHtml = await galRes.text();
+    const ogMatch = galHtml.match(/property=["']og:image["']\s+content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']/i)
+      || galHtml.match(/content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']\s+property=["']og:image["']/i);
+    const directMatch = ogMatch ? [null, ogMatch[1]] : galHtml.match(/(https:\/\/i\.postimg\.cc\/[^\s"'<>)\]]+)/i);
+    const finalUrl = directMatch && directMatch[1] ? directMatch[1] : pageUrl;
+
+    return res.json({ success: true, url: finalUrl });
+  } catch (err) {
+    console.error('图床上传错误:', err);
+    return res.status(500).json({ error: err.message || '图床上传失败' });
+  }
+});
+
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
   req.setTimeout(600000);

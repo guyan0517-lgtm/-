@@ -35337,6 +35337,130 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           } catch (_) {}
         };
 
+        window.copyTextToClipboard = async function (text) {
+          if (!text) return false;
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(text);
+              return true;
+            }
+          } catch (_) {}
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            return true;
+          } catch (_) {
+            return false;
+          }
+        };
+
+        window.copySiteUrlInModal = async function (url, statusId) {
+          await window.copyTextToClipboard(url);
+          const statusEl = statusId ? document.getElementById(statusId) : null;
+          if (statusEl) {
+            statusEl.textContent = "官网链接已复制，正在打开";
+          }
+          try {
+            window.open(url, "_blank");
+          } catch (_) {}
+        };
+
+        window.uploadImageToBed = async function (dataUrl, filename) {
+          const resp = await fetch("/api/upload-image-bed", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dataUrl, filename: filename || "sticker.png" }),
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data || !data.url) {
+            throw new Error((data && data.error) || "图床上传失败");
+          }
+          return data.url;
+        };
+
+        window.triggerModalStickerBedUpload = function (btnEl, statusId) {
+          let fileInput = document.getElementById("modal-sticker-bed-file-input");
+          if (!fileInput) {
+            fileInput = document.createElement("input");
+            fileInput.type = "file";
+            fileInput.id = "modal-sticker-bed-file-input";
+            fileInput.accept = "image/*";
+            fileInput.multiple = true;
+            fileInput.style.display = "none";
+            document.body.appendChild(fileInput);
+          }
+          fileInput.onchange = async (e) => {
+            const files = e.target.files;
+            if (!files || !files.length) return;
+            const statusEl = statusId ? document.getElementById(statusId) : null;
+            const promptInput = document.getElementById("custom-prompt-input");
+            if (btnEl) {
+              btnEl.disabled = true;
+              btnEl.textContent = "上传中";
+            }
+            if (statusEl) {
+              statusEl.textContent = "正在上传图床生成链接...";
+            }
+            const generatedUrls = [];
+            const appendedLines = [];
+            try {
+              for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const rawName = file.name.replace(/\.[^/.]+$/, "").trim() || ("表情" + (i + 1));
+                if (statusEl) {
+                  statusEl.textContent = "正在上传第 " + (i + 1) + " 张，共 " + files.length + " 张...";
+                }
+                let base64Url = await new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onload = (ev) => resolve(ev.target.result);
+                  reader.readAsDataURL(file);
+                });
+                const isGif = file.type === "image/gif" || (typeof base64Url === "string" && base64Url.startsWith("data:image/gif"));
+                if (!isGif && typeof compressImage === "function" && typeof base64Url === "string" && base64Url.length > 100000) {
+                  try {
+                    const compressed = await compressImage(base64Url, 0.86, 640);
+                    if (compressed && compressed.length < base64Url.length) {
+                      base64Url = compressed;
+                    }
+                  } catch (_) {}
+                }
+                const remoteUrl = await window.uploadImageToBed(base64Url, file.name);
+                generatedUrls.push(remoteUrl);
+                appendedLines.push(rawName + " " + remoteUrl);
+              }
+              if (promptInput && appendedLines.length > 0) {
+                const existing = promptInput.value.trim();
+                promptInput.value = existing
+                  ? existing + "\n" + appendedLines.join("\n")
+                  : appendedLines.join("\n");
+              }
+              if (generatedUrls.length > 0) {
+                await window.copyTextToClipboard(generatedUrls.join("\n"));
+              }
+              if (statusEl) {
+                statusEl.textContent = "已生成 " + generatedUrls.length + " 条链接并自动复制";
+              }
+            } catch (err) {
+              if (statusEl) {
+                statusEl.textContent = "上传失败：" + (err.message || "请重试");
+              }
+            } finally {
+              if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = "上传";
+              }
+              e.target.value = null;
+            }
+          };
+          fileInput.click();
+        };
+
         function updateGlobalChatUnreadBadge() {
           let totalUnread = 0;
           if (state && state.chats) {
@@ -62951,11 +63075,15 @@ ${stickerContext || "无"}
         async function openBulkAddStickersModal() {
           const urlSiteHelperHtml = `
             <div style="margin-bottom: 10px; padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--text-primary); text-align: left;">
-              <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">图片生成URL官网直达：</div>
-              <div style="display: flex; flex-direction: column; gap: 4px;">
-                <a href="https://postimages.org/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); text-decoration: underline; font-weight: 600;">Postimages官网 https://postimages.org</a>
-                <a href="https://catbox.moe/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); text-decoration: underline; font-weight: 600;">Catbox官网 https://catbox.moe</a>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
+                <div style="font-weight: 600; color: var(--text-primary);">图片生成URL官网直达：</div>
+                <button type="button" class="moe-btn-small" onclick="window.triggerModalStickerBedUpload(this, 'bulk-sticker-bed-status')" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">上传</button>
               </div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <a href="https://postimages.org/" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault(); window.copySiteUrlInModal('https://postimages.org/', 'bulk-sticker-bed-status');" style="color: var(--accent-color); text-decoration: underline; font-weight: 600; cursor: pointer;">Postimages官网 https://postimages.org</a>
+                <a href="https://catbox.moe/" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault(); window.copySiteUrlInModal('https://catbox.moe/', 'bulk-sticker-bed-status');" style="color: var(--accent-color); text-decoration: underline; font-weight: 600; cursor: pointer;">Catbox官网 https://catbox.moe</a>
+              </div>
+              <div id="bulk-sticker-bed-status" style="margin-top: 4px; font-size: 11px; color: var(--text-secondary);">点击右侧上传可直接选图转URL并自动复制</div>
             </div>
           `;
 
@@ -67317,11 +67445,15 @@ ${stickerContext || "无"}
         async function bulkAddCharStickers(type) {
           const urlSiteHelperHtml = `
             <div style="margin-bottom: 10px; padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--text-primary); text-align: left;">
-              <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">图片生成URL官网直达：</div>
-              <div style="display: flex; flex-direction: column; gap: 4px;">
-                <a href="https://postimages.org/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); text-decoration: underline; font-weight: 600;">Postimages官网 https://postimages.org</a>
-                <a href="https://catbox.moe/" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); text-decoration: underline; font-weight: 600;">Catbox官网 https://catbox.moe</a>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
+                <div style="font-weight: 600; color: var(--text-primary);">图片生成URL官网直达：</div>
+                <button type="button" class="moe-btn-small" onclick="window.triggerModalStickerBedUpload(this, 'char-bulk-sticker-bed-status')" style="height: 26px; min-height: 26px; padding: 0 10px !important; font-size: 11px !important; margin: 0 !important; width: auto !important; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1; flex-shrink: 0;">上传</button>
               </div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <a href="https://postimages.org/" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault(); window.copySiteUrlInModal('https://postimages.org/', 'char-bulk-sticker-bed-status');" style="color: var(--accent-color); text-decoration: underline; font-weight: 600; cursor: pointer;">Postimages官网 https://postimages.org</a>
+                <a href="https://catbox.moe/" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault(); window.copySiteUrlInModal('https://catbox.moe/', 'char-bulk-sticker-bed-status');" style="color: var(--accent-color); text-decoration: underline; font-weight: 600; cursor: pointer;">Catbox官网 https://catbox.moe</a>
+              </div>
+              <div id="char-bulk-sticker-bed-status" style="margin-top: 4px; font-size: 11px; color: var(--text-secondary);">点击右侧上传可直接选图转URL并自动复制</div>
             </div>
           `;
           const textInput = await showCustomPrompt(
@@ -67399,6 +67531,7 @@ ${stickerContext || "无"}
             if (!files.length) return;
 
             const stickersToAdd = []; // 先收集所有要添加的表情
+            const copiedUrls = [];
 
             for (const file of files) {
               const name = await showCustomPrompt(
@@ -67423,7 +67556,18 @@ ${stickerContext || "无"}
                   } catch (_) {}
                 }
 
-                const stickerData = { name: name.trim(), url: base64Url };
+                let finalStickerUrl = base64Url;
+                if (typeof window.uploadImageToBed === "function") {
+                  try {
+                    const remoteUrl = await window.uploadImageToBed(base64Url, file.name);
+                    if (remoteUrl && remoteUrl.startsWith("http")) {
+                      finalStickerUrl = remoteUrl;
+                      copiedUrls.push(remoteUrl);
+                    }
+                  } catch (_) {}
+                }
+
+                const stickerData = { name: name.trim(), url: finalStickerUrl };
                 if (type !== "exclusive") {
                   stickerData.id = "char_sticker_" + Date.now() + Math.random();
                 }
@@ -67440,7 +67584,12 @@ ${stickerContext || "无"}
                 await db.charStickers.bulkAdd(stickersToAdd);
               }
               await renderCharStickers(type); // 在数据库操作后，统一重新渲染
-              alert(`已成功上传 ${stickersToAdd.length} 个表情！`);
+              if (copiedUrls.length > 0 && typeof window.copyTextToClipboard === "function") {
+                await window.copyTextToClipboard(copiedUrls.join("\n"));
+                alert(`已成功上传 ${stickersToAdd.length} 个表情，图床链接已自动复制！`);
+              } else {
+                alert(`已成功上传 ${stickersToAdd.length} 个表情！`);
+              }
             }
 
             event.target.value = null;
@@ -90033,6 +90182,7 @@ ${stickerContext || "无"}
               if (!files.length) return;
 
               const newStickers = [];
+              const copiedUrls = [];
               let canceled = false;
 
               // 使用 for...of 循环来逐个处理选中的文件
@@ -90073,9 +90223,20 @@ ${stickerContext || "无"}
                     } catch (_) {}
                   }
 
+                  let finalStickerUrl = base64Url;
+                  if (typeof window.uploadImageToBed === "function") {
+                    try {
+                      const remoteUrl = await window.uploadImageToBed(base64Url, file.name);
+                      if (remoteUrl && remoteUrl.startsWith("http")) {
+                        finalStickerUrl = remoteUrl;
+                        copiedUrls.push(remoteUrl);
+                      }
+                    } catch (_) {}
+                  }
+
                   newStickers.push({
                     id: "sticker_" + (Date.now() + newStickers.length),
-                    url: base64Url,
+                    url: finalStickerUrl,
                     name: name.trim(),
                   });
                 } else if (name === null) {
@@ -90097,10 +90258,18 @@ ${stickerContext || "无"}
                 await db.userStickers.bulkAdd(newStickers);
                 state.userStickers.push(...newStickers);
                 renderStickerPanel();
-                await showCustomAlert(
-                  "上传成功",
-                  `已成功添加 ${newStickers.length} 个新表情！`,
-                );
+                if (copiedUrls.length > 0 && typeof window.copyTextToClipboard === "function") {
+                  await window.copyTextToClipboard(copiedUrls.join("\n"));
+                  await showCustomAlert(
+                    "上传成功",
+                    `已成功添加 ${newStickers.length} 个新表情，图床链接已自动复制！`,
+                  );
+                } else {
+                  await showCustomAlert(
+                    "上传成功",
+                    `已成功添加 ${newStickers.length} 个新表情！`,
+                  );
+                }
               }
 
               // 清空文件选择器的值，以便下次能选择相同的文件
