@@ -231,14 +231,71 @@ app.post('/api/webdav-proxy', async (req, res) => {
 
 const LOCAL_VAULT_ROOT = path.join(__dirname, 'EPhoneVault');
 const LOCAL_VAULT_MEDIA_DIR = path.join(LOCAL_VAULT_ROOT, 'media');
-try {
-  fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
-} catch (_) {}
+const VAULT_MAGIC_HEADER = Buffer.from('EPHVAULT', 'ascii');
+
+function toStealthDiskFileName(rawName) {
+  const safe = path.basename(String(rawName || '')).replace(/[^a-zA-Z0-9._-]/g, '_');
+  return safe.replace(/\.(png|jpe?g|webp|gif|epdat)$/i, '') + '.epdat';
+}
+
+function getMimeFromVaultName(rawName) {
+  const lower = String(rawName || '').toLowerCase();
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  return 'image/png';
+}
+
+function wrapBufferForVault(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length === 0) return buf;
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(VAULT_MAGIC_HEADER)) {
+    return buf;
+  }
+  return Buffer.concat([VAULT_MAGIC_HEADER, buf]);
+}
+
+function unwrapBufferFromVault(buf) {
+  if (!Buffer.isBuffer(buf)) return buf;
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(VAULT_MAGIC_HEADER)) {
+    return buf.subarray(8);
+  }
+  return buf;
+}
+
+function ensureVaultNoMediaAndMigrate() {
+  let converted = 0;
+  try {
+    fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
+    const rootNoMedia = path.join(LOCAL_VAULT_ROOT, '.nomedia');
+    const mediaNoMedia = path.join(LOCAL_VAULT_MEDIA_DIR, '.nomedia');
+    if (!fs.existsSync(rootNoMedia)) fs.writeFileSync(rootNoMedia, '');
+    if (!fs.existsSync(mediaNoMedia)) fs.writeFileSync(mediaNoMedia, '');
+    const entries = fs.readdirSync(LOCAL_VAULT_MEDIA_DIR);
+    for (const entry of entries) {
+      if (/\.(png|jpe?g|webp|gif)$/i.test(entry)) {
+        const oldPath = path.join(LOCAL_VAULT_MEDIA_DIR, entry);
+        const stealthName = toStealthDiskFileName(entry);
+        const newPath = path.join(LOCAL_VAULT_MEDIA_DIR, stealthName);
+        try {
+          const rawBuf = fs.readFileSync(oldPath);
+          fs.writeFileSync(newPath, wrapBufferForVault(rawBuf));
+          fs.unlinkSync(oldPath);
+          converted++;
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+  return converted;
+}
+
+ensureVaultNoMediaAndMigrate();
 
 app.get('/api/local-vault/ping', (req, res) => {
   try {
-    fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
-    const files = fs.existsSync(LOCAL_VAULT_MEDIA_DIR) ? fs.readdirSync(LOCAL_VAULT_MEDIA_DIR) : [];
+    ensureVaultNoMediaAndMigrate();
+    const files = fs.existsSync(LOCAL_VAULT_MEDIA_DIR)
+      ? fs.readdirSync(LOCAL_VAULT_MEDIA_DIR).filter((f) => f !== '.nomedia')
+      : [];
     const backupPath = path.join(LOCAL_VAULT_ROOT, 'backup.json');
     const hasBackup = fs.existsSync(backupPath);
     return res.json({
@@ -252,15 +309,24 @@ app.get('/api/local-vault/ping', (req, res) => {
   }
 });
 
+app.post('/api/local-vault/hide-gallery', (req, res) => {
+  try {
+    const converted = ensureVaultNoMediaAndMigrate();
+    return res.json({ ok: true, converted });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/api/local-vault/media', (req, res) => {
   try {
-    fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
+    ensureVaultNoMediaAndMigrate();
     const { fileName = 'image.png', contentBase64 = '' } = req.body || {};
-    const safeName = path.basename(String(fileName)).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filePath = path.join(LOCAL_VAULT_MEDIA_DIR, safeName);
-    const buf = Buffer.from(String(contentBase64), 'base64');
-    fs.writeFileSync(filePath, buf);
-    return res.json({ ok: true, fileName: safeName, url: `/api/local-vault/media/${encodeURIComponent(safeName)}` });
+    const stealthName = toStealthDiskFileName(fileName);
+    const filePath = path.join(LOCAL_VAULT_MEDIA_DIR, stealthName);
+    const rawBuf = Buffer.from(String(contentBase64), 'base64');
+    fs.writeFileSync(filePath, wrapBufferForVault(rawBuf));
+    return res.json({ ok: true, fileName: stealthName, url: `/api/local-vault/media/${encodeURIComponent(fileName)}` });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -268,15 +334,16 @@ app.post('/api/local-vault/media', (req, res) => {
 
 app.post('/api/local-vault/media-batch', (req, res) => {
   try {
-    fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
+    ensureVaultNoMediaAndMigrate();
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
     let saved = 0;
     for (const item of items) {
       if (!item || !item.fileName || !item.contentBase64) continue;
-      const safeName = path.basename(String(item.fileName)).replace(/[^a-zA-Z0-9._-]/g, '_');
-      const filePath = path.join(LOCAL_VAULT_MEDIA_DIR, safeName);
+      const stealthName = toStealthDiskFileName(item.fileName);
+      const filePath = path.join(LOCAL_VAULT_MEDIA_DIR, stealthName);
       if (!fs.existsSync(filePath)) {
-        fs.writeFileSync(filePath, Buffer.from(String(item.contentBase64), 'base64'));
+        const rawBuf = Buffer.from(String(item.contentBase64), 'base64');
+        fs.writeFileSync(filePath, wrapBufferForVault(rawBuf));
       }
       saved++;
     }
@@ -289,11 +356,17 @@ app.post('/api/local-vault/media-batch', (req, res) => {
 app.get('/api/local-vault/media/:filename', (req, res) => {
   try {
     const safeName = path.basename(String(req.params.filename || '')).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filePath = path.join(LOCAL_VAULT_MEDIA_DIR, safeName);
-    if (!fs.existsSync(filePath)) {
+    const stealthName = toStealthDiskFileName(safeName);
+    const stealthPath = path.join(LOCAL_VAULT_MEDIA_DIR, stealthName);
+    const legacyPath = path.join(LOCAL_VAULT_MEDIA_DIR, safeName);
+    const targetPath = fs.existsSync(stealthPath) ? stealthPath : (fs.existsSync(legacyPath) ? legacyPath : '');
+    if (!targetPath) {
       return res.status(404).end();
     }
-    return res.sendFile(filePath);
+    const rawBuf = fs.readFileSync(targetPath);
+    const cleanBuf = unwrapBufferFromVault(rawBuf);
+    res.setHeader('Content-Type', getMimeFromVaultName(safeName));
+    return res.send(cleanBuf);
   } catch (err) {
     return res.status(500).end();
   }
