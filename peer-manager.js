@@ -1887,24 +1887,25 @@
           chatId: (meta && meta.chatId) || "",
           openRequests: Boolean(meta && meta.openRequests)
         };
+        const notifOpts = {
+          body: body,
+          icon: safeIcon,
+          badge: "./icon-192.png",
+          tag: tag,
+          renotify: true,
+          silent: false,
+          vibrate: [200, 100, 200],
+          data: notifData
+        };
 
         if ("serviceWorker" in navigator) {
-          try {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (reg && typeof reg.showNotification === "function") {
-              await reg.showNotification(title, {
-                body: body,
-                icon: safeIcon,
-                badge: "./icon-192.png",
-                tag: tag,
-                renotify: true,
-                silent: false,
-                vibrate: [200, 100, 200],
-                data: notifData
-              });
+          const cachedReg = this._cachedSwReg || window.__cachedSwReg;
+          if (cachedReg && typeof cachedReg.showNotification === "function") {
+            try {
+              await cachedReg.showNotification(title, notifOpts);
               return;
-            }
-          } catch (_) {}
+            } catch (_) {}
+          }
           if (navigator.serviceWorker.controller) {
             try {
               navigator.serviceWorker.controller.postMessage({
@@ -1919,6 +1920,15 @@
               return;
             } catch (_) {}
           }
+          try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg && typeof reg.showNotification === "function") {
+              this._cachedSwReg = reg;
+              window.__cachedSwReg = reg;
+              await reg.showNotification(title, notifOpts);
+              return;
+            }
+          } catch (_) {}
         }
         new Notification(title, {
           body: body,
@@ -2813,6 +2823,7 @@
           : {},
         keeperSettings: {
           keeperForcedDraw: Boolean(groupChat.settings?.keeperForcedDraw),
+          keeperPromptEnabled: groupChat.settings?.keeperPromptEnabled !== false,
           keeperMaxMemory: groupChat.settings?.keeperMaxMemory,
           keeperPrompt: groupChat.settings?.keeperPrompt,
           keeperTargetId: groupChat.settings?.keeperTargetId,
@@ -3767,6 +3778,9 @@
       if (data.keeperSettings && typeof data.keeperSettings === "object") {
         if (data.keeperSettings.keeperForcedDraw !== undefined) {
           groupChat.settings.keeperForcedDraw = Boolean(data.keeperSettings.keeperForcedDraw);
+        }
+        if (data.keeperSettings.keeperPromptEnabled !== undefined) {
+          groupChat.settings.keeperPromptEnabled = Boolean(data.keeperSettings.keeperPromptEnabled);
         }
         if (data.keeperSettings.keeperMaxMemory !== undefined) {
           groupChat.settings.keeperMaxMemory = data.keeperSettings.keeperMaxMemory;

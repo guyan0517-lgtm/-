@@ -2016,6 +2016,65 @@
               </button>
 
               <div class="moe-divider"></div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h4 style="font-size: 14px; margin: 0; color: var(--accent-color); display: flex; align-items: center; gap: 6px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                  <span>扩容</span>
+                </h4>
+                <span id="local-vault-status-badge" style="font-size: 11px; color: var(--text-secondary);">未连接</span>
+              </div>
+
+              <div style="padding: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <label style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; width: 36px;">模式</label>
+                  <select id="local-vault-mode-select" class="moe-input" style="flex: 1; height: 36px; line-height: 36px; font-size: 12.5px; box-sizing: border-box; padding: 0 10px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <option value="server">本地服务</option>
+                    <option value="webdav">网盘桥接</option>
+                    <option value="folder">本地目录</option>
+                  </select>
+                </div>
+
+                <div id="local-vault-url-row" style="display: flex; gap: 6px; align-items: center;">
+                  <label style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; width: 36px;">地址</label>
+                  <input type="text" id="local-vault-url-input" class="moe-input" placeholder="http://127.0.0.1:8765" style="flex: 1; height: 32px; font-size: 12px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);" />
+                </div>
+
+                <div id="local-vault-auth-rows" style="display: none; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; gap: 6px; align-items: center;">
+                    <label style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; width: 36px;">账号</label>
+                    <input type="text" id="local-vault-user-input" class="moe-input" placeholder="WebDAV账号" style="flex: 1; height: 32px; font-size: 12px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);" />
+                  </div>
+                  <div style="display: flex; gap: 6px; align-items: center;">
+                    <label style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; width: 36px;">密码</label>
+                    <input type="password" id="local-vault-pass-input" class="moe-input" placeholder="应用密码" style="flex: 1; height: 32px; font-size: 12px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);" />
+                  </div>
+                </div>
+
+                <div id="local-vault-folder-row" style="display: none; gap: 6px; align-items: center;">
+                  <label style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; width: 36px;">目录</label>
+                  <input type="text" id="local-vault-folder-display" class="moe-input" placeholder="未选择本地目录" readonly style="flex: 1; min-width: 0; height: 32px; font-size: 12px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);" />
+                  <button type="button" class="moe-btn-mini" id="local-vault-pick-folder-btn" style="height: 28px; padding: 0 10px; font-size: 11.5px; border-radius: 6px; flex-shrink: 0; width: auto; min-width: auto;">选择</button>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px;">
+                  <span style="font-size: 12px; color: var(--text-primary); font-weight: 600;">自动</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="local-vault-auto-switch" />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+
+                <div class="moe-btn-group" style="margin-top: 2px;">
+                  <button type="button" class="moe-btn-secondary" id="local-vault-connect-btn" style="font-size: 12px; padding: 6px 0;">连接</button>
+                  <button type="button" class="moe-btn-secondary" id="local-vault-offload-btn" style="font-size: 12px; padding: 6px 0;">分离</button>
+                  <button type="button" class="moe-btn-secondary" id="local-vault-backup-btn" style="font-size: 12px; padding: 6px 0;">备份</button>
+                  <button type="button" class="moe-btn-secondary" id="local-vault-restore-btn" style="font-size: 12px; padding: 6px 0;">恢复</button>
+                </div>
+                <div id="local-vault-info-text" style="font-size: 11px; color: var(--text-secondary); text-align: center; line-height: 1.4;">可将头像与生图分离存储至手机本地，释放浏览器运行内存</div>
+              </div>
+
+              <div class="moe-divider"></div>
               <button class="moe-btn-danger" id="clear-orphaned-data-btn">
                 🧹 清理失效数据
               </button>
@@ -2082,7 +2141,7 @@
             </div>
           </div>
 
-          <div style="text-align: center; margin-bottom: 15px; margin-top: 5px">
+          <div style="text-align: center; margin-bottom: 12px; margin-top: 5px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
             <a
               href="https://jcny642xl7ll.feishu.cn/wiki/KGsnwECKji2xdxkCqDbcZNOnndd"
               target="_blank"
@@ -2104,6 +2163,83 @@
             >
               <span>📖</span> 兔k写的一些教程
             </a>
+
+            <button
+              type="button"
+              id="toggle-storage-tutorial-btn"
+              onclick="if(window.toggleStorageTutorialPanel)window.toggleStorageTutorialPanel();"
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 9px 20px;
+                background-color: var(--card-bg);
+                color: var(--accent-color);
+                border-radius: 25px;
+                font-size: 13.5px;
+                font-weight: 600;
+                border: 1px solid var(--border-color);
+                cursor: pointer;
+              "
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              <span>存储</span>
+            </button>
+          </div>
+
+          <div class="moe-card" id="storage-tutorial-card" style="display: none; margin-bottom: 14px;">
+            <div class="moe-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                <h3>存储</h3>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" class="moe-btn-small" id="storage-tut-tab-android" onclick="if(window.switchStorageTutorialTab)window.switchStorageTutorialTab('android');" style="height: 26px; min-height: 26px; padding: 0 12px; font-size: 11.5px; margin: 0; width: auto;">安卓</button>
+                <button type="button" class="moe-btn-small" id="storage-tut-tab-ios" onclick="if(window.switchStorageTutorialTab)window.switchStorageTutorialTab('ios');" style="height: 26px; min-height: 26px; padding: 0 12px; font-size: 11.5px; margin: 0; width: auto; background: var(--secondary-bg); color: var(--text-primary);">苹果</button>
+              </div>
+            </div>
+            <div class="moe-card-body" style="display: flex; flex-direction: column; gap: 12px; font-size: 12.5px; color: var(--text-primary); line-height: 1.6;">
+              <div id="storage-tut-pane-android" style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="padding: 10px 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700; color: var(--accent-color); font-size: 13px;">安卓方法一 Termux本地服务</span>
+                    <button type="button" class="moe-btn-small" onclick="if(window.copyVaultStartupCmd)window.copyVaultStartupCmd('android');" style="height: 24px; min-height: 24px; padding: 0 10px; font-size: 11px; margin: 0; width: auto;">复制</button>
+                  </div>
+                  <div>1. 在手机安装并打开 Termux 软件，点击右上角复制按钮获取启动命令，粘贴到 Termux 中回车运行。</div>
+                  <div>2. 首次运行如果弹出存储授权提示，点击允许，它会自动在手机下载目录创建 EPhoneVault 真实文件夹。</div>
+                  <div>3. 回到上方存储与备份的扩容栏，模式选为本地服务，地址保持默认 http://127.0.0.1:8765，点击连接。</div>
+                  <div>4. 连接成功后打开自动开关，再点击一次分离和备份，所有头像、背景与生图就会直接搬进手机真实硬盘，清理浏览器缓存也不会丢失，存二十G也丝滑不卡。</div>
+                </div>
+
+                <div style="padding: 10px 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 6px;">
+                  <span style="font-weight: 700; color: var(--accent-color); font-size: 13px;">安卓方法二 本地目录直连</span>
+                  <div>1. 如果不想打开 Termux，直接在上方扩容栏将模式切换为本地目录。</div>
+                  <div>2. 点击目录右侧的选择按钮，在手机里新建或选中一个专门存放数据的文件夹并授权允许访问。</div>
+                  <div>3. 点击分离按钮，系统会把聊天记录里积压的高清大图单独拆分成文件写入该文件夹，瞬间把几百兆的运行包缩减到几兆。</div>
+                  <div>4. 平时点击备份即可将完整聊天与图片同步写入该文件夹，随时可点恢复找回。</div>
+                </div>
+              </div>
+
+              <div id="storage-tut-pane-ios" style="display: none; flex-direction: column; gap: 12px;">
+                <div style="padding: 10px 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700; color: var(--accent-color); font-size: 13px;">苹果方法一 a-Shell本地服务</span>
+                    <button type="button" class="moe-btn-small" onclick="if(window.copyVaultStartupCmd)window.copyVaultStartupCmd('ios');" style="height: 24px; min-height: 24px; padding: 0 10px; font-size: 11px; margin: 0; width: auto;">复制</button>
+                  </div>
+                  <div>1. 在苹果 App Store 免费下载安装 a-Shell 软件，它就是苹果手机上的本地终端工具。</div>
+                  <div>2. 点击右上角复制按钮获取苹果专用启动命令，打开 a-Shell 粘贴并回车运行。</div>
+                  <div>3. 回到小手机上方的扩容栏，模式选为本地服务，地址填 http://127.0.0.1:8765，点击连接并开启自动开关。</div>
+                  <div>4. 点击分离和备份后，所有图片和聊天档案会直接保存在苹果自带的文件应用里的 a-Shell 文件夹下，彻底脱离浏览器缓存，清理 Safari 或谷歌浏览器数据都绝不会丢。</div>
+                </div>
+
+                <div style="padding: 10px 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 6px;">
+                  <span style="font-weight: 700; color: var(--accent-color); font-size: 13px;">苹果方法二 网盘桥接模式</span>
+                  <div>1. 如果不想在苹果手机上输命令，可以使用支持 WebDAV 的免费网盘或苹果本地文件桥接软件，例如坚果云、TeraCloud 或 FE文件管理器。</div>
+                  <div>2. 在上方扩容栏把模式切换为网盘桥接，填入服务器地址、账号和应用密码，点击连接。</div>
+                  <div>3. 连接成功后开启自动开关，点击分离与备份，所有大图会自动转存到外部空间并按需加载，让苹果浏览器始终保持几兆的超轻内存，再多图片也不卡顿。</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div style="margin: 10px 0; text-align: center">
@@ -10202,6 +10338,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin: 0;">
               <span class="toggle-switch-text" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">每回合末尾强制生图</span>
               <input type="checkbox" id="keeper-forced-draw-switch" />
+              <span class="toggle-switch-slider"></span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin: 0; padding-bottom: 12px; border-bottom: 1px dashed var(--border-color);">
+            <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin: 0;">
+              <span class="toggle-switch-text" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">提示</span>
+              <input type="checkbox" id="keeper-prompt-switch" checked />
               <span class="toggle-switch-slider"></span>
             </label>
           </div>
@@ -21044,6 +21188,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   finish_reason: finalFinishReason,
                 },
               ],
+              candidates: [
+                {
+                  content: {
+                    parts: [{ text: fullText }],
+                  },
+                  finishReason: "STOP",
+                },
+              ],
             };
           };
 
@@ -21236,6 +21388,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     stream_interrupted: Boolean(streamInterruptedErr || (!sawDoneMarker && !sawFinishReason)),
                   },
                 ],
+                candidates: [
+                  {
+                    content: {
+                      parts: [{ text: fullText }],
+                    },
+                    finishReason: "STOP",
+                  },
+                ],
               };
               return {
                 ok: true,
@@ -21382,12 +21542,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const isClaude = protocol === "claude" || /claude/i.test(model);
             let replyText = "";
 
+            const useStreamForTest = typeof window.isApiStreamEnabled === "function"
+              ? window.isApiStreamEnabled()
+              : Boolean(state && state.apiConfig && state.apiConfig.streamEnabled);
+
             if (isGemini) {
               const gCfg = toGeminiRequestData(model, apiKey, "You are a test assistant.", [{ role: "user", content: "请回复收到" }], isGemini, 0.7);
-              const res = await origFetch(gCfg.url, gCfg.data);
-              if (!res.ok) throw new Error("HTTP " + res.status + ": " + (await res.text()));
-              const jData = await res.json();
-              replyText = jData?.candidates?.[0]?.content?.parts?.[0]?.text || "成功";
+              let testGeminiUrl = gCfg.url;
+              if (useStreamForTest && testGeminiUrl.includes(":generateContent")) {
+                testGeminiUrl = testGeminiUrl.replace(":generateContent", ":streamGenerateContent") + (testGeminiUrl.includes("?") ? "&alt=sse" : "?alt=sse");
+              }
+              const gRes = await requestLlmapiWithFallback(testGeminiUrl, gCfg.data);
+              if (!gRes.ok) throw new Error("HTTP " + gRes.status + ": " + (gRes.text || ""));
+              const jData = JSON.parse(gRes.text);
+              replyText = jData?.candidates?.[0]?.content?.parts?.[0]?.text || jData?.choices?.[0]?.message?.content || "成功";
             } else if (isClaude) {
               let claudeUrl = proxyUrl.replace(/\/+$/, "");
               if (!claudeUrl.endsWith("/messages")) {
@@ -21399,16 +21567,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   "Content-Type": "application/json",
                   "x-api-key": apiKey,
                   "anthropic-version": "2023-06-01",
+                  ...(useStreamForTest ? { Accept: "text/event-stream" } : {}),
                 },
                 body: JSON.stringify({
                   model: model,
                   max_tokens: 30,
                   messages: [{ role: "user", content: "请回复收到" }],
+                  stream: useStreamForTest,
                 }),
               });
               if (!cRes.ok) throw new Error("HTTP " + cRes.status + ": " + (cRes.text || ""));
               const cJson = JSON.parse(cRes.text);
-              replyText = cJson?.content?.[0]?.text || "成功";
+              replyText = cJson?.content?.[0]?.text || cJson?.choices?.[0]?.message?.content || "成功";
             } else {
               let oUrl = proxyUrl.replace(/\/+$/, "");
               if (!oUrl.endsWith("/chat/completions") && !oUrl.endsWith("/completions")) {
@@ -21419,11 +21589,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${apiKey}`,
+                  ...(useStreamForTest ? { Accept: "text/event-stream" } : {}),
                 },
                 body: JSON.stringify({
                   model: model,
                   messages: [{ role: "user", content: "请回复收到" }],
                   temperature: 0.7,
+                  stream: useStreamForTest,
                 }),
               });
               if (!oRes.ok) throw new Error("HTTP " + oRes.status + ": " + (oRes.text || ""));
@@ -21668,15 +21840,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         };
 
+        function isApiStreamEnabled() {
+          const sw = document.getElementById("api-stream-switch");
+          if (sw && typeof sw.checked === "boolean") {
+            return sw.checked;
+          }
+          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
+          if (typeof cfg.streamEnabled === "boolean") {
+            return cfg.streamEnabled;
+          }
+          return localStorage.getItem("api_stream_enabled") === "true";
+        }
+        window.isApiStreamEnabled = isApiStreamEnabled;
+
         window.fetch = async function (input, init) {
           try {
             const urlStr = typeof input === "string" ? input : (input && input.url ? input.url : String(input || ""));
-            const apiCfg = (window.state && window.state.apiConfig) ? window.state.apiConfig : {};
+            const apiCfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
 
             // 判断是否命中了 AI 聊天补全接口
             const isChatCompletionCall =
               urlStr.includes("/chat/completions") ||
-              urlStr.includes(":generateContent");
+              urlStr.includes(":generateContent") ||
+              urlStr.includes(":streamGenerateContent");
 
             if (!isChatCompletionCall) {
               return origFetch(input, init);
@@ -21733,22 +21919,31 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "默认模型"
             ).trim();
 
-            const isStreamActive = !!apiCfg.streamEnabled;
-            const isTinyCheck = Boolean(parsedBody && parsedBody.max_tokens && parsedBody.max_tokens <= 10);
+            const isStreamActive = isApiStreamEnabled();
 
             if (!isClaudeOrLlmapi && protocol === "default") {
               const fetchStartT = Date.now();
               let initForDefault = { ...init };
-              const callerPassedStreamFalse = parsedBody && parsedBody.stream === false;
-              if (urlStr.includes("/chat/completions") && parsedBody && Array.isArray(parsedBody.messages) && !isTinyCheck) {
-                const streamBody = { ...parsedBody, stream: true };
-                initForDefault.body = JSON.stringify(streamBody);
-                initForDefault.headers = {
-                  ...(init && init.headers ? init.headers : {}),
-                  Accept: "text/event-stream",
-                };
+              let effectiveUrlStr = urlStr;
+              if (urlStr.includes("/chat/completions") && parsedBody && typeof parsedBody === "object") {
+                const updatedBody = { ...parsedBody, stream: isStreamActive };
+                initForDefault.body = JSON.stringify(updatedBody);
+                const nextHeaders = { ...(init && init.headers ? init.headers : {}) };
+                if (isStreamActive) {
+                  nextHeaders.Accept = "text/event-stream";
+                } else {
+                  if (nextHeaders.Accept === "text/event-stream") delete nextHeaders.Accept;
+                  if (nextHeaders.accept === "text/event-stream") delete nextHeaders.accept;
+                }
+                initForDefault.headers = nextHeaders;
+              } else if (urlStr.includes(":generateContent") || urlStr.includes(":streamGenerateContent")) {
+                if (isStreamActive && urlStr.includes(":generateContent")) {
+                  effectiveUrlStr = urlStr.replace(":generateContent", ":streamGenerateContent") + (urlStr.includes("?") ? "&alt=sse" : "?alt=sse");
+                } else if (!isStreamActive && urlStr.includes(":streamGenerateContent")) {
+                  effectiveUrlStr = urlStr.replace(":streamGenerateContent", ":generateContent").replace(/([?&])alt=sse(&|$)/, "$1").replace(/[?&]$/, "");
+                }
               }
-              let fallbackRes = await requestLlmapiWithFallback(urlStr, {
+              let fallbackRes = await requestLlmapiWithFallback(effectiveUrlStr, {
                 ...initForDefault,
                 onStreamChunk: isStreamActive ? (chunk) => {
                   if (typeof window.onAiStreamTokenReceived === "function") {
@@ -21756,11 +21951,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   }
                 } : undefined,
               });
-              if (!fallbackRes.ok && callerPassedStreamFalse && fallbackRes.status === 400) {
-                fallbackRes = await requestLlmapiWithFallback(urlStr, {
-                  ...init,
-                });
-              }
               const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
               try {
                 recordApiCallLog({
@@ -21839,13 +22029,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             const normalizedMessages = normalizeMessagesForClaudeRelay(rawMessages);
-            const callerExplicitNonStream = parsedBody && parsedBody.stream === false;
 
             const openAiPayload = {
               model: modelId,
               messages: normalizedMessages,
               temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
-              stream: !isTinyCheck ? true : (parsedBody.stream !== undefined ? parsedBody.stream : isStreamActive),
+              stream: Boolean(isStreamActive),
               ...(parsedBody.max_tokens ? { max_tokens: parsedBody.max_tokens } : {}),
             };
 
@@ -21877,19 +22066,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   ...(noMaxTokensPayload.stream ? { Accept: "text/event-stream" } : {})
                 },
                 body: JSON.stringify(noMaxTokensPayload),
-              });
-            }
-            if (!res.ok && callerExplicitNonStream && res.status === 400) {
-              const nonStreamPayload = { ...openAiPayload, stream: false };
-              delete nonStreamPayload.max_tokens;
-              res = await requestLlmapiWithFallback(targetUrl, {
-                method: "POST",
-                signal: init?.signal,
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${cleanKey}`,
-                },
-                body: JSON.stringify(nonStreamPayload),
               });
             }
 
@@ -34669,8 +34845,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const streamSwitch = document.getElementById("api-stream-switch");
           if (streamSwitch) {
             streamSwitch.checked = !!state.apiConfig.streamEnabled;
+            localStorage.setItem("api_stream_enabled", state.apiConfig.streamEnabled ? "true" : "false");
             streamSwitch.onchange = () => {
               state.apiConfig.streamEnabled = streamSwitch.checked;
+              localStorage.setItem("api_stream_enabled", streamSwitch.checked ? "true" : "false");
               if (typeof db !== "undefined" && db.apiConfig) {
                 db.apiConfig.put(state.apiConfig);
               }
@@ -44157,9 +44335,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? `${GEMINI_API_URL}/${model || 'gemini-1.5-flash'}:generateContent?key=${getRandomValue(apiKey)}`
                 : (cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`);
 
+              const useStreamForMap = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
               let requestHeaders = isGemini
                 ? { "Content-Type": "application/json" }
-                : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, Accept: "text/event-stream" };
+                : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, ...(useStreamForMap ? { Accept: "text/event-stream" } : {}) };
 
               const geminiImageParts = [];
               const openaiImageParts = [];
@@ -44204,7 +44383,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       { role: "user", content: openaiImageParts.length > 0 ? [{ type: "text", text: prompt }, ...openaiImageParts] : prompt }
                     ],
                     temperature: mapTemperature,
-                    stream: true
+                    stream: useStreamForMap
                   };
 
               const fetchOptions = {
@@ -44337,9 +44516,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             ? `${GEMINI_API_URL}/${model || 'gemini-1.5-flash'}:generateContent?key=${getRandomValue(apiKey)}`
             : (cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`);
 
+          const useStreamForModMap = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
           let requestHeaders = isGemini
             ? { "Content-Type": "application/json" }
-            : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, Accept: "text/event-stream" };
+            : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, ...(useStreamForModMap ? { Accept: "text/event-stream" } : {}) };
 
           let requestBody = isGemini
             ? {
@@ -44354,7 +44534,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   { role: "user", content: prompt }
                 ],
                 temperature: 0.3,
-                stream: true
+                stream: useStreamForModMap
               };
 
           const resp = await fetch(requestUrl, {
@@ -47789,6 +47969,7 @@ ${stickerContext || "无"}
             if (typeof ensureBackgroundKeepAlive === "function") {
               ensureBackgroundKeepAlive();
             }
+            const useStreamInChat = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
             const response = isGemini
               ? await fetch(geminiConfig.url, geminiConfig.data)
               : await fetch(`${proxyUrl}/v1/chat/completions`, {
@@ -47796,13 +47977,13 @@ ${stickerContext || "无"}
                   headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${apiKey}`,
-                    Accept: "text/event-stream",
+                    ...(useStreamInChat ? { Accept: "text/event-stream" } : {}),
                   },
                   body: JSON.stringify({
                     model: model,
                     messages: openAiMessages,
                     temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                    stream: true,
+                    stream: useStreamInChat,
                   }),
                 });
 
@@ -50791,6 +50972,9 @@ ${stickerContext || "无"}
 
                   const targetNaiMsg = aiMessage;
                   (async () => {
+                    const releaseNaiKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
+                      ? window.acquireBackgroundTaskKeepAlive()
+                      : null;
                     try {
                       const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
                       const apiKey = domKey || localStorage.getItem("novelai-api-key");
@@ -50879,6 +51063,9 @@ ${stickerContext || "无"}
                       }, requestBody);
                       const imageDataUrl = await parseNovelAiResponseToDataUrl(response);
                       targetNaiMsg.imageUrl = imageDataUrl;
+                      if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
+                        try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(targetNaiMsg); } catch (_) {}
+                      }
                       await db.chats.put(chat);
                       if (typeof updateNaiBubbleInDom === "function") {
                         updateNaiBubbleInDom(chat, targetNaiMsg);
@@ -50886,8 +51073,18 @@ ${stickerContext || "无"}
                       if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
                         window.PeerManager.broadcastGroupMessage(chat, { ...targetNaiMsg, eventId: undefined, isMessageUpdate: true }, false);
                       }
+                      const isAppBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
+                      if (isAppBgNow && typeof showNotification === "function") {
+                        const notifTxt = chat.isGroup ? `${targetNaiMsg.senderName || chat.name}: [图片]` : "[图片]";
+                        const notifyAv = targetNaiMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
+                        showNotification(chat.id, notifTxt, notifyAv);
+                      }
                     } catch (error) {
                       console.warn("NAI图片生成失败:", error);
+                    } finally {
+                      if (typeof releaseNaiKeepAlive === "function") {
+                        releaseNaiKeepAlive();
+                      }
                     }
                   })();
                   break;
@@ -70305,6 +70502,11 @@ ${stickerContext || "无"}
             forcedSwitch.checked = chat.settings.keeperForcedDraw === true;
           }
 
+          const promptSwitch = document.getElementById("keeper-prompt-switch");
+          if (promptSwitch) {
+            promptSwitch.checked = chat.settings.keeperPromptEnabled !== false;
+          }
+
           const countInput = document.getElementById("keeper-context-count-input");
           if (countInput) {
             const savedCount = (chat.settings.keeperMaxMemory !== undefined && chat.settings.keeperMaxMemory !== null && !isNaN(parseInt(chat.settings.keeperMaxMemory)))
@@ -70466,6 +70668,9 @@ ${stickerContext || "无"}
 
           const forcedSwitch = document.getElementById("keeper-forced-draw-switch");
           chat.settings.keeperForcedDraw = forcedSwitch ? forcedSwitch.checked : false;
+
+          const promptSwitch = document.getElementById("keeper-prompt-switch");
+          chat.settings.keeperPromptEnabled = promptSwitch ? promptSwitch.checked : true;
 
           const countInput = document.getElementById("keeper-context-count-input");
           if (countInput) {
@@ -71278,6 +71483,9 @@ ${stickerContext || "无"}
 
           const forcedDrawStart = Date.now();
           let activeUsedCfg = null;
+          const releaseKeeperKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
+            ? window.acquireBackgroundTaskKeepAlive()
+            : null;
 
           try {
             console.log("执行守秘人末尾强制生图...");
@@ -71797,6 +72005,9 @@ ${stickerContext || "无"}
                 curTypingInd.style.display = "none";
               }
             }
+            if (typeof releaseKeeperKeepAlive === "function") {
+              releaseKeeperKeepAlive();
+            }
           }
         }
 
@@ -71987,6 +72198,9 @@ ${stickerContext || "无"}
             if (!imageDataUrl) throw new Error("无法解析生图数据");
 
             targetMsg.imageUrl = imageDataUrl;
+            if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
+              try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(targetMsg); } catch (_) {}
+            }
 
             if (state.chats) {
               state.chats[chat.id] = chat;
@@ -71996,6 +72210,12 @@ ${stickerContext || "无"}
             updateNaiBubbleInDom(chat, targetMsg);
             if (typeof playNotificationSound === "function" && String(state.activeChatId) === String(chat.id)) {
               playNotificationSound();
+            }
+            const isAppBgForKeeper = Boolean(document.hidden || document.visibilityState === "hidden");
+            if (isAppBgForKeeper && typeof showNotification === "function") {
+              const notifTxt = chat.isGroup ? `${targetMsg.senderName || chat.name}: [图片]` : "[图片]";
+              const notifyAv = targetMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
+              showNotification(chat.id, notifTxt, notifyAv);
             }
             if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
               window.PeerManager.broadcastGroupMessage(chat, { ...targetMsg, eventId: undefined, isMessageUpdate: true }, false);
@@ -85907,6 +86127,7 @@ ${stickerContext || "无"}
               };
               const streamSwitch = document.getElementById("api-stream-switch");
               state.apiConfig.streamEnabled = streamSwitch ? streamSwitch.checked : false;
+              localStorage.setItem("api_stream_enabled", state.apiConfig.streamEnabled ? "true" : "false");
               const cleanBotSwitch = document.getElementById("clean-bot-text-switch");
               state.apiConfig.cleanBotTextEnabled = cleanBotSwitch ? cleanBotSwitch.checked : false;
               const cognitionSwitch = document.getElementById("real-time-cognition-switch");
@@ -101026,6 +101247,814 @@ ${stickerContext || "无"}
             document.addEventListener("DOMContentLoaded", bindMiniPhoneAppearanceControls);
           } else {
             bindMiniPhoneAppearanceControls();
+          }
+        })();
+
+        // ==================== 本地扩容存储与教程模块 ====================
+        (function () {
+          const VAULT_CFG_KEY = "ephone_local_vault_config";
+          let dirHandleCache = null;
+          const blobUrlMemoryCache = new Map();
+
+          function loadVaultConfig() {
+            try {
+              const raw = localStorage.getItem(VAULT_CFG_KEY);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                return {
+                  mode: parsed.mode || "termux",
+                  url: parsed.url || "http://127.0.0.1:8765",
+                  username: parsed.username || "",
+                  password: parsed.password || "",
+                  auto: Boolean(parsed.auto),
+                  folderName: parsed.folderName || "",
+                };
+              }
+            } catch (_) {}
+            return {
+              mode: "termux",
+              url: "http://127.0.0.1:8765",
+              username: "",
+              password: "",
+              auto: false,
+              folderName: "",
+            };
+          }
+
+          function saveVaultConfig(cfg) {
+            try {
+              localStorage.setItem(VAULT_CFG_KEY, JSON.stringify(cfg));
+            } catch (_) {}
+          }
+
+          function openVaultHandleDb() {
+            return new Promise((resolve, reject) => {
+              const req = indexedDB.open("EPhoneLocalVaultHandles", 1);
+              req.onupgradeneeded = (e) => {
+                const idb = e.target.result;
+                if (!idb.objectStoreNames.contains("handles")) {
+                  idb.createObjectStore("handles");
+                }
+              };
+              req.onsuccess = (e) => resolve(e.target.result);
+              req.onerror = (e) => reject(e.target.error);
+            });
+          }
+
+          async function saveDirectoryHandle(handle) {
+            dirHandleCache = handle;
+            try {
+              const idb = await openVaultHandleDb();
+              await new Promise((resolve, reject) => {
+                const tx = idb.transaction("handles", "readwrite");
+                tx.objectStore("handles").put(handle, "rootDir");
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject(e.target.error);
+              });
+            } catch (_) {}
+          }
+
+          async function getSavedDirectoryHandle() {
+            if (dirHandleCache) return dirHandleCache;
+            try {
+              const idb = await openVaultHandleDb();
+              const handle = await new Promise((resolve) => {
+                const tx = idb.transaction("handles", "readonly");
+                const r = tx.objectStore("handles").get("rootDir");
+                r.onsuccess = () => resolve(r.result || null);
+                r.onerror = () => resolve(null);
+              });
+              if (handle) dirHandleCache = handle;
+              return handle;
+            } catch (_) {
+              return null;
+            }
+          }
+
+          function updateVaultStatusBadge(text, isOk) {
+            const badge = document.getElementById("local-vault-status-badge");
+            if (!badge) return;
+            badge.textContent = text;
+            badge.style.color = isOk ? "var(--accent-color)" : "var(--text-secondary)";
+          }
+
+          function setVaultInfoText(text) {
+            const infoEl = document.getElementById("local-vault-info-text");
+            if (infoEl) infoEl.textContent = text;
+          }
+
+          function syncVaultModeRows() {
+            const modeSel = document.getElementById("local-vault-mode-select");
+            const urlRow = document.getElementById("local-vault-url-row");
+            const authRows = document.getElementById("local-vault-auth-rows");
+            const folderRow = document.getElementById("local-vault-folder-row");
+            const urlInput = document.getElementById("local-vault-url-input");
+            if (!modeSel) return;
+            const mode = modeSel.value || "termux";
+            if (mode === "termux") {
+              if (urlRow) urlRow.style.display = "flex";
+              if (authRows) authRows.style.display = "none";
+              if (folderRow) folderRow.style.display = "none";
+              if (urlInput && !urlInput.value.trim()) {
+                urlInput.value = "http://127.0.0.1:8765";
+              }
+            } else if (mode === "webdav") {
+              if (urlRow) urlRow.style.display = "flex";
+              if (authRows) authRows.style.display = "flex";
+              if (folderRow) folderRow.style.display = "none";
+              if (urlInput && urlInput.value.trim() === "http://127.0.0.1:8765") {
+                urlInput.value = "";
+              }
+              if (urlInput) urlInput.placeholder = "https://dav.jianguoyun.com/dav/";
+            } else if (mode === "folder") {
+              if (urlRow) urlRow.style.display = "none";
+              if (authRows) authRows.style.display = "none";
+              if (folderRow) folderRow.style.display = "flex";
+            }
+          }
+
+          function hashDataUrl(str) {
+            let h1 = 0xdeadbeef ^ str.length;
+            let h2 = 0x41c6ce57 ^ str.length;
+            const step = Math.max(1, Math.floor(str.length / 4096));
+            for (let i = 0; i < str.length; i += step) {
+              const ch = str.charCodeAt(i);
+              h1 = Math.imul(h1 ^ ch, 2654435761);
+              h2 = Math.imul(h2 ^ ch, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0") + "_" + str.length.toString(16);
+          }
+
+          function parseDataUrlToParts(dataUrl) {
+            const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
+            if (!match) return null;
+            const mime = match[1].toLowerCase();
+            const b64 = match[2];
+            let ext = "png";
+            if (mime.includes("jpeg") || mime.includes("jpg")) ext = "jpg";
+            else if (mime.includes("webp")) ext = "webp";
+            else if (mime.includes("gif")) ext = "gif";
+            return { mime, b64, ext };
+          }
+
+          function base64ToUint8Array(b64) {
+            const bin = atob(b64);
+            const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) {
+              arr[i] = bin.charCodeAt(i);
+            }
+            return arr;
+          }
+
+          function getCurrentFormVaultConfig() {
+            const modeSel = document.getElementById("local-vault-mode-select");
+            const urlInput = document.getElementById("local-vault-url-input");
+            const userInput = document.getElementById("local-vault-user-input");
+            const passInput = document.getElementById("local-vault-pass-input");
+            const autoSw = document.getElementById("local-vault-auto-switch");
+            const folderDisp = document.getElementById("local-vault-folder-display");
+            const saved = loadVaultConfig();
+            const cfg = {
+              mode: modeSel ? modeSel.value : saved.mode,
+              url: urlInput ? urlInput.value.trim().replace(/\/+$/, "") : saved.url,
+              username: userInput ? userInput.value.trim() : saved.username,
+              password: passInput ? passInput.value : saved.password,
+              auto: autoSw ? autoSw.checked : saved.auto,
+              folderName: folderDisp && folderDisp.value ? folderDisp.value : saved.folderName,
+            };
+            saveVaultConfig(cfg);
+            return cfg;
+          }
+
+          async function testVaultConnection(silent = false) {
+            const cfg = getCurrentFormVaultConfig();
+            try {
+              if (cfg.mode === "termux") {
+                const baseUrl = cfg.url || "http://127.0.0.1:8765";
+                const res = await fetch(baseUrl + "/ping", { method: "GET" });
+                if (!res.ok) throw new Error("本地服务响应异常");
+                updateVaultStatusBadge("已连接", true);
+                setVaultInfoText("本地服务已连接，图片与备份将直通手机存储");
+                if (!silent && typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "本地服务连接成功");
+                }
+                return true;
+              } else if (cfg.mode === "webdav") {
+                if (!cfg.url) throw new Error("请填写网盘桥接地址");
+                const targetDir = cfg.url.replace(/\/+$/, "") + "/EPhoneVault/";
+                await fetch("/api/webdav-proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    url: targetDir,
+                    method: "MKCOL",
+                    username: cfg.username,
+                    password: cfg.password,
+                  }),
+                });
+                const propRes = await fetch("/api/webdav-proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    url: targetDir,
+                    method: "PROPFIND",
+                    username: cfg.username,
+                    password: cfg.password,
+                    depth: 0,
+                  }),
+                });
+                const data = await propRes.json();
+                if (!data || !data.ok) {
+                  throw new Error(data && data.error ? data.error : "网盘验证未通过");
+                }
+                updateVaultStatusBadge("已连接", true);
+                setVaultInfoText("网盘桥接已就绪，支持图片分离与完整备份");
+                if (!silent && typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "网盘桥接连接成功");
+                }
+                return true;
+              } else if (cfg.mode === "folder") {
+                const handle = await getSavedDirectoryHandle();
+                if (!handle) {
+                  throw new Error("请先点击选择按钮指定本地文件夹");
+                }
+                if (typeof handle.queryPermission === "function") {
+                  let perm = await handle.queryPermission({ mode: "readwrite" });
+                  if (perm !== "granted" && !silent && typeof handle.requestPermission === "function") {
+                    perm = await handle.requestPermission({ mode: "readwrite" });
+                  }
+                  if (perm !== "granted") {
+                    throw new Error("需要授予本地目录读写权限");
+                  }
+                }
+                updateVaultStatusBadge("已授权", true);
+                setVaultInfoText("本地目录已就绪: " + handle.name);
+                if (!silent && typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "本地目录连接成功");
+                }
+                return true;
+              }
+            } catch (err) {
+              updateVaultStatusBadge("未连接", false);
+              if (!silent && typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "连接未成功: " + (err && err.message ? err.message : "请检查配置或教程"));
+              }
+              return false;
+            }
+            return false;
+          }
+
+          async function storeImageInVault(fileName, parts, cfg) {
+            if (cfg.mode === "termux") {
+              const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+              const bytes = base64ToUint8Array(parts.b64);
+              const targetUrl = baseUrl + "/media/" + encodeURIComponent(fileName);
+              const res = await fetch(targetUrl, {
+                method: "PUT",
+                headers: { "Content-Type": parts.mime },
+                body: bytes,
+              });
+              if (!res.ok) throw new Error("写入本地服务失败");
+              return targetUrl;
+            } else if (cfg.mode === "webdav") {
+              const baseUrl = cfg.url.replace(/\/+$/, "");
+              const targetUrl = baseUrl + "/EPhoneVault/media_" + fileName;
+              const res = await fetch("/api/webdav-proxy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  url: targetUrl,
+                  method: "PUT",
+                  username: cfg.username,
+                  password: cfg.password,
+                  contentBase64: parts.b64,
+                  contentType: parts.mime,
+                }),
+              });
+              const data = await res.json();
+              if (!data || !data.ok) throw new Error("上传网盘图片失败");
+              const blob = new Blob([base64ToUint8Array(parts.b64)], { type: parts.mime });
+              blobUrlMemoryCache.set(fileName, URL.createObjectURL(blob));
+              return "vault://" + fileName;
+            } else if (cfg.mode === "folder") {
+              const handle = await getSavedDirectoryHandle();
+              if (!handle) throw new Error("未选择本地目录");
+              const mediaDir = await handle.getDirectoryHandle("media", { create: true });
+              const fileHandle = await mediaDir.getFileHandle(fileName, { create: true });
+              const writable = await fileHandle.createWritable();
+              const bytes = base64ToUint8Array(parts.b64);
+              await writable.write(bytes);
+              await writable.close();
+              const blob = new Blob([bytes], { type: parts.mime });
+              blobUrlMemoryCache.set(fileName, URL.createObjectURL(blob));
+              return "vault://" + fileName;
+            }
+            return null;
+          }
+
+          async function resolveVaultRefToUrl(vaultRef) {
+            if (!vaultRef || typeof vaultRef !== "string") return vaultRef;
+            if (!vaultRef.startsWith("vault://")) return vaultRef;
+            const fileName = vaultRef.slice("vault://".length);
+            if (blobUrlMemoryCache.has(fileName)) {
+              return blobUrlMemoryCache.get(fileName);
+            }
+            const cfg = loadVaultConfig();
+            try {
+              if (cfg.mode === "termux") {
+                const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                return baseUrl + "/media/" + encodeURIComponent(fileName);
+              } else if (cfg.mode === "folder") {
+                const handle = await getSavedDirectoryHandle();
+                if (!handle) return vaultRef;
+                const mediaDir = await handle.getDirectoryHandle("media", { create: false });
+                const fileHandle = await mediaDir.getFileHandle(fileName, { create: false });
+                const file = await fileHandle.getFile();
+                const objUrl = URL.createObjectURL(file);
+                blobUrlMemoryCache.set(fileName, objUrl);
+                return objUrl;
+              } else if (cfg.mode === "webdav" && cfg.url) {
+                const targetUrl = cfg.url.replace(/\/+$/, "") + "/EPhoneVault/media_" + fileName;
+                const res = await fetch("/api/webdav-proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    url: targetUrl,
+                    method: "GET",
+                    username: cfg.username,
+                    password: cfg.password,
+                  }),
+                });
+                const data = await res.json();
+                if (data && data.ok && data.contentBase64) {
+                  const bytes = base64ToUint8Array(data.contentBase64);
+                  const blob = new Blob([bytes], { type: data.contentType || "image/png" });
+                  const objUrl = URL.createObjectURL(blob);
+                  blobUrlMemoryCache.set(fileName, objUrl);
+                  return objUrl;
+                }
+              }
+            } catch (_) {}
+            return vaultRef;
+          }
+
+          async function offloadDataUrlString(str, cfg, counter) {
+            if (typeof str !== "string" || !str.startsWith("data:image/") || str.length < 8192) {
+              return str;
+            }
+            const parts = parseDataUrlToParts(str);
+            if (!parts) return str;
+            const fileName = "img_" + hashDataUrl(str) + "." + parts.ext;
+            const ref = await storeImageInVault(fileName, parts, cfg);
+            if (ref) {
+              counter.count++;
+              counter.savedBytes += str.length;
+              return ref;
+            }
+            return str;
+          }
+
+          async function offloadObjectImagesDeep(obj, cfg, counter, visited = new WeakSet()) {
+            if (!obj || typeof obj !== "object") return false;
+            if (visited.has(obj)) return false;
+            visited.add(obj);
+            let modified = false;
+            if (Array.isArray(obj)) {
+              for (let i = 0; i < obj.length; i++) {
+                const val = obj[i];
+                if (typeof val === "string" && val.startsWith("data:image/") && val.length >= 8192) {
+                  const nextVal = await offloadDataUrlString(val, cfg, counter);
+                  if (nextVal !== val) {
+                    obj[i] = nextVal;
+                    modified = true;
+                  }
+                } else if (val && typeof val === "object") {
+                  const childMod = await offloadObjectImagesDeep(val, cfg, counter, visited);
+                  if (childMod) modified = true;
+                }
+              }
+              return modified;
+            }
+            for (const key of Object.keys(obj)) {
+              const val = obj[key];
+              if (typeof val === "string" && val.startsWith("data:image/") && val.length >= 8192) {
+                const nextVal = await offloadDataUrlString(val, cfg, counter);
+                if (nextVal !== val) {
+                  obj[key] = nextVal;
+                  modified = true;
+                }
+              } else if (val && typeof val === "object") {
+                const childMod = await offloadObjectImagesDeep(val, cfg, counter, visited);
+                if (childMod) modified = true;
+              }
+            }
+            return modified;
+          }
+
+          async function runVaultImageOffload() {
+            const ok = await testVaultConnection(true);
+            if (!ok) {
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "请先连接本地服务、网盘桥接或授权本地目录后再执行分离");
+              }
+              return;
+            }
+            const cfg = getCurrentFormVaultConfig();
+            const counter = { count: 0, savedBytes: 0 };
+            setVaultInfoText("正在分离高清图片到本地存储，请稍候...");
+            try {
+              if (typeof db !== "undefined" && db.chats) {
+                const allChats = await db.chats.toArray();
+                for (const chat of allChats) {
+                  const changed = await offloadObjectImagesDeep(chat, cfg, counter);
+                  if (changed) {
+                    await db.chats.put(chat);
+                    if (typeof state !== "undefined" && state.chats && chat.id !== undefined) {
+                      state.chats[chat.id] = chat;
+                      state.chats[String(chat.id)] = chat;
+                    }
+                  }
+                }
+              }
+              if (typeof db !== "undefined" && db.qzonePosts) {
+                const posts = await db.qzonePosts.toArray();
+                for (const post of posts) {
+                  const changed = await offloadObjectImagesDeep(post, cfg, counter);
+                  if (changed) {
+                    await db.qzonePosts.put(post);
+                  }
+                }
+              }
+              const mbSaved = (counter.savedBytes / (1024 * 1024)).toFixed(1);
+              setVaultInfoText("已分离 " + counter.count + " 张图片，释放约 " + mbSaved + " MB 浏览器内存");
+              hydrateDomVaultImages();
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "分离完成，共转移 " + counter.count + " 张图片，释放约 " + mbSaved + " MB 浏览器内存");
+              }
+            } catch (err) {
+              setVaultInfoText("分离中断: " + (err && err.message ? err.message : "未知错误"));
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "分离出现异常: " + (err && err.message ? err.message : "请重试"));
+              }
+            }
+          }
+
+          async function collectFullDatabaseSnapshot() {
+            const snapshot = {
+              version: 1,
+              timestamp: Date.now(),
+              localStorageData: {},
+              tables: {},
+            };
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k) snapshot.localStorageData[k] = localStorage.getItem(k);
+            }
+            if (typeof db !== "undefined" && db.tables) {
+              for (const table of db.tables) {
+                try {
+                  snapshot.tables[table.name] = await table.toArray();
+                } catch (_) {}
+              }
+            }
+            return snapshot;
+          }
+
+          async function applyFullDatabaseSnapshot(snapshot) {
+            if (!snapshot || typeof snapshot !== "object") {
+              throw new Error("备份数据格式无效");
+            }
+            if (snapshot.localStorageData && typeof snapshot.localStorageData === "object") {
+              for (const [k, v] of Object.entries(snapshot.localStorageData)) {
+                if (typeof v === "string") {
+                  localStorage.setItem(k, v);
+                }
+              }
+            }
+            if (snapshot.tables && typeof db !== "undefined" && db.tables) {
+              for (const table of db.tables) {
+                if (Array.isArray(snapshot.tables[table.name])) {
+                  await table.clear();
+                  if (snapshot.tables[table.name].length > 0) {
+                    await table.bulkPut(snapshot.tables[table.name]);
+                  }
+                }
+              }
+            }
+          }
+
+          async function runVaultBackup() {
+            const ok = await testVaultConnection(true);
+            if (!ok) {
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "请先连接存储通道后再点击备份");
+              }
+              return;
+            }
+            const cfg = getCurrentFormVaultConfig();
+            setVaultInfoText("正在打包全量数据并写入本地存储...");
+            try {
+              const snap = await collectFullDatabaseSnapshot();
+              const jsonStr = JSON.stringify(snap);
+              if (cfg.mode === "termux") {
+                const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                const res = await fetch(baseUrl + "/backup.json", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json; charset=utf-8" },
+                  body: jsonStr,
+                });
+                if (!res.ok) throw new Error("写入本地服务失败");
+              } else if (cfg.mode === "webdav") {
+                const targetUrl = cfg.url.replace(/\/+$/, "") + "/EPhoneVault/backup.json";
+                const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+                const res = await fetch("/api/webdav-proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    url: targetUrl,
+                    method: "PUT",
+                    username: cfg.username,
+                    password: cfg.password,
+                    contentBase64: b64,
+                    contentType: "application/json",
+                  }),
+                });
+                const data = await res.json();
+                if (!data || !data.ok) throw new Error("上传网盘备份失败");
+              } else if (cfg.mode === "folder") {
+                const handle = await getSavedDirectoryHandle();
+                if (!handle) throw new Error("未选择本地目录");
+                const fileHandle = await handle.getFileHandle("EPhoneBackup.json", { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(jsonStr);
+                await writable.close();
+              }
+              setVaultInfoText("备份已完成，全量聊天与设置已安全写入外部存储");
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "备份成功，数据已安全保存在外部存储");
+              }
+            } catch (err) {
+              setVaultInfoText("备份失败: " + (err && err.message ? err.message : "未知错误"));
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "备份未成功: " + (err && err.message ? err.message : "请检查连接"));
+              }
+            }
+          }
+
+          async function runVaultRestore() {
+            const ok = await testVaultConnection(true);
+            if (!ok) {
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "请先连接存储通道后再点击恢复");
+              }
+              return;
+            }
+            const cfg = getCurrentFormVaultConfig();
+            setVaultInfoText("正在从外部存储读取备份并恢复...");
+            try {
+              let jsonStr = "";
+              if (cfg.mode === "termux") {
+                const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                const res = await fetch(baseUrl + "/backup.json", { method: "GET" });
+                if (!res.ok) throw new Error("未找到本地服务中的备份文件");
+                jsonStr = await res.text();
+              } else if (cfg.mode === "webdav") {
+                const targetUrl = cfg.url.replace(/\/+$/, "") + "/EPhoneVault/backup.json";
+                const res = await fetch("/api/webdav-proxy", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    url: targetUrl,
+                    method: "GET",
+                    username: cfg.username,
+                    password: cfg.password,
+                  }),
+                });
+                const data = await res.json();
+                if (!data || !data.ok || !data.contentBase64) {
+                  throw new Error("未找到网盘中的备份文件");
+                }
+                jsonStr = decodeURIComponent(escape(atob(data.contentBase64)));
+              } else if (cfg.mode === "folder") {
+                const handle = await getSavedDirectoryHandle();
+                if (!handle) throw new Error("未选择本地目录");
+                const fileHandle = await handle.getFileHandle("EPhoneBackup.json", { create: false });
+                const file = await fileHandle.getFile();
+                jsonStr = await file.text();
+              }
+              const snap = JSON.parse(jsonStr);
+              await applyFullDatabaseSnapshot(snap);
+              setVaultInfoText("恢复成功，正在刷新页面加载数据...");
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "恢复成功，即将重新加载页面");
+              }
+              setTimeout(() => window.location.reload(), 900);
+            } catch (err) {
+              setVaultInfoText("恢复失败: " + (err && err.message ? err.message : "未找到备份"));
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "恢复未成功: " + (err && err.message ? err.message : "请确认之前已执行过备份"));
+              }
+            }
+          }
+
+          function hydrateDomVaultImages() {
+            const imgs = document.querySelectorAll('img[src^="vault://"]');
+            imgs.forEach((img) => {
+              const ref = img.getAttribute("src");
+              if (!ref) return;
+              resolveVaultRefToUrl(ref).then((resolved) => {
+                if (resolved && resolved !== ref) {
+                  img.setAttribute("src", resolved);
+                }
+              });
+            });
+          }
+
+          window.toggleStorageTutorialPanel = function () {
+            const card = document.getElementById("storage-tutorial-card");
+            if (!card) return;
+            const isHidden = card.style.display === "none" || !card.style.display;
+            card.style.display = isHidden ? "block" : "none";
+            if (isHidden) {
+              card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+          };
+
+          window.switchStorageTutorialTab = function (tab) {
+            const androidBtn = document.getElementById("storage-tut-tab-android");
+            const iosBtn = document.getElementById("storage-tut-tab-ios");
+            const androidPane = document.getElementById("storage-tut-pane-android");
+            const iosPane = document.getElementById("storage-tut-pane-ios");
+            if (tab === "ios") {
+              if (androidPane) androidPane.style.display = "none";
+              if (iosPane) iosPane.style.display = "flex";
+              if (iosBtn) {
+                iosBtn.style.background = "var(--accent-color)";
+                iosBtn.style.color = "#fff";
+              }
+              if (androidBtn) {
+                androidBtn.style.background = "var(--secondary-bg)";
+                androidBtn.style.color = "var(--text-primary)";
+              }
+            } else {
+              if (androidPane) androidPane.style.display = "flex";
+              if (iosPane) iosPane.style.display = "none";
+              if (androidBtn) {
+                androidBtn.style.background = "var(--accent-color)";
+                androidBtn.style.color = "#fff";
+              }
+              if (iosBtn) {
+                iosBtn.style.background = "var(--secondary-bg)";
+                iosBtn.style.color = "var(--text-primary)";
+              }
+            }
+          };
+
+          window.copyVaultStartupCmd = async function (platform) {
+            const pyScript = [
+              "import os,http.server,socketserver",
+              "root=os.path.expanduser('~/storage/downloads/EPhoneVault' if os.path.exists(os.path.expanduser('~/storage/downloads')) else '~/Documents/EPhoneVault' if os.path.exists(os.path.expanduser('~/Documents')) else '~/EPhoneVault')",
+              "os.makedirs(os.path.join(root,'media'),exist_ok=True)",
+              "class H(http.server.BaseHTTPRequestHandler):",
+              " def _c(s):",
+              "  s.send_header('Access-Control-Allow-Origin','*')",
+              "  s.send_header('Access-Control-Allow-Methods','GET,PUT,POST,OPTIONS')",
+              "  s.send_header('Access-Control-Allow-Headers','*')",
+              " def do_OPTIONS(s): s.send_response(200); s._c(); s.end_headers()",
+              " def do_GET(s):",
+              "  if s.path=='/ping': s.send_response(200); s._c(); s.end_headers(); s.wfile.write(b'ok'); return",
+              "  p=os.path.join(root,s.path.lstrip('/'))",
+              "  if os.path.isfile(p):",
+              "   s.send_response(200); s._c(); s.end_headers()",
+              "   with open(p,'rb') as f: s.wfile.write(f.read())",
+              "  else: s.send_response(404); s._c(); s.end_headers()",
+              " def do_PUT(s):",
+              "  n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n)",
+              "  p=os.path.join(root,s.path.lstrip('/')); os.makedirs(os.path.dirname(p),exist_ok=True)",
+              "  with open(p,'wb') as f: f.write(b)",
+              "  s.send_response(200); s._c(); s.end_headers(); s.wfile.write(b'ok')",
+              "print('Vault Ready on 127.0.0.1:8765 ->',root)",
+              "http.server.HTTPServer(('127.0.0.1',8765),H).serve_forever()",
+            ].join("\n");
+            const b64Script = btoa(pyScript);
+            const cmd = platform === "ios"
+              ? `python3 -c "import base64;exec(base64.b64decode('${b64Script}').decode())"`
+              : `pkg install -y python >/dev/null 2>&1; python3 -c "import base64;exec(base64.b64decode('${b64Script}').decode())"`;
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(cmd);
+              } else {
+                const ta = document.createElement("textarea");
+                ta.value = cmd;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+              }
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", platform === "ios" ? "苹果 a-Shell 启动命令已复制" : "安卓 Termux 启动命令已复制");
+              }
+            } catch (_) {
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "复制未成功，请检查浏览器剪贴板权限");
+              }
+            }
+          };
+
+          window.LocalVaultManager = {
+            maybeAutoOffloadSingleMessage: async function (msg) {
+              const cfg = loadVaultConfig();
+              if (!cfg.auto || !msg || !msg.imageUrl) return;
+              if (typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image/") && msg.imageUrl.length >= 8192) {
+                const counter = { count: 0, savedBytes: 0 };
+                msg.imageUrl = await offloadDataUrlString(msg.imageUrl, cfg, counter);
+              }
+            },
+          };
+
+          function initLocalVaultControls() {
+            const cfg = loadVaultConfig();
+            const modeSel = document.getElementById("local-vault-mode-select");
+            const urlInput = document.getElementById("local-vault-url-input");
+            const userInput = document.getElementById("local-vault-user-input");
+            const passInput = document.getElementById("local-vault-pass-input");
+            const autoSw = document.getElementById("local-vault-auto-switch");
+            const folderDisp = document.getElementById("local-vault-folder-display");
+            const pickBtn = document.getElementById("local-vault-pick-folder-btn");
+            const connBtn = document.getElementById("local-vault-connect-btn");
+            const offloadBtn = document.getElementById("local-vault-offload-btn");
+            const backupBtn = document.getElementById("local-vault-backup-btn");
+            const restoreBtn = document.getElementById("local-vault-restore-btn");
+
+            if (modeSel) {
+              modeSel.value = cfg.mode || "termux";
+              modeSel.addEventListener("change", () => {
+                syncVaultModeRows();
+                getCurrentFormVaultConfig();
+              });
+            }
+            if (urlInput) {
+              urlInput.value = cfg.url || "http://127.0.0.1:8765";
+              urlInput.addEventListener("change", getCurrentFormVaultConfig);
+            }
+            if (userInput) {
+              userInput.value = cfg.username || "";
+              userInput.addEventListener("change", getCurrentFormVaultConfig);
+            }
+            if (passInput) {
+              passInput.value = cfg.password || "";
+              passInput.addEventListener("change", getCurrentFormVaultConfig);
+            }
+            if (autoSw) {
+              autoSw.checked = Boolean(cfg.auto);
+              autoSw.addEventListener("change", getCurrentFormVaultConfig);
+            }
+            if (folderDisp && cfg.folderName) {
+              folderDisp.value = cfg.folderName;
+            }
+            syncVaultModeRows();
+
+            if (pickBtn) {
+              pickBtn.addEventListener("click", async () => {
+                if (typeof window.showDirectoryPicker !== "function") {
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "当前浏览器不支持直接选择文件夹，请切换为本地服务或网盘桥接模式");
+                  }
+                  return;
+                }
+                try {
+                  const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+                  if (handle) {
+                    await saveDirectoryHandle(handle);
+                    if (folderDisp) folderDisp.value = handle.name;
+                    getCurrentFormVaultConfig();
+                    updateVaultStatusBadge("已授权", true);
+                    setVaultInfoText("已绑定本地目录: " + handle.name);
+                  }
+                } catch (_) {}
+              });
+            }
+            if (connBtn) connBtn.addEventListener("click", () => testVaultConnection(false));
+            if (offloadBtn) offloadBtn.addEventListener("click", () => runVaultImageOffload());
+            if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
+            if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
+
+            if (cfg.auto) {
+              setTimeout(() => testVaultConnection(true), 800);
+            }
+
+            const obs = new MutationObserver(() => {
+              hydrateDomVaultImages();
+            });
+            obs.observe(document.body, { childList: true, subtree: true });
+          }
+
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initLocalVaultControls);
+          } else {
+            initLocalVaultControls();
           }
         })();
       })();

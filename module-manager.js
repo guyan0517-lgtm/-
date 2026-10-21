@@ -2304,12 +2304,13 @@
         ? `${GEMINI_URL}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
         : `${proxyUrl}/v1/chat/completions`;
 
+      const useStreamInModule = typeof window.isApiStreamEnabled === 'function' ? window.isApiStreamEnabled() : false;
       let requestHeaders = isGemini
         ? { 'Content-Type': 'application/json' }
         : {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`,
-            Accept: 'text/event-stream'
+            ...(useStreamInModule ? { Accept: 'text/event-stream' } : {})
           };
 
       let requestBody;
@@ -2352,7 +2353,7 @@
             { role: 'user', content: userContent }
           ],
           temperature: parseFloat(temperature) || 0.2,
-          stream: true
+          stream: useStreamInModule
         };
       }
 

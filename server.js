@@ -195,6 +195,40 @@ app.post('/api/upload-image-bed', async (req, res) => {
   }
 });
 
+app.post('/api/webdav-proxy', async (req, res) => {
+  try {
+    const { url, method = 'GET', username = '', password = '', contentBase64 = '', contentType = 'application/octet-stream', depth } = req.body || {};
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: '缺少WebDAV目标地址' });
+    }
+    const headers = {};
+    if (username || password) {
+      const token = Buffer.from(`${username}:${password}`, 'utf8').toString('base64');
+      headers['Authorization'] = `Basic ${token}`;
+    }
+    if (depth !== undefined) {
+      headers['Depth'] = String(depth);
+    }
+    const fetchOpts = { method, headers };
+    if (method === 'PUT' && contentBase64) {
+      headers['Content-Type'] = contentType;
+      fetchOpts.body = Buffer.from(contentBase64, 'base64');
+    }
+    const upRes = await fetch(url, fetchOpts);
+    const status = upRes.status;
+    if (method === 'GET' && upRes.ok) {
+      const arrayBuf = await upRes.arrayBuffer();
+      const b64 = Buffer.from(arrayBuf).toString('base64');
+      const mime = upRes.headers.get('content-type') || 'application/octet-stream';
+      return res.json({ ok: true, status, contentBase64: b64, contentType: mime });
+    }
+    const text = await upRes.text().catch(() => '');
+    return res.json({ ok: upRes.ok || status === 201 || status === 204 || status === 207 || status === 405, status, text: text.slice(0, 2000) });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'WebDAV代理请求失败' });
+  }
+});
+
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
   req.setTimeout(600000);
@@ -668,6 +702,102 @@ app.get('/api/peer/poll', (req, res) => {
   });
 
   pollers.add(entry);
+});
+
+const LOCAL_VAULT_DIR = path.join(__dirname, '.local-vault-store');
+const LOCAL_VAULT_FILES_DIR = path.join(LOCAL_VAULT_DIR, 'files');
+try {
+  if (!fs.existsSync(LOCAL_VAULT_FILES_DIR)) {
+    fs.mkdirSync(LOCAL_VAULT_FILES_DIR, { recursive: true });
+  }
+} catch (_) {}
+
+app.use('/api/local-vault', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PROPFIND, MKCOL, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Vault-Token');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  next();
+});
+
+app.get('/api/local-vault/ping', (req, res) => {
+  let count = 0;
+  try {
+    count = fs.readdirSync(LOCAL_VAULT_FILES_DIR).length;
+  } catch (_) {}
+  return res.json({ ok: true, mode: 'node-vault', files: count });
+});
+
+app.post('/api/local-vault/file/:id', (req, res) => {
+  try {
+    const safeId = String(req.params.id || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+    if (!safeId) return res.status(400).json({ error: 'Invalid file id' });
+    const dataUrl = req.body && req.body.dataUrl ? String(req.body.dataUrl) : '';
+    if (!dataUrl) return res.status(400).json({ error: 'Missing dataUrl' });
+    const filePath = path.join(LOCAL_VAULT_FILES_DIR, safeId + '.txt');
+    fs.writeFileSync(filePath, dataUrl, 'utf8');
+    return res.json({ ok: true, id: safeId });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Write failed' });
+  }
+});
+
+app.get('/api/local-vault/file/:id', (req, res) => {
+  try {
+    const safeId = String(req.params.id || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = path.join(LOCAL_VAULT_FILES_DIR, safeId + '.txt');
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+    const dataUrl = fs.readFileSync(filePath, 'utf8');
+    return res.json({ ok: true, id: safeId, dataUrl });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Read failed' });
+  }
+});
+
+app.post('/api/local-vault/backup', (req, res) => {
+  try {
+    const payload = req.body || {};
+    const backupPath = path.join(LOCAL_VAULT_DIR, 'latest-backup.json');
+    fs.writeFileSync(backupPath, JSON.stringify(payload), 'utf8');
+    return res.json({ ok: true, timestamp: Date.now() });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Backup write failed' });
+  }
+});
+
+app.get('/api/local-vault/backup', (req, res) => {
+  try {
+    const backupPath = path.join(LOCAL_VAULT_DIR, 'latest-backup.json');
+    if (!fs.existsSync(backupPath)) return res.status(404).json({ error: 'No backup found' });
+    const raw = fs.readFileSync(backupPath, 'utf8');
+    return res.type('application/json').send(raw);
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Backup read failed' });
+  }
+});
+
+app.post('/api/local-vault/webdav', async (req, res) => {
+  try {
+    const { url, username = '', password = '', method = 'GET', bodyData = '' } = req.body || {};
+    if (!url || !/^https?:\/\//i.test(String(url))) {
+      return res.status(400).json({ error: '无效的WebDAV地址' });
+    }
+    const headers = {};
+    if (username || password) {
+      headers['Authorization'] = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+    }
+    const upperMethod = String(method || 'GET').toUpperCase();
+    const fetchOpts = { method: upperMethod, headers };
+    if (upperMethod === 'PUT' || upperMethod === 'POST') {
+      headers['Content-Type'] = 'text/plain; charset=utf-8';
+      fetchOpts.body = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData);
+    }
+    const r = await fetch(String(url), fetchOpts);
+    const text = await r.text();
+    return res.json({ ok: r.ok || r.status === 201 || r.status === 204 || r.status === 207, status: r.status, data: text });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'WebDAV请求失败' });
+  }
 });
 
 app.use(express.static(__dirname));
