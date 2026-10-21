@@ -229,6 +229,82 @@ app.post('/api/webdav-proxy', async (req, res) => {
   }
 });
 
+const LOCAL_VAULT_ROOT = path.join(__dirname, 'EPhoneVault');
+const LOCAL_VAULT_MEDIA_DIR = path.join(LOCAL_VAULT_ROOT, 'media');
+try {
+  fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
+} catch (_) {}
+
+app.get('/api/local-vault/ping', (req, res) => {
+  try {
+    fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
+    const files = fs.existsSync(LOCAL_VAULT_MEDIA_DIR) ? fs.readdirSync(LOCAL_VAULT_MEDIA_DIR) : [];
+    const backupPath = path.join(LOCAL_VAULT_ROOT, 'backup.json');
+    const hasBackup = fs.existsSync(backupPath);
+    return res.json({
+      ok: true,
+      folderName: 'EPhoneVault',
+      mediaCount: files.length,
+      hasBackup
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/local-vault/media', (req, res) => {
+  try {
+    fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
+    const { fileName = 'image.png', contentBase64 = '' } = req.body || {};
+    const safeName = path.basename(String(fileName)).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = path.join(LOCAL_VAULT_MEDIA_DIR, safeName);
+    const buf = Buffer.from(String(contentBase64), 'base64');
+    fs.writeFileSync(filePath, buf);
+    return res.json({ ok: true, fileName: safeName, url: `/api/local-vault/media/${encodeURIComponent(safeName)}` });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/local-vault/media/:filename', (req, res) => {
+  try {
+    const safeName = path.basename(String(req.params.filename || '')).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = path.join(LOCAL_VAULT_MEDIA_DIR, safeName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).end();
+    }
+    return res.sendFile(filePath);
+  } catch (err) {
+    return res.status(500).end();
+  }
+});
+
+app.put('/api/local-vault/backup.json', (req, res) => {
+  try {
+    fs.mkdirSync(LOCAL_VAULT_ROOT, { recursive: true });
+    const backupPath = path.join(LOCAL_VAULT_ROOT, 'backup.json');
+    const bodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+    fs.writeFileSync(backupPath, bodyStr, 'utf8');
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/local-vault/backup.json', (req, res) => {
+  try {
+    const backupPath = path.join(LOCAL_VAULT_ROOT, 'backup.json');
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ ok: false, error: '未找到备份文件' });
+    }
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.sendFile(backupPath);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
   req.setTimeout(600000);
