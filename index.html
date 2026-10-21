@@ -1467,42 +1467,88 @@
             </div>
             <div class="moe-card-body">
               <div class="form-group">
-                <label>Group ID</label>
-                <input type="text" id="minimax-group-id" class="moe-input" />
-              </div>
-              <div class="form-group">
-                <label>API Key</label>
-                <input type="password" id="minimax-api-key" class="moe-input" />
-              </div>
-              <div class="form-group">
-                <label>服务区域</label>
-                <select id="minimax-provider-select" class="moe-input">
-                  <option value="cn">国内版</option>
-                  <option value="io">海外版</option>
+                <label>引擎</label>
+                <select id="tts-engine-select" class="moe-input" style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;">
+                  <option value="minimax">Minimax</option>
+                  <option value="voicevox">次元</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label>语音模型</label>
-                <select
-                  id="minimax-speech-model-select"
-                  class="moe-input"
+              <div class="form-group" style="margin-top: 8px; margin-bottom: 10px;">
+                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                  <span class="toggle-switch-text" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">译音</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="tts-ja-translate-switch" checked />
+                    <span class="slider"></span>
+                  </label>
+                </label>
+              </div>
+              <div id="tts-minimax-fields-wrap">
+                <div class="form-group">
+                  <label>Group ID</label>
+                  <input type="text" id="minimax-group-id" class="moe-input" />
+                </div>
+                <div class="form-group">
+                  <label>API Key</label>
+                  <input type="password" id="minimax-api-key" class="moe-input" />
+                </div>
+                <div class="form-group">
+                  <label>服务区域</label>
+                  <select id="minimax-provider-select" class="moe-input" style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;">
+                    <option value="cn">国内版</option>
+                    <option value="io">海外版</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>语音模型</label>
+                  <select
+                    id="minimax-speech-model-select"
+                    class="moe-input"
+                    style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;"
+                  >
+                    <option value="speech-2.8-turbo">speech-2.8-turbo</option>
+                    <option value="speech-2.8-hd">speech-2.8-hd</option>
+                    <option value="speech-2.6-hd">speech-2.6-hd</option>
+                    <option value="speech-2.6-turbo">speech-2.6-turbo</option>
+                    <option value="speech-02-hd">speech-02-hd</option>
+                    <option value="speech-02-turbo">speech-02-turbo</option>
+                    <option value="speech-01-hd">speech-01-hd</option>
+                    <option value="speech-01-turbo">speech-01-turbo</option>
+                  </select>
+                </div>
+                <button
+                  id="fetch-minimax-speech-models-btn"
+                  class="moe-btn-secondary"
                 >
-                  <option value="speech-2.8-turbo">speech-2.8-turbo</option>
-                  <option value="speech-2.8-hd">speech-2.8-hd</option>
-                  <option value="speech-2.6-hd">speech-2.6-hd</option>
-                  <option value="speech-2.6-turbo">speech-2.6-turbo</option>
-                  <option value="speech-02-hd">speech-02-hd</option>
-                  <option value="speech-02-turbo">speech-02-turbo</option>
-                  <option value="speech-01-hd">speech-01-hd</option>
-                  <option value="speech-01-turbo">speech-01-turbo</option>
-                </select>
+                  🎵 拉取语音模型
+                </button>
               </div>
-              <button
-                id="fetch-minimax-speech-models-btn"
-                class="moe-btn-secondary"
-              >
-                🎵 拉取语音模型
-              </button>
+              <div id="tts-voicevox-fields-wrap" style="display: none;">
+                <div class="form-group">
+                  <label>声优</label>
+                  <select id="voicevox-speaker-select" class="moe-input" style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;">
+                    <option value="3">甜妹 ずんだもん</option>
+                    <option value="2">傲娇 四国めたん</option>
+                    <option value="8">元气 春日部つむぎ</option>
+                    <option value="10">温柔 雨晴はう</option>
+                    <option value="65">御姐 波音リツ</option>
+                    <option value="14">冥鸣 冥鳴ひまり</option>
+                    <option value="20">治愈 もち子さん</option>
+                    <option value="43">萝莉 櫻歌ミコ</option>
+                    <option value="47">机械 ナースロボ</option>
+                    <option value="11">青年 玄野武宏</option>
+                    <option value="52">少年 雀松朱司</option>
+                    <option value="13">低音 青山龍星</option>
+                    <option value="67">温和 栗田まろん</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>密钥</label>
+                  <input type="password" id="voicevox-api-key" class="moe-input" placeholder="选填，不填也可直接使用每日免费额度" />
+                </div>
+                <button type="button" id="test-voicevox-btn" class="moe-btn-secondary">
+                  试听
+                </button>
+              </div>
             </div>
           </div>
 
@@ -35044,13 +35090,39 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
-          // --- Minimax 设置 ---
+          // --- Minimax 与 次元 语音设置 ---
           document.getElementById("minimax-group-id").value =
             state.apiConfig.minimaxGroupId || "";
           document.getElementById("minimax-api-key").value =
             state.apiConfig.minimaxApiKey || "";
           document.getElementById("minimax-provider-select").value =
             state.apiConfig.minimaxProvider || "cn";
+          const ttsEngineSelectEl = document.getElementById("tts-engine-select");
+          const savedTtsEngine = state.apiConfig.ttsEngine || localStorage.getItem("ephone_tts_engine") || "minimax";
+          if (ttsEngineSelectEl) {
+            ttsEngineSelectEl.value = savedTtsEngine;
+          }
+          const vvSpeakerEl = document.getElementById("voicevox-speaker-select");
+          if (vvSpeakerEl) {
+            vvSpeakerEl.value = state.apiConfig.voicevoxSpeaker || localStorage.getItem("ephone_voicevox_speaker") || "3";
+          }
+          const vvKeyEl = document.getElementById("voicevox-api-key");
+          if (vvKeyEl) {
+            vvKeyEl.value = state.apiConfig.voicevoxApiKey || localStorage.getItem("ephone_voicevox_key") || "";
+          }
+          const ttsJaSwEl = document.getElementById("tts-ja-translate-switch");
+          if (ttsJaSwEl) {
+            const savedJa = state.apiConfig.ttsJaTranslate !== undefined
+              ? Boolean(state.apiConfig.ttsJaTranslate)
+              : localStorage.getItem("ephone_tts_ja_translate") !== "false";
+            ttsJaSwEl.checked = savedJa;
+          }
+          const mmWrap = document.getElementById("tts-minimax-fields-wrap");
+          const vvWrap = document.getElementById("tts-voicevox-fields-wrap");
+          if (mmWrap && vvWrap) {
+            mmWrap.style.display = savedTtsEngine === "voicevox" ? "none" : "block";
+            vvWrap.style.display = savedTtsEngine === "voicevox" ? "block" : "none";
+          }
 
           // 2：Minimax 语音模型下拉框回显
           const speechModelSelect = document.getElementById(
@@ -72986,12 +73058,75 @@ ${stickerContext || "无"}
             }
           }
 
+          const ttsEngine = state.apiConfig?.ttsEngine || localStorage.getItem("ephone_tts_engine") || "minimax";
+          const jaTranslateEnabled = state.apiConfig?.ttsJaTranslate !== undefined
+            ? Boolean(state.apiConfig.ttsJaTranslate)
+            : localStorage.getItem("ephone_tts_ja_translate") !== "false";
+
+          let textForTts = text
+            .replace(/\(.*?\)|（.*?）|【.*?】/g, "")
+            .trim();
+
+          if (ttsEngine === "voicevox") {
+            const vvSpeaker = voiceId || state.apiConfig?.voicevoxSpeaker || localStorage.getItem("ephone_voicevox_speaker") || "3";
+            const vvApiKey = state.apiConfig?.voicevoxApiKey || localStorage.getItem("ephone_voicevox_key") || "";
+            try {
+              const response = await fetch("/api/anime-tts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  text: textForTts,
+                  speakerId: vvSpeaker,
+                  apiKey: vvApiKey,
+                  translateToJa: jaTranslateEnabled,
+                }),
+              });
+              const result = await response.json();
+              if (!response.ok || !result || !result.ok || !result.audioHex) {
+                throw new Error(result?.error || "日系语音合成失败");
+              }
+              if (targetMsg) {
+                targetMsg.audioHex = result.audioHex;
+                if (typeof db !== "undefined" && db.chats) {
+                  await db.chats.put(chat);
+                }
+              }
+              const audioUrl = hexToBlobUrl(result.audioHex);
+              if (!audioUrl) throw new Error("音频数据转换失败");
+              bubblesToAnimate.forEach((b) => {
+                const spinner = b.querySelector(".loading-spinner");
+                if (spinner) spinner.style.display = "none";
+                b.classList.add("playing");
+              });
+              ttsPlayer.src = audioUrl;
+              const cleanupAndReset = () => {
+                if (isTtsPlaying) {
+                  isTtsPlaying = false;
+                  URL.revokeObjectURL(audioUrl);
+                  if (window.currentAnimatingBubbles) {
+                    window.currentAnimatingBubbles.forEach((b) => b.classList.remove("playing"));
+                  }
+                  currentTtsAudioBubble = null;
+                  window.currentAnimatingBubbles = null;
+                }
+              };
+              ttsPlayer.onended = cleanupAndReset;
+              ttsPlayer.onerror = () => cleanupAndReset();
+              await ttsPlayer.play();
+            } catch (error) {
+              console.error("次元语音调用失败:", error);
+              await showCustomAlert("语音合成失败", `错误信息: ${error.message}`);
+              stopMinimaxAudio();
+            }
+            return;
+          }
+
           const groupId = state.apiConfig.minimaxGroupId;
           const apiKey = state.apiConfig.minimaxApiKey;
           if (!groupId || !apiKey) {
             await showCustomAlert(
               "语音播放失败",
-              "尚未配置Minimax的Group ID和API Key。",
+              "尚未配置Minimax的Group ID和API Key，或可在设置中将语音引擎切换为次元。",
             );
             stopMinimaxAudio();
             return;
@@ -73008,9 +73143,19 @@ ${stickerContext || "无"}
           const speed = chat.settings.speed ?? 1.0;
           const langBoost = chat.settings.language_boost;
 
-          const textForTts = text
-            .replace(/\(.*?\)|（.*?）|【.*?】/g, "")
-            .trim();
+          if (jaTranslateEnabled || langBoost === "Japanese") {
+            try {
+              const trRes = await fetch("/api/translate-ja", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: textForTts }),
+              });
+              const trData = await trRes.json();
+              if (trData && trData.jaText) {
+                textForTts = trData.jaText;
+              }
+            } catch (_) {}
+          }
 
           const requestBody = {
             model: speechModel,
@@ -73023,6 +73168,8 @@ ${stickerContext || "无"}
 
           if (langBoost) {
             requestBody.language_boost = langBoost;
+          } else if (jaTranslateEnabled) {
+            requestBody.language_boost = "Japanese";
           }
 
           console.log(`[Minimax TTS] Request to ${requestUrl}`, requestBody);
@@ -73225,15 +73372,62 @@ ${stickerContext || "无"}
             }
           }
 
+          const ttsEngine = state.apiConfig?.ttsEngine || localStorage.getItem("ephone_tts_engine") || "minimax";
+          const jaTranslateEnabled = state.apiConfig?.ttsJaTranslate !== undefined
+            ? Boolean(state.apiConfig.ttsJaTranslate)
+            : localStorage.getItem("ephone_tts_ja_translate") !== "false";
+
+          if (ttsEngine === "voicevox") {
+            let vvSpeaker = voiceId || state.apiConfig?.voicevoxSpeaker || localStorage.getItem("ephone_voicevox_speaker") || "3";
+            if (!voiceId && chat && chat.isGroup) {
+              const defaultPool = ["3", "2", "8", "10", "65", "14", "20", "11", "52", "13"];
+              const speakerKey = String(msg.senderId || msg.senderName || msg.sender || "0");
+              let hash = 0;
+              for (let c = 0; c < speakerKey.length; c++) {
+                hash = (hash * 31 + speakerKey.charCodeAt(c)) >>> 0;
+              }
+              vvSpeaker = defaultPool[hash % defaultPool.length];
+            }
+            const vvApiKey = state.apiConfig?.voicevoxApiKey || localStorage.getItem("ephone_voicevox_key") || "";
+            if (bubble) bubble.classList.add("playing-quote-audio");
+            try {
+              const response = await fetch("/api/anime-tts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  text: textToRead,
+                  speakerId: vvSpeaker,
+                  apiKey: vvApiKey,
+                  translateToJa: jaTranslateEnabled,
+                }),
+              });
+              const result = await response.json();
+              if (!response.ok || !result || !result.ok || !result.audioHex) {
+                throw new Error(result?.error || "日系语音合成失败");
+              }
+              msg.quoteAudioHex = result.audioHex;
+              const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+              if (dbInstance && dbInstance.chats) {
+                await dbInstance.chats.put(chat);
+              }
+              await playQuoteAudioSource(msg.quoteAudioHex, bubble, msg);
+            } catch (err) {
+              if (bubble) bubble.classList.remove("playing-quote-audio");
+              console.error("生成次元台词语音失败:", err);
+              await showCustomAlert("语音合成失败", `错误信息: ${err.message}`);
+            }
+            return;
+          }
+
           if (!voiceId) {
-            await showCustomAlert("语音播放失败", "尚未为该角色配置音色标识。");
+            await showCustomAlert("语音播放失败", "尚未为该角色配置音色标识，或可在设置中将语音引擎切换为次元。");
             return;
           }
 
           const groupId = state.apiConfig?.minimaxGroupId;
           const apiKey = state.apiConfig?.minimaxApiKey;
           if (!groupId || !apiKey) {
-            await showCustomAlert("语音播放失败", "尚未配置Minimax的Group ID和API Key。");
+            await showCustomAlert("语音播放失败", "尚未配置Minimax的Group ID和API Key，或可在设置中将语音引擎切换为次元。");
             return;
           }
 
@@ -73244,9 +73438,24 @@ ${stickerContext || "无"}
           const speed = chat.settings?.speed ?? 1.0;
           const langBoost = chat.settings?.language_boost;
 
+          let finalTextToRead = textToRead;
+          if (jaTranslateEnabled || langBoost === "Japanese") {
+            try {
+              const trRes = await fetch("/api/translate-ja", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: textToRead }),
+              });
+              const trData = await trRes.json();
+              if (trData && trData.jaText) {
+                finalTextToRead = trData.jaText;
+              }
+            } catch (_) {}
+          }
+
           const requestBody = {
             model: speechModel,
-            text: textToRead,
+            text: finalTextToRead,
             voice_setting: {
               voice_id: voiceId,
               speed: speed,
@@ -73254,6 +73463,8 @@ ${stickerContext || "无"}
           };
           if (langBoost) {
             requestBody.language_boost = langBoost;
+          } else if (jaTranslateEnabled) {
+            requestBody.language_boost = "Japanese";
           }
 
           if (bubble) bubble.classList.add("playing-quote-audio");
@@ -73288,6 +73499,17 @@ ${stickerContext || "无"}
             await showCustomAlert("语音合成失败", `错误信息: ${err.message}`);
           }
         }
+
+        window.triggerAutoVoiceForPeerMessage = async function (msg, chat) {
+          if (!msg || !chat || chat.settings?.voiceMode !== "auto") return;
+          const chatScreenEl = document.getElementById("chat-interface-screen");
+          if (!chatScreenEl || !chatScreenEl.classList.contains("active")) return;
+          if (String(state.activeChatId) !== String(chat.id)) return;
+          const content = String(msg.content || msg.text || "").trim();
+          if (!content || msg.type === "image" || msg.type === "naiimag" || msg.type === "sticker") return;
+          const bubble = document.querySelector(`.message-bubble[data-timestamp="${msg.timestamp}"]`);
+          await handleTripleClickQuoteVoice(msg, bubble, chat);
+        };
 
         function getMessageSpeakerIdentifier(m, chat) {
           if (!m) return "";
@@ -86183,7 +86405,7 @@ ${stickerContext || "无"}
               const hellPromptEl = document.getElementById("hell-prompt-input");
               if (hellPromptEl) state.apiConfig.hellPrompt = hellPromptEl.value;
 
-              // 保存 Minimax 设置
+              // 保存 Minimax 与 次元 语音设置
               state.apiConfig.minimaxGroupId = document
                 .getElementById("minimax-group-id")
                 .value.trim();
@@ -86196,6 +86418,26 @@ ${stickerContext || "无"}
               state.apiConfig.minimaxSpeechModel = document.getElementById(
                 "minimax-speech-model-select",
               ).value;
+              const ttsEngineEl = document.getElementById("tts-engine-select");
+              if (ttsEngineEl) {
+                state.apiConfig.ttsEngine = ttsEngineEl.value || "minimax";
+                localStorage.setItem("ephone_tts_engine", state.apiConfig.ttsEngine);
+              }
+              const vvSpeakerEl = document.getElementById("voicevox-speaker-select");
+              if (vvSpeakerEl) {
+                state.apiConfig.voicevoxSpeaker = vvSpeakerEl.value || "3";
+                localStorage.setItem("ephone_voicevox_speaker", state.apiConfig.voicevoxSpeaker);
+              }
+              const vvKeyEl = document.getElementById("voicevox-api-key");
+              if (vvKeyEl) {
+                state.apiConfig.voicevoxApiKey = vvKeyEl.value.trim();
+                localStorage.setItem("ephone_voicevox_key", state.apiConfig.voicevoxApiKey);
+              }
+              const ttsJaSwEl = document.getElementById("tts-ja-translate-switch");
+              if (ttsJaSwEl) {
+                state.apiConfig.ttsJaTranslate = ttsJaSwEl.checked;
+                localStorage.setItem("ephone_tts_ja_translate", String(ttsJaSwEl.checked));
+              }
               // --- 保存 GitHub 备份设置 ---
               state.apiConfig.githubToken = document
                 .getElementById("github-token")
@@ -88783,15 +89025,33 @@ ${stickerContext || "无"}
               const userAvatar = (state.user && state.user.avatar) || (chat.settings && chat.settings.myAvatar) || defaultAvatar;
               const userName = (chat.settings && chat.settings.myGroupNickname) || (state.user && state.user.name) || "我";
 
+              const vvPresetOptionsHtml = `
+                <option value="">选声优</option>
+                <option value="3">甜妹</option>
+                <option value="2">傲娇</option>
+                <option value="8">元气</option>
+                <option value="10">温柔</option>
+                <option value="65">御姐</option>
+                <option value="14">冥鸣</option>
+                <option value="20">治愈</option>
+                <option value="43">萝莉</option>
+                <option value="47">机械</option>
+                <option value="11">青年</option>
+                <option value="52">少年</option>
+                <option value="13">低音</option>
+                <option value="67">温和</option>
+              `;
+
               const userRow = document.createElement("div");
               userRow.className = "group-minimax-member-row";
-              userRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-color);";
+              userRow.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--border-color);";
               userRow.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
                   <img src="${userAvatar}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />
                   <span style="font-size: 13px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${userName}</span>
                 </div>
-                <input type="text" class="moe-input group-voice-input" data-is-user="true" placeholder="音色ID" value="${userVoiceId}" style="width: 130px; flex-shrink: 0;" />
+                <select class="moe-input group-voice-preset-select" style="width: 78px; height: 34px; line-height: 34px; padding: 0 4px; font-size: 12px; flex-shrink: 0; box-sizing: border-box;">${vvPresetOptionsHtml}</select>
+                <input type="text" class="moe-input group-voice-input" data-is-user="true" placeholder="音色ID" value="${userVoiceId}" style="width: 95px; height: 34px; flex-shrink: 0;" />
               `;
               groupMinimaxVoiceList.appendChild(userRow);
 
@@ -88803,15 +89063,29 @@ ${stickerContext || "无"}
 
                 const row = document.createElement("div");
                 row.className = "group-minimax-member-row";
-                row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-color);";
+                row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--border-color);";
                 row.innerHTML = `
                   <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
                     <img src="${mAvatar}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />
                     <span style="font-size: 13px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${mName}</span>
                   </div>
-                  <input type="text" class="moe-input group-voice-input" data-member-id="${m.id}" placeholder="音色ID" value="${mVoiceId}" style="width: 130px; flex-shrink: 0;" />
+                  <select class="moe-input group-voice-preset-select" style="width: 78px; height: 34px; line-height: 34px; padding: 0 4px; font-size: 12px; flex-shrink: 0; box-sizing: border-box;">${vvPresetOptionsHtml}</select>
+                  <input type="text" class="moe-input group-voice-input" data-member-id="${m.id}" placeholder="音色ID" value="${mVoiceId}" style="width: 95px; height: 34px; flex-shrink: 0;" />
                 `;
                 groupMinimaxVoiceList.appendChild(row);
+              });
+
+              groupMinimaxVoiceList.querySelectorAll(".group-minimax-member-row").forEach((r) => {
+                const sel = r.querySelector(".group-voice-preset-select");
+                const inp = r.querySelector(".group-voice-input");
+                if (sel && inp) {
+                  if (inp.value && Array.from(sel.options).some((o) => o.value === inp.value)) {
+                    sel.value = inp.value;
+                  }
+                  sel.addEventListener("change", () => {
+                    if (sel.value) inp.value = sel.value;
+                  });
+                }
               });
 
               groupMinimaxVoiceModal.classList.add("visible");
@@ -101274,17 +101548,17 @@ ${stickerContext || "无"}
                   url: parsed.url || "http://127.0.0.1:8765",
                   username: parsed.username || "",
                   password: parsed.password || "",
-                  auto: Boolean(parsed.auto),
+                  auto: parsed.auto !== undefined ? Boolean(parsed.auto) : true,
                   folderName: parsed.folderName || "EPhoneVault",
                 };
               }
             } catch (_) {}
             return {
-              mode: "server",
+              mode: "folder",
               url: "http://127.0.0.1:8765",
               username: "",
               password: "",
-              auto: false,
+              auto: true,
               folderName: "EPhoneVault",
             };
           }
@@ -101508,14 +101782,24 @@ ${stickerContext || "无"}
             return cfg;
           }
 
-          async function checkTermuxEndpointReachable(baseUrl) {
+          let cachedTermuxOk = false;
+          let lastTermuxCheckTime = 0;
+
+          async function checkTermuxEndpointReachable(baseUrl, force = false) {
+            const now = Date.now();
+            if (!force && now - lastTermuxCheckTime < 30000) {
+              return cachedTermuxOk;
+            }
+            lastTermuxCheckTime = now;
             try {
               const controller = new AbortController();
-              const timer = setTimeout(() => controller.abort(), 1500);
+              const timer = setTimeout(() => controller.abort(), 350);
               const res = await fetch(baseUrl + "/ping", { method: "GET", signal: controller.signal });
               clearTimeout(timer);
-              return Boolean(res && res.ok);
+              cachedTermuxOk = Boolean(res && res.ok);
+              return cachedTermuxOk;
             } catch (_) {
+              cachedTermuxOk = false;
               return false;
             }
           }
@@ -101537,7 +101821,7 @@ ${stickerContext || "无"}
             try {
               if (cfg.mode === "server") {
                 const baseUrl = cfg.url || "http://127.0.0.1:8765";
-                const termuxOk = await checkTermuxEndpointReachable(baseUrl);
+                const termuxOk = await checkTermuxEndpointReachable(baseUrl, !silent);
                 if (termuxOk) {
                   updateVaultStatusBadge("已连接", true);
                   setVaultInfoText("本地服务已连接 " + baseUrl + " · " + dataSummary);
@@ -101605,34 +101889,19 @@ ${stickerContext || "无"}
                 if (urlInput && !urlInput.value.trim()) {
                   urlInput.value = "http://127.0.0.1:8765";
                 }
-                let handle = await getSavedDirectoryHandle();
-                if (handle && typeof handle.queryPermission === "function") {
-                  let perm = await handle.queryPermission({ mode: "readwrite" });
-                  if (perm !== "granted" && !silent && typeof handle.requestPermission === "function") {
-                    try {
-                      perm = await handle.requestPermission({ mode: "readwrite" });
-                    } catch (_) {}
-                  }
-                  if (perm !== "granted") {
-                    handle = null;
-                  }
-                }
-                if (!handle) {
-                  handle = await getAutoOpfsDirectoryHandle();
-                }
+                const handle = await getEffectiveDirectoryHandle();
                 const serverVault = await checkBuiltInVaultServer();
                 const baseUrl = (urlInput && urlInput.value.trim()) || cfg.url || "http://127.0.0.1:8765";
-                const termuxOk = await checkTermuxEndpointReachable(baseUrl);
-                if (!handle && !(serverVault && serverVault.ok) && !termuxOk) {
+                if (!handle && !(serverVault && serverVault.ok)) {
                   throw new Error("当前环境无法初始化本地目录");
                 }
                 const folderName = (handle && handle.name) || "EPhoneVault";
                 if (folderDisp) folderDisp.value = folderName;
                 getCurrentFormVaultConfig();
                 updateVaultStatusBadge("已连接", true);
-                setVaultInfoText("本地目录 " + folderName + " 已连接 · " + baseUrl + " · " + dataSummary);
+                setVaultInfoText("本地目录 " + folderName + " 已永久授权 · " + baseUrl + " · " + dataSummary);
                 if (!silent && typeof window.showCustomAlert === "function") {
-                  window.showCustomAlert("提示", "本地目录 " + folderName + " 连接成功，" + dataSummary + "，无需手动寻找文件夹，可直接点击分离或备份");
+                  window.showCustomAlert("提示", "本地目录 " + folderName + " 已连接，" + dataSummary + "，无需重复授权，收到新图会自动存入该目录");
                 }
                 return true;
               }
@@ -101646,42 +101915,30 @@ ${stickerContext || "无"}
             return false;
           }
 
-          async function storeImageInVault(fileName, parts, cfg) {
+          const writtenVaultFiles = new Set();
+
+          async function storeImageInVault(fileName, parts, cfg, sharedMediaDir = null) {
+            if (writtenVaultFiles.has(fileName)) {
+              if (!blobUrlMemoryCache.has(fileName)) {
+                const bytes = base64ToUint8Array(parts.b64);
+                blobUrlMemoryCache.set(fileName, URL.createObjectURL(new Blob([bytes], { type: parts.mime })));
+              }
+              return "vault://" + fileName;
+            }
             const mode = normalizeVaultMode(cfg.mode);
             if (mode === "server" || mode === "folder") {
-              const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
               const bytes = base64ToUint8Array(parts.b64);
               let storedAny = false;
 
-              if (await checkTermuxEndpointReachable(baseUrl)) {
-                try {
-                  const targetUrl = baseUrl + "/media/" + encodeURIComponent(fileName);
-                  const res = await fetch(targetUrl, {
-                    method: "PUT",
-                    headers: { "Content-Type": parts.mime },
-                    body: bytes,
-                  });
-                  if (res.ok) storedAny = true;
-                } catch (_) {}
-              }
-
               try {
-                const apiRes = await fetch("/api/local-vault/media", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    fileName,
-                    contentBase64: parts.b64,
-                    contentType: parts.mime,
-                  }),
-                });
-                if (apiRes.ok) storedAny = true;
-              } catch (_) {}
-
-              try {
-                const handle = await getEffectiveDirectoryHandle();
-                if (handle) {
-                  const mediaDir = await handle.getDirectoryHandle("media", { create: true });
+                let mediaDir = sharedMediaDir;
+                if (!mediaDir) {
+                  const handle = await getEffectiveDirectoryHandle();
+                  if (handle) {
+                    mediaDir = await handle.getDirectoryHandle("media", { create: true });
+                  }
+                }
+                if (mediaDir) {
                   const fileHandle = await mediaDir.getFileHandle(fileName, { create: true });
                   const writable = await fileHandle.createWritable();
                   await writable.write(bytes);
@@ -101690,7 +101947,30 @@ ${stickerContext || "无"}
                 }
               } catch (_) {}
 
+              if (!sharedMediaDir) {
+                fetch("/api/local-vault/media", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    fileName,
+                    contentBase64: parts.b64,
+                    contentType: parts.mime,
+                  }),
+                }).catch(() => {});
+                storedAny = true;
+              }
+
+              if (cachedTermuxOk) {
+                const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                fetch(baseUrl + "/media/" + encodeURIComponent(fileName), {
+                  method: "PUT",
+                  headers: { "Content-Type": parts.mime },
+                  body: bytes,
+                }).catch(() => {});
+              }
+
               if (!storedAny) throw new Error("写入本地目录失败");
+              writtenVaultFiles.add(fileName);
               const blob = new Blob([bytes], { type: parts.mime });
               blobUrlMemoryCache.set(fileName, URL.createObjectURL(blob));
               return "vault://" + fileName;
@@ -101711,6 +101991,7 @@ ${stickerContext || "无"}
               });
               const data = await res.json();
               if (!data || !data.ok) throw new Error("上传网盘图片失败");
+              writtenVaultFiles.add(fileName);
               const blob = new Blob([base64ToUint8Array(parts.b64)], { type: parts.mime });
               blobUrlMemoryCache.set(fileName, URL.createObjectURL(blob));
               return "vault://" + fileName;
@@ -101778,14 +102059,14 @@ ${stickerContext || "无"}
             return vaultRef;
           }
 
-          async function offloadDataUrlString(str, cfg, counter) {
+          async function offloadDataUrlString(str, cfg, counter, sharedMediaDir = null) {
             if (typeof str !== "string" || !str.startsWith("data:image/") || str.length < 8192) {
               return str;
             }
             const parts = parseDataUrlToParts(str);
             if (!parts) return str;
             const fileName = "img_" + hashDataUrl(str) + "." + parts.ext;
-            const ref = await storeImageInVault(fileName, parts, cfg);
+            const ref = await storeImageInVault(fileName, parts, cfg, sharedMediaDir);
             if (ref) {
               counter.count++;
               counter.savedBytes += str.length;
@@ -101794,38 +102075,63 @@ ${stickerContext || "无"}
             return str;
           }
 
-          async function offloadObjectImagesDeep(obj, cfg, counter, visited = new WeakSet()) {
-            if (!obj || typeof obj !== "object") return false;
-            if (visited.has(obj)) return false;
+          function collectImageTasksFromObject(obj, tasks, visited = new WeakSet()) {
+            if (!obj || typeof obj !== "object" || visited.has(obj)) return;
             visited.add(obj);
-            let modified = false;
             if (Array.isArray(obj)) {
               for (let i = 0; i < obj.length; i++) {
                 const val = obj[i];
                 if (typeof val === "string" && val.startsWith("data:image/") && val.length >= 8192) {
-                  const nextVal = await offloadDataUrlString(val, cfg, counter);
-                  if (nextVal !== val) {
-                    obj[i] = nextVal;
-                    modified = true;
-                  }
+                  tasks.push({ holder: obj, key: i, val });
                 } else if (val && typeof val === "object") {
-                  const childMod = await offloadObjectImagesDeep(val, cfg, counter, visited);
-                  if (childMod) modified = true;
+                  collectImageTasksFromObject(val, tasks, visited);
                 }
               }
-              return modified;
+              return;
             }
             for (const key of Object.keys(obj)) {
               const val = obj[key];
               if (typeof val === "string" && val.startsWith("data:image/") && val.length >= 8192) {
-                const nextVal = await offloadDataUrlString(val, cfg, counter);
-                if (nextVal !== val) {
-                  obj[key] = nextVal;
-                  modified = true;
-                }
+                tasks.push({ holder: obj, key, val });
               } else if (val && typeof val === "object") {
-                const childMod = await offloadObjectImagesDeep(val, cfg, counter, visited);
-                if (childMod) modified = true;
+                collectImageTasksFromObject(val, tasks, visited);
+              }
+            }
+          }
+
+          async function offloadObjectImagesDeep(obj, cfg, counter, sharedMediaDir = null) {
+            const tasks = [];
+            collectImageTasksFromObject(obj, tasks);
+            if (tasks.length === 0) return false;
+            let modified = false;
+            const BATCH_SIZE = 24;
+            for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
+              const slice = tasks.slice(i, i + BATCH_SIZE);
+              const serverBatch = [];
+              await Promise.all(
+                slice.map(async (t) => {
+                  const parts = parseDataUrlToParts(t.val);
+                  if (!parts) return;
+                  const fileName = "img_" + hashDataUrl(t.val) + "." + parts.ext;
+                  const wasWritten = writtenVaultFiles.has(fileName);
+                  const nextVal = await storeImageInVault(fileName, parts, cfg, sharedMediaDir);
+                  if (nextVal && nextVal !== t.val) {
+                    t.holder[t.key] = nextVal;
+                    counter.count++;
+                    counter.savedBytes += t.val.length;
+                    modified = true;
+                    if (!wasWritten && normalizeVaultMode(cfg.mode) !== "webdav") {
+                      serverBatch.push({ fileName, contentBase64: parts.b64 });
+                    }
+                  }
+                }),
+              );
+              if (serverBatch.length > 0) {
+                fetch("/api/local-vault/media-batch", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ items: serverBatch }),
+                }).catch(() => {});
               }
             }
             return modified;
@@ -101841,35 +102147,45 @@ ${stickerContext || "无"}
             }
             const cfg = getCurrentFormVaultConfig();
             const counter = { count: 0, savedBytes: 0 };
-            setVaultInfoText("正在分离高清图片到本地存储，请稍候...");
+            setVaultInfoText("正在扫描并高速并发分离高清图片，请稍候...");
             try {
+              let sharedMediaDir = null;
+              try {
+                const handle = await getEffectiveDirectoryHandle();
+                if (handle) {
+                  sharedMediaDir = await handle.getDirectoryHandle("media", { create: true });
+                }
+              } catch (_) {}
+
               if (typeof db !== "undefined" && db.chats) {
                 const allChats = await db.chats.toArray();
-                for (const chat of allChats) {
-                  const changed = await offloadObjectImagesDeep(chat, cfg, counter);
+                for (let idx = 0; idx < allChats.length; idx++) {
+                  const chat = allChats[idx];
+                  const changed = await offloadObjectImagesDeep(chat, cfg, counter, sharedMediaDir);
                   if (changed) {
                     await db.chats.put(chat);
                     if (typeof state !== "undefined" && state.chats && chat.id !== undefined) {
                       state.chats[chat.id] = chat;
                       state.chats[String(chat.id)] = chat;
                     }
+                    setVaultInfoText("正在高速分离图片 · 已处理 " + counter.count + " 张...");
                   }
                 }
               }
               if (typeof db !== "undefined" && db.qzonePosts) {
                 const posts = await db.qzonePosts.toArray();
                 for (const post of posts) {
-                  const changed = await offloadObjectImagesDeep(post, cfg, counter);
+                  const changed = await offloadObjectImagesDeep(post, cfg, counter, sharedMediaDir);
                   if (changed) {
                     await db.qzonePosts.put(post);
                   }
                 }
               }
               const mbSaved = (counter.savedBytes / (1024 * 1024)).toFixed(1);
-              setVaultInfoText("已分离 " + counter.count + " 张图片，释放约 " + mbSaved + " MB 浏览器内存");
+              setVaultInfoText("已高速分离 " + counter.count + " 张图片，释放约 " + mbSaved + " MB 浏览器内存");
               hydrateDomVaultImages();
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", "分离完成，共转移 " + counter.count + " 张图片，释放约 " + mbSaved + " MB 浏览器内存");
+                window.showCustomAlert("提示", "分离完成，共极速转移 " + counter.count + " 张图片，释放约 " + mbSaved + " MB 浏览器内存");
               }
             } catch (err) {
               setVaultInfoText("分离中断: " + (err && err.message ? err.message : "未知错误"));
@@ -102081,6 +102397,19 @@ ${stickerContext || "无"}
                 }
               });
             });
+            const bgEls = document.querySelectorAll('[style*="vault://"]');
+            bgEls.forEach((el) => {
+              const st = el.getAttribute("style") || "";
+              const m = /vault:\/\/[a-zA-Z0-9._-]+/.exec(st);
+              if (!m) return;
+              const ref = m[0];
+              resolveVaultRefToUrl(ref).then((resolved) => {
+                if (resolved && resolved !== ref) {
+                  const curSt = el.getAttribute("style") || "";
+                  el.setAttribute("style", curSt.split(ref).join(resolved));
+                }
+              });
+            });
           }
 
           window.toggleStorageTutorialPanel = function () {
@@ -102177,15 +102506,122 @@ ${stickerContext || "无"}
           window.LocalVaultManager = {
             maybeAutoOffloadSingleMessage: async function (msg) {
               const cfg = loadVaultConfig();
-              if (!cfg.auto || !msg || !msg.imageUrl) return;
-              if (typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image/") && msg.imageUrl.length >= 8192) {
-                const counter = { count: 0, savedBytes: 0 };
-                msg.imageUrl = await offloadDataUrlString(msg.imageUrl, cfg, counter);
-              }
+              if (!cfg.auto || !msg) return;
+              const counter = { count: 0, savedBytes: 0 };
+              await offloadObjectImagesDeep(msg, cfg, counter);
+              hydrateDomVaultImages();
             },
           };
 
+          function hookDatabaseAutoOffload() {
+            if (typeof db === "undefined" || !db.chats || db.chats._vaultHooked) return;
+            db.chats._vaultHooked = true;
+            const origPut = db.chats.put.bind(db.chats);
+            db.chats.put = async function (chatObj, ...rest) {
+              try {
+                const cfg = loadVaultConfig();
+                if (cfg.auto && chatObj && typeof chatObj === "object") {
+                  const counter = { count: 0, savedBytes: 0 };
+                  await offloadObjectImagesDeep(chatObj, cfg, counter);
+                  if (counter.count > 0) {
+                    setTimeout(hydrateDomVaultImages, 50);
+                  }
+                }
+              } catch (_) {}
+              return origPut(chatObj, ...rest);
+            };
+          }
+
+          function initTtsEngineControls() {
+            const ttsEngineSel = document.getElementById("tts-engine-select");
+            const mmWrap = document.getElementById("tts-minimax-fields-wrap");
+            const vvWrap = document.getElementById("tts-voicevox-fields-wrap");
+            const vvSpeakerSel = document.getElementById("voicevox-speaker-select");
+            const vvKeyInput = document.getElementById("voicevox-api-key");
+            const jaSw = document.getElementById("tts-ja-translate-switch");
+            const testBtn = document.getElementById("test-voicevox-btn");
+
+            if (ttsEngineSel) {
+              ttsEngineSel.addEventListener("change", () => {
+                const val = ttsEngineSel.value || "minimax";
+                localStorage.setItem("ephone_tts_engine", val);
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.ttsEngine = val;
+                }
+                if (mmWrap && vvWrap) {
+                  mmWrap.style.display = val === "voicevox" ? "none" : "block";
+                  vvWrap.style.display = val === "voicevox" ? "block" : "none";
+                }
+              });
+            }
+            if (vvSpeakerSel) {
+              vvSpeakerSel.addEventListener("change", () => {
+                localStorage.setItem("ephone_voicevox_speaker", vvSpeakerSel.value);
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.voicevoxSpeaker = vvSpeakerSel.value;
+                }
+              });
+            }
+            if (vvKeyInput) {
+              vvKeyInput.addEventListener("change", () => {
+                localStorage.setItem("ephone_voicevox_key", vvKeyInput.value.trim());
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.voicevoxApiKey = vvKeyInput.value.trim();
+                }
+              });
+            }
+            if (jaSw) {
+              jaSw.addEventListener("change", () => {
+                localStorage.setItem("ephone_tts_ja_translate", String(jaSw.checked));
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.ttsJaTranslate = jaSw.checked;
+                }
+              });
+            }
+            if (testBtn) {
+              testBtn.addEventListener("click", async () => {
+                const spk = (vvSpeakerSel && vvSpeakerSel.value) || "3";
+                const key = (vvKeyInput && vvKeyInput.value.trim()) || "";
+                const trJa = jaSw ? jaSw.checked : true;
+                testBtn.textContent = "生成中...";
+                try {
+                  const res = await fetch("/api/anime-tts", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      text: "前辈，今天我们一起去哪里冒险呢？",
+                      speakerId: spk,
+                      apiKey: key,
+                      translateToJa: trJa,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok || !data || !data.ok || !data.audioHex) {
+                    throw new Error(data?.error || "试听生成失败");
+                  }
+                  const cleanHex = data.audioHex.replace(/[^0-9a-fA-F]/g, "");
+                  const buf = new Uint8Array(cleanHex.length / 2);
+                  for (let i = 0; i < cleanHex.length; i += 2) {
+                    buf[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
+                  }
+                  const blobUrl = URL.createObjectURL(new Blob([buf], { type: "audio/mpeg" }));
+                  const player = document.getElementById("tts-audio-player") || new Audio();
+                  player.src = blobUrl;
+                  await player.play();
+                } catch (e) {
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "试听失败: " + (e.message || "请稍后重试"));
+                  }
+                } finally {
+                  testBtn.textContent = "试听";
+                }
+              });
+            }
+          }
+
           function initLocalVaultControls() {
+            initTtsEngineControls();
+            hookDatabaseAutoOffload();
             const cfg = loadVaultConfig();
             const modeSel = document.getElementById("local-vault-mode-select");
             const urlInput = document.getElementById("local-vault-url-input");
@@ -102248,7 +102684,7 @@ ${stickerContext || "无"}
                 getCurrentFormVaultConfig();
                 await testVaultConnection(true);
                 if (typeof window.showCustomAlert === "function") {
-                  window.showCustomAlert("提示", "已自动为您绑定默认本地目录 " + defaultName + "，无需手动寻找文件夹，直接点击连接或分离即可");
+                  window.showCustomAlert("提示", "已自动为您绑定永久免授权目录 " + defaultName + "，无需手动寻找文件夹，收到图片将自动存入");
                 }
               });
             }
@@ -102258,8 +102694,10 @@ ${stickerContext || "无"}
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
 
             setTimeout(() => {
+              hookDatabaseAutoOffload();
               testVaultConnection(true);
-            }, 600);
+              hydrateDomVaultImages();
+            }, 500);
 
             const obs = new MutationObserver(() => {
               hydrateDomVaultImages();

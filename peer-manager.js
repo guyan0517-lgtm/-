@@ -4127,6 +4127,9 @@
                 } else if (typeof window.renderChatInterfaceProxy === "function") {
                   window.renderChatInterfaceProxy(groupChat.id);
                 }
+                if (groupChat.settings?.voiceMode === "auto" && typeof window.triggerAutoVoiceForPeerMessage === "function") {
+                  setTimeout(() => window.triggerAutoVoiceForPeerMessage(msgToInsert, groupChat), 150);
+                }
               }
             }
           }
@@ -4209,6 +4212,9 @@
           window.appendMessage(msgToInsert, groupChat);
         } else if (typeof window.renderChatInterfaceProxy === "function") {
           window.renderChatInterfaceProxy(groupChat.id);
+        }
+        if (groupChat.settings?.voiceMode === "auto" && typeof window.triggerAutoVoiceForPeerMessage === "function") {
+          setTimeout(() => window.triggerAutoVoiceForPeerMessage(msgToInsert, groupChat), 150);
         }
       }
 

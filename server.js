@@ -266,6 +266,26 @@ app.post('/api/local-vault/media', (req, res) => {
   }
 });
 
+app.post('/api/local-vault/media-batch', (req, res) => {
+  try {
+    fs.mkdirSync(LOCAL_VAULT_MEDIA_DIR, { recursive: true });
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    let saved = 0;
+    for (const item of items) {
+      if (!item || !item.fileName || !item.contentBase64) continue;
+      const safeName = path.basename(String(item.fileName)).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = path.join(LOCAL_VAULT_MEDIA_DIR, safeName);
+      if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, Buffer.from(String(item.contentBase64), 'base64'));
+      }
+      saved++;
+    }
+    return res.json({ ok: true, saved });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/api/local-vault/media/:filename', (req, res) => {
   try {
     const safeName = path.basename(String(req.params.filename || '')).replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -301,6 +321,165 @@ app.get('/api/local-vault/backup.json', (req, res) => {
     return res.sendFile(backupPath);
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+const jaTransCache = new Map();
+
+async function translateChineseToJapanese(rawText) {
+  const clean = String(rawText || '').trim();
+  if (!clean) return '';
+  if (/[\u3040-\u30ff]/.test(clean)) {
+    return clean;
+  }
+  if (jaTransCache.has(clean)) {
+    return jaTransCache.get(clean);
+  }
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ja&dt=t&q=${encodeURIComponent(clean)}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        const translated = data[0].map((seg) => (Array.isArray(seg) ? seg[0] : '')).join('').trim();
+        if (translated) {
+          if (jaTransCache.size > 500) jaTransCache.clear();
+          jaTransCache.set(clean, translated);
+          return translated;
+        }
+      }
+    }
+  } catch (_) {}
+  return clean;
+}
+
+function resolveVoicevoxSpeakerId(rawId) {
+  const s = String(rawId || '').trim();
+  if (/^\d+$/.test(s)) {
+    return parseInt(s, 10);
+  }
+  const map = {
+    '甜妹': 3,
+    '傲娇': 2,
+    '元气': 8,
+    '温柔': 10,
+    '御姐': 65,
+    '冥鸣': 14,
+    '治愈': 20,
+    '萝莉': 43,
+    '机械': 47,
+    '青年': 11,
+    '少年': 52,
+    '低音': 13,
+    '温和': 67
+  };
+  if (map[s] !== undefined) return map[s];
+  if (/male|boy|qingnian|badao|shushu/i.test(s)) return 11;
+  if (/yujie|mature/i.test(s)) return 65;
+  if (/shaonv|cute|loli/i.test(s)) return 2;
+  return 3;
+}
+
+app.post('/api/translate-ja', async (req, res) => {
+  try {
+    const { text = '' } = req.body || {};
+    const jaText = await translateChineseToJapanese(text);
+    return res.json({ ok: true, jaText });
+  } catch (err) {
+    return res.json({ ok: false, jaText: String(req.body?.text || '') });
+  }
+});
+
+app.post('/api/anime-tts', async (req, res) => {
+  try {
+    const { text = '', speakerId = '3', apiKey = '', translateToJa = true } = req.body || {};
+    const rawTrimmed = String(text || '').trim();
+    if (!rawTrimmed) {
+      return res.status(400).json({ ok: false, error: '语音文本为空' });
+    }
+    const spokenText = translateToJa !== false ? await translateChineseToJapanese(rawTrimmed) : rawTrimmed;
+    const vvSpeaker = resolveVoicevoxSpeakerId(speakerId);
+
+    // 1. 优先调用 VOICEVOX (tts.quest v3 免费额度或用户 Key)
+    try {
+      let vvUrl = `https://api.tts.quest/v3/voicevox/synthesis?speaker=${vvSpeaker}&text=${encodeURIComponent(spokenText)}`;
+      if (apiKey && String(apiKey).trim()) {
+        vvUrl += `&key=${encodeURIComponent(String(apiKey).trim())}`;
+      }
+      const synthRes = await fetch(vvUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (synthRes.ok) {
+        const synthJson = await synthRes.json();
+        if (synthJson && synthJson.success && synthJson.mp3StreamingUrl) {
+          const statusUrl = synthJson.audioStatusUrl;
+          const mp3Url = synthJson.mp3StreamingUrl;
+          if (statusUrl) {
+            for (let attempt = 0; attempt < 18; attempt++) {
+              try {
+                const stRes = await fetch(statusUrl);
+                if (stRes.ok) {
+                  const stJson = await stRes.json();
+                  if (stJson && stJson.isAudioReady) break;
+                  if (stJson && stJson.isAudioError) break;
+                }
+              } catch (_) {}
+              await new Promise((r) => setTimeout(r, 350));
+            }
+          }
+          const audioRes = await fetch(mp3Url);
+          if (audioRes.ok) {
+            const arrBuf = await audioRes.arrayBuffer();
+            if (arrBuf && arrBuf.byteLength > 200) {
+              const audioHex = Buffer.from(arrBuf).toString('hex');
+              return res.json({
+                ok: true,
+                audioHex,
+                jaText: spokenText,
+                speaker: vvSpeaker,
+                engine: 'voicevox'
+              });
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. 免 Key 极速日语语音兜底（当公共队列繁忙时零报错秒出日语语音）
+    const chunks = spokenText.match(/.{1,160}/g) || [spokenText];
+    const buffers = [];
+    for (const chunk of chunks) {
+      const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=ja&client=tw-ob&q=${encodeURIComponent(chunk)}`;
+      const fbRes = await fetch(fallbackUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      if (fbRes.ok) {
+        const ab = await fbRes.arrayBuffer();
+        if (ab && ab.byteLength > 0) {
+          buffers.push(Buffer.from(ab));
+        }
+      }
+    }
+    if (buffers.length > 0) {
+      const combined = Buffer.concat(buffers);
+      return res.json({
+        ok: true,
+        audioHex: combined.toString('hex'),
+        jaText: spokenText,
+        speaker: vvSpeaker,
+        engine: 'ja-fallback'
+      });
+    }
+
+    return res.status(502).json({ ok: false, error: '日系语音合成暂时繁忙，请稍后重试' });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || '日系语音合成失败' });
   }
 });
 
