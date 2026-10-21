@@ -312,6 +312,18 @@ app.get('/api/local-vault/ping', (req, res) => {
   }
 });
 
+app.get('/api/local-vault/list', (req, res) => {
+  try {
+    ensureVaultNoMediaAndMigrate();
+    const files = fs.existsSync(LOCAL_VAULT_MEDIA_DIR)
+      ? fs.readdirSync(LOCAL_VAULT_MEDIA_DIR).filter((f) => f !== '.nomedia')
+      : [];
+    return res.json({ ok: true, files });
+  } catch (err) {
+    return res.status(500).json({ ok: false, files: [] });
+  }
+});
+
 app.post('/api/local-vault/hide-gallery', (req, res) => {
   try {
     const converted = ensureVaultNoMediaAndMigrate();

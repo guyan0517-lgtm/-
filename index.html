@@ -101815,6 +101815,19 @@ ${stickerContext || "无"}
             }
           }
 
+          async function clearSavedDirectoryHandle() {
+            dirHandleCache = null;
+            try {
+              const idb = await openVaultHandleDb();
+              await new Promise((resolve) => {
+                const tx = idb.transaction("handles", "readwrite");
+                tx.objectStore("handles").delete("rootDir");
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+              });
+            } catch (_) {}
+          }
+
           async function getAutoOpfsDirectoryHandle() {
             if (opfsHandleCache) return opfsHandleCache;
             try {
@@ -101829,6 +101842,8 @@ ${stickerContext || "无"}
           }
 
           async function getEffectiveDirectoryHandle() {
+            const opfs = await getAutoOpfsDirectoryHandle();
+            if (opfs) return opfs;
             const saved = await getSavedDirectoryHandle();
             if (saved) {
               try {
@@ -101840,7 +101855,7 @@ ${stickerContext || "无"}
                 }
               } catch (_) {}
             }
-            return await getAutoOpfsDirectoryHandle();
+            return null;
           }
 
           async function countLocalDatabaseStats() {
@@ -102227,11 +102242,15 @@ ${stickerContext || "无"}
           async function migrateExposedImagesInDir(dirHandle, opfsMediaDir = null) {
             if (!dirHandle || typeof dirHandle.entries !== "function") return 0;
             let converted = 0;
+            const isExternalFolder = Boolean(opfsMediaDir && dirHandle !== opfsMediaDir);
             await writeNoMediaFileInDir(dirHandle);
+            const targetPattern = isExternalFolder
+              ? /\.(png|jpe?g|webp|gif|mp3|wav|ogg|epdat)$/i
+              : /\.(png|jpe?g|webp|gif|mp3|wav|ogg)$/i;
             const exposedNames = [];
             try {
               for await (const [entryName, entryHandle] of dirHandle.entries()) {
-                if (entryHandle && entryHandle.kind === "file" && /\.(png|jpe?g|webp|gif|mp3|wav|ogg)$/i.test(entryName)) {
+                if (entryHandle && entryHandle.kind === "file" && targetPattern.test(entryName)) {
                   exposedNames.push({ entryName, entryHandle });
                 }
               }
@@ -102247,31 +102266,28 @@ ${stickerContext || "无"}
                 const wrapped = wrapVaultBinary(cleanBytes);
                 const stealthName = toStealthVaultFileName(item.entryName);
 
-                // 1. 同步转入默认免授权隐藏仓库，确保切换目录后也绝不丢图
-                if (opfsMediaDir) {
+                // 1. 吸收进内置免授权 EPhoneVault/media 目录
+                const targetMediaDir = opfsMediaDir || dirHandle;
+                if (targetMediaDir) {
                   try {
-                    const opfsFile = await opfsMediaDir.getFileHandle(stealthName, { create: true });
+                    const opfsFile = await targetMediaDir.getFileHandle(stealthName, { create: true });
                     const wOpfs = await opfsFile.createWritable();
                     await wOpfs.write(wrapped);
                     await wOpfs.close();
                   } catch (_) {}
                 }
 
-                // 2. 在当前目录写入加密数据块
-                try {
-                  const stealthHandle = await dirHandle.getFileHandle(stealthName, { create: true });
-                  const writable = await stealthHandle.createWritable();
-                  await writable.write(wrapped);
-                  await writable.close();
-                } catch (_) {}
-
-                // 3. 彻底删除外露的 .png / .jpg 原图，让手机相册立刻移除该照片
-                if (typeof dirHandle.removeEntry === "function") {
-                  await dirHandle.removeEntry(item.entryName);
+                // 2. 删除外部文件夹里的原图或分散文件，彻底清空手机相册残留
+                if (isExternalFolder || item.entryName !== stealthName) {
+                  if (typeof dirHandle.removeEntry === "function") {
+                    try {
+                      await dirHandle.removeEntry(item.entryName);
+                    } catch (_) {}
+                  }
                 }
 
                 serverSyncBatch.push({
-                  fileName: item.entryName,
+                  fileName: stealthName,
                   contentBase64: uint8ArrayToBase64(cleanBytes),
                 });
                 converted++;
@@ -102280,11 +102296,13 @@ ${stickerContext || "无"}
 
             if (serverSyncBatch.length > 0) {
               for (let i = 0; i < serverSyncBatch.length; i += 20) {
-                fetch("/api/local-vault/media-batch", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ items: serverSyncBatch.slice(i, i + 20) }),
-                }).catch(() => {});
+                try {
+                  await fetch("/api/local-vault/media-batch", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ items: serverSyncBatch.slice(i, i + 20) }),
+                  });
+                } catch (_) {}
               }
             }
             return converted;
@@ -102312,7 +102330,70 @@ ${stickerContext || "无"}
             return count;
           }
 
-          async function runVaultHideGalleryImages(silent = false) {
+          async function syncVaultBetweenOpfsAndServer(opfsMediaDir) {
+            if (!opfsMediaDir) return 0;
+            let synced = 0;
+            try {
+              const opfsFiles = new Set();
+              for await (const [entryName, entryHandle] of opfsMediaDir.entries()) {
+                if (entryHandle && entryHandle.kind === "file" && entryName !== ".nomedia") {
+                  opfsFiles.add(toStealthVaultFileName(entryName));
+                }
+              }
+              const res = await fetch("/api/local-vault/list");
+              if (res.ok) {
+                const data = await res.json();
+                const serverFiles = Array.isArray(data && data.files) ? data.files : [];
+                const serverSet = new Set(serverFiles.map((f) => toStealthVaultFileName(f)));
+                for (const sFile of serverFiles) {
+                  const stealth = toStealthVaultFileName(sFile);
+                  if (!opfsFiles.has(stealth)) {
+                    try {
+                      const fRes = await fetch("/api/local-vault/media/" + encodeURIComponent(stealth));
+                      if (fRes.ok) {
+                        const ab = await fRes.arrayBuffer();
+                        const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
+                        const fh = await opfsMediaDir.getFileHandle(stealth, { create: true });
+                        const w = await fh.createWritable();
+                        await w.write(wrapped);
+                        await w.close();
+                        synced++;
+                      }
+                    } catch (_) {}
+                  }
+                }
+                const uploadBatch = [];
+                for await (const [entryName, entryHandle] of opfsMediaDir.entries()) {
+                  if (!entryHandle || entryHandle.kind !== "file" || entryName === ".nomedia") continue;
+                  const stealth = toStealthVaultFileName(entryName);
+                  if (!serverSet.has(stealth)) {
+                    try {
+                      const f = await entryHandle.getFile();
+                      const ab = await f.arrayBuffer();
+                      const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                      uploadBatch.push({
+                        fileName: stealth,
+                        contentBase64: uint8ArrayToBase64(cleanBytes),
+                      });
+                    } catch (_) {}
+                  }
+                }
+                for (let i = 0; i < uploadBatch.length; i += 20) {
+                  try {
+                    await fetch("/api/local-vault/media-batch", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ items: uploadBatch.slice(i, i + 20) }),
+                    });
+                    synced += uploadBatch.slice(i, i + 20).length;
+                  } catch (_) {}
+                }
+              }
+            } catch (_) {}
+            return synced;
+          }
+
+          async function runVaultHideGalleryImages(silent = false, explicitHandle = null) {
             let totalConverted = 0;
             let opfsMediaDir = null;
             try {
@@ -102321,20 +102402,33 @@ ${stickerContext || "无"}
                 await writeNoMediaFileInDir(opfsRoot);
                 opfsMediaDir = await opfsRoot.getDirectoryHandle("media", { create: true });
                 await writeNoMediaFileInDir(opfsMediaDir);
-                totalConverted += await absorbAndPurgeDirectoryTree(opfsRoot, null);
+                totalConverted += await migrateExposedImagesInDir(opfsRoot, opfsMediaDir);
+                totalConverted += await migrateExposedImagesInDir(opfsMediaDir, null);
               }
             } catch (_) {}
+
+            if (explicitHandle) {
+              try {
+                setVaultInfoText("正在将所选文件夹内的媒体文件全部吸入 EPhoneVault 并清理手机相册残留...");
+                totalConverted += await absorbAndPurgeDirectoryTree(explicitHandle, opfsMediaDir);
+                await clearSavedDirectoryHandle();
+              } catch (_) {}
+            }
 
             try {
               const savedHandle = await getSavedDirectoryHandle();
               if (savedHandle) {
-                if (!silent && typeof savedHandle.queryPermission === "function") {
-                  const perm = await savedHandle.queryPermission({ mode: "readwrite" });
-                  if (perm !== "granted" && typeof savedHandle.requestPermission === "function") {
-                    await savedHandle.requestPermission({ mode: "readwrite" });
+                let perm = "granted";
+                if (typeof savedHandle.queryPermission === "function") {
+                  perm = await savedHandle.queryPermission({ mode: "readwrite" });
+                  if (perm !== "granted" && !silent && typeof savedHandle.requestPermission === "function") {
+                    perm = await savedHandle.requestPermission({ mode: "readwrite" });
                   }
                 }
-                totalConverted += await absorbAndPurgeDirectoryTree(savedHandle, opfsMediaDir);
+                if (perm === "granted") {
+                  totalConverted += await absorbAndPurgeDirectoryTree(savedHandle, opfsMediaDir);
+                  await clearSavedDirectoryHandle();
+                }
               }
             } catch (_) {}
 
@@ -102348,26 +102442,36 @@ ${stickerContext || "无"}
               }
             } catch (_) {}
 
-            // 若用户手动点击隐图，且当前已绑定目录没有发现外露图片，支持直接点选之前误操作的那300张图片所在文件夹一键收编并清空相册残留
-            if (!silent && totalConverted === 0 && typeof window.showDirectoryPicker === "function") {
+            // 若用户手动点击隐图，且之前未吸收到外部文件夹，弹出文件夹选择框让用户点选那300张图片所在文件夹，一键吸入 EPhoneVault 并清空原文件夹
+            if (!silent && !explicitHandle && totalConverted === 0 && typeof window.showDirectoryPicker === "function") {
               try {
                 const pickedHandle = await window.showDirectoryPicker({ mode: "readwrite" });
                 if (pickedHandle) {
-                  setVaultInfoText("正在从所选文件夹收编并清除相册残留图片...");
+                  setVaultInfoText("正在从所选文件夹吸入全部图片至 EPhoneVault 并清除相册残留...");
                   const pickedCount = await absorbAndPurgeDirectoryTree(pickedHandle, opfsMediaDir);
                   totalConverted += pickedCount;
+                  await clearSavedDirectoryHandle();
                 }
               } catch (_) {}
             }
 
+            await syncVaultBetweenOpfsAndServer(opfsMediaDir);
+
+            const folderDisp = document.getElementById("local-vault-folder-display");
+            if (folderDisp) {
+              folderDisp.value = "EPhoneVault";
+            }
+            getCurrentFormVaultConfig();
+            hydrateDomVaultImages();
+
             if (!silent) {
-              setVaultInfoText("防相册扫描已完成 · 已收编并隐藏 " + totalConverted + " 个外露媒体文件");
+              setVaultInfoText("已全部吸入 EPhoneVault · 本次收编并隐藏 " + totalConverted + " 个媒体文件");
               if (typeof window.showCustomAlert === "function") {
                 window.showCustomAlert(
                   "提示",
-                  "已完成防相册扫描与旧图收编，共转移并隐藏 " +
+                  "已完成收编与防相册扫描，共将 " +
                     totalConverted +
-                    " 个外露文件，原文件夹中的普通图片已删除并写入 .nomedia 防扫描标记，手机相册将不再显示这些图片"
+                    " 个分散文件吸入 EPhoneVault 隐藏目录，外部文件夹中的暴露原图已清除并写入 .nomedia，不会再占用小手机内存或出现在手机相册"
                 );
               }
             }
@@ -102520,6 +102624,16 @@ ${stickerContext || "无"}
                   if (apiRes.ok) {
                     const ab = await apiRes.arrayBuffer();
                     const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                    try {
+                      const opfsRoot = await getAutoOpfsDirectoryHandle();
+                      if (opfsRoot) {
+                        const opfsMedia = await opfsRoot.getDirectoryHandle("media", { create: true });
+                        const fh = await opfsMedia.getFileHandle(stealthName, { create: true });
+                        const w = await fh.createWritable();
+                        await w.write(wrapVaultBinary(cleanBytes));
+                        await w.close();
+                      }
+                    } catch (_) {}
                     const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
                     blobUrlMemoryCache.set(fileName, objUrl);
                     return objUrl;
@@ -103479,7 +103593,7 @@ ${stickerContext || "无"}
               autoSw.addEventListener("change", getCurrentFormVaultConfig);
             }
             if (folderDisp) {
-              folderDisp.value = cfg.folderName || "EPhoneVault";
+              folderDisp.value = "EPhoneVault";
             }
             syncVaultModeRows();
 
@@ -103489,11 +103603,9 @@ ${stickerContext || "无"}
                   try {
                     const handle = await window.showDirectoryPicker({ mode: "readwrite" });
                     if (handle) {
-                      await saveDirectoryHandle(handle);
-                      if (folderDisp) folderDisp.value = handle.name;
-                      getCurrentFormVaultConfig();
-                      await runVaultHideGalleryImages(true);
-                      await testVaultConnection(false);
+                      if (folderDisp) folderDisp.value = "EPhoneVault";
+                      await runVaultHideGalleryImages(false, handle);
+                      await testVaultConnection(true);
                       return;
                     }
                   } catch (_) {}
@@ -103505,7 +103617,7 @@ ${stickerContext || "无"}
                 await runVaultHideGalleryImages(true);
                 await testVaultConnection(true);
                 if (typeof window.showCustomAlert === "function") {
-                  window.showCustomAlert("提示", "已自动为您绑定永久免授权目录 " + defaultName + "，无需手动寻找文件夹，收到图片将自动存入且不会进入手机相册");
+                  window.showCustomAlert("提示", "已统一锁定至永久免授权目录 " + defaultName + "，收到图片将自动存入且不会进入手机相册");
                 }
               });
             }
