@@ -324,17 +324,110 @@ app.get('/api/local-vault/backup.json', (req, res) => {
   }
 });
 
-const jaTransCache = new Map();
+const LOCAL_VOICES_DIR = path.join(LOCAL_VAULT_ROOT, 'voices');
+const LOCAL_VOICES_META_PATH = path.join(LOCAL_VOICES_DIR, 'voices.json');
+try {
+  fs.mkdirSync(LOCAL_VOICES_DIR, { recursive: true });
+} catch (_) {}
 
-async function translateChineseToJapanese(rawText) {
+function loadClonedVoicesList() {
+  try {
+    if (fs.existsSync(LOCAL_VOICES_META_PATH)) {
+      const raw = fs.readFileSync(LOCAL_VOICES_META_PATH, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (_) {}
+  return [];
+}
+
+function saveClonedVoicesList(list) {
+  try {
+    fs.mkdirSync(LOCAL_VOICES_DIR, { recursive: true });
+    fs.writeFileSync(LOCAL_VOICES_META_PATH, JSON.stringify(list, null, 2), 'utf8');
+  } catch (_) {}
+}
+
+const jaTransCache = new Map();
+const GLM_ANIME_TRANSLATE_PROMPT =
+  '你是一个专门负责密友群聊与二次元角色配音的日语台词翻译官。请将用户发来的中文聊天句子直接翻译成自然、地道、符合二次元动漫口吻的日语口语台词。严禁输出任何解释、罗马音、引号或多余说明，只输出纯日语台词本身。';
+
+async function translateChineseToJapanese(rawText, glmConfig = {}) {
   const clean = String(rawText || '').trim();
   if (!clean) return '';
-  if (/[\u3040-\u30ff]/.test(clean)) {
+  if (/[\u3040-\u30ff]/.test(clean) && !/[\u4e00-\u9fa5]{3,}/.test(clean)) {
     return clean;
   }
   if (jaTransCache.has(clean)) {
     return jaTransCache.get(clean);
   }
+
+  const glmUrl = String(glmConfig.url || 'https://open.bigmodel.cn/api/paas/v4').trim().replace(/\/+$/, '');
+  const glmKey = String(glmConfig.apiKey || '').trim();
+  const glmModel = String(glmConfig.model || 'glm-4-flash').trim();
+
+  // 1. 若配置了自定义智谱 GLM-4 密钥，优先调用 GLM-4 接口翻译
+  if (glmKey && glmKey !== 'builtin-glm4-auto') {
+    try {
+      const targetEndpoint = glmUrl.endsWith('/chat/completions')
+        ? glmUrl
+        : `${glmUrl}/chat/completions`;
+      const glmRes = await fetch(targetEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${glmKey}`
+        },
+        body: JSON.stringify({
+          model: glmModel || 'glm-4-flash',
+          messages: [
+            { role: 'system', content: GLM_ANIME_TRANSLATE_PROMPT },
+            { role: 'user', content: clean }
+          ],
+          temperature: 0.3,
+          stream: false
+        }),
+        signal: AbortSignal.timeout(12000)
+      });
+      if (glmRes.ok) {
+        const glmData = await glmRes.json();
+        const outText = String(glmData?.choices?.[0]?.message?.content || '').trim();
+        if (outText) {
+          if (jaTransCache.size > 500) jaTransCache.clear();
+          jaTransCache.set(clean, outText);
+          return outText;
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 2. 内置免填 AI 动漫日语翻译通道
+  try {
+    const aiRes = await fetch('https://text.pollinations.ai/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai-fast',
+        messages: [
+          { role: 'system', content: GLM_ANIME_TRANSLATE_PROMPT },
+          { role: 'user', content: clean }
+        ],
+        temperature: 0.3
+      }),
+      signal: AbortSignal.timeout(7000)
+    });
+    if (aiRes.ok) {
+      const aiData = await aiRes.json();
+      const outText = String(aiData?.choices?.[0]?.message?.content || '').trim();
+      if (outText && /[\u3040-\u30ff]/.test(outText)) {
+        if (jaTransCache.size > 500) jaTransCache.clear();
+        jaTransCache.set(clean, outText);
+        return outText;
+      }
+    }
+  } catch (_) {}
+
+  // 3. 高速日语直译保底通道
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ja&dt=t&q=${encodeURIComponent(clean)}`;
     const res = await fetch(url, {
@@ -357,6 +450,169 @@ async function translateChineseToJapanese(rawText) {
   return clean;
 }
 
+app.post('/api/glm-models', async (req, res) => {
+  const defaultGlmModels = ['glm-4-flash', 'glm-4-air', 'glm-4-plus', 'glm-4-long', 'glm-4'];
+  try {
+    const { url = 'https://open.bigmodel.cn/api/paas/v4', apiKey = '' } = req.body || {};
+    const cleanKey = String(apiKey || '').trim();
+    if (cleanKey && cleanKey !== 'builtin-glm4-auto') {
+      const base = String(url).trim().replace(/\/+$/, '');
+      const mRes = await fetch(`${base}/models`, {
+        headers: { 'Authorization': `Bearer ${cleanKey}` },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (mRes.ok) {
+        const mData = await mRes.json();
+        if (Array.isArray(mData?.data) && mData.data.length > 0) {
+          return res.json({ ok: true, models: mData.data.map((m) => m.id).filter(Boolean) });
+        }
+      }
+    }
+  } catch (_) {}
+  return res.json({ ok: true, models: defaultGlmModels });
+});
+
+app.post('/api/translate-ja', async (req, res) => {
+  try {
+    const { text = '', glmConfig = {} } = req.body || {};
+    const jaText = await translateChineseToJapanese(text, glmConfig);
+    return res.json({ ok: true, jaText });
+  } catch (err) {
+    return res.json({ ok: false, jaText: String(req.body?.text || '') });
+  }
+});
+
+app.get('/api/fish-voices', (req, res) => {
+  const list = loadClonedVoicesList().map((v) => ({
+    id: v.id,
+    name: v.name,
+    remoteId: v.remoteId || '',
+    remoteUri: v.remoteUri || '',
+    provider: v.provider || 'fish',
+    text: v.text || ''
+  }));
+  return res.json({ ok: true, voices: list });
+});
+
+app.post('/api/fish-clone', async (req, res) => {
+  try {
+    const {
+      name = '克隆音色',
+      text = '',
+      audioBase64 = '',
+      mimeType = 'audio/mpeg',
+      apiKey = '',
+      provider = 'fish'
+    } = req.body || {};
+
+    let rawB64 = String(audioBase64 || '').trim();
+    if (!rawB64) {
+      return res.status(400).json({ ok: false, error: '请先选择要克隆的参考音频文件' });
+    }
+    if (rawB64.includes(',')) {
+      rawB64 = rawB64.split(',')[1];
+    }
+    const audioBuf = Buffer.from(rawB64, 'base64');
+    if (audioBuf.length < 100) {
+      return res.status(400).json({ ok: false, error: '音频文件无效或为空' });
+    }
+
+    const voiceId = 'clone_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    const ext = mimeType.includes('wav') ? 'wav' : 'mp3';
+    const fileName = `${voiceId}.${ext}`;
+    fs.mkdirSync(LOCAL_VOICES_DIR, { recursive: true });
+    fs.writeFileSync(path.join(LOCAL_VOICES_DIR, fileName), audioBuf);
+
+    let remoteId = '';
+    let remoteUri = '';
+    const cleanKey = String(apiKey || '').trim();
+
+    if (cleanKey) {
+      if (provider === 'siliconflow') {
+        try {
+          const form = new FormData();
+          form.append('model', 'FunAudioLLM/CosyVoice2-0.5B');
+          form.append('customName', String(name).replace(/[^a-zA-Z0-9_-]/g, '') || ('voice_' + Date.now()));
+          form.append('text', String(text || 'こんにちは、よろしくお願いします。'));
+          form.append('file', new Blob([audioBuf], { type: mimeType }), fileName);
+
+          const sfRes = await fetch('https://api.siliconflow.cn/v1/uploads/audio/voice', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${cleanKey}` },
+            body: form
+          });
+          if (sfRes.ok) {
+            const sfJson = await sfRes.json();
+            if (sfJson && sfJson.uri) {
+              remoteUri = sfJson.uri;
+            }
+          }
+        } catch (_) {}
+      } else {
+        try {
+          const form = new FormData();
+          form.append('visibility', 'private');
+          form.append('type', 'tts');
+          form.append('title', String(name || '克隆音色'));
+          form.append('train_mode', 'fast');
+          form.append('enhance_audio_quality', 'true');
+          form.append('voices', new Blob([audioBuf], { type: mimeType }), fileName);
+          if (text && String(text).trim()) {
+            form.append('texts', String(text).trim());
+          }
+          const fishRes = await fetch('https://api.fish.audio/model', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${cleanKey}` },
+            body: form
+          });
+          if (fishRes.ok) {
+            const fishJson = await fishRes.json();
+            if (fishJson && fishJson._id) {
+              remoteId = fishJson._id;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    const list = loadClonedVoicesList();
+    const newEntry = {
+      id: remoteId || remoteUri || voiceId,
+      localId: voiceId,
+      name: String(name || '克隆音色').trim(),
+      fileName,
+      mimeType,
+      text: String(text || '').trim(),
+      remoteId,
+      remoteUri,
+      provider,
+      createdAt: Date.now()
+    };
+    list.unshift(newEntry);
+    saveClonedVoicesList(list);
+
+    return res.json({
+      ok: true,
+      voice: {
+        id: newEntry.id,
+        name: newEntry.name,
+        remoteId: newEntry.remoteId,
+        remoteUri: newEntry.remoteUri,
+        provider: newEntry.provider
+      },
+      voices: list.map((v) => ({
+        id: v.id,
+        name: v.name,
+        remoteId: v.remoteId || '',
+        remoteUri: v.remoteUri || '',
+        provider: v.provider || 'fish'
+      }))
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || '音色克隆失败' });
+  }
+});
+
 function resolveVoicevoxSpeakerId(rawId) {
   const s = String(rawId || '').trim();
   if (/^\d+$/.test(s)) {
@@ -378,41 +634,128 @@ function resolveVoicevoxSpeakerId(rawId) {
     '温和': 67
   };
   if (map[s] !== undefined) return map[s];
-  if (/male|boy|qingnian|badao|shushu/i.test(s)) return 11;
-  if (/yujie|mature/i.test(s)) return 65;
-  if (/shaonv|cute|loli/i.test(s)) return 2;
   return 3;
 }
 
-app.post('/api/translate-ja', async (req, res) => {
-  try {
-    const { text = '' } = req.body || {};
-    const jaText = await translateChineseToJapanese(text);
-    return res.json({ ok: true, jaText });
-  } catch (err) {
-    return res.json({ ok: false, jaText: String(req.body?.text || '') });
-  }
-});
-
 app.post('/api/anime-tts', async (req, res) => {
   try {
-    const { text = '', speakerId = '3', apiKey = '', translateToJa = true } = req.body || {};
+    const {
+      text = '',
+      speakerId = '',
+      referenceId = '',
+      apiKey = '',
+      provider = 'fish',
+      translateToJa = true,
+      glmConfig = {}
+    } = req.body || {};
+
     const rawTrimmed = String(text || '').trim();
     if (!rawTrimmed) {
       return res.status(400).json({ ok: false, error: '语音文本为空' });
     }
-    const spokenText = translateToJa !== false ? await translateChineseToJapanese(rawTrimmed) : rawTrimmed;
-    const vvSpeaker = resolveVoicevoxSpeakerId(speakerId);
+    const spokenText = translateToJa !== false
+      ? await translateChineseToJapanese(rawTrimmed, glmConfig)
+      : rawTrimmed;
 
-    // 1. 优先调用 VOICEVOX (tts.quest v3 免费额度或用户 Key)
+    const targetId = String(referenceId || speakerId || '').trim();
+    const cleanKey = String(apiKey || '').trim();
+    const clonedList = loadClonedVoicesList();
+    const matchedClone = clonedList.find(
+      (v) => v.id === targetId || v.localId === targetId || v.remoteId === targetId || v.remoteUri === targetId || v.name === targetId
+    );
+
+    // 1. 鱼音频官方 Fish Audio 接口 (支持云端克隆 ID 与本地参考音频零样本实时音色克隆)
+    if (cleanKey && provider !== 'siliconflow') {
+      try {
+        const fishPayload = {
+          text: spokenText,
+          format: 'mp3',
+          mp3_bitrate: 128,
+          latency: 'normal'
+        };
+        if (matchedClone && matchedClone.remoteId) {
+          fishPayload.reference_id = matchedClone.remoteId;
+        } else if (matchedClone && matchedClone.fileName) {
+          const samplePath = path.join(LOCAL_VOICES_DIR, matchedClone.fileName);
+          if (fs.existsSync(samplePath)) {
+            const sampleB64 = fs.readFileSync(samplePath).toString('base64');
+            fishPayload.references = [
+              {
+                audio: sampleB64,
+                text: matchedClone.text || ''
+              }
+            ];
+          }
+        } else if (targetId && targetId.length >= 16 && !/^\d+$/.test(targetId)) {
+          fishPayload.reference_id = targetId;
+        }
+
+        const fishRes = await fetch('https://api.fish.audio/v1/tts', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${cleanKey}`,
+            'Content-Type': 'application/json',
+            'model': 'speech-1.6'
+          },
+          body: JSON.stringify(fishPayload)
+        });
+        if (fishRes.ok) {
+          const ab = await fishRes.arrayBuffer();
+          if (ab && ab.byteLength > 200) {
+            return res.json({
+              ok: true,
+              audioHex: Buffer.from(ab).toString('hex'),
+              jaText: spokenText,
+              speaker: targetId,
+              engine: 'fish'
+            });
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. 硅基流动 Fish Speech / CosyVoice2 克隆与预置音色接口
+    if (cleanKey && (provider === 'siliconflow' || cleanKey.startsWith('sk-'))) {
+      try {
+        const voiceUri = (matchedClone && matchedClone.remoteUri)
+          ? matchedClone.remoteUri
+          : (targetId && targetId.startsWith('speech:') ? targetId : 'FunAudioLLM/CosyVoice2-0.5B:anna');
+        const sfModel = voiceUri.includes('fish-speech')
+          ? 'fishaudio/fish-speech-1.5'
+          : 'FunAudioLLM/CosyVoice2-0.5B';
+        const sfRes = await fetch('https://api.siliconflow.cn/v1/audio/speech', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${cleanKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: sfModel,
+            input: spokenText,
+            voice: voiceUri,
+            response_format: 'mp3'
+          })
+        });
+        if (sfRes.ok) {
+          const ab = await sfRes.arrayBuffer();
+          if (ab && ab.byteLength > 200) {
+            return res.json({
+              ok: true,
+              audioHex: Buffer.from(ab).toString('hex'),
+              jaText: spokenText,
+              speaker: voiceUri,
+              engine: 'siliconflow'
+            });
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. 免费公共日系动漫声优兜底通道
+    const vvSpeaker = resolveVoicevoxSpeakerId(targetId);
     try {
-      let vvUrl = `https://api.tts.quest/v3/voicevox/synthesis?speaker=${vvSpeaker}&text=${encodeURIComponent(spokenText)}`;
-      if (apiKey && String(apiKey).trim()) {
-        vvUrl += `&key=${encodeURIComponent(String(apiKey).trim())}`;
-      }
-      const synthRes = await fetch(vvUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
+      const vvUrl = `https://api.tts.quest/v3/voicevox/synthesis?speaker=${vvSpeaker}&text=${encodeURIComponent(spokenText)}`;
+      const synthRes = await fetch(vvUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
       if (synthRes.ok) {
         const synthJson = await synthRes.json();
         if (synthJson && synthJson.success && synthJson.mp3StreamingUrl) {
@@ -424,8 +767,7 @@ app.post('/api/anime-tts', async (req, res) => {
                 const stRes = await fetch(statusUrl);
                 if (stRes.ok) {
                   const stJson = await stRes.json();
-                  if (stJson && stJson.isAudioReady) break;
-                  if (stJson && stJson.isAudioError) break;
+                  if (stJson && (stJson.isAudioReady || stJson.isAudioError)) break;
                 }
               } catch (_) {}
               await new Promise((r) => setTimeout(r, 350));
@@ -435,13 +777,12 @@ app.post('/api/anime-tts', async (req, res) => {
           if (audioRes.ok) {
             const arrBuf = await audioRes.arrayBuffer();
             if (arrBuf && arrBuf.byteLength > 200) {
-              const audioHex = Buffer.from(arrBuf).toString('hex');
               return res.json({
                 ok: true,
-                audioHex,
+                audioHex: Buffer.from(arrBuf).toString('hex'),
                 jaText: spokenText,
                 speaker: vvSpeaker,
-                engine: 'voicevox'
+                engine: 'fish-free'
               });
             }
           }
@@ -449,7 +790,7 @@ app.post('/api/anime-tts', async (req, res) => {
       }
     } catch (_) {}
 
-    // 2. 免 Key 极速日语语音兜底（当公共队列繁忙时零报错秒出日语语音）
+    // 4. 零报错日语语音保底
     const chunks = spokenText.match(/.{1,160}/g) || [spokenText];
     const buffers = [];
     for (const chunk of chunks) {
@@ -477,9 +818,9 @@ app.post('/api/anime-tts', async (req, res) => {
       });
     }
 
-    return res.status(502).json({ ok: false, error: '日系语音合成暂时繁忙，请稍后重试' });
+    return res.status(502).json({ ok: false, error: '鱼音合成暂时繁忙，请稍后重试' });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message || '日系语音合成失败' });
+    return res.status(500).json({ ok: false, error: err.message || '鱼音合成失败' });
   }
 });
 

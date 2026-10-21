@@ -1470,7 +1470,7 @@
                 <label>引擎</label>
                 <select id="tts-engine-select" class="moe-input" style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;">
                   <option value="minimax">Minimax</option>
-                  <option value="voicevox">次元</option>
+                  <option value="voicevox">鱼音</option>
                 </select>
               </div>
               <div class="form-group" style="margin-top: 8px; margin-bottom: 10px;">
@@ -1524,6 +1524,23 @@
               </div>
               <div id="tts-voicevox-fields-wrap" style="display: none;">
                 <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <label style="margin: 0;">通道</label>
+                    <div style="display: flex; gap: 6px;">
+                      <button type="button" class="moe-btn-small" onclick="window.copyAndOpenLink('https://fish.audio/zh-CN/')" style="height: 24px; min-height: 24px; padding: 0 8px; font-size: 11px; margin: 0; width: auto;">鱼站</button>
+                      <button type="button" class="moe-btn-small" onclick="window.copyAndOpenLink('https://cloud.siliconflow.cn')" style="height: 24px; min-height: 24px; padding: 0 8px; font-size: 11px; margin: 0; width: auto;">硅站</button>
+                    </div>
+                  </div>
+                  <select id="fish-provider-select" class="moe-input" style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;">
+                    <option value="fish">鱼音</option>
+                    <option value="siliconflow">硅基</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>密钥</label>
+                  <input type="password" id="voicevox-api-key" class="moe-input" placeholder="填入鱼音频或硅基流动密钥以启用克隆" />
+                </div>
+                <div class="form-group">
                   <label>声优</label>
                   <select id="voicevox-speaker-select" class="moe-input" style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;">
                     <option value="3">甜妹 ずんだもん</option>
@@ -1542,12 +1559,31 @@
                   </select>
                 </div>
                 <div class="form-group">
-                  <label>密钥</label>
-                  <input type="password" id="voicevox-api-key" class="moe-input" placeholder="选填，不填也可直接使用每日免费额度" />
+                  <label>编号</label>
+                  <input type="text" id="fish-reference-id-input" class="moe-input" placeholder="鱼音频音色编号或选择上方已克隆声优" />
                 </div>
-                <button type="button" id="test-voicevox-btn" class="moe-btn-secondary">
-                  试听
-                </button>
+                <div style="margin-top: 10px; padding: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">
+                  <div class="form-group" style="margin: 0;">
+                    <label>名称</label>
+                    <input type="text" id="fish-clone-name-input" class="moe-input" placeholder="给克隆音色起个名字" />
+                  </div>
+                  <div class="form-group" style="margin: 0;">
+                    <label>文稿</label>
+                    <input type="text" id="fish-clone-text-input" class="moe-input" placeholder="参考音频里说的台词内容" />
+                  </div>
+                  <div class="form-group" style="margin: 0;">
+                    <label>样本</label>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                      <input type="text" id="fish-clone-file-display" class="moe-input" placeholder="选择10至30秒清晰人声音频" readonly style="flex: 1; min-width: 0;" />
+                      <input type="file" id="fish-clone-audio-input" accept="audio/*" style="display: none;" />
+                      <button type="button" class="moe-btn-small" id="fish-pick-audio-btn" style="height: 34px; min-height: 34px; padding: 0 12px; font-size: 12px; margin: 0; width: auto; flex-shrink: 0;">选音</button>
+                    </div>
+                  </div>
+                  <div class="moe-btn-group" style="margin-top: 4px;">
+                    <button type="button" id="fish-clone-submit-btn" class="moe-btn-secondary">克隆</button>
+                    <button type="button" id="test-voicevox-btn" class="moe-btn-secondary">试听</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2331,6 +2367,48 @@
             <div class="moe-card-body" style="padding: 10px;">
               <div id="api-console-log-list" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
                 <div style="text-align: center; color: var(--text-secondary); font-size: 12px; padding: 14px 0;">暂无调用记录</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 密友群专用 GLM-4 翻译模型卡片 -->
+          <div class="moe-card" id="glm-translate-card">
+            <div class="moe-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 8l6 6"></path>
+                  <path d="M4 14l6-6 2-3"></path>
+                  <path d="M2 5h12"></path>
+                  <path d="M7 2h1"></path>
+                  <path d="M22 22l-5-10-5 10"></path>
+                  <path d="M14 18h6"></path>
+                </svg>
+                <h3>译模</h3>
+              </div>
+              <span id="glm-translate-status-badge" style="font-size: 11px; color: var(--accent-color); font-weight: 600;">已就绪</span>
+            </div>
+            <div class="moe-card-body">
+              <div class="form-group">
+                <label>地址</label>
+                <input type="text" id="glm-translate-url" class="moe-input" value="https://open.bigmodel.cn/api/paas/v4" />
+              </div>
+              <div class="form-group">
+                <label>密钥</label>
+                <input type="password" id="glm-translate-key" class="moe-input" value="builtin-glm4-auto" />
+              </div>
+              <div class="form-group">
+                <label>模型</label>
+                <select id="glm-translate-model" class="moe-input" style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;">
+                  <option value="glm-4-flash" selected>glm-4-flash</option>
+                  <option value="glm-4-air">glm-4-air</option>
+                  <option value="glm-4-plus">glm-4-plus</option>
+                  <option value="glm-4-long">glm-4-long</option>
+                  <option value="glm-4">glm-4</option>
+                </select>
+              </div>
+              <div class="moe-btn-group">
+                <button type="button" id="fetch-glm-models-btn" class="moe-btn-secondary">拉取</button>
+                <button type="button" id="test-glm-translate-btn" class="moe-btn-secondary">测试</button>
               </div>
             </div>
           </div>
@@ -35129,7 +35207,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
           }
 
-          // --- Minimax 与 次元 语音设置 ---
+          // --- Minimax 与 鱼音 语音设置 ---
           document.getElementById("minimax-group-id").value =
             state.apiConfig.minimaxGroupId || "";
           document.getElementById("minimax-api-key").value =
@@ -35140,6 +35218,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const savedTtsEngine = state.apiConfig.ttsEngine || localStorage.getItem("ephone_tts_engine") || "minimax";
           if (ttsEngineSelectEl) {
             ttsEngineSelectEl.value = savedTtsEngine;
+          }
+          const fishProviderEl = document.getElementById("fish-provider-select");
+          if (fishProviderEl) {
+            fishProviderEl.value = state.apiConfig.fishProvider || localStorage.getItem("ephone_fish_provider") || "fish";
+          }
+          const fishRefEl = document.getElementById("fish-reference-id-input");
+          if (fishRefEl) {
+            fishRefEl.value = state.apiConfig.fishReferenceId || localStorage.getItem("ephone_fish_ref_id") || "";
           }
           const vvSpeakerEl = document.getElementById("voicevox-speaker-select");
           if (vvSpeakerEl) {
@@ -35155,6 +35241,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               ? Boolean(state.apiConfig.ttsJaTranslate)
               : localStorage.getItem("ephone_tts_ja_translate") !== "false";
             ttsJaSwEl.checked = savedJa;
+          }
+          const glmUrlEl = document.getElementById("glm-translate-url");
+          if (glmUrlEl) {
+            glmUrlEl.value = state.apiConfig.glmTranslateUrl || localStorage.getItem("ephone_glm_translate_url") || "https://open.bigmodel.cn/api/paas/v4";
+          }
+          const glmKeyEl = document.getElementById("glm-translate-key");
+          if (glmKeyEl) {
+            glmKeyEl.value = state.apiConfig.glmTranslateKey || localStorage.getItem("ephone_glm_translate_key") || "builtin-glm4-auto";
+          }
+          const glmModelEl = document.getElementById("glm-translate-model");
+          if (glmModelEl) {
+            glmModelEl.value = state.apiConfig.glmTranslateModel || localStorage.getItem("ephone_glm_translate_model") || "glm-4-flash";
           }
           const mmWrap = document.getElementById("tts-minimax-fields-wrap");
           const vvWrap = document.getElementById("tts-voicevox-fields-wrap");
@@ -73120,9 +73218,12 @@ ${stickerContext || "无"}
             .replace(/\(.*?\)|（.*?）|【.*?】/g, "")
             .trim();
 
-          if (ttsEngine === "voicevox") {
-            const vvSpeaker = voiceId || state.apiConfig?.voicevoxSpeaker || localStorage.getItem("ephone_voicevox_speaker") || "3";
+          if (ttsEngine === "voicevox" || ttsEngine === "fish") {
+            const fishRef = state.apiConfig?.fishReferenceId || localStorage.getItem("ephone_fish_ref_id") || "";
+            const vvSpeaker = voiceId || fishRef || state.apiConfig?.voicevoxSpeaker || localStorage.getItem("ephone_voicevox_speaker") || "3";
             const vvApiKey = state.apiConfig?.voicevoxApiKey || localStorage.getItem("ephone_voicevox_key") || "";
+            const fishProvider = state.apiConfig?.fishProvider || localStorage.getItem("ephone_fish_provider") || "fish";
+            const glmConfig = typeof window.getGlmTranslateConfig === "function" ? window.getGlmTranslateConfig() : {};
             try {
               const response = await fetch("/api/anime-tts", {
                 method: "POST",
@@ -73130,13 +73231,16 @@ ${stickerContext || "无"}
                 body: JSON.stringify({
                   text: textForTts,
                   speakerId: vvSpeaker,
+                  referenceId: vvSpeaker,
                   apiKey: vvApiKey,
+                  provider: fishProvider,
                   translateToJa: jaTranslateEnabled,
+                  glmConfig,
                 }),
               });
               const result = await response.json();
               if (!response.ok || !result || !result.ok || !result.audioHex) {
-                throw new Error(result?.error || "日系语音合成失败");
+                throw new Error(result?.error || "鱼音合成失败");
               }
               if (targetMsg) {
                 targetMsg.audioHex = result.audioHex;
@@ -73167,7 +73271,7 @@ ${stickerContext || "无"}
               ttsPlayer.onerror = () => cleanupAndReset();
               await ttsPlayer.play();
             } catch (error) {
-              console.error("次元语音调用失败:", error);
+              console.error("鱼音调用失败:", error);
               await showCustomAlert("语音合成失败", `错误信息: ${error.message}`);
               stopMinimaxAudio();
             }
@@ -73179,7 +73283,7 @@ ${stickerContext || "无"}
           if (!groupId || !apiKey) {
             await showCustomAlert(
               "语音播放失败",
-              "尚未配置Minimax的Group ID和API Key，或可在设置中将语音引擎切换为次元。",
+              "尚未配置Minimax的Group ID和API Key，或可在设置中将语音引擎切换为鱼音。",
             );
             stopMinimaxAudio();
             return;
@@ -73198,10 +73302,11 @@ ${stickerContext || "无"}
 
           if (jaTranslateEnabled || langBoost === "Japanese") {
             try {
+              const glmConfig = typeof window.getGlmTranslateConfig === "function" ? window.getGlmTranslateConfig() : {};
               const trRes = await fetch("/api/translate-ja", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: textForTts }),
+                body: JSON.stringify({ text: textForTts, glmConfig }),
               });
               const trData = await trRes.json();
               if (trData && trData.jaText) {
@@ -73430,9 +73535,10 @@ ${stickerContext || "无"}
             ? Boolean(state.apiConfig.ttsJaTranslate)
             : localStorage.getItem("ephone_tts_ja_translate") !== "false";
 
-          if (ttsEngine === "voicevox") {
-            let vvSpeaker = voiceId || state.apiConfig?.voicevoxSpeaker || localStorage.getItem("ephone_voicevox_speaker") || "3";
-            if (!voiceId && chat && chat.isGroup) {
+          if (ttsEngine === "voicevox" || ttsEngine === "fish") {
+            const fishRef = state.apiConfig?.fishReferenceId || localStorage.getItem("ephone_fish_ref_id") || "";
+            let vvSpeaker = voiceId || fishRef || state.apiConfig?.voicevoxSpeaker || localStorage.getItem("ephone_voicevox_speaker") || "3";
+            if (!voiceId && !fishRef && chat && chat.isGroup) {
               const defaultPool = ["3", "2", "8", "10", "65", "14", "20", "11", "52", "13"];
               const speakerKey = String(msg.senderId || msg.senderName || msg.sender || "0");
               let hash = 0;
@@ -73442,6 +73548,8 @@ ${stickerContext || "无"}
               vvSpeaker = defaultPool[hash % defaultPool.length];
             }
             const vvApiKey = state.apiConfig?.voicevoxApiKey || localStorage.getItem("ephone_voicevox_key") || "";
+            const fishProvider = state.apiConfig?.fishProvider || localStorage.getItem("ephone_fish_provider") || "fish";
+            const glmConfig = typeof window.getGlmTranslateConfig === "function" ? window.getGlmTranslateConfig() : {};
             if (bubble) bubble.classList.add("playing-quote-audio");
             try {
               const response = await fetch("/api/anime-tts", {
@@ -73450,13 +73558,16 @@ ${stickerContext || "无"}
                 body: JSON.stringify({
                   text: textToRead,
                   speakerId: vvSpeaker,
+                  referenceId: vvSpeaker,
                   apiKey: vvApiKey,
+                  provider: fishProvider,
                   translateToJa: jaTranslateEnabled,
+                  glmConfig,
                 }),
               });
               const result = await response.json();
               if (!response.ok || !result || !result.ok || !result.audioHex) {
-                throw new Error(result?.error || "日系语音合成失败");
+                throw new Error(result?.error || "鱼音合成失败");
               }
               msg.quoteAudioHex = result.audioHex;
               const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
@@ -73466,21 +73577,21 @@ ${stickerContext || "无"}
               await playQuoteAudioSource(msg.quoteAudioHex, bubble, msg);
             } catch (err) {
               if (bubble) bubble.classList.remove("playing-quote-audio");
-              console.error("生成次元台词语音失败:", err);
+              console.error("生成鱼音台词语音失败:", err);
               await showCustomAlert("语音合成失败", `错误信息: ${err.message}`);
             }
             return;
           }
 
           if (!voiceId) {
-            await showCustomAlert("语音播放失败", "尚未为该角色配置音色标识，或可在设置中将语音引擎切换为次元。");
+            await showCustomAlert("语音播放失败", "尚未为该角色配置音色标识，或可在设置中将语音引擎切换为鱼音。");
             return;
           }
 
           const groupId = state.apiConfig?.minimaxGroupId;
           const apiKey = state.apiConfig?.minimaxApiKey;
           if (!groupId || !apiKey) {
-            await showCustomAlert("语音播放失败", "尚未配置Minimax的Group ID和API Key，或可在设置中将语音引擎切换为次元。");
+            await showCustomAlert("语音播放失败", "尚未配置Minimax的Group ID和API Key，或可在设置中将语音引擎切换为鱼音。");
             return;
           }
 
@@ -73494,10 +73605,11 @@ ${stickerContext || "无"}
           let finalTextToRead = textToRead;
           if (jaTranslateEnabled || langBoost === "Japanese") {
             try {
+              const glmConfig = typeof window.getGlmTranslateConfig === "function" ? window.getGlmTranslateConfig() : {};
               const trRes = await fetch("/api/translate-ja", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: textToRead }),
+                body: JSON.stringify({ text: textToRead, glmConfig }),
               });
               const trData = await trRes.json();
               if (trData && trData.jaText) {
@@ -86458,7 +86570,7 @@ ${stickerContext || "无"}
               const hellPromptEl = document.getElementById("hell-prompt-input");
               if (hellPromptEl) state.apiConfig.hellPrompt = hellPromptEl.value;
 
-              // 保存 Minimax 与 次元 语音设置
+              // 保存 Minimax 与 鱼音 语音设置
               state.apiConfig.minimaxGroupId = document
                 .getElementById("minimax-group-id")
                 .value.trim();
@@ -86476,6 +86588,16 @@ ${stickerContext || "无"}
                 state.apiConfig.ttsEngine = ttsEngineEl.value || "minimax";
                 localStorage.setItem("ephone_tts_engine", state.apiConfig.ttsEngine);
               }
+              const fishProviderEl = document.getElementById("fish-provider-select");
+              if (fishProviderEl) {
+                state.apiConfig.fishProvider = fishProviderEl.value || "fish";
+                localStorage.setItem("ephone_fish_provider", state.apiConfig.fishProvider);
+              }
+              const fishRefEl = document.getElementById("fish-reference-id-input");
+              if (fishRefEl) {
+                state.apiConfig.fishReferenceId = fishRefEl.value.trim();
+                localStorage.setItem("ephone_fish_ref_id", state.apiConfig.fishReferenceId);
+              }
               const vvSpeakerEl = document.getElementById("voicevox-speaker-select");
               if (vvSpeakerEl) {
                 state.apiConfig.voicevoxSpeaker = vvSpeakerEl.value || "3";
@@ -86490,6 +86612,21 @@ ${stickerContext || "无"}
               if (ttsJaSwEl) {
                 state.apiConfig.ttsJaTranslate = ttsJaSwEl.checked;
                 localStorage.setItem("ephone_tts_ja_translate", String(ttsJaSwEl.checked));
+              }
+              const glmUrlEl = document.getElementById("glm-translate-url");
+              if (glmUrlEl) {
+                state.apiConfig.glmTranslateUrl = glmUrlEl.value.trim() || "https://open.bigmodel.cn/api/paas/v4";
+                localStorage.setItem("ephone_glm_translate_url", state.apiConfig.glmTranslateUrl);
+              }
+              const glmKeyEl = document.getElementById("glm-translate-key");
+              if (glmKeyEl) {
+                state.apiConfig.glmTranslateKey = glmKeyEl.value.trim() || "builtin-glm4-auto";
+                localStorage.setItem("ephone_glm_translate_key", state.apiConfig.glmTranslateKey);
+              }
+              const glmModelEl = document.getElementById("glm-translate-model");
+              if (glmModelEl) {
+                state.apiConfig.glmTranslateModel = glmModelEl.value || "glm-4-flash";
+                localStorage.setItem("ephone_glm_translate_model", state.apiConfig.glmTranslateModel);
               }
               // --- 保存 GitHub 备份设置 ---
               state.apiConfig.githubToken = document
@@ -89078,8 +89215,14 @@ ${stickerContext || "无"}
               const userAvatar = (state.user && state.user.avatar) || (chat.settings && chat.settings.myAvatar) || defaultAvatar;
               const userName = (chat.settings && chat.settings.myGroupNickname) || (state.user && state.user.name) || "我";
 
+              const clonedVoices = Array.isArray(window._cachedFishClonedVoices) ? window._cachedFishClonedVoices : [];
+              const clonedOptsHtml = clonedVoices
+                .map((v) => `<option value="${v.id}">克隆 ${v.name}</option>`)
+                .join("");
+
               const vvPresetOptionsHtml = `
                 <option value="">选声优</option>
+                ${clonedOptsHtml}
                 <option value="3">甜妹</option>
                 <option value="2">傲娇</option>
                 <option value="8">元气</option>
@@ -102585,14 +102728,80 @@ ${stickerContext || "无"}
             };
           }
 
+          window.getGlmTranslateConfig = function () {
+            const urlEl = document.getElementById("glm-translate-url");
+            const keyEl = document.getElementById("glm-translate-key");
+            const modelEl = document.getElementById("glm-translate-model");
+            return {
+              url: (urlEl && urlEl.value.trim()) || (typeof state !== "undefined" && state.apiConfig?.glmTranslateUrl) || localStorage.getItem("ephone_glm_translate_url") || "https://open.bigmodel.cn/api/paas/v4",
+              apiKey: (keyEl && keyEl.value.trim()) || (typeof state !== "undefined" && state.apiConfig?.glmTranslateKey) || localStorage.getItem("ephone_glm_translate_key") || "builtin-glm4-auto",
+              model: (modelEl && modelEl.value) || (typeof state !== "undefined" && state.apiConfig?.glmTranslateModel) || localStorage.getItem("ephone_glm_translate_model") || "glm-4-flash",
+            };
+          };
+
           function initTtsEngineControls() {
             const ttsEngineSel = document.getElementById("tts-engine-select");
             const mmWrap = document.getElementById("tts-minimax-fields-wrap");
             const vvWrap = document.getElementById("tts-voicevox-fields-wrap");
+            const fishProviderSel = document.getElementById("fish-provider-select");
+            const fishRefInput = document.getElementById("fish-reference-id-input");
             const vvSpeakerSel = document.getElementById("voicevox-speaker-select");
             const vvKeyInput = document.getElementById("voicevox-api-key");
             const jaSw = document.getElementById("tts-ja-translate-switch");
             const testBtn = document.getElementById("test-voicevox-btn");
+            const pickAudioBtn = document.getElementById("fish-pick-audio-btn");
+            const audioFileInput = document.getElementById("fish-clone-audio-input");
+            const fileDisplayInput = document.getElementById("fish-clone-file-display");
+            const cloneNameInput = document.getElementById("fish-clone-name-input");
+            const cloneTextInput = document.getElementById("fish-clone-text-input");
+            const cloneSubmitBtn = document.getElementById("fish-clone-submit-btn");
+
+            const glmUrlInput = document.getElementById("glm-translate-url");
+            const glmKeyInput = document.getElementById("glm-translate-key");
+            const glmModelSel = document.getElementById("glm-translate-model");
+            const fetchGlmBtn = document.getElementById("fetch-glm-models-btn");
+            const testGlmBtn = document.getElementById("test-glm-translate-btn");
+            const glmBadge = document.getElementById("glm-translate-status-badge");
+
+            const defaultPresets = [
+              { id: "3", label: "甜妹 ずんだもん" },
+              { id: "2", label: "傲娇 四国めたん" },
+              { id: "8", label: "元气 春日部つむぎ" },
+              { id: "10", label: "温柔 雨晴はう" },
+              { id: "65", label: "御姐 波音リツ" },
+              { id: "14", label: "冥鸣 冥鳴ひまり" },
+              { id: "20", label: "治愈 もち子さん" },
+              { id: "43", label: "萝莉 櫻歌ミコ" },
+              { id: "47", label: "机械 ナースロボ" },
+              { id: "11", label: "青年 玄野武宏" },
+              { id: "52", label: "少年 雀松朱司" },
+              { id: "13", label: "低音 青山龍星" },
+              { id: "67", label: "温和 栗田まろん" },
+            ];
+
+            async function refreshClonedVoicesDropdown(selectedIdOverride) {
+              try {
+                const res = await fetch("/api/fish-voices");
+                const data = await res.json();
+                const cloned = (data && Array.isArray(data.voices)) ? data.voices : [];
+                window._cachedFishClonedVoices = cloned;
+                if (vvSpeakerSel) {
+                  const prevVal = selectedIdOverride || vvSpeakerSel.value || localStorage.getItem("ephone_voicevox_speaker") || "3";
+                  let html = "";
+                  for (const c of cloned) {
+                    html += `<option value="${c.id}">克隆 ${c.name}</option>`;
+                  }
+                  for (const p of defaultPresets) {
+                    html += `<option value="${p.id}">${p.label}</option>`;
+                  }
+                  vvSpeakerSel.innerHTML = html;
+                  if (Array.from(vvSpeakerSel.options).some((o) => o.value === prevVal)) {
+                    vvSpeakerSel.value = prevVal;
+                  }
+                }
+              } catch (_) {}
+            }
+            refreshClonedVoicesDropdown();
 
             if (ttsEngineSel) {
               ttsEngineSel.addEventListener("change", () => {
@@ -102602,8 +102811,24 @@ ${stickerContext || "无"}
                   state.apiConfig.ttsEngine = val;
                 }
                 if (mmWrap && vvWrap) {
-                  mmWrap.style.display = val === "voicevox" ? "none" : "block";
-                  vvWrap.style.display = val === "voicevox" ? "block" : "none";
+                  mmWrap.style.display = (val === "voicevox" || val === "fish") ? "none" : "block";
+                  vvWrap.style.display = (val === "voicevox" || val === "fish") ? "block" : "none";
+                }
+              });
+            }
+            if (fishProviderSel) {
+              fishProviderSel.addEventListener("change", () => {
+                localStorage.setItem("ephone_fish_provider", fishProviderSel.value);
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.fishProvider = fishProviderSel.value;
+                }
+              });
+            }
+            if (fishRefInput) {
+              fishRefInput.addEventListener("change", () => {
+                localStorage.setItem("ephone_fish_ref_id", fishRefInput.value.trim());
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.fishReferenceId = fishRefInput.value.trim();
                 }
               });
             }
@@ -102612,6 +102837,13 @@ ${stickerContext || "无"}
                 localStorage.setItem("ephone_voicevox_speaker", vvSpeakerSel.value);
                 if (typeof state !== "undefined" && state.apiConfig) {
                   state.apiConfig.voicevoxSpeaker = vvSpeakerSel.value;
+                }
+                if (fishRefInput && (vvSpeakerSel.value.startsWith("clone_") || vvSpeakerSel.value.length >= 16 || vvSpeakerSel.value.startsWith("speech:"))) {
+                  fishRefInput.value = vvSpeakerSel.value;
+                  localStorage.setItem("ephone_fish_ref_id", vvSpeakerSel.value);
+                  if (typeof state !== "undefined" && state.apiConfig) {
+                    state.apiConfig.fishReferenceId = vvSpeakerSel.value;
+                  }
                 }
               });
             }
@@ -102631,12 +102863,92 @@ ${stickerContext || "无"}
                 }
               });
             }
+
+            let pendingCloneAudioB64 = "";
+            let pendingCloneMime = "audio/mpeg";
+            if (pickAudioBtn && audioFileInput) {
+              pickAudioBtn.addEventListener("click", () => audioFileInput.click());
+              audioFileInput.addEventListener("change", () => {
+                const file = audioFileInput.files && audioFileInput.files[0];
+                if (!file) return;
+                if (fileDisplayInput) fileDisplayInput.value = file.name;
+                if (cloneNameInput && !cloneNameInput.value.trim()) {
+                  cloneNameInput.value = file.name.replace(/\.[a-zA-Z0-9]+$/, "");
+                }
+                pendingCloneMime = file.type || "audio/mpeg";
+                const reader = new FileReader();
+                reader.onload = () => {
+                  pendingCloneAudioB64 = String(reader.result || "");
+                };
+                reader.readAsDataURL(file);
+              });
+            }
+
+            if (cloneSubmitBtn) {
+              cloneSubmitBtn.addEventListener("click", async () => {
+                if (!pendingCloneAudioB64) {
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "请先点击选音按钮选择一段参考音频文件");
+                  }
+                  return;
+                }
+                const cName = (cloneNameInput && cloneNameInput.value.trim()) || "专属音色";
+                const cText = (cloneTextInput && cloneTextInput.value.trim()) || "";
+                const cKey = (vvKeyInput && vvKeyInput.value.trim()) || "";
+                const cProv = (fishProviderSel && fishProviderSel.value) || "fish";
+                cloneSubmitBtn.textContent = "克隆中";
+                try {
+                  const res = await fetch("/api/fish-clone", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      name: cName,
+                      text: cText,
+                      audioBase64: pendingCloneAudioB64,
+                      mimeType: pendingCloneMime,
+                      apiKey: cKey,
+                      provider: cProv,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok || !data || !data.ok || !data.voice) {
+                    throw new Error(data?.error || "克隆失败");
+                  }
+                  const newId = data.voice.id;
+                  await refreshClonedVoicesDropdown(newId);
+                  if (fishRefInput) {
+                    fishRefInput.value = newId;
+                    localStorage.setItem("ephone_fish_ref_id", newId);
+                    if (typeof state !== "undefined" && state.apiConfig) {
+                      state.apiConfig.fishReferenceId = newId;
+                    }
+                  }
+                  localStorage.setItem("ephone_voicevox_speaker", newId);
+                  if (typeof state !== "undefined" && state.apiConfig) {
+                    state.apiConfig.voicevoxSpeaker = newId;
+                  }
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "音色克隆成功，已自动选中 " + data.voice.name + "，群聊成员也可在选声优里直接选用");
+                  }
+                } catch (e) {
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "克隆未成功: " + (e.message || "请检查音频文件"));
+                  }
+                } finally {
+                  cloneSubmitBtn.textContent = "克隆";
+                }
+              });
+            }
+
             if (testBtn) {
               testBtn.addEventListener("click", async () => {
-                const spk = (vvSpeakerSel && vvSpeakerSel.value) || "3";
+                const refVal = (fishRefInput && fishRefInput.value.trim()) || "";
+                const spk = refVal || (vvSpeakerSel && vvSpeakerSel.value) || "3";
                 const key = (vvKeyInput && vvKeyInput.value.trim()) || "";
+                const prov = (fishProviderSel && fishProviderSel.value) || "fish";
                 const trJa = jaSw ? jaSw.checked : true;
-                testBtn.textContent = "生成中...";
+                const glmConfig = window.getGlmTranslateConfig();
+                testBtn.textContent = "生成中";
                 try {
                   const res = await fetch("/api/anime-tts", {
                     method: "POST",
@@ -102644,8 +102956,11 @@ ${stickerContext || "无"}
                     body: JSON.stringify({
                       text: "前辈，今天我们一起去哪里冒险呢？",
                       speakerId: spk,
+                      referenceId: spk,
                       apiKey: key,
+                      provider: prov,
                       translateToJa: trJa,
+                      glmConfig,
                     }),
                   });
                   const data = await res.json();
@@ -102667,6 +102982,83 @@ ${stickerContext || "无"}
                   }
                 } finally {
                   testBtn.textContent = "试听";
+                }
+              });
+            }
+
+            if (glmUrlInput) {
+              glmUrlInput.addEventListener("change", () => {
+                localStorage.setItem("ephone_glm_translate_url", glmUrlInput.value.trim());
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.glmTranslateUrl = glmUrlInput.value.trim();
+                }
+              });
+            }
+            if (glmKeyInput) {
+              glmKeyInput.addEventListener("change", () => {
+                localStorage.setItem("ephone_glm_translate_key", glmKeyInput.value.trim());
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.glmTranslateKey = glmKeyInput.value.trim();
+                }
+              });
+            }
+            if (glmModelSel) {
+              glmModelSel.addEventListener("change", () => {
+                localStorage.setItem("ephone_glm_translate_model", glmModelSel.value);
+                if (typeof state !== "undefined" && state.apiConfig) {
+                  state.apiConfig.glmTranslateModel = glmModelSel.value;
+                }
+              });
+            }
+            if (fetchGlmBtn) {
+              fetchGlmBtn.addEventListener("click", async () => {
+                fetchGlmBtn.textContent = "拉取中";
+                try {
+                  const cfg = window.getGlmTranslateConfig();
+                  const res = await fetch("/api/glm-models", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(cfg),
+                  });
+                  const data = await res.json();
+                  if (data && Array.isArray(data.models) && glmModelSel) {
+                    const prev = glmModelSel.value || "glm-4-flash";
+                    glmModelSel.innerHTML = data.models
+                      .map((m) => `<option value="${m}">${m}</option>`)
+                      .join("");
+                    if (data.models.includes(prev)) glmModelSel.value = prev;
+                  }
+                  if (glmBadge) glmBadge.textContent = "已拉取";
+                } catch (_) {
+                } finally {
+                  fetchGlmBtn.textContent = "拉取";
+                }
+              });
+            }
+            if (testGlmBtn) {
+              testGlmBtn.addEventListener("click", async () => {
+                testGlmBtn.textContent = "测试中";
+                try {
+                  const cfg = window.getGlmTranslateConfig();
+                  const res = await fetch("/api/translate-ja", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      text: "珍珠，今天晚上我们一起去吃好吃的吧！",
+                      glmConfig: cfg,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (glmBadge) glmBadge.textContent = "已联通";
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "密友群日语翻译测试成功: " + (data?.jaText || "已就绪"));
+                  }
+                } catch (e) {
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "翻译测试失败: " + (e.message || "请重试"));
+                  }
+                } finally {
+                  testGlmBtn.textContent = "测试";
                 }
               });
             }
