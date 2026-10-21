@@ -33781,25 +33781,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             if (naiSettings.promptSource === "character") {
               const charPos = (naiSettings.characterPositivePrompt || "").trim();
-              const posParts = [];
-              if (artist) posParts.push(artist);
-              if (charPos) posParts.push(charPos);
               return {
                 artist: artist,
-                positive: posParts.join(", "),
+                positive: charPos,
                 negative: naiSettings.characterNegativePrompt || systemSettings.default_negative || "",
                 source: "character",
               };
             }
           }
 
-          // 默认系统配置：只打包用户真实填写的画师串与正面提示词，空则为空
-          const posParts = [];
-          if (artist) posParts.push(artist);
-          if (defaultPos) posParts.push(defaultPos);
+          // 默认系统配置：画师串与默认正面提示词独立返回，避免外层拼接时将画师串发送两次
           return {
             artist: artist,
-            positive: posParts.join(", "),
+            positive: defaultPos,
             negative: systemSettings.default_negative || "",
             source: "system",
           };
@@ -33828,10 +33822,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const prompts = getCharacterNAIPrompts(chatId);
 
           // 构建最终的提示词（如果有自定义提示词则追加）
-          let finalPrompt = prompts.positive;
-          if (customPrompt) {
-            finalPrompt = customPrompt + ", " + prompts.positive;
-          }
+          const finalPrompt = [prompts.artist, prompts.positive, customPrompt].filter(Boolean).join(", ");
 
           const negativePrompt = prompts.negative;
 
@@ -45212,7 +45203,11 @@ ${recentHistoryText}
 
                       const naiPrompts = getCharacterNAIPrompts(chat.id);
                       const aiPrompt = msgData.prompt || msgData.content || msgData.image_prompt || msgData.imagePrompt || msgData.description || "a beautiful scene";
-                      const finalPositivePrompt = `${aiPrompt}, ${naiPrompts.positive}`;
+                      const finalPositivePrompt = [
+                        naiPrompts.artist && !aiPrompt.includes(naiPrompts.artist) ? naiPrompts.artist : "",
+                        naiPrompts.positive && !aiPrompt.includes(naiPrompts.positive) ? naiPrompts.positive : "",
+                        aiPrompt,
+                      ].filter(Boolean).join(", ");
                       const finalNegativePrompt = naiPrompts.negative;
 
                       const apiKey = localStorage.getItem("novelai-api-key");
@@ -50351,9 +50346,12 @@ ${stickerContext || "无"}
                         // 获取角色的NAI提示词配置（系统或角色专属）
                         const naiPrompts = getCharacterNAIPrompts(chat.id);
 
-                        // 构建最终的提示词：AI的prompt + 配置的提示词
-                        const finalPositivePrompt =
-                          aiPrompt + ", " + naiPrompts.positive;
+                        // 构建最终的提示词：画师串 + 正面提示词 + AI的prompt
+                        const finalPositivePrompt = [
+                          naiPrompts.artist && !aiPrompt.includes(naiPrompts.artist) ? naiPrompts.artist : "",
+                          naiPrompts.positive && !aiPrompt.includes(naiPrompts.positive) ? naiPrompts.positive : "",
+                          aiPrompt,
+                        ].filter(Boolean).join(", ");
                         const finalNegativePrompt = naiPrompts.negative;
 
                         console.log(
