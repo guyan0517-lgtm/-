@@ -235,11 +235,14 @@ const VAULT_MAGIC_HEADER = Buffer.from('EPHVAULT', 'ascii');
 
 function toStealthDiskFileName(rawName) {
   const safe = path.basename(String(rawName || '')).replace(/[^a-zA-Z0-9._-]/g, '_');
-  return safe.replace(/\.(png|jpe?g|webp|gif|epdat)$/i, '') + '.epdat';
+  return safe.replace(/\.(png|jpe?g|webp|gif|mp3|wav|ogg|epdat)$/i, '') + '.epdat';
 }
 
 function getMimeFromVaultName(rawName) {
   const lower = String(rawName || '').toLowerCase();
+  if (lower.endsWith('.mp3') || lower.endsWith('.mpeg') || lower.startsWith('aud_')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  if (lower.endsWith('.ogg')) return 'audio/ogg';
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
   if (lower.endsWith('.webp')) return 'image/webp';
   if (lower.endsWith('.gif')) return 'image/gif';

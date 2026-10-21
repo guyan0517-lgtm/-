@@ -36784,7 +36784,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function applyGlobalWallpaper() {
           const homeScreen = document.getElementById("home-screen");
           const wallpaper = state.globalSettings.wallpaper;
-          if (wallpaper && wallpaper.startsWith("data:image"))
+          if (wallpaper && (wallpaper.startsWith("data:image") || wallpaper.startsWith("vault://") || wallpaper.startsWith("blob:")))
             homeScreen.style.backgroundImage = `url(${wallpaper})`;
           else if (wallpaper) homeScreen.style.backgroundImage = wallpaper;
         }
@@ -63389,7 +63389,7 @@ ${stickerContext || "无"}
         function applyLockscreenWallpaper() {
           const lockScreen = document.getElementById("lock-screen");
           const wallpaper = state.globalSettings.lockscreenWallpaper;
-          if (wallpaper && wallpaper.startsWith("data:image")) {
+          if (wallpaper && (wallpaper.startsWith("data:image") || wallpaper.startsWith("vault://") || wallpaper.startsWith("blob:"))) {
             lockScreen.style.backgroundImage = `url(${wallpaper})`;
           } else if (wallpaper) {
             lockScreen.style.backgroundImage = wallpaper;
@@ -73170,7 +73170,10 @@ ${stickerContext || "无"}
 
           if (targetMsg && (targetMsg.audioHex || targetMsg.audioData)) {
             try {
-              const audioUrl = targetMsg.audioHex ? hexToBlobUrl(targetMsg.audioHex) : targetMsg.audioData;
+              const rawSavedAudio = targetMsg.audioHex || targetMsg.audioData;
+              const audioUrl = (typeof rawSavedAudio === "string" && rawSavedAudio.startsWith("vault://") && typeof window.resolveVaultRefToUrl === "function")
+                ? await window.resolveVaultRefToUrl(rawSavedAudio)
+                : (targetMsg.audioHex ? hexToBlobUrl(targetMsg.audioHex) : targetMsg.audioData);
               if (audioUrl) {
                 bubblesToAnimate.forEach((b) => {
                   const spinner = b.querySelector(".loading-spinner");
@@ -73422,9 +73425,11 @@ ${stickerContext || "无"}
               return;
             }
 
-            const audioUrl = audioHexOrData.startsWith("data:") || audioHexOrData.startsWith("blob:")
-              ? audioHexOrData
-              : hexToBlobUrl(audioHexOrData);
+            const audioUrl = (typeof audioHexOrData === "string" && audioHexOrData.startsWith("vault://") && typeof window.resolveVaultRefToUrl === "function")
+              ? await window.resolveVaultRefToUrl(audioHexOrData)
+              : (audioHexOrData.startsWith("data:") || audioHexOrData.startsWith("blob:")
+                ? audioHexOrData
+                : hexToBlobUrl(audioHexOrData));
 
             if (!audioUrl) {
               resolve();
@@ -101938,16 +101943,62 @@ ${stickerContext || "无"}
             return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0") + "_" + str.length.toString(16);
           }
 
-          function parseDataUrlToParts(dataUrl) {
-            const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
-            if (!match) return null;
-            const mime = match[1].toLowerCase();
-            const b64 = match[2];
-            let ext = "png";
-            if (mime.includes("jpeg") || mime.includes("jpg")) ext = "jpg";
-            else if (mime.includes("webp")) ext = "webp";
-            else if (mime.includes("gif")) ext = "gif";
-            return { mime, b64, ext };
+          function uint8ArrayToBase64(bytes) {
+            let binary = "";
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+              binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            return btoa(binary);
+          }
+
+          function hexStringToUint8Array(hexStr) {
+            const clean = String(hexStr || "").replace(/[^0-9a-fA-F]/g, "");
+            const len = Math.floor(clean.length / 2);
+            const out = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              out[i] = parseInt(clean.substr(i * 2, 2), 16);
+            }
+            return out;
+          }
+
+          function parseDataUrlToParts(dataUrl, propKey = "") {
+            if (typeof dataUrl !== "string") return null;
+            const imgMatch = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
+            if (imgMatch) {
+              const mime = imgMatch[1].toLowerCase();
+              const b64 = imgMatch[2];
+              let ext = "png";
+              if (mime.includes("jpeg") || mime.includes("jpg")) ext = "jpg";
+              else if (mime.includes("webp")) ext = "webp";
+              else if (mime.includes("gif")) ext = "gif";
+              return { mime, b64, ext, prefix: "img_" };
+            }
+            const audMatch = /^data:(audio\/[a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
+            if (audMatch) {
+              const mime = audMatch[1].toLowerCase();
+              const b64 = audMatch[2];
+              let ext = "mp3";
+              if (mime.includes("wav")) ext = "wav";
+              else if (mime.includes("ogg")) ext = "ogg";
+              return { mime, b64, ext, prefix: "aud_" };
+            }
+            if (
+              (propKey === "audioHex" || propKey === "quoteAudioHex" || propKey === "audioData" || propKey === "quoteAudioData") &&
+              dataUrl.length >= 4096 &&
+              /^[0-9a-fA-F\s]+$/.test(dataUrl)
+            ) {
+              const bytes = hexStringToUint8Array(dataUrl);
+              if (bytes.length > 100) {
+                return {
+                  mime: "audio/mpeg",
+                  b64: uint8ArrayToBase64(bytes),
+                  ext: "mp3",
+                  prefix: "aud_",
+                };
+              }
+            }
+            return null;
           }
 
           function base64ToUint8Array(b64) {
@@ -102116,11 +102167,14 @@ ${stickerContext || "无"}
           const VAULT_MAGIC_BYTES = new Uint8Array([69, 80, 72, 86, 65, 85, 76, 84]); // "EPHVAULT"
 
           function toStealthVaultFileName(fileName) {
-            return String(fileName || "").replace(/\.(png|jpe?g|webp|gif|epdat)$/i, "") + ".epdat";
+            return String(fileName || "").replace(/\.(png|jpe?g|webp|gif|mp3|wav|ogg|epdat)$/i, "") + ".epdat";
           }
 
           function getMimeFromVaultFileName(fileName) {
             const lower = String(fileName || "").toLowerCase();
+            if (lower.endsWith(".mp3") || lower.endsWith(".mpeg") || lower.startsWith("aud_")) return "audio/mpeg";
+            if (lower.endsWith(".wav")) return "audio/wav";
+            if (lower.endsWith(".ogg")) return "audio/ogg";
             if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
             if (lower.endsWith(".webp")) return "image/webp";
             if (lower.endsWith(".gif")) return "image/gif";
@@ -102170,48 +102224,117 @@ ${stickerContext || "无"}
             } catch (_) {}
           }
 
-          async function migrateExposedImagesInDir(dirHandle) {
+          async function migrateExposedImagesInDir(dirHandle, opfsMediaDir = null) {
             if (!dirHandle || typeof dirHandle.entries !== "function") return 0;
             let converted = 0;
             await writeNoMediaFileInDir(dirHandle);
             const exposedNames = [];
             try {
               for await (const [entryName, entryHandle] of dirHandle.entries()) {
-                if (entryHandle && entryHandle.kind === "file" && /\.(png|jpe?g|webp|gif)$/i.test(entryName)) {
+                if (entryHandle && entryHandle.kind === "file" && /\.(png|jpe?g|webp|gif|mp3|wav|ogg)$/i.test(entryName)) {
                   exposedNames.push({ entryName, entryHandle });
                 }
               }
             } catch (_) {}
 
+            const serverSyncBatch = [];
             for (const item of exposedNames) {
               try {
                 const file = await item.entryHandle.getFile();
                 const ab = await file.arrayBuffer();
                 const rawBytes = new Uint8Array(ab);
+                const cleanBytes = unwrapVaultBinary(rawBytes);
+                const wrapped = wrapVaultBinary(cleanBytes);
                 const stealthName = toStealthVaultFileName(item.entryName);
-                const stealthHandle = await dirHandle.getFileHandle(stealthName, { create: true });
-                const writable = await stealthHandle.createWritable();
-                await writable.write(wrapVaultBinary(rawBytes));
-                await writable.close();
+
+                // 1. 同步转入默认免授权隐藏仓库，确保切换目录后也绝不丢图
+                if (opfsMediaDir) {
+                  try {
+                    const opfsFile = await opfsMediaDir.getFileHandle(stealthName, { create: true });
+                    const wOpfs = await opfsFile.createWritable();
+                    await wOpfs.write(wrapped);
+                    await wOpfs.close();
+                  } catch (_) {}
+                }
+
+                // 2. 在当前目录写入加密数据块
+                try {
+                  const stealthHandle = await dirHandle.getFileHandle(stealthName, { create: true });
+                  const writable = await stealthHandle.createWritable();
+                  await writable.write(wrapped);
+                  await writable.close();
+                } catch (_) {}
+
+                // 3. 彻底删除外露的 .png / .jpg 原图，让手机相册立刻移除该照片
                 if (typeof dirHandle.removeEntry === "function") {
                   await dirHandle.removeEntry(item.entryName);
                 }
+
+                serverSyncBatch.push({
+                  fileName: item.entryName,
+                  contentBase64: uint8ArrayToBase64(cleanBytes),
+                });
                 converted++;
               } catch (_) {}
+            }
+
+            if (serverSyncBatch.length > 0) {
+              for (let i = 0; i < serverSyncBatch.length; i += 20) {
+                fetch("/api/local-vault/media-batch", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ items: serverSyncBatch.slice(i, i + 20) }),
+                }).catch(() => {});
+              }
             }
             return converted;
           }
 
+          async function absorbAndPurgeDirectoryTree(rootHandle, opfsMediaDir = null) {
+            if (!rootHandle) return 0;
+            let count = 0;
+            count += await migrateExposedImagesInDir(rootHandle, opfsMediaDir);
+            const subDirs = ["media", "EPhoneVault"];
+            for (const subName of subDirs) {
+              try {
+                const subHandle = await rootHandle.getDirectoryHandle(subName, { create: false });
+                if (subHandle) {
+                  count += await migrateExposedImagesInDir(subHandle, opfsMediaDir);
+                  try {
+                    const nestedMedia = await subHandle.getDirectoryHandle("media", { create: false });
+                    if (nestedMedia) {
+                      count += await migrateExposedImagesInDir(nestedMedia, opfsMediaDir);
+                    }
+                  } catch (_) {}
+                }
+              } catch (_) {}
+            }
+            return count;
+          }
+
           async function runVaultHideGalleryImages(silent = false) {
             let totalConverted = 0;
+            let opfsMediaDir = null;
             try {
-              const handle = await getEffectiveDirectoryHandle();
-              if (handle) {
-                totalConverted += await migrateExposedImagesInDir(handle);
-                try {
-                  const mediaDir = await handle.getDirectoryHandle("media", { create: true });
-                  totalConverted += await migrateExposedImagesInDir(mediaDir);
-                } catch (_) {}
+              const opfsRoot = await getAutoOpfsDirectoryHandle();
+              if (opfsRoot) {
+                await writeNoMediaFileInDir(opfsRoot);
+                opfsMediaDir = await opfsRoot.getDirectoryHandle("media", { create: true });
+                await writeNoMediaFileInDir(opfsMediaDir);
+                totalConverted += await absorbAndPurgeDirectoryTree(opfsRoot, null);
+              }
+            } catch (_) {}
+
+            try {
+              const savedHandle = await getSavedDirectoryHandle();
+              if (savedHandle) {
+                if (!silent && typeof savedHandle.queryPermission === "function") {
+                  const perm = await savedHandle.queryPermission({ mode: "readwrite" });
+                  if (perm !== "granted" && typeof savedHandle.requestPermission === "function") {
+                    await savedHandle.requestPermission({ mode: "readwrite" });
+                  }
+                }
+                totalConverted += await absorbAndPurgeDirectoryTree(savedHandle, opfsMediaDir);
               }
             } catch (_) {}
 
@@ -102225,14 +102348,26 @@ ${stickerContext || "无"}
               }
             } catch (_) {}
 
+            // 若用户手动点击隐图，且当前已绑定目录没有发现外露图片，支持直接点选之前误操作的那300张图片所在文件夹一键收编并清空相册残留
+            if (!silent && totalConverted === 0 && typeof window.showDirectoryPicker === "function") {
+              try {
+                const pickedHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+                if (pickedHandle) {
+                  setVaultInfoText("正在从所选文件夹收编并清除相册残留图片...");
+                  const pickedCount = await absorbAndPurgeDirectoryTree(pickedHandle, opfsMediaDir);
+                  totalConverted += pickedCount;
+                }
+              } catch (_) {}
+            }
+
             if (!silent) {
-              setVaultInfoText("已开启防相册扫描保护 · 已隐藏转换 " + totalConverted + " 张图片为加密数据块");
+              setVaultInfoText("防相册扫描已完成 · 已收编并隐藏 " + totalConverted + " 个外露媒体文件");
               if (typeof window.showCustomAlert === "function") {
                 window.showCustomAlert(
                   "提示",
-                  "已完成防相册扫描处理，共转换并隐藏 " +
+                  "已完成防相册扫描与旧图收编，共转移并隐藏 " +
                     totalConverted +
-                    " 张外露图片，已生成 .nomedia 防扫描标记并将图片伪装为 .epdat 数据文件，手机相册不会再显示这些图片"
+                    " 个外露文件，原文件夹中的普通图片已删除并写入 .nomedia 防扫描标记，手机相册将不再显示这些图片"
                 );
               }
             }
@@ -102360,6 +102495,27 @@ ${stickerContext || "无"}
                 } catch (_) {}
 
                 try {
+                  const opfsRoot = await getAutoOpfsDirectoryHandle();
+                  if (opfsRoot) {
+                    const opfsMedia = await opfsRoot.getDirectoryHandle("media", { create: false });
+                    let fHandle = null;
+                    try {
+                      fHandle = await opfsMedia.getFileHandle(stealthName, { create: false });
+                    } catch (_) {
+                      fHandle = await opfsMedia.getFileHandle(fileName, { create: false });
+                    }
+                    if (fHandle) {
+                      const file = await fHandle.getFile();
+                      const ab = await file.arrayBuffer();
+                      const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                      const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                      blobUrlMemoryCache.set(fileName, objUrl);
+                      return objUrl;
+                    }
+                  }
+                } catch (_) {}
+
+                try {
                   const apiRes = await fetch("/api/local-vault/media/" + encodeURIComponent(fileName));
                   if (apiRes.ok) {
                     const ab = await apiRes.arrayBuffer();
@@ -102406,14 +102562,28 @@ ${stickerContext || "无"}
             } catch (_) {}
             return vaultRef;
           }
+          window.resolveVaultRefToUrl = resolveVaultRefToUrl;
 
-          async function offloadDataUrlString(str, cfg, counter, sharedMediaDir = null) {
-            if (typeof str !== "string" || !str.startsWith("data:image/") || str.length < 8192) {
+          function isOffloadableStringValue(val, propKey = "") {
+            if (typeof val !== "string" || val.length < 4096 || val.startsWith("vault://")) return false;
+            if (val.startsWith("data:image/") || val.startsWith("data:audio/")) return true;
+            if (
+              (propKey === "audioHex" || propKey === "quoteAudioHex" || propKey === "audioData" || propKey === "quoteAudioData") &&
+              /^[0-9a-fA-F\s]+$/.test(val)
+            ) {
+              return true;
+            }
+            return false;
+          }
+
+          async function offloadDataUrlString(str, cfg, counter, sharedMediaDir = null, propKey = "") {
+            if (!isOffloadableStringValue(str, propKey)) {
               return str;
             }
-            const parts = parseDataUrlToParts(str);
+            const parts = parseDataUrlToParts(str, propKey);
             if (!parts) return str;
-            const fileName = "img_" + hashDataUrl(str) + "." + parts.ext;
+            const prefix = parts.prefix || "img_";
+            const fileName = prefix + hashDataUrl(str) + "." + parts.ext;
             const ref = await storeImageInVault(fileName, parts, cfg, sharedMediaDir);
             if (ref) {
               counter.count++;
@@ -102429,8 +102599,8 @@ ${stickerContext || "无"}
             if (Array.isArray(obj)) {
               for (let i = 0; i < obj.length; i++) {
                 const val = obj[i];
-                if (typeof val === "string" && val.startsWith("data:image/") && val.length >= 8192) {
-                  tasks.push({ holder: obj, key: i, val });
+                if (isOffloadableStringValue(val, "")) {
+                  tasks.push({ holder: obj, key: i, val, propKey: "" });
                 } else if (val && typeof val === "object") {
                   collectImageTasksFromObject(val, tasks, visited);
                 }
@@ -102439,8 +102609,8 @@ ${stickerContext || "无"}
             }
             for (const key of Object.keys(obj)) {
               const val = obj[key];
-              if (typeof val === "string" && val.startsWith("data:image/") && val.length >= 8192) {
-                tasks.push({ holder: obj, key, val });
+              if (isOffloadableStringValue(val, key)) {
+                tasks.push({ holder: obj, key, val, propKey: key });
               } else if (val && typeof val === "object") {
                 collectImageTasksFromObject(val, tasks, visited);
               }
@@ -102458,9 +102628,10 @@ ${stickerContext || "无"}
               const serverBatch = [];
               await Promise.all(
                 slice.map(async (t) => {
-                  const parts = parseDataUrlToParts(t.val);
+                  const parts = parseDataUrlToParts(t.val, t.propKey || "");
                   if (!parts) return;
-                  const fileName = "img_" + hashDataUrl(t.val) + "." + parts.ext;
+                  const prefix = parts.prefix || "img_";
+                  const fileName = prefix + hashDataUrl(t.val) + "." + parts.ext;
                   const wasWritten = writtenVaultFiles.has(fileName);
                   const nextVal = await storeImageInVault(fileName, parts, cfg, sharedMediaDir);
                   if (nextVal && nextVal !== t.val) {
@@ -102495,7 +102666,7 @@ ${stickerContext || "无"}
             }
             const cfg = getCurrentFormVaultConfig();
             const counter = { count: 0, savedBytes: 0 };
-            setVaultInfoText("正在扫描并高速并发分离高清图片，请稍候...");
+            setVaultInfoText("正在全表扫描并高速并发分离图片、表情包、壁纸与语音音频...");
             try {
               let sharedMediaDir = null;
               try {
@@ -102508,35 +102679,51 @@ ${stickerContext || "无"}
               } catch (_) {}
               await runVaultHideGalleryImages(true);
 
-              if (typeof db !== "undefined" && db.chats) {
-                const allChats = await db.chats.toArray();
-                for (let idx = 0; idx < allChats.length; idx++) {
-                  const chat = allChats[idx];
-                  const changed = await offloadObjectImagesDeep(chat, cfg, counter, sharedMediaDir);
-                  if (changed) {
-                    await db.chats.put(chat);
-                    if (typeof state !== "undefined" && state.chats && chat.id !== undefined) {
-                      state.chats[chat.id] = chat;
-                      state.chats[String(chat.id)] = chat;
+              if (typeof db !== "undefined" && Array.isArray(db.tables)) {
+                for (const table of db.tables) {
+                  if (!table || table.name === "apiConfig") continue;
+                  try {
+                    const rows = await table.toArray();
+                    for (let idx = 0; idx < rows.length; idx++) {
+                      const row = rows[idx];
+                      const changed = await offloadObjectImagesDeep(row, cfg, counter, sharedMediaDir);
+                      if (changed) {
+                        await table.put(row);
+                        if (table.name === "chats" && typeof state !== "undefined" && state.chats && row.id !== undefined) {
+                          state.chats[row.id] = row;
+                          state.chats[String(row.id)] = row;
+                        }
+                        if (table.name === "globalSettings" && typeof state !== "undefined" && state.globalSettings) {
+                          Object.assign(state.globalSettings, row);
+                        }
+                        setVaultInfoText("正在全表高速分离图片与音频 · 已转移 " + counter.count + " 项...");
+                      }
                     }
-                    setVaultInfoText("正在高速分离图片 · 已处理 " + counter.count + " 张...");
-                  }
+                  } catch (_) {}
                 }
               }
-              if (typeof db !== "undefined" && db.qzonePosts) {
-                const posts = await db.qzonePosts.toArray();
-                for (const post of posts) {
-                  const changed = await offloadObjectImagesDeep(post, cfg, counter, sharedMediaDir);
-                  if (changed) {
-                    await db.qzonePosts.put(post);
+
+              // 同步分离 localStorage 中的大体积壁纸、背景与音频缓存
+              try {
+                for (let i = 0; i < localStorage.length; i++) {
+                  const k = localStorage.key(i);
+                  if (!k || k === VAULT_CFG_KEY) continue;
+                  const rawVal = localStorage.getItem(k);
+                  if (!rawVal || rawVal.length < 4096) continue;
+                  if (isOffloadableStringValue(rawVal, k)) {
+                    const nextRef = await offloadDataUrlString(rawVal, cfg, counter, sharedMediaDir, k);
+                    if (nextRef && nextRef !== rawVal) {
+                      localStorage.setItem(k, nextRef);
+                    }
                   }
                 }
-              }
+              } catch (_) {}
+
               const mbSaved = (counter.savedBytes / (1024 * 1024)).toFixed(1);
-              setVaultInfoText("已高速分离 " + counter.count + " 张图片，释放约 " + mbSaved + " MB 浏览器内存");
+              setVaultInfoText("已全量分离 " + counter.count + " 项图片与音频资源，释放约 " + mbSaved + " MB 浏览器内存");
               hydrateDomVaultImages();
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", "分离完成，共极速转移 " + counter.count + " 张图片，释放约 " + mbSaved + " MB 浏览器内存");
+                window.showCustomAlert("提示", "全表分离完成，共极速转移 " + counter.count + " 项图片、表情包、壁纸与语音数据，释放约 " + mbSaved + " MB 浏览器内存");
               }
             } catch (err) {
               setVaultInfoText("分离中断: " + (err && err.message ? err.message : "未知错误"));
@@ -102748,6 +102935,16 @@ ${stickerContext || "无"}
                 }
               });
             });
+            const audios = document.querySelectorAll('audio[src^="vault://"]');
+            audios.forEach((aud) => {
+              const ref = aud.getAttribute("src");
+              if (!ref) return;
+              resolveVaultRefToUrl(ref).then((resolved) => {
+                if (resolved && resolved !== ref) {
+                  aud.setAttribute("src", resolved);
+                }
+              });
+            });
             const bgEls = document.querySelectorAll('[style*="vault://"]');
             bgEls.forEach((el) => {
               const st = el.getAttribute("style") || "";
@@ -102759,6 +102956,20 @@ ${stickerContext || "无"}
                   const curSt = el.getAttribute("style") || "";
                   el.setAttribute("style", curSt.split(ref).join(resolved));
                 }
+              });
+            });
+            const styleTags = document.querySelectorAll("style");
+            styleTags.forEach((stEl) => {
+              const cssText = stEl.textContent || "";
+              if (!cssText.includes("vault://")) return;
+              const matches = cssText.match(/vault:\/\/[a-zA-Z0-9._-]+/g);
+              if (!matches) return;
+              matches.forEach((ref) => {
+                resolveVaultRefToUrl(ref).then((resolved) => {
+                  if (resolved && resolved !== ref && stEl.textContent && stEl.textContent.includes(ref)) {
+                    stEl.textContent = stEl.textContent.split(ref).join(resolved);
+                  }
+                });
               });
             });
           }
@@ -102868,22 +103079,26 @@ ${stickerContext || "无"}
           };
 
           function hookDatabaseAutoOffload() {
-            if (typeof db === "undefined" || !db.chats || db.chats._vaultHooked) return;
-            db.chats._vaultHooked = true;
-            const origPut = db.chats.put.bind(db.chats);
-            db.chats.put = async function (chatObj, ...rest) {
-              try {
-                const cfg = loadVaultConfig();
-                if (cfg.auto && chatObj && typeof chatObj === "object") {
-                  const counter = { count: 0, savedBytes: 0 };
-                  await offloadObjectImagesDeep(chatObj, cfg, counter);
-                  if (counter.count > 0) {
-                    setTimeout(hydrateDomVaultImages, 50);
+            if (typeof db === "undefined" || !Array.isArray(db.tables) || db._allTablesVaultHooked) return;
+            db._allTablesVaultHooked = true;
+            for (const table of db.tables) {
+              if (!table || table.name === "apiConfig" || table._vaultHooked) continue;
+              table._vaultHooked = true;
+              const origPut = table.put.bind(table);
+              table.put = async function (rowObj, ...rest) {
+                try {
+                  const cfg = loadVaultConfig();
+                  if (cfg.auto && rowObj && typeof rowObj === "object") {
+                    const counter = { count: 0, savedBytes: 0 };
+                    await offloadObjectImagesDeep(rowObj, cfg, counter);
+                    if (counter.count > 0) {
+                      setTimeout(hydrateDomVaultImages, 50);
+                    }
                   }
-                }
-              } catch (_) {}
-              return origPut(chatObj, ...rest);
-            };
+                } catch (_) {}
+                return origPut(rowObj, ...rest);
+              };
+            }
           }
 
           window.getGlmTranslateConfig = function () {
