@@ -502,7 +502,8 @@ app.post('/api/proxy', async (req, res) => {
 
     const fetchOptions = {
       method,
-      headers: fetchHeaders
+      headers: fetchHeaders,
+      signal: AbortSignal.timeout(480000)
     };
 
     if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
@@ -540,10 +541,7 @@ app.post('/api/proxy', async (req, res) => {
       res.setHeader('Content-Type', contentType);
     }
 
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      return res.json(data);
-    } else if (contentType.includes('text/')) {
+    if (contentType.includes('application/json') || contentType.includes('text/')) {
       const text = await response.text();
       return res.send(text);
     } else {
