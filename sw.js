@@ -1,4 +1,4 @@
-const CACHE_NAME = "ephone-tuk-cache-v13";
+const CACHE_NAME = "ephone-tuk-cache-v12";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -15,11 +15,13 @@ const ASSETS_TO_CACHE = [
 
 self.addEventListener("install", event => {
   self.skipWaiting();
-  caches.open(CACHE_NAME).then(cache => {
-    cache.addAll(ASSETS_TO_CACHE).catch(err => {
-      console.warn("Pre-cache warning: " + err);
-    });
-  });
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(ASSETS_TO_CACHE).catch(err => {
+        console.warn("Pre-cache warning: " + err);
+      });
+    })
+  );
 });
 
 self.addEventListener("activate", event => {
@@ -38,17 +40,10 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
-
+  
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith("http")) return;
-  if (url.origin !== self.location.origin) return;
-  if (
-    url.pathname.startsWith("/api") ||
-    url.pathname.startsWith("/media") ||
-    url.pathname === "/ping" ||
-    url.hostname.includes("socket") ||
-    url.hostname.includes("hmr")
-  ) {
+  if (url.pathname.startsWith("/api") || url.hostname.includes("socket") || url.hostname.includes("hmr")) {
     return;
   }
 
@@ -71,14 +66,8 @@ self.addEventListener("fetch", event => {
           }
           return networkResponse;
         })
-        .catch(err => {
-          return caches.match(event.request).then(cached => {
-            if (cached) return cached;
-            if (event.request.mode === "navigate") {
-              return caches.match("./index.html");
-            }
-            return Promise.reject(err);
-          });
+        .catch(() => {
+          return caches.match(event.request).then(cached => cached || caches.match("./index.html"));
         })
     );
     return;
@@ -105,6 +94,8 @@ self.addEventListener("fetch", event => {
           cache.put(event.request, responseToCache);
         });
         return networkResponse;
+      }).catch(err => {
+        return caches.match("./index.html") || Promise.reject(err);
       });
     })
   );
@@ -144,33 +135,22 @@ self.addEventListener("notificationclick", event => {
 
 self.addEventListener("message", event => {
   const data = event.data;
-  if (!data || (data.type !== "SHOW_PEER_NOTIFICATION" && data.type !== "SHOW_AI_NOTIFICATION")) return;
+  if (!data || data.type !== "SHOW_PEER_NOTIFICATION") return;
   const title = data.title || "新消息";
-  const tag = data.tag || ("peer_notif_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6));
-  const notifData = {
-    chatId: data.chatId || "",
-    openRequests: !!data.openRequests
-  };
   const options = {
     body: data.body || "",
     icon: data.icon || "./icon-192.png",
     badge: "./icon-192.png",
-    tag: tag,
+    tag: data.tag || ("peer_notif_" + Date.now()),
     renotify: true,
     silent: false,
     vibrate: [200, 100, 200],
-    data: notifData
+    data: {
+      chatId: data.chatId || "",
+      openRequests: !!data.openRequests
+    }
   };
-  event.waitUntil(
-    self.registration.showNotification(title, options).catch(() => {
-      return self.registration.showNotification(title, {
-        body: data.body || "",
-        icon: data.icon || "./icon-192.png",
-        tag: tag,
-        data: notifData
-      }).catch(() => {});
-    })
-  );
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("push", event => {

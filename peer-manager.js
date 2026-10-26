@@ -1895,11 +1895,8 @@
 
     triggerMobileSystemNotification: async function (title, body, avatarUrl, meta) {
       try {
-        if (!("Notification" in window)) return false;
-        if (Notification.permission === "default") {
-          try { await Notification.requestPermission(); } catch (_) {}
-        }
-        if (Notification.permission !== "granted") return false;
+        if (!("Notification" in window)) return;
+        if (Notification.permission !== "granted") return;
 
         const isValidHttpOrRelativeIcon =
           typeof avatarUrl === "string" &&
@@ -1925,12 +1922,6 @@
           vibrate: [200, 100, 200],
           data: notifData
         };
-        const minimalOpts = {
-          body: body,
-          icon: safeIcon,
-          tag: tag,
-          data: notifData
-        };
 
         let shown = false;
         if ("serviceWorker" in navigator) {
@@ -1939,12 +1930,7 @@
             try {
               await cachedReg.showNotification(title, notifOpts);
               shown = true;
-            } catch (_) {
-              try {
-                await cachedReg.showNotification(title, minimalOpts);
-                shown = true;
-              } catch (_2) {}
-            }
+            } catch (_) {}
           }
           if (!shown) {
             try {
@@ -1952,13 +1938,8 @@
               if (reg && typeof reg.showNotification === "function") {
                 this._cachedSwReg = reg;
                 window.__cachedSwReg = reg;
-                try {
-                  await reg.showNotification(title, notifOpts);
-                  shown = true;
-                } catch (_) {
-                  await reg.showNotification(title, minimalOpts);
-                  shown = true;
-                }
+                await reg.showNotification(title, notifOpts);
+                shown = true;
               }
             } catch (_) {}
           }
@@ -1973,27 +1954,27 @@
                 chatId: notifData.chatId,
                 openRequests: notifData.openRequests
               });
-              shown = true;
             } catch (_) {}
           }
         }
         if (!shown) {
-          try {
-            const n = new Notification(title, minimalOpts);
-            n.onclick = function () {
-              try { window.focus(); } catch (_) {}
-              if (notifData.chatId && typeof window.openChat === "function") {
-                try { window.openChat(notifData.chatId); } catch (_) {}
-              }
-              try { n.close(); } catch (_) {}
-            };
-            shown = true;
-          } catch (_) {}
+          const n = new Notification(title, {
+            body: body,
+            icon: safeIcon,
+            tag: tag,
+            renotify: true,
+            silent: false,
+            data: notifData
+          });
+          n.onclick = function () {
+            try { window.focus(); } catch (_) {}
+            if (notifData.chatId && typeof window.openChat === "function") {
+              try { window.openChat(notifData.chatId); } catch (_) {}
+            }
+            try { n.close(); } catch (_) {}
+          };
         }
-        return shown;
-      } catch (e) {
-        return false;
-      }
+      } catch (e) {}
     },
 
     showPeerNotice: function (titleOrText, onClick, options) {

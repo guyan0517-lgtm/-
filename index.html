@@ -1817,7 +1817,7 @@
                     <option value="nai-diffusion-4-curated-preview">
                       V4.5 Curated
                     </option>
-                    <option value="nai-diffusion-4-5-full" selected>V4.5 Full</option>
+                    <option value="nai-diffusion-4-5-full">V4.5 Full</option>
                     <option value="nai-diffusion-3">V3 Anime</option>
                   </select>
                 </div>
@@ -21085,13 +21085,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
         })();
 
-        // 后台保活音频自动激活：生成 8 秒真实低频微幅 PCM WAV 音频并配合 Web Locks 与 Worker 心跳，防止切后台时浏览器挂起网络与 JS 线程
+        // 后台保活音频自动激活：生成 1 秒真实极微幅 PCM WAV 音频并配合 Web Locks 与 Worker 心跳，防止切后台时浏览器挂起网络与 JS 线程
         let _keepAliveAudioCtx = null;
-        const _SILENT_WAV_URI = (function createKeepAliveWav() {
+        const _SILENT_WAV_URI = (function createOneSecondKeepAliveWav() {
           try {
             const sampleRate = 8000;
-            const durationSeconds = 8;
-            const numSamples = sampleRate * durationSeconds;
+            const numSamples = sampleRate;
             const dataSize = numSamples * 2;
             const buffer = new ArrayBuffer(44 + dataSize);
             const view = new DataView(buffer);
@@ -21112,8 +21111,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             writeStr(36, "data");
             view.setUint32(40, dataSize, true);
             for (let i = 0; i < numSamples; i++) {
-              const sampleVal = Math.round(Math.sin((2 * Math.PI * 30 * i) / sampleRate) * 48);
-              view.setInt16(44 + i * 2, sampleVal || 1, true);
+              view.setInt16(44 + i * 2, (i & 1) ? 1 : -1, true);
             }
             const bytes = new Uint8Array(buffer);
             let binary = "";
@@ -21129,18 +21127,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         let _lastKeepAliveCheckTs = 0;
         let _keepAliveSrcConfigured = false;
-        function ensureBackgroundKeepAlive(evt, force) {
+        function ensureBackgroundKeepAlive(evt) {
           const now = Date.now();
-          if (!force && evt && evt.type === "keydown" && now - _lastKeepAliveCheckTs < 4000) {
+          if (evt && evt.type === "keydown" && now - _lastKeepAliveCheckTs < 4000) {
             return;
           }
-          const audio = document.getElementById("strong-keep-alive-player") || document.getElementById("keep-alive-audio");
-          const isAudioPaused = !audio || audio.paused || audio.ended;
-          if (!force && !isAudioPaused && now - _lastKeepAliveCheckTs < 1500 && _keepAliveSrcConfigured) {
+          if (now - _lastKeepAliveCheckTs < 1500 && _keepAliveSrcConfigured) {
             return;
           }
           _lastKeepAliveCheckTs = now;
           try {
+            const audio = document.getElementById("strong-keep-alive-player") || document.getElementById("keep-alive-audio");
             if (audio) {
               if (!_keepAliveSrcConfigured || audio.error) {
                 const curSrc = audio.getAttribute("src") || "";
@@ -21148,20 +21145,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   audio.src = _SILENT_WAV_URI;
                 }
                 audio.loop = true;
-                audio.volume = 0.02;
+                audio.volume = 0.01;
                 audio.muted = false;
-                audio.setAttribute("playsinline", "");
-                audio.setAttribute("webkit-playsinline", "");
                 _keepAliveSrcConfigured = true;
               }
-              if (audio.paused || audio.ended) {
+              if (audio.paused) {
                 const playPromise = audio.play();
                 if (playPromise && typeof playPromise.catch === "function") {
                   playPromise.catch(() => {
                     try {
                       if (audio.src !== _SILENT_WAV_URI) {
                         audio.src = _SILENT_WAV_URI;
-                        audio.volume = 0.02;
+                        audio.volume = 0.01;
                         audio.play().catch(() => {});
                       }
                     } catch (_) {}
@@ -21175,8 +21170,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 _keepAliveAudioCtx = new AudioCtx();
                 const osc = _keepAliveAudioCtx.createOscillator();
                 const gain = _keepAliveAudioCtx.createGain();
-                osc.frequency.value = 30;
-                gain.gain.value = 0.0005;
+                gain.gain.value = 0.0001;
                 osc.connect(gain);
                 gain.connect(_keepAliveAudioCtx.destination);
                 osc.start();
@@ -21192,7 +21186,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         let _bgTaskKeepAliveCount = 0;
         window.acquireBackgroundTaskKeepAlive = function() {
           _bgTaskKeepAliveCount++;
-          ensureBackgroundKeepAlive(null, true);
+          ensureBackgroundKeepAlive();
           if (typeof window.startBackgroundWorkerHeartbeat === "function") {
             window.startBackgroundWorkerHeartbeat();
           }
@@ -21232,12 +21226,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           } catch (_) {}
         }
-        document.addEventListener("pointerdown", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
-        document.addEventListener("touchstart", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
-        document.addEventListener("click", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        document.addEventListener("pointerdown", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        document.addEventListener("touchstart", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        document.addEventListener("click", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
         document.addEventListener("keydown", ensureBackgroundKeepAlive, { passive: true });
         document.addEventListener("visibilitychange", () => {
-          ensureBackgroundKeepAlive(null, true);
+          ensureBackgroundKeepAlive();
           if (!document.hidden) {
             if (typeof window.recoverPendingNaiImagesInActiveChat === "function") {
               setTimeout(() => window.recoverPendingNaiImagesInActiveChat(), 120);
@@ -21299,8 +21293,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const resetTimeout = () => {
             if (timeoutId) clearTimeout(timeoutId);
             timeoutId = setTimeout(() => {
-              controller.abort(new Error("请求超时：等待模型响应超时，连接已切断"));
-            }, 180000);
+              controller.abort(new Error("请求超时：已等待超过8分钟未收到模型数据，连接已切断"));
+            }, 480000);
           };
           resetTimeout();
 
@@ -21378,7 +21372,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? (typeof activeBodyObj === "string" ? activeBodyObj : JSON.stringify(activeBodyObj))
                 : undefined;
 
-              const directStartT = Date.now();
               try {
                 currentRes = await origFetch(finalUrl, {
                   method,
@@ -21389,10 +21382,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (err) {
                 currentDirectErr = err;
               }
-              const directElapsedMs = Date.now() - directStartT;
 
               const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
-              if (!currentRes && directElapsedMs < 15000 && !isStaticHost && !controller.signal.aborted) {
+              if ((!currentRes || currentRes.status === 502 || currentRes.status === 503 || currentRes.status === 504) && !isStaticHost && !controller.signal.aborted) {
                 try {
                   const proxyRes = await origFetch("/api/proxy", {
                     method: "POST",
@@ -21540,11 +21532,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
                   for (const line of lines) {
                     processSseLine(line);
-                    if (sawDoneMarker) break;
-                  }
-                  if (sawDoneMarker) {
-                    try { await reader.cancel(); } catch (_) {}
-                    break;
                   }
                 }
               } catch (streamErr) {
@@ -22046,22 +22033,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         };
 
         function isApiStreamEnabled() {
-          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || null;
           const sw = document.getElementById("api-stream-switch");
-          if (sw && window._apiStreamSwitchSyncedOnce && typeof sw.checked === "boolean") {
-            return sw.checked;
-          }
-          if (cfg && typeof cfg.streamEnabled === "boolean") {
-            return cfg.streamEnabled;
-          }
-          const savedStr = localStorage.getItem("api_stream_enabled");
-          if (savedStr === "true" || savedStr === "false") {
-            return savedStr === "true";
-          }
           if (sw && typeof sw.checked === "boolean") {
             return sw.checked;
           }
-          return false;
+          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
+          if (typeof cfg.streamEnabled === "boolean") {
+            return cfg.streamEnabled;
+          }
+          return localStorage.getItem("api_stream_enabled") === "true";
         }
         window.isApiStreamEnabled = isApiStreamEnabled;
 
@@ -22140,11 +22120,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (urlStr.includes("/chat/completions") && parsedBody && typeof parsedBody === "object") {
                 const updatedBody = {
                   ...parsedBody,
-                  stream: Boolean(isStreamActive),
+                  stream: isStreamActive,
+                  max_tokens: parsedBody.max_tokens || 100000,
                 };
-                if (updatedBody.max_tokens === 100000) {
-                  delete updatedBody.max_tokens;
-                }
                 initForDefault.body = JSON.stringify(updatedBody);
                 const nextHeaders = { ...(init && init.headers ? init.headers : {}) };
                 if (isStreamActive) {
@@ -22253,10 +22231,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               messages: normalizedMessages,
               temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
               stream: Boolean(isStreamActive),
+              max_tokens: parsedBody.max_tokens || 100000,
             };
-            if (parsedBody.max_tokens && parsedBody.max_tokens !== 100000) {
-              openAiPayload.max_tokens = parsedBody.max_tokens;
-            }
 
             const fetchStartT = Date.now();
             let res = await requestLlmapiWithFallback(targetUrl, {
@@ -33164,16 +33140,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (typeof state.apiConfig.temperature === "undefined") {
             state.apiConfig.temperature = 0.8;
           }
-          if (typeof state.apiConfig.streamEnabled !== "boolean") {
-            state.apiConfig.streamEnabled = localStorage.getItem("api_stream_enabled") === "true";
-          } else {
-            localStorage.setItem("api_stream_enabled", state.apiConfig.streamEnabled ? "true" : "false");
-          }
-          const initStreamSwitch = document.getElementById("api-stream-switch");
-          if (initStreamSwitch) {
-            initStreamSwitch.checked = Boolean(state.apiConfig.streamEnabled);
-            window._apiStreamSwitchSyncedOnce = true;
-          }
 
           state.globalSettings = globalSettings || {
             id: "main",
@@ -33507,7 +33473,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               state.globalSettings.enableSystemNotifications !== false;
 
             if (isSystemNotifyEnabled) {
-              const uniqueTag = "ai_msg_" + chatId;
+              const uniqueTag = "ai_msg_" + chatId + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
               const isValidIcon =
                 typeof avatarUrl === "string" &&
                 avatarUrl.trim() !== "" &&
@@ -33515,76 +33481,54 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 !avatarUrl.startsWith("blob:") &&
                 !avatarUrl.startsWith("vault:");
               const safeIcon = isValidIcon ? avatarUrl : "./icon-192.png";
-              const safeBody = String(messageContent || "收到一条新消息");
-              const targetChatIdStr = String(chat.id);
 
-              (async () => {
-                let delivered = false;
-                if (
-                  window.PeerManager &&
-                  typeof window.PeerManager.triggerMobileSystemNotification ===
-                    "function"
-                ) {
-                  try {
-                    delivered = await window.PeerManager.triggerMobileSystemNotification(
-                      notifName,
-                      safeBody,
-                      safeIcon,
-                      {
-                        chatId: targetChatIdStr,
-                        tag: uniqueTag,
-                      },
-                    );
-                  } catch (_) {
-                    delivered = false;
-                  }
-                }
-                if (!delivered && "Notification" in window && Notification.permission === "granted") {
-                  const options = {
-                    body: safeBody,
-                    icon: safeIcon,
+              if (
+                window.PeerManager &&
+                typeof window.PeerManager.triggerMobileSystemNotification ===
+                  "function"
+              ) {
+                window.PeerManager.triggerMobileSystemNotification(
+                  notifName,
+                  messageContent,
+                  safeIcon,
+                  {
+                    chatId: String(chat.id),
                     tag: uniqueTag,
-                    renotify: true,
-                    silent: false,
-                    badge: "./icon-192.png",
-                    data: { chatId: targetChatIdStr },
-                  };
-                  try {
-                    let shown = false;
-                    if ("serviceWorker" in navigator) {
-                      const reg = await navigator.serviceWorker.getRegistration();
-                      if (reg && typeof reg.showNotification === "function") {
-                        try {
-                          await reg.showNotification(notifName, options);
-                          shown = true;
-                        } catch (_) {
-                          await reg.showNotification(notifName, {
-                            body: safeBody,
-                            icon: safeIcon,
-                            tag: uniqueTag,
-                            data: { chatId: targetChatIdStr },
-                          });
-                          shown = true;
-                        }
-                      }
+                  },
+                );
+              } else if ("Notification" in window && Notification.permission === "granted") {
+                const options = {
+                  body: messageContent,
+                  icon: safeIcon,
+                  tag: uniqueTag,
+                  renotify: true,
+                  silent: false,
+                  vibrate: [200, 100, 200],
+                  badge: "./icon-192.png",
+                  data: { chatId: String(chat.id) },
+                };
+
+                try {
+                  let shown = false;
+                  if ("serviceWorker" in navigator) {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (reg && typeof reg.showNotification === "function") {
+                      await reg.showNotification(notifName, options);
+                      shown = true;
                     }
-                    if (!shown) {
-                      const n = new Notification(notifName, {
-                        body: safeBody,
-                        icon: safeIcon,
-                        tag: uniqueTag,
-                      });
-                      n.onclick = () => {
-                        try { window.focus(); } catch (_) {}
-                        if (typeof openChat === "function") openChat(chatId);
-                        try { n.close(); } catch (_) {}
-                      };
-                    }
-                  } catch (e) {
-                    console.error("系统通知发送失败:", e.message);
                   }
+                  if (!shown) {
+                    const n = new Notification(notifName, options);
+                    n.onclick = () => {
+                      try { window.focus(); } catch (_) {}
+                      if (typeof openChat === "function") openChat(chatId);
+                      try { n.close(); } catch (_) {}
+                    };
+                  }
+                } catch (e) {
+                  console.error("系统通知发送失败:", e.message);
                 }
-              })();
+              }
             }
             return;
           }
@@ -33899,7 +33843,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (tSenderMatch) extracted.target_sender = tSenderMatch[1].trim();
             const targetMatch = s.match(/"(?:target_content|targetContent|quoted_content)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (targetMatch) extracted.target_content = targetMatch[1].trim();
-            const promptMatch = s.match(/"(?:prompt|imagePrompt|image_prompt|naiPrompt|description|tags)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
+            const promptMatch = s.match(/"(?:prompt|imagePrompt|naiPrompt)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (promptMatch) extracted.prompt = promptMatch[1].trim();
 
             // 如果包含 system_status 的 fields 对象，尝试单独提取 fields
@@ -34174,28 +34118,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         // NovelAI设置相关函数（加载、保存、重置）
         // NovelAI设置相关函数
-        function resolveNovelAIModel(preferredModel) {
-          const savedModel = localStorage.getItem("novelai-model") || "";
-          const domModelEl = document.getElementById("novelai-model");
-          const domModel = domModelEl ? domModelEl.value : "";
-          return preferredModel || savedModel || domModel || "nai-diffusion-4-5-full";
-        }
-        window.resolveNovelAIModel = resolveNovelAIModel;
-
         function loadNovelAISettings() {
-          const switchEl = document.getElementById("novelai-switch");
-          const modelEl = document.getElementById("novelai-model");
-          const keyEl = document.getElementById("novelai-api-key");
-          const detailsEl = document.getElementById("novelai-details");
-          const savedEnabled = localStorage.getItem("novelai-enabled") === "true";
-          const savedModel = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
-          const savedKey = localStorage.getItem("novelai-api-key") || "";
-          if (switchEl) switchEl.checked = savedEnabled;
-          if (modelEl) modelEl.value = savedModel;
-          if (keyEl && savedKey) keyEl.value = savedKey;
-          if (detailsEl) detailsEl.style.display = savedEnabled ? "block" : "none";
-          window._naiApiDomLoadedOnce = true;
-
           const settings = getNovelAISettings();
           const resEl = document.getElementById("nai-resolution");
           if (resEl) resEl.value = settings.resolution;
@@ -34265,9 +34188,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const switchEl = document.getElementById("novelai-switch");
           const modelEl = document.getElementById("novelai-model");
           const keyEl = document.getElementById("novelai-api-key");
-          if (switchEl && window._naiApiDomLoadedOnce) localStorage.setItem("novelai-enabled", switchEl.checked);
-          if (modelEl && window._naiApiDomLoadedOnce && modelEl.value) localStorage.setItem("novelai-model", modelEl.value);
-          if (keyEl && keyEl.value.trim()) localStorage.setItem("novelai-api-key", keyEl.value.trim());
+          if (switchEl) localStorage.setItem("novelai-enabled", switchEl.checked);
+          if (modelEl) localStorage.setItem("novelai-model", modelEl.value);
+          if (keyEl) localStorage.setItem("novelai-api-key", keyEl.value.trim());
 
           const prevSettings = getNovelAISettings();
           const artistInput = document.getElementById("nai-default-artist");
@@ -34343,9 +34266,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           return defaultSettings;
         }
-        window.getNovelAISettings = getNovelAISettings;
-        window.loadNovelAISettings = loadNovelAISettings;
-        window.saveNovelAISettings = saveNovelAISettings;
 
         /**
          * 根据角色ID获取对应的NAI提示词配置
@@ -34353,17 +34273,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
          * @returns {Object} 包含正面和负面提示词的对象
          */
         function getCharacterNAIPrompts(chatId) {
-          // 获取用户在设置中填写的画师串、默认正面提示词与默认负面提示词
+          // 获取用户在设置中填写的画师串与默认正面提示词
           const systemSettings = getNovelAISettings();
           const domArtistEl = document.getElementById("nai-default-artist");
           const domPosEl = document.getElementById("nai-default-positive");
-          const domNegEl = document.getElementById("nai-default-negative");
           const domArtist = domArtistEl ? domArtistEl.value.trim() : "";
           const domPositive = domPosEl ? domPosEl.value.trim() : "";
-          const domNegative = domNegEl ? domNegEl.value.trim() : "";
           const artist = (domArtist || systemSettings.artist_prompt || "").trim();
           const defaultPos = (domPositive || systemSettings.default_positive || "").trim();
-          const defaultNeg = (domNegative || systemSettings.default_negative || "").trim();
 
           // 如果角色指定了角色独立提示词
           if (chatId && state.chats[chatId]) {
@@ -34372,15 +34289,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             if (naiSettings.promptSource === "character") {
               const charPos = (naiSettings.characterPositivePrompt || "").trim();
-              const charNeg = (naiSettings.characterNegativePrompt || "").trim();
-              const combinedPos = [defaultPos, charPos]
-                .filter(Boolean)
-                .filter((v, i, a) => a.indexOf(v) === i)
-                .join(", ");
               return {
                 artist: artist,
-                positive: combinedPos,
-                negative: charNeg || defaultNeg,
+                positive: charPos,
+                negative: naiSettings.characterNegativePrompt || systemSettings.default_negative || "",
                 source: "character",
               };
             }
@@ -34390,11 +34302,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return {
             artist: artist,
             positive: defaultPos,
-            negative: defaultNeg,
+            negative: systemSettings.default_negative || "",
             source: "system",
           };
         }
-        window.getCharacterNAIPrompts = getCharacterNAIPrompts;
 
         /**
          * 为指定角色生成NovelAI图像（将来聊天调用时使用）
@@ -34786,7 +34697,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const localKey = localStorage.getItem("novelai-api-key") || "";
           const apiKey = domKey || localKey;
 
-          const model = resolveNovelAIModel(options.model);
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const localModel = localStorage.getItem("novelai-model") || "";
+          const model = options.model || domModel || localModel || "nai-diffusion-4-5-full";
 
           if (!apiKey) {
             throw new Error("请先在设置中配置 NovelAI API Key");
@@ -35267,10 +35180,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const streamSwitch = document.getElementById("api-stream-switch");
           if (streamSwitch) {
             streamSwitch.checked = !!state.apiConfig.streamEnabled;
-            window._apiStreamSwitchSyncedOnce = true;
             localStorage.setItem("api_stream_enabled", state.apiConfig.streamEnabled ? "true" : "false");
             streamSwitch.onchange = () => {
-              window._apiStreamSwitchSyncedOnce = true;
               state.apiConfig.streamEnabled = streamSwitch.checked;
               localStorage.setItem("api_stream_enabled", streamSwitch.checked ? "true" : "false");
               if (typeof db !== "undefined" && db.apiConfig) {
@@ -45305,9 +45216,6 @@ ${recentHistoryText}
         }
 
         async function triggerAiResponse(targetChatId) {
-          if (typeof ensureBackgroundKeepAlive === "function") {
-            ensureBackgroundKeepAlive(null, true);
-          }
           let finishTurnRender = null;
           const chatId = (typeof targetChatId === "string" || typeof targetChatId === "number") ? targetChatId : state.activeChatId;
           if (!chatId && chatId !== 0) return;
@@ -45872,7 +45780,6 @@ ${recentHistoryText}
                   .classList.contains("active") &&
                 state.activeChatId === chatId;
               let messageTimestamp = Date.now();
-              let offlineNotifShown = false;
 
               for (const msgData of messagesArray) {
                 // 2.1 如果是 naiimag 类型，执行生图逻辑 (复用线上代码)
@@ -45881,35 +45788,255 @@ ${recentHistoryText}
                   console.log(
                     "【线下模式】检测到生图指令，执行 NovelAI 请求...",
                   );
-                  const aiPrompt =
-                    msgData.prompt ||
-                    msgData.content ||
-                    msgData.image_prompt ||
-                    msgData.imagePrompt ||
-                    msgData.description ||
-                    msgData.tags ||
-                    "a beautiful scene";
-                  const imgMsg = {
-                    role: "assistant",
-                    senderName: chat.name,
-                    timestamp: messageTimestamp++,
-                    type: "naiimag",
-                    imageUrl: "",
-                    isGeneratingNai: true,
-                    prompt: aiPrompt,
-                    _suppressTurnNotify: offlineNotifShown,
-                  };
-                  offlineNotifShown = true;
-                  chat.history.push(imgMsg);
-                  await db.chats.put(chat);
-                  if (isViewingThisChat) {
-                    appendMessage(imgMsg, chat);
-                  }
-                  if (typeof window.executeChatNaiImageGeneration === "function") {
-                    window.executeChatNaiImageGeneration(chat, imgMsg).catch((err) => {
+
+                  // 这里直接复用switch case里的生图逻辑代码
+                  // 因为代码太长，我们把它封装成一个即时执行的逻辑
+                  (async () => {
+                    try {
+                      if (chatHeaderTitle)
+                        chatHeaderTitle.textContent = "正在绘制插图...";
+
+                      const naiPrompts = getCharacterNAIPrompts(chat.id);
+                      const aiPrompt = msgData.prompt || msgData.content || msgData.image_prompt || msgData.imagePrompt || msgData.description || "a beautiful scene";
+                      const finalPositivePrompt = [
+                        naiPrompts.artist && !aiPrompt.includes(naiPrompts.artist) ? naiPrompts.artist : "",
+                        naiPrompts.positive && !aiPrompt.includes(naiPrompts.positive) ? naiPrompts.positive : "",
+                        aiPrompt,
+                      ].filter(Boolean).join(", ");
+                      const finalNegativePrompt = naiPrompts.negative;
+
+                      const apiKey = localStorage.getItem("novelai-api-key");
+                      const model =
+                        localStorage.getItem("novelai-model") ||
+                        "nai-diffusion-4-5-full";
+                      const settings = getNovelAISettings();
+
+                      if (!apiKey) throw new Error("未配置NovelAI API Key");
+
+                      const [width, height] = settings.resolution
+                        .split("x")
+                        .map(Number);
+                      let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+                        ? "https://image.novelai.net/ai/generate-image-stream"
+                        : "https://image.novelai.net/ai/generate-image";
+
+                      // V4/V3 参数构建逻辑 (简化复用)
+                      const commonParams = {
+                        width,
+                        height,
+                        scale: settings.cfg_scale,
+                        sampler: settings.sampler,
+                        steps: settings.steps,
+                        seed: Math.floor(Math.random() * 4294967295),
+                        n_samples: 1,
+                        ucPreset: settings.uc_preset,
+                        qualityToggle: settings.quality_toggle,
+                      };
+
+                      if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+                        requestBody = {
+                          input: finalPositivePrompt,
+                          model,
+                          action: "generate",
+                          parameters: {
+                            ...commonParams,
+                            params_version: model.includes("nai-diffusion-5") ? 4 : 3,
+                            negative_prompt: finalNegativePrompt,
+                            noise_schedule: "karras",
+                            deliberate_euler_ancestral_bug: false,
+                            prefer_brownian: true,
+                            add_original_image: true,
+                            cfg_rescale: 0,
+                            dynamic_thresholding: false,
+                            legacy: false,
+                            legacy_uc: false,
+                            inpaintImg2ImgStrength: 1,
+                            normalize_reference_strength_multiple: true,
+                            characterPrompts: [],
+                            v4_prompt: {
+                              caption: {
+                                base_caption: finalPositivePrompt,
+                                char_captions: [],
+                              },
+                              use_coords: false,
+                              use_order: true,
+                            },
+                            v4_negative_prompt: {
+                              caption: {
+                                base_caption: finalNegativePrompt,
+                                char_captions: [],
+                              },
+                              legacy_uc: false,
+                            },
+                          },
+                        };
+                      } else {
+                        requestBody = {
+                          input: finalPositivePrompt,
+                          model,
+                          action: "generate",
+                          parameters: {
+                            ...commonParams,
+                            negative_prompt: finalNegativePrompt,
+                            sm: settings.smea,
+                            sm_dyn: settings.smea_dyn,
+                            noise_schedule: "native",
+                            add_original_image: false,
+                          },
+                        };
+                      }
+
+                      // 代理处理
+                      let corsProxy =
+                        settings.cors_proxy === "custom"
+                          ? settings.custom_proxy_url
+                          : settings.cors_proxy;
+                      if (corsProxy)
+                        apiUrl = corsProxy + encodeURIComponent(apiUrl);
+
+                      // Headers (Chrome兼容)
+                      const isChrome =
+                        /Chrome/.test(navigator.userAgent) &&
+                        !/Edg/.test(navigator.userAgent);
+                      let headers = {
+                        "Content-Type": "application/json",
+                        Authorization: "Bearer " + apiKey,
+                      };
+                      if (isChrome) {
+                        const cleanHeaders = {};
+                        for (const [k, v] of Object.entries(headers))
+                          cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
+                        headers = cleanHeaders;
+                      }
+
+                      const res = await fetch(apiUrl, {
+                        method: "POST",
+                        headers,
+                        body: JSON.stringify(requestBody),
+                      });
+                      if (!res.ok)
+                        throw new Error(`NAI API Error: ${res.status}`);
+
+                      // 解析响应 (SSE/Blob)
+                      const contentType = res.headers.get("content-type");
+                      let imageDataUrl = null,
+                        zipBlob = null;
+
+                      if (
+                        contentType &&
+                        contentType.includes("text/event-stream")
+                      ) {
+                        const text = await res.text();
+                        const lines = text.trim().split("\n");
+                        let base64Data = null;
+                        for (let i = lines.length - 1; i >= 0; i--) {
+                          const line = lines[i].trim();
+                          if (
+                            line.startsWith("data: ") &&
+                            line !== "data: [DONE]"
+                          ) {
+                            const dataContent = line.substring(6);
+                            try {
+                              const jsonData = JSON.parse(dataContent);
+                              if (
+                                jsonData.event_type === "final" &&
+                                (jsonData.image || jsonData.data)
+                              ) {
+                                base64Data = jsonData.image || jsonData.data;
+                                break;
+                              }
+                            } catch (e) {}
+                          }
+                        }
+                        if (!base64Data) {
+                          throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
+                        }
+                        if (base64Data) {
+                          const isPNG = base64Data.startsWith("iVBORw0KGgo");
+                          const binaryString = atob(base64Data);
+                          const bytes = new Uint8Array(binaryString.length);
+                          for (let i = 0; i < binaryString.length; i++)
+                            bytes[i] = binaryString.charCodeAt(i);
+                          if (isPNG || base64Data.startsWith("/9j/")) {
+                            const imageBlob = new Blob([bytes], {
+                              type: isPNG ? "image/png" : "image/jpeg",
+                            });
+                            const reader = new FileReader();
+                            imageDataUrl = await new Promise((r) => {
+                              reader.onloadend = () => r(reader.result);
+                              reader.readAsDataURL(imageBlob);
+                            });
+                          } else {
+                            zipBlob = new Blob([bytes]);
+                          }
+                        }
+                      } else {
+                        zipBlob = await res.blob();
+                      }
+
+                      if (!imageDataUrl && zipBlob) {
+                        if (typeof JSZip === "undefined")
+                          throw new Error("未找到JSZip库");
+                        const zip = await JSZip.loadAsync(zipBlob);
+                        const file = Object.values(zip.files)[0];
+                        if (file) {
+                          const imgBlob = await file.async("blob");
+                          const reader = new FileReader();
+                          imageDataUrl = await new Promise((r) => {
+                            reader.onloadend = () => r(reader.result);
+                            reader.readAsDataURL(imgBlob);
+                          });
+                        }
+                      }
+
+                      if (imageDataUrl) {
+                        const imgMsg = {
+                          role: "assistant",
+                          senderName: chat.name,
+                          timestamp: Date.now(),
+                          type: "naiimag",
+                          imageUrl: imageDataUrl,
+                          prompt: aiPrompt,
+                          fullPrompt: finalPositivePrompt,
+                          negativePrompt: finalNegativePrompt,
+                          model: model,
+                          naiSettings: {
+                            resolution: settings.resolution,
+                            width,
+                            height,
+                            steps: settings.steps,
+                            cfg_scale: settings.cfg_scale,
+                            sampler: settings.sampler,
+                            uc_preset: settings.uc_preset,
+                            quality_toggle: settings.quality_toggle,
+                            smea: settings.smea,
+                            smea_dyn: settings.smea_dyn,
+                          },
+                        };
+                        chat.history.push(imgMsg);
+                        await db.chats.put(chat);
+                        if (isViewingThisChat) {
+                          appendMessage(imgMsg, chat);
+                        }
+                      }
+                    } catch (err) {
                       console.error("线下模式生图失败:", err);
-                    });
-                  }
+                      const errBubble = {
+                        role: "system",
+                        content: `[生图失败: ${err.message}]`,
+                        timestamp: Date.now(),
+                      };
+                      chat.history.push(errBubble);
+                      if (isViewingThisChat) appendMessage(errBubble, chat);
+                    } finally {
+                      if (chatHeaderTitle) {
+                        chatHeaderTitle.textContent = typeof window.getEffectiveChatDisplayTitle === "function"
+                          ? window.getEffectiveChatDisplayTitle(chat)
+                          : chat.name;
+                        chatHeaderTitle.classList.remove("typing-status");
+                      }
+                    }
+                  })();
                   continue; // 处理完生图，跳过普通文本逻辑
                 }
 
@@ -45922,8 +46049,7 @@ ${recentHistoryText}
                 };
                 chat.history.push(aiMessage);
                 await incrementMessageCount(chatId);
-                if (!offlineNotifShown && (!isViewingThisChat || document.hidden)) {
-                  offlineNotifShown = true;
+                if (!isViewingThisChat || document.hidden) {
                   showNotification(chatId, aiMessage.content);
                 }
                 if (isViewingThisChat) {
@@ -46914,7 +47040,7 @@ ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${
 - 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
 - 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_sender": "被引用者名字", "target_content": "被引用消息原文", "reply_content": "回复文本内容"}${isPeerGrpPrompt ? "。针对某个玩家做出的检定结果进行判定或回应时，AI必须使用引用回复引注该玩家的检定消息" : ""}
 ${isPeerGrpPrompt ? `- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}\n` : ""}${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
-${groupModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "纯英文Danbooru标签描述词，使用英文逗号分隔，严禁出现中文，包含1girl或1boy、18-22 years old、mature_female或mature_male、tall、long_legs、detailed_face、角色外貌特征、服装、动作、表情、光影与场景..."}${(() => { const cp = (chat.settings && chat.settings.keeperCharPrompts) || {}; const lines = Object.entries(cp).filter(([_, v]) => v && String(v).trim()).map(([k, v]) => `${k}: ${String(v).trim()}`); return lines.length > 0 ? `\n  生图角色固定外貌标签(若画面出现对应人物必须原样附带进prompt): ${lines.join(" | ")}` : ""; })()}\n` : ""}`);
+${groupModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}`);
 
               const groupWhisperRuleBlock = isPeerGrpPrompt
                 ? window.formatPromptSection("无痕私密对话规范", `当当前信息为某个人的侦查结果、聆听结果、某个HO位的秘密、只有特定PC能看见的画面时，则必须使用私密内容（在消息对象中加上 "visibleTo": ["目标玩家群昵称"]）。且私密内容的范围仅仅包含可以被称作隐私的、短小的信息，即在模组中有标注的或者是检定的结果。而像其他不属于隐私的内容，比如场景描写、共通的场景描写、对话细节动作等，如果要进行描写的话，需要再分一个公共的气泡，否则另一个人将完全不知道这个场景发生了什么，就会缺少开头和结果，所以绝对不能误判。`)
@@ -47612,7 +47738,7 @@ ${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
 - 发送文本: {"type": "text", "content": "你好呀！"}
 - 发送语音: {"type": "voice_message", "content": "语音的文字内容..."}
 - 发送表情: {"type": "sticker", "sticker_name": "表情的名字"}，表情名必须在表情列表中，禁止杜撰
-${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}${singleModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "纯英文Danbooru标签描述词，使用英文逗号分隔，严禁出现中文，包含1girl或1boy、18-22 years old、mature_female或mature_male、tall、long_legs、detailed_face、角色外貌特征、服装、动作、表情、光影与场景..."}${(() => { const cp = (chat.settings && chat.settings.keeperCharPrompts) || {}; const lines = Object.entries(cp).filter(([_, v]) => v && String(v).trim()).map(([k, v]) => `${k === "me" ? (chat.settings.myName || "我") : (chat.name || k)}: ${String(v).trim()}`); return lines.length > 0 ? `\n  生图角色固定外貌标签(若画面出现对应人物必须原样附带进prompt): ${lines.join(" | ")}` : ""; })()}` : ""}`);
+${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}${singleModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "详细的英文描述词..."}` : ""}`);
 
               const singleMyPersonaBlock = window.formatPromptSection("我的人设", `
 对话者档案与COC面板:
@@ -48256,7 +48382,7 @@ ${stickerContext || "无"}
 
             // 1. 发起请求时强制开启流式保活，防止长连接超时被掐断
             if (typeof ensureBackgroundKeepAlive === "function") {
-              ensureBackgroundKeepAlive(null, true);
+              ensureBackgroundKeepAlive();
             }
             let releaseChatBgKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
               ? window.acquireBackgroundTaskKeepAlive()
@@ -48275,7 +48401,8 @@ ${stickerContext || "无"}
                     model: model,
                     messages: openAiMessages,
                     temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                    stream: Boolean(useStreamInChat),
+                    stream: useStreamInChat,
+                    max_tokens: 100000,
                   }),
                 });
 
@@ -48291,7 +48418,6 @@ ${stickerContext || "无"}
             let fullContent = "";
             let fullReasoning = "";
             let buffer = "";
-            let chatStreamDone = false;
 
             try {
               while (true) {
@@ -48308,10 +48434,7 @@ ${stickerContext || "无"}
                   const trimmed = line.trim();
                   if (!trimmed || !trimmed.startsWith("data:")) continue;
                   const dataStr = trimmed.replace(/^data:\s*/, "");
-                  if (dataStr === "[DONE]") {
-                    chatStreamDone = true;
-                    break;
-                  }
+                  if (dataStr === "[DONE]") continue;
                   try {
                     const parsed = JSON.parse(dataStr);
                     const delta = parsed.choices?.[0]?.delta?.content 
@@ -48327,10 +48450,6 @@ ${stickerContext || "无"}
                   } catch (e) {
                     // 忽略单行半截 JSON 解析错误，继续拼接
                   }
-                }
-                if (chatStreamDone) {
-                  try { await reader.cancel(); } catch (_) {}
-                  break;
                 }
               }
             } catch (streamReadErr) {
@@ -48511,7 +48630,7 @@ ${stickerContext || "无"}
             // 提取并聚合所有思维链内容，消除独立思考气泡
             let collectedThinking = extractedThinking || "";
 
-            // 扁平化解压：如果返回的数组中混入了嵌套有 chatResponse 或 messages 的父对象，或者在文本气泡中夹杂了内嵌的 naiimag JSON，将所有子气泡完整解压出来
+            // 扁平化解压：如果返回的数组中混入了嵌套有 chatResponse 或 messages 的父对象，将所有子气泡完整解压出来
             const unnestedItems = [];
             for (let i = 0; i < messagesArray.length; i++) {
               const it = messagesArray[i];
@@ -48531,41 +48650,6 @@ ${stickerContext || "无"}
                   if (sub) unnestedItems.push(sub);
                 }
               } else {
-                const rawTextField = typeof it.content === "string" ? it.content : (typeof it.message === "string" ? it.message : "");
-                if (
-                  (!it.type || it.type === "text") &&
-                  rawTextField &&
-                  /\{\s*"type"\s*:\s*"naiimag"/i.test(rawTextField)
-                ) {
-                  const embeddedRegex = /\{\s*"type"\s*:\s*"naiimag"[\s\S]*?\}/gi;
-                  const embeddedMatches = rawTextField.match(embeddedRegex);
-                  if (embeddedMatches && embeddedMatches.length > 0) {
-                    const cleanedText = rawTextField.replace(embeddedRegex, "").trim();
-                    if (cleanedText) {
-                      const clonedTextItem = { ...it };
-                      if (typeof clonedTextItem.content === "string") clonedTextItem.content = cleanedText;
-                      if (typeof clonedTextItem.message === "string") clonedTextItem.message = cleanedText;
-                      unnestedItems.push(clonedTextItem);
-                    }
-                    for (const rawJsonBlock of embeddedMatches) {
-                      let parsedEmbedded = null;
-                      try {
-                        parsedEmbedded = JSON.parse(rawJsonBlock);
-                      } catch (_) {
-                        const pMatch = rawJsonBlock.match(/"(?:prompt|imagePrompt|image_prompt|naiPrompt|description|tags|content)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*\})/i);
-                        if (pMatch) {
-                          parsedEmbedded = { type: "naiimag", prompt: pMatch[1].trim() };
-                        }
-                      }
-                      if (parsedEmbedded && parsedEmbedded.type === "naiimag") {
-                        if (!parsedEmbedded.name && it.name) parsedEmbedded.name = it.name;
-                        if (!parsedEmbedded.senderName && it.senderName) parsedEmbedded.senderName = it.senderName;
-                        unnestedItems.push(parsedEmbedded);
-                      }
-                    }
-                    continue;
-                  }
-                }
                 unnestedItems.push(it);
               }
             }
@@ -50891,7 +50975,11 @@ ${stickerContext || "无"}
 
                         // 获取NAI设置（从localStorage读取）
                         const apiKey = localStorage.getItem("novelai-api-key");
-                        const model = resolveNovelAIModel();
+                        const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+                        const model =
+                          domModel ||
+                          localStorage.getItem("novelai-model") ||
+                          "nai-diffusion-4-5-full";
                         const settings = getNovelAISettings();
 
                         if (!apiKey) {
@@ -51302,7 +51390,8 @@ ${stickerContext || "无"}
                   }
                   const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
                   const finalNegativePrompt = naiPrompts.negative || "";
-                  const model = resolveNovelAIModel(msgData.model);
+                  const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+                  const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
                   const settings = getNovelAISettings();
                   const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
 
@@ -51408,8 +51497,7 @@ ${stickerContext || "无"}
                       500,
                     );
                     appendMessage(patMessage, chat);
-                  } else if (!notificationShown) {
-                    notificationShown = true;
+                  } else {
                     showNotification(chatId, patText);
                   }
                   continue;
@@ -52632,15 +52720,7 @@ ${stickerContext || "无"}
                   document.hidden || document.visibilityState === "hidden"
                 );
 
-                const isAsyncGeneratingNaiPlaceholder =
-                  aiMessage.type === "naiimag" && !aiMessage.imageUrl;
-                if (isAsyncGeneratingNaiPlaceholder) {
-                  aiMessage._suppressTurnNotify = notificationShown;
-                  notificationShown = true;
-                }
-
-                if (!notificationShown && (!isCurrentlyViewingThisChat || isAppInBackground) && isVisibleToMeLocal && aiMessage.type !== "system_status" && !isAsyncGeneratingNaiPlaceholder) {
-                  notificationShown = true;
+                if ((!isCurrentlyViewingThisChat || isAppInBackground) && isVisibleToMeLocal && aiMessage.type !== "system_status") {
                   let notificationText;
                   switch (aiMessage.type) {
                     case "transfer":
@@ -55971,7 +56051,10 @@ ${stickerContext || "无"}
 
           // 获取模型与设置 (完全复用第一次生成时的参数)
           const savedModel = message.model;
-          const model = resolveNovelAIModel(savedModel);
+          const model =
+            savedModel ||
+            localStorage.getItem("novelai-model") ||
+            "nai-diffusion-4-5-full";
 
           const baseSettings = getNovelAISettings();
           const messageSettings = message.naiSettings || {};
@@ -71015,13 +71098,9 @@ ${stickerContext || "无"}
           if (rawDataUrl.startsWith("data:image/gif")) {
             return rawDataUrl;
           }
-          const isBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
-          if (!isBgNow && typeof compressImage === "function" && rawDataUrl.length > 250000) {
+          if (typeof compressImage === "function" && rawDataUrl.length > 250000) {
             try {
-              const compressed = await Promise.race([
-                compressImage(rawDataUrl, 0.88, 1440),
-                new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-              ]);
+              const compressed = await compressImage(rawDataUrl, 0.88, 1440);
               if (compressed && compressed.startsWith("data:image") && compressed.length < rawDataUrl.length) {
                 return compressed;
               }
@@ -71168,26 +71247,11 @@ ${stickerContext || "无"}
               throw new Error("NovelAI API Key未配置。请在NovelAI设置中填写API Key。");
             }
             const naiPrompts = getCharacterNAIPrompts(chat.id);
-            const aiPrompt = (targetNaiMsg.prompt || targetNaiMsg.content || "a beautiful scene").trim();
-            const basePrompt = (targetNaiMsg.fullPrompt || aiPrompt || "").trim();
-            const promptParts = [];
-            if (naiPrompts.artist && !basePrompt.includes(naiPrompts.artist)) {
-              promptParts.push(naiPrompts.artist);
-            }
-            if (naiPrompts.positive && !basePrompt.includes(naiPrompts.positive)) {
-              promptParts.push(naiPrompts.positive);
-            }
-            if (basePrompt) {
-              promptParts.push(basePrompt);
-            }
-            const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
-            const finalNegativePrompt = (targetNaiMsg.negativePrompt && String(targetNaiMsg.negativePrompt).trim())
-              ? targetNaiMsg.negativePrompt
-              : (naiPrompts.negative || "");
-            targetNaiMsg.fullPrompt = finalPositivePrompt;
-            targetNaiMsg.negativePrompt = finalNegativePrompt;
-            const model = resolveNovelAIModel(targetNaiMsg.model);
-            targetNaiMsg.model = model;
+            const aiPrompt = targetNaiMsg.prompt || targetNaiMsg.content || "a beautiful scene";
+            const finalPositivePrompt = targetNaiMsg.fullPrompt || [naiPrompts.artist, naiPrompts.positive, aiPrompt].filter(Boolean).join(", ");
+            const finalNegativePrompt = targetNaiMsg.negativePrompt !== undefined ? targetNaiMsg.negativePrompt : (naiPrompts.negative || "");
+            const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+            const model = targetNaiMsg.model || domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
             const settings = Object.assign({}, getNovelAISettings(), targetNaiMsg.naiSettings || {});
             const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
 
@@ -71301,7 +71365,7 @@ ${stickerContext || "无"}
               window.PeerManager.broadcastGroupMessage(chat, { ...targetNaiMsg, eventId: undefined, isMessageUpdate: true }, false);
             }
             const isAppBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
-            if (isAppBgNow && !targetNaiMsg._suppressTurnNotify && typeof showNotification === "function") {
+            if (isAppBgNow && typeof showNotification === "function") {
               const notifTxt = chat.isGroup ? `${targetNaiMsg.senderName || chat.name}: [图片]` : "[图片]";
               const notifyAv = targetNaiMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
               showNotification(chat.id, notifTxt, notifyAv);
@@ -71346,7 +71410,8 @@ ${stickerContext || "无"}
 
           const baseSettings = getNovelAISettings();
           const settings = { ...baseSettings, ...(message.naiSettings || {}) };
-          const model = resolveNovelAIModel(message.model);
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const model = domModel || localStorage.getItem("novelai-model") || message.model || "nai-diffusion-4-5-full";
           const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
           const apiKey = domKey || localStorage.getItem("novelai-api-key");
           if (!apiKey) {
@@ -71369,7 +71434,7 @@ ${stickerContext || "无"}
           const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
 
           let finalNegativePrompt = message.negativePrompt;
-          if (typeof finalNegativePrompt === "undefined" || !String(finalNegativePrompt).trim()) {
+          if (typeof finalNegativePrompt === "undefined") {
             finalNegativePrompt = naiPrompts.negative || "";
           }
 
@@ -71705,7 +71770,8 @@ ${stickerContext || "无"}
             return;
           }
 
-          const model = resolveNovelAIModel();
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
           const settings = getNovelAISettings();
           const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
           const artist = (domArtist || settings.artist_prompt || "").trim();
@@ -72235,19 +72301,16 @@ ${stickerContext || "无"}
                 return { text: extractTextFromAnyLlmResponse(data), fullData: data };
               }
 
-              const useStreamForKeeper = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : false;
               const response = await fetch(targetUrl, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${apiKey}`,
-                  ...(useStreamForKeeper ? { Accept: "text/event-stream" } : {}),
                 },
                 body: JSON.stringify({
                   model: model,
                   messages: messagesForApi,
                   temperature: temperature || 0.7,
-                  stream: Boolean(useStreamForKeeper),
                 }),
               });
 
@@ -72523,7 +72586,8 @@ ${stickerContext || "无"}
             }
           }
 
-          const model = resolveNovelAIModel();
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
           const settings = getNovelAISettings();
           const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
 
@@ -72578,29 +72642,13 @@ ${stickerContext || "无"}
 
         async function generateAndAppendKeeperNaiImage(chat, aiPrompt, existingMsg = null) {
           const targetMsg = existingMsg || await createImmediateKeeperNaiBubble(chat, aiPrompt, 0);
-          const naiPrompts = getCharacterNAIPrompts(chat.id);
-          const basePrompt = (targetMsg.fullPrompt || aiPrompt || "").trim();
-          const promptParts = [];
-          if (naiPrompts.artist && !basePrompt.includes(naiPrompts.artist)) {
-            promptParts.push(naiPrompts.artist);
-          }
-          if (naiPrompts.positive && !basePrompt.includes(naiPrompts.positive)) {
-            promptParts.push(naiPrompts.positive);
-          }
-          if (basePrompt) {
-            promptParts.push(basePrompt);
-          }
-          const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
-          const finalNegativePrompt = (targetMsg.negativePrompt && String(targetMsg.negativePrompt).trim())
-            ? targetMsg.negativePrompt
-            : (naiPrompts.negative || "");
-          targetMsg.fullPrompt = finalPositivePrompt;
-          targetMsg.negativePrompt = finalNegativePrompt;
+          const finalPositivePrompt = targetMsg.fullPrompt || aiPrompt;
+          const finalNegativePrompt = targetMsg.negativePrompt || "";
 
           const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
           const apiKey = domKey || localStorage.getItem("novelai-api-key");
-          const model = resolveNovelAIModel(targetMsg.model);
-          targetMsg.model = model;
+          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+          const model = domModel || localStorage.getItem("novelai-model") || targetMsg.model || "nai-diffusion-4-5-full";
           const settings = getNovelAISettings();
 
           if (!apiKey) {
@@ -84138,18 +84186,25 @@ ${stickerContext || "无"}
         async function init() {
           // ▼▼▼▼▼▼▼▼▼▼▼▼ 修改：注册真正的 sw.js 文件 ▼▼▼▼▼▼▼▼▼▼▼▼
           if ("serviceWorker" in navigator) {
-            navigator.serviceWorker
-              .register("sw.js")
-              .then((registration) => {
-                registration.update().catch(() => {});
-                console.log(
-                  "ServiceWorker 注册成功 (File Mode), Scope:",
-                  registration.scope,
-                );
-              })
-              .catch((error) => {
-                console.error("ServiceWorker 注册失败:", error);
-              });
+            try {
+              // 这一行变了：直接加载根目录的 sw.js
+              const registration =
+                await navigator.serviceWorker.register("sw.js");
+              registration.update().catch(() => {});
+              console.log(
+                "ServiceWorker 注册成功 (File Mode), Scope:",
+                registration.scope,
+              );
+
+              // 等待激活
+              await navigator.serviceWorker.ready;
+            } catch (error) {
+              console.error("ServiceWorker 注册失败:", error);
+              // 提示用户可能的原因
+              console.warn(
+                "提示：请确保 sw.js 文件位于网站根目录，且通过 HTTPS 或 localhost 访问。",
+              );
+            }
           }
           // ▲▲▲▲▲▲▲▲▲▲▲▲ 修改结束 ▲▲▲▲▲▲▲▲▲▲▲▲
 
@@ -102230,25 +102285,6 @@ ${stickerContext || "无"}
             return null;
           }
 
-          function isHtmlFallbackResponse(bytes, res) {
-            if (res && res.headers && typeof res.headers.get === "function") {
-              const ct = String(res.headers.get("content-type") || "").toLowerCase();
-              if (ct.includes("text/html")) return true;
-            }
-            if (bytes instanceof Uint8Array && bytes.byteLength >= 5) {
-              // Check for "<!DOC", "<!doc", "<html", "<HTML"
-              if (
-                bytes[0] === 60 &&
-                ((bytes[1] === 33 && (bytes[2] === 68 || bytes[2] === 100)) ||
-                  (bytes[1] === 104 && bytes[2] === 116) ||
-                  (bytes[1] === 72 && bytes[2] === 84))
-              ) {
-                return true;
-              }
-            }
-            return false;
-          }
-
           let _isPurgingOpfs = false;
           // 安全去重与自动同步：当 Termux 已连接时，先确保 OPFS 中的图片已同步上传到 Termux 且校验字节数大于 0，再清理 OPFS 重复副本
           async function purgeBrowserOpfsMediaCacheIfExternalActive() {
@@ -102291,25 +102327,39 @@ ${stickerContext || "无"}
 
                 if (isTermuxReady) {
                   try {
-                    const opfsFile = await entryHandle.getFile();
-                    const ab = await opfsFile.arrayBuffer();
-                    if (ab && ab.byteLength > 0) {
-                      const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
-                      const upOk = await uploadToTermuxWithRetry(baseUrl, stealthName, wrapped);
-                      if (upOk) {
-                        const verifyRes = await fetch(baseUrl + "/media/" + encodeURIComponent(stealthName), {
-                          method: "GET",
-                        });
-                        if (verifyRes && verifyRes.ok) {
-                          const verifyAb = await verifyRes.arrayBuffer();
-                          const verifyBytes = new Uint8Array(verifyAb);
-                          if (verifyBytes.byteLength > 8 && !isHtmlFallbackResponse(verifyBytes, verifyRes)) {
-                            confirmedStoredLocally = true;
-                          }
-                        }
+                    const checkRes = await fetch(baseUrl + "/media/" + encodeURIComponent(stealthName), {
+                      method: "GET",
+                    });
+                    if (checkRes && checkRes.ok) {
+                      const checkAb = await checkRes.arrayBuffer();
+                      if (checkAb && checkAb.byteLength > 8) {
+                        confirmedStoredLocally = true;
                       }
                     }
                   } catch (_) {}
+
+                  // 若 Termux 中尚未保存该图片，先从 OPFS 同步上传到 Termux 并二次校验
+                  if (!confirmedStoredLocally) {
+                    try {
+                      const opfsFile = await entryHandle.getFile();
+                      const ab = await opfsFile.arrayBuffer();
+                      if (ab && ab.byteLength > 0) {
+                        const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
+                        const upOk = await uploadToTermuxWithRetry(baseUrl, stealthName, wrapped);
+                        if (upOk) {
+                          const verifyRes = await fetch(baseUrl + "/media/" + encodeURIComponent(stealthName), {
+                            method: "GET",
+                          });
+                          if (verifyRes && verifyRes.ok) {
+                            const verifyAb = await verifyRes.arrayBuffer();
+                            if (verifyAb && verifyAb.byteLength > 8) {
+                              confirmedStoredLocally = true;
+                            }
+                          }
+                        }
+                      }
+                    } catch (_) {}
+                  }
                 }
 
                 if (!confirmedStoredLocally && extMediaDir) {
@@ -102564,18 +102614,14 @@ ${stickerContext || "无"}
             const baseUrl = (rawUrl.trim() || "http://127.0.0.1:8765").replace(/\/+$/, "");
             try {
               const controller = new AbortController();
-              const timer = setTimeout(() => controller.abort(), 500);
-              const res = await fetch(baseUrl + "/ping", {
-                method: "GET",
-                cache: "no-store",
-                signal: controller.signal,
-              });
+              const timer = setTimeout(() => controller.abort(), 2500);
+              const res = await fetch(baseUrl + "/ping", { method: "GET", signal: controller.signal });
               clearTimeout(timer);
-              if (res && res.ok) {
-                const txt = (await res.text()).trim();
-                cachedTermuxOk = txt === "ok";
-              } else {
-                cachedTermuxOk = false;
+              cachedTermuxOk = Boolean(res && res.ok);
+              if (cachedTermuxOk) {
+                setTimeout(() => {
+                  purgeBrowserOpfsMediaCacheIfExternalActive();
+                }, 200);
               }
               return cachedTermuxOk;
             } catch (_) {
@@ -102596,6 +102642,8 @@ ${stickerContext || "无"}
 
           async function testVaultConnection(silent = false) {
             const cfg = getCurrentFormVaultConfig();
+            const stats = await countLocalDatabaseStats();
+            const dataSummary = "已关联 " + stats.chatCount + " 个会话与 " + (stats.inlineImgCount + stats.vaultedImgCount) + " 张图片";
             try {
               if (cfg.mode === "server" || cfg.mode === "folder") {
                 const urlInput = document.getElementById("local-vault-url-input");
@@ -102603,32 +102651,39 @@ ${stickerContext || "无"}
                   urlInput.value = "http://127.0.0.1:8765";
                 }
                 const baseUrl = ((urlInput && urlInput.value.trim()) || cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-                const [termuxOk, serverVault, handle, opfsHandle] = await Promise.all([
-                  checkTermuxEndpointReachable(baseUrl, !silent),
-                  checkBuiltInVaultServer(),
-                  getEffectiveDirectoryHandle(),
-                  getAutoOpfsDirectoryHandle(),
-                ]);
+                const termuxOk = await checkTermuxEndpointReachable(baseUrl, !silent);
+                if (termuxOk) {
+                  updateVaultStatusBadge("已连接", true);
+                  setVaultInfoText("本地服务已连接 " + baseUrl + " · " + dataSummary);
+                  hydrateDomVaultImages();
+                  if (!silent && typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "本地服务连接成功，" + dataSummary);
+                  }
+                  return true;
+                }
+                const serverVault = await checkBuiltInVaultServer();
+                const handle = await getEffectiveDirectoryHandle();
+                const opfsHandle = await getAutoOpfsDirectoryHandle();
                 const activeHandle = handle || opfsHandle;
-                if (termuxOk || (serverVault && serverVault.ok) || activeHandle) {
+                if (serverVault && serverVault.ok) {
+                  updateVaultStatusBadge("已连接", true);
+                  setVaultInfoText("本地服务已连接 " + baseUrl + " · 目录 EPhoneVault · " + dataSummary);
+                  hydrateDomVaultImages();
+                  if (!silent && typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "本地服务已连接默认目录 EPhoneVault，" + dataSummary);
+                  }
+                  return true;
+                }
+                if (activeHandle) {
                   const folderName = (activeHandle && activeHandle.name) || "EPhoneVault";
                   const folderDisp = document.getElementById("local-vault-folder-display");
-                  if (folderDisp && !folderDisp.value.trim()) folderDisp.value = folderName;
+                  if (folderDisp) folderDisp.value = folderName;
                   updateVaultStatusBadge("已连接", true);
-                  const prefixText = termuxOk
-                    ? "本地服务已连接 " + baseUrl
-                    : serverVault && serverVault.ok
-                    ? "本地服务已连接 · 目录 EPhoneVault"
-                    : "本地目录 " + folderName + " 已就绪";
-                  setVaultInfoText(prefixText);
+                  setVaultInfoText("本地目录 " + folderName + " 已就绪 · " + dataSummary);
                   hydrateDomVaultImages();
-                  countLocalDatabaseStats().then((stats) => {
-                    const dataSummary = "已关联 " + stats.chatCount + " 个会话与 " + (stats.inlineImgCount + stats.vaultedImgCount) + " 张图片";
-                    setVaultInfoText(prefixText + " · " + dataSummary);
-                    if (!silent && typeof window.showCustomAlert === "function") {
-                      window.showCustomAlert("提示", prefixText + "，" + dataSummary);
-                    }
-                  });
+                  if (!silent && typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "本地目录 " + folderName + " 已连接，" + dataSummary);
+                  }
                   return true;
                 }
                 throw new Error("本地服务未响应，请检查地址或切换模式");
@@ -102661,15 +102716,11 @@ ${stickerContext || "无"}
                   throw new Error(data && data.error ? data.error : "网盘验证未通过");
                 }
                 updateVaultStatusBadge("已连接", true);
-                setVaultInfoText("网盘桥接已连接");
+                setVaultInfoText("网盘桥接已连接 · " + dataSummary);
                 hydrateDomVaultImages();
-                countLocalDatabaseStats().then((stats) => {
-                  const dataSummary = "已关联 " + stats.chatCount + " 个会话与 " + (stats.inlineImgCount + stats.vaultedImgCount) + " 张图片";
-                  setVaultInfoText("网盘桥接已连接 · " + dataSummary);
-                  if (!silent && typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("提示", "网盘桥接连接成功，" + dataSummary);
-                  }
-                });
+                if (!silent && typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "网盘桥接连接成功，" + dataSummary);
+                }
                 return true;
               }
             } catch (err) {
@@ -102746,8 +102797,11 @@ ${stickerContext || "无"}
           async function migrateExposedImagesInDir(dirHandle, opfsMediaDir = null) {
             if (!dirHandle || typeof dirHandle.entries !== "function") return 0;
             let converted = 0;
+            const isExternalFolder = Boolean(opfsMediaDir && dirHandle !== opfsMediaDir);
             await writeNoMediaFileInDir(dirHandle);
-            const targetPattern = /\.(png|jpe?g|webp|gif|mp3|wav|ogg)$/i;
+            const targetPattern = isExternalFolder
+              ? /\.(png|jpe?g|webp|gif|mp3|wav|ogg|epdat)$/i
+              : /\.(png|jpe?g|webp|gif|mp3|wav|ogg)$/i;
             const exposedNames = [];
             try {
               for await (const [entryName, entryHandle] of dirHandle.entries()) {
@@ -102868,15 +102922,12 @@ ${stickerContext || "无"}
                       const fRes = await fetch("/api/local-vault/media/" + encodeURIComponent(stealth));
                       if (fRes.ok) {
                         const ab = await fRes.arrayBuffer();
-                        const rawBytes = new Uint8Array(ab);
-                        if (!isHtmlFallbackResponse(rawBytes, fRes)) {
-                          const wrapped = wrapVaultBinary(unwrapVaultBinary(rawBytes));
-                          const fh = await opfsMediaDir.getFileHandle(stealth, { create: true });
-                          const w = await fh.createWritable();
-                          await w.write(wrapped);
-                          await w.close();
-                          synced++;
-                        }
+                        const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
+                        const fh = await opfsMediaDir.getFileHandle(stealth, { create: true });
+                        const w = await fh.createWritable();
+                        await w.write(wrapped);
+                        await w.close();
+                        synced++;
                       }
                     } catch (_) {}
                   }
@@ -102972,9 +103023,7 @@ ${stickerContext || "无"}
               } catch (_) {}
             }
 
-            if (!silent || explicitHandle) {
-              await syncVaultBetweenOpfsAndServer(opfsMediaDir);
-            }
+            await syncVaultBetweenOpfsAndServer(opfsMediaDir);
 
             const folderDisp = document.getElementById("local-vault-folder-display");
             if (folderDisp && !folderDisp.value.trim()) {
@@ -103177,30 +103226,24 @@ ${stickerContext || "无"}
                 if (mode === "server" || mode === "folder") {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
 
-                  // 1. 若 Termux 已确认在线，从 Termux 本地服务读取
-                  if (cachedTermuxOk) {
-                    for (const candidate of candidates) {
-                      try {
-                        const tRes = await fetch(baseUrl + "/media/" + encodeURIComponent(candidate), {
-                          cache: "no-store",
-                        });
-                        if (tRes && tRes.ok) {
-                          const ab = await tRes.arrayBuffer();
-                          const rawBytes = new Uint8Array(ab);
-                          if (!isHtmlFallbackResponse(rawBytes, tRes)) {
-                            const cleanBytes = unwrapVaultBinary(rawBytes);
-                            if (cleanBytes && cleanBytes.byteLength > 0) {
-                              const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                              setVaultBlobCache(fileName, objUrl);
-                              return objUrl;
-                            }
-                          }
+                  // 1. 优先从 Termux 本地服务读取（兼容 .epdat 与原文件名）
+                  for (const candidate of candidates) {
+                    try {
+                      const tRes = await fetch(baseUrl + "/media/" + encodeURIComponent(candidate));
+                      if (tRes && tRes.ok) {
+                        const ab = await tRes.arrayBuffer();
+                        const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                        if (cleanBytes && cleanBytes.byteLength > 0) {
+                          const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                          setVaultBlobCache(fileName, objUrl);
+                          cachedTermuxOk = true;
+                          return objUrl;
                         }
-                      } catch (_) {}
-                    }
+                      }
+                    } catch (_) {}
                   }
 
-                  // 2. 从用户授权的外部本地文件夹直接秒读（零网络等待）
+                  // 2. 从用户授权的外部本地文件夹读取（同时查找 media 子目录与根目录）
                   try {
                     const savedHandle = await getSavedDirectoryHandle();
                     if (savedHandle) {
@@ -103222,7 +103265,7 @@ ${stickerContext || "无"}
                               const file = await fh.getFile();
                               const ab = await file.arrayBuffer();
                               const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                              if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
+                              if (cleanBytes && cleanBytes.byteLength > 0) {
                                 const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
                                 setVaultBlobCache(fileName, objUrl);
                                 return objUrl;
@@ -103234,7 +103277,7 @@ ${stickerContext || "无"}
                     }
                   } catch (_) {}
 
-                  // 3. 从浏览器内置免授权目录 OPFS EPhoneVault 直接秒读（零网络等待）
+                  // 3. 从浏览器内置免授权目录 OPFS EPhoneVault 读取（无论是否连接 Termux 均兜底查找）
                   try {
                     const opfsRoot = await getAutoOpfsDirectoryHandle();
                     if (opfsRoot) {
@@ -103251,7 +103294,7 @@ ${stickerContext || "无"}
                             const file = await fh.getFile();
                             const ab = await file.arrayBuffer();
                             const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                            if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
+                            if (cleanBytes && cleanBytes.byteLength > 0) {
                               const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
                               setVaultBlobCache(fileName, objUrl);
                               if (cachedTermuxOk) {
@@ -103265,25 +103308,20 @@ ${stickerContext || "无"}
                     }
                   } catch (_) {}
 
-                  // 4. 从服务端本地目录读取
+                  // 4. 从服务端本地目录读取（兼容 .epdat 与原文件名）
                   for (const candidate of candidates) {
                     try {
-                      const apiRes = await fetch("/api/local-vault/media/" + encodeURIComponent(candidate), {
-                        cache: "no-store",
-                      });
+                      const apiRes = await fetch("/api/local-vault/media/" + encodeURIComponent(candidate));
                       if (apiRes && apiRes.ok) {
                         const ab = await apiRes.arrayBuffer();
-                        const rawBytes = new Uint8Array(ab);
-                        if (!isHtmlFallbackResponse(rawBytes, apiRes)) {
-                          const cleanBytes = unwrapVaultBinary(rawBytes);
-                          if (cleanBytes && cleanBytes.byteLength > 0) {
-                            const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                            setVaultBlobCache(fileName, objUrl);
-                            if (cachedTermuxOk) {
-                              uploadToTermuxWithRetry(baseUrl, stealthName, wrapVaultBinary(cleanBytes)).catch(() => {});
-                            }
-                            return objUrl;
+                        const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                        if (cleanBytes && cleanBytes.byteLength > 0) {
+                          const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                          setVaultBlobCache(fileName, objUrl);
+                          if (cachedTermuxOk) {
+                            uploadToTermuxWithRetry(baseUrl, stealthName, wrapVaultBinary(cleanBytes)).catch(() => {});
                           }
+                          return objUrl;
                         }
                       }
                     } catch (_) {}
@@ -104444,6 +104482,7 @@ ${stickerContext || "无"}
               });
             }
             if (connBtn) connBtn.addEventListener("click", async () => {
+              await runVaultHideGalleryImages(true);
               await testVaultConnection(false);
             });
             if (offloadBtn) offloadBtn.addEventListener("click", () => runVaultImageOffload());
@@ -104451,12 +104490,12 @@ ${stickerContext || "无"}
             if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
 
-            hydrateDomVaultImages();
             setTimeout(() => {
               hookDatabaseAutoOffload();
+              runVaultHideGalleryImages(true);
               testVaultConnection(true);
               hydrateDomVaultImages();
-            }, 150);
+            }, 500);
 
             let hydrateTimer = null;
             const obs = new MutationObserver(() => {
