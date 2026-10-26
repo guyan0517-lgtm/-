@@ -84186,25 +84186,18 @@ ${stickerContext || "无"}
         async function init() {
           // ▼▼▼▼▼▼▼▼▼▼▼▼ 修改：注册真正的 sw.js 文件 ▼▼▼▼▼▼▼▼▼▼▼▼
           if ("serviceWorker" in navigator) {
-            try {
-              // 这一行变了：直接加载根目录的 sw.js
-              const registration =
-                await navigator.serviceWorker.register("sw.js");
-              registration.update().catch(() => {});
-              console.log(
-                "ServiceWorker 注册成功 (File Mode), Scope:",
-                registration.scope,
-              );
-
-              // 等待激活
-              await navigator.serviceWorker.ready;
-            } catch (error) {
-              console.error("ServiceWorker 注册失败:", error);
-              // 提示用户可能的原因
-              console.warn(
-                "提示：请确保 sw.js 文件位于网站根目录，且通过 HTTPS 或 localhost 访问。",
-              );
-            }
+            navigator.serviceWorker
+              .register("sw.js")
+              .then((registration) => {
+                registration.update().catch(() => {});
+                console.log(
+                  "ServiceWorker 注册成功 (File Mode), Scope:",
+                  registration.scope,
+                );
+              })
+              .catch((error) => {
+                console.error("ServiceWorker 注册失败:", error);
+              });
           }
           // ▲▲▲▲▲▲▲▲▲▲▲▲ 修改结束 ▲▲▲▲▲▲▲▲▲▲▲▲
 
@@ -102285,6 +102278,25 @@ ${stickerContext || "无"}
             return null;
           }
 
+          function isHtmlFallbackResponse(bytes, res) {
+            if (res && res.headers && typeof res.headers.get === "function") {
+              const ct = String(res.headers.get("content-type") || "").toLowerCase();
+              if (ct.includes("text/html")) return true;
+            }
+            if (bytes instanceof Uint8Array && bytes.byteLength >= 5) {
+              // Check for "<!DOC", "<!doc", "<html", "<HTML"
+              if (
+                bytes[0] === 60 &&
+                ((bytes[1] === 33 && (bytes[2] === 68 || bytes[2] === 100)) ||
+                  (bytes[1] === 104 && bytes[2] === 116) ||
+                  (bytes[1] === 72 && bytes[2] === 84))
+              ) {
+                return true;
+              }
+            }
+            return false;
+          }
+
           let _isPurgingOpfs = false;
           // 安全去重与自动同步：当 Termux 已连接时，先确保 OPFS 中的图片已同步上传到 Termux 且校验字节数大于 0，再清理 OPFS 重复副本
           async function purgeBrowserOpfsMediaCacheIfExternalActive() {
@@ -102327,39 +102339,25 @@ ${stickerContext || "无"}
 
                 if (isTermuxReady) {
                   try {
-                    const checkRes = await fetch(baseUrl + "/media/" + encodeURIComponent(stealthName), {
-                      method: "GET",
-                    });
-                    if (checkRes && checkRes.ok) {
-                      const checkAb = await checkRes.arrayBuffer();
-                      if (checkAb && checkAb.byteLength > 8) {
-                        confirmedStoredLocally = true;
-                      }
-                    }
-                  } catch (_) {}
-
-                  // 若 Termux 中尚未保存该图片，先从 OPFS 同步上传到 Termux 并二次校验
-                  if (!confirmedStoredLocally) {
-                    try {
-                      const opfsFile = await entryHandle.getFile();
-                      const ab = await opfsFile.arrayBuffer();
-                      if (ab && ab.byteLength > 0) {
-                        const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
-                        const upOk = await uploadToTermuxWithRetry(baseUrl, stealthName, wrapped);
-                        if (upOk) {
-                          const verifyRes = await fetch(baseUrl + "/media/" + encodeURIComponent(stealthName), {
-                            method: "GET",
-                          });
-                          if (verifyRes && verifyRes.ok) {
-                            const verifyAb = await verifyRes.arrayBuffer();
-                            if (verifyAb && verifyAb.byteLength > 8) {
-                              confirmedStoredLocally = true;
-                            }
+                    const opfsFile = await entryHandle.getFile();
+                    const ab = await opfsFile.arrayBuffer();
+                    if (ab && ab.byteLength > 0) {
+                      const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
+                      const upOk = await uploadToTermuxWithRetry(baseUrl, stealthName, wrapped);
+                      if (upOk) {
+                        const verifyRes = await fetch(baseUrl + "/media/" + encodeURIComponent(stealthName), {
+                          method: "GET",
+                        });
+                        if (verifyRes && verifyRes.ok) {
+                          const verifyAb = await verifyRes.arrayBuffer();
+                          const verifyBytes = new Uint8Array(verifyAb);
+                          if (verifyBytes.byteLength > 8 && !isHtmlFallbackResponse(verifyBytes, verifyRes)) {
+                            confirmedStoredLocally = true;
                           }
                         }
                       }
-                    } catch (_) {}
-                  }
+                    }
+                  } catch (_) {}
                 }
 
                 if (!confirmedStoredLocally && extMediaDir) {
@@ -102614,14 +102612,18 @@ ${stickerContext || "无"}
             const baseUrl = (rawUrl.trim() || "http://127.0.0.1:8765").replace(/\/+$/, "");
             try {
               const controller = new AbortController();
-              const timer = setTimeout(() => controller.abort(), 2500);
-              const res = await fetch(baseUrl + "/ping", { method: "GET", signal: controller.signal });
+              const timer = setTimeout(() => controller.abort(), 500);
+              const res = await fetch(baseUrl + "/ping", {
+                method: "GET",
+                cache: "no-store",
+                signal: controller.signal,
+              });
               clearTimeout(timer);
-              cachedTermuxOk = Boolean(res && res.ok);
-              if (cachedTermuxOk) {
-                setTimeout(() => {
-                  purgeBrowserOpfsMediaCacheIfExternalActive();
-                }, 200);
+              if (res && res.ok) {
+                const txt = (await res.text()).trim();
+                cachedTermuxOk = txt === "ok";
+              } else {
+                cachedTermuxOk = false;
               }
               return cachedTermuxOk;
             } catch (_) {
@@ -102642,8 +102644,6 @@ ${stickerContext || "无"}
 
           async function testVaultConnection(silent = false) {
             const cfg = getCurrentFormVaultConfig();
-            const stats = await countLocalDatabaseStats();
-            const dataSummary = "已关联 " + stats.chatCount + " 个会话与 " + (stats.inlineImgCount + stats.vaultedImgCount) + " 张图片";
             try {
               if (cfg.mode === "server" || cfg.mode === "folder") {
                 const urlInput = document.getElementById("local-vault-url-input");
@@ -102651,39 +102651,32 @@ ${stickerContext || "无"}
                   urlInput.value = "http://127.0.0.1:8765";
                 }
                 const baseUrl = ((urlInput && urlInput.value.trim()) || cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-                const termuxOk = await checkTermuxEndpointReachable(baseUrl, !silent);
-                if (termuxOk) {
-                  updateVaultStatusBadge("已连接", true);
-                  setVaultInfoText("本地服务已连接 " + baseUrl + " · " + dataSummary);
-                  hydrateDomVaultImages();
-                  if (!silent && typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("提示", "本地服务连接成功，" + dataSummary);
-                  }
-                  return true;
-                }
-                const serverVault = await checkBuiltInVaultServer();
-                const handle = await getEffectiveDirectoryHandle();
-                const opfsHandle = await getAutoOpfsDirectoryHandle();
+                const [termuxOk, serverVault, handle, opfsHandle] = await Promise.all([
+                  checkTermuxEndpointReachable(baseUrl, !silent),
+                  checkBuiltInVaultServer(),
+                  getEffectiveDirectoryHandle(),
+                  getAutoOpfsDirectoryHandle(),
+                ]);
                 const activeHandle = handle || opfsHandle;
-                if (serverVault && serverVault.ok) {
-                  updateVaultStatusBadge("已连接", true);
-                  setVaultInfoText("本地服务已连接 " + baseUrl + " · 目录 EPhoneVault · " + dataSummary);
-                  hydrateDomVaultImages();
-                  if (!silent && typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("提示", "本地服务已连接默认目录 EPhoneVault，" + dataSummary);
-                  }
-                  return true;
-                }
-                if (activeHandle) {
+                if (termuxOk || (serverVault && serverVault.ok) || activeHandle) {
                   const folderName = (activeHandle && activeHandle.name) || "EPhoneVault";
                   const folderDisp = document.getElementById("local-vault-folder-display");
-                  if (folderDisp) folderDisp.value = folderName;
+                  if (folderDisp && !folderDisp.value.trim()) folderDisp.value = folderName;
                   updateVaultStatusBadge("已连接", true);
-                  setVaultInfoText("本地目录 " + folderName + " 已就绪 · " + dataSummary);
+                  const prefixText = termuxOk
+                    ? "本地服务已连接 " + baseUrl
+                    : serverVault && serverVault.ok
+                    ? "本地服务已连接 · 目录 EPhoneVault"
+                    : "本地目录 " + folderName + " 已就绪";
+                  setVaultInfoText(prefixText);
                   hydrateDomVaultImages();
-                  if (!silent && typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("提示", "本地目录 " + folderName + " 已连接，" + dataSummary);
-                  }
+                  countLocalDatabaseStats().then((stats) => {
+                    const dataSummary = "已关联 " + stats.chatCount + " 个会话与 " + (stats.inlineImgCount + stats.vaultedImgCount) + " 张图片";
+                    setVaultInfoText(prefixText + " · " + dataSummary);
+                    if (!silent && typeof window.showCustomAlert === "function") {
+                      window.showCustomAlert("提示", prefixText + "，" + dataSummary);
+                    }
+                  });
                   return true;
                 }
                 throw new Error("本地服务未响应，请检查地址或切换模式");
@@ -102716,11 +102709,15 @@ ${stickerContext || "无"}
                   throw new Error(data && data.error ? data.error : "网盘验证未通过");
                 }
                 updateVaultStatusBadge("已连接", true);
-                setVaultInfoText("网盘桥接已连接 · " + dataSummary);
+                setVaultInfoText("网盘桥接已连接");
                 hydrateDomVaultImages();
-                if (!silent && typeof window.showCustomAlert === "function") {
-                  window.showCustomAlert("提示", "网盘桥接连接成功，" + dataSummary);
-                }
+                countLocalDatabaseStats().then((stats) => {
+                  const dataSummary = "已关联 " + stats.chatCount + " 个会话与 " + (stats.inlineImgCount + stats.vaultedImgCount) + " 张图片";
+                  setVaultInfoText("网盘桥接已连接 · " + dataSummary);
+                  if (!silent && typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "网盘桥接连接成功，" + dataSummary);
+                  }
+                });
                 return true;
               }
             } catch (err) {
@@ -102797,11 +102794,8 @@ ${stickerContext || "无"}
           async function migrateExposedImagesInDir(dirHandle, opfsMediaDir = null) {
             if (!dirHandle || typeof dirHandle.entries !== "function") return 0;
             let converted = 0;
-            const isExternalFolder = Boolean(opfsMediaDir && dirHandle !== opfsMediaDir);
             await writeNoMediaFileInDir(dirHandle);
-            const targetPattern = isExternalFolder
-              ? /\.(png|jpe?g|webp|gif|mp3|wav|ogg|epdat)$/i
-              : /\.(png|jpe?g|webp|gif|mp3|wav|ogg)$/i;
+            const targetPattern = /\.(png|jpe?g|webp|gif|mp3|wav|ogg)$/i;
             const exposedNames = [];
             try {
               for await (const [entryName, entryHandle] of dirHandle.entries()) {
@@ -102922,12 +102916,15 @@ ${stickerContext || "无"}
                       const fRes = await fetch("/api/local-vault/media/" + encodeURIComponent(stealth));
                       if (fRes.ok) {
                         const ab = await fRes.arrayBuffer();
-                        const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
-                        const fh = await opfsMediaDir.getFileHandle(stealth, { create: true });
-                        const w = await fh.createWritable();
-                        await w.write(wrapped);
-                        await w.close();
-                        synced++;
+                        const rawBytes = new Uint8Array(ab);
+                        if (!isHtmlFallbackResponse(rawBytes, fRes)) {
+                          const wrapped = wrapVaultBinary(unwrapVaultBinary(rawBytes));
+                          const fh = await opfsMediaDir.getFileHandle(stealth, { create: true });
+                          const w = await fh.createWritable();
+                          await w.write(wrapped);
+                          await w.close();
+                          synced++;
+                        }
                       }
                     } catch (_) {}
                   }
@@ -103023,7 +103020,9 @@ ${stickerContext || "无"}
               } catch (_) {}
             }
 
-            await syncVaultBetweenOpfsAndServer(opfsMediaDir);
+            if (!silent || explicitHandle) {
+              await syncVaultBetweenOpfsAndServer(opfsMediaDir);
+            }
 
             const folderDisp = document.getElementById("local-vault-folder-display");
             if (folderDisp && !folderDisp.value.trim()) {
@@ -103226,24 +103225,30 @@ ${stickerContext || "无"}
                 if (mode === "server" || mode === "folder") {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
 
-                  // 1. 优先从 Termux 本地服务读取（兼容 .epdat 与原文件名）
-                  for (const candidate of candidates) {
-                    try {
-                      const tRes = await fetch(baseUrl + "/media/" + encodeURIComponent(candidate));
-                      if (tRes && tRes.ok) {
-                        const ab = await tRes.arrayBuffer();
-                        const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                        if (cleanBytes && cleanBytes.byteLength > 0) {
-                          const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                          setVaultBlobCache(fileName, objUrl);
-                          cachedTermuxOk = true;
-                          return objUrl;
+                  // 1. 若 Termux 已确认在线，从 Termux 本地服务读取
+                  if (cachedTermuxOk) {
+                    for (const candidate of candidates) {
+                      try {
+                        const tRes = await fetch(baseUrl + "/media/" + encodeURIComponent(candidate), {
+                          cache: "no-store",
+                        });
+                        if (tRes && tRes.ok) {
+                          const ab = await tRes.arrayBuffer();
+                          const rawBytes = new Uint8Array(ab);
+                          if (!isHtmlFallbackResponse(rawBytes, tRes)) {
+                            const cleanBytes = unwrapVaultBinary(rawBytes);
+                            if (cleanBytes && cleanBytes.byteLength > 0) {
+                              const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                              setVaultBlobCache(fileName, objUrl);
+                              return objUrl;
+                            }
+                          }
                         }
-                      }
-                    } catch (_) {}
+                      } catch (_) {}
+                    }
                   }
 
-                  // 2. 从用户授权的外部本地文件夹读取（同时查找 media 子目录与根目录）
+                  // 2. 从用户授权的外部本地文件夹直接秒读（零网络等待）
                   try {
                     const savedHandle = await getSavedDirectoryHandle();
                     if (savedHandle) {
@@ -103265,7 +103270,7 @@ ${stickerContext || "无"}
                               const file = await fh.getFile();
                               const ab = await file.arrayBuffer();
                               const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                              if (cleanBytes && cleanBytes.byteLength > 0) {
+                              if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
                                 const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
                                 setVaultBlobCache(fileName, objUrl);
                                 return objUrl;
@@ -103277,7 +103282,7 @@ ${stickerContext || "无"}
                     }
                   } catch (_) {}
 
-                  // 3. 从浏览器内置免授权目录 OPFS EPhoneVault 读取（无论是否连接 Termux 均兜底查找）
+                  // 3. 从浏览器内置免授权目录 OPFS EPhoneVault 直接秒读（零网络等待）
                   try {
                     const opfsRoot = await getAutoOpfsDirectoryHandle();
                     if (opfsRoot) {
@@ -103294,7 +103299,7 @@ ${stickerContext || "无"}
                             const file = await fh.getFile();
                             const ab = await file.arrayBuffer();
                             const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                            if (cleanBytes && cleanBytes.byteLength > 0) {
+                            if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
                               const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
                               setVaultBlobCache(fileName, objUrl);
                               if (cachedTermuxOk) {
@@ -103308,20 +103313,25 @@ ${stickerContext || "无"}
                     }
                   } catch (_) {}
 
-                  // 4. 从服务端本地目录读取（兼容 .epdat 与原文件名）
+                  // 4. 从服务端本地目录读取
                   for (const candidate of candidates) {
                     try {
-                      const apiRes = await fetch("/api/local-vault/media/" + encodeURIComponent(candidate));
+                      const apiRes = await fetch("/api/local-vault/media/" + encodeURIComponent(candidate), {
+                        cache: "no-store",
+                      });
                       if (apiRes && apiRes.ok) {
                         const ab = await apiRes.arrayBuffer();
-                        const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                        if (cleanBytes && cleanBytes.byteLength > 0) {
-                          const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                          setVaultBlobCache(fileName, objUrl);
-                          if (cachedTermuxOk) {
-                            uploadToTermuxWithRetry(baseUrl, stealthName, wrapVaultBinary(cleanBytes)).catch(() => {});
+                        const rawBytes = new Uint8Array(ab);
+                        if (!isHtmlFallbackResponse(rawBytes, apiRes)) {
+                          const cleanBytes = unwrapVaultBinary(rawBytes);
+                          if (cleanBytes && cleanBytes.byteLength > 0) {
+                            const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                            setVaultBlobCache(fileName, objUrl);
+                            if (cachedTermuxOk) {
+                              uploadToTermuxWithRetry(baseUrl, stealthName, wrapVaultBinary(cleanBytes)).catch(() => {});
+                            }
+                            return objUrl;
                           }
-                          return objUrl;
                         }
                       }
                     } catch (_) {}
@@ -104482,7 +104492,6 @@ ${stickerContext || "无"}
               });
             }
             if (connBtn) connBtn.addEventListener("click", async () => {
-              await runVaultHideGalleryImages(true);
               await testVaultConnection(false);
             });
             if (offloadBtn) offloadBtn.addEventListener("click", () => runVaultImageOffload());
@@ -104490,12 +104499,12 @@ ${stickerContext || "无"}
             if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
 
+            hydrateDomVaultImages();
             setTimeout(() => {
               hookDatabaseAutoOffload();
-              runVaultHideGalleryImages(true);
               testVaultConnection(true);
               hydrateDomVaultImages();
-            }, 500);
+            }, 150);
 
             let hydrateTimer = null;
             const obs = new MutationObserver(() => {

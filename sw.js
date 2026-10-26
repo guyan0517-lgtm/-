@@ -1,4 +1,4 @@
-const CACHE_NAME = "ephone-tuk-cache-v12";
+const CACHE_NAME = "ephone-tuk-cache-v13";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -15,13 +15,11 @@ const ASSETS_TO_CACHE = [
 
 self.addEventListener("install", event => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS_TO_CACHE).catch(err => {
-        console.warn("Pre-cache warning: " + err);
-      });
-    })
-  );
+  caches.open(CACHE_NAME).then(cache => {
+    cache.addAll(ASSETS_TO_CACHE).catch(err => {
+      console.warn("Pre-cache warning: " + err);
+    });
+  });
 });
 
 self.addEventListener("activate", event => {
@@ -40,10 +38,17 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
-  
+
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith("http")) return;
-  if (url.pathname.startsWith("/api") || url.hostname.includes("socket") || url.hostname.includes("hmr")) {
+  if (url.origin !== self.location.origin) return;
+  if (
+    url.pathname.startsWith("/api") ||
+    url.pathname.startsWith("/media") ||
+    url.pathname === "/ping" ||
+    url.hostname.includes("socket") ||
+    url.hostname.includes("hmr")
+  ) {
     return;
   }
 
@@ -66,8 +71,14 @@ self.addEventListener("fetch", event => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          return caches.match(event.request).then(cached => cached || caches.match("./index.html"));
+        .catch(err => {
+          return caches.match(event.request).then(cached => {
+            if (cached) return cached;
+            if (event.request.mode === "navigate") {
+              return caches.match("./index.html");
+            }
+            return Promise.reject(err);
+          });
         })
     );
     return;
@@ -94,8 +105,6 @@ self.addEventListener("fetch", event => {
           cache.put(event.request, responseToCache);
         });
         return networkResponse;
-      }).catch(err => {
-        return caches.match("./index.html") || Promise.reject(err);
       });
     })
   );
