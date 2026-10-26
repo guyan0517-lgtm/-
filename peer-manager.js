@@ -511,7 +511,12 @@
         name = profileNameEl.textContent.trim();
       }
       if (profileAvatarEl && profileAvatarEl.src) {
-        avatar = profileAvatarEl.src;
+        const vRef = profileAvatarEl.getAttribute("data-vault-ref") || (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(profileAvatarEl.src));
+        if (vRef && vRef.startsWith("vault://")) {
+          avatar = vRef;
+        } else if (!profileAvatarEl.src.startsWith("blob:") || !avatar || avatar.startsWith("blob:")) {
+          avatar = profileAvatarEl.src;
+        }
       }
       if (profileFrameEl && profileFrameEl.style.display !== "none" && profileFrameEl.getAttribute("src")) {
         myAvatarFrame = profileFrameEl.getAttribute("src");
@@ -521,23 +526,34 @@
     },
 
     compressAvatarForWire: function (src, customMaxDim, customQuality) {
-      return new Promise((resolve) => {
+      return new Promise(async (resolve) => {
         if (!src || typeof src !== "string") {
           resolve("");
           return;
         }
-        if (!src.startsWith("data:image")) {
+        let loadSrc = src;
+        if (src.startsWith("vault://") && typeof window.resolveVaultRefToUrl === "function") {
+          try {
+            const resolved = await window.resolveVaultRefToUrl(src);
+            if (resolved && !resolved.startsWith("vault://")) {
+              loadSrc = resolved;
+            }
+          } catch (_) {}
+        }
+        const isVaultOrBlob = src.startsWith("vault://") || src.startsWith("blob:") || loadSrc.startsWith("blob:");
+        if (!loadSrc.startsWith("data:image") && !isVaultOrBlob) {
           resolve(src);
           return;
         }
         const maxDim = Number(customMaxDim) > 0 ? Number(customMaxDim) : 512;
         const quality = Number(customQuality) > 0 ? Number(customQuality) : 0.90;
         const rawThreshold = customMaxDim ? 450000 : 250000;
-        if (src.length < rawThreshold || src.startsWith("data:image/gif")) {
-          resolve(src);
+        if (!isVaultOrBlob && (loadSrc.length < rawThreshold || loadSrc.startsWith("data:image/gif"))) {
+          resolve(loadSrc);
           return;
         }
         const img = new Image();
+        img.crossOrigin = "anonymous";
         img.onload = function () {
           try {
             const canvas = document.createElement("canvas");
@@ -563,15 +579,19 @@
               ctx.drawImage(img, 0, 0, w, h);
             }
             const out = canvas.toDataURL("image/jpeg", quality);
-            resolve(out && out.length < src.length ? out : src);
+            if (isVaultOrBlob) {
+              resolve(out || "");
+            } else {
+              resolve(out && out.length < loadSrc.length ? out : loadSrc);
+            }
           } catch (e) {
-            resolve(src);
+            resolve(isVaultOrBlob ? "" : src);
           }
         };
         img.onerror = function () {
-          resolve(src);
+          resolve(isVaultOrBlob ? "" : src);
         };
-        img.src = src;
+        img.src = loadSrc;
       });
     },
 
@@ -1878,10 +1898,15 @@
         if (!("Notification" in window)) return;
         if (Notification.permission !== "granted") return;
 
-        const safeIcon =
-          avatarUrl && !avatarUrl.startsWith("data:")
-            ? avatarUrl
-            : "./icon-192.png";
+        const isValidHttpOrRelativeIcon =
+          typeof avatarUrl === "string" &&
+          avatarUrl.trim() !== "" &&
+          !avatarUrl.startsWith("data:") &&
+          !avatarUrl.startsWith("blob:") &&
+          !avatarUrl.startsWith("vault:");
+        const safeIcon = isValidHttpOrRelativeIcon
+          ? avatarUrl
+          : "./icon-192.png";
         const tag = (meta && meta.tag) || "peer_msg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
         const notifData = {
           chatId: (meta && meta.chatId) || "",
@@ -1898,15 +1923,27 @@
           data: notifData
         };
 
+        let shown = false;
         if ("serviceWorker" in navigator) {
           const cachedReg = this._cachedSwReg || window.__cachedSwReg;
           if (cachedReg && typeof cachedReg.showNotification === "function") {
             try {
               await cachedReg.showNotification(title, notifOpts);
-              return;
+              shown = true;
             } catch (_) {}
           }
-          if (navigator.serviceWorker.controller) {
+          if (!shown) {
+            try {
+              const reg = await navigator.serviceWorker.getRegistration();
+              if (reg && typeof reg.showNotification === "function") {
+                this._cachedSwReg = reg;
+                window.__cachedSwReg = reg;
+                await reg.showNotification(title, notifOpts);
+                shown = true;
+              }
+            } catch (_) {}
+          }
+          if (!shown && navigator.serviceWorker.controller) {
             try {
               navigator.serviceWorker.controller.postMessage({
                 type: "SHOW_PEER_NOTIFICATION",
@@ -1917,26 +1954,26 @@
                 chatId: notifData.chatId,
                 openRequests: notifData.openRequests
               });
-              return;
             } catch (_) {}
           }
-          try {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (reg && typeof reg.showNotification === "function") {
-              this._cachedSwReg = reg;
-              window.__cachedSwReg = reg;
-              await reg.showNotification(title, notifOpts);
-              return;
-            }
-          } catch (_) {}
         }
-        new Notification(title, {
-          body: body,
-          icon: safeIcon,
-          tag: tag,
-          renotify: true,
-          silent: false
-        });
+        if (!shown) {
+          const n = new Notification(title, {
+            body: body,
+            icon: safeIcon,
+            tag: tag,
+            renotify: true,
+            silent: false,
+            data: notifData
+          });
+          n.onclick = function () {
+            try { window.focus(); } catch (_) {}
+            if (notifData.chatId && typeof window.openChat === "function") {
+              try { window.openChat(notifData.chatId); } catch (_) {}
+            }
+            try { n.close(); } catch (_) {}
+          };
+        }
       } catch (e) {}
     },
 
@@ -2402,7 +2439,7 @@
         } else if (peerName && (!existing.settings.remarkName || existing.settings.remarkName === "密友")) {
           existing.settings.remarkName = peerName;
         }
-        if (peerAvatar) existing.settings.aiAvatar = peerAvatar;
+        if (peerAvatar && !String(peerAvatar).startsWith("blob:")) existing.settings.aiAvatar = peerAvatar;
         if (peerAvatarFrame !== undefined && peerAvatarFrame !== "") {
           existing.settings.aiAvatarFrame = peerAvatarFrame;
         }
@@ -4861,7 +4898,7 @@
       if (data.senderName && data.senderName !== "我") {
         peerChat.name = data.senderName;
       }
-      if (data.senderAvatar) {
+      if (data.senderAvatar && !String(data.senderAvatar).startsWith("blob:")) {
         peerChat.settings.aiAvatar = data.senderAvatar;
       }
       if (data.senderAvatarFrame !== undefined && data.senderAvatarFrame !== "") {
@@ -4998,7 +5035,7 @@
           chat.settings.remarkName = newName;
         }
       }
-      if (newAvatar) {
+      if (newAvatar && !String(newAvatar).startsWith("blob:")) {
         chat.settings.aiAvatar = newAvatar;
       }
       if (newPeerOwnFrame !== undefined) {
@@ -6247,7 +6284,13 @@
             const myAvatarEl = document.getElementById("my-avatar-preview");
             const myNickEl = document.getElementById("my-group-nickname-input");
             const myNameEl = document.getElementById("my-name-input");
-            const newAva = myAvatarEl ? myAvatarEl.src : currentChat.settings?.myAvatar;
+            let newAva = myAvatarEl ? myAvatarEl.src : currentChat.settings?.myAvatar;
+            if (myAvatarEl) {
+              const vRef = myAvatarEl.getAttribute("data-vault-ref") || (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(myAvatarEl.src));
+              if (vRef && vRef.startsWith("vault://")) {
+                newAva = vRef;
+              }
+            }
             const newName =
               (myNickEl && myNickEl.value.trim()) ||
               (myNameEl && myNameEl.value.trim()) ||
