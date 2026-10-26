@@ -1817,7 +1817,7 @@
                     <option value="nai-diffusion-4-curated-preview">
                       V4.5 Curated
                     </option>
-                    <option value="nai-diffusion-4-5-full">V4.5 Full</option>
+                    <option value="nai-diffusion-4-5-full" selected>V4.5 Full</option>
                     <option value="nai-diffusion-3">V3 Anime</option>
                   </select>
                 </div>
@@ -34146,7 +34146,28 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         // NovelAI设置相关函数（加载、保存、重置）
         // NovelAI设置相关函数
+        function resolveNovelAIModel(preferredModel) {
+          const savedModel = localStorage.getItem("novelai-model") || "";
+          const domModelEl = document.getElementById("novelai-model");
+          const domModel = domModelEl ? domModelEl.value : "";
+          return preferredModel || savedModel || domModel || "nai-diffusion-4-5-full";
+        }
+        window.resolveNovelAIModel = resolveNovelAIModel;
+
         function loadNovelAISettings() {
+          const switchEl = document.getElementById("novelai-switch");
+          const modelEl = document.getElementById("novelai-model");
+          const keyEl = document.getElementById("novelai-api-key");
+          const detailsEl = document.getElementById("novelai-details");
+          const savedEnabled = localStorage.getItem("novelai-enabled") === "true";
+          const savedModel = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const savedKey = localStorage.getItem("novelai-api-key") || "";
+          if (switchEl) switchEl.checked = savedEnabled;
+          if (modelEl) modelEl.value = savedModel;
+          if (keyEl && savedKey) keyEl.value = savedKey;
+          if (detailsEl) detailsEl.style.display = savedEnabled ? "block" : "none";
+          window._naiApiDomLoadedOnce = true;
+
           const settings = getNovelAISettings();
           const resEl = document.getElementById("nai-resolution");
           if (resEl) resEl.value = settings.resolution;
@@ -34216,9 +34237,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const switchEl = document.getElementById("novelai-switch");
           const modelEl = document.getElementById("novelai-model");
           const keyEl = document.getElementById("novelai-api-key");
-          if (switchEl) localStorage.setItem("novelai-enabled", switchEl.checked);
-          if (modelEl) localStorage.setItem("novelai-model", modelEl.value);
-          if (keyEl) localStorage.setItem("novelai-api-key", keyEl.value.trim());
+          if (switchEl && window._naiApiDomLoadedOnce) localStorage.setItem("novelai-enabled", switchEl.checked);
+          if (modelEl && window._naiApiDomLoadedOnce && modelEl.value) localStorage.setItem("novelai-model", modelEl.value);
+          if (keyEl && keyEl.value.trim()) localStorage.setItem("novelai-api-key", keyEl.value.trim());
 
           const prevSettings = getNovelAISettings();
           const artistInput = document.getElementById("nai-default-artist");
@@ -34294,6 +34315,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           return defaultSettings;
         }
+        window.getNovelAISettings = getNovelAISettings;
+        window.loadNovelAISettings = loadNovelAISettings;
+        window.saveNovelAISettings = saveNovelAISettings;
 
         /**
          * 根据角色ID获取对应的NAI提示词配置
@@ -34301,14 +34325,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
          * @returns {Object} 包含正面和负面提示词的对象
          */
         function getCharacterNAIPrompts(chatId) {
-          // 获取用户在设置中填写的画师串与默认正面提示词
+          // 获取用户在设置中填写的画师串、默认正面提示词与默认负面提示词
           const systemSettings = getNovelAISettings();
           const domArtistEl = document.getElementById("nai-default-artist");
           const domPosEl = document.getElementById("nai-default-positive");
+          const domNegEl = document.getElementById("nai-default-negative");
           const domArtist = domArtistEl ? domArtistEl.value.trim() : "";
           const domPositive = domPosEl ? domPosEl.value.trim() : "";
+          const domNegative = domNegEl ? domNegEl.value.trim() : "";
           const artist = (domArtist || systemSettings.artist_prompt || "").trim();
           const defaultPos = (domPositive || systemSettings.default_positive || "").trim();
+          const defaultNeg = (domNegative || systemSettings.default_negative || "").trim();
 
           // 如果角色指定了角色独立提示词
           if (chatId && state.chats[chatId]) {
@@ -34317,10 +34344,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             if (naiSettings.promptSource === "character") {
               const charPos = (naiSettings.characterPositivePrompt || "").trim();
+              const charNeg = (naiSettings.characterNegativePrompt || "").trim();
+              const combinedPos = [defaultPos, charPos]
+                .filter(Boolean)
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .join(", ");
               return {
                 artist: artist,
-                positive: charPos,
-                negative: naiSettings.characterNegativePrompt || systemSettings.default_negative || "",
+                positive: combinedPos,
+                negative: charNeg || defaultNeg,
                 source: "character",
               };
             }
@@ -34330,10 +34362,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return {
             artist: artist,
             positive: defaultPos,
-            negative: systemSettings.default_negative || "",
+            negative: defaultNeg,
             source: "system",
           };
         }
+        window.getCharacterNAIPrompts = getCharacterNAIPrompts;
 
         /**
          * 为指定角色生成NovelAI图像（将来聊天调用时使用）
@@ -34725,9 +34758,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const localKey = localStorage.getItem("novelai-api-key") || "";
           const apiKey = domKey || localKey;
 
-          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-          const localModel = localStorage.getItem("novelai-model") || "";
-          const model = options.model || domModel || localModel || "nai-diffusion-4-5-full";
+          const model = resolveNovelAIModel(options.model);
 
           if (!apiKey) {
             throw new Error("请先在设置中配置 NovelAI API Key");
@@ -46853,7 +46884,7 @@ ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${
 - 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
 - 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_sender": "被引用者名字", "target_content": "被引用消息原文", "reply_content": "回复文本内容"}${isPeerGrpPrompt ? "。针对某个玩家做出的检定结果进行判定或回应时，AI必须使用引用回复引注该玩家的检定消息" : ""}
 ${isPeerGrpPrompt ? `- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}\n` : ""}${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
-${groupModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "详细的英文描述词..."}\n` : ""}`);
+${groupModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "纯英文Danbooru标签描述词，使用英文逗号分隔，严禁出现中文，包含1girl或1boy、18-22 years old、mature_female或mature_male、tall、long_legs、detailed_face、角色外貌特征、服装、动作、表情、光影与场景..."}${(() => { const cp = (chat.settings && chat.settings.keeperCharPrompts) || {}; const lines = Object.entries(cp).filter(([_, v]) => v && String(v).trim()).map(([k, v]) => `${k}: ${String(v).trim()}`); return lines.length > 0 ? `\n  生图角色固定外貌标签(若画面出现对应人物必须原样附带进prompt): ${lines.join(" | ")}` : ""; })()}\n` : ""}`);
 
               const groupWhisperRuleBlock = isPeerGrpPrompt
                 ? window.formatPromptSection("无痕私密对话规范", `当当前信息为某个人的侦查结果、聆听结果、某个HO位的秘密、只有特定PC能看见的画面时，则必须使用私密内容（在消息对象中加上 "visibleTo": ["目标玩家群昵称"]）。且私密内容的范围仅仅包含可以被称作隐私的、短小的信息，即在模组中有标注的或者是检定的结果。而像其他不属于隐私的内容，比如场景描写、共通的场景描写、对话细节动作等，如果要进行描写的话，需要再分一个公共的气泡，否则另一个人将完全不知道这个场景发生了什么，就会缺少开头和结果，所以绝对不能误判。`)
@@ -47551,7 +47582,7 @@ ${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
 - 发送文本: {"type": "text", "content": "你好呀！"}
 - 发送语音: {"type": "voice_message", "content": "语音的文字内容..."}
 - 发送表情: {"type": "sticker", "sticker_name": "表情的名字"}，表情名必须在表情列表中，禁止杜撰
-${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}${singleModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "详细的英文描述词..."}` : ""}`);
+${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}${singleModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "纯英文Danbooru标签描述词，使用英文逗号分隔，严禁出现中文，包含1girl或1boy、18-22 years old、mature_female或mature_male、tall、long_legs、detailed_face、角色外貌特征、服装、动作、表情、光影与场景..."}${(() => { const cp = (chat.settings && chat.settings.keeperCharPrompts) || {}; const lines = Object.entries(cp).filter(([_, v]) => v && String(v).trim()).map(([k, v]) => `${k === "me" ? (chat.settings.myName || "我") : (chat.name || k)}: ${String(v).trim()}`); return lines.length > 0 ? `\n  生图角色固定外貌标签(若画面出现对应人物必须原样附带进prompt): ${lines.join(" | ")}` : ""; })()}` : ""}`);
 
               const singleMyPersonaBlock = window.formatPromptSection("我的人设", `
 对话者档案与COC面板:
@@ -50823,11 +50854,7 @@ ${stickerContext || "无"}
 
                         // 获取NAI设置（从localStorage读取）
                         const apiKey = localStorage.getItem("novelai-api-key");
-                        const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-                        const model =
-                          domModel ||
-                          localStorage.getItem("novelai-model") ||
-                          "nai-diffusion-4-5-full";
+                        const model = resolveNovelAIModel();
                         const settings = getNovelAISettings();
 
                         if (!apiKey) {
@@ -51238,8 +51265,7 @@ ${stickerContext || "无"}
                   }
                   const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
                   const finalNegativePrompt = naiPrompts.negative || "";
-                  const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-                  const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+                  const model = resolveNovelAIModel(msgData.model);
                   const settings = getNovelAISettings();
                   const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
 
@@ -55908,10 +55934,7 @@ ${stickerContext || "无"}
 
           // 获取模型与设置 (完全复用第一次生成时的参数)
           const savedModel = message.model;
-          const model =
-            savedModel ||
-            localStorage.getItem("novelai-model") ||
-            "nai-diffusion-4-5-full";
+          const model = resolveNovelAIModel(savedModel);
 
           const baseSettings = getNovelAISettings();
           const messageSettings = message.naiSettings || {};
@@ -71108,11 +71131,26 @@ ${stickerContext || "无"}
               throw new Error("NovelAI API Key未配置。请在NovelAI设置中填写API Key。");
             }
             const naiPrompts = getCharacterNAIPrompts(chat.id);
-            const aiPrompt = targetNaiMsg.prompt || targetNaiMsg.content || "a beautiful scene";
-            const finalPositivePrompt = targetNaiMsg.fullPrompt || [naiPrompts.artist, naiPrompts.positive, aiPrompt].filter(Boolean).join(", ");
-            const finalNegativePrompt = targetNaiMsg.negativePrompt !== undefined ? targetNaiMsg.negativePrompt : (naiPrompts.negative || "");
-            const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-            const model = targetNaiMsg.model || domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+            const aiPrompt = (targetNaiMsg.prompt || targetNaiMsg.content || "a beautiful scene").trim();
+            const basePrompt = (targetNaiMsg.fullPrompt || aiPrompt || "").trim();
+            const promptParts = [];
+            if (naiPrompts.artist && !basePrompt.includes(naiPrompts.artist)) {
+              promptParts.push(naiPrompts.artist);
+            }
+            if (naiPrompts.positive && !basePrompt.includes(naiPrompts.positive)) {
+              promptParts.push(naiPrompts.positive);
+            }
+            if (basePrompt) {
+              promptParts.push(basePrompt);
+            }
+            const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
+            const finalNegativePrompt = (targetNaiMsg.negativePrompt && String(targetNaiMsg.negativePrompt).trim())
+              ? targetNaiMsg.negativePrompt
+              : (naiPrompts.negative || "");
+            targetNaiMsg.fullPrompt = finalPositivePrompt;
+            targetNaiMsg.negativePrompt = finalNegativePrompt;
+            const model = resolveNovelAIModel(targetNaiMsg.model);
+            targetNaiMsg.model = model;
             const settings = Object.assign({}, getNovelAISettings(), targetNaiMsg.naiSettings || {});
             const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
 
@@ -71271,8 +71309,7 @@ ${stickerContext || "无"}
 
           const baseSettings = getNovelAISettings();
           const settings = { ...baseSettings, ...(message.naiSettings || {}) };
-          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-          const model = domModel || localStorage.getItem("novelai-model") || message.model || "nai-diffusion-4-5-full";
+          const model = resolveNovelAIModel(message.model);
           const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
           const apiKey = domKey || localStorage.getItem("novelai-api-key");
           if (!apiKey) {
@@ -71295,7 +71332,7 @@ ${stickerContext || "无"}
           const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
 
           let finalNegativePrompt = message.negativePrompt;
-          if (typeof finalNegativePrompt === "undefined") {
+          if (typeof finalNegativePrompt === "undefined" || !String(finalNegativePrompt).trim()) {
             finalNegativePrompt = naiPrompts.negative || "";
           }
 
@@ -71631,8 +71668,7 @@ ${stickerContext || "无"}
             return;
           }
 
-          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-          const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const model = resolveNovelAIModel();
           const settings = getNovelAISettings();
           const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
           const artist = (domArtist || settings.artist_prompt || "").trim();
@@ -72447,8 +72483,7 @@ ${stickerContext || "无"}
             }
           }
 
-          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-          const model = domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+          const model = resolveNovelAIModel();
           const settings = getNovelAISettings();
           const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
 
@@ -72503,13 +72538,29 @@ ${stickerContext || "无"}
 
         async function generateAndAppendKeeperNaiImage(chat, aiPrompt, existingMsg = null) {
           const targetMsg = existingMsg || await createImmediateKeeperNaiBubble(chat, aiPrompt, 0);
-          const finalPositivePrompt = targetMsg.fullPrompt || aiPrompt;
-          const finalNegativePrompt = targetMsg.negativePrompt || "";
+          const naiPrompts = getCharacterNAIPrompts(chat.id);
+          const basePrompt = (targetMsg.fullPrompt || aiPrompt || "").trim();
+          const promptParts = [];
+          if (naiPrompts.artist && !basePrompt.includes(naiPrompts.artist)) {
+            promptParts.push(naiPrompts.artist);
+          }
+          if (naiPrompts.positive && !basePrompt.includes(naiPrompts.positive)) {
+            promptParts.push(naiPrompts.positive);
+          }
+          if (basePrompt) {
+            promptParts.push(basePrompt);
+          }
+          const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
+          const finalNegativePrompt = (targetMsg.negativePrompt && String(targetMsg.negativePrompt).trim())
+            ? targetMsg.negativePrompt
+            : (naiPrompts.negative || "");
+          targetMsg.fullPrompt = finalPositivePrompt;
+          targetMsg.negativePrompt = finalNegativePrompt;
 
           const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
           const apiKey = domKey || localStorage.getItem("novelai-api-key");
-          const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
-          const model = domModel || localStorage.getItem("novelai-model") || targetMsg.model || "nai-diffusion-4-5-full";
+          const model = resolveNovelAIModel(targetMsg.model);
+          targetMsg.model = model;
           const settings = getNovelAISettings();
 
           if (!apiKey) {
