@@ -21085,12 +21085,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
         })();
 
-        // 后台保活音频自动激活：生成 1 秒真实极微幅 PCM WAV 音频并配合 Web Locks 与 Worker 心跳，防止切后台时浏览器挂起网络与 JS 线程
+        // 后台保活音频自动激活：生成 8 秒真实低频微幅 PCM WAV 音频并配合 Web Locks 与 Worker 心跳，防止切后台时浏览器挂起网络与 JS 线程
         let _keepAliveAudioCtx = null;
-        const _SILENT_WAV_URI = (function createOneSecondKeepAliveWav() {
+        const _SILENT_WAV_URI = (function createKeepAliveWav() {
           try {
             const sampleRate = 8000;
-            const numSamples = sampleRate;
+            const durationSeconds = 8;
+            const numSamples = sampleRate * durationSeconds;
             const dataSize = numSamples * 2;
             const buffer = new ArrayBuffer(44 + dataSize);
             const view = new DataView(buffer);
@@ -21111,7 +21112,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             writeStr(36, "data");
             view.setUint32(40, dataSize, true);
             for (let i = 0; i < numSamples; i++) {
-              view.setInt16(44 + i * 2, (i & 1) ? 1 : -1, true);
+              const sampleVal = Math.round(Math.sin((2 * Math.PI * 30 * i) / sampleRate) * 48);
+              view.setInt16(44 + i * 2, sampleVal || 1, true);
             }
             const bytes = new Uint8Array(buffer);
             let binary = "";
@@ -21127,17 +21129,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         let _lastKeepAliveCheckTs = 0;
         let _keepAliveSrcConfigured = false;
-        function ensureBackgroundKeepAlive(evt) {
+        function ensureBackgroundKeepAlive(evt, force) {
           const now = Date.now();
-          if (evt && evt.type === "keydown" && now - _lastKeepAliveCheckTs < 4000) {
+          if (!force && evt && evt.type === "keydown" && now - _lastKeepAliveCheckTs < 4000) {
             return;
           }
-          if (now - _lastKeepAliveCheckTs < 1500 && _keepAliveSrcConfigured) {
+          const audio = document.getElementById("strong-keep-alive-player") || document.getElementById("keep-alive-audio");
+          const isAudioPaused = !audio || audio.paused || audio.ended;
+          if (!force && !isAudioPaused && now - _lastKeepAliveCheckTs < 1500 && _keepAliveSrcConfigured) {
             return;
           }
           _lastKeepAliveCheckTs = now;
           try {
-            const audio = document.getElementById("strong-keep-alive-player") || document.getElementById("keep-alive-audio");
             if (audio) {
               if (!_keepAliveSrcConfigured || audio.error) {
                 const curSrc = audio.getAttribute("src") || "";
@@ -21145,18 +21148,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   audio.src = _SILENT_WAV_URI;
                 }
                 audio.loop = true;
-                audio.volume = 0.01;
+                audio.volume = 0.02;
                 audio.muted = false;
+                audio.setAttribute("playsinline", "");
+                audio.setAttribute("webkit-playsinline", "");
                 _keepAliveSrcConfigured = true;
               }
-              if (audio.paused) {
+              if (audio.paused || audio.ended) {
                 const playPromise = audio.play();
                 if (playPromise && typeof playPromise.catch === "function") {
                   playPromise.catch(() => {
                     try {
                       if (audio.src !== _SILENT_WAV_URI) {
                         audio.src = _SILENT_WAV_URI;
-                        audio.volume = 0.01;
+                        audio.volume = 0.02;
                         audio.play().catch(() => {});
                       }
                     } catch (_) {}
@@ -21170,7 +21175,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 _keepAliveAudioCtx = new AudioCtx();
                 const osc = _keepAliveAudioCtx.createOscillator();
                 const gain = _keepAliveAudioCtx.createGain();
-                gain.gain.value = 0.0001;
+                osc.frequency.value = 30;
+                gain.gain.value = 0.0005;
                 osc.connect(gain);
                 gain.connect(_keepAliveAudioCtx.destination);
                 osc.start();
@@ -21186,7 +21192,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         let _bgTaskKeepAliveCount = 0;
         window.acquireBackgroundTaskKeepAlive = function() {
           _bgTaskKeepAliveCount++;
-          ensureBackgroundKeepAlive();
+          ensureBackgroundKeepAlive(null, true);
           if (typeof window.startBackgroundWorkerHeartbeat === "function") {
             window.startBackgroundWorkerHeartbeat();
           }
@@ -21226,12 +21232,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           } catch (_) {}
         }
-        document.addEventListener("pointerdown", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
-        document.addEventListener("touchstart", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
-        document.addEventListener("click", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        document.addEventListener("pointerdown", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        document.addEventListener("touchstart", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        document.addEventListener("click", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
         document.addEventListener("keydown", ensureBackgroundKeepAlive, { passive: true });
         document.addEventListener("visibilitychange", () => {
-          ensureBackgroundKeepAlive();
+          ensureBackgroundKeepAlive(null, true);
           if (!document.hidden) {
             if (typeof window.recoverPendingNaiImagesInActiveChat === "function") {
               setTimeout(() => window.recoverPendingNaiImagesInActiveChat(), 120);
@@ -21406,6 +21412,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
 
             let { res, directErr } = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body);
+
+            if (
+              (!res || !res.ok) &&
+              parsedBody &&
+              typeof parsedBody === "object" &&
+              parsedBody.stream === true &&
+              !controller.signal.aborted
+            ) {
+              const nonStreamBody = { ...parsedBody, stream: false };
+              delete headers["Accept"];
+              delete headers["accept"];
+              headers["Accept"] = "application/json";
+              const retryNonStream = await executeUpstreamFetch(nonStreamBody);
+              if (retryNonStream.res && (retryNonStream.res.ok || !res)) {
+                res = retryNonStream.res;
+                directErr = retryNonStream.directErr;
+              }
+            }
 
             if (
               res &&
@@ -22033,15 +22057,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         };
 
         function isApiStreamEnabled() {
+          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
+          if (typeof cfg.streamEnabled === "boolean") {
+            const sw = document.getElementById("api-stream-switch");
+            if (sw && sw.checked !== cfg.streamEnabled) {
+              sw.checked = cfg.streamEnabled;
+            }
+            return cfg.streamEnabled;
+          }
+          const stored = localStorage.getItem("api_stream_enabled");
+          if (stored === "true" || stored === "false") {
+            return stored === "true";
+          }
           const sw = document.getElementById("api-stream-switch");
           if (sw && typeof sw.checked === "boolean") {
             return sw.checked;
           }
-          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
-          if (typeof cfg.streamEnabled === "boolean") {
-            return cfg.streamEnabled;
-          }
-          return localStorage.getItem("api_stream_enabled") === "true";
+          return false;
         }
         window.isApiStreamEnabled = isApiStreamEnabled;
 
@@ -22111,7 +22143,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "默认模型"
             ).trim();
 
-            const isStreamActive = isApiStreamEnabled();
+            const isStreamActive = isApiStreamEnabled() || Boolean(parsedBody && parsedBody.stream === true) || Boolean(document.hidden || document.visibilityState === "hidden" || _bgTaskKeepAliveCount > 0);
 
             if (!isClaudeOrLlmapi && protocol === "default") {
               const fetchStartT = Date.now();
@@ -33481,54 +33513,81 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 !avatarUrl.startsWith("blob:") &&
                 !avatarUrl.startsWith("vault:");
               const safeIcon = isValidIcon ? avatarUrl : "./icon-192.png";
+              const safeBody = String(messageContent || "收到一条新消息");
+              const targetChatIdStr = String(chat.id);
 
-              if (
-                window.PeerManager &&
-                typeof window.PeerManager.triggerMobileSystemNotification ===
-                  "function"
-              ) {
-                window.PeerManager.triggerMobileSystemNotification(
-                  notifName,
-                  messageContent,
-                  safeIcon,
-                  {
-                    chatId: String(chat.id),
-                    tag: uniqueTag,
-                  },
-                );
-              } else if ("Notification" in window && Notification.permission === "granted") {
-                const options = {
-                  body: messageContent,
-                  icon: safeIcon,
-                  tag: uniqueTag,
-                  renotify: true,
-                  silent: false,
-                  vibrate: [200, 100, 200],
-                  badge: "./icon-192.png",
-                  data: { chatId: String(chat.id) },
-                };
-
-                try {
-                  let shown = false;
-                  if ("serviceWorker" in navigator) {
-                    const reg = await navigator.serviceWorker.getRegistration();
-                    if (reg && typeof reg.showNotification === "function") {
-                      await reg.showNotification(notifName, options);
-                      shown = true;
-                    }
+              const dispatchBgSystemNotif = async () => {
+                let delivered = false;
+                if (
+                  window.PeerManager &&
+                  typeof window.PeerManager.triggerMobileSystemNotification ===
+                    "function"
+                ) {
+                  try {
+                    delivered = await window.PeerManager.triggerMobileSystemNotification(
+                      notifName,
+                      safeBody,
+                      safeIcon,
+                      {
+                        chatId: targetChatIdStr,
+                        tag: uniqueTag,
+                      },
+                    );
+                  } catch (_) {
+                    delivered = false;
                   }
-                  if (!shown) {
-                    const n = new Notification(notifName, options);
-                    n.onclick = () => {
-                      try { window.focus(); } catch (_) {}
-                      if (typeof openChat === "function") openChat(chatId);
-                      try { n.close(); } catch (_) {}
-                    };
-                  }
-                } catch (e) {
-                  console.error("系统通知发送失败:", e.message);
                 }
-              }
+                if (!delivered && "Notification" in window && Notification.permission === "granted") {
+                  const options = {
+                    body: safeBody,
+                    icon: safeIcon,
+                    tag: uniqueTag,
+                    renotify: true,
+                    silent: false,
+                    badge: "./icon-192.png",
+                    data: { chatId: targetChatIdStr },
+                  };
+                  try {
+                    let shown = false;
+                    if ("serviceWorker" in navigator) {
+                      const reg = await navigator.serviceWorker.getRegistration();
+                      if (reg && typeof reg.showNotification === "function") {
+                        try {
+                          await reg.showNotification(notifName, options);
+                          shown = true;
+                        } catch (_) {
+                          await reg.showNotification(notifName, {
+                            body: safeBody,
+                            icon: safeIcon,
+                            tag: uniqueTag,
+                            data: { chatId: targetChatIdStr },
+                          });
+                          shown = true;
+                        }
+                      }
+                    }
+                    if (!shown) {
+                      const n = new Notification(notifName, {
+                        body: safeBody,
+                        icon: safeIcon,
+                        tag: uniqueTag,
+                      });
+                      n.onclick = () => {
+                        try { window.focus(); } catch (_) {}
+                        if (typeof openChat === "function") openChat(chatId);
+                        try { n.close(); } catch (_) {}
+                      };
+                    }
+                  } catch (e) {
+                    console.error("系统通知发送失败:", e.message);
+                  }
+                }
+              };
+
+              window._bgNotifQueuePromise = (window._bgNotifQueuePromise || Promise.resolve())
+                .then(() => dispatchBgSystemNotif())
+                .then(() => new Promise((r) => setTimeout(r, 180)))
+                .catch(() => {});
             }
             return;
           }
@@ -33843,7 +33902,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (tSenderMatch) extracted.target_sender = tSenderMatch[1].trim();
             const targetMatch = s.match(/"(?:target_content|targetContent|quoted_content)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (targetMatch) extracted.target_content = targetMatch[1].trim();
-            const promptMatch = s.match(/"(?:prompt|imagePrompt|naiPrompt)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
+            const promptMatch = s.match(/"(?:prompt|imagePrompt|image_prompt|naiPrompt|description|tags)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (promptMatch) extracted.prompt = promptMatch[1].trim();
 
             // 如果包含 system_status 的 fields 对象，尝试单独提取 fields
@@ -45216,6 +45275,9 @@ ${recentHistoryText}
         }
 
         async function triggerAiResponse(targetChatId) {
+          if (typeof ensureBackgroundKeepAlive === "function") {
+            ensureBackgroundKeepAlive(null, true);
+          }
           let finishTurnRender = null;
           const chatId = (typeof targetChatId === "string" || typeof targetChatId === "number") ? targetChatId : state.activeChatId;
           if (!chatId && chatId !== 0) return;
@@ -45788,255 +45850,33 @@ ${recentHistoryText}
                   console.log(
                     "【线下模式】检测到生图指令，执行 NovelAI 请求...",
                   );
-
-                  // 这里直接复用switch case里的生图逻辑代码
-                  // 因为代码太长，我们把它封装成一个即时执行的逻辑
-                  (async () => {
-                    try {
-                      if (chatHeaderTitle)
-                        chatHeaderTitle.textContent = "正在绘制插图...";
-
-                      const naiPrompts = getCharacterNAIPrompts(chat.id);
-                      const aiPrompt = msgData.prompt || msgData.content || msgData.image_prompt || msgData.imagePrompt || msgData.description || "a beautiful scene";
-                      const finalPositivePrompt = [
-                        naiPrompts.artist && !aiPrompt.includes(naiPrompts.artist) ? naiPrompts.artist : "",
-                        naiPrompts.positive && !aiPrompt.includes(naiPrompts.positive) ? naiPrompts.positive : "",
-                        aiPrompt,
-                      ].filter(Boolean).join(", ");
-                      const finalNegativePrompt = naiPrompts.negative;
-
-                      const apiKey = localStorage.getItem("novelai-api-key");
-                      const model =
-                        localStorage.getItem("novelai-model") ||
-                        "nai-diffusion-4-5-full";
-                      const settings = getNovelAISettings();
-
-                      if (!apiKey) throw new Error("未配置NovelAI API Key");
-
-                      const [width, height] = settings.resolution
-                        .split("x")
-                        .map(Number);
-                      let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-                        ? "https://image.novelai.net/ai/generate-image-stream"
-                        : "https://image.novelai.net/ai/generate-image";
-
-                      // V4/V3 参数构建逻辑 (简化复用)
-                      const commonParams = {
-                        width,
-                        height,
-                        scale: settings.cfg_scale,
-                        sampler: settings.sampler,
-                        steps: settings.steps,
-                        seed: Math.floor(Math.random() * 4294967295),
-                        n_samples: 1,
-                        ucPreset: settings.uc_preset,
-                        qualityToggle: settings.quality_toggle,
-                      };
-
-                      if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
-                        requestBody = {
-                          input: finalPositivePrompt,
-                          model,
-                          action: "generate",
-                          parameters: {
-                            ...commonParams,
-                            params_version: model.includes("nai-diffusion-5") ? 4 : 3,
-                            negative_prompt: finalNegativePrompt,
-                            noise_schedule: "karras",
-                            deliberate_euler_ancestral_bug: false,
-                            prefer_brownian: true,
-                            add_original_image: true,
-                            cfg_rescale: 0,
-                            dynamic_thresholding: false,
-                            legacy: false,
-                            legacy_uc: false,
-                            inpaintImg2ImgStrength: 1,
-                            normalize_reference_strength_multiple: true,
-                            characterPrompts: [],
-                            v4_prompt: {
-                              caption: {
-                                base_caption: finalPositivePrompt,
-                                char_captions: [],
-                              },
-                              use_coords: false,
-                              use_order: true,
-                            },
-                            v4_negative_prompt: {
-                              caption: {
-                                base_caption: finalNegativePrompt,
-                                char_captions: [],
-                              },
-                              legacy_uc: false,
-                            },
-                          },
-                        };
-                      } else {
-                        requestBody = {
-                          input: finalPositivePrompt,
-                          model,
-                          action: "generate",
-                          parameters: {
-                            ...commonParams,
-                            negative_prompt: finalNegativePrompt,
-                            sm: settings.smea,
-                            sm_dyn: settings.smea_dyn,
-                            noise_schedule: "native",
-                            add_original_image: false,
-                          },
-                        };
-                      }
-
-                      // 代理处理
-                      let corsProxy =
-                        settings.cors_proxy === "custom"
-                          ? settings.custom_proxy_url
-                          : settings.cors_proxy;
-                      if (corsProxy)
-                        apiUrl = corsProxy + encodeURIComponent(apiUrl);
-
-                      // Headers (Chrome兼容)
-                      const isChrome =
-                        /Chrome/.test(navigator.userAgent) &&
-                        !/Edg/.test(navigator.userAgent);
-                      let headers = {
-                        "Content-Type": "application/json",
-                        Authorization: "Bearer " + apiKey,
-                      };
-                      if (isChrome) {
-                        const cleanHeaders = {};
-                        for (const [k, v] of Object.entries(headers))
-                          cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
-                        headers = cleanHeaders;
-                      }
-
-                      const res = await fetch(apiUrl, {
-                        method: "POST",
-                        headers,
-                        body: JSON.stringify(requestBody),
-                      });
-                      if (!res.ok)
-                        throw new Error(`NAI API Error: ${res.status}`);
-
-                      // 解析响应 (SSE/Blob)
-                      const contentType = res.headers.get("content-type");
-                      let imageDataUrl = null,
-                        zipBlob = null;
-
-                      if (
-                        contentType &&
-                        contentType.includes("text/event-stream")
-                      ) {
-                        const text = await res.text();
-                        const lines = text.trim().split("\n");
-                        let base64Data = null;
-                        for (let i = lines.length - 1; i >= 0; i--) {
-                          const line = lines[i].trim();
-                          if (
-                            line.startsWith("data: ") &&
-                            line !== "data: [DONE]"
-                          ) {
-                            const dataContent = line.substring(6);
-                            try {
-                              const jsonData = JSON.parse(dataContent);
-                              if (
-                                jsonData.event_type === "final" &&
-                                (jsonData.image || jsonData.data)
-                              ) {
-                                base64Data = jsonData.image || jsonData.data;
-                                break;
-                              }
-                            } catch (e) {}
-                          }
-                        }
-                        if (!base64Data) {
-                          throw new Error("图片生成未完全完成，未获取到最终成品图像，请重新生成");
-                        }
-                        if (base64Data) {
-                          const isPNG = base64Data.startsWith("iVBORw0KGgo");
-                          const binaryString = atob(base64Data);
-                          const bytes = new Uint8Array(binaryString.length);
-                          for (let i = 0; i < binaryString.length; i++)
-                            bytes[i] = binaryString.charCodeAt(i);
-                          if (isPNG || base64Data.startsWith("/9j/")) {
-                            const imageBlob = new Blob([bytes], {
-                              type: isPNG ? "image/png" : "image/jpeg",
-                            });
-                            const reader = new FileReader();
-                            imageDataUrl = await new Promise((r) => {
-                              reader.onloadend = () => r(reader.result);
-                              reader.readAsDataURL(imageBlob);
-                            });
-                          } else {
-                            zipBlob = new Blob([bytes]);
-                          }
-                        }
-                      } else {
-                        zipBlob = await res.blob();
-                      }
-
-                      if (!imageDataUrl && zipBlob) {
-                        if (typeof JSZip === "undefined")
-                          throw new Error("未找到JSZip库");
-                        const zip = await JSZip.loadAsync(zipBlob);
-                        const file = Object.values(zip.files)[0];
-                        if (file) {
-                          const imgBlob = await file.async("blob");
-                          const reader = new FileReader();
-                          imageDataUrl = await new Promise((r) => {
-                            reader.onloadend = () => r(reader.result);
-                            reader.readAsDataURL(imgBlob);
-                          });
-                        }
-                      }
-
-                      if (imageDataUrl) {
-                        const imgMsg = {
-                          role: "assistant",
-                          senderName: chat.name,
-                          timestamp: Date.now(),
-                          type: "naiimag",
-                          imageUrl: imageDataUrl,
-                          prompt: aiPrompt,
-                          fullPrompt: finalPositivePrompt,
-                          negativePrompt: finalNegativePrompt,
-                          model: model,
-                          naiSettings: {
-                            resolution: settings.resolution,
-                            width,
-                            height,
-                            steps: settings.steps,
-                            cfg_scale: settings.cfg_scale,
-                            sampler: settings.sampler,
-                            uc_preset: settings.uc_preset,
-                            quality_toggle: settings.quality_toggle,
-                            smea: settings.smea,
-                            smea_dyn: settings.smea_dyn,
-                          },
-                        };
-                        chat.history.push(imgMsg);
-                        await db.chats.put(chat);
-                        if (isViewingThisChat) {
-                          appendMessage(imgMsg, chat);
-                        }
-                      }
-                    } catch (err) {
+                  const aiPrompt =
+                    msgData.prompt ||
+                    msgData.content ||
+                    msgData.image_prompt ||
+                    msgData.imagePrompt ||
+                    msgData.description ||
+                    msgData.tags ||
+                    "a beautiful scene";
+                  const imgMsg = {
+                    role: "assistant",
+                    senderName: chat.name,
+                    timestamp: messageTimestamp++,
+                    type: "naiimag",
+                    imageUrl: "",
+                    isGeneratingNai: true,
+                    prompt: aiPrompt,
+                  };
+                  chat.history.push(imgMsg);
+                  await db.chats.put(chat);
+                  if (isViewingThisChat) {
+                    appendMessage(imgMsg, chat);
+                  }
+                  if (typeof window.executeChatNaiImageGeneration === "function") {
+                    window.executeChatNaiImageGeneration(chat, imgMsg).catch((err) => {
                       console.error("线下模式生图失败:", err);
-                      const errBubble = {
-                        role: "system",
-                        content: `[生图失败: ${err.message}]`,
-                        timestamp: Date.now(),
-                      };
-                      chat.history.push(errBubble);
-                      if (isViewingThisChat) appendMessage(errBubble, chat);
-                    } finally {
-                      if (chatHeaderTitle) {
-                        chatHeaderTitle.textContent = typeof window.getEffectiveChatDisplayTitle === "function"
-                          ? window.getEffectiveChatDisplayTitle(chat)
-                          : chat.name;
-                        chatHeaderTitle.classList.remove("typing-status");
-                      }
-                    }
-                  })();
+                    });
+                  }
                   continue; // 处理完生图，跳过普通文本逻辑
                 }
 
@@ -48382,12 +48222,12 @@ ${stickerContext || "无"}
 
             // 1. 发起请求时强制开启流式保活，防止长连接超时被掐断
             if (typeof ensureBackgroundKeepAlive === "function") {
-              ensureBackgroundKeepAlive();
+              ensureBackgroundKeepAlive(null, true);
             }
             let releaseChatBgKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
               ? window.acquireBackgroundTaskKeepAlive()
               : null;
-            const useStreamInChat = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
+            const useStreamInChat = true;
             const response = isGemini
               ? await fetch(geminiConfig.url, geminiConfig.data)
               : await fetch(`${proxyUrl}/v1/chat/completions`, {
@@ -48630,7 +48470,7 @@ ${stickerContext || "无"}
             // 提取并聚合所有思维链内容，消除独立思考气泡
             let collectedThinking = extractedThinking || "";
 
-            // 扁平化解压：如果返回的数组中混入了嵌套有 chatResponse 或 messages 的父对象，将所有子气泡完整解压出来
+            // 扁平化解压：如果返回的数组中混入了嵌套有 chatResponse 或 messages 的父对象，或者在文本气泡中夹杂了内嵌的 naiimag JSON，将所有子气泡完整解压出来
             const unnestedItems = [];
             for (let i = 0; i < messagesArray.length; i++) {
               const it = messagesArray[i];
@@ -48650,6 +48490,41 @@ ${stickerContext || "无"}
                   if (sub) unnestedItems.push(sub);
                 }
               } else {
+                const rawTextField = typeof it.content === "string" ? it.content : (typeof it.message === "string" ? it.message : "");
+                if (
+                  (!it.type || it.type === "text") &&
+                  rawTextField &&
+                  /\{\s*"type"\s*:\s*"naiimag"/i.test(rawTextField)
+                ) {
+                  const embeddedRegex = /\{\s*"type"\s*:\s*"naiimag"[\s\S]*?\}/gi;
+                  const embeddedMatches = rawTextField.match(embeddedRegex);
+                  if (embeddedMatches && embeddedMatches.length > 0) {
+                    const cleanedText = rawTextField.replace(embeddedRegex, "").trim();
+                    if (cleanedText) {
+                      const clonedTextItem = { ...it };
+                      if (typeof clonedTextItem.content === "string") clonedTextItem.content = cleanedText;
+                      if (typeof clonedTextItem.message === "string") clonedTextItem.message = cleanedText;
+                      unnestedItems.push(clonedTextItem);
+                    }
+                    for (const rawJsonBlock of embeddedMatches) {
+                      let parsedEmbedded = null;
+                      try {
+                        parsedEmbedded = JSON.parse(rawJsonBlock);
+                      } catch (_) {
+                        const pMatch = rawJsonBlock.match(/"(?:prompt|imagePrompt|image_prompt|naiPrompt|description|tags|content)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*\})/i);
+                        if (pMatch) {
+                          parsedEmbedded = { type: "naiimag", prompt: pMatch[1].trim() };
+                        }
+                      }
+                      if (parsedEmbedded && parsedEmbedded.type === "naiimag") {
+                        if (!parsedEmbedded.name && it.name) parsedEmbedded.name = it.name;
+                        if (!parsedEmbedded.senderName && it.senderName) parsedEmbedded.senderName = it.senderName;
+                        unnestedItems.push(parsedEmbedded);
+                      }
+                    }
+                    continue;
+                  }
+                }
                 unnestedItems.push(it);
               }
             }
@@ -52720,7 +52595,10 @@ ${stickerContext || "无"}
                   document.hidden || document.visibilityState === "hidden"
                 );
 
-                if ((!isCurrentlyViewingThisChat || isAppInBackground) && isVisibleToMeLocal && aiMessage.type !== "system_status") {
+                const isAsyncGeneratingNaiPlaceholder =
+                  aiMessage.type === "naiimag" && !aiMessage.imageUrl;
+
+                if ((!isCurrentlyViewingThisChat || isAppInBackground) && isVisibleToMeLocal && aiMessage.type !== "system_status" && !isAsyncGeneratingNaiPlaceholder) {
                   let notificationText;
                   switch (aiMessage.type) {
                     case "transfer":
@@ -71098,9 +70976,13 @@ ${stickerContext || "无"}
           if (rawDataUrl.startsWith("data:image/gif")) {
             return rawDataUrl;
           }
-          if (typeof compressImage === "function" && rawDataUrl.length > 250000) {
+          const isBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
+          if (!isBgNow && typeof compressImage === "function" && rawDataUrl.length > 250000) {
             try {
-              const compressed = await compressImage(rawDataUrl, 0.88, 1440);
+              const compressed = await Promise.race([
+                compressImage(rawDataUrl, 0.88, 1440),
+                new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+              ]);
               if (compressed && compressed.startsWith("data:image") && compressed.length < rawDataUrl.length) {
                 return compressed;
               }

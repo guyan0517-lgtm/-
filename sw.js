@@ -144,22 +144,33 @@ self.addEventListener("notificationclick", event => {
 
 self.addEventListener("message", event => {
   const data = event.data;
-  if (!data || data.type !== "SHOW_PEER_NOTIFICATION") return;
+  if (!data || (data.type !== "SHOW_PEER_NOTIFICATION" && data.type !== "SHOW_AI_NOTIFICATION")) return;
   const title = data.title || "新消息";
+  const tag = data.tag || ("peer_notif_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6));
+  const notifData = {
+    chatId: data.chatId || "",
+    openRequests: !!data.openRequests
+  };
   const options = {
     body: data.body || "",
     icon: data.icon || "./icon-192.png",
     badge: "./icon-192.png",
-    tag: data.tag || ("peer_notif_" + Date.now()),
+    tag: tag,
     renotify: true,
     silent: false,
     vibrate: [200, 100, 200],
-    data: {
-      chatId: data.chatId || "",
-      openRequests: !!data.openRequests
-    }
+    data: notifData
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, options).catch(() => {
+      return self.registration.showNotification(title, {
+        body: data.body || "",
+        icon: data.icon || "./icon-192.png",
+        tag: tag,
+        data: notifData
+      }).catch(() => {});
+    })
+  );
 });
 
 self.addEventListener("push", event => {
