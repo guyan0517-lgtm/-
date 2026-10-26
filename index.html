@@ -21414,24 +21414,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let { res, directErr } = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body);
 
             if (
-              (!res || !res.ok) &&
-              parsedBody &&
-              typeof parsedBody === "object" &&
-              parsedBody.stream === true &&
-              !controller.signal.aborted
-            ) {
-              const nonStreamBody = { ...parsedBody, stream: false };
-              delete headers["Accept"];
-              delete headers["accept"];
-              headers["Accept"] = "application/json";
-              const retryNonStream = await executeUpstreamFetch(nonStreamBody);
-              if (retryNonStream.res && (retryNonStream.res.ok || !res)) {
-                res = retryNonStream.res;
-                directErr = retryNonStream.directErr;
-              }
-            }
-
-            if (
               res &&
               !res.ok &&
               (res.status === 400 || res.status === 422) &&
@@ -22057,23 +22039,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         };
 
         function isApiStreamEnabled() {
-          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
-          if (typeof cfg.streamEnabled === "boolean") {
-            const sw = document.getElementById("api-stream-switch");
-            if (sw && sw.checked !== cfg.streamEnabled) {
-              sw.checked = cfg.streamEnabled;
-            }
-            return cfg.streamEnabled;
-          }
-          const stored = localStorage.getItem("api_stream_enabled");
-          if (stored === "true" || stored === "false") {
-            return stored === "true";
-          }
           const sw = document.getElementById("api-stream-switch");
           if (sw && typeof sw.checked === "boolean") {
             return sw.checked;
           }
-          return false;
+          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
+          if (typeof cfg.streamEnabled === "boolean") {
+            return cfg.streamEnabled;
+          }
+          return localStorage.getItem("api_stream_enabled") === "true";
         }
         window.isApiStreamEnabled = isApiStreamEnabled;
 
@@ -22143,7 +22117,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "默认模型"
             ).trim();
 
-            const isStreamActive = isApiStreamEnabled() || Boolean(parsedBody && parsedBody.stream === true) || Boolean(document.hidden || document.visibilityState === "hidden" || _bgTaskKeepAliveCount > 0);
+            const isStreamActive = isApiStreamEnabled();
 
             if (!isClaudeOrLlmapi && protocol === "default") {
               const fetchStartT = Date.now();
@@ -33505,7 +33479,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               state.globalSettings.enableSystemNotifications !== false;
 
             if (isSystemNotifyEnabled) {
-              const uniqueTag = "ai_msg_" + chatId + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+              const uniqueTag = "ai_msg_" + chatId;
               const isValidIcon =
                 typeof avatarUrl === "string" &&
                 avatarUrl.trim() !== "" &&
@@ -33516,7 +33490,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const safeBody = String(messageContent || "收到一条新消息");
               const targetChatIdStr = String(chat.id);
 
-              const dispatchBgSystemNotif = async () => {
+              (async () => {
                 let delivered = false;
                 if (
                   window.PeerManager &&
@@ -33582,12 +33556,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     console.error("系统通知发送失败:", e.message);
                   }
                 }
-              };
-
-              window._bgNotifQueuePromise = (window._bgNotifQueuePromise || Promise.resolve())
-                .then(() => dispatchBgSystemNotif())
-                .then(() => new Promise((r) => setTimeout(r, 180)))
-                .catch(() => {});
+              })();
             }
             return;
           }
@@ -45842,6 +45811,7 @@ ${recentHistoryText}
                   .classList.contains("active") &&
                 state.activeChatId === chatId;
               let messageTimestamp = Date.now();
+              let offlineNotifShown = false;
 
               for (const msgData of messagesArray) {
                 // 2.1 如果是 naiimag 类型，执行生图逻辑 (复用线上代码)
@@ -45866,7 +45836,9 @@ ${recentHistoryText}
                     imageUrl: "",
                     isGeneratingNai: true,
                     prompt: aiPrompt,
+                    _suppressTurnNotify: offlineNotifShown,
                   };
+                  offlineNotifShown = true;
                   chat.history.push(imgMsg);
                   await db.chats.put(chat);
                   if (isViewingThisChat) {
@@ -45889,7 +45861,8 @@ ${recentHistoryText}
                 };
                 chat.history.push(aiMessage);
                 await incrementMessageCount(chatId);
-                if (!isViewingThisChat || document.hidden) {
+                if (!offlineNotifShown && (!isViewingThisChat || document.hidden)) {
+                  offlineNotifShown = true;
                   showNotification(chatId, aiMessage.content);
                 }
                 if (isViewingThisChat) {
@@ -48227,7 +48200,7 @@ ${stickerContext || "无"}
             let releaseChatBgKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
               ? window.acquireBackgroundTaskKeepAlive()
               : null;
-            const useStreamInChat = true;
+            const useStreamInChat = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
             const response = isGemini
               ? await fetch(geminiConfig.url, geminiConfig.data)
               : await fetch(`${proxyUrl}/v1/chat/completions`, {
@@ -51372,7 +51345,8 @@ ${stickerContext || "无"}
                       500,
                     );
                     appendMessage(patMessage, chat);
-                  } else {
+                  } else if (!notificationShown) {
+                    notificationShown = true;
                     showNotification(chatId, patText);
                   }
                   continue;
@@ -52597,8 +52571,13 @@ ${stickerContext || "无"}
 
                 const isAsyncGeneratingNaiPlaceholder =
                   aiMessage.type === "naiimag" && !aiMessage.imageUrl;
+                if (isAsyncGeneratingNaiPlaceholder) {
+                  aiMessage._suppressTurnNotify = notificationShown;
+                  notificationShown = true;
+                }
 
-                if ((!isCurrentlyViewingThisChat || isAppInBackground) && isVisibleToMeLocal && aiMessage.type !== "system_status" && !isAsyncGeneratingNaiPlaceholder) {
+                if (!notificationShown && (!isCurrentlyViewingThisChat || isAppInBackground) && isVisibleToMeLocal && aiMessage.type !== "system_status" && !isAsyncGeneratingNaiPlaceholder) {
+                  notificationShown = true;
                   let notificationText;
                   switch (aiMessage.type) {
                     case "transfer":
@@ -71247,7 +71226,7 @@ ${stickerContext || "无"}
               window.PeerManager.broadcastGroupMessage(chat, { ...targetNaiMsg, eventId: undefined, isMessageUpdate: true }, false);
             }
             const isAppBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
-            if (isAppBgNow && typeof showNotification === "function") {
+            if (isAppBgNow && !targetNaiMsg._suppressTurnNotify && typeof showNotification === "function") {
               const notifTxt = chat.isGroup ? `${targetNaiMsg.senderName || chat.name}: [图片]` : "[图片]";
               const notifyAv = targetNaiMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
               showNotification(chat.id, notifTxt, notifyAv);
