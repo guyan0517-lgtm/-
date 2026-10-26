@@ -21299,8 +21299,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const resetTimeout = () => {
             if (timeoutId) clearTimeout(timeoutId);
             timeoutId = setTimeout(() => {
-              controller.abort(new Error("请求超时：已等待超过8分钟未收到模型数据，连接已切断"));
-            }, 480000);
+              controller.abort(new Error("请求超时：等待模型响应超时，连接已切断"));
+            }, 180000);
           };
           resetTimeout();
 
@@ -21378,6 +21378,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? (typeof activeBodyObj === "string" ? activeBodyObj : JSON.stringify(activeBodyObj))
                 : undefined;
 
+              const directStartT = Date.now();
               try {
                 currentRes = await origFetch(finalUrl, {
                   method,
@@ -21388,9 +21389,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (err) {
                 currentDirectErr = err;
               }
+              const directElapsedMs = Date.now() - directStartT;
 
               const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
-              if ((!currentRes || currentRes.status === 502 || currentRes.status === 503 || currentRes.status === 504) && !isStaticHost && !controller.signal.aborted) {
+              if (!currentRes && directElapsedMs < 15000 && !isStaticHost && !controller.signal.aborted) {
                 try {
                   const proxyRes = await origFetch("/api/proxy", {
                     method: "POST",
@@ -21538,6 +21540,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
                   for (const line of lines) {
                     processSseLine(line);
+                    if (sawDoneMarker) break;
+                  }
+                  if (sawDoneMarker) {
+                    try { await reader.cancel(); } catch (_) {}
+                    break;
                   }
                 }
               } catch (streamErr) {
@@ -22039,15 +22046,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         };
 
         function isApiStreamEnabled() {
+          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || null;
           const sw = document.getElementById("api-stream-switch");
+          if (sw && window._apiStreamSwitchSyncedOnce && typeof sw.checked === "boolean") {
+            return sw.checked;
+          }
+          if (cfg && typeof cfg.streamEnabled === "boolean") {
+            return cfg.streamEnabled;
+          }
+          const savedStr = localStorage.getItem("api_stream_enabled");
+          if (savedStr === "true" || savedStr === "false") {
+            return savedStr === "true";
+          }
           if (sw && typeof sw.checked === "boolean") {
             return sw.checked;
           }
-          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || {};
-          if (typeof cfg.streamEnabled === "boolean") {
-            return cfg.streamEnabled;
-          }
-          return localStorage.getItem("api_stream_enabled") === "true";
+          return false;
         }
         window.isApiStreamEnabled = isApiStreamEnabled;
 
@@ -22126,9 +22140,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (urlStr.includes("/chat/completions") && parsedBody && typeof parsedBody === "object") {
                 const updatedBody = {
                   ...parsedBody,
-                  stream: isStreamActive,
-                  max_tokens: parsedBody.max_tokens || 100000,
+                  stream: Boolean(isStreamActive),
                 };
+                if (updatedBody.max_tokens === 100000) {
+                  delete updatedBody.max_tokens;
+                }
                 initForDefault.body = JSON.stringify(updatedBody);
                 const nextHeaders = { ...(init && init.headers ? init.headers : {}) };
                 if (isStreamActive) {
@@ -22237,8 +22253,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               messages: normalizedMessages,
               temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
               stream: Boolean(isStreamActive),
-              max_tokens: parsedBody.max_tokens || 100000,
             };
+            if (parsedBody.max_tokens && parsedBody.max_tokens !== 100000) {
+              openAiPayload.max_tokens = parsedBody.max_tokens;
+            }
 
             const fetchStartT = Date.now();
             let res = await requestLlmapiWithFallback(targetUrl, {
@@ -33146,6 +33164,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (typeof state.apiConfig.temperature === "undefined") {
             state.apiConfig.temperature = 0.8;
           }
+          if (typeof state.apiConfig.streamEnabled !== "boolean") {
+            state.apiConfig.streamEnabled = localStorage.getItem("api_stream_enabled") === "true";
+          } else {
+            localStorage.setItem("api_stream_enabled", state.apiConfig.streamEnabled ? "true" : "false");
+          }
+          const initStreamSwitch = document.getElementById("api-stream-switch");
+          if (initStreamSwitch) {
+            initStreamSwitch.checked = Boolean(state.apiConfig.streamEnabled);
+            window._apiStreamSwitchSyncedOnce = true;
+          }
 
           state.globalSettings = globalSettings || {
             id: "main",
@@ -35239,8 +35267,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const streamSwitch = document.getElementById("api-stream-switch");
           if (streamSwitch) {
             streamSwitch.checked = !!state.apiConfig.streamEnabled;
+            window._apiStreamSwitchSyncedOnce = true;
             localStorage.setItem("api_stream_enabled", state.apiConfig.streamEnabled ? "true" : "false");
             streamSwitch.onchange = () => {
+              window._apiStreamSwitchSyncedOnce = true;
               state.apiConfig.streamEnabled = streamSwitch.checked;
               localStorage.setItem("api_stream_enabled", streamSwitch.checked ? "true" : "false");
               if (typeof db !== "undefined" && db.apiConfig) {
@@ -48245,8 +48275,7 @@ ${stickerContext || "无"}
                     model: model,
                     messages: openAiMessages,
                     temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                    stream: useStreamInChat,
-                    max_tokens: 100000,
+                    stream: Boolean(useStreamInChat),
                   }),
                 });
 
@@ -48262,6 +48291,7 @@ ${stickerContext || "无"}
             let fullContent = "";
             let fullReasoning = "";
             let buffer = "";
+            let chatStreamDone = false;
 
             try {
               while (true) {
@@ -48278,7 +48308,10 @@ ${stickerContext || "无"}
                   const trimmed = line.trim();
                   if (!trimmed || !trimmed.startsWith("data:")) continue;
                   const dataStr = trimmed.replace(/^data:\s*/, "");
-                  if (dataStr === "[DONE]") continue;
+                  if (dataStr === "[DONE]") {
+                    chatStreamDone = true;
+                    break;
+                  }
                   try {
                     const parsed = JSON.parse(dataStr);
                     const delta = parsed.choices?.[0]?.delta?.content 
@@ -48294,6 +48327,10 @@ ${stickerContext || "无"}
                   } catch (e) {
                     // 忽略单行半截 JSON 解析错误，继续拼接
                   }
+                }
+                if (chatStreamDone) {
+                  try { await reader.cancel(); } catch (_) {}
+                  break;
                 }
               }
             } catch (streamReadErr) {
@@ -72198,16 +72235,19 @@ ${stickerContext || "无"}
                 return { text: extractTextFromAnyLlmResponse(data), fullData: data };
               }
 
+              const useStreamForKeeper = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : false;
               const response = await fetch(targetUrl, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${apiKey}`,
+                  ...(useStreamForKeeper ? { Accept: "text/event-stream" } : {}),
                 },
                 body: JSON.stringify({
                   model: model,
                   messages: messagesForApi,
                   temperature: temperature || 0.7,
+                  stream: Boolean(useStreamForKeeper),
                 }),
               });
 
