@@ -21183,7 +21183,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.ensureBackgroundKeepAlive = ensureBackgroundKeepAlive;
 
+        let _bgTaskKeepAliveCount = 0;
         window.acquireBackgroundTaskKeepAlive = function() {
+          _bgTaskKeepAliveCount++;
           ensureBackgroundKeepAlive();
           if (typeof window.startBackgroundWorkerHeartbeat === "function") {
             window.startBackgroundWorkerHeartbeat();
@@ -21202,7 +21204,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return function release() {
             if (released) return;
             released = true;
-            if (typeof window.stopBackgroundWorkerHeartbeat === "function") {
+            _bgTaskKeepAliveCount = Math.max(0, _bgTaskKeepAliveCount - 1);
+            if (_bgTaskKeepAliveCount === 0 && typeof window.stopBackgroundWorkerHeartbeat === "function") {
               window.stopBackgroundWorkerHeartbeat();
             }
             if (typeof releaseLock === "function") {
@@ -21212,12 +21215,48 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
         };
 
-        document.addEventListener("pointerdown", ensureBackgroundKeepAlive, { passive: true });
-        document.addEventListener("touchstart", ensureBackgroundKeepAlive, { passive: true });
-        document.addEventListener("click", ensureBackgroundKeepAlive, { passive: true });
+        function tryRequestNotificationPermissionOnGesture() {
+          try {
+            if (
+              "Notification" in window &&
+              Notification.permission === "default" &&
+              (!window.state || !window.state.globalSettings || window.state.globalSettings.enableSystemNotifications !== false)
+            ) {
+              Notification.requestPermission().catch(() => {});
+            }
+          } catch (_) {}
+        }
+        document.addEventListener("pointerdown", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        document.addEventListener("touchstart", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        document.addEventListener("click", () => { ensureBackgroundKeepAlive(); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
         document.addEventListener("keydown", ensureBackgroundKeepAlive, { passive: true });
         document.addEventListener("visibilitychange", () => {
           ensureBackgroundKeepAlive();
+          if (!document.hidden) {
+            if (typeof window.recoverPendingNaiImagesInActiveChat === "function") {
+              setTimeout(() => window.recoverPendingNaiImagesInActiveChat(), 120);
+            }
+            if (typeof window.hydrateDomVaultImages === "function") {
+              setTimeout(() => window.hydrateDomVaultImages(), 80);
+            }
+            try {
+              const chatScreen = document.getElementById("chat-interface-screen");
+              if (chatScreen && chatScreen.classList.contains("active") && state && state.activeChatId && state.chats && state.chats[state.activeChatId]) {
+                const activeChat = state.chats[state.activeChatId];
+                const msgContainer = document.getElementById("chat-messages");
+                if (msgContainer && Array.isArray(activeChat.history) && activeChat.history.length > 0) {
+                  const lastMsg = activeChat.history[activeChat.history.length - 1];
+                  if (lastMsg && lastMsg.timestamp && !msgContainer.querySelector(`[data-timestamp="${lastMsg.timestamp}"]`)) {
+                    if (typeof renderChatInterface === "function") {
+                      renderChatInterface(state.activeChatId);
+                    }
+                  } else {
+                    msgContainer.scrollTop = msgContainer.scrollHeight;
+                  }
+                }
+              }
+            } catch (_) {}
+          }
         });
 
         async function requestLlmapiWithFallback(targetUrl, options = {}) {
@@ -31580,6 +31619,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               lockscreenWallpaper: state.globalSettings.lockscreenWallpaper,
             };
 
+            backupData.localStorageSnapshot = {};
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k) backupData.localStorageSnapshot[k] = localStorage.getItem(k);
+            }
+            backupData.extraDbTables = {};
+            for (const table of db.tables) {
+              if (!(table.name in backupData)) {
+                try {
+                  backupData.extraDbTables[table.name] = await table.toArray();
+                } catch (_) {}
+              }
+            }
+            if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
+              await window.resolveAllVaultUrlsDeepForBackup(backupData);
+            }
+
             let actualFileName = (typeof customFileName === "string" && customFileName.trim())
               ? customFileName
               : (typeof formatAutoExportDateTime === "function" ? formatAutoExportDateTime() : `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
@@ -31812,9 +31868,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             backupData.globalSettings.deletedPeerCodes = JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]");
           }
 
-          // 这里省略了 homeScreenState 的详细抓取，因为它依赖 DOM 元素，
-          // 自动备份时可能不在主屏幕。为了安全起见，这里仅保存 globalSettings 里的 widgetData。
-          // 如果需要完整还原UI布局，最好只在手动导出时包含 homeScreenState。
+          backupData.localStorageSnapshot = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k) backupData.localStorageSnapshot[k] = localStorage.getItem(k);
+          }
+          backupData.extraDbTables = {};
+          for (const table of db.tables) {
+            if (!(table.name in backupData)) {
+              try {
+                backupData.extraDbTables[table.name] = await table.toArray();
+              } catch (_) {}
+            }
+          }
+          if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
+            await window.resolveAllVaultUrlsDeepForBackup(backupData);
+          }
 
           return JSON.stringify(backupData, null, 2);
         }
@@ -32360,6 +32429,46 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               }
 
+              // 兼容导入 extraDbTables 以及全量快照格式 data.tables 中包含的所有其余数据库表
+              const extraTablesObj = data.extraDbTables || data.tables || {};
+              for (const table of db.tables) {
+                const tName = table.name;
+                if (arrayTables.includes(tName) || objectTables.includes(tName)) {
+                  if (!data[tName] && Array.isArray(extraTablesObj[tName])) {
+                    try {
+                      await table.bulkPut(extraTablesObj[tName]);
+                    } catch (_) {}
+                  }
+                  continue;
+                }
+                const rows = Array.isArray(extraTablesObj[tName])
+                  ? extraTablesObj[tName]
+                  : Array.isArray(data[tName])
+                  ? data[tName]
+                  : null;
+                if (rows && rows.length > 0) {
+                  try {
+                    await table.bulkPut(rows);
+                  } catch (_) {}
+                } else if (data[tName] && typeof data[tName] === "object") {
+                  try {
+                    await table.put(data[tName]);
+                  } catch (_) {}
+                }
+              }
+
+              // 完整恢复 localStorage 快照（含字体、NovelAI、自定义预设、主题、密友等全部本地项）
+              const lsSnap = data.localStorageSnapshot || data.localStorageData || null;
+              if (lsSnap && typeof lsSnap === "object") {
+                for (const [k, v] of Object.entries(lsSnap)) {
+                  if (typeof k === "string" && typeof v === "string") {
+                    try {
+                      localStorage.setItem(k, v);
+                    } catch (_) {}
+                  }
+                }
+              }
+
               if (data.novelaiSettings) {
                 if (data.novelaiSettings.enabled !== undefined && data.novelaiSettings.enabled !== null) {
                   localStorage.setItem("novelai-enabled", String(data.novelaiSettings.enabled));
@@ -32443,9 +32552,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   data.homeScreenState.lockscreenWallpaper;
               if (data.homeScreenState.appIcons)
                 settings.appIcons = data.homeScreenState.appIcons;
+              if (data.homeScreenState.appLabels)
+                settings.appLabels = data.homeScreenState.appLabels;
               await db.globalSettings.put(settings);
               console.log("已成功导入主屏幕样式数据。");
             }
+
+            try {
+              const finalGlobalSettings = await db.globalSettings.get("main");
+              if (finalGlobalSettings && typeof finalGlobalSettings.fontUrl === "string" && typeof applyCustomFont === "function") {
+                applyCustomFont(finalGlobalSettings.fontUrl, false);
+              }
+              if (typeof loadNovelAISettings === "function") {
+                loadNovelAISettings();
+              }
+            } catch (_) {}
 
             await showCustomAlert(
               "导入成功",
@@ -33345,7 +33466,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             document.hidden || document.visibilityState === "hidden"
           );
 
-          // 2. 当处于后台时，立即发送外置系统弹窗通知
+          // 2. 当处于后台时，立即发送外置浏览器系统弹窗通知（前台绝不触发浏览器外置弹窗）
           if (isBackgroundState) {
             playNotificationSound();
             const isSystemNotifyEnabled =
@@ -33353,6 +33474,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             if (isSystemNotifyEnabled) {
               const uniqueTag = "ai_msg_" + chatId + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+              const isValidIcon =
+                typeof avatarUrl === "string" &&
+                avatarUrl.trim() !== "" &&
+                !avatarUrl.startsWith("data:") &&
+                !avatarUrl.startsWith("blob:") &&
+                !avatarUrl.startsWith("vault:");
+              const safeIcon = isValidIcon ? avatarUrl : "./icon-192.png";
+
               if (
                 window.PeerManager &&
                 typeof window.PeerManager.triggerMobileSystemNotification ===
@@ -33361,50 +33490,47 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 window.PeerManager.triggerMobileSystemNotification(
                   notifName,
                   messageContent,
-                  avatarUrl,
+                  safeIcon,
                   {
                     chatId: String(chat.id),
                     tag: uniqueTag,
                   },
                 );
-              } else {
-                const hasPermission =
-                  "Notification" in window &&
-                  Notification.permission === "granted";
-                if (hasPermission) {
-                  const safeIcon =
-                    avatarUrl && !avatarUrl.startsWith("data:")
-                      ? avatarUrl
-                      : "./icon-192.png";
-                  const options = {
-                    body: messageContent,
-                    icon: safeIcon,
-                    tag: uniqueTag,
-                    renotify: true,
-                    silent: false,
-                    vibrate: [200, 100, 200],
-                    badge: "./icon-192.png",
-                    data: { chatId: String(chat.id) },
-                  };
+              } else if ("Notification" in window && Notification.permission === "granted") {
+                const options = {
+                  body: messageContent,
+                  icon: safeIcon,
+                  tag: uniqueTag,
+                  renotify: true,
+                  silent: false,
+                  vibrate: [200, 100, 200],
+                  badge: "./icon-192.png",
+                  data: { chatId: String(chat.id) },
+                };
 
-                  try {
-                    if ("serviceWorker" in navigator) {
-                      const reg =
-                        await navigator.serviceWorker.getRegistration();
-                      if (reg && typeof reg.showNotification === "function") {
-                        await reg.showNotification(notifName, options);
-                      } else {
-                        new Notification(notifName, options);
-                      }
-                    } else {
-                      new Notification(notifName, options);
+                try {
+                  let shown = false;
+                  if ("serviceWorker" in navigator) {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (reg && typeof reg.showNotification === "function") {
+                      await reg.showNotification(notifName, options);
+                      shown = true;
                     }
-                  } catch (e) {
-                    console.error("系统通知发送失败:", e.message);
                   }
+                  if (!shown) {
+                    const n = new Notification(notifName, options);
+                    n.onclick = () => {
+                      try { window.focus(); } catch (_) {}
+                      if (typeof openChat === "function") openChat(chatId);
+                      try { n.close(); } catch (_) {}
+                    };
+                  }
+                } catch (e) {
+                  console.error("系统通知发送失败:", e.message);
                 }
               }
             }
+            return;
           }
 
           // 3. 当处于前台时，不显示外置弹窗，仅在未打开当前聊天框时显示内置顶部横幅弹窗
@@ -33994,70 +34120,107 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         // NovelAI设置相关函数
         function loadNovelAISettings() {
           const settings = getNovelAISettings();
-          document.getElementById("nai-resolution").value = settings.resolution;
-          document.getElementById("nai-steps").value = settings.steps;
-          document.getElementById("nai-cfg-scale").value = settings.cfg_scale;
-          document.getElementById("nai-sampler").value = settings.sampler;
-          document.getElementById("nai-seed").value = settings.seed;
-          document.getElementById("nai-uc-preset").value = settings.uc_preset;
-          document.getElementById("nai-quality-toggle").checked =
-            settings.quality_toggle;
-          document.getElementById("nai-smea").checked = settings.smea;
-          document.getElementById("nai-smea-dyn").checked = settings.smea_dyn;
+          const resEl = document.getElementById("nai-resolution");
+          if (resEl) resEl.value = settings.resolution;
+          const stepsEl = document.getElementById("nai-steps");
+          if (stepsEl) stepsEl.value = settings.steps;
+          const cfgEl = document.getElementById("nai-cfg-scale");
+          if (cfgEl) cfgEl.value = settings.cfg_scale;
+          const samplerEl = document.getElementById("nai-sampler");
+          if (samplerEl) samplerEl.value = settings.sampler;
+          const seedEl = document.getElementById("nai-seed");
+          if (seedEl) seedEl.value = settings.seed;
+          const ucEl = document.getElementById("nai-uc-preset");
+          if (ucEl) ucEl.value = settings.uc_preset;
+          const qualEl = document.getElementById("nai-quality-toggle");
+          if (qualEl) qualEl.checked = settings.quality_toggle;
+          const smeaEl = document.getElementById("nai-smea");
+          if (smeaEl) smeaEl.checked = settings.smea;
+          const smeaDynEl = document.getElementById("nai-smea-dyn");
+          if (smeaDynEl) smeaDynEl.checked = settings.smea_dyn;
           const artistInput = document.getElementById("nai-default-artist");
           if (artistInput) artistInput.value = settings.artist_prompt || "";
-          document.getElementById("nai-default-positive").value =
-            settings.default_positive;
-          document.getElementById("nai-default-negative").value =
-            settings.default_negative;
-          document.getElementById("nai-cors-proxy").value = settings.cors_proxy;
-          document.getElementById("nai-custom-proxy-url").value =
-            settings.custom_proxy_url || "";
+          const posInput = document.getElementById("nai-default-positive");
+          if (posInput) posInput.value = settings.default_positive || "";
+          const negInput = document.getElementById("nai-default-negative");
+          if (negInput) negInput.value = settings.default_negative || "";
+          const corsEl = document.getElementById("nai-cors-proxy");
+          if (corsEl) corsEl.value = settings.cors_proxy;
+          const proxyUrlEl = document.getElementById("nai-custom-proxy-url");
+          if (proxyUrlEl) proxyUrlEl.value = settings.custom_proxy_url || "";
 
           // 显示/隐藏自定义代理输入框
           const customProxyGroup = document.getElementById(
             "nai-custom-proxy-group",
           );
-          customProxyGroup.style.display =
-            settings.cors_proxy === "custom" ? "block" : "none";
+          if (customProxyGroup) {
+            customProxyGroup.style.display =
+              settings.cors_proxy === "custom" ? "block" : "none";
+          }
+          window._naiModalLoadedOnce = true;
+
+          if (!window._naiPromptAutoSaveBound) {
+            window._naiPromptAutoSaveBound = true;
+            ["nai-default-positive", "nai-default-artist", "nai-default-negative"].forEach((id) => {
+              const el = document.getElementById(id);
+              if (el) {
+                const syncToStorage = () => {
+                  try {
+                    const current = getNovelAISettings();
+                    const aEl = document.getElementById("nai-default-artist");
+                    const pEl = document.getElementById("nai-default-positive");
+                    const nEl = document.getElementById("nai-default-negative");
+                    if (aEl) current.artist_prompt = aEl.value;
+                    if (pEl) current.default_positive = pEl.value;
+                    if (nEl) current.default_negative = nEl.value;
+                    localStorage.setItem("novelai-settings", JSON.stringify(current));
+                  } catch (_) {}
+                };
+                el.addEventListener("input", syncToStorage);
+                el.addEventListener("change", syncToStorage);
+              }
+            });
+          }
         }
 
         function saveNovelAISettings() {
           // 保存API Key和模型等基础配置
-          const novelaiEnabled =
-            document.getElementById("novelai-switch").checked;
-          const novelaiModel = document.getElementById("novelai-model").value;
-          const novelaiApiKey = document
-            .getElementById("novelai-api-key")
-            .value.trim();
+          const switchEl = document.getElementById("novelai-switch");
+          const modelEl = document.getElementById("novelai-model");
+          const keyEl = document.getElementById("novelai-api-key");
+          if (switchEl) localStorage.setItem("novelai-enabled", switchEl.checked);
+          if (modelEl) localStorage.setItem("novelai-model", modelEl.value);
+          if (keyEl) localStorage.setItem("novelai-api-key", keyEl.value.trim());
 
-          localStorage.setItem("novelai-enabled", novelaiEnabled);
-          localStorage.setItem("novelai-model", novelaiModel);
-          localStorage.setItem("novelai-api-key", novelaiApiKey);
-
-          // 保存高级参数配置
+          const prevSettings = getNovelAISettings();
           const artistInput = document.getElementById("nai-default-artist");
+          const posInput = document.getElementById("nai-default-positive");
+          const negInput = document.getElementById("nai-default-negative");
+
+          const domArtistVal = artistInput ? artistInput.value : "";
+          const domPosVal = posInput ? posInput.value : "";
+          const domNegVal = negInput ? negInput.value : "";
+
           const settings = {
-            resolution: document.getElementById("nai-resolution").value,
-            steps: parseInt(document.getElementById("nai-steps").value),
+            resolution: document.getElementById("nai-resolution")?.value || prevSettings.resolution,
+            steps: parseInt(document.getElementById("nai-steps")?.value) || prevSettings.steps,
             cfg_scale: parseFloat(
-              document.getElementById("nai-cfg-scale").value,
-            ),
-            sampler: document.getElementById("nai-sampler").value,
-            seed: parseInt(document.getElementById("nai-seed").value),
-            uc_preset: parseInt(document.getElementById("nai-uc-preset").value),
+              document.getElementById("nai-cfg-scale")?.value,
+            ) || prevSettings.cfg_scale,
+            sampler: document.getElementById("nai-sampler")?.value || prevSettings.sampler,
+            seed: document.getElementById("nai-seed") ? parseInt(document.getElementById("nai-seed").value) : prevSettings.seed,
+            uc_preset: document.getElementById("nai-uc-preset") ? parseInt(document.getElementById("nai-uc-preset").value) : prevSettings.uc_preset,
             quality_toggle:
-              document.getElementById("nai-quality-toggle").checked,
-            smea: document.getElementById("nai-smea").checked,
-            smea_dyn: document.getElementById("nai-smea-dyn").checked,
-            artist_prompt: artistInput ? artistInput.value : "",
-            default_positive: document.getElementById("nai-default-positive")
-              .value,
-            default_negative: document.getElementById("nai-default-negative")
-              .value,
-            cors_proxy: document.getElementById("nai-cors-proxy").value,
+              document.getElementById("nai-quality-toggle") ? document.getElementById("nai-quality-toggle").checked : prevSettings.quality_toggle,
+            smea: document.getElementById("nai-smea") ? document.getElementById("nai-smea").checked : prevSettings.smea,
+            smea_dyn: document.getElementById("nai-smea-dyn") ? document.getElementById("nai-smea-dyn").checked : prevSettings.smea_dyn,
+            artist_prompt: window._naiModalLoadedOnce ? domArtistVal : (domArtistVal || prevSettings.artist_prompt || ""),
+            default_positive: window._naiModalLoadedOnce ? domPosVal : (domPosVal || prevSettings.default_positive || ""),
+            default_negative: window._naiModalLoadedOnce ? domNegVal : (domNegVal || prevSettings.default_negative || ""),
+            cors_proxy: document.getElementById("nai-cors-proxy")?.value || prevSettings.cors_proxy,
             custom_proxy_url: document.getElementById("nai-custom-proxy-url")
-              .value,
+              ? document.getElementById("nai-custom-proxy-url").value
+              : prevSettings.custom_proxy_url,
           };
 
           localStorage.setItem("novelai-settings", JSON.stringify(settings));
@@ -34068,6 +34231,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           loadNovelAISettings();
           alert("已恢复默认设置！");
         }
+        setTimeout(() => {
+          try {
+            loadNovelAISettings();
+          } catch (_) {}
+        }, 0);
 
         function getNovelAISettings() {
           const defaultSettings = {
@@ -34221,9 +34389,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             // V4/V4.5 和 V3 使用不同的请求体格式
             let requestBody;
 
+            const finalTestPrompt = [settings.artist_prompt, settings.default_positive, prompt].filter(Boolean).join(", ");
             if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
               // V4/V4.5/V5 使用新格式
-              const finalTestPrompt = [settings.artist_prompt, prompt].filter(Boolean).join(", ");
               requestBody = {
                 input: finalTestPrompt,
                 model: model,
@@ -34259,7 +34427,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   // V4/V5专用提示词格式
                   v4_prompt: {
                     caption: {
-                      base_caption: prompt,
+                      base_caption: finalTestPrompt,
                       char_captions: [],
                     },
                     use_coords: false,
@@ -34282,7 +34450,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } else {
               // V3 及更早版本使用旧格式
               requestBody = {
-                input: prompt,
+                input: finalTestPrompt,
                 model: model,
                 action: "generate",
                 parameters: {
@@ -34548,9 +34716,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
           const artist = (options.artist !== undefined ? options.artist : (domArtist || settings.artist_prompt || "")).trim();
+          const domPos = document.getElementById("nai-default-positive") ? document.getElementById("nai-default-positive").value.trim() : "";
+          const defaultPos = (options.defaultPositive !== undefined ? options.defaultPositive : (domPos || settings.default_positive || "")).trim();
 
           let promptPieces = [];
           if (artist && !prompt.includes(artist)) promptPieces.push(artist);
+          if (defaultPos && !prompt.includes(defaultPos)) promptPieces.push(defaultPos);
           if (prompt && prompt.trim()) promptPieces.push(prompt.trim());
           const finalPrompt = promptPieces.filter(Boolean).join(", ");
 
@@ -37795,18 +37966,30 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
 
+          if (typeof window.normalizeAndRecoverAvatarSrc === "function") {
+            avatarSrc = window.normalizeAndRecoverAvatarSrc(avatarSrc, chat, msg, isUser);
+          }
+          let avatarVaultAttr = "";
+          if (typeof avatarSrc === "string" && avatarSrc.startsWith("vault://")) {
+            avatarVaultAttr = ` data-vault-ref="${avatarSrc}"`;
+            const cachedAva = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(avatarSrc) : null;
+            avatarSrc = cachedAva || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+          } else if (typeof avatarSrc === "string" && avatarSrc.startsWith("blob:") && window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.has(avatarSrc)) {
+            avatarVaultAttr = ` data-vault-ref="${window.blobUrlToVaultRefMap.get(avatarSrc)}"`;
+          }
+
           let avatarHtml;
           // 如果存在头像框URL
           if (avatarFrameSrc) {
             avatarHtml = `
 			            <div class="avatar-with-frame">
-			                <img src="${avatarSrc}" class="avatar-img">
+			                <img src="${avatarSrc}"${avatarVaultAttr} class="avatar-img">
 			                <img src="${avatarFrameSrc}" class="avatar-frame">
 			            </div>
 			        `;
           } else {
             // 如果没有，就使用最简单的头像结构
-            avatarHtml = `<img src="${avatarSrc}" class="avatar">`;
+            avatarHtml = `<img src="${avatarSrc}"${avatarVaultAttr} class="avatar">`;
           }
 
           let contentHtml = "";
@@ -38572,7 +38755,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           ) {
             bubble.classList.add("has-image");
             const imageUrl = msg.content[0].image_url.url;
-            contentHtml = `<img src="${imageUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+            if (typeof imageUrl === "string" && imageUrl.startsWith("vault://")) {
+              const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(imageUrl) : null;
+              const initSrc = cachedUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+              contentHtml = `<img src="${initSrc}" data-vault-ref="${imageUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+            } else {
+              contentHtml = `<img src="${imageUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+            }
           } else if (msg.type === "module_pure_image") {
             bubble.classList.add("has-image");
             const imageUrl = msg.imageUrl || msg.content;
@@ -38608,7 +38797,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               <div class="inventory-chat-card-wrap">
                 <div class="inventory-chat-card-header">${headerText}</div>
                 <div class="inventory-chat-card" data-item-id="${it.id || ''}" data-item-name="${it.name || ''}">
-                  <div class="inventory-chat-card-avatar" data-avatar-id="${it.id || ''}" data-avatar-name="${it.name || ''}" data-avatar-url="${it.avatar || ''}">
+                  <div class="inventory-chat-card-avatar" data-avatar-id="${it.id || ''}" data-item-name="${it.name || ''}" data-avatar-url="${it.avatar || ''}">
                     ${avatarHtml}
                   </div>
                   <div class="inventory-chat-card-body">
@@ -38618,17 +38807,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 </div>
               </div>
             `;
-          } else if (msg.type === "naiimag" || msg.type === "nov" || msg.type === "realimag") {
-            const isCleared = msg.content === "[图片已清理]" || (!msg.imageUrl && !msg.image && !msg.url);
+          } else if (msg.type === "naiimag" || msg.type === "nov" || msg.type === "novelai" || msg.type === "nai_image" || msg.type === "realimag") {
+            const isExplicitlyCleared = msg.content === "[图片已清理]";
             const realSrc = msg.imageUrl || msg.url || msg.image;
-            if (realSrc && !isCleared) {
+            if (realSrc && !isExplicitlyCleared) {
               bubble.classList.add("is-realimag", "is-card-like");
               const safeTitle = String(msg.fullPrompt || msg.prompt || "NovelAI生成").replace(/"/g, "&quot;");
-              contentHtml = `<img src="${realSrc}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.className='cleared-image-placeholder ai-generated-image'; this.alt='图片已被肥鸭坐塌';">`;
+              if (typeof realSrc === "string" && realSrc.startsWith("vault://")) {
+                const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(realSrc) : null;
+                if (cachedUrl) {
+                  contentHtml = `<img src="${cachedUrl}" data-vault-ref="${realSrc}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.className='cleared-image-placeholder ai-generated-image'; this.alt='图片已被肥鸭坐塌';">`;
+                } else {
+                  contentHtml = `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${realSrc}" data-vault-pending="1" class="realimag-image" alt="NovelAI图片分享" decoding="async" title="${safeTitle}">`;
+                }
+              } else {
+                contentHtml = `<img src="${realSrc}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.className='cleared-image-placeholder ai-generated-image'; this.alt='图片已被肥鸭坐塌';">`;
+              }
             } else {
               bubble.classList.add("is-ai-image");
               const safeTitle = String(msg.fullPrompt || msg.prompt || "图片已被肥鸭坐塌").replace(/"/g, "&quot;");
               contentHtml = `<img src="https://i.postimg.cc/KYr2qRCK/1.jpg" class="cleared-image-placeholder ai-generated-image" alt="图片已被肥鸭坐塌" title="${safeTitle}">`;
+              if (!isExplicitlyCleared && (msg.prompt || msg.fullPrompt) && !msg._naiGenerating && typeof window.executeChatNaiImageGeneration === "function") {
+                setTimeout(() => {
+                  if (!msg.imageUrl && !msg._naiGenerating) {
+                    window.executeChatNaiImageGeneration(chat, msg);
+                  }
+                }, 60);
+              }
             }
           } else if (msg.content === "[图片已清理]") {
             bubble.classList.add("is-ai-image");
@@ -48179,6 +48384,9 @@ ${stickerContext || "无"}
             if (typeof ensureBackgroundKeepAlive === "function") {
               ensureBackgroundKeepAlive();
             }
+            let releaseChatBgKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
+              ? window.acquireBackgroundTaskKeepAlive()
+              : null;
             const useStreamInChat = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
             const response = isGemini
               ? await fetch(geminiConfig.url, geminiConfig.data)
@@ -51152,8 +51360,22 @@ ${stickerContext || "无"}
                   }
                   continue;
 
-                // 群聊中发送naiimag的完整逻辑：AI填写API返回后立即发送气泡，再异步调用NovelAI生图填充
-                case "naiimag": {
+                // 群聊或单聊中发送naiimag的完整逻辑：AI填写API返回后立即发送气泡，再异步调用NovelAI生图填充
+                case "naiimag":
+                case "nov":
+                case "novelai":
+                case "nai_image":
+                case "realimag": {
+                  if (msgData.imageUrl || msgData.url || msgData.image) {
+                    aiMessage = {
+                      ...baseMessage,
+                      type: "realimag",
+                      imageUrl: msgData.imageUrl || msgData.url || msgData.image,
+                      prompt: msgData.prompt || msgData.content || "",
+                      fullPrompt: msgData.fullPrompt || msgData.prompt || "",
+                    };
+                    break;
+                  }
                   const naiPrompts = getCharacterNAIPrompts(chat.id);
                   const aiPrompt = msgData.prompt || msgData.content || msgData.image_prompt || msgData.imagePrompt || msgData.description || "a beautiful scene";
                   const promptParts = [];
@@ -51195,122 +51417,9 @@ ${stickerContext || "无"}
                   };
 
                   const targetNaiMsg = aiMessage;
-                  (async () => {
-                    const releaseNaiKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
-                      ? window.acquireBackgroundTaskKeepAlive()
-                      : null;
-                    try {
-                      const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
-                      const apiKey = domKey || localStorage.getItem("novelai-api-key");
-                      if (!apiKey) {
-                        throw new Error("NovelAI API Key未配置。请在NovelAI设置中填写API Key。");
-                      }
-                      let requestBody;
-                      if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
-                        requestBody = {
-                          input: finalPositivePrompt,
-                          model: model,
-                          action: "generate",
-                          parameters: {
-                            params_version: model.includes("nai-diffusion-5") ? 4 : 3,
-                            width: width || 1024,
-                            height: height || 1024,
-                            scale: settings.cfg_scale,
-                            sampler: settings.sampler,
-                            steps: settings.steps,
-                            seed: settings.seed === -1 ? Math.floor(Math.random() * 4294967295) : settings.seed,
-                            n_samples: 1,
-                            ucPreset: settings.uc_preset,
-                            qualityToggle: settings.quality_toggle,
-                            autoSmea: false,
-                            dynamic_thresholding: false,
-                            controlnet_strength: 1,
-                            legacy: false,
-                            add_original_image: true,
-                            cfg_rescale: 0,
-                            noise_schedule: "karras",
-                            legacy_v3_extend: false,
-                            skip_cfg_above_sigma: null,
-                            use_coords: false,
-                            legacy_uc: false,
-                            normalize_reference_strength_multiple: true,
-                            inpaintImg2ImgStrength: 1,
-                            characterPrompts: [],
-                            v4_prompt: {
-                              caption: { base_caption: finalPositivePrompt, char_captions: [] },
-                              use_coords: false,
-                              use_order: true,
-                            },
-                            v4_negative_prompt: {
-                              caption: { base_caption: finalNegativePrompt, char_captions: [] },
-                              legacy_uc: false,
-                            },
-                            negative_prompt: finalNegativePrompt,
-                            deliberate_euler_ancestral_bug: false,
-                            prefer_brownian: true,
-                          },
-                        };
-                      } else {
-                        requestBody = {
-                          input: finalPositivePrompt,
-                          model: model,
-                          action: "generate",
-                          parameters: {
-                            width: width || 1024,
-                            height: height || 1024,
-                            scale: settings.cfg_scale,
-                            sampler: settings.sampler,
-                            steps: settings.steps,
-                            seed: settings.seed === -1 ? Math.floor(Math.random() * 4294967295) : settings.seed,
-                            n_samples: 1,
-                            ucPreset: settings.uc_preset,
-                            qualityToggle: settings.quality_toggle,
-                            sm: settings.smea,
-                            sm_dyn: settings.smea_dyn,
-                            dynamic_thresholding: false,
-                            controlnet_strength: 1,
-                            legacy: false,
-                            add_original_image: false,
-                            cfg_rescale: 0,
-                            noise_schedule: "native",
-                            negative_prompt: finalNegativePrompt,
-                          },
-                        };
-                      }
-                      const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-                        ? "https://image.novelai.net/ai/generate-image-stream"
-                        : "https://image.novelai.net/ai/generate-image";
-                      const corsProxy = settings.cors_proxy === "custom" ? (settings.custom_proxy_url || "") : settings.cors_proxy;
-                      const response = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, {
-                        "Content-Type": "application/json",
-                        Authorization: "Bearer " + apiKey,
-                      }, requestBody);
-                      const imageDataUrl = await parseNovelAiResponseToDataUrl(response);
-                      targetNaiMsg.imageUrl = imageDataUrl;
-                      if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
-                        try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(targetNaiMsg); } catch (_) {}
-                      }
-                      await db.chats.put(chat);
-                      if (typeof updateNaiBubbleInDom === "function") {
-                        updateNaiBubbleInDom(chat, targetNaiMsg);
-                      }
-                      if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
-                        window.PeerManager.broadcastGroupMessage(chat, { ...targetNaiMsg, eventId: undefined, isMessageUpdate: true }, false);
-                      }
-                      const isAppBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
-                      if (isAppBgNow && typeof showNotification === "function") {
-                        const notifTxt = chat.isGroup ? `${targetNaiMsg.senderName || chat.name}: [图片]` : "[图片]";
-                        const notifyAv = targetNaiMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
-                        showNotification(chat.id, notifTxt, notifyAv);
-                      }
-                    } catch (error) {
-                      console.warn("NAI图片生成失败:", error);
-                    } finally {
-                      if (typeof releaseNaiKeepAlive === "function") {
-                        releaseNaiKeepAlive();
-                      }
-                    }
-                  })();
+                  if (typeof window.executeChatNaiImageGeneration === "function") {
+                    window.executeChatNaiImageGeneration(chat, targetNaiMsg);
+                  }
                   break;
                 }
 
@@ -52928,7 +53037,15 @@ ${stickerContext || "无"}
                 console.warn("守密人末尾强制生图执行提示:", drawErr);
               });
             }
+            if (typeof releaseChatBgKeepAlive === "function") {
+              try { releaseChatBgKeepAlive(); } catch (_) {}
+              releaseChatBgKeepAlive = null;
+            }
           } catch (error) {
+            if (typeof releaseChatBgKeepAlive === "function") {
+              try { releaseChatBgKeepAlive(); } catch (_) {}
+              releaseChatBgKeepAlive = null;
+            }
             if (typeof finishTurnRender === "function") {
               try { finishTurnRender(); } catch (e) {}
               finishTurnRender = null;
@@ -71066,19 +71183,48 @@ ${stickerContext || "无"}
           if (msg.imageUrl) {
             bubble.classList.remove("is-ai-image");
             bubble.classList.add("is-realimag", "is-card-like");
-            const imgEl = contentEl.querySelector("img");
-            if (imgEl) {
-              imgEl.src = msg.imageUrl;
+            const rawRef = msg.imageUrl;
+            const isVaultRef = typeof rawRef === "string" && rawRef.startsWith("vault://");
+            const cachedBlobUrl = isVaultRef && typeof window.getCachedVaultBlobUrl === "function"
+              ? window.getCachedVaultBlobUrl(rawRef)
+              : null;
+            const applyResolvedSrc = (finalUrl) => {
+              let imgEl = contentEl.querySelector("img");
+              if (!imgEl) {
+                contentEl.innerHTML = `<img class="realimag-image" alt="NovelAI图片分享" decoding="async" title="${safeTitle}">`;
+                imgEl = contentEl.querySelector("img");
+              }
+              if (!imgEl) return;
+              if (isVaultRef) {
+                imgEl.setAttribute("data-vault-ref", rawRef);
+                imgEl.removeAttribute("data-vault-pending");
+              }
               imgEl.className = "realimag-image";
               imgEl.alt = "NovelAI图片分享";
               imgEl.title = msg.fullPrompt || msg.prompt || "NovelAI生成";
               imgEl.onerror = function () {
+                if (isVaultRef && typeof window.resolveVaultRefToUrl === "function" && !this._retriedVault) {
+                  this._retriedVault = true;
+                  window.resolveVaultRefToUrl(rawRef).then((rUrl) => {
+                    if (rUrl && !rUrl.startsWith("vault://")) {
+                      this.className = "realimag-image";
+                      this.src = rUrl;
+                    }
+                  });
+                  return;
+                }
                 this.src = "https://i.postimg.cc/KYr2qRCK/1.jpg";
                 this.className = "cleared-image-placeholder ai-generated-image";
                 this.alt = "图片已被肥鸭坐塌";
               };
+              imgEl.src = finalUrl;
+            };
+            if (isVaultRef && !cachedBlobUrl && typeof window.resolveVaultRefToUrl === "function") {
+              window.resolveVaultRefToUrl(rawRef).then((resolved) => {
+                applyResolvedSrc(resolved || rawRef);
+              });
             } else {
-              contentEl.innerHTML = `<img src="${msg.imageUrl}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.className='cleared-image-placeholder ai-generated-image'; this.alt='图片已被肥鸭坐塌';">`;
+              applyResolvedSrc(cachedBlobUrl || rawRef);
             }
           } else {
             bubble.classList.remove("is-realimag", "is-card-like");
@@ -71087,6 +71233,175 @@ ${stickerContext || "无"}
           }
         }
         window.updateNaiBubbleInDom = updateNaiBubbleInDom;
+
+        window.executeChatNaiImageGeneration = async function (chat, targetNaiMsg) {
+          if (!chat || !targetNaiMsg || targetNaiMsg.imageUrl || targetNaiMsg._naiGenerating) return;
+          targetNaiMsg._naiGenerating = true;
+          const releaseNaiKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
+            ? window.acquireBackgroundTaskKeepAlive()
+            : null;
+          try {
+            const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
+            const apiKey = domKey || localStorage.getItem("novelai-api-key");
+            if (!apiKey) {
+              throw new Error("NovelAI API Key未配置。请在NovelAI设置中填写API Key。");
+            }
+            const naiPrompts = getCharacterNAIPrompts(chat.id);
+            const aiPrompt = targetNaiMsg.prompt || targetNaiMsg.content || "a beautiful scene";
+            const finalPositivePrompt = targetNaiMsg.fullPrompt || [naiPrompts.artist, naiPrompts.positive, aiPrompt].filter(Boolean).join(", ");
+            const finalNegativePrompt = targetNaiMsg.negativePrompt !== undefined ? targetNaiMsg.negativePrompt : (naiPrompts.negative || "");
+            const domModel = document.getElementById("novelai-model") ? document.getElementById("novelai-model").value : "";
+            const model = targetNaiMsg.model || domModel || localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+            const settings = Object.assign({}, getNovelAISettings(), targetNaiMsg.naiSettings || {});
+            const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
+
+            const buildRequestBody = () => {
+              if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+                return {
+                  input: finalPositivePrompt,
+                  model: model,
+                  action: "generate",
+                  parameters: {
+                    params_version: model.includes("nai-diffusion-5") ? 4 : 3,
+                    width: width || 1024,
+                    height: height || 1024,
+                    scale: settings.cfg_scale,
+                    sampler: settings.sampler,
+                    steps: settings.steps,
+                    seed: settings.seed === -1 || settings.seed === undefined ? Math.floor(Math.random() * 4294967295) : settings.seed,
+                    n_samples: 1,
+                    ucPreset: settings.uc_preset,
+                    qualityToggle: settings.quality_toggle,
+                    autoSmea: false,
+                    dynamic_thresholding: false,
+                    controlnet_strength: 1,
+                    legacy: false,
+                    add_original_image: true,
+                    cfg_rescale: 0,
+                    noise_schedule: "karras",
+                    legacy_v3_extend: false,
+                    skip_cfg_above_sigma: null,
+                    use_coords: false,
+                    legacy_uc: false,
+                    normalize_reference_strength_multiple: true,
+                    inpaintImg2ImgStrength: 1,
+                    characterPrompts: [],
+                    v4_prompt: {
+                      caption: { base_caption: finalPositivePrompt, char_captions: [] },
+                      use_coords: false,
+                      use_order: true,
+                    },
+                    v4_negative_prompt: {
+                      caption: { base_caption: finalNegativePrompt, char_captions: [] },
+                      legacy_uc: false,
+                    },
+                    negative_prompt: finalNegativePrompt,
+                    deliberate_euler_ancestral_bug: false,
+                    prefer_brownian: true,
+                  },
+                };
+              }
+              return {
+                input: finalPositivePrompt,
+                model: model,
+                action: "generate",
+                parameters: {
+                  width: width || 1024,
+                  height: height || 1024,
+                  scale: settings.cfg_scale,
+                  sampler: settings.sampler,
+                  steps: settings.steps,
+                  seed: settings.seed === -1 || settings.seed === undefined ? Math.floor(Math.random() * 4294967295) : settings.seed,
+                  n_samples: 1,
+                  ucPreset: settings.uc_preset,
+                  qualityToggle: settings.quality_toggle,
+                  sm: settings.smea,
+                  sm_dyn: settings.smea_dyn,
+                  dynamic_thresholding: false,
+                  controlnet_strength: 1,
+                  legacy: false,
+                  add_original_image: false,
+                  cfg_rescale: 0,
+                  noise_schedule: "native",
+                  negative_prompt: finalNegativePrompt,
+                },
+              };
+            };
+
+            const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+              ? "https://image.novelai.net/ai/generate-image-stream"
+              : "https://image.novelai.net/ai/generate-image";
+            const corsProxy = settings.cors_proxy === "custom" ? (settings.custom_proxy_url || "") : settings.cors_proxy;
+
+            let imageDataUrl = null;
+            let lastErr = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                if (attempt > 0) {
+                  await new Promise((r) => setTimeout(r, 1200 * attempt));
+                }
+                const response = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, {
+                  "Content-Type": "application/json",
+                  Authorization: "Bearer " + apiKey,
+                }, buildRequestBody());
+                imageDataUrl = await parseNovelAiResponseToDataUrl(response);
+                if (imageDataUrl) break;
+              } catch (err) {
+                lastErr = err;
+              }
+            }
+            if (!imageDataUrl) {
+              throw lastErr || new Error("NovelAI生图未返回有效图片");
+            }
+
+            targetNaiMsg.imageUrl = imageDataUrl;
+            delete targetNaiMsg._naiGenerating;
+            if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
+              try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(targetNaiMsg); } catch (_) {}
+            }
+            await db.chats.put(chat);
+            updateNaiBubbleInDom(chat, targetNaiMsg);
+            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+              window.PeerManager.broadcastGroupMessage(chat, { ...targetNaiMsg, eventId: undefined, isMessageUpdate: true }, false);
+            }
+            const isAppBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
+            if (isAppBgNow && typeof showNotification === "function") {
+              const notifTxt = chat.isGroup ? `${targetNaiMsg.senderName || chat.name}: [图片]` : "[图片]";
+              const notifyAv = targetNaiMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
+              showNotification(chat.id, notifTxt, notifyAv);
+            }
+          } catch (error) {
+            console.warn("NAI图片生成失败:", error);
+          } finally {
+            delete targetNaiMsg._naiGenerating;
+            if (typeof releaseNaiKeepAlive === "function") {
+              releaseNaiKeepAlive();
+            }
+          }
+        };
+
+        window.recoverPendingNaiImagesInActiveChat = function () {
+          try {
+            if (!state || !state.activeChatId || !state.chats) return;
+            const chat = state.chats[state.activeChatId];
+            if (!chat || !Array.isArray(chat.history)) return;
+            const recentSlice = chat.history.slice(-15);
+            for (const m of recentSlice) {
+              if (
+                m &&
+                (m.type === "naiimag" || m.type === "nov" || m.type === "novelai" || m.type === "nai_image") &&
+                !m.imageUrl &&
+                !m.url &&
+                !m.image &&
+                m.content !== "[图片已清理]" &&
+                (m.prompt || m.fullPrompt) &&
+                !m._naiGenerating
+              ) {
+                window.executeChatNaiImageGeneration(chat, m);
+              }
+            }
+          } catch (_) {}
+        };
 
         async function handleNaiRerollForMessage(message, customPrompt, customFullPrompt) {
           if (!message || !state.activeChatId) return;
@@ -86774,6 +87089,9 @@ ${stickerContext || "无"}
                   novelaiKeyInput.value.trim(),
                 );
               }
+              if (typeof saveNovelAISettings === "function") {
+                try { saveNovelAISettings(); } catch (_) {}
+              }
               alert("API设置已保存!");
             });
 
@@ -86920,6 +87238,9 @@ ${stickerContext || "无"}
           document
             .getElementById("close-novelai-settings")
             .addEventListener("click", () => {
+              if (typeof saveNovelAISettings === "function") {
+                try { saveNovelAISettings(); } catch (_) {}
+              }
               document.getElementById("novelai-settings-modal").style.display =
                 "none";
             });
@@ -90255,46 +90576,27 @@ ${stickerContext || "无"}
                 chat.settings.useRealCamera = document.getElementById(
                   "user-real-camera-switch",
                 ).checked;
-                // 保存NAI出图设置
-                const novelaiEnabled =
-                  localStorage.getItem("novelai-enabled") === "true";
-                if (novelaiEnabled) {
-                  if (!chat.settings.naiSettings) {
-                    chat.settings.naiSettings = {};
-                  }
-
-                  // 根据是否为群聊选择不同的radio按钮组
-                  const isGroup = chat.isGroup;
-                  const promptSourceRadio = document.querySelector(
-                    isGroup
-                      ? 'input[name="group-nai-prompt-source"]:checked'
-                      : 'input[name="nai-prompt-source"]:checked',
-                  );
-
-                  chat.settings.naiSettings.promptSource = promptSourceRadio
-                    ? promptSourceRadio.value
-                    : "system";
-                  console.log(
-                    "💾 保存NAI设置 - promptSource:",
-                    chat.settings.naiSettings.promptSource,
-                  );
-                  console.log(
-                    "💾 保存NAI设置 - characterPositivePrompt:",
-                    chat.settings.naiSettings.characterPositivePrompt,
-                  );
-                  console.log(
-                    "💾 保存NAI设置 - characterNegativePrompt:",
-                    chat.settings.naiSettings.characterNegativePrompt,
-                  );
-                  // 角色专属提示词已经在专属弹窗中保存，这里只保存来源选择
-                }
-
                 const selectedGroupId = document.getElementById(
                   "assign-group-select",
                 ).value;
                 chat.groupId = selectedGroupId
                   ? parseInt(selectedGroupId)
                   : null;
+              }
+
+              // 保存NAI出图设置（单聊与群聊通用，且不受外层开关阻塞）
+              if (!chat.settings.naiSettings) {
+                chat.settings.naiSettings = {};
+              }
+              const promptSourceRadio = document.querySelector(
+                chat.isGroup
+                  ? 'input[name="group-nai-prompt-source"]:checked'
+                  : 'input[name="nai-prompt-source"]:checked',
+              );
+              if (promptSourceRadio) {
+                chat.settings.naiSettings.promptSource = promptSourceRadio.value;
+              } else if (!chat.settings.naiSettings.promptSource) {
+                chat.settings.naiSettings.promptSource = "system";
               }
 
               chat.settings.maxMemory =
@@ -101732,6 +102034,148 @@ ${stickerContext || "无"}
           let dirHandleCache = null;
           let opfsHandleCache = null;
           const blobUrlMemoryCache = new Map();
+          const blobUrlToVaultRefMap = new Map();
+          window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
+
+          function setVaultBlobCache(fileName, objUrl) {
+            if (!fileName || !objUrl) return;
+            const cleanName = fileName.startsWith("vault://") ? fileName.slice("vault://".length) : fileName;
+            blobUrlMemoryCache.set(cleanName, objUrl);
+            blobUrlToVaultRefMap.set(objUrl, "vault://" + cleanName);
+          }
+
+          window.getCachedVaultBlobUrl = function (vaultRef) {
+            if (!vaultRef || typeof vaultRef !== "string") return null;
+            const cleanName = vaultRef.startsWith("vault://") ? vaultRef.slice("vault://".length) : vaultRef;
+            return blobUrlMemoryCache.get(cleanName) || null;
+          };
+
+          function isValidNonBlobAvatar(val) {
+            return typeof val === "string" && val.length > 0 && !val.startsWith("blob:");
+          }
+
+          window.normalizeAndRecoverAvatarSrc = function (avatarSrc, chat, msg, isUser) {
+            if (!avatarSrc || typeof avatarSrc !== "string") return avatarSrc;
+            if (avatarSrc.startsWith("blob:")) {
+              if (blobUrlToVaultRefMap.has(avatarSrc)) {
+                return blobUrlToVaultRefMap.get(avatarSrc);
+              }
+              // 发现已失效的历史 blob: 头像，自动从有效数据源恢复并修复数据库
+              let recovered = "";
+              if (isUser) {
+                const gsAva = typeof state !== "undefined" && state.globalSettings?.widgetData?.["profile-avatar-img"];
+                if (isValidNonBlobAvatar(gsAva)) recovered = gsAva;
+                if (!recovered && chat && Array.isArray(chat.history)) {
+                  for (let i = chat.history.length - 1; i >= 0; i--) {
+                    const hm = chat.history[i];
+                    if (hm && hm.role === "user" && isValidNonBlobAvatar(hm.senderAvatar)) {
+                      recovered = hm.senderAvatar;
+                      break;
+                    }
+                  }
+                }
+                if (recovered && chat && chat.settings && chat.settings.myAvatar === avatarSrc) {
+                  chat.settings.myAvatar = recovered;
+                }
+              } else if (chat) {
+                if (chat.isGroup) {
+                  const sName = msg ? (msg.senderName || msg.sender) : "";
+                  const mem = (chat.members || []).find(
+                    (m) =>
+                      (msg && msg.senderId && m.id === msg.senderId) ||
+                      (sName && (m.originalName === sName || m.groupNickname === sName))
+                  );
+                  if (mem && isValidNonBlobAvatar(mem.avatar)) {
+                    recovered = mem.avatar;
+                  }
+                  if (!recovered && mem && mem.id && typeof state !== "undefined" && state.chats && state.chats[mem.id]) {
+                    const singleAva = state.chats[mem.id].settings?.aiAvatar;
+                    if (isValidNonBlobAvatar(singleAva)) recovered = singleAva;
+                  }
+                  if (!recovered && Array.isArray(chat.history) && sName) {
+                    for (let i = chat.history.length - 1; i >= 0; i--) {
+                      const hm = chat.history[i];
+                      if (hm && (hm.senderName === sName || hm.sender === sName) && isValidNonBlobAvatar(hm.senderAvatar)) {
+                        recovered = hm.senderAvatar;
+                        break;
+                      }
+                    }
+                  }
+                  if (recovered && mem && mem.avatar === avatarSrc) {
+                    mem.avatar = recovered;
+                  }
+                } else {
+                  if (isValidNonBlobAvatar(chat.settings?.aiAvatar)) {
+                    recovered = chat.settings.aiAvatar;
+                  } else if (Array.isArray(chat.history)) {
+                    for (let i = chat.history.length - 1; i >= 0; i--) {
+                      const hm = chat.history[i];
+                      if (hm && hm.role !== "user" && isValidNonBlobAvatar(hm.senderAvatar)) {
+                        recovered = hm.senderAvatar;
+                        break;
+                      }
+                    }
+                  }
+                  if (recovered && chat.settings && chat.settings.aiAvatar === avatarSrc) {
+                    chat.settings.aiAvatar = recovered;
+                  }
+                }
+              }
+              if (msg && msg.senderAvatar === avatarSrc && recovered) {
+                msg.senderAvatar = recovered;
+              }
+              return recovered || (typeof defaultAvatar !== "undefined" ? defaultAvatar : "");
+            }
+            return avatarSrc;
+          };
+
+          function restoreVaultRefsInObjectDeep(obj, visited = new WeakSet()) {
+            if (!obj || typeof obj !== "object" || visited.has(obj)) return false;
+            visited.add(obj);
+            let changed = false;
+            const domVaultMap = new Map();
+            try {
+              const domImgs = document.querySelectorAll("img[data-vault-ref]");
+              domImgs.forEach((el) => {
+                const vRef = el.getAttribute("data-vault-ref");
+                const curSrc = el.src || el.getAttribute("src");
+                if (vRef && vRef.startsWith("vault://") && curSrc && curSrc.startsWith("blob:")) {
+                  blobUrlToVaultRefMap.set(curSrc, vRef);
+                  domVaultMap.set(curSrc, vRef);
+                }
+              });
+            } catch (_) {}
+
+            if (Array.isArray(obj)) {
+              for (let i = 0; i < obj.length; i++) {
+                const val = obj[i];
+                if (typeof val === "string" && val.startsWith("blob:")) {
+                  const mapped = blobUrlToVaultRefMap.get(val) || domVaultMap.get(val);
+                  if (mapped) {
+                    obj[i] = mapped;
+                    changed = true;
+                  }
+                } else if (val && typeof val === "object") {
+                  if (restoreVaultRefsInObjectDeep(val, visited)) changed = true;
+                }
+              }
+              return changed;
+            }
+            for (const key of Object.keys(obj)) {
+              const val = obj[key];
+              if (typeof val === "string" && val.startsWith("blob:")) {
+                const mapped = blobUrlToVaultRefMap.get(val) || domVaultMap.get(val);
+                if (mapped) {
+                  obj[key] = mapped;
+                  changed = true;
+                }
+              } else if (val && typeof val === "object") {
+                if (restoreVaultRefsInObjectDeep(val, visited)) changed = true;
+              }
+            }
+            return changed;
+          }
+          window.restoreVaultRefsInObjectDeep = restoreVaultRefsInObjectDeep;
 
           function normalizeVaultMode(m) {
             if (!m || m === "termux" || m === "server") return "server";
@@ -101841,9 +102285,74 @@ ${stickerContext || "无"}
             return null;
           }
 
+          // 安全去重清理：仅当某个文件已确切保存在 Termux 或外部授权文件夹中时，才清理浏览器 OPFS 中的同名重复副本，绝不删除任何未存到本地的文件
+          async function purgeBrowserOpfsMediaCacheIfExternalActive() {
+            try {
+              if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") return;
+              const cfg = loadVaultConfig();
+              const isTermuxReady = cfg.mode === "termux" && (await checkTermuxEndpointReachable(cfg));
+              const savedExtDir = await getSavedDirectoryHandle();
+              let extMediaDir = null;
+              if (savedExtDir) {
+                try {
+                  if (typeof savedExtDir.queryPermission === "function") {
+                    const perm = await savedExtDir.queryPermission({ mode: "readwrite" });
+                    if (perm === "granted") {
+                      extMediaDir = await savedExtDir.getDirectoryHandle("media", { create: false });
+                    }
+                  }
+                } catch (_) {}
+              }
+              if (!isTermuxReady && !extMediaDir) return;
+
+              const root = await navigator.storage.getDirectory();
+              let vaultDir = null;
+              let opfsMediaDir = null;
+              try {
+                vaultDir = await root.getDirectoryHandle("EPhoneVault", { create: false });
+                opfsMediaDir = await vaultDir.getDirectoryHandle("media", { create: false });
+              } catch (_) {
+                return;
+              }
+              if (!opfsMediaDir || typeof opfsMediaDir.entries !== "function") return;
+
+              const baseUrl = normalizeTermuxEndpoint(cfg.termuxUrl);
+              for await (const [entryName, entryHandle] of opfsMediaDir.entries()) {
+                if (!entryHandle || entryHandle.kind !== "file") continue;
+                let confirmedStoredLocally = false;
+                if (isTermuxReady) {
+                  try {
+                    const checkRes = await fetch(baseUrl + "/media/" + encodeURIComponent(entryName), {
+                      method: "HEAD",
+                      headers: getTermuxHeaders(cfg),
+                    });
+                    if (checkRes && checkRes.ok) {
+                      const lenHeader = checkRes.headers.get("content-length");
+                      if (!lenHeader || parseInt(lenHeader, 10) > 0) {
+                        confirmedStoredLocally = true;
+                      }
+                    }
+                  } catch (_) {}
+                }
+                if (!confirmedStoredLocally && extMediaDir) {
+                  try {
+                    const extFileHandle = await extMediaDir.getFileHandle(entryName, { create: false });
+                    const extFile = await extFileHandle.getFile();
+                    if (extFile && extFile.size > 0) {
+                      confirmedStoredLocally = true;
+                    }
+                  } catch (_) {}
+                }
+                if (confirmedStoredLocally) {
+                  try {
+                    await opfsMediaDir.removeEntry(entryName);
+                  } catch (_) {}
+                }
+              }
+            } catch (_) {}
+          }
+
           async function getEffectiveDirectoryHandle() {
-            const opfs = await getAutoOpfsDirectoryHandle();
-            if (opfs) return opfs;
             const saved = await getSavedDirectoryHandle();
             if (saved) {
               try {
@@ -101854,6 +102363,9 @@ ${stickerContext || "无"}
                   return saved;
                 }
               } catch (_) {}
+            }
+            if (cachedTermuxOk) {
+              return null;
             }
             return null;
           }
@@ -102050,16 +102562,19 @@ ${stickerContext || "无"}
 
           async function checkTermuxEndpointReachable(baseUrl, force = false) {
             const now = Date.now();
-            if (!force && now - lastTermuxCheckTime < 30000) {
+            if (!force && now - lastTermuxCheckTime < 20000) {
               return cachedTermuxOk;
             }
             lastTermuxCheckTime = now;
             try {
               const controller = new AbortController();
-              const timer = setTimeout(() => controller.abort(), 350);
+              const timer = setTimeout(() => controller.abort(), 2500);
               const res = await fetch(baseUrl + "/ping", { method: "GET", signal: controller.signal });
               clearTimeout(timer);
               cachedTermuxOk = Boolean(res && res.ok);
+              if (cachedTermuxOk) {
+                purgeBrowserOpfsMediaCacheIfExternalActive();
+              }
               return cachedTermuxOk;
             } catch (_) {
               cachedTermuxOk = false;
@@ -102266,7 +102781,8 @@ ${stickerContext || "无"}
                 const wrapped = wrapVaultBinary(cleanBytes);
                 const stealthName = toStealthVaultFileName(item.entryName);
 
-                // 1. 吸收进内置免授权 EPhoneVault/media 目录
+                // 1. 吸收进内置免授权 EPhoneVault/media 目录并校验写入成功
+                let savedToTargetOk = false;
                 const targetMediaDir = opfsMediaDir || dirHandle;
                 if (targetMediaDir) {
                   try {
@@ -102274,11 +102790,15 @@ ${stickerContext || "无"}
                     const wOpfs = await opfsFile.createWritable();
                     await wOpfs.write(wrapped);
                     await wOpfs.close();
+                    const verifyFile = await opfsFile.getFile();
+                    if (verifyFile && verifyFile.size > 0) {
+                      savedToTargetOk = true;
+                    }
                   } catch (_) {}
                 }
 
-                // 2. 删除外部文件夹里的原图或分散文件，彻底清空手机相册残留
-                if (isExternalFolder || item.entryName !== stealthName) {
+                // 2. 仅在新文件已确切写入成功后，才删除原同名/明文重复文件，绝不误删未保存成功的文件
+                if (savedToTargetOk && (isExternalFolder || item.entryName !== stealthName)) {
                   if (typeof dirHandle.removeEntry === "function") {
                     try {
                       await dirHandle.removeEntry(item.entryName);
@@ -102478,11 +102998,55 @@ ${stickerContext || "无"}
             return totalConverted;
           }
 
+          let activeTermuxUploads = 0;
+          const termuxUploadWaitQueue = [];
+          async function acquireTermuxUploadSlot() {
+            if (activeTermuxUploads < 3) {
+              activeTermuxUploads++;
+              return;
+            }
+            await new Promise((resolve) => termuxUploadWaitQueue.push(resolve));
+            activeTermuxUploads++;
+          }
+          function releaseTermuxUploadSlot() {
+            activeTermuxUploads = Math.max(0, activeTermuxUploads - 1);
+            if (termuxUploadWaitQueue.length > 0) {
+              const next = termuxUploadWaitQueue.shift();
+              if (next) next();
+            }
+          }
+
+          async function uploadToTermuxWithRetry(baseUrl, stealthName, wrappedBytes) {
+            await acquireTermuxUploadSlot();
+            try {
+              const targetUrl = baseUrl + "/media/" + encodeURIComponent(stealthName);
+              for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                  if (attempt > 0) {
+                    await new Promise((r) => setTimeout(r, 250 * attempt));
+                  }
+                  const res = await fetch(targetUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/octet-stream" },
+                    body: wrappedBytes,
+                  });
+                  if (res && res.ok) {
+                    cachedTermuxOk = true;
+                    return true;
+                  }
+                } catch (_) {}
+              }
+              return false;
+            } finally {
+              releaseTermuxUploadSlot();
+            }
+          }
+
           async function storeImageInVault(fileName, parts, cfg, sharedMediaDir = null) {
             if (writtenVaultFiles.has(fileName)) {
               if (!blobUrlMemoryCache.has(fileName)) {
                 const bytes = base64ToUint8Array(parts.b64);
-                blobUrlMemoryCache.set(fileName, URL.createObjectURL(new Blob([bytes], { type: parts.mime })));
+                setVaultBlobCache(fileName, URL.createObjectURL(new Blob([bytes], { type: parts.mime })));
               }
               return "vault://" + fileName;
             }
@@ -102492,52 +103056,61 @@ ${stickerContext || "无"}
               const bytes = base64ToUint8Array(parts.b64);
               const wrappedBytes = wrapVaultBinary(bytes);
               let storedAny = false;
+              const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
 
-              try {
-                let mediaDir = sharedMediaDir;
-                if (!mediaDir) {
-                  const handle = await getEffectiveDirectoryHandle();
-                  if (handle) {
-                    await writeNoMediaFileInDir(handle);
-                    mediaDir = await handle.getDirectoryHandle("media", { create: true });
-                    await writeNoMediaFileInDir(mediaDir);
-                  }
-                }
-                if (mediaDir) {
-                  const fileHandle = await mediaDir.getFileHandle(stealthName, { create: true });
-                  const writable = await fileHandle.createWritable();
-                  await writable.write(wrappedBytes);
-                  await writable.close();
+              // 1. 优先写入 Termux 本地守护服务（带并发队列与3次重试，确保每一张都真实落盘不丢图，且不在浏览器内重复留底）
+              if (cachedTermuxOk || await checkTermuxEndpointReachable(baseUrl)) {
+                const termuxSaved = await uploadToTermuxWithRetry(baseUrl, stealthName, wrappedBytes);
+                if (termuxSaved) {
                   storedAny = true;
                 }
-              } catch (_) {}
-
-              if (!sharedMediaDir) {
-                fetch("/api/local-vault/media", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    fileName,
-                    contentBase64: parts.b64,
-                    contentType: parts.mime,
-                  }),
-                }).catch(() => {});
-                storedAny = true;
               }
 
-              if (cachedTermuxOk) {
-                const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-                fetch(baseUrl + "/media/" + encodeURIComponent(stealthName), {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/octet-stream" },
-                  body: wrappedBytes,
-                }).catch(() => {});
+              // 2. 若用户显式选择了系统文件夹句柄，写入该外部文件夹
+              if (!storedAny) {
+                try {
+                  let mediaDir = sharedMediaDir;
+                  if (!mediaDir) {
+                    const handle = await getEffectiveDirectoryHandle();
+                    if (handle) {
+                      await writeNoMediaFileInDir(handle);
+                      mediaDir = await handle.getDirectoryHandle("media", { create: true });
+                      await writeNoMediaFileInDir(mediaDir);
+                    }
+                  }
+                  if (mediaDir) {
+                    const fileHandle = await mediaDir.getFileHandle(stealthName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(wrappedBytes);
+                    await writable.close();
+                    storedAny = true;
+                  }
+                } catch (_) {}
+              }
+
+              // 3. 同步至后端磁盘目录（非浏览器内存，带重试）
+              for (let sAttempt = 0; sAttempt < 2; sAttempt++) {
+                try {
+                  const sRes = await fetch("/api/local-vault/media", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      fileName,
+                      contentBase64: parts.b64,
+                      contentType: parts.mime,
+                    }),
+                  });
+                  if (sRes && sRes.ok) {
+                    storedAny = true;
+                    break;
+                  }
+                } catch (_) {}
               }
 
               if (!storedAny) throw new Error("写入本地目录失败");
               writtenVaultFiles.add(fileName);
               const blob = new Blob([bytes], { type: parts.mime });
-              blobUrlMemoryCache.set(fileName, URL.createObjectURL(blob));
+              setVaultBlobCache(fileName, URL.createObjectURL(blob));
               return "vault://" + fileName;
             } else if (mode === "webdav") {
               const baseUrl = cfg.url.replace(/\/+$/, "");
@@ -102558,12 +103131,13 @@ ${stickerContext || "无"}
               if (!data || !data.ok) throw new Error("上传网盘图片失败");
               writtenVaultFiles.add(fileName);
               const blob = new Blob([base64ToUint8Array(parts.b64)], { type: parts.mime });
-              blobUrlMemoryCache.set(fileName, URL.createObjectURL(blob));
+              setVaultBlobCache(fileName, URL.createObjectURL(blob));
               return "vault://" + fileName;
             }
             return null;
           }
 
+          const inflightVaultResolves = new Map();
           async function resolveVaultRefToUrl(vaultRef) {
             if (!vaultRef || typeof vaultRef !== "string") return vaultRef;
             if (!vaultRef.startsWith("vault://")) return vaultRef;
@@ -102571,112 +103145,208 @@ ${stickerContext || "无"}
             if (blobUrlMemoryCache.has(fileName)) {
               return blobUrlMemoryCache.get(fileName);
             }
-            const stealthName = toStealthVaultFileName(fileName);
-            const mime = getMimeFromVaultFileName(fileName);
-            const cfg = loadVaultConfig();
-            const mode = normalizeVaultMode(cfg.mode);
-            try {
-              if (mode === "server" || mode === "folder") {
-                try {
-                  const handle = await getEffectiveDirectoryHandle();
-                  if (handle) {
-                    const mediaDir = await handle.getDirectoryHandle("media", { create: false });
-                    let fileHandle = null;
+            if (inflightVaultResolves.has(fileName)) {
+              return inflightVaultResolves.get(fileName);
+            }
+            const task = (async () => {
+              const stealthName = toStealthVaultFileName(fileName);
+              const mime = getMimeFromVaultFileName(fileName);
+              const cfg = loadVaultConfig();
+              const mode = normalizeVaultMode(cfg.mode);
+              try {
+                if (mode === "server" || mode === "folder") {
+                  const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                  // 1. 优先从 Termux 本地服务读取（支持 .epdat 与原文件名双重匹配 + 重试）
+                  for (const candidate of [stealthName, fileName]) {
                     try {
-                      fileHandle = await mediaDir.getFileHandle(stealthName, { create: false });
-                    } catch (_) {
-                      fileHandle = await mediaDir.getFileHandle(fileName, { create: false });
-                    }
-                    if (fileHandle) {
-                      const file = await fileHandle.getFile();
-                      const ab = await file.arrayBuffer();
-                      const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                      const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                      blobUrlMemoryCache.set(fileName, objUrl);
-                      return objUrl;
-                    }
-                  }
-                } catch (_) {}
-
-                try {
-                  const opfsRoot = await getAutoOpfsDirectoryHandle();
-                  if (opfsRoot) {
-                    const opfsMedia = await opfsRoot.getDirectoryHandle("media", { create: false });
-                    let fHandle = null;
-                    try {
-                      fHandle = await opfsMedia.getFileHandle(stealthName, { create: false });
-                    } catch (_) {
-                      fHandle = await opfsMedia.getFileHandle(fileName, { create: false });
-                    }
-                    if (fHandle) {
-                      const file = await fHandle.getFile();
-                      const ab = await file.arrayBuffer();
-                      const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                      const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                      blobUrlMemoryCache.set(fileName, objUrl);
-                      return objUrl;
-                    }
-                  }
-                } catch (_) {}
-
-                try {
-                  const apiRes = await fetch("/api/local-vault/media/" + encodeURIComponent(fileName));
-                  if (apiRes.ok) {
-                    const ab = await apiRes.arrayBuffer();
-                    const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                    try {
-                      const opfsRoot = await getAutoOpfsDirectoryHandle();
-                      if (opfsRoot) {
-                        const opfsMedia = await opfsRoot.getDirectoryHandle("media", { create: true });
-                        const fh = await opfsMedia.getFileHandle(stealthName, { create: true });
-                        const w = await fh.createWritable();
-                        await w.write(wrapVaultBinary(cleanBytes));
-                        await w.close();
+                      const tRes = await fetch(baseUrl + "/media/" + encodeURIComponent(candidate));
+                      if (tRes && tRes.ok) {
+                        const ab = await tRes.arrayBuffer();
+                        const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                        const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                        setVaultBlobCache(fileName, objUrl);
+                        cachedTermuxOk = true;
+                        return objUrl;
                       }
                     } catch (_) {}
-                    const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                    blobUrlMemoryCache.set(fileName, objUrl);
-                    return objUrl;
                   }
-                } catch (_) {}
 
-                const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-                try {
-                  const tRes = await fetch(baseUrl + "/media/" + encodeURIComponent(stealthName));
-                  if (tRes.ok) {
-                    const ab = await tRes.arrayBuffer();
-                    const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                    const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                    blobUrlMemoryCache.set(fileName, objUrl);
+                  // 2. 从服务端本地目录读取
+                  try {
+                    const apiRes = await fetch("/api/local-vault/media/" + encodeURIComponent(fileName));
+                    if (apiRes && apiRes.ok) {
+                      const ab = await apiRes.arrayBuffer();
+                      const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                      const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                      setVaultBlobCache(fileName, objUrl);
+                      return objUrl;
+                    }
+                  } catch (_) {}
+
+                  // 3. 若用户授权了外部本地文件夹句柄，从外部文件夹读取
+                  try {
+                    const handle = await getEffectiveDirectoryHandle();
+                    if (handle) {
+                      const mediaDir = await handle.getDirectoryHandle("media", { create: false });
+                      let fileHandle = null;
+                      try {
+                        fileHandle = await mediaDir.getFileHandle(stealthName, { create: false });
+                      } catch (_) {
+                        fileHandle = await mediaDir.getFileHandle(fileName, { create: false });
+                      }
+                      if (fileHandle) {
+                        const file = await fileHandle.getFile();
+                        const ab = await file.arrayBuffer();
+                        const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                        const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                        setVaultBlobCache(fileName, objUrl);
+                        return objUrl;
+                      }
+                    }
+                  } catch (_) {}
+
+                  return vaultRef;
+                } else if (mode === "webdav" && cfg.url) {
+                  const targetUrl = cfg.url.replace(/\/+$/, "") + "/EPhoneVault/media_" + stealthName;
+                  const res = await fetch("/api/webdav-proxy", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      url: targetUrl,
+                      method: "GET",
+                      username: cfg.username,
+                      password: cfg.password,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (data && data.ok && data.contentBase64) {
+                    const bytes = unwrapVaultBinary(base64ToUint8Array(data.contentBase64));
+                    const blob = new Blob([bytes], { type: mime });
+                    const objUrl = URL.createObjectURL(blob);
+                    setVaultBlobCache(fileName, objUrl);
                     return objUrl;
                   }
-                } catch (_) {}
-                return baseUrl + "/media/" + encodeURIComponent(fileName);
-              } else if (mode === "webdav" && cfg.url) {
-                const targetUrl = cfg.url.replace(/\/+$/, "") + "/EPhoneVault/media_" + stealthName;
-                const res = await fetch("/api/webdav-proxy", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    url: targetUrl,
-                    method: "GET",
-                    username: cfg.username,
-                    password: cfg.password,
-                  }),
-                });
-                const data = await res.json();
-                if (data && data.ok && data.contentBase64) {
-                  const bytes = unwrapVaultBinary(base64ToUint8Array(data.contentBase64));
-                  const blob = new Blob([bytes], { type: mime });
-                  const objUrl = URL.createObjectURL(blob);
-                  blobUrlMemoryCache.set(fileName, objUrl);
-                  return objUrl;
                 }
-              }
-            } catch (_) {}
-            return vaultRef;
+              } catch (_) {}
+              return vaultRef;
+            })();
+            inflightVaultResolves.set(fileName, task);
+            try {
+              return await task;
+            } finally {
+              inflightVaultResolves.delete(fileName);
+            }
           }
           window.resolveVaultRefToUrl = resolveVaultRefToUrl;
+
+          async function resolveVaultRefToDataUrl(refOrUrl) {
+            if (typeof refOrUrl !== "string") return refOrUrl;
+            try {
+              if (refOrUrl.startsWith("data:")) return refOrUrl;
+              let blobUrl = refOrUrl;
+              let fileName = "";
+              if (refOrUrl.startsWith("vault://")) {
+                fileName = refOrUrl.slice("vault://".length).split("?")[0].trim();
+                const resolved = await resolveVaultRefToUrl(refOrUrl);
+                if (typeof resolved === "string" && resolved.startsWith("data:")) {
+                  return resolved;
+                }
+                if (typeof resolved === "string" && (resolved.startsWith("blob:") || resolved.startsWith("http") || resolved.startsWith("/"))) {
+                  blobUrl = resolved;
+                }
+              }
+              if (blobUrl.startsWith("blob:") || blobUrl.startsWith("http") || blobUrl.startsWith("/api/")) {
+                try {
+                  const res = await fetch(blobUrl);
+                  if (res && res.ok) {
+                    const ab = await res.arrayBuffer();
+                    const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                    if (cleanBytes && cleanBytes.byteLength > 0) {
+                      const mime = guessMimeFromFileName(fileName || "image.png");
+                      return "data:" + mime + ";base64," + uint8ArrayToBase64(cleanBytes);
+                    }
+                  }
+                } catch (_) {}
+              }
+            } catch (_) {}
+            return refOrUrl;
+          }
+          window.resolveVaultRefToDataUrl = resolveVaultRefToDataUrl;
+
+          async function resolveAllVaultUrlsDeepForBackup(rootObj) {
+            if (!rootObj || typeof rootObj !== "object") return rootObj;
+            if (typeof restoreVaultRefsInObjectDeep === "function") {
+              try { restoreVaultRefsInObjectDeep(rootObj); } catch (_) {}
+            }
+            const tasks = [];
+            const visited = new WeakSet();
+            function walk(obj) {
+              if (!obj || typeof obj !== "object" || visited.has(obj)) return;
+              visited.add(obj);
+              if (Array.isArray(obj)) {
+                for (let i = 0; i < obj.length; i++) {
+                  const v = obj[i];
+                  if (typeof v === "string") {
+                    if (v.startsWith("vault://") || v.startsWith("blob:")) {
+                      tasks.push({ holder: obj, key: i, val: v });
+                    }
+                  } else if (v && typeof v === "object") {
+                    walk(v);
+                  }
+                }
+                return;
+              }
+              for (const k of Object.keys(obj)) {
+                const v = obj[k];
+                if (typeof v === "string") {
+                  if (v.startsWith("vault://") || v.startsWith("blob:")) {
+                    tasks.push({ holder: obj, key: k, val: v });
+                  } else if ((v.startsWith("{") || v.startsWith("[")) && v.includes("vault://")) {
+                    try {
+                      const parsed = JSON.parse(v);
+                      if (parsed && typeof parsed === "object") {
+                        tasks.push({ holder: obj, key: k, jsonObj: parsed });
+                        walk(parsed);
+                      }
+                    } catch (_) {}
+                  }
+                } else if (v && typeof v === "object") {
+                  walk(v);
+                }
+              }
+            }
+            walk(rootObj);
+            const strTasks = tasks.filter((t) => typeof t.val === "string");
+            const jsonTasks = tasks.filter((t) => t.jsonObj);
+            const cache = new Map();
+            const BATCH = 8;
+            for (let i = 0; i < strTasks.length; i += BATCH) {
+              const slice = strTasks.slice(i, i + BATCH);
+              await Promise.all(
+                slice.map(async (t) => {
+                  try {
+                    if (cache.has(t.val)) {
+                      t.holder[t.key] = cache.get(t.val);
+                      return;
+                    }
+                    const dataUrl = await resolveVaultRefToDataUrl(t.val);
+                    if (typeof dataUrl === "string" && dataUrl.startsWith("data:")) {
+                      cache.set(t.val, dataUrl);
+                      t.holder[t.key] = dataUrl;
+                    }
+                  } catch (_) {}
+                }),
+              );
+            }
+            for (let j = jsonTasks.length - 1; j >= 0; j--) {
+              const jt = jsonTasks[j];
+              try {
+                jt.holder[jt.key] = JSON.stringify(jt.jsonObj);
+              } catch (_) {}
+            }
+            return rootObj;
+          }
+          window.resolveAllVaultUrlsDeepForBackup = resolveAllVaultUrlsDeepForBackup;
 
           function isOffloadableStringValue(val, propKey = "") {
             if (typeof val !== "string" || val.length < 4096 || val.startsWith("vault://")) return false;
@@ -102732,40 +103402,31 @@ ${stickerContext || "无"}
           }
 
           async function offloadObjectImagesDeep(obj, cfg, counter, sharedMediaDir = null) {
+            restoreVaultRefsInObjectDeep(obj);
             const tasks = [];
             collectImageTasksFromObject(obj, tasks);
             if (tasks.length === 0) return false;
             let modified = false;
-            const BATCH_SIZE = 24;
+            const BATCH_SIZE = 6;
             for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
               const slice = tasks.slice(i, i + BATCH_SIZE);
-              const serverBatch = [];
               await Promise.all(
                 slice.map(async (t) => {
-                  const parts = parseDataUrlToParts(t.val, t.propKey || "");
-                  if (!parts) return;
-                  const prefix = parts.prefix || "img_";
-                  const fileName = prefix + hashDataUrl(t.val) + "." + parts.ext;
-                  const wasWritten = writtenVaultFiles.has(fileName);
-                  const nextVal = await storeImageInVault(fileName, parts, cfg, sharedMediaDir);
-                  if (nextVal && nextVal !== t.val) {
-                    t.holder[t.key] = nextVal;
-                    counter.count++;
-                    counter.savedBytes += t.val.length;
-                    modified = true;
-                    if (!wasWritten && normalizeVaultMode(cfg.mode) !== "webdav") {
-                      serverBatch.push({ fileName, contentBase64: parts.b64 });
+                  try {
+                    const parts = parseDataUrlToParts(t.val, t.propKey || "");
+                    if (!parts) return;
+                    const prefix = parts.prefix || "img_";
+                    const fileName = prefix + hashDataUrl(t.val) + "." + parts.ext;
+                    const nextVal = await storeImageInVault(fileName, parts, cfg, sharedMediaDir);
+                    if (nextVal && nextVal !== t.val) {
+                      t.holder[t.key] = nextVal;
+                      counter.count++;
+                      counter.savedBytes += t.val.length;
+                      modified = true;
                     }
-                  }
+                  } catch (_) {}
                 }),
               );
-              if (serverBatch.length > 0) {
-                fetch("/api/local-vault/media-batch", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ items: serverBatch }),
-                }).catch(() => {});
-              }
             }
             return modified;
           }
@@ -103039,13 +103700,37 @@ ${stickerContext || "无"}
           }
 
           function hydrateDomVaultImages() {
-            const imgs = document.querySelectorAll('img[src^="vault://"]');
+            const imgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref]');
             imgs.forEach((img) => {
-              const ref = img.getAttribute("src");
-              if (!ref) return;
+              const attrSrc = img.getAttribute("src") || "";
+              const ref = attrSrc.startsWith("vault://") ? attrSrc : img.getAttribute("data-vault-ref");
+              if (!ref || !ref.startsWith("vault://")) return;
+              img.setAttribute("data-vault-ref", ref);
+              if (!attrSrc.startsWith("vault://") && !img.hasAttribute("data-vault-pending") && attrSrc.startsWith("blob:")) {
+                blobUrlToVaultRefMap.set(attrSrc, ref);
+                return;
+              }
               resolveVaultRefToUrl(ref).then((resolved) => {
-                if (resolved && resolved !== ref) {
+                if (resolved && resolved !== ref && !resolved.startsWith("vault://")) {
+                  img.removeAttribute("data-vault-pending");
+                  if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
+                    img.className = "realimag-image";
+                  }
                   img.setAttribute("src", resolved);
+                } else if (!img._vaultRetryScheduled) {
+                  img._vaultRetryScheduled = true;
+                  setTimeout(() => {
+                    img._vaultRetryScheduled = false;
+                    resolveVaultRefToUrl(ref).then((retryResolved) => {
+                      if (retryResolved && retryResolved !== ref && !retryResolved.startsWith("vault://")) {
+                        img.removeAttribute("data-vault-pending");
+                        if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
+                          img.className = "realimag-image";
+                        }
+                        img.setAttribute("src", retryResolved);
+                      }
+                    });
+                  }, 700);
                 }
               });
             });
@@ -103087,6 +103772,7 @@ ${stickerContext || "无"}
               });
             });
           }
+          window.hydrateDomVaultImages = hydrateDomVaultImages;
 
           window.toggleStorageTutorialPanel = function () {
             const card = document.getElementById("storage-tutorial-card");
@@ -103137,6 +103823,7 @@ ${stickerContext || "无"}
               "open(os.path.join(root,'.nomedia'),'a').close()",
               "open(os.path.join(mdir,'.nomedia'),'a').close()",
               "class H(http.server.BaseHTTPRequestHandler):",
+              " def log_message(s,*a): pass",
               " def _c(s):",
               "  s.send_header('Access-Control-Allow-Origin','*')",
               "  s.send_header('Access-Control-Allow-Methods','GET,PUT,POST,OPTIONS')",
@@ -103154,8 +103841,9 @@ ${stickerContext || "无"}
               "  p=os.path.join(root,s.path.lstrip('/')); os.makedirs(os.path.dirname(p),exist_ok=True)",
               "  with open(p,'wb') as f: f.write(b)",
               "  s.send_response(200); s._c(); s.end_headers(); s.wfile.write(b'ok')",
+              "class S(socketserver.ThreadingMixIn,http.server.HTTPServer): daemon_threads=True",
               "print('Vault Ready on 127.0.0.1:8765 ->',root)",
-              "http.server.HTTPServer(('127.0.0.1',8765),H).serve_forever()",
+              "S(('127.0.0.1',8765),H).serve_forever()",
             ].join("\n");
             const b64Script = btoa(pyScript);
             const cmd = platform === "ios"
@@ -103201,17 +103889,67 @@ ${stickerContext || "无"}
               const origPut = table.put.bind(table);
               table.put = async function (rowObj, ...rest) {
                 try {
-                  const cfg = loadVaultConfig();
-                  if (cfg.auto && rowObj && typeof rowObj === "object") {
-                    const counter = { count: 0, savedBytes: 0 };
-                    await offloadObjectImagesDeep(rowObj, cfg, counter);
-                    if (counter.count > 0) {
-                      setTimeout(hydrateDomVaultImages, 50);
+                  if (rowObj && typeof rowObj === "object") {
+                    restoreVaultRefsInObjectDeep(rowObj);
+                    const cfg = loadVaultConfig();
+                    if (cfg.auto) {
+                      const counter = { count: 0, savedBytes: 0 };
+                      await offloadObjectImagesDeep(rowObj, cfg, counter);
+                      if (counter.count > 0) {
+                        setTimeout(hydrateDomVaultImages, 50);
+                      }
                     }
                   }
                 } catch (_) {}
                 return origPut(rowObj, ...rest);
               };
+              if (typeof table.add === "function") {
+                const origAdd = table.add.bind(table);
+                table.add = async function (rowObj, ...rest) {
+                  try {
+                    if (rowObj && typeof rowObj === "object") {
+                      restoreVaultRefsInObjectDeep(rowObj);
+                      const cfg = loadVaultConfig();
+                      if (cfg.auto) {
+                        const counter = { count: 0, savedBytes: 0 };
+                        await offloadObjectImagesDeep(rowObj, cfg, counter);
+                      }
+                    }
+                  } catch (_) {}
+                  return origAdd(rowObj, ...rest);
+                };
+              }
+              if (typeof table.bulkPut === "function") {
+                const origBulkPut = table.bulkPut.bind(table);
+                table.bulkPut = async function (rows, ...rest) {
+                  try {
+                    if (Array.isArray(rows)) {
+                      const cfg = loadVaultConfig();
+                      for (const r of rows) {
+                        if (r && typeof r === "object") {
+                          restoreVaultRefsInObjectDeep(r);
+                          if (cfg.auto) {
+                            const counter = { count: 0, savedBytes: 0 };
+                            await offloadObjectImagesDeep(r, cfg, counter);
+                          }
+                        }
+                      }
+                    }
+                  } catch (_) {}
+                  return origBulkPut(rows, ...rest);
+                };
+              }
+              if (typeof table.update === "function") {
+                const origUpdate = table.update.bind(table);
+                table.update = async function (key, changes, ...rest) {
+                  try {
+                    if (changes && typeof changes === "object") {
+                      restoreVaultRefsInObjectDeep(changes);
+                    }
+                  } catch (_) {}
+                  return origUpdate(key, changes, ...rest);
+                };
+              }
             }
           }
 
@@ -103637,10 +104375,20 @@ ${stickerContext || "无"}
               hydrateDomVaultImages();
             }, 500);
 
+            let hydrateTimer = null;
             const obs = new MutationObserver(() => {
-              hydrateDomVaultImages();
+              if (hydrateTimer) return;
+              hydrateTimer = setTimeout(() => {
+                hydrateTimer = null;
+                hydrateDomVaultImages();
+              }, 16);
             });
-            obs.observe(document.body, { childList: true, subtree: true });
+            obs.observe(document.body, {
+              childList: true,
+              subtree: true,
+              attributes: true,
+              attributeFilter: ["src", "data-vault-ref", "style"],
+            });
           }
 
           if (document.readyState === "loading") {
