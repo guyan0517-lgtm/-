@@ -454,6 +454,7 @@
           this.ws.send(JSON.stringify({ type: "ack", peerCode: myCode, eventIds: eventIds }));
         } catch (e) {}
       }
+      if (!this.hasBackendRelayServer()) return;
       fetch(this.getApiUrl("/api/peer/ack"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -645,6 +646,26 @@
       return "";
     },
 
+    hasBackendRelayServer: function () {
+      const base = this.getApiBase();
+      if (base) return true;
+      if (this._backendRelayUnsupported) return false;
+      const host = (typeof window !== "undefined" && window.location && window.location.hostname)
+        ? window.location.hostname.toLowerCase()
+        : "";
+      if (
+        !host ||
+        (typeof window !== "undefined" && window.location && window.location.protocol === "file:") ||
+        host.endsWith(".github.io") ||
+        host.endsWith(".pages.dev") ||
+        host.endsWith(".netlify.app") ||
+        host.endsWith(".vercel.app")
+      ) {
+        return false;
+      }
+      return true;
+    },
+
     getApiUrl: function (path) {
       const base = this.getApiBase();
       return base ? base + path : path;
@@ -715,9 +736,11 @@
 
     wakeUpAndSyncNow: function () {
       this.flushIncomingQueue();
-      this.pollOnce();
-      if (!this.ws || this.ws.readyState > 1) {
-        this.connectWebSocket();
+      if (this.hasBackendRelayServer()) {
+        this.pollOnce();
+        if (!this.ws || this.ws.readyState > 1) {
+          this.connectWebSocket();
+        }
       }
       if (!this.mqttClients || this.mqttClients.length === 0) {
         this.connectMqttBroker();
@@ -1101,6 +1124,7 @@
           this.ws.send(jsonStr);
         } catch (e) {}
       }
+      if (!this.hasBackendRelayServer()) return;
       if (
         payload.type === "offline_ping" &&
         typeof navigator !== "undefined" &&
@@ -1360,7 +1384,7 @@
         } catch (e) {}
       }
 
-      if (apiPath) {
+      if (apiPath && this.hasBackendRelayServer()) {
         fetch(this.getApiUrl(apiPath), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1387,6 +1411,7 @@
     },
 
     connectWebSocket: function () {
+      if (!this.hasBackendRelayServer()) return;
       const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const profile = this.getMyProfile();
 
@@ -1430,6 +1455,7 @@
         ws.onclose = () => {
           this.ws = null;
           if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+          if (!this.hasBackendRelayServer()) return;
           this.reconnectTimer = setTimeout(() => {
             this.connectWebSocket();
           }, 3000);
@@ -1440,6 +1466,7 @@
     },
 
     registerViaHttp: async function () {
+      if (!this.hasBackendRelayServer()) return;
       const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const profile = this.getMyProfile();
       const smallAva = await this.compressAvatarForWire(profile.avatar);
@@ -1452,16 +1479,28 @@
           avatar: smallAva,
           myAvatarFrame: profile.myAvatarFrame || ""
         })
-      }).catch(() => {});
+      })
+        .then((res) => {
+          if (res && (res.status === 404 || res.status === 405)) {
+            this._backendRelayUnsupported = true;
+          }
+        })
+        .catch(() => {});
     },
 
     startPollingFallback: function () {
+      if (!this.hasBackendRelayServer()) return;
       if (this.isPollingActive) return;
       this.isPollingActive = true;
       this.pollOnce();
     },
 
     pollOnce: function () {
+      if (!this.hasBackendRelayServer()) {
+        this._isPollingNow = false;
+        this.isPollingActive = false;
+        return;
+      }
       if (this._isPollingNow) return;
       this._isPollingNow = true;
       const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
@@ -1474,9 +1513,20 @@
       fetch(this.getApiUrl("/api/peer/poll?code=" + encodeURIComponent(myCode) + peersQuery), {
         signal: controller ? controller.signal : undefined
       })
-        .then((res) => (res.ok ? res.json() : null))
+        .then((res) => {
+          if (res && (res.status === 404 || res.status === 405)) {
+            this._backendRelayUnsupported = true;
+            return null;
+          }
+          return res && res.ok ? res.json() : null;
+        })
         .then((data) => {
           if (abortTimer) clearTimeout(abortTimer);
+          if (!this.hasBackendRelayServer()) {
+            this._isPollingNow = false;
+            this.isPollingActive = false;
+            return;
+          }
           if (data && data.onlinePeers && typeof data.onlinePeers === "object") {
             for (const [pCode, isOn] of Object.entries(data.onlinePeers)) {
               const norm = this.normalizePeerCode(pCode);
@@ -1508,6 +1558,10 @@
         .catch(() => {
           if (abortTimer) clearTimeout(abortTimer);
           this._isPollingNow = false;
+          if (!this.hasBackendRelayServer()) {
+            this.isPollingActive = false;
+            return;
+          }
           setTimeout(() => {
             this.pollOnce();
           }, 1500);
@@ -1895,8 +1949,11 @@
 
     triggerMobileSystemNotification: async function (title, body, avatarUrl, meta) {
       try {
-        if (!("Notification" in window)) return;
-        if (Notification.permission !== "granted") return;
+        if (!("Notification" in window)) return false;
+        if (Notification.permission === "default") {
+          try { await Notification.requestPermission(); } catch (_) {}
+        }
+        if (Notification.permission !== "granted") return false;
 
         const isValidHttpOrRelativeIcon =
           typeof avatarUrl === "string" &&
@@ -1922,6 +1979,12 @@
           vibrate: [200, 100, 200],
           data: notifData
         };
+        const minimalOpts = {
+          body: body,
+          icon: safeIcon,
+          tag: tag,
+          data: notifData
+        };
 
         let shown = false;
         if ("serviceWorker" in navigator) {
@@ -1930,7 +1993,12 @@
             try {
               await cachedReg.showNotification(title, notifOpts);
               shown = true;
-            } catch (_) {}
+            } catch (_) {
+              try {
+                await cachedReg.showNotification(title, minimalOpts);
+                shown = true;
+              } catch (_2) {}
+            }
           }
           if (!shown) {
             try {
@@ -1938,8 +2006,13 @@
               if (reg && typeof reg.showNotification === "function") {
                 this._cachedSwReg = reg;
                 window.__cachedSwReg = reg;
-                await reg.showNotification(title, notifOpts);
-                shown = true;
+                try {
+                  await reg.showNotification(title, notifOpts);
+                  shown = true;
+                } catch (_) {
+                  await reg.showNotification(title, minimalOpts);
+                  shown = true;
+                }
               }
             } catch (_) {}
           }
@@ -1954,27 +2027,27 @@
                 chatId: notifData.chatId,
                 openRequests: notifData.openRequests
               });
+              shown = true;
             } catch (_) {}
           }
         }
         if (!shown) {
-          const n = new Notification(title, {
-            body: body,
-            icon: safeIcon,
-            tag: tag,
-            renotify: true,
-            silent: false,
-            data: notifData
-          });
-          n.onclick = function () {
-            try { window.focus(); } catch (_) {}
-            if (notifData.chatId && typeof window.openChat === "function") {
-              try { window.openChat(notifData.chatId); } catch (_) {}
-            }
-            try { n.close(); } catch (_) {}
-          };
+          try {
+            const n = new Notification(title, minimalOpts);
+            n.onclick = function () {
+              try { window.focus(); } catch (_) {}
+              if (notifData.chatId && typeof window.openChat === "function") {
+                try { window.openChat(notifData.chatId); } catch (_) {}
+              }
+              try { n.close(); } catch (_) {}
+            };
+            shown = true;
+          } catch (_) {}
         }
-      } catch (e) {}
+        return shown;
+      } catch (e) {
+        return false;
+      }
     },
 
     showPeerNotice: function (titleOrText, onClick, options) {

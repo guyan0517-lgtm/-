@@ -915,8 +915,8 @@ app.post('/api/anime-tts', async (req, res) => {
 
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
-  req.setTimeout(600000);
-  res.setTimeout(600000);
+  req.setTimeout(180000);
+  res.setTimeout(180000);
 
   try {
     const { url, method = 'POST', headers = {}, body } = req.body;
@@ -932,7 +932,7 @@ app.post('/api/proxy', async (req, res) => {
     const fetchOptions = {
       method,
       headers: fetchHeaders,
-      signal: AbortSignal.timeout(480000)
+      signal: AbortSignal.timeout(180000)
     };
 
     if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
@@ -951,11 +951,17 @@ app.post('/api/proxy', async (req, res) => {
 
       if (response.body) {
         const reader = response.body.getReader();
+        const decoder = new TextDecoder();
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             res.write(value);
+            const textChunk = decoder.decode(value, { stream: true });
+            if (textChunk.includes('data: [DONE]') || textChunk.includes('data:[DONE]')) {
+              try { await reader.cancel(); } catch (_) {}
+              break;
+            }
           }
         } catch (streamErr) {
           console.warn('[Proxy Stream] Stream reading error:', streamErr.message);
