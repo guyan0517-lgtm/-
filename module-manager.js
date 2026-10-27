@@ -3580,12 +3580,12 @@
       return [];
     },
 
-    async callAI(systemPrompt, userPrompt, imageParts = null) {
+    async callAI(systemPrompt, userPrompt, imageParts = null, purpose = 'module') {
       const stateObj = global.state || (typeof window !== 'undefined' ? window.state : {}) || {};
       const apiCfg = (typeof global.getEffectiveApiConfig === 'function')
-        ? global.getEffectiveApiConfig('module')
+        ? global.getEffectiveApiConfig(purpose)
         : ((typeof window !== 'undefined' && typeof window.getEffectiveApiConfig === 'function')
-            ? window.getEffectiveApiConfig('module')
+            ? window.getEffectiveApiConfig(purpose)
             : (stateObj.apiConfig || {}));
 
       const proxyUrl = apiCfg.proxyUrl || (apiCfg.isSub ? "https://api.openai.com" : (stateObj.apiConfig?.proxyUrl || "https://api.openai.com"));
@@ -3598,11 +3598,12 @@
         throw new Error(apiCfg.isSub ? '未检测到副 API Key，请先在API设置中配置副 API 密钥与模型' : '未检测到主 API Key，请先在API设置中配置主 API 密钥与模型');
       }
       const GEMINI_URL = global.GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models';
-      const isGemini = proxyUrl === GEMINI_URL;
+      const isGemini = proxyUrl === GEMINI_URL || (proxyUrl && proxyUrl.includes('generativelanguage.googleapis.com'));
+      const cleanedProxy = String(proxyUrl || 'https://api.openai.com').trim().replace(/\/+$/, '');
 
       let requestUrl = isGemini
         ? `${GEMINI_URL}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
-        : `${proxyUrl}/v1/chat/completions`;
+        : (cleanedProxy.endsWith('/v1') ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`);
 
       const useStreamInModule = typeof window.isApiStreamEnabled === 'function' ? window.isApiStreamEnabled() : false;
       let requestHeaders = isGemini
@@ -3725,19 +3726,25 @@
       if (trimmed.startsWith('{')) {
         try {
           const resData = JSON.parse(trimmed);
+          const candidateParts = resData.candidates?.[0]?.content?.parts;
+          const joinedPartsText = Array.isArray(candidateParts)
+            ? (candidateParts.filter(p => p && !p.thought).map(p => p.text || '').join('') || candidateParts.map(p => p.text || '').join(''))
+            : (candidateParts?.[0]?.text || '');
           if (isGemini) {
-            const parts = resData.candidates?.[0]?.content?.parts;
-            resText = Array.isArray(parts) ? parts.map(p => p.text || '').join('') : (parts?.[0]?.text || '');
-            if (!resText && resData.choices?.[0]?.message?.content) {
-              resText = resData.choices[0].message.content;
-            }
+            resText = joinedPartsText || resData.choices?.[0]?.message?.content || '';
           } else {
-            resText =
+            const msgContent =
               resData.choices?.[0]?.message?.content ||
               resData.choices?.[0]?.delta?.content ||
               resData.content?.[0]?.text ||
-              resData.candidates?.[0]?.content?.parts?.[0]?.text ||
+              joinedPartsText ||
               '';
+            const msgReasoning =
+              resData.choices?.[0]?.message?.reasoning_content ||
+              resData.choices?.[0]?.message?.reasoning ||
+              resData.choices?.[0]?.message?.thinking ||
+              '';
+            resText = msgContent || msgReasoning || '';
           }
         } catch (jsonErr) {
           resText = rawText;
@@ -13522,21 +13529,195 @@ ${chaptersDigest}
       if (statusEl && text) statusEl.textContent = text;
     },
 
-    parseJsonFromAiResponse(rawText) {
-      if (!rawText || typeof rawText !== 'string') return null;
-      let clean = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-      try {
-        return JSON.parse(clean);
-      } catch (_) {
-        const firstBrace = clean.indexOf('{');
-        const lastBrace = clean.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          try {
-            return JSON.parse(clean.slice(firstBrace, lastBrace + 1));
-          } catch (_2) {}
+    repairJsonTextForParse(jsonCandidate) {
+      if (!jsonCandidate || typeof jsonCandidate !== 'string') return '';
+      let text = jsonCandidate.trim();
+      let out = '';
+      let inString = false;
+      let isEscaped = false;
+      const len = text.length;
+
+      for (let i = 0; i < len; i++) {
+        const ch = text[i];
+        if (!inString) {
+          if (ch === '"') {
+            inString = true;
+          }
+          out += ch;
+        } else {
+          if (isEscaped) {
+            isEscaped = false;
+            out += ch;
+            continue;
+          }
+          if (ch === '\\') {
+            isEscaped = true;
+            out += ch;
+            continue;
+          }
+          if (ch === '\n') {
+            out += '\\n';
+            continue;
+          }
+          if (ch === '\r') {
+            continue;
+          }
+          if (ch === '\t') {
+            out += '\\t';
+            continue;
+          }
+          if (ch === '"') {
+            let j = i + 1;
+            while (j < len && (text[j] === ' ' || text[j] === '\t' || text[j] === '\r' || text[j] === '\n')) {
+              j++;
+            }
+            const nextNonWs = j < len ? text[j] : '';
+            const isClosingQuote =
+              nextNonWs === ':' ||
+              nextNonWs === ',' ||
+              nextNonWs === '}' ||
+              nextNonWs === ']' ||
+              nextNonWs === '';
+            if (isClosingQuote) {
+              inString = false;
+              out += '"';
+            } else {
+              out += '\\"';
+            }
+            continue;
+          }
+          out += ch;
         }
       }
+      out = out.replace(/,\s*([}\]])/g, '$1');
+      return out;
+    },
+
+    parseJsonFromAiResponse(rawText) {
+      if (!rawText || typeof rawText !== 'string') return null;
+      let clean = rawText
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+
+      const tryParseCandidate = (candidate) => {
+        if (!candidate) return null;
+        try {
+          return JSON.parse(candidate);
+        } catch (_) {}
+        try {
+          const repaired = this.repairJsonTextForParse(candidate);
+          return JSON.parse(repaired);
+        } catch (_2) {}
+        return null;
+      };
+
+      const directParsed = tryParseCandidate(clean);
+      if (directParsed && typeof directParsed === 'object') return directParsed;
+
+      const firstBrace = clean.indexOf('{');
+      const lastBrace = clean.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const sliced = clean.slice(firstBrace, lastBrace + 1);
+        const slicedParsed = tryParseCandidate(sliced);
+        if (slicedParsed && typeof slicedParsed === 'object') return slicedParsed;
+      }
+
       return null;
+    },
+
+    salvageAi1BlueprintFromRaw(rawText, fallbackTitle = '') {
+      if (!rawText || typeof rawText !== 'string') return null;
+      const clean = rawText
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+
+      const extractFieldText = (keyNames, nextKeyPattern) => {
+        for (const k of keyNames) {
+          const reg = new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"(?:${nextKeyPattern})"|\\s*\\})`, 'i');
+          const m = clean.match(reg);
+          if (m && m[1]) {
+            return m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+          }
+        }
+        return '';
+      };
+
+      const allKeys = 'title|summary|themeMode|creativeReflection|publicInfoChapter|publicInfo|knownInfo|kpTruthAndMechanism|kpTruth|catAndNpcProfiles|plannedScenes|endingsPlan';
+      const title = extractFieldText(['title', 'moduleName', 'name'], allKeys) || fallbackTitle || '未命名模组';
+      const summary = extractFieldText(['summary', 'desc', 'description'], allKeys);
+      const themeMode = extractFieldText(['themeMode', 'style', 'theme'], allKeys);
+      const creativeReflection = extractFieldText(['creativeReflection', 'reflection'], allKeys);
+      const publicInfoChapter = extractFieldText(['publicInfoChapter', 'publicInfo', 'knownInfo'], allKeys) || summary;
+      const kpTruthAndMechanism = extractFieldText(['kpTruthAndMechanism', 'kpTruth', 'truth'], allKeys);
+      const endingsPlan = extractFieldText(['endingsPlan', 'endings'], allKeys);
+
+      const catAndNpcProfiles = [];
+      const profBlockMatch = clean.match(/"catAndNpcProfiles"\s*:\s*\[([\s\S]*?)\](?=\s*,\s*"|\s*\})/i);
+      if (profBlockMatch && profBlockMatch[1]) {
+        const itemReg = /\{([\s\S]*?)\}/g;
+        let m;
+        while ((m = itemReg.exec(profBlockMatch[1])) !== null) {
+          const b = m[1];
+          const getSub = (k) => {
+            const sm = b.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"|\\s*$)`, 'i'));
+            return sm ? sm[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+          };
+          const roleName = getSub('roleName') || getSub('name');
+          const secretProfile = getSub('secretProfile') || getSub('secret');
+          if (roleName || secretProfile) {
+            catAndNpcProfiles.push({
+              chapterTitle: getSub('chapterTitle') || `猫-${roleName || '核心角色'}`,
+              roleName: roleName || '核心角色',
+              publicDesc: getSub('publicDesc') || '',
+              secretProfile: secretProfile
+            });
+          }
+        }
+      }
+
+      const plannedScenes = [];
+      const scenesBlockMatch = clean.match(/"plannedScenes"\s*:\s*\[([\s\S]*?)\](?=\s*,\s*"|\s*\})/i);
+      if (scenesBlockMatch && scenesBlockMatch[1]) {
+        const itemReg = /\{([\s\S]*?)\}/g;
+        let m;
+        while ((m = itemReg.exec(scenesBlockMatch[1])) !== null) {
+          const b = m[1];
+          const getSub = (k) => {
+            const sm = b.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"|\\s*$)`, 'i'));
+            return sm ? sm[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+          };
+          const sceneTitle = getSub('sceneTitle') || getSub('title');
+          if (sceneTitle) {
+            plannedScenes.push({
+              sceneTitle,
+              purpose: getSub('purpose') || '',
+              pacingNote: getSub('pacingNote') || ''
+            });
+          }
+        }
+      }
+
+      if (!publicInfoChapter && !kpTruthAndMechanism && clean.length < 30) {
+        return null;
+      }
+
+      return {
+        title,
+        summary: summary || publicInfoChapter.slice(0, 160),
+        themeMode,
+        creativeReflection,
+        publicInfoChapter: publicInfoChapter || clean.slice(0, 800),
+        kpTruthAndMechanism: kpTruthAndMechanism || clean,
+        catAndNpcProfiles,
+        plannedScenes,
+        endingsPlan
+      };
     },
 
     async runAiModulePipeline() {
@@ -13659,9 +13840,15 @@ ${drawnSeeds.length > 0 ? '- 候选灵感池（请从中挑选最契合当前主
   "endingsPlan": "多分支结局规划：包含True End、Normal End、特殊结局或Bad End的达成条件与核心意境"
 }`;
 
-        const ai1Raw = await this.callAI(ai1System, ai1User);
-        const ai1Data = this.parseJsonFromAiResponse(ai1Raw);
+        const ai1Raw = await this.callAI(ai1System, ai1User, null, 'writeModule');
+        let ai1Data = this.parseJsonFromAiResponse(ai1Raw);
+        if (ai1Data && !ai1Data.publicInfoChapter) {
+          ai1Data.publicInfoChapter = ai1Data.publicInfo || ai1Data.knownInfo || ai1Data.public_info_chapter || ai1Data.summary || '';
+        }
         if (!ai1Data || !ai1Data.publicInfoChapter) {
+          ai1Data = this.salvageAi1BlueprintFromRaw(ai1Raw, customTitle);
+        }
+        if (!ai1Data || (!ai1Data.publicInfoChapter && !ai1Data.kpTruthAndMechanism)) {
           throw new Error('AI1 立意构思返回格式异常，请重试');
         }
 
@@ -13711,7 +13898,7 @@ ${JSON.stringify(ai1Data, null, 2)}
   ]
 }`;
 
-        const ai2Raw = await this.callAI(ai2System, ai2User);
+        const ai2Raw = await this.callAI(ai2System, ai2User, null, 'writeModule');
         const ai2Data = this.parseJsonFromAiResponse(ai2Raw) || {
           atmosphereAndMechanicsGuide: '',
           deepenedScenes: ai1Data.plannedScenes || [],
@@ -13751,7 +13938,7 @@ ${JSON.stringify(ai2Data, null, 2)}
   ]
 }`;
 
-        const ai3Raw = await this.callAI(ai3System, ai3User);
+        const ai3Raw = await this.callAI(ai3System, ai3User, null, 'writeModule');
         const ai3Data = this.parseJsonFromAiResponse(ai3Raw) || {
           auditReport: '已完成节奏与张力校准',
           kpMasterGuideChapter: `【KP信息】\n模组导读与带团指南\n\n${ai2Data.atmosphereAndMechanicsGuide || ''}`,
@@ -13853,7 +14040,7 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
 
 请直接输出本章节的完整模组正文（包含【正文】场景描写与互动分支，以及必要的【KP信息】带团提示，字数要求详实饱满，约1500至2500字，不要输出多余寒暄）：`;
 
-          const sceneTextRaw = await this.callAI(ai4System, ai4SceneUser);
+          const sceneTextRaw = await this.callAI(ai4System, ai4SceneUser, null, 'writeModule');
           let cleanSceneText = String(sceneTextRaw || '').trim();
           if (!cleanSceneText.includes('【正文】') && !cleanSceneText.includes('【KP信息】')) {
             cleanSceneText = `【正文】\n${cleanSceneText}`;
@@ -13882,7 +14069,7 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
 
 请撰写本模组的【结局】章节完整文本，包含各分支结局（如True End、Normal End、特殊结局或Bad End）的判定条件、极具感染力的结局正文演出、以及守秘人结团结算提示。直接输出章节正文：`;
 
-        const endingRaw = await this.callAI(ai4System, ai4EndingUser);
+        const endingRaw = await this.callAI(ai4System, ai4EndingUser, null, 'writeModule');
         let cleanEndingText = String(endingRaw || '').trim();
         if (!cleanEndingText.includes('【正文】') && !cleanEndingText.includes('【KP信息】')) {
           cleanEndingText = `【正文】\n${cleanEndingText}`;

@@ -1330,6 +1330,10 @@
                     <input type="checkbox" id="sub-api-use-map" style="margin: 0; padding: 0; width: 16px; height: 16px;" />
                     <span style="font-size: 14px; color: var(--text-primary);">地图</span>
                   </label>
+                  <label style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; text-align: left; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="sub-api-use-write-module" checked style="margin: 0; padding: 0; width: 16px; height: 16px;" />
+                    <span style="font-size: 14px; color: var(--text-primary);">写模</span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -33867,9 +33871,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             draw: "sub-api-use-draw",
             forcedImage: "sub-api-use-forced-image",
             map: "sub-api-use-map",
+            writeModule: "sub-api-use-write-module",
           };
           const domCheckbox = purpose && domIdMap[purpose] ? document.getElementById(domIdMap[purpose]) : null;
-          const isPurposeSubChecked = Boolean(purpose && ((domCheckbox && domCheckbox.checked) || uses[purpose]));
+          const isPurposeSubChecked = purpose === "writeModule"
+            ? (uses.writeModule !== undefined ? Boolean(uses.writeModule) : (domCheckbox ? Boolean(domCheckbox.checked) : true))
+            : Boolean(purpose && ((domCheckbox && domCheckbox.checked) || uses[purpose]));
 
           // 仅当传入了 purpose、且在副 API 用途列表中勾选了该项时，严格调用副 API，绝不回退主 API
           if (isPurposeSubChecked) {
@@ -36107,6 +36114,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           const uses = state.apiConfig.subApiUses || {};
+          if (uses.writeModule === undefined) {
+            uses.writeModule = true;
+            state.apiConfig.subApiUses = uses;
+          }
           const subSummary = document.getElementById("sub-api-use-summary");
           if (subSummary) subSummary.checked = !!uses.summary;
           const subFanfic = document.getElementById("sub-api-use-fanfic");
@@ -36121,6 +36132,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (subForcedImage) subForcedImage.checked = !!uses.forcedImage;
           const subMap = document.getElementById("sub-api-use-map");
           if (subMap) subMap.checked = !!uses.map;
+          const subWriteModule = document.getElementById("sub-api-use-write-module");
+          if (subWriteModule) subWriteModule.checked = uses.writeModule !== undefined ? !!uses.writeModule : true;
 
           const syncSubApiUses = async () => {
             if (!state.apiConfig) state.apiConfig = {};
@@ -36132,13 +36145,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               draw: subDraw ? subDraw.checked : false,
               forcedImage: subForcedImage ? subForcedImage.checked : false,
               map: subMap ? subMap.checked : false,
+              writeModule: subWriteModule ? subWriteModule.checked : true,
             };
             const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
             if (dbInstance && dbInstance.apiConfig) {
               await dbInstance.apiConfig.put(state.apiConfig);
             }
           };
-          [subSummary, subFanfic, subModule, subOptimize, subDraw, subForcedImage, subMap].forEach((el) => {
+          [subSummary, subFanfic, subModule, subOptimize, subDraw, subForcedImage, subMap, subWriteModule].forEach((el) => {
             if (el) el.onchange = syncSubApiUses;
           });
 
@@ -87663,6 +87677,7 @@ ${stickerContext || "无"}
               const subDrawEl = document.getElementById("sub-api-use-draw");
               const subForcedImageEl = document.getElementById("sub-api-use-forced-image");
               const subMapEl = document.getElementById("sub-api-use-map");
+              const subWriteModuleEl = document.getElementById("sub-api-use-write-module");
 
               state.apiConfig.subApiUses = {
                 summary: subSummaryEl ? subSummaryEl.checked : false,
@@ -87672,6 +87687,7 @@ ${stickerContext || "无"}
                 draw: subDrawEl ? subDrawEl.checked : false,
                 forcedImage: subForcedImageEl ? subForcedImageEl.checked : false,
                 map: subMapEl ? subMapEl.checked : false,
+                writeModule: subWriteModuleEl ? subWriteModuleEl.checked : true,
               };
 
               const urgingModeEl = document.getElementById("urging-mode-select");
