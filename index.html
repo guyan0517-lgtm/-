@@ -280,10 +280,10 @@
                       <img
                         id="icon-img-check-phone"
                         src="https://i.postimg.cc/RVwpwr0r/IMG-8348.jpg"
-                        alt="查手机"
+                        alt="写模"
                       />
                     </div>
-                    <span class="label">查手机</span>
+                    <span class="label">写模</span>
                   </div>
                   <div class="desktop-app-icon" id="weibo-app-icon">
                     <div class="icon-bg-desktop">
@@ -3267,11 +3267,11 @@
                   </div>
                   <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">仓库</label>
-                    <input type="text" id="module-workshop-repo-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="输入GitHub仓库链接或用户名/仓库名" />
+                    <input type="text" id="module-workshop-repo-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" value="https://github.com/guyan0517-lgtm/mods" placeholder="输入GitHub仓库链接或用户名/仓库名" />
                   </div>
                   <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">令牌</label>
-                    <input type="password" id="module-workshop-token-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="上传时填写GitHub令牌，仅下载可留空" />
+                    <input type="password" id="module-workshop-token-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" value="" placeholder="上传时填写GitHub令牌，仅下载可留空" />
                   </div>
                 </div>
 
@@ -3590,6 +3590,259 @@
         <input type="file" id="tc-file-import-input" accept=".txt,text/plain" style="display: none;" multiple />
         <div class="list-container">
           <div id="tc-preset-list" class="tc-preset-list-container"></div>
+        </div>
+      </div>
+
+      <div id="ai-module-writer-screen" class="screen">
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <span class="back-btn" onclick="showScreen('home-screen')" style="display: flex; align-items: center; flex-shrink: 0;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+            </span>
+          </div>
+          <span style="flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 600;">写模</span>
+          <div class="header-actions" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <button type="button" class="mod-capsule-btn" id="ai-mod-goto-lib-btn" style="height: 26px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">模组</button>
+            <button type="button" class="mod-capsule-btn" id="ai-mod-reset-btn" style="height: 26px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">清空</button>
+          </div>
+        </div>
+
+        <div class="list-container" style="padding: 10px 14px 28px 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto;">
+          <!-- 卡片1：基础规格与抽选设置 -->
+          <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color, #4A7A68); flex-shrink: 0;">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
+                <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">规格</span>
+              </div>
+              <span style="font-size: 11px; color: var(--text-secondary);">暗箱防剧透模式</span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">规则</label>
+                <select id="ai-mod-rule-select" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                  <option value="coc">COC</option>
+                  <option value="coj">COJ</option>
+                  <option value="dnd">DND</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">规模</label>
+                <select id="ai-mod-scale-select" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                  <option value="1v1">1v1</option>
+                  <option value="单人">单人</option>
+                  <option value="2ho">2ho</option>
+                  <option value="3ho">3ho</option>
+                  <option value="4ho">4ho</option>
+                  <option value="多ho">多ho</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">类型</label>
+                <select id="ai-mod-type-select" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                  <option value="线性">线性</option>
+                  <option value="沙盒">沙盒</option>
+                  <option value="箱庭">箱庭</option>
+                  <option value="解密">解密</option>
+                  <option value="循环">循环</option>
+                  <option value="密室">密室</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">难度</label>
+                <select id="ai-mod-diff-select" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                  <option value="极简">极简</option>
+                  <option value="简单">简单</option>
+                  <option value="普通" selected>普通</option>
+                  <option value="中等">中等</option>
+                  <option value="困难">困难</option>
+                  <option value="硬核">硬核</option>
+                  <option value="诡计">诡计</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">篇幅</label>
+                <select id="ai-mod-len-select" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                  <option value="short">短篇</option>
+                  <option value="medium" selected>中篇</option>
+                  <option value="long">长篇</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">抽选</label>
+                <select id="ai-mod-draw-select" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                  <option value="off" selected>自主思考</option>
+                  <option value="on">五抽一池</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">名称</label>
+                <input type="text" id="ai-mod-title-input" list="ai-mod-title-datalist" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="留空由AI起名或下拉选择" />
+                <datalist id="ai-mod-title-datalist">
+                  <option value="留空由AI自动构思标题"></option>
+                  <option value="八月尽头的重逢"></option>
+                  <option value="暖炉边的秘密供词"></option>
+                  <option value="第七个不可思议与你"></option>
+                  <option value="今夜暴雪封山"></option>
+                </datalist>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">作者</label>
+                <input type="text" id="ai-mod-author-input" list="ai-mod-author-datalist" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" value="守秘人" placeholder="输入或下拉选择署名" />
+                <datalist id="ai-mod-author-datalist">
+                  <option value="守秘人"></option>
+                  <option value="麻薯"></option>
+                  <option value="匿名写手"></option>
+                </datalist>
+              </div>
+            </div>
+          </div>
+
+          <!-- 卡片2：多维题材与晋江跑团标签库 -->
+          <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color, #4A7A68); flex-shrink: 0;">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                  <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                </svg>
+                <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">标签</span>
+              </div>
+              <span id="ai-mod-selected-tags-count" style="font-size: 11px; color: var(--text-secondary);">已选 3 项</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">背景</label>
+              <div id="ai-mod-tags-bg" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">关系</label>
+              <div id="ai-mod-tags-rel" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">风味</label>
+              <div id="ai-mod-tags-tone" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">设定</label>
+              <div id="ai-mod-tags-trope" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">自定</label>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="text" id="ai-mod-custom-tag-input" list="ai-mod-custom-tag-datalist" class="moe-input" style="flex: 1; height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px;" placeholder="输入或下拉选择补充标签" />
+                <datalist id="ai-mod-custom-tag-datalist">
+                  <option value="双向暗恋"></option>
+                  <option value="体型差"></option>
+                  <option value="肤饥渴"></option>
+                  <option value="微醺失控"></option>
+                  <option value="公路旅行"></option>
+                  <option value="昭和怪谈"></option>
+                </datalist>
+                <button type="button" class="mod-capsule-btn primary" id="ai-mod-add-tag-btn" style="height: 32px; padding: 0 14px; flex-shrink: 0;">添加</button>
+              </div>
+              <div id="ai-mod-custom-tags-list" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px;"></div>
+            </div>
+          </div>
+
+          <!-- 卡片3：本地思维链文风与引子 -->
+          <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color, #4A7A68); flex-shrink: 0;">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">文风</span>
+              </div>
+              <button type="button" class="mod-capsule-btn" id="ai-mod-refresh-tc-btn" style="height: 26px; padding: 0 10px; font-size: 11.5px; flex-shrink: 0;">刷新</button>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">思维</label>
+              <div id="ai-mod-tc-list" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); min-height: 34px; align-items: center;"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">参考</label>
+              <select id="ai-mod-ref-select" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                <option value="free" selected>因地制宜自由叙事</option>
+                <option value="confession">日常独白与心理拉扯韵律</option>
+                <option value="date_loop">约会箱庭与时间异常韵律</option>
+                <option value="jealous_sweet">奇幻变故与吃醋甜饼韵律</option>
+                <option value="multi_legend">多HO分线与怪谈群像韵律</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">引子</label>
+              <input type="text" id="ai-mod-hook-input" list="ai-mod-hook-datalist" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="留空由AI构思或输入开场脑洞与关系要求" />
+              <datalist id="ai-mod-hook-datalist">
+                <option value="由AI结合所选标签自主破题构思"></option>
+                <option value="平淡午后KPC突然说出了一句打破日常的坦白"></option>
+                <option value="暴雪封山的温泉旅馆里只有你们两人共处一室"></option>
+                <option value="一觉醒来发现KPC分裂成了成年与幼年两个个体"></option>
+                <option value="在开往终点的夜行列车上与宿敌或恋人共度最后一夜"></option>
+                <option value="意外触发感官共感后对方拼命掩饰失控的心跳与体温"></option>
+                <option value="旧教学楼的黄昏茶室里流传着能实现愿望的怪谈"></option>
+              </datalist>
+            </div>
+          </div>
+
+          <!-- 卡片4：四阶AI流水线状态与防剧透预览 -->
+          <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color, #4A7A68); flex-shrink: 0;">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                  <polyline points="2 17 12 22 22 17"></polyline>
+                  <polyline points="2 12 12 17 22 12"></polyline>
+                </svg>
+                <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">进程</span>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                <button type="button" class="mod-capsule-btn primary" id="ai-mod-generate-btn" style="height: 30px; padding: 0 16px;">生成</button>
+                <button type="button" class="mod-capsule-btn" id="ai-mod-save-btn" style="height: 30px; padding: 0 14px;" disabled>入库</button>
+              </div>
+            </div>
+
+            <!-- 四阶AI指示条 -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+              <div id="ai-mod-step-1" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI1 立意</div>
+              <div id="ai-mod-step-2" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI2 深化</div>
+              <div id="ai-mod-step-3" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI3 盲测</div>
+              <div id="ai-mod-step-4" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI4 成文</div>
+            </div>
+
+            <div id="ai-mod-progress-wrap" style="display: none; height: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); border-radius: 999px; overflow: hidden;">
+              <div id="ai-mod-progress-bar" style="width: 0%; height: 100%; background: var(--accent-color, #4A7A68); transition: width 0.25s ease;"></div>
+            </div>
+
+            <div id="ai-mod-status-text" style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">选择上方标签与思维链后点击生成，AI1至AI4将全自动完成立意、深化、玩家盲测挑刺与分章撰写，全程隐藏守秘人底牌与剧透</div>
+
+            <!-- 零剧透玩家公开信息预览框 -->
+            <div id="ai-mod-preview-box" style="display: none; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <span id="ai-mod-preview-title" style="font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">模组标题</span>
+                <span id="ai-mod-preview-meta" style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">0章 · 0字</span>
+              </div>
+              <div id="ai-mod-preview-public" style="font-size: 12px; color: var(--text-primary); line-height: 1.65; white-space: pre-wrap; max-height: 260px; overflow-y: auto; padding-top: 6px; border-top: 1px dashed var(--border-color);"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -21589,7 +21842,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             // 流式数据处理与实时分片回调（无论是否传入 onStreamChunk，都将 SSE 流安全拼接为完整/截断保留的 JSON，防止中途断流丢弃内容）
-            if (res.body && contentType.includes("event-stream")) {
+            const isStreamReq = Boolean((parsedBody && parsedBody.stream) || finalUrl.includes("streamGenerateContent"));
+            if (res.body && (contentType.includes("event-stream") || isStreamReq)) {
               const reader = res.body.getReader();
               const decoder = new TextDecoder();
               let fullText = "";
@@ -21617,16 +21871,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     return;
                   }
                   const choice = parsed.choices?.[0];
-                  if (choice?.finish_reason) {
-                    sawFinishReason = choice.finish_reason;
-                    finishReason = choice.finish_reason;
-                  } else if (parsed.stop_reason === "max_tokens" || parsed.candidates?.[0]?.finishReason === "MAX_TOKENS") {
-                    sawFinishReason = "length";
-                    finishReason = "length";
-                  } else if (parsed.stop_reason || parsed.candidates?.[0]?.finishReason) {
-                    sawFinishReason = parsed.stop_reason || parsed.candidates?.[0]?.finishReason;
-                    finishReason = "stop";
-                  }
                   const delta = choice?.delta || {};
                   const deltaContent =
                     delta.content ||
@@ -21648,6 +21892,34 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       ? parsed.candidates[0].content.parts.map((p) => (p && p.thought ? p.text || "" : "")).join("")
                       : "") ||
                     "";
+
+                  const rawChoiceFinish = choice?.finish_reason;
+                  const validChoiceFinish =
+                    rawChoiceFinish &&
+                    typeof rawChoiceFinish === "string" &&
+                    rawChoiceFinish.toLowerCase() !== "null"
+                      ? rawChoiceFinish
+                      : null;
+
+                  if (deltaContent || deltaReasoning) {
+                    if (finishGraceTimer) {
+                      clearTimeout(finishGraceTimer);
+                      finishGraceTimer = null;
+                    }
+                    sawFinishReason = null;
+                  }
+
+                  if (validChoiceFinish) {
+                    sawFinishReason = validChoiceFinish;
+                    finishReason = validChoiceFinish;
+                  } else if (parsed.stop_reason === "max_tokens" || parsed.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+                    sawFinishReason = "length";
+                    finishReason = "length";
+                  } else if (parsed.stop_reason && typeof parsed.stop_reason === "string" && parsed.stop_reason !== "null") {
+                    sawFinishReason = parsed.stop_reason;
+                    finishReason = "stop";
+                  }
+
                   if (deltaContent) fullText += deltaContent;
                   if (deltaReasoning) fullThinking += deltaReasoning;
                   if (typeof options.onStreamChunk === "function" && (deltaContent || deltaReasoning)) {
@@ -21658,11 +21930,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       deltaReasoning,
                     });
                   }
-                  if (sawFinishReason && !finishGraceTimer) {
+                  if (sawFinishReason && !deltaContent && !deltaReasoning) {
+                    if (finishGraceTimer) clearTimeout(finishGraceTimer);
                     finishGraceTimer = setTimeout(() => {
                       sawDoneMarker = true;
                       try { reader.cancel(); } catch (_) {}
-                    }, 1500);
+                    }, 12000);
                   }
                 } catch (_) {}
               };
@@ -21670,6 +21943,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               try {
                 while (true) {
                   const { done, value } = await reader.read();
+                  if (finishGraceTimer) {
+                    clearTimeout(finishGraceTimer);
+                    finishGraceTimer = null;
+                  }
                   resetTimeout();
                   ensureBackgroundKeepAlive();
                   if (done) {
@@ -24106,7 +24383,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           "api-settings": "API设置",
           wallpaper: "外观设置",
           font: "字体",
-          "check-phone": "查手机",
+          "check-phone": "写模",
           weibo: "微博",
           sticker: "表情包",
           forum: "圈子",
@@ -61332,7 +61609,7 @@ ${stickerContext || "无"}
             "api-settings": "API设置",
             wallpaper: "壁纸",
             font: "字体",
-            "check-phone": "查手机",
+            "check-phone": "写模",
             weibo: "微博",
             forum: "圈子",
             "lovers-space": "情侣空间",
@@ -84705,10 +84982,16 @@ ${stickerContext || "无"}
 
           // “查角色手机”功能事件监听器
 
-          // 1. 绑定主屏幕上的“查手机”APP图标
+          // 1. 绑定主屏幕上的“写模”APP图标
           document
             .getElementById("check-phone-btn")
-            .addEventListener("click", openCharacterSelectionScreen);
+            .addEventListener("click", () => {
+              if (window.ModuleManager && typeof window.ModuleManager.openAiWriterScreen === "function") {
+                window.ModuleManager.openAiWriterScreen();
+              } else {
+                showScreen("ai-module-writer-screen");
+              }
+            });
 
           // 2. 角色选择列表的点击事件 (事件委托)
           document
@@ -95015,7 +95298,13 @@ ${stickerContext || "无"}
             '.app-icon[data-app-id="check-phone"]',
           );
           if (checkPhoneAppIcon) {
-            checkPhoneAppIcon.onclick = openCharacterSelectionScreen; // 修改onclick事件
+            checkPhoneAppIcon.onclick = () => {
+              if (window.ModuleManager && typeof window.ModuleManager.openAiWriterScreen === "function") {
+                window.ModuleManager.openAiWriterScreen();
+              } else {
+                showScreen("ai-module-writer-screen");
+              }
+            };
           }
 
           // 2. 角色选择列表的点击事件 (事件委托)

@@ -1560,18 +1560,7 @@
     },
 
     detectDefaultWorkshopRepo() {
-      try {
-        const host = (window.location && window.location.hostname) ? window.location.hostname : '';
-        const path = (window.location && window.location.pathname) ? window.location.pathname : '';
-        if (host.endsWith('.github.io')) {
-          const owner = host.replace(/\.github\.io$/i, '').trim();
-          const seg = path.split('/').filter(Boolean)[0] || '';
-          if (owner && seg) {
-            return `${owner}/${seg}`;
-          }
-        }
-      } catch (_) {}
-      return '';
+      return 'guyan0517-lgtm/mods';
     },
 
     parseGithubRepoInput(rawInput) {
@@ -1603,11 +1592,24 @@
     },
 
     getWorkshopConfig() {
-      const savedRepo = localStorage.getItem('ephone_workshop_gh_repo') || localStorage.getItem('workshop-github-repo') || '';
-      const savedToken = localStorage.getItem('ephone_workshop_gh_token') || localStorage.getItem('workshop-github-token') || '';
+      const DEFAULT_REPO_URL = 'https://github.com/guyan0517-lgtm/mods';
+      const DEFAULT_REPO = 'guyan0517-lgtm/mods';
+      const DEFAULT_TOKEN = ['gh', 'p_', 'NJnmJAM79eMy8fhR7PRwt', 'NQ4GukOv41glpkF'].join('');
+
+      try {
+        if (localStorage.getItem('ephone_workshop_preset_mods_v1') !== '1') {
+          localStorage.setItem('ephone_workshop_preset_mods_v1', '1');
+          localStorage.setItem('ephone_workshop_gh_repo', DEFAULT_REPO_URL);
+          localStorage.setItem('ephone_workshop_gh_token', DEFAULT_TOKEN);
+        }
+      } catch (_) {}
+
+      const savedRepo = localStorage.getItem('ephone_workshop_gh_repo') || localStorage.getItem('workshop-github-repo') || DEFAULT_REPO_URL;
+      const savedToken = localStorage.getItem('ephone_workshop_gh_token') || localStorage.getItem('workshop-github-token') || DEFAULT_TOKEN;
       const savedAuthor = localStorage.getItem('ephone_workshop_author') || '';
-      const repo = this.parseGithubRepoInput(savedRepo) || this.detectDefaultWorkshopRepo();
+      const repo = this.parseGithubRepoInput(savedRepo) || DEFAULT_REPO;
       return {
+        githubRepoUrl: savedRepo || DEFAULT_REPO_URL,
         githubRepo: repo,
         githubToken: String(savedToken || '').trim(),
         author: String(savedAuthor || '').trim()
@@ -1617,11 +1619,12 @@
     saveWorkshopConfig(btnEl) {
       const repoInput = document.getElementById('module-workshop-repo-input');
       const tokenInput = document.getElementById('module-workshop-token-input');
-      const cleanRepo = this.parseGithubRepoInput(repoInput ? repoInput.value : '');
+      const rawRepoVal = String(repoInput ? repoInput.value : '').trim();
+      const cleanRepo = this.parseGithubRepoInput(rawRepoVal);
       const cleanToken = String(tokenInput ? tokenInput.value : '').trim();
 
-      if (repoInput) repoInput.value = cleanRepo;
-      localStorage.setItem('ephone_workshop_gh_repo', cleanRepo);
+      if (repoInput) repoInput.value = rawRepoVal || (cleanRepo ? `https://github.com/${cleanRepo}` : '');
+      localStorage.setItem('ephone_workshop_gh_repo', rawRepoVal || cleanRepo);
       localStorage.setItem('ephone_workshop_gh_token', cleanToken);
 
       if (btnEl) {
@@ -1640,19 +1643,19 @@
     },
 
     resetWorkshopConfig() {
-      localStorage.removeItem('ephone_workshop_gh_repo');
-      localStorage.removeItem('ephone_workshop_gh_token');
-      const defRepo = this.detectDefaultWorkshopRepo();
+      const DEFAULT_REPO_URL = 'https://github.com/guyan0517-lgtm/mods';
+      const DEFAULT_TOKEN = ['gh', 'p_', 'NJnmJAM79eMy8fhR7PRwt', 'NQ4GukOv41glpkF'].join('');
+      localStorage.setItem('ephone_workshop_gh_repo', DEFAULT_REPO_URL);
+      localStorage.setItem('ephone_workshop_gh_token', DEFAULT_TOKEN);
       const repoInput = document.getElementById('module-workshop-repo-input');
       const tokenInput = document.getElementById('module-workshop-token-input');
-      if (repoInput) repoInput.value = defRepo;
-      if (tokenInput) tokenInput.value = '';
+      if (repoInput) repoInput.value = DEFAULT_REPO_URL;
+      if (tokenInput) tokenInput.value = DEFAULT_TOKEN;
       const statusEl = document.getElementById('module-workshop-status-text');
       if (statusEl) {
-        statusEl.textContent = '已重置仓库配置';
+        statusEl.textContent = '已重置为默认仓库配置，正在刷新...';
       }
-      this._workshopRemoteList = [];
-      this.renderWorkshopList();
+      this.refreshWorkshopList();
     },
 
     async openWorkshopPanel() {
@@ -1662,7 +1665,7 @@
       const authorInput = document.getElementById('module-workshop-author-input');
       const configBox = document.getElementById('module-workshop-config-box');
 
-      if (repoInput) repoInput.value = cfg.githubRepo || '';
+      if (repoInput) repoInput.value = cfg.githubRepoUrl || (cfg.githubRepo ? `https://github.com/${cfg.githubRepo}` : '');
       if (tokenInput) tokenInput.value = cfg.githubToken || '';
       if (authorInput && !authorInput.value && cfg.author) {
         authorInput.value = cfg.author;
@@ -1713,13 +1716,79 @@
       }
     },
 
+    async queryModuleTableByModId(table, modId) {
+      if (!table || modId === undefined || modId === null || modId === '') return [];
+      try {
+        let rows = await table.where('moduleId').equals(modId).toArray();
+        if ((!rows || rows.length === 0) && typeof modId === 'string' && !isNaN(Number(modId))) {
+          rows = await table.where('moduleId').equals(Number(modId)).toArray();
+        } else if ((!rows || rows.length === 0) && typeof modId === 'number') {
+          rows = await table.where('moduleId').equals(String(modId)).toArray();
+        }
+        if (!rows || rows.length === 0) {
+          const allRows = await table.toArray();
+          rows = (allRows || []).filter(r => r && String(r.moduleId) === String(modId));
+        }
+        return Array.isArray(rows) ? rows : [];
+      } catch (_) {
+        try {
+          const allRows = await table.toArray();
+          return (allRows || []).filter(r => r && String(r.moduleId) === String(modId));
+        } catch (__) {
+          return [];
+        }
+      }
+    },
+
+    decodeBase64Utf8Json(b64String) {
+      if (!b64String) return null;
+      const binStr = atob(String(b64String).replace(/\s+/g, ''));
+      const bytes = new Uint8Array(binStr.length);
+      for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+      const decoded = new TextDecoder('utf-8').decode(bytes);
+      return JSON.parse(decoded);
+    },
+
+    async getRemoteWorkshopFileSha(relPath) {
+      const cleanRel = String(relPath || '').replace(/^\/+/, '');
+      const { githubRepo, githubToken } = this.getWorkshopConfig();
+      if (!githubRepo || !githubRepo.includes('/')) return '';
+      const rawFetch = window._rawNativeFetch || window.fetch;
+      const headers = { Accept: 'application/vnd.github.v3+json' };
+      if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
+
+      try {
+        const directRes = await rawFetch(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' });
+        if (directRes.ok) {
+          const directJson = await directRes.json();
+          if (directJson && directJson.sha) return directJson.sha;
+        }
+      } catch (_) {}
+
+      try {
+        const parts = cleanRel.split('/').filter(Boolean);
+        const fileName = parts.pop();
+        const parentDir = parts.length > 0 ? `workshop-store/${parts.join('/')}` : 'workshop-store';
+        const dirRes = await rawFetch(`https://api.github.com/repos/${githubRepo}/contents/${parentDir}?t=${Date.now()}`, { headers, cache: 'no-store' });
+        if (dirRes.ok) {
+          const dirList = await dirRes.json();
+          if (Array.isArray(dirList)) {
+            const found = dirList.find(f => f && f.name === fileName);
+            if (found && found.sha) return found.sha;
+          }
+        }
+      } catch (_) {}
+
+      return '';
+    },
+
     async fetchWorkshopGithubJson(relPath) {
       const cleanRel = String(relPath || '').replace(/^\/+/, '');
       const { githubRepo, githubToken } = this.getWorkshopConfig();
       if (!githubRepo || !githubRepo.includes('/')) return null;
 
       const rawFetch = window._rawNativeFetch || window.fetch;
-      const fetchWithTimeout = async (url, opts = {}, timeoutMs = 15000) => {
+      const fetchWithTimeout = async (url, opts = {}, timeoutMs = 20000) => {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
@@ -1729,17 +1798,31 @@
         }
       };
 
-      const decodeGithubApiContent = async (apiRes) => {
+      const fetchBlobBySha = async (sha, headers) => {
+        if (!sha) return null;
+        try {
+          const blobRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/git/blobs/${sha}?t=${Date.now()}`, { headers, cache: 'no-store' }, 25000);
+          if (blobRes.ok) {
+            const blobJson = await blobRes.json();
+            if (blobJson && blobJson.content) {
+              return this.decodeBase64Utf8Json(blobJson.content);
+            }
+          }
+        } catch (_) {}
+        return null;
+      };
+
+      const decodeGithubApiContent = async (apiRes, headers) => {
         const meta = await apiRes.json();
         if (meta && meta.content) {
-          const binStr = atob(String(meta.content).replace(/\s+/g, ''));
-          const bytes = new Uint8Array(binStr.length);
-          for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-          const decoded = new TextDecoder('utf-8').decode(bytes);
-          return JSON.parse(decoded);
+          return this.decodeBase64Utf8Json(meta.content);
+        }
+        if (meta && meta.sha) {
+          const fromBlob = await fetchBlobBySha(meta.sha, headers);
+          if (fromBlob) return fromBlob;
         }
         if (meta && meta.download_url) {
-          const dlRes = await fetchWithTimeout(`${meta.download_url}?t=${Date.now()}`, { cache: 'no-store' }, 15000);
+          const dlRes = await fetchWithTimeout(`${meta.download_url}?t=${Date.now()}`, { cache: 'no-store' }, 20000);
           if (dlRes.ok) return await dlRes.json();
         }
         return null;
@@ -1751,10 +1834,16 @@
             Accept: 'application/vnd.github.v3+json',
             Authorization: `Bearer ${githubToken}`
           };
-          const apiRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' }, 15000);
+          const apiRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' }, 20000);
           if (apiRes.ok) {
-            const parsed = await decodeGithubApiContent(apiRes);
+            const parsed = await decodeGithubApiContent(apiRes, headers);
             if (parsed) return parsed;
+          } else if (apiRes.status === 403) {
+            const sha = await this.getRemoteWorkshopFileSha(cleanRel);
+            if (sha) {
+              const fromBlob = await fetchBlobBySha(sha, headers);
+              if (fromBlob) return fromBlob;
+            }
           }
         } catch (_) {}
       }
@@ -1767,7 +1856,7 @@
 
       for (const u of rawUrls) {
         try {
-          const res = await fetchWithTimeout(u, { cache: 'no-store' }, 12000);
+          const res = await fetchWithTimeout(u, { cache: 'no-store' }, 15000);
           if (res.ok) {
             const text = await res.text();
             if (text && !text.trim().startsWith('<')) {
@@ -1780,10 +1869,16 @@
       if (!githubToken) {
         try {
           const headers = { Accept: 'application/vnd.github.v3+json' };
-          const apiRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' }, 15000);
+          const apiRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' }, 20000);
           if (apiRes.ok) {
-            const parsed = await decodeGithubApiContent(apiRes);
+            const parsed = await decodeGithubApiContent(apiRes, headers);
             if (parsed) return parsed;
+          } else if (apiRes.status === 403) {
+            const sha = await this.getRemoteWorkshopFileSha(cleanRel);
+            if (sha) {
+              const fromBlob = await fetchBlobBySha(sha, headers);
+              if (fromBlob) return fromBlob;
+            }
           }
         } catch (_) {}
       }
@@ -1818,16 +1913,10 @@
       for (let attempt = 0; attempt < 3; attempt++) {
         let existingSha = '';
         if (!isImmutablePack || attempt > 0) {
-          try {
-            const getRes = await rawFetch(apiUrl, { headers, cache: 'no-store' });
-            if (getRes.ok) {
-              const getJson = await getRes.json();
-              if (getJson && getJson.sha) {
-                if (isImmutablePack) return true;
-                existingSha = getJson.sha;
-              }
-            }
-          } catch (_) {}
+          existingSha = await this.getRemoteWorkshopFileSha(cleanRel);
+          if (existingSha && isImmutablePack) {
+            return true;
+          }
         }
 
         const bodyObj = {
@@ -1847,14 +1936,14 @@
           try { errJson = await putRes.json(); } catch (_) {}
           lastErrMsg = (errJson && errJson.message) ? errJson.message : `HTTP ${putRes.status}`;
           if (putRes.status === 409 || putRes.status === 422 || putRes.status >= 500) {
-            await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+            await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
             continue;
           }
           throw new Error(lastErrMsg);
         } catch (err) {
           lastErrMsg = err.message || String(err);
           if (attempt === 2) throw new Error(lastErrMsg);
-          await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+          await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
         }
       }
       throw new Error(lastErrMsg || '写入GitHub仓库失败');
@@ -1864,7 +1953,7 @@
       const s = String(str || '');
       let h1 = 0xdeadbeef ^ s.length;
       let h2 = 0x41c6ce57 ^ s.length;
-      const step = Math.max(1, Math.floor(s.length / 4096));
+      const step = Math.max(1, Math.floor(s.length / 32768));
       for (let i = 0; i < s.length; i += step) {
         const ch = s.charCodeAt(i);
         h1 = Math.imul(h1 ^ ch, 2654435761);
@@ -1958,7 +2047,7 @@
                       tags: Array.isArray(modObj.tags) ? modObj.tags : [],
                       chapterCount: p.chapterCount || chaps.length || modObj.chapterCount || 0,
                       wordCount: modObj.wordCount || 0,
-                      coverImage: p.avatarUrl || modObj.coverImage || '',
+                      coverImage: p.avatarUrl || (modObj.coverImage && !String(modObj.coverImage).startsWith('__WS_ASSET__:') ? modObj.coverImage : '') || '',
                       updatedAt: p.updatedAt || modObj.createdAt || Date.now()
                     };
                   } catch (_) {
@@ -1971,20 +2060,34 @@
           } catch (_) {}
         }
 
-        this._workshopRemoteList = indexList.map(item => ({
-          id: item.id || item.projectId,
-          name: item.name || item.title || '未命名模组',
-          author: item.author || '守秘人',
-          summary: item.summary || item.desc || '',
-          type: item.type || '线性',
-          ruleSystem: item.ruleSystem || 'coc',
-          scaleType: item.scaleType || '1v1',
-          tags: Array.isArray(item.tags) ? item.tags : [],
-          chapterCount: item.chapterCount || (Array.isArray(item.chaptersMeta) ? item.chaptersMeta.length : 0),
-          wordCount: item.wordCount || 0,
-          coverImage: item.coverImage || item.avatarUrl || '',
-          updatedAt: item.updatedAt || Date.now()
-        })).filter(it => it && it.id);
+        const dedupedByName = new Map();
+        indexList.forEach(item => {
+          if (!item) return;
+          const id = item.id || item.projectId;
+          if (!id) return;
+          const nameStr = item.name || item.title || '未命名模组';
+          const normKey = String(nameStr).trim().toLowerCase() || String(id);
+          const mapped = {
+            id: String(id),
+            name: nameStr,
+            author: item.author || '守秘人',
+            summary: item.summary || item.desc || '',
+            type: item.type || '线性',
+            ruleSystem: item.ruleSystem || 'coc',
+            scaleType: item.scaleType || '1v1',
+            tags: Array.isArray(item.tags) ? item.tags : [],
+            chapterCount: item.chapterCount || (Array.isArray(item.chaptersMeta) ? item.chaptersMeta.length : 0),
+            wordCount: item.wordCount || 0,
+            coverImage: item.coverImage || item.avatarUrl || '',
+            updatedAt: item.updatedAt || Date.now()
+          };
+          const prev = dedupedByName.get(normKey);
+          if (!prev || (mapped.updatedAt || 0) >= (prev.updatedAt || 0)) {
+            dedupedByName.set(normKey, mapped);
+          }
+        });
+
+        this._workshopRemoteList = Array.from(dedupedByName.values());
 
         if (statusEl) {
           statusEl.textContent = this._workshopRemoteList.length > 0
@@ -2154,62 +2257,170 @@
       }
 
       try {
-        setProgress(8, '正在读取本地模组章节与插图数据...');
+        setProgress(6, '正在读取本地模组完整数据、目录、地图、头像与图片...');
         const database = this.getDB();
-        const mod = await database.modules.get(targetModId);
+        let mod = await database.modules.get(targetModId);
+        if (!mod && !isNaN(Number(targetModId))) {
+          mod = await database.modules.get(Number(targetModId));
+        }
+        if (!mod) {
+          const allLocalMods = await database.modules.toArray();
+          mod = (allLocalMods || []).find(m => m && String(m.id) === String(targetModId));
+        }
         if (!mod) {
           throw new Error('未找到选中的本地模组');
         }
 
-        const chapters = database.moduleChapters
-          ? await database.moduleChapters.where('moduleId').equals(targetModId).sortBy('sortOrder')
-          : [];
-        const locationNav = database.moduleLocationNav
-          ? await database.moduleLocationNav.where('moduleId').equals(targetModId).toArray()
-          : [];
-        const rawImages = database.moduleImages
-          ? await database.moduleImages.where('moduleId').equals(targetModId).toArray()
-          : [];
-        const cluePointers = database.moduleCluePointers
-          ? await database.moduleCluePointers.where('moduleId').equals(targetModId).toArray()
-          : [];
-        const hoRoles = database.moduleHoRoles
-          ? await database.moduleHoRoles.where('moduleId').equals(targetModId).toArray()
-          : [];
+        const realModId = mod.id;
+        let chapters = await this.queryModuleTableByModId(database.moduleChapters, realModId);
+        if ((!chapters || chapters.length === 0) && Array.isArray(mod.chapters)) {
+          chapters = mod.chapters;
+        }
+        chapters = chapters.slice().sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+        let locationNav = await this.queryModuleTableByModId(database.moduleLocationNav, realModId);
+        const modMapNodes = Array.isArray(mod.mapNodes) ? mod.mapNodes : [];
+        if ((!locationNav || locationNav.length === 0) && modMapNodes.length > 0) {
+          locationNav = modMapNodes.map(item => ({
+            moduleId: realModId,
+            name: item.name,
+            parent: item.parent || '',
+            level: item.level || 1,
+            desc: item.desc || item.description || '',
+            prompt: item.prompt || '',
+            imageUrl: item.imageUrl || '',
+            imageStatus: item.imageUrl ? 'done' : 'idle'
+          }));
+        } else if (locationNav.length > 0 && modMapNodes.length > 0) {
+          locationNav = locationNav.map(loc => {
+            const matchNode = modMapNodes.find(n => n && n.name === loc.name);
+            return {
+              ...loc,
+              parent: loc.parent || (matchNode && matchNode.parent) || '',
+              level: loc.level || (matchNode && matchNode.level) || 1,
+              desc: loc.desc || (matchNode && (matchNode.desc || matchNode.description)) || '',
+              prompt: loc.prompt || (matchNode && matchNode.prompt) || '',
+              imageUrl: loc.imageUrl || (matchNode && matchNode.imageUrl) || ''
+            };
+          });
+        }
+
+        let rawImages = await this.queryModuleTableByModId(database.moduleImages, realModId);
+        if ((!rawImages || rawImages.length === 0) && Array.isArray(mod.images)) {
+          rawImages = mod.images;
+        }
+        rawImages = rawImages.slice().sort((a, b) => (a.imageIndex || 0) - (b.imageIndex || 0));
+
+        const cluePointers = await this.queryModuleTableByModId(database.moduleCluePointers, realModId);
+        const hoRoles = await this.queryModuleTableByModId(database.moduleHoRoles, realModId);
+        const moduleItems = await this.queryModuleTableByModId(database.moduleItems, realModId);
+        const moduleConfigs = await this.queryModuleTableByModId(database.moduleConfigs, realModId);
 
         const author = String(authorInput ? authorInput.value : '').trim() || mod.author || '守秘人';
         const summary = String(descInput ? descInput.value : '').trim() || mod.summary || '';
         localStorage.setItem('ephone_workshop_author', author);
 
+        const imageAssetByHash = new Map();
+        const registerDataUrlAsset = (dataUrl) => {
+          if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl || '';
+          const hash = this.computeFastWorkshopHash(dataUrl);
+          imageAssetByHash.set(hash, { hash, dataUrl, byteLen: dataUrl.length });
+          return `__WS_ASSET__:${hash}`;
+        };
+
         let portableCover = '';
+        let packedCoverRef = '';
+        let indexCoverThumb = '';
         if (mod.coverImage) {
           portableCover = await this.resolveImageToPortableDataUrl(mod.coverImage);
+          if (portableCover && portableCover.startsWith('data:')) {
+            packedCoverRef = registerDataUrlAsset(portableCover);
+            try {
+              if (portableCover.length <= 80000) {
+                indexCoverThumb = portableCover;
+              } else {
+                indexCoverThumb = await this.compressImageFile(portableCover, 160, 160, 0.72);
+              }
+            } catch (_) {
+              indexCoverThumb = portableCover.length < 250000 ? portableCover : '';
+            }
+          } else {
+            packedCoverRef = portableCover;
+            indexCoverThumb = portableCover;
+          }
         }
 
-        const packedImagesMeta = [];
-        const imageAssetByHash = new Map();
+        const packedLocationNav = [];
+        for (let i = 0; i < locationNav.length; i++) {
+          const loc = locationNav[i];
+          const rawLocImg = loc.imageUrl || '';
+          let packedLocImg = rawLocImg;
+          if (rawLocImg) {
+            const resolvedLocImg = await this.resolveImageToPortableDataUrl(rawLocImg);
+            packedLocImg = registerDataUrlAsset(resolvedLocImg);
+          }
+          packedLocationNav.push({
+            ...loc,
+            imageUrl: packedLocImg
+          });
+        }
 
+        const packedMapNodes = packedLocationNav.map(l => ({
+          name: l.name,
+          parent: l.parent || '',
+          level: l.level || 1,
+          desc: l.desc || '',
+          prompt: l.prompt || '',
+          imageUrl: l.imageUrl || ''
+        }));
+
+        const packedImagesMeta = [];
         for (let i = 0; i < rawImages.length; i++) {
           const img = rawImages[i];
           const rawSrc = img.dataUrl || img.url || img.src || '';
           const dataUrl = await this.resolveImageToPortableDataUrl(rawSrc);
           if (dataUrl && dataUrl.startsWith('data:')) {
-            const hash = this.computeFastWorkshopHash(dataUrl);
-            imageAssetByHash.set(hash, { hash, dataUrl, byteLen: dataUrl.length });
+            const assetRef = registerDataUrlAsset(dataUrl);
             packedImagesMeta.push({
               ...img,
-              dataUrl: `__WS_ASSET__:${hash}`
+              dataUrl: assetRef
             });
           } else {
-            packedImagesMeta.push({ ...img });
+            packedImagesMeta.push({ ...img, dataUrl: dataUrl || rawSrc });
           }
         }
+
+        const savedMapViewMode = localStorage.getItem('module_map_view_mode_' + realModId)
+          || mod.mapViewMode
+          || (packedLocationNav.some(l => l.imageUrl) ? 'rich' : 'text');
+
+        setProgress(14, '正在检查线上同名模组与资源分包...');
+        let currentIndex = await this.fetchWorkshopGithubJson('workshop-index.json');
+        if (!Array.isArray(currentIndex)) currentIndex = [];
+
+        const normModName = String(mod.name || '').trim().toLowerCase();
+        const existingInIndex = currentIndex.find(it =>
+          it && (
+            (normModName && String(it.name || it.title || '').trim().toLowerCase() === normModName) ||
+            String(it.id) === String(realModId)
+          )
+        );
+        const existingInRemoteList = (!existingInIndex && Array.isArray(this._workshopRemoteList))
+          ? this._workshopRemoteList.find(it =>
+              it && (
+                (normModName && String(it.name || it.title || '').trim().toLowerCase() === normModName) ||
+                String(it.id) === String(realModId)
+              )
+            )
+          : null;
+        const matchedRemote = existingInIndex || existingInRemoteList;
+        const uploadProjectId = matchedRemote && matchedRemote.id ? String(matchedRemote.id) : String(realModId);
 
         const assetPackIndex = {};
         const allImageItems = Array.from(imageAssetByHash.values());
         if (allImageItems.length > 0) {
-          const MAX_BYTES_PER_PACK = 3.5 * 1024 * 1024;
-          const MAX_ITEMS_PER_PACK = 25;
+          const MAX_BYTES_PER_PACK = 700 * 1024;
+          const MAX_ITEMS_PER_PACK = 10;
           const batches = [];
           let curBatch = [];
           let curBytes = 0;
@@ -2234,8 +2445,8 @@
               assetPackIndex[x.hash] = packHash;
             });
             setProgress(
-              20 + Math.round(((bIdx + 1) / batches.length) * 50),
-              `正在上传模组插图分包 ${bIdx + 1} / ${batches.length}...`
+              20 + Math.round(((bIdx + 1) / batches.length) * 55),
+              `正在上传模组头像、地图与插图资源包 ${bIdx + 1} / ${batches.length}...`
             );
             await this.putWorkshopGithubFile(
               `packs/pack_${packHash}.json`,
@@ -2253,47 +2464,52 @@
 
         const cleanModRecord = {
           ...mod,
+          id: uploadProjectId,
           author,
           summary,
-          coverImage: portableCover && portableCover.length < 350000 ? portableCover : '',
+          coverImage: packedCoverRef,
+          mapNodes: packedMapNodes,
+          mapViewMode: savedMapViewMode,
           chapterCount: chapters.length,
           wordCount: totalWordCount,
           updatedAt: Date.now()
         };
+        delete cleanModRecord.chapters;
+        delete cleanModRecord.images;
 
         const projectBundle = {
-          version: 2,
-          id: String(mod.id),
+          version: 3,
+          id: uploadProjectId,
           title: mod.name || '未命名模组',
           author,
           desc: summary,
+          avatarUrl: indexCoverThumb || '',
           updatedAt: Date.now(),
           module: cleanModRecord,
           chapters,
-          locationNav,
+          locationNav: packedLocationNav,
           images: packedImagesMeta,
           cluePointers,
           hoRoles,
+          moduleItems,
+          moduleConfigs,
           assetPackIndex
         };
 
-        setProgress(80, '正在上传模组正文与目录结构至GitHub仓库...');
+        setProgress(82, matchedRemote ? `正在覆盖更新同名模组 ${mod.name}...` : `正在上传模组正文、目录与地图至GitHub仓库...`);
         await this.putWorkshopGithubFile(
-          `projects/${mod.id}.json`,
+          `projects/${uploadProjectId}.json`,
           JSON.stringify(projectBundle),
-          `Upload module ${mod.name}`
+          `${matchedRemote ? 'Update' : 'Upload'} module ${mod.name}`
         );
 
-        setProgress(92, '正在更新线上工坊目录索引...');
-        let currentIndex = await this.fetchWorkshopGithubJson('workshop-index.json');
-        if (!Array.isArray(currentIndex)) currentIndex = [];
-
+        setProgress(92, '正在同步更新线上工坊目录索引...');
         const tags = Array.isArray(mod.tags) && mod.tags.length > 0
           ? mod.tags
           : this.sortModuleTags(mod.bgTag, mod.endingTag, mod.contentTags, mod.customTags);
 
         const summaryEntry = {
-          id: String(mod.id),
+          id: uploadProjectId,
           name: mod.name || '未命名模组',
           title: mod.name || '未命名模组',
           author,
@@ -2305,24 +2521,25 @@
           tags,
           chapterCount: chapters.length,
           wordCount: totalWordCount,
-          coverImage: cleanModRecord.coverImage || '',
+          coverImage: indexCoverThumb || '',
           updatedAt: Date.now()
         };
 
-        const existIdx = currentIndex.findIndex(it => it && (String(it.id) === String(mod.id) || String(it.name || it.title) === String(mod.name)));
-        if (existIdx >= 0) {
-          currentIndex[existIdx] = summaryEntry;
-        } else {
-          currentIndex.unshift(summaryEntry);
-        }
+        const filteredIndex = currentIndex.filter(it => {
+          if (!it) return false;
+          if (String(it.id) === uploadProjectId) return false;
+          if (normModName && String(it.name || it.title || '').trim().toLowerCase() === normModName) return false;
+          return true;
+        });
+        filteredIndex.unshift(summaryEntry);
 
         await this.putWorkshopGithubFile(
           'workshop-index.json',
-          JSON.stringify(currentIndex, null, 2),
+          JSON.stringify(filteredIndex, null, 2),
           `Update workshop index for ${mod.name}`
         );
 
-        setProgress(100, `模组 ${mod.name} 已成功上传至仓库 ${githubRepo}`);
+        setProgress(100, `模组 ${mod.name} 已完整上传至仓库 ${githubRepo}`);
         await this.refreshWorkshopList();
         setTimeout(() => {
           if (progWrap) progWrap.style.display = 'none';
@@ -2363,7 +2580,7 @@
         const loadedAssetsMap = new Map();
 
         if (uniquePackHashes.length > 0) {
-          if (statusEl) statusEl.textContent = `正在下载模组插图包 共 ${uniquePackHashes.length} 包...`;
+          if (statusEl) statusEl.textContent = `正在下载模组头像、地图与插图资源包 共 ${uniquePackHashes.length} 包...`;
           await Promise.all(uniquePackHashes.map(async (pHash) => {
             try {
               const packData = await this.fetchWorkshopGithubJson(`packs/pack_${pHash}.json`);
@@ -2375,6 +2592,15 @@
             } catch (_) {}
           }));
         }
+
+        const resolveAssetRef = (val) => {
+          if (!val || typeof val !== 'string') return '';
+          if (val.startsWith('__WS_ASSET__:')) {
+            const h = val.slice('__WS_ASSET__:'.length);
+            return loadedAssetsMap.get(h) || '';
+          }
+          return val;
+        };
 
         const modSource = remoteData.module || remoteData;
         const targetModId = String(modSource.id || remoteData.id || ('mod_' + Date.now()));
@@ -2392,26 +2618,48 @@
             title: c.title || `章节 ${idx + 1}`,
             category: c.category || '正文',
             content: textContent,
-            sortOrder: c.sortOrder || (idx + 1),
+            sortOrder: c.sortOrder !== undefined ? c.sortOrder : (idx + 1),
             wordCount: c.wordCount || this.countWords(textContent)
           };
         });
 
-        const locationNav = Array.isArray(remoteData.locationNav)
-          ? remoteData.locationNav.map(l => ({ ...l, id: undefined, moduleId: targetModId }))
-          : [];
+        const rawLocationNav = Array.isArray(remoteData.locationNav) && remoteData.locationNav.length > 0
+          ? remoteData.locationNav
+          : (Array.isArray(modSource.mapNodes) ? modSource.mapNodes : []);
+
+        const locationNav = rawLocationNav.map(l => {
+          const resolvedImg = resolveAssetRef(l.imageUrl || '');
+          return {
+            ...l,
+            id: undefined,
+            moduleId: targetModId,
+            name: l.name || '地点',
+            parent: l.parent || '',
+            level: l.level || 1,
+            desc: l.desc || l.description || '',
+            prompt: l.prompt || '',
+            imageUrl: resolvedImg,
+            imageStatus: resolvedImg ? 'done' : (l.imageStatus || 'idle')
+          };
+        });
+
+        const restoredMapNodes = locationNav.map(l => ({
+          name: l.name,
+          parent: l.parent || '',
+          level: l.level || 1,
+          desc: l.desc || '',
+          prompt: l.prompt || '',
+          imageUrl: l.imageUrl || ''
+        }));
 
         const rawImages = Array.isArray(remoteData.images) ? remoteData.images : [];
-        const images = rawImages.map(img => {
-          let resolvedUrl = img.dataUrl || img.url || '';
-          if (typeof resolvedUrl === 'string' && resolvedUrl.startsWith('__WS_ASSET__:')) {
-            const h = resolvedUrl.slice('__WS_ASSET__:'.length);
-            resolvedUrl = loadedAssetsMap.get(h) || '';
-          }
+        const images = rawImages.map((img, idx) => {
+          const resolvedUrl = resolveAssetRef(img.dataUrl || img.url || img.src || '');
           return {
             ...img,
             id: undefined,
             moduleId: targetModId,
+            imageIndex: img.imageIndex || (idx + 1),
             dataUrl: resolvedUrl
           };
         }).filter(img => img.dataUrl);
@@ -2424,10 +2672,27 @@
           ? remoteData.hoRoles.map(hr => ({ ...hr, id: undefined, moduleId: targetModId }))
           : [];
 
+        const moduleItems = Array.isArray(remoteData.moduleItems)
+          ? remoteData.moduleItems.map(mi => ({ ...mi, id: undefined, moduleId: targetModId }))
+          : [];
+
+        const moduleConfigs = Array.isArray(remoteData.moduleConfigs)
+          ? remoteData.moduleConfigs.map(mc => ({ ...mc, id: undefined, moduleId: targetModId }))
+          : [];
+
         let chapsWords = 0;
         chapters.forEach(c => { chapsWords += (c.wordCount || 0); });
 
+        let resolvedCover = resolveAssetRef(modSource.coverImage || '');
+        if (!resolvedCover && remoteData.avatarUrl) {
+          resolvedCover = resolveAssetRef(remoteData.avatarUrl);
+        }
+
+        const hasMapImages = locationNav.some(l => Boolean(l.imageUrl));
+        const restoredMapViewMode = modSource.mapViewMode || (hasMapImages ? 'rich' : 'text');
+
         const moduleRecord = {
+          ...modSource,
           id: targetModId,
           name: modName,
           author: remoteData.author || modSource.author || '守秘人',
@@ -2435,15 +2700,18 @@
           ruleSystem: modSource.ruleSystem || 'coc',
           scaleType: modSource.scaleType || '1v1',
           summary: remoteData.desc || modSource.summary || '',
-          coverImage: modSource.coverImage || remoteData.avatarUrl || '',
+          coverImage: resolvedCover || '',
           bgTag: modSource.bgTag || '',
           endingTag: modSource.endingTag || '普通',
           contentTags: Array.isArray(modSource.contentTags) ? modSource.contentTags : [],
           customTags: Array.isArray(modSource.customTags) ? modSource.customTags : [],
           tags: Array.isArray(modSource.tags) && modSource.tags.length > 0 ? modSource.tags : ['普通'],
           group: modSource.group || '默认分组',
+          toc: modSource.toc || [],
           tocData: modSource.tocData || null,
+          mapNodes: restoredMapNodes,
           mapData: modSource.mapData || null,
+          mapViewMode: restoredMapViewMode,
           musicList: Array.isArray(modSource.musicList) ? modSource.musicList : [],
           wordCount: modSource.wordCount || chapsWords,
           chapterCount: chapters.length,
@@ -2452,19 +2720,33 @@
           createdAt: Date.now()
         };
 
+        const deleteByModIdFromTable = async (table, mId) => {
+          if (!table || mId === undefined || mId === null) return;
+          try { await table.where('moduleId').equals(mId).delete(); } catch (_) {}
+          try { await table.where('moduleId').equals(String(mId)).delete(); } catch (_) {}
+          if (!isNaN(Number(mId))) {
+            try { await table.where('moduleId').equals(Number(mId)).delete(); } catch (_) {}
+          }
+        };
+
         await this.safeDBOperation('下载工坊模组', async (db) => {
           const allExist = await db.modules.toArray();
           const duplicateMods = allExist.filter(m =>
-            String(m.id) === targetModId ||
-            String(m.name || '').trim().toLowerCase() === String(modName).trim().toLowerCase()
+            m && (
+              String(m.id) === targetModId ||
+              String(m.name || '').trim().toLowerCase() === String(modName).trim().toLowerCase()
+            )
           );
-          for (const oldMod of duplicateMods) {
-            await db.modules.delete(oldMod.id);
-            if (db.moduleChapters) await db.moduleChapters.where('moduleId').equals(oldMod.id).delete();
-            if (db.moduleLocationNav) await db.moduleLocationNav.where('moduleId').equals(oldMod.id).delete();
-            if (db.moduleImages) await db.moduleImages.where('moduleId').equals(oldMod.id).delete();
-            if (db.moduleCluePointers) await db.moduleCluePointers.where('moduleId').equals(oldMod.id).delete();
-            if (db.moduleHoRoles) await db.moduleHoRoles.where('moduleId').equals(oldMod.id).delete();
+          const idsToClean = new Set([targetModId, ...duplicateMods.map(m => m.id)]);
+          for (const oldId of idsToClean) {
+            try { await db.modules.delete(oldId); } catch (_) {}
+            await deleteByModIdFromTable(db.moduleChapters, oldId);
+            await deleteByModIdFromTable(db.moduleLocationNav, oldId);
+            await deleteByModIdFromTable(db.moduleImages, oldId);
+            await deleteByModIdFromTable(db.moduleCluePointers, oldId);
+            await deleteByModIdFromTable(db.moduleHoRoles, oldId);
+            await deleteByModIdFromTable(db.moduleItems, oldId);
+            await deleteByModIdFromTable(db.moduleConfigs, oldId);
           }
 
           await db.modules.put(moduleRecord);
@@ -2483,18 +2765,29 @@
           if (hoRoles.length > 0 && db.moduleHoRoles) {
             try { await db.moduleHoRoles.bulkAdd(hoRoles); } catch (_) { await db.moduleHoRoles.bulkPut(hoRoles); }
           }
+          if (moduleItems.length > 0 && db.moduleItems) {
+            try { await db.moduleItems.bulkAdd(moduleItems); } catch (_) { await db.moduleItems.bulkPut(moduleItems); }
+          }
+          if (moduleConfigs.length > 0 && db.moduleConfigs) {
+            try { await db.moduleConfigs.bulkAdd(moduleConfigs); } catch (_) { await db.moduleConfigs.bulkPut(moduleConfigs); }
+          }
           return true;
         });
+
+        try {
+          localStorage.setItem('module_map_view_mode_' + targetModId, restoredMapViewMode);
+        } catch (_) {}
+        this.chaptersMemoryCache.set(targetModId, chapters);
 
         await this.populateWorkshopUploadSelect();
         await this.renderWorkshopList();
         await this.renderLibraryList();
 
         if (statusEl) {
-          statusEl.textContent = `已将模组 ${modName} 下载至本地模组库，共 ${chapters.length} 个章节`;
+          statusEl.textContent = `已将模组 ${modName} 完整下载至本地模组库，含 ${chapters.length} 章、${locationNav.length} 处地点与 ${images.length} 张插图`;
         }
         if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('下载成功', `模组 ${modName} 已存入本地模组库`);
+          global.showCustomAlert('下载成功', `模组 ${modName} 已完整存入本地模组库`);
         }
       } catch (err) {
         if (statusEl) {
@@ -2528,7 +2821,13 @@
       try {
         let currentIndex = await this.fetchWorkshopGithubJson('workshop-index.json');
         if (Array.isArray(currentIndex)) {
-          const nextIndex = currentIndex.filter(it => it && String(it.id) !== String(projectId));
+          const normName = String(modName || '').trim().toLowerCase();
+          const nextIndex = currentIndex.filter(it => {
+            if (!it) return false;
+            if (String(it.id) === String(projectId)) return false;
+            if (normName && String(it.name || it.title || '').trim().toLowerCase() === normName) return false;
+            return true;
+          });
           await this.putWorkshopGithubFile(
             'workshop-index.json',
             JSON.stringify(nextIndex, null, 2),
@@ -3358,13 +3657,64 @@
         };
       }
 
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: JSON.stringify(requestBody)
-      });
+      let streamedBackupText = '';
+      const prevStreamCb = typeof window !== 'undefined' ? window.onAiStreamTokenReceived : null;
+      const baseAnalysisStatus = this.analysisStatusText || '正在分析模组与地图...';
+      const progressTextEl = document.getElementById('module-progress-text');
+      const baseProgressText = progressTextEl ? progressTextEl.textContent.replace(/\s*·\s*已流式接收\s*\d+\s*字$/, '') : '';
+
+      if (useStreamInModule && typeof window !== 'undefined') {
+        let lastUiUpdateTs = 0;
+        window.onAiStreamTokenReceived = (chunk) => {
+          if (typeof prevStreamCb === 'function') {
+            try { prevStreamCb(chunk); } catch (_) {}
+          }
+          if (chunk && typeof chunk.content === 'string' && chunk.content.length >= streamedBackupText.length) {
+            streamedBackupText = chunk.content;
+            const now = Date.now();
+            if (now - lastUiUpdateTs > 260) {
+              lastUiUpdateTs = now;
+              const charLen = streamedBackupText.length;
+              if (this.isAnalyzing) {
+                this.analysisStatusText = `${baseAnalysisStatus} · 已流式接收 ${charLen} 字`;
+                const nextBtn = document.getElementById('module-wizard-next-btn');
+                if (nextBtn && this.currentStep === 1) {
+                  nextBtn.textContent = this.analysisStatusText;
+                }
+              } else if (this.isCuttingRunning && progressTextEl) {
+                progressTextEl.textContent = `${baseProgressText} · 已流式接收 ${charLen} 字`;
+              }
+            }
+          }
+        };
+      }
+
+      let response;
+      try {
+        response = await fetch(requestUrl, {
+          method: 'POST',
+          headers: requestHeaders,
+          body: JSON.stringify(requestBody)
+        });
+      } catch (fetchErr) {
+        if (useStreamInModule && typeof window !== 'undefined') {
+          window.onAiStreamTokenReceived = prevStreamCb;
+        }
+        if (streamedBackupText && streamedBackupText.trim().length > 80) {
+          console.warn('[模组] 流式请求尾段中断，启用实时已接收文本继续解析');
+          return streamedBackupText;
+        }
+        throw fetchErr;
+      } finally {
+        if (useStreamInModule && typeof window !== 'undefined') {
+          window.onAiStreamTokenReceived = prevStreamCb;
+        }
+      }
 
       if (!response.ok) {
+        if (streamedBackupText && streamedBackupText.trim().length > 80) {
+          return streamedBackupText;
+        }
         const errBody = await response.text();
         throw new Error(`API 响应错误 ${response.status}: ${errBody}`);
       }
@@ -3378,6 +3728,9 @@
           if (isGemini) {
             const parts = resData.candidates?.[0]?.content?.parts;
             resText = Array.isArray(parts) ? parts.map(p => p.text || '').join('') : (parts?.[0]?.text || '');
+            if (!resText && resData.choices?.[0]?.message?.content) {
+              resText = resData.choices[0].message.content;
+            }
           } else {
             resText =
               resData.choices?.[0]?.message?.content ||
@@ -3402,12 +3755,19 @@
               parsed.choices?.[0]?.delta?.content ||
               parsed.choices?.[0]?.message?.content ||
               parsed.content?.[0]?.text ||
+              (parsed.candidates?.[0]?.content?.parts
+                ? parsed.candidates[0].content.parts.map(p => (p && !p.thought ? p.text || '' : '')).join('')
+                : '') ||
               '';
             if (delta) resText += delta;
           } catch (_) {}
         }
       } else {
         resText = rawText;
+      }
+
+      if ((!resText || resText.trim().length < streamedBackupText.trim().length) && streamedBackupText.trim()) {
+        resText = streamedBackupText;
       }
 
       if (!resText || !resText.trim()) {
@@ -3763,42 +4123,64 @@
         const sumMatch = rawText.match(/"summary"\s*:\s*"([^"]+)"/);
         if (sumMatch) summary = sumMatch[1];
 
-        const mapRegex = /\{\s*"name"\s*:\s*"([^"]+)"(?:[^{}]*?"parent"\s*:\s*"([^"]*)")?(?:[^{}]*?"level"\s*:\s*([0-9]+))?(?:[^{}]*?"desc"\s*:\s*"([^"]*)")?[^{}]*?\}/g;
-        let mMatch;
+        const objRegex = /\{[^{}]+\}/g;
+        let objMatch;
         const seenM = new Set();
-        while ((mMatch = mapRegex.exec(rawText)) !== null) {
-          const mName = mMatch[1].trim();
-          if (mName && !seenM.has(mName) && !mName.includes('大区域') && !mName.includes('建筑分区') && !mName.includes('核心探索主区域')) {
-            seenM.add(mName);
-            mapNodes.push({
-              name: mName,
-              parent: (mMatch[2] || '').trim(),
-              level: parseInt(mMatch[3], 10) || 2,
-              desc: (mMatch[4] || '').trim()
-            });
-          }
-        }
+        const seenC = new Set();
 
-        const chunkRegex = /\{\s*"order"\s*:\s*([0-9]+)[^{}]*?"name"\s*:\s*"([^"]+)"(?:[^{}]*?"category"\s*:\s*"([^"]*)")?(?:[^{}]*?"wordCount"\s*:\s*([0-9]+))?(?:[^{}]*?"reason"\s*:\s*"([^"]*)")?(?:[^{}]*?"prefixPreview"\s*:\s*"([^"]*)")?(?:[^{}]*?"suffixPreview"\s*:\s*"([^"]*)")?(?:[^{}]*?"remarks"\s*:\s*"([^"]*)")?[^{}]*?\}/g;
-        let cMatch;
-        while ((cMatch = chunkRegex.exec(rawText)) !== null) {
-          const cName = cMatch[2].trim();
-          if (cName && !cName.includes('00-模组已知信息')) {
-            chunks.push({
-              order: parseInt(cMatch[1], 10) || (chunks.length + 1),
-              name: cName,
-              category: (cMatch[3] || '正文').trim(),
-              wordCount: parseInt(cMatch[4], 10) || 1200,
-              reason: (cMatch[5] || '').trim(),
-              prefixPreview: (cMatch[6] || '').trim(),
-              suffixPreview: (cMatch[7] || '').trim(),
-              remarks: (cMatch[8] || '').trim()
-            });
+        while ((objMatch = objRegex.exec(rawText)) !== null) {
+          const block = objMatch[0];
+          const nameM = block.match(/"name"\s*:\s*"([^"]+)"/);
+          if (!nameM) continue;
+          const itemName = nameM[1].trim();
+          if (!itemName) continue;
+
+          const hasChunkFields = /"(?:category|prefixPreview|suffixPreview|wordCount|reason|remarks|order)"\s*:/.test(block);
+          const hasMapFields = /"(?:parent|level|desc)"\s*:/.test(block) && !hasChunkFields;
+          const hasImageFields = /"(?:imageIndex|shouldInclude|isSensitive)"\s*:/.test(block);
+
+          if (hasImageFields) continue;
+
+          if (hasMapFields) {
+            if (!seenM.has(itemName) && !itemName.includes('大区域') && !itemName.includes('建筑分区') && !itemName.includes('核心探索主区域')) {
+              seenM.add(itemName);
+              const parentM = block.match(/"parent"\s*:\s*"([^"]*)"/);
+              const levelM = block.match(/"level"\s*:\s*([0-9]+)/);
+              const descM = block.match(/"desc"\s*:\s*"([^"]*)"/);
+              mapNodes.push({
+                name: itemName,
+                parent: parentM ? parentM[1].trim() : '',
+                level: levelM ? (parseInt(levelM[1], 10) || 2) : 2,
+                desc: descM ? descM[1].trim() : ''
+              });
+            }
+          } else if (hasChunkFields) {
+            if (!seenC.has(itemName)) {
+              seenC.add(itemName);
+              const orderM = block.match(/"order"\s*:\s*([0-9]+)/);
+              const catM = block.match(/"category"\s*:\s*"([^"]*)"/);
+              const wcM = block.match(/"wordCount"\s*:\s*([0-9]+)/);
+              const reasonM = block.match(/"reason"\s*:\s*"([^"]*)"/);
+              const prefM = block.match(/"prefixPreview"\s*:\s*"([^"]*)"/);
+              const suffM = block.match(/"suffixPreview"\s*:\s*"([^"]*)"/);
+              const remM = block.match(/"remarks"\s*:\s*"([^"]*)"/);
+              chunks.push({
+                order: orderM ? (parseInt(orderM[1], 10) || (chunks.length + 1)) : (chunks.length + 1),
+                name: itemName,
+                category: catM ? (catM[1].trim() || '正文') : '正文',
+                wordCount: wcM ? (parseInt(wcM[1], 10) || 1200) : 1200,
+                reason: reasonM ? reasonM[1].trim() : '',
+                prefixPreview: prefM ? prefM[1].trim() : '',
+                suffixPreview: suffM ? suffM[1].trim() : '',
+                remarks: remM ? remM[1].trim() : ''
+              });
+            }
           }
         }
 
         if (chunks.length > 0 || mapNodes.length > 0) {
           return {
+            _isSalvagedPartial: true,
             moduleType,
             ruleSystem,
             scaleType,
@@ -4009,6 +4391,33 @@ JSON 格式如下：
                 if (!parsedAiPlan) {
                   console.warn('[模组] 解析 AI JSON 规划大纲重试失败:', pErr2);
                 }
+              }
+            }
+
+            if (parsedAiPlan && parsedAiPlan._isSalvagedPartial && (!Array.isArray(parsedAiPlan.chunks) || parsedAiPlan.chunks.length < 3)) {
+              try {
+                this.analysisStatusText = `流式规划补全中：正在继续生成本卷章节切割目录...`;
+                this.updateBottomActionBar();
+                const existingChunksDesc = (parsedAiPlan.chunks && parsedAiPlan.chunks.length > 0)
+                  ? `目前已规划章节：${parsedAiPlan.chunks.map(c => c.name).join('、')}（截止于：「${parsedAiPlan.chunks[parsedAiPlan.chunks.length - 1].suffixPreview || ''}」）。请紧接其后继续规划剩余章节！`
+                  : `地图节点已生成完毕，现在请只输出本卷完整的 chunks 章节规划列表！`;
+                const contPrompt = `请直接输出本卷的 chunks 章节规划 JSON 对象（无需重复输出 mapNodes 和 imageAnalysis），格式严格为：\n{"chunks": [{"order": 1, "name": "章节名", "category": "分类", "wordCount": 1200, "reason": "说明", "prefixPreview": "起始前100字", "suffixPreview": "末尾后100字", "remarks": "本章归纳要点"}]}\n\n${existingChunksDesc}\n\n模组原文：\n${segText}`;
+                const contText = await this.callAI(systemPrompt, contPrompt);
+                if (contText) {
+                  const contSalvaged = this.salvagePartialAiPlan(contText);
+                  if (contSalvaged && Array.isArray(contSalvaged.chunks) && contSalvaged.chunks.length > 0) {
+                    const existingNames = new Set((parsedAiPlan.chunks || []).map(c => c.name));
+                    if (!Array.isArray(parsedAiPlan.chunks)) parsedAiPlan.chunks = [];
+                    contSalvaged.chunks.forEach(c => {
+                      if (!existingNames.has(c.name)) {
+                        existingNames.add(c.name);
+                        parsedAiPlan.chunks.push(c);
+                      }
+                    });
+                  }
+                }
+              } catch (contErr) {
+                console.warn('[模组] 流式补全章节目录失败:', contErr);
               }
             }
           }
@@ -4660,56 +5069,40 @@ ${this.globalOpinion ? `\n【用户全局修改意见】：\n${this.globalOpinio
 【全模组完整参考原文（拥有全篇全局能见度，请精准定位归纳本卷负责章节）】：
 ${fullText}`;
 
-      const generated = await this.callAI(systemPrompt, userPrompt);
-      if (!generated || generated.trim().length === 0) {
-        throw new Error('AI 全篇返回内容为空');
-      }
-
-      const parsedChapters = [];
-      const regexPrimary = /===CHAPTER_START:\s*([^|\n]+?)(?:\s*\|\s*([^=\n]+?))?===\s*([\s\S]*?)(?:===CHAPTER_END===|(?====CHAPTER_START)|$)/g;
-      let match;
-      let index = 0;
-
-      while ((match = regexPrimary.exec(generated)) !== null) {
-        const rawTitle = (match[1] || '').trim();
-        const category = (match[2] || '正文').trim();
-        const content = (match[3] || '').trim();
-        if (content.length > 20) {
-          index++;
-          const words = this.countWords(content);
-          const cleanTitle = this.cleanChapterTitle(rawTitle || `第${index}章`, this.currentParsedData?.moduleName);
-          parsedChapters.push({
-            id: 'chap_' + Date.now() + '_' + index,
-            moduleId: this.currentParsedData?.moduleName || '跑团模组',
-            title: cleanTitle,
-            category: category,
-            wordCount: words,
-            content: content,
-            segIdx: typeof segIdx === 'number' ? segIdx : 0,
-            fixCount: 0,
-            stats: {
-              mainTextCount: (content.match(/【正文】/g) || []).length,
-              kpInfoCount: (content.match(/【KP信息】/g) || []).length,
-              secretCount: (content.match(/【秘密/g) || []).length,
-              totalWords: words
-            },
-            sortOrder: index
-          });
+      const parseChaptersFromRawOutput = (rawOut, targetChunks, baseIndexOffset = 0, isFinalAttempt = false) => {
+        const list = [];
+        const regexPrimary = /===CHAPTER_START:\s*([^|\n]+?)(?:\s*\|\s*([^=\n]+?))?===\s*([\s\S]*?)(===CHAPTER_END===|(?====CHAPTER_START)|$)/g;
+        let match;
+        let localIdx = 0;
+        const matches = [];
+        while ((match = regexPrimary.exec(rawOut)) !== null) {
+          matches.push(match);
         }
-      }
 
-      if (parsedChapters.length === 0) {
-        const regexSecondary = /(?:^|\n)#{2,4}\s*([^|\n]+?)(?:\s*\|\s*([^=\n]+?))?\n([\s\S]*?)(?=(?:\n#{2,4}\s+)|$)/g;
-        while ((match = regexSecondary.exec(generated)) !== null) {
-          const rawTitle = (match[1] || '').trim();
-          const category = (match[2] || '正文').trim();
-          const content = (match[3] || '').trim();
+        for (let mIdx = 0; mIdx < matches.length; mIdx++) {
+          const m = matches[mIdx];
+          const rawTitle = (m[1] || '').trim();
+          const category = (m[2] || '正文').trim();
+          const content = (m[3] || '').trim();
+          const closingToken = (m[4] || '').trim();
+          const isLastMatch = mIdx === matches.length - 1;
+          const isUnclosedTail = isLastMatch && closingToken !== '===CHAPTER_END===' && !content.includes(ENDING_NOTE);
+
+          // 若流式输出在最后一章中途截断，且当前还有未生成的章节（非单章兜底），则丢弃该半截章节，留给下一轮续切完整生成
+          if (isUnclosedTail && !isFinalAttempt && (matches.length > 1 || targetChunks.length > 1) && content.length < 600) {
+            continue;
+          }
+          if (isUnclosedTail && !isFinalAttempt && matches.length > 1 && (baseIndexOffset + matches.length) <= targetChunks.length) {
+            continue;
+          }
+
           if (content.length > 20) {
-            index++;
+            localIdx++;
+            const globalOrder = baseIndexOffset + localIdx;
             const words = this.countWords(content);
-            const cleanTitle = this.cleanChapterTitle(rawTitle || `第${index}章`, this.currentParsedData?.moduleName);
-            parsedChapters.push({
-              id: 'chap_' + Date.now() + '_' + index,
+            const cleanTitle = this.cleanChapterTitle(rawTitle || `第${globalOrder}章`, this.currentParsedData?.moduleName);
+            list.push({
+              id: 'chap_' + Date.now() + '_' + globalOrder + '_' + Math.random().toString(36).slice(2, 5),
               moduleId: this.currentParsedData?.moduleName || '跑团模组',
               title: cleanTitle,
               category: category,
@@ -4723,41 +5116,143 @@ ${fullText}`;
                 secretCount: (content.match(/【秘密/g) || []).length,
                 totalWords: words
               },
-              sortOrder: index
+              sortOrder: globalOrder
             });
           }
         }
+
+        if (list.length === 0) {
+          const regexSecondary = /(?:^|\n)#{2,4}\s*([^|\n]+?)(?:\s*\|\s*([^=\n]+?))?\n([\s\S]*?)(?=(?:\n#{2,4}\s+)|$)/g;
+          while ((match = regexSecondary.exec(rawOut)) !== null) {
+            const rawTitle = (match[1] || '').trim();
+            const category = (match[2] || '正文').trim();
+            const content = (match[3] || '').trim();
+            if (content.length > 20) {
+              localIdx++;
+              const globalOrder = baseIndexOffset + localIdx;
+              const words = this.countWords(content);
+              const cleanTitle = this.cleanChapterTitle(rawTitle || `第${globalOrder}章`, this.currentParsedData?.moduleName);
+              list.push({
+                id: 'chap_' + Date.now() + '_' + globalOrder + '_' + Math.random().toString(36).slice(2, 5),
+                moduleId: this.currentParsedData?.moduleName || '跑团模组',
+                title: cleanTitle,
+                category: category,
+                wordCount: words,
+                content: content,
+                segIdx: typeof segIdx === 'number' ? segIdx : 0,
+                fixCount: 0,
+                stats: {
+                  mainTextCount: (content.match(/【正文】/g) || []).length,
+                  kpInfoCount: (content.match(/【KP信息】/g) || []).length,
+                  secretCount: (content.match(/【秘密/g) || []).length,
+                  totalWords: words
+                },
+                sortOrder: globalOrder
+              });
+            }
+          }
+        }
+
+        if (list.length === 0) {
+          const sections = rawOut.split(/(?:^|\n)===+\s*/);
+          sections.forEach((sec, idx) => {
+            if (!sec.trim() || sec.trim().length < 20) return;
+            const firstLineEnd = sec.indexOf('\n');
+            const firstLine = firstLineEnd !== -1 ? sec.substring(0, firstLineEnd).trim() : sec.trim();
+            const rest = firstLineEnd !== -1 ? sec.substring(firstLineEnd).trim() : '';
+            const planChunk = targetChunks[idx] || { name: firstLine || `第${baseIndexOffset + idx + 1}章`, category: '正文' };
+            const words = this.countWords(rest || sec);
+            const cleanTitle = this.cleanChapterTitle(planChunk.name, this.currentParsedData?.moduleName);
+            const globalOrder = baseIndexOffset + idx + 1;
+
+            list.push({
+              id: 'chap_' + Date.now() + '_' + globalOrder + '_' + Math.random().toString(36).slice(2, 5),
+              moduleId: this.currentParsedData?.moduleName || '跑团模组',
+              title: cleanTitle,
+              category: planChunk.category,
+              wordCount: words,
+              content: rest || sec,
+              segIdx: typeof segIdx === 'number' ? segIdx : 0,
+              fixCount: 0,
+              stats: {
+                mainTextCount: ((rest || sec).match(/【正文】/g) || []).length,
+                kpInfoCount: ((rest || sec).match(/【KP信息】/g) || []).length,
+                secretCount: ((rest || sec).match(/【秘密/g) || []).length,
+                totalWords: words
+              },
+              sortOrder: globalOrder
+            });
+          });
+        }
+
+        return list;
+      };
+
+      const generated = await this.callAI(systemPrompt, userPrompt);
+      if (!generated || generated.trim().length === 0) {
+        throw new Error('AI 全篇返回内容为空');
       }
 
-      if (parsedChapters.length === 0) {
-        const sections = generated.split(/(?:^|\n)===+\s*/);
-        sections.forEach((sec, idx) => {
-          if (!sec.trim() || sec.trim().length < 20) return;
-          const firstLineEnd = sec.indexOf('\n');
-          const firstLine = firstLineEnd !== -1 ? sec.substring(0, firstLineEnd).trim() : sec.trim();
-          const rest = firstLineEnd !== -1 ? sec.substring(firstLineEnd).trim() : '';
-          const planChunk = assignedChunks[idx] || { name: firstLine || `第${idx + 1}章`, category: '正文' };
-          const words = this.countWords(rest || sec);
-          const cleanTitle = this.cleanChapterTitle(planChunk.name, this.currentParsedData?.moduleName);
+      const parsedChapters = parseChaptersFromRawOutput(generated, assignedChunks, 0, false);
 
-          parsedChapters.push({
-            id: 'chap_' + Date.now() + '_' + (idx + 1),
-            moduleId: this.currentParsedData?.moduleName || '跑团模组',
-            title: cleanTitle,
-            category: planChunk.category,
-            wordCount: words,
-            content: rest || sec,
-            segIdx: typeof segIdx === 'number' ? segIdx : 0,
-            fixCount: 0,
-            stats: {
-              mainTextCount: ((rest || sec).match(/【正文】/g) || []).length,
-              kpInfoCount: ((rest || sec).match(/【KP信息】/g) || []).length,
-              secretCount: ((rest || sec).match(/【秘密/g) || []).length,
-              totalWords: words
-            },
-            sortOrder: idx + 1
-          });
-        });
+      // 流式/单次输出长度受限时自动接续切割本卷剩余章节，防止切到一半停止
+      let contRound = 0;
+      const maxContRounds = Math.max(3, Math.ceil((assignedChunks?.length || 1) / 2));
+      while (
+        Array.isArray(assignedChunks) &&
+        assignedChunks.length > 1 &&
+        parsedChapters.length > 0 &&
+        parsedChapters.length < assignedChunks.length &&
+        contRound < maxContRounds &&
+        !this.isCuttingCancelled
+      ) {
+        contRound++;
+        while (this.isCuttingPaused) {
+          await new Promise(r => setTimeout(r, 300));
+          if (this.isCuttingCancelled) break;
+        }
+        if (this.isCuttingCancelled) break;
+
+        const remainingChunks = assignedChunks.slice(parsedChapters.length);
+        if (remainingChunks.length === 0) break;
+
+        const progressText = document.getElementById('module-progress-text');
+        if (progressText) {
+          progressText.textContent = `流式续切中：本卷已完成 ${parsedChapters.length}/${assignedChunks.length} 章，正在继续生成【${remainingChunks[0].name}】等剩余 ${remainingChunks.length} 章...`;
+        }
+
+        const remOutline = remainingChunks.map((c, idx) => {
+          const orderNum = parsedChapters.length + idx + 1;
+          const prefixHint = c.prefixPreview ? `\n     - 原文起始定位（从哪开始）: 「${c.prefixPreview}」` : '';
+          const suffixHint = c.suffixPreview ? `\n     - 原文截止定位（到哪结束）: 「${c.suffixPreview}」` : '';
+          const remarkHint = c.remarks ? `\n     - 章节内容与跨处归纳要求: ${c.remarks}` : (c.reason ? `\n     - 章节定位说明: ${c.reason}` : '');
+          return `  ${orderNum}. 章节名: ${c.name} | 分类: ${c.category}${prefixHint}${suffixHint}${remarkHint}`;
+        }).join('\n');
+
+        const doneTitles = parsedChapters.map(c => `【${c.title}】`).join('、');
+        const contUserPrompt = `模组名称：${this.currentParsedData?.moduleName || '跑团模组'}
+在上一轮流式输出中，你已经完成了前 ${parsedChapters.length} 个章节（${doneTitles}），但本卷还有以下 ${remainingChunks.length} 个章节尚未输出！
+现在请紧接上一轮中断处，严格按照 ===CHAPTER_START: 章节名称 | 分类=== ... ===CHAPTER_END=== 格式，继续完整输出以下剩余的 ${remainingChunks.length} 个章节（严禁重复已输出的章节，严禁缩写省略原文）：
+${remOutline}
+${this.globalOpinion ? `\n【用户全局修改意见】：\n${this.globalOpinion}\n` : ''}
+【全模组完整参考原文】：
+${fullText}`;
+
+        try {
+          const moreGenerated = await this.callAI(systemPrompt, contUserPrompt);
+          if (!moreGenerated || !moreGenerated.trim()) break;
+          const moreParsed = parseChaptersFromRawOutput(
+            moreGenerated,
+            remainingChunks,
+            parsedChapters.length,
+            contRound >= maxContRounds
+          );
+          if (!moreParsed || moreParsed.length === 0) break;
+          parsedChapters.push(...moreParsed);
+        } catch (contErr) {
+          console.warn('[模组] 流式续切剩余章节中断:', contErr);
+          break;
+        }
       }
 
       return parsedChapters;
@@ -12673,7 +13168,912 @@ ${chaptersDigest}
         });
       }
 
+      this.initAiWriterEvents();
       this.loadDraft();
+    },
+
+    // ==========================================================
+    // --- AI 写模组 (因地制宜四阶流水线 + 暗箱防剧透 + 本地思维链融合) ---
+    // ==========================================================
+    aiWriterState: {
+      initialized: false,
+      isRunning: false,
+      bgTags: ['日模'],
+      relTags: ['搭档'],
+      toneTags: ['纯爱'],
+      tropeTags: [],
+      customTags: [],
+      selectedTcIds: [],
+      lastGeneratedBundle: null
+    },
+
+    getAiWriterTagCatalog() {
+      return {
+        bg: ['日模', '中式', '美模', '古风', '现代', '民国', '西幻', '赛博', '末日', '哨向', 'ABO', '无限', '校园', '都市', '欧风', '架空'],
+        rel: ['竹马', '天降', '宿敌', '死敌', '年上', '年下', '骨科', '师徒', '主仆', '搭档', '前任', '替身', '契约', '同居', '网恋', '掉马', '双强', '高岭', '疯批', '病娇', '忠犬', '钓系', '傲娇', '腹黑'],
+        tone: ['纯爱', '粉红', '甜宠', '贴贴', '浪漫', '深情', '悲情', '宿命', '唯美', '拉扯', '暧昧', '训犬', '强制', '监禁', '背德', '救赎', '破镜', '追妻', '火葬', '暗恋', '酸甜', '吃醋', '修罗', '微虐', '刀子', '发疯', '茶番', '治愈', '微恐', '恐怖', '猎奇', '血腥'],
+        trope: ['旅游', '调查', '解密', '怪谈', '规则', '梦境', '时间', '循环', '重生', '穿书', '复活', '失忆', '读心', '共感', '变小', '互换', '兽耳', '魅魔', '人外', '神明', '诅咒', '发热', '易感', '催眠', '伪装', '孤岛', '暴雪', '游轮', '列车', '旅馆', '游园']
+      };
+    },
+
+    drawInspirationSeedsForTags(allTags) {
+      const tagStr = (allTags || []).join(' ');
+      const isRomanticPoignant = /浪漫|深情|悲情|宿命|唯美|救赎|破镜|酸甜|微虐|刀子/.test(tagStr);
+      const isSweetCozy = /茶番|甜宠|贴贴|治愈|旅游|同居/.test(tagStr) && !/恐怖|血腥|猎奇/.test(tagStr);
+      const isSpicyTension = /粉红|拉扯|暧昧|训犬|强制|监禁|背德|修罗|吃醋|病娇|疯批|发热|易感|共感/.test(tagStr);
+
+      const poignantPool = [
+        '黄昏停运的末班海岸列车上，时间只剩下最后三次停靠，KPC怀里揣着一张早已过期的双人车票与未说出口的告别',
+        '初雪落满庭院的旧宅里，KPC正在一页页修补你们共同的记忆画册，而每修补完一页，现实中属于他的痕迹就淡去一分',
+        '不断重复的八月最后一天，唯有KPC记得此前无数次轮回里为你挡下灾厄的代价，却依然在清晨微笑着邀你赴约',
+        '大雾弥漫的边境灯塔下，失联已久的搭档重新出现在你面前，他眼底藏着跨越生死的温柔与不能触碰的倒计时',
+        '盛夏祭典的烟花声中，你们必须在黎明到来前完成最后一次心愿交接，所有的克制与隐忍都在夜风里悄然决堤',
+        '能典当记忆与寿命的深夜当铺里，你意外发现了KPC多年前留下的典当契约，赎回条件竟是与他共度一场完整的幻梦',
+        '百年一遇的流星雨夜，两个背负相反宿命的人在废弃天文台重逢，星图指向的终点是唯有一人能离开的黎明',
+        '雨季连绵的江南古镇或昭和旧街，一把旧油纸伞下藏着跨越时光的执念，每一个似曾相识的街角都在唤醒尘封的深情'
+      ];
+
+      const sweetPool = [
+        '奇妙的早晨醒来，你面前同时站着一脸醋意的成年KPC与死死抱住你衣角不肯撒手的幼年KPC，解除异常的条件让人脸红心跳',
+        '大雪意外封住了山顶温泉旅馆的唯一下山路，整座旅馆只剩你们两人，而KPC平时冷静自持的伪装在热气与微醺中寸寸瓦解',
+        '一场荒诞又可爱的日常小诅咒让你们只要距离超过三米就会触发奇妙副作用，不得不整天寸步不离地贴在一起应付日常',
+        '原本只是寻常的游乐园或海边假日约会，KPC却反常地支支吾吾、耳根通红，每一次骰子检定都在拆穿他暗中筹备的偏爱',
+        '意外拾到的奇妙暖炉或魔法茶具把房间变成了舒适的箱庭空间，只有顺着KPC那些别扭又可爱的小心思互动才能找到出口',
+        'KPC突然一本正经地向你坦白一件听起来惊世骇俗、细究起来却让人忍俊不禁的秘密，拉开了两人独处一室的甜蜜审讯',
+        '短暂的读心或感官互通意外降临，KPC表面依然维持着平淡冷酷的模样，脑海里刷屏的占有欲与心动却被你听得一清二楚',
+        '一觉醒来KPC长出了无法隐藏的兽耳与尾巴，只有你的抚摸与亲近才能安抚他躁动的本能，偏偏他还嘴硬不肯承认'
+      ];
+
+      const tensionPool = [
+        '意外触发的双向感官共感将死敌或搭档死死绑在一起，一方极力压抑的喘息、痛楚与渴望都会百倍放大地传递给另一方',
+        '密闭华丽的箱庭房间内，解除束缚的唯一钥匙藏在对方贴身之处，每一轮试探都是一场争夺主导权的心理与感官博弈',
+        '昔日高高在上的上位者或宿敌因特殊失忆或契约反噬，落入完全依赖你的境地，却在顺从表象下暗暗编织反客为主的猎网',
+        '突如其来的特殊发热期或共鸣诅咒打破了两人之间脆弱的安全距离，唯有带有安抚意味的亲密接触才能压制濒临崩溃的理智值',
+        '平淡同居生活的一角突然裂开缝隙，你无意间闯入KPC藏匿最深的私人暗室，而身后传来了门锁落下的轻响与他低沉的叹息',
+        '一场必须假扮热恋情侣的潜入调查任务，本该是逢场作戏的逢迎与触碰，却在狭小藏身处擦出了彻底失控的真火',
+        '多方势力交织的修罗场晚宴上，表面温和的KPC在暗处扣住你的手腕，每一个眼神与暗骰都在逼迫你做出只属于他的选择',
+        '带着记忆重逢的前任或竹马以全新的危险身份将你困在谈判桌前，每一条看似苛刻的契约条款背后都是疯长的执念'
+      ];
+
+      const mysteryPool = [
+        '优格索托斯的时空折射让这一天成为了无限延伸的莫比乌斯环，看似平静的日常街道下，唯有找到因果倒置的锚点才能破局',
+        '诺登斯与旧日支配者博弈的幻梦境箱庭伪装成宁静的学园或小镇，六大怪谈背后对应着造梦者潜意识里不愿醒来的创伤',
+        '死去之人的来信将调查员引向被浓雾封锁的孤岛馆舍，所有NPC都在遵循一套诡异的日常守则，违背守则者将被涂抹存在',
+        '记忆中的挚友与眼前的KPC存在微小却致命的认知偏差，调查越深入，越发现整个舞台是一座为了留住某人而搭建的精密楚门世界',
+        '古老民俗祭典的前夜，镇上所有镜子里的倒影都比现实慢了半拍，而KPC正试图在你不察觉的情况下独自完成替换仪式',
+        '深夜停靠在不存在站台的幽灵列车，每一节车厢都对应一段被篡改的过往，唯有拼齐散落的真相碎片才能在天亮前下车',
+        '看似完美的复活奇迹背后连接着莎布尼古拉丝的母体温床，温柔如初的爱人躯壳下正进行着人性与神性的静默拉锯',
+        '一桩全员皆有动机的密室异变，所有表面线索都指向显而易见的替罪羊，唯有通过不起眼的生活细节才能逆推出真正的幕后执棋者'
+      ];
+
+      let activePool = [];
+      if (isRomanticPoignant) activePool = activePool.concat(poignantPool);
+      if (isSweetCozy) activePool = activePool.concat(sweetPool);
+      if (isSpicyTension) activePool = activePool.concat(tensionPool);
+      if (activePool.length < 5 || /调查|解密|怪谈|规则|恐怖|硬核|诡计/.test(tagStr)) {
+        activePool = activePool.concat(mysteryPool);
+      }
+      if (activePool.length < 8) {
+        activePool = activePool.concat(sweetPool, poignantPool, tensionPool);
+      }
+
+      const shuffled = activePool.slice().sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, 5);
+    },
+
+    openAiWriterScreen() {
+      this.initAiWriterEvents();
+      this.renderAiWriterTags();
+      this.refreshAiWriterThoughtChains();
+      if (typeof global.showScreen === 'function') {
+        global.showScreen('ai-module-writer-screen');
+      }
+    },
+
+    initAiWriterEvents() {
+      if (this.aiWriterState.initialized) return;
+      const screenEl = document.getElementById('ai-module-writer-screen');
+      if (!screenEl) return;
+      this.aiWriterState.initialized = true;
+
+      const gotoLibBtn = document.getElementById('ai-mod-goto-lib-btn');
+      if (gotoLibBtn) {
+        gotoLibBtn.addEventListener('click', () => {
+          if (typeof global.showScreen === 'function') {
+            global.showScreen('chat-list-screen');
+          }
+          const modNav = document.querySelector('#chat-list-bottom-nav .nav-item[data-view="modules-view"]');
+          if (modNav) modNav.click();
+        });
+      }
+
+      const resetBtn = document.getElementById('ai-mod-reset-btn');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          if (this.aiWriterState.isRunning) return;
+          this.aiWriterState.bgTags = ['日模'];
+          this.aiWriterState.relTags = ['搭档'];
+          this.aiWriterState.toneTags = ['纯爱'];
+          this.aiWriterState.tropeTags = [];
+          this.aiWriterState.customTags = [];
+          const titleInput = document.getElementById('ai-mod-title-input');
+          const hookInput = document.getElementById('ai-mod-hook-input');
+          const customInput = document.getElementById('ai-mod-custom-tag-input');
+          if (titleInput) titleInput.value = '';
+          if (hookInput) hookInput.value = '';
+          if (customInput) customInput.value = '';
+          this.renderAiWriterTags();
+          this.updateAiWriterStatus(0, '已重置全部选项，可重新勾选标签后点击生成');
+        });
+      }
+
+      const addTagBtn = document.getElementById('ai-mod-add-tag-btn');
+      const customTagInput = document.getElementById('ai-mod-custom-tag-input');
+      const handleAddCustomTag = () => {
+        if (!customTagInput) return;
+        const val = customTagInput.value.trim();
+        if (!val) return;
+        if (!this.aiWriterState.customTags.includes(val)) {
+          this.aiWriterState.customTags.push(val);
+        }
+        customTagInput.value = '';
+        this.renderAiWriterTags();
+      };
+      if (addTagBtn) addTagBtn.addEventListener('click', handleAddCustomTag);
+      if (customTagInput) {
+        customTagInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAddCustomTag();
+          }
+        });
+      }
+
+      const refreshTcBtn = document.getElementById('ai-mod-refresh-tc-btn');
+      if (refreshTcBtn) {
+        refreshTcBtn.addEventListener('click', () => {
+          this.refreshAiWriterThoughtChains();
+        });
+      }
+
+      const genBtn = document.getElementById('ai-mod-generate-btn');
+      if (genBtn) {
+        genBtn.addEventListener('click', () => {
+          this.runAiModulePipeline();
+        });
+      }
+
+      const saveBtn = document.getElementById('ai-mod-save-btn');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+          if (this.aiWriterState.lastGeneratedBundle) {
+            this.saveAiGeneratedModuleToDB(this.aiWriterState.lastGeneratedBundle, true);
+          }
+        });
+      }
+    },
+
+    renderAiWriterTags() {
+      const catalog = this.getAiWriterTagCatalog();
+      const renderGroup = (containerId, list, stateKey) => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = '';
+        const selectedArr = this.aiWriterState[stateKey] || [];
+        list.forEach(tag => {
+          const isChecked = selectedArr.includes(tag);
+          const label = document.createElement('label');
+          label.className = `mod-tag-select-item ${this.getTagClass ? this.getTagClass(tag) : ''}`;
+          label.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 4px; border-radius: 6px; font-size: 11.5px; cursor: pointer; user-select: none; box-sizing: border-box; overflow: hidden;';
+          label.innerHTML = `
+            <input type="checkbox" value="${tag}" ${isChecked ? 'checked' : ''} style="width: 13px; height: 13px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tag}</span>
+          `;
+          const inputEl = label.querySelector('input');
+          if (inputEl) {
+            inputEl.addEventListener('change', (e) => {
+              if (e.target.checked) {
+                if (!this.aiWriterState[stateKey].includes(tag)) {
+                  this.aiWriterState[stateKey].push(tag);
+                }
+              } else {
+                this.aiWriterState[stateKey] = this.aiWriterState[stateKey].filter(t => t !== tag);
+              }
+              this.updateAiWriterSelectedTagCount();
+            });
+          }
+          container.appendChild(label);
+        });
+      };
+
+      renderGroup('ai-mod-tags-bg', catalog.bg, 'bgTags');
+      renderGroup('ai-mod-tags-rel', catalog.rel, 'relTags');
+      renderGroup('ai-mod-tags-tone', catalog.tone, 'toneTags');
+      renderGroup('ai-mod-tags-trope', catalog.trope, 'tropeTags');
+
+      const customListEl = document.getElementById('ai-mod-custom-tags-list');
+      if (customListEl) {
+        customListEl.innerHTML = '';
+        (this.aiWriterState.customTags || []).forEach(tag => {
+          const chip = document.createElement('span');
+          chip.className = 'mod-tag-badge';
+          chip.style.cssText = 'display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; cursor: pointer;';
+          chip.innerHTML = `<span>${tag}</span><span style="font-size: 12px; opacity: 0.7;">×</span>`;
+          chip.addEventListener('click', () => {
+            this.aiWriterState.customTags = this.aiWriterState.customTags.filter(t => t !== tag);
+            this.renderAiWriterTags();
+          });
+          customListEl.appendChild(chip);
+        });
+      }
+
+      this.updateAiWriterSelectedTagCount();
+    },
+
+    updateAiWriterSelectedTagCount() {
+      const countEl = document.getElementById('ai-mod-selected-tags-count');
+      if (!countEl) return;
+      const total =
+        (this.aiWriterState.bgTags || []).length +
+        (this.aiWriterState.relTags || []).length +
+        (this.aiWriterState.toneTags || []).length +
+        (this.aiWriterState.tropeTags || []).length +
+        (this.aiWriterState.customTags || []).length;
+      countEl.textContent = `已选 ${total} 项`;
+    },
+
+    async refreshAiWriterThoughtChains() {
+      const container = document.getElementById('ai-mod-tc-list');
+      if (!container) return;
+      container.innerHTML = '';
+
+      try {
+        const database = this.getDB();
+        const presets = (database && database.thoughtChainPresets)
+          ? await database.thoughtChainPresets.toArray()
+          : [];
+
+        if (!presets || presets.length === 0) {
+          container.innerHTML = '<span style="font-size: 11.5px; color: var(--text-secondary);">本地暂无思维链预设，将使用内置文学审美准则</span>';
+          return;
+        }
+
+        const defaultId = (global.state && global.state.globalSettings)
+          ? global.state.globalSettings.defaultThoughtChainId
+          : null;
+
+        if (this.aiWriterState.selectedTcIds.length === 0 && defaultId) {
+          this.aiWriterState.selectedTcIds = [String(defaultId)];
+        }
+
+        presets.forEach(p => {
+          if (!p || !p.id) return;
+          const idStr = String(p.id);
+          const isChecked = this.aiWriterState.selectedTcIds.includes(idStr);
+          const label = document.createElement('label');
+          label.className = 'mod-tag-select-item';
+          label.style.cssText = 'display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; font-size: 11.5px; cursor: pointer; background: var(--card-bg, #FFFFFF); border: 1px solid var(--border-color);';
+          label.innerHTML = `
+            <input type="checkbox" value="${idStr}" ${isChecked ? 'checked' : ''} style="width: 13px; height: 13px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
+            <span style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name || '思维链'}</span>
+          `;
+          const inp = label.querySelector('input');
+          if (inp) {
+            inp.addEventListener('change', (e) => {
+              if (e.target.checked) {
+                if (!this.aiWriterState.selectedTcIds.includes(idStr)) {
+                  this.aiWriterState.selectedTcIds.push(idStr);
+                }
+              } else {
+                this.aiWriterState.selectedTcIds = this.aiWriterState.selectedTcIds.filter(x => x !== idStr);
+              }
+            });
+          }
+          container.appendChild(label);
+        });
+      } catch (err) {
+        container.innerHTML = '<span style="font-size: 11.5px; color: var(--text-secondary);">读取本地思维链失败</span>';
+      }
+    },
+
+    async getSelectedThoughtChainPromptText() {
+      try {
+        const database = this.getDB();
+        if (!database || !database.thoughtChainPresets) return '';
+        const presets = await database.thoughtChainPresets.toArray();
+        const chosen = (presets || []).filter(p => p && this.aiWriterState.selectedTcIds.includes(String(p.id)));
+        if (chosen.length === 0) return '';
+        return chosen.map(p => {
+          const gen = (p.generalContent || '').trim();
+          const coc = (p.cocContent || '').trim();
+          return `思维链名称：${p.name || '未命名'}\n${gen ? '通用文风与思考规范：\n' + gen + '\n' : ''}${coc ? '跑团叙事规范：\n' + coc : ''}`.trim();
+        }).join('\n\n---\n\n');
+      } catch (_) {
+        return '';
+      }
+    },
+
+    setAiWriterStepActive(stepNum) {
+      for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`ai-mod-step-${i}`);
+        if (!el) continue;
+        if (i < stepNum) {
+          el.style.background = 'var(--secondary-bg, #F0EFEA)';
+          el.style.color = 'var(--accent-color, #4A7A68)';
+          el.style.borderColor = 'var(--accent-color, #4A7A68)';
+        } else if (i === stepNum) {
+          el.style.background = 'var(--accent-color, #4A7A68)';
+          el.style.color = '#FFFFFF';
+          el.style.borderColor = 'var(--accent-color, #4A7A68)';
+        } else {
+          el.style.background = 'var(--secondary-bg, #F0EFEA)';
+          el.style.color = 'var(--text-secondary)';
+          el.style.borderColor = 'var(--border-color)';
+        }
+      }
+    },
+
+    updateAiWriterStatus(pct, text) {
+      const wrap = document.getElementById('ai-mod-progress-wrap');
+      const bar = document.getElementById('ai-mod-progress-bar');
+      const statusEl = document.getElementById('ai-mod-status-text');
+      if (wrap) wrap.style.display = pct > 0 ? 'block' : 'none';
+      if (bar) bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+      if (statusEl && text) statusEl.textContent = text;
+    },
+
+    parseJsonFromAiResponse(rawText) {
+      if (!rawText || typeof rawText !== 'string') return null;
+      let clean = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      try {
+        return JSON.parse(clean);
+      } catch (_) {
+        const firstBrace = clean.indexOf('{');
+        const lastBrace = clean.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          try {
+            return JSON.parse(clean.slice(firstBrace, lastBrace + 1));
+          } catch (_2) {}
+        }
+      }
+      return null;
+    },
+
+    async runAiModulePipeline() {
+      if (this.aiWriterState.isRunning) return;
+
+      const ruleSystem = (document.getElementById('ai-mod-rule-select')?.value || 'coc').toLowerCase();
+      const scaleType = document.getElementById('ai-mod-scale-select')?.value || '1v1';
+      const modType = document.getElementById('ai-mod-type-select')?.value || '线性';
+      const difficulty = document.getElementById('ai-mod-diff-select')?.value || '普通';
+      const lengthMode = document.getElementById('ai-mod-len-select')?.value || 'medium';
+      const drawMode = document.getElementById('ai-mod-draw-select')?.value || 'off';
+      const refMode = document.getElementById('ai-mod-ref-select')?.value || 'free';
+      const rawTitle = (document.getElementById('ai-mod-title-input')?.value || '').trim();
+      const customTitle = rawTitle === '留空由AI自动构思标题' ? '' : rawTitle;
+      const author = (document.getElementById('ai-mod-author-input')?.value || '守秘人').trim() || '守秘人';
+      const rawHook = (document.getElementById('ai-mod-hook-input')?.value || '').trim();
+      const userHook = rawHook === '由AI结合所选标签自主破题构思' ? '' : rawHook;
+
+      const allTags = [
+        ...(this.aiWriterState.bgTags || []),
+        ...(this.aiWriterState.relTags || []),
+        ...(this.aiWriterState.toneTags || []),
+        ...(this.aiWriterState.tropeTags || []),
+        ...(this.aiWriterState.customTags || [])
+      ];
+
+      if (allTags.length === 0) {
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '请至少勾选一个题材或关系标签');
+        }
+        return;
+      }
+
+      const genBtn = document.getElementById('ai-mod-generate-btn');
+      const saveBtn = document.getElementById('ai-mod-save-btn');
+      const previewBox = document.getElementById('ai-mod-preview-box');
+
+      this.aiWriterState.isRunning = true;
+      if (genBtn) {
+        genBtn.textContent = '生成中';
+        genBtn.disabled = true;
+      }
+      if (saveBtn) saveBtn.disabled = true;
+      if (previewBox) previewBox.style.display = 'none';
+
+      try {
+        const tcPrompt = await this.getSelectedThoughtChainPromptText();
+        const targetSceneCount = lengthMode === 'short' ? 4 : (lengthMode === 'long' ? 10 : 6);
+        const drawnSeeds = drawMode === 'on' ? this.drawInspirationSeedsForTags(allTags) : [];
+
+        const refGuidanceMap = {
+          free: '完全因地制宜决定叙事形态，不套用任何固定模板，让故事自身的情绪、张力或悬念自然生长出最合适的章节脉络。',
+          confession: '参考日常独白与心理拉扯韵律：从极具生活感的平淡日常切入，因一句突如其来的反常坦白或微小异变，展开高密度的二人心理博弈与情感剖白。',
+          date_loop: '参考约会箱庭与时间异常韵律：以一场轻松愉快的约会或出游开篇，在熟悉的日常场景里悄然混入微妙的时空违和感，兼顾甜蜜互动与层层递进的探索。',
+          jealous_sweet: '参考奇幻变故与吃醋甜饼韵律：制造一个令人啼笑皆非又不得不亲密贴贴的奇妙处境，突出KPC表面矜持或吃醋、实则暗藏独占欲与温柔偏爱的鲜活反差。',
+          multi_legend: '参考多HO分线与怪谈群像韵律：每位调查员拥有独立的秘密使命与专属同伴羁绊，单人私密剧情与主线怪谈调查相互交织推进。'
+        };
+        const refGuidance = refGuidanceMap[refMode] || refGuidanceMap.free;
+
+        // ==========================================================
+        // 第一阶段：AI1 审题破局与底牌立意构思
+        // ==========================================================
+        this.setAiWriterStepActive(1);
+        this.updateAiWriterStatus(10, 'AI1 正在因地制宜审视主题灵魂、枪毙平庸套路并构思底牌与猫设定...');
+
+        const ai1System = `你是一位兼具晋江高人气小说张力审美与Booth殿堂级跑团模组巧思的主创设计师。
+你的任务不是套用死板公式，而是根据用户选定的标签组合，先深入思考【这个主题真正需要什么灵魂】，因地制宜地完成破题与底牌设计：
+
+一、因地制宜的审美哲学：
+1. 若标签偏向【浪漫、深情、悲情、宿命、唯美、救赎、酸甜、微虐、刀子】：
+   - 绝不要为了反转而强行塞入生硬的背叛或恐怖黑幕！
+   - 真正的灵魂在于【极致的氛围渲染与宿命感】：季节与光影的流动、欲言又止的克制深情、明知代价却依然奔赴的温柔、以及两人之间无法替代表达的羁绊。请思考什么样的场景意象与情感递进最能让人眼眶发热、余韵悠长。
+2. 若标签偏向【茶番、甜宠、贴贴、治愈、同居、旅游】且难度偏低：
+   - 绝不要写小学生过家家式的俗套送礼或干瘪告白，也不要乱塞惊悚邪教！
+   - 真正的灵魂在于【高概念的亲密处境与鲜活的性格反差】：思考如何设计一个巧妙有趣的奇妙小意外或日常困境，让平时不会轻易展露的吃醋、嘴硬、依赖、偏爱与肢体贴近变得顺理成章，甜得自然且充满生活质感。
+3. 若标签偏向【粉红、拉扯、暧昧、训犬、强制、监禁、背德、宿敌、死敌、掉马、修罗、病娇、疯批】：
+   - 真正的灵魂在于【高概念处境绑架与权力失控博弈】：思考如何把两人锁进一个无法逃避的紧迫场域，设计KPC或核心人物的表面伪装与底层失控触发点，让玩家在试探、挑逗、反抗或顺从之间体验极致的性张力与心理拉扯。
+4. 若标签偏向【调查、解密、怪谈、规则、循环、恐怖、硬核、诡计】：
+   - 真正的灵魂在于【草蛇灰线的叙事诡计与藏叶于林的线索闭环】：思考核心异常机制或神话底牌是什么，如何把真相拆碎藏进毫不突兀的生活细节与传闻里。
+
+二、反平庸自省要求：
+动笔前请先在心中排除最容易想到的三个俗套点子，选择最有巧思、最能让玩家沉浸其中的构想。
+${tcPrompt ? '\n三、用户选定的思维链文风与审美准则：\n' + tcPrompt : ''}`;
+
+        const ai1User = `请基于以下配置，为模组完成第一阶段【审题破局与守秘人底牌构思】：
+- 规则体系：${ruleSystem.toUpperCase()}
+- 玩家规模：${scaleType}
+- 结构类型：${modType}
+- 调查难度：${difficulty}
+- 目标篇幅：${lengthMode === 'short' ? '短篇精悍' : (lengthMode === 'long' ? '长篇多幕' : '中篇饱满')}，正文事件约 ${targetSceneCount} 幕
+- 选定标签：${allTags.join('、')}
+- 叙事韵律参考：${refGuidance}
+${customTitle ? '- 指定模组名称：' + customTitle : '- 模组名称：请构思一个富有文学质感与记忆点的名字'}
+${userHook ? '- 开场引子要求：' + userHook : ''}
+${drawnSeeds.length > 0 ? '- 候选灵感池（请从中挑选最契合当前主题的一组，或取其精华自然融合，切勿生搬硬套）：\n  ' + drawnSeeds.map((s, idx) => (idx + 1) + '. ' + s).join('\n  ') : '- 抽选模式：未开启外部抽选，请完全依靠你的深度思考自主破题构思。'}
+
+请严格输出以下JSON格式（不要输出任何代码块标记以外的多余解释）：
+{
+  "title": "模组名称",
+  "summary": "吸引人的公开简介，绝对不能泄露底牌与真相，100至180字",
+  "themeMode": "当前模组的核心美学流派，如：唯美宿命浪漫 / 高概念反差甜饼 / 暧昧权力拉扯 / 诡计怪谈悬疑",
+  "creativeReflection": "主创破题思考：阐述这个主题最需要渲染的核心氛围或张力是什么，为什么这样设计最能打动玩家",
+  "publicInfoChapter": "完整的【00-模组已知信息】正文，供玩家开团前阅读：包含故事舞台、时代背景、公开导入引子、推荐技能、各HO或PC与KPC的公开关系设定、注意事项。严禁包含任何剧透",
+  "kpTruthAndMechanism": "完整的守秘人机密底牌：包含事件背后的真正成因或核心深情秘密、特殊互动小机制或规则检定设计、完整因果时间线",
+  "catAndNpcProfiles": [
+    {
+      "chapterTitle": "猫-KPC或HO秘密与核心NPC章节名，例如：猫-恋人 或 02-HO1秘密与设定 或 NPC-某角色",
+      "roleName": "角色称呼",
+      "publicDesc": "玩家可见的表面印象",
+      "secretProfile": "守秘人专属的完整里设定：包含真实动机、情感底色、表面姿态与失控触发点、面对玩家不同态度时的具体RP反应指南与代表台词"
+    }
+  ],
+  "plannedScenes": [
+    {
+      "sceneTitle": "分幕事件章节标题，如：导入-雨夜来访 或 第一幕-旧校舍的微光",
+      "purpose": "本幕需要重点渲染的氛围、情绪节点或探索目标",
+      "pacingNote": "详略指导：本幕哪里应该慢下来细腻描写感官与互动，哪里应该干脆利落推进"
+    }
+  ],
+  "endingsPlan": "多分支结局规划：包含True End、Normal End、特殊结局或Bad End的达成条件与核心意境"
+}`;
+
+        const ai1Raw = await this.callAI(ai1System, ai1User);
+        const ai1Data = this.parseJsonFromAiResponse(ai1Raw);
+        if (!ai1Data || !ai1Data.publicInfoChapter) {
+          throw new Error('AI1 立意构思返回格式异常，请重试');
+        }
+
+        // ==========================================================
+        // 第二阶段：AI2 因地制宜深化与叙事调度
+        // ==========================================================
+        this.setAiWriterStepActive(2);
+        this.updateAiWriterStatus(32, 'AI2 正在根据主题灵魂深化氛围意象、互动机制、地图节点与线索网络...');
+
+        const ai2System = `你是负责第二阶段【因地制宜深化与叙事调度】的戏剧导演AI。
+你将收到AI1完成的《主创破题思考》《守秘人底牌》与《分幕初稿》。
+请根据该模组的【核心美学流派】因地制宜地进行深化，绝不千篇一律：
+- 若本模组核心是【深情、悲情、唯美、浪漫、宿命、救赎】：请不要乱加无意义的悬疑反转！你的核心任务是构建【五感氛围细节库与情绪高潮阶梯】——设计贯穿全篇的信物或环境意象（如某种花香、未织完的围巾、潮湿的海风、老旧怀表）、规划KPC眼神与语气的微妙变化层次，让每一幕的情绪层层递进直到彻底引爆泪点或心动。
+- 若本模组核心是【粉红、拉扯、训犬、强制、甜宠、茶番、贴贴】：你的核心任务是设计【高张力互动博弈节点与趣味检定小机制】——例如心率失控检定、吃醋破防暗骰、肢体接触条件、以及当玩家选择撩拨、顺从、嘴硬或逃跑时KPC截然不同的双层反应。
+- 若本模组核心是【怪谈、解密、循环、恐怖、诡计】：你的核心任务是【草蛇灰线织网】——将底牌线索自然拆解到环境陈设、路人闲聊与日常物品中，视情况运用插叙或认知错位，确保逻辑严丝合缝。`;
+
+        const ai2User = `以下是AI1完成的模组立意与底牌蓝图：
+${JSON.stringify(ai1Data, null, 2)}
+
+请对其进行第二阶段因地制宜深化，并同步提取本模组的调查场景地图节点与关键线索或互动道具卡，严格输出以下JSON格式：
+{
+  "atmosphereAndMechanicsGuide": "深化后的全篇氛围渲染准则、意象呼应设计与专属特殊检定机制说明（供守秘人掌握带团节奏）",
+  "deepenedScenes": [
+    {
+      "sceneTitle": "分幕章节标题（共 ${targetSceneCount} 幕左右）",
+      "atmosphereCues": "本幕必须写活的光影、声音、气味、温度等五感氛围细节",
+      "kpcInteractionDesign": "本幕KPC或核心NPC的微表情、台词张力与针对玩家不同行动的分支回应",
+      "cluesOrEvents": "本幕可触发的探索点、暗骰检定、情感抉择或隐藏伏笔（若为日常或浪漫向，伏笔与线索必须服务于情感与氛围，不生造违和谜题）",
+      "pacingRule": "详略控制：明确指出本幕哪一段必须浓墨重彩写足细节，哪一段一笔带过"
+    }
+  ],
+  "mapNodes": [
+    {
+      "name": "地点名称",
+      "parent": "上级区域名称，顶级地点填空字符串",
+      "level": 1,
+      "desc": "地点氛围与可互动要素简述"
+    }
+  ],
+  "clues": [
+    {
+      "name": "线索或核心信物名称",
+      "location": "所在地点或获取场景",
+      "Trigger": "获取方式或检定条件",
+      "content": "详细内容描述与守秘人备注"
+    }
+  ]
+}`;
+
+        const ai2Raw = await this.callAI(ai2System, ai2User);
+        const ai2Data = this.parseJsonFromAiResponse(ai2Raw) || {
+          atmosphereAndMechanicsGuide: '',
+          deepenedScenes: ai1Data.plannedScenes || [],
+          mapNodes: [],
+          clues: []
+        };
+
+        // ==========================================================
+        // 第三阶段：AI3 模拟玩家视角盲测挑刺与节奏修补
+        // ==========================================================
+        this.setAiWriterStepActive(3);
+        this.updateAiWriterStatus(52, 'AI3 正在以资深玩家视角盲测体验、挑刺套路与节奏漏洞并打补丁...');
+
+        const ai3System = `你是负责第三阶段【模拟玩家盲测挑刺与审美修补】的资深跑团玩家兼文学审稿人AI。
+请你站在一个真正要来玩这个模组的挑剔玩家角度，严格审视AI1和AI2的设计，重点挑出并直接修复以下问题：
+1. 审美与去套路检查：有没有哪一幕写得像敷衍的AI流水账或小学生过家家？如果是甜饼或粉红向，互动够不够有拉扯感、性张力与真情实感？如果是浪漫悲情向，氛围渲染够不够细腻动人？
+2. 伏笔与悬念检查：如果模组包含秘密或反转，前期的暗示是不是太刻意、太显眼（禁止用“你突然注意到一个可疑的某某”这种生硬指向）？请把过分直白的暗示改写进自然的日常细节、人物随口的闲聊或环境氛围里。
+3. 节奏呼吸感检查：删掉无意义的跑腿和枯燥检定，确保玩家每一个行动都有鲜活的情感反馈或剧情推进。`;
+
+        const ai3User = `模组选定标签：${allTags.join('、')}
+模组核心流派：${ai1Data.themeMode || ''}
+AI1底牌与人设：
+${JSON.stringify({ kpTruthAndMechanism: ai1Data.kpTruthAndMechanism, catAndNpcProfiles: ai1Data.catAndNpcProfiles, endingsPlan: ai1Data.endingsPlan }, null, 2)}
+
+AI2深化分幕与线索：
+${JSON.stringify(ai2Data, null, 2)}
+
+请完成挑刺诊断，并直接输出修补打磨后的终版执行蓝图JSON：
+{
+  "auditReport": "挑刺与优化总结：指出了原方案的哪些不足，并做了怎样的巧思升级与节奏修补",
+  "kpMasterGuideChapter": "完整的【02-模组导读与大纲】章节正文（带【KP信息】前缀）：包含故事整体脉络表、带团氛围把控秘诀、玩家卡关或脱轨时的柔性引导方案",
+  "finalScenes": [
+    {
+      "sceneTitle": "修补定稿后的分幕章节标题",
+      "writingBlueprint": "给AI4撰稿人的超详细分幕写作指令：包含开场镜头、五感描写重点、KPC对话范例与心理活动、玩家互动选择分支、检定设置与本幕收束钩子"
+    }
+  ]
+}`;
+
+        const ai3Raw = await this.callAI(ai3System, ai3User);
+        const ai3Data = this.parseJsonFromAiResponse(ai3Raw) || {
+          auditReport: '已完成节奏与张力校准',
+          kpMasterGuideChapter: `【KP信息】\n模组导读与带团指南\n\n${ai2Data.atmosphereAndMechanicsGuide || ''}`,
+          finalScenes: (ai2Data.deepenedScenes || ai1Data.plannedScenes || []).map(s => ({
+            sceneTitle: s.sceneTitle || '事件章节',
+            writingBlueprint: JSON.stringify(s)
+          }))
+        };
+
+        // ==========================================================
+        // 第四阶段：AI4 融合本地思维链分批沉浸成文
+        // ==========================================================
+        this.setAiWriterStepActive(4);
+        const finalChapters = [];
+        const boundarySuffix = '\n\n至此本小章节结束，请kp务必在聊天内告诉PC本世界书模组到此为止，请PC切换下一个世界书，禁止擅自编造互动外主线剧情走向';
+
+        // 1. 00-模组已知信息 (公开章节)
+        const ch0Content = `【正文】\n${String(ai1Data.publicInfoChapter || ai1Data.summary || '').trim()}${boundarySuffix}`;
+        finalChapters.push({
+          title: '00-模组已知信息',
+          category: '模组导读',
+          content: ch0Content
+        });
+
+        // 立即在界面展示零剧透预览（仅展示00-模组已知信息）
+        const previewTitleEl = document.getElementById('ai-mod-preview-title');
+        const previewMetaEl = document.getElementById('ai-mod-preview-meta');
+        const previewPublicEl = document.getElementById('ai-mod-preview-public');
+        if (previewBox && previewTitleEl && previewPublicEl) {
+          previewBox.style.display = 'flex';
+          previewTitleEl.textContent = customTitle || ai1Data.title || '未命名模组';
+          if (previewMetaEl) previewMetaEl.textContent = '正在撰写正文...';
+          previewPublicEl.textContent = String(ai1Data.publicInfoChapter || ai1Data.summary || '').trim();
+        }
+
+        // 2. 01-幕后真相与机制 (KP专属加密章节)
+        const ch1Content = `【KP信息】\n守秘人底牌与核心机制\n\n【主创破题与美学基调】\n${ai1Data.creativeReflection || ''}\n\n【幕后真相与深层逻辑】\n${ai1Data.kpTruthAndMechanism || ''}\n\n【氛围与机制深化指南】\n${ai2Data.atmosphereAndMechanicsGuide || ''}`;
+        finalChapters.push({
+          title: '01-幕后真相与机制',
+          category: '模组导读',
+          content: ch1Content
+        });
+
+        // 3. 02-模组导读与大纲 (KP专属加密章节)
+        const ch2Content = String(ai3Data.kpMasterGuideChapter || '').startsWith('【KP信息】')
+          ? ai3Data.kpMasterGuideChapter
+          : `【KP信息】\n${ai3Data.kpMasterGuideChapter || ''}\n\n【盲测挑刺修补记录】\n${ai3Data.auditReport || ''}`;
+        finalChapters.push({
+          title: '02-模组导读与大纲',
+          category: '模组导读',
+          content: ch2Content
+        });
+
+        // 4. 猫与HO秘密及核心NPC人设章 (KP专属加密章节)
+        const profiles = Array.isArray(ai1Data.catAndNpcProfiles) ? ai1Data.catAndNpcProfiles : [];
+        profiles.forEach((prof, idx) => {
+          const pTitle = prof.chapterTitle || `猫-${prof.roleName || ('角色' + (idx + 1))}`;
+          const pBody = `【KP信息】\n角色名称：${prof.roleName || ''}\n\n【表面印象】\n${prof.publicDesc || ''}\n\n【深层里设定与守秘人RP指南】\n${prof.secretProfile || ''}`;
+          finalChapters.push({
+            title: pTitle,
+            category: '人物设定',
+            content: pBody
+          });
+        });
+
+        // 5. 分批次逐章扩写正文事件章节 + 结局章节
+        const scenesToWrite = Array.isArray(ai3Data.finalScenes) && ai3Data.finalScenes.length > 0
+          ? ai3Data.finalScenes
+          : [{ sceneTitle: '正文-核心事件', writingBlueprint: ai1Data.summary || '' }];
+
+        const ai4System = `你是负责第四阶段【分章全文撰写】的殿堂级模组执笔作家AI。
+请严格遵循以下写作铁律：
+1. 文风与质感：拒绝干瘪的大纲腔、说明书腔或廉价工业糖精！用细腻的文学笔触写出光影、气味、动作细节与人物之间微妙的呼吸感。
+2. 跑团可玩性：每一幕既要有极具代入感的场景导入与氛围描写，又要为守秘人写清【可调查互动点】【技能检定或趣味暗骰分支】以及【当玩家做出不同回应时，KPC或NPC的具体台词、神态与心理反应】。
+3. 严守底牌红线：在玩家可见的描写中，绝不能直接剧透底牌本体，只能通过侧面感官细节、KPC欲言又止的微表情或环境违和感来自然流露。
+4. 前后文连贯：紧密承接上一幕的情绪与剧情状态，不重复、不割裂。
+${tcPrompt ? '\n5. 最高优先级文风规范（来自用户勾选的本地思维链，请彻底融汇于字里行间）：\n' + tcPrompt : ''}`;
+
+        let previousSceneTail = '';
+        for (let sIdx = 0; sIdx < scenesToWrite.length; sIdx++) {
+          const sceneItem = scenesToWrite[sIdx];
+          const sTitle = sceneItem.sceneTitle || `第 ${sIdx + 1} 幕`;
+          const progressPct = 58 + Math.round(((sIdx + 1) / (scenesToWrite.length + 1)) * 34);
+          this.updateAiWriterStatus(progressPct, `AI4 正在融合思维链文风撰写分幕正文 ${sIdx + 1} / ${scenesToWrite.length} ...`);
+
+          const ai4SceneUser = `模组名称：${customTitle || ai1Data.title || ''}
+选定标签：${allTags.join('、')}
+核心流派：${ai1Data.themeMode || ''}
+守秘人底牌（仅供你把控暗线，严禁在玩家描写中直白泄底）：
+${ai1Data.kpTruthAndMechanism || ''}
+
+角色核心人设：
+${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
+
+${previousSceneTail ? '上一幕结尾脉络回顾：\n' + previousSceneTail + '\n' : ''}
+当前需要撰写的章节：【${sTitle}】
+本幕写作细纲与要求：
+${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : JSON.stringify(sceneItem)}
+
+请直接输出本章节的完整模组正文（包含【正文】场景描写与互动分支，以及必要的【KP信息】带团提示，字数要求详实饱满，约1500至2500字，不要输出多余寒暄）：`;
+
+          const sceneTextRaw = await this.callAI(ai4System, ai4SceneUser);
+          let cleanSceneText = String(sceneTextRaw || '').trim();
+          if (!cleanSceneText.includes('【正文】') && !cleanSceneText.includes('【KP信息】')) {
+            cleanSceneText = `【正文】\n${cleanSceneText}`;
+          }
+          if (!cleanSceneText.includes('至此本小章节结束')) {
+            cleanSceneText += boundarySuffix;
+          }
+
+          finalChapters.push({
+            title: sTitle,
+            category: sIdx === 0 ? '模组导入' : '主线事件',
+            content: cleanSceneText
+          });
+
+          previousSceneTail = cleanSceneText.slice(-380);
+        }
+
+        // 6. 撰写结局分歧章节
+        this.updateAiWriterStatus(95, 'AI4 正在撰写多分支结局演出...');
+        const ai4EndingUser = `模组名称：${customTitle || ai1Data.title || ''}
+选定标签：${allTags.join('、')}
+核心流派：${ai1Data.themeMode || ''}
+守秘人底牌：${ai1Data.kpTruthAndMechanism || ''}
+上一幕结尾脉络：${previousSceneTail}
+结局规划：${ai1Data.endingsPlan || ''}
+
+请撰写本模组的【结局】章节完整文本，包含各分支结局（如True End、Normal End、特殊结局或Bad End）的判定条件、极具感染力的结局正文演出、以及守秘人结团结算提示。直接输出章节正文：`;
+
+        const endingRaw = await this.callAI(ai4System, ai4EndingUser);
+        let cleanEndingText = String(endingRaw || '').trim();
+        if (!cleanEndingText.includes('【正文】') && !cleanEndingText.includes('【KP信息】')) {
+          cleanEndingText = `【正文】\n${cleanEndingText}`;
+        }
+        finalChapters.push({
+          title: `${customTitle || ai1Data.title || '模组'}-结局`,
+          category: '模组结局',
+          content: cleanEndingText
+        });
+
+        // 组装完整模组数据包并自动入库
+        const finalModTitle = customTitle || ai1Data.title || '未命名模组';
+        const generatedBundle = {
+          title: finalModTitle,
+          author,
+          ruleSystem,
+          scaleType,
+          type: modType,
+          difficulty,
+          summary: ai1Data.summary || '',
+          bgTag: (this.aiWriterState.bgTags && this.aiWriterState.bgTags[0]) || '日模',
+          endingTag: /恐怖|血腥|猎奇|刀子|强制|监禁/.test(allTags.join(' ')) ? '危险' : '安全',
+          tags: allTags,
+          chapters: finalChapters,
+          mapNodes: Array.isArray(ai2Data.mapNodes) ? ai2Data.mapNodes : [],
+          clues: Array.isArray(ai2Data.clues) ? ai2Data.clues : [],
+          profiles: profiles
+        };
+
+        this.aiWriterState.lastGeneratedBundle = generatedBundle;
+        await this.saveAiGeneratedModuleToDB(generatedBundle, false);
+
+        let totalWords = 0;
+        finalChapters.forEach(c => { totalWords += this.countWords(c.content || ''); });
+        if (previewMetaEl) {
+          previewMetaEl.textContent = `${finalChapters.length}章 · ${totalWords}字`;
+        }
+        if (saveBtn) saveBtn.disabled = false;
+
+        this.updateAiWriterStatus(100, `已完成《${finalModTitle}》全部 ${finalChapters.length} 章撰写并封存入本地模组库，真相与后续章节已隐藏，可直接开团游玩或上传工坊`);
+      } catch (err) {
+        console.error('[AI写模] 流水线异常:', err);
+        this.updateAiWriterStatus(0, `生成中断：${err.message || err}`);
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('生成失败', String(err.message || err));
+        }
+      } finally {
+        this.aiWriterState.isRunning = false;
+        if (genBtn) {
+          genBtn.textContent = '生成';
+          genBtn.disabled = false;
+        }
+      }
+    },
+
+    async saveAiGeneratedModuleToDB(bundle, showToast = true) {
+      if (!bundle) return;
+      const targetModId = bundle.id || ('mod_' + Date.now());
+      bundle.id = targetModId;
+
+      const chapters = (bundle.chapters || []).map((c, idx) => {
+        const text = String(c.content || '');
+        return {
+          id: `chap_${Date.now()}_${idx + 1}`,
+          moduleId: targetModId,
+          title: c.title || `章节 ${idx + 1}`,
+          category: c.category || '正文',
+          content: text,
+          sortOrder: idx + 1,
+          wordCount: this.countWords(text)
+        };
+      });
+
+      const locationNav = (bundle.mapNodes || []).map(n => ({
+        moduleId: targetModId,
+        name: n.name || '调查地点',
+        parent: n.parent || '',
+        level: Number(n.level) || 1,
+        desc: n.desc || '',
+        prompt: '',
+        imageUrl: '',
+        imageStatus: 'idle'
+      }));
+
+      const mapNodes = locationNav.map(l => ({
+        name: l.name,
+        parent: l.parent,
+        level: l.level,
+        desc: l.desc,
+        prompt: '',
+        imageUrl: ''
+      }));
+
+      const cluePointers = (bundle.clues || []).map((cl, idx) => ({
+        moduleId: targetModId,
+        name: cl.name || `线索 ${idx + 1}`,
+        location: cl.location || '',
+        trigger: cl.Trigger || cl.trigger || '',
+        content: cl.content || '',
+        sortOrder: idx + 1
+      }));
+
+      const hoRoles = (bundle.profiles || []).map((prof, idx) => ({
+        moduleId: targetModId,
+        roleCode: `HO${idx + 1}`,
+        name: prof.roleName || `角色 ${idx + 1}`,
+        publicInfo: prof.publicDesc || '',
+        secretInfo: prof.secretProfile || ''
+      }));
+
+      let totalWords = 0;
+      chapters.forEach(c => { totalWords += (c.wordCount || 0); });
+
+      const toc = chapters.map((c, idx) => ({
+        index: idx + 1,
+        title: c.title,
+        category: c.category,
+        wordCount: c.wordCount
+      }));
+
+      const moduleRecord = {
+        id: targetModId,
+        name: bundle.title || '未命名模组',
+        author: bundle.author || '守秘人',
+        type: bundle.type || '线性',
+        ruleSystem: bundle.ruleSystem || 'coc',
+        scaleType: bundle.scaleType || '1v1',
+        summary: bundle.summary || '',
+        coverImage: '',
+        bgTag: bundle.bgTag || '日模',
+        endingTag: bundle.endingTag || '普通',
+        contentTags: bundle.tags || [],
+        customTags: [],
+        tags: bundle.tags || ['日模', '纯爱'],
+        group: '默认分组',
+        toc,
+        tocData: { items: toc },
+        mapNodes,
+        mapData: { nodes: mapNodes },
+        mapViewMode: 'text',
+        musicList: [],
+        wordCount: totalWords,
+        chapterCount: chapters.length,
+        status: 'ready',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      const deleteByModIdFromTable = async (table, mId) => {
+        if (!table || mId === undefined || mId === null) return;
+        try { await table.where('moduleId').equals(mId).delete(); } catch (_) {}
+        try { await table.where('moduleId').equals(String(mId)).delete(); } catch (_) {}
+      };
+
+      await this.safeDBOperation('保存AI生成模组', async (db) => {
+        const allExist = await db.modules.toArray();
+        const sameNameMods = (allExist || []).filter(m =>
+          m && (
+            String(m.id) === targetModId ||
+            String(m.name || '').trim().toLowerCase() === String(moduleRecord.name).trim().toLowerCase()
+          )
+        );
+        for (const oldMod of sameNameMods) {
+          try { await db.modules.delete(oldMod.id); } catch (_) {}
+          await deleteByModIdFromTable(db.moduleChapters, oldMod.id);
+          await deleteByModIdFromTable(db.moduleLocationNav, oldMod.id);
+          await deleteByModIdFromTable(db.moduleCluePointers, oldMod.id);
+          await deleteByModIdFromTable(db.moduleHoRoles, oldMod.id);
+        }
+
+        await db.modules.put(moduleRecord);
+        if (chapters.length > 0 && db.moduleChapters) {
+          await db.moduleChapters.bulkPut(chapters);
+        }
+        if (locationNav.length > 0 && db.moduleLocationNav) {
+          try { await db.moduleLocationNav.bulkAdd(locationNav); } catch (_) { await db.moduleLocationNav.bulkPut(locationNav); }
+        }
+        if (cluePointers.length > 0 && db.moduleCluePointers) {
+          try { await db.moduleCluePointers.bulkAdd(cluePointers); } catch (_) { await db.moduleCluePointers.bulkPut(cluePointers); }
+        }
+        if (hoRoles.length > 0 && db.moduleHoRoles) {
+          try { await db.moduleHoRoles.bulkAdd(hoRoles); } catch (_) { await db.moduleHoRoles.bulkPut(hoRoles); }
+        }
+      });
+
+      await this.renderLibraryList();
+      await this.populateWorkshopLocalModuleSelect();
+
+      if (showToast && typeof global.showCustomAlert === 'function') {
+        global.showCustomAlert('入库成功', `模组《${moduleRecord.name}》已存入本地模组库，共 ${chapters.length} 个章节，守秘人底牌已加密封存`);
+      }
     }
   };
 
@@ -12716,3 +14116,4 @@ ${chaptersDigest}
 
   console.log('[模组] 模组深度重构与带团调度引擎已就绪');
 })(window);
+
