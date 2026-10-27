@@ -77,17 +77,7 @@
     <script src="combat-engine.js" defer></script>
     <script src="peer-manager.js?v=13" defer></script>
 
-    <style id="core-layout-compat-style">
-      *,
-      *::before,
-      *::after,
-      html,
-      body,
-      #phone-screen,
-      #phone-screen * {
-        -webkit-tap-highlight-color: transparent !important;
-      }
-    </style>
+    <style></style>
 
     <style id="custom-theme-style"></style>
     <style id="mini-phone-custom-style"></style>
@@ -61094,13 +61084,10 @@ ${stickerContext || "无"}
                       ? window.getCachedVaultBlobUrl(savedValue)
                       : null;
                   if (cachedBlob) {
-                    element.removeAttribute("data-vault-pending");
                     element.src = cachedBlob;
                   } else if (typeof window.resolveVaultRefToUrl === "function") {
-                    element.setAttribute("data-vault-pending", "1");
                     window.resolveVaultRefToUrl(savedValue).then((resolved) => {
                       if (resolved && !resolved.startsWith("vault://")) {
-                        element.removeAttribute("data-vault-pending");
                         element.src = resolved;
                       }
                     });
@@ -61108,8 +61095,6 @@ ${stickerContext || "无"}
                     element.src = savedValue;
                   }
                 } else if (!savedValue.startsWith("blob:")) {
-                  element.removeAttribute("data-vault-ref");
-                  element.removeAttribute("data-vault-pending");
                   element.src = savedValue;
                 }
               }
@@ -61490,8 +61475,6 @@ ${stickerContext || "无"}
 
           if (newValue && newValue.trim()) {
             const trimmedValue = newValue.trim();
-            element.removeAttribute("data-vault-ref");
-            element.removeAttribute("data-vault-pending");
             element.src = trimmedValue;
             state.globalSettings.widgetData[elementId] = trimmedValue;
             await db.globalSettings.put(state.globalSettings);
@@ -61592,13 +61575,10 @@ ${stickerContext || "无"}
                   ? window.getCachedVaultBlobUrl(iconUrl)
                   : null;
               if (cachedBlob) {
-                imgElement.removeAttribute("data-vault-pending");
                 imgElement.src = cachedBlob;
               } else if (typeof window.resolveVaultRefToUrl === "function") {
-                imgElement.setAttribute("data-vault-pending", "1");
                 window.resolveVaultRefToUrl(iconUrl).then((resolved) => {
                   if (resolved && !resolved.startsWith("vault://")) {
-                    imgElement.removeAttribute("data-vault-pending");
                     imgElement.src = resolved;
                   }
                 });
@@ -61606,14 +61586,10 @@ ${stickerContext || "无"}
                 imgElement.src = iconUrl;
               }
             } else if (iconUrl.startsWith("blob:")) {
-              imgElement.removeAttribute("data-vault-ref");
-              imgElement.removeAttribute("data-vault-pending");
               if (DEFAULT_APP_ICONS[iconId]) {
                 imgElement.src = DEFAULT_APP_ICONS[iconId];
               }
             } else {
-              imgElement.removeAttribute("data-vault-ref");
-              imgElement.removeAttribute("data-vault-pending");
               imgElement.src = iconUrl;
             }
           }
@@ -89173,20 +89149,9 @@ ${stickerContext || "无"}
               if (typeof window.renderMyThoughtChainLockUI === "function") {
                 window.renderMyThoughtChainLockUI(chat);
               }
-              const myAvatarPreviewEl = document.getElementById("my-avatar-preview");
-              const initMyAvatarVal =
+              document.getElementById("my-avatar-preview").src =
                 chat.settings.myAvatar ||
                 (isGroup ? defaultMyGroupAvatar : defaultAvatar);
-              if (myAvatarPreviewEl) {
-                if (typeof initMyAvatarVal === "string" && initMyAvatarVal.startsWith("vault://")) {
-                  myAvatarPreviewEl.setAttribute("data-vault-ref", initMyAvatarVal);
-                  myAvatarPreviewEl.setAttribute("data-vault-pending", "1");
-                } else {
-                  myAvatarPreviewEl.removeAttribute("data-vault-ref");
-                  myAvatarPreviewEl.removeAttribute("data-vault-pending");
-                }
-                myAvatarPreviewEl.src = initMyAvatarVal;
-              }
               document.getElementById("max-memory").value =
                 chat.settings.maxMemory;
               const defaultMin = chat.isGroup ? 3 : 2;
@@ -89392,18 +89357,8 @@ ${stickerContext || "无"}
                     }
                   };
                 }
-                const grpAvatarPreviewEl = document.getElementById("group-avatar-preview");
-                const initGrpAvatarVal = chat.settings.groupAvatar || defaultGroupAvatar;
-                if (grpAvatarPreviewEl) {
-                  if (typeof initGrpAvatarVal === "string" && initGrpAvatarVal.startsWith("vault://")) {
-                    grpAvatarPreviewEl.setAttribute("data-vault-ref", initGrpAvatarVal);
-                    grpAvatarPreviewEl.setAttribute("data-vault-pending", "1");
-                  } else {
-                    grpAvatarPreviewEl.removeAttribute("data-vault-ref");
-                    grpAvatarPreviewEl.removeAttribute("data-vault-pending");
-                  }
-                  grpAvatarPreviewEl.src = initGrpAvatarVal;
-                }
+                document.getElementById("group-avatar-preview").src =
+                  chat.settings.groupAvatar || defaultGroupAvatar;
                 renderGroupMemberSettings(chat.members);
                 // 加载群聊后台活动设置
                 const groupActivityGroup = document.getElementById(
@@ -89582,18 +89537,8 @@ ${stickerContext || "无"}
                   chat.settings.weiboProfession || "";
                 document.getElementById("weibo-instruction-input").value =
                   chat.settings.weiboInstruction || "";
-                const aiAvatarPreviewEl = document.getElementById("ai-avatar-preview");
-                const initAiAvatarVal = chat.settings.aiAvatar || defaultAvatar;
-                if (aiAvatarPreviewEl) {
-                  if (typeof initAiAvatarVal === "string" && initAiAvatarVal.startsWith("vault://")) {
-                    aiAvatarPreviewEl.setAttribute("data-vault-ref", initAiAvatarVal);
-                    aiAvatarPreviewEl.setAttribute("data-vault-pending", "1");
-                  } else {
-                    aiAvatarPreviewEl.removeAttribute("data-vault-ref");
-                    aiAvatarPreviewEl.removeAttribute("data-vault-pending");
-                  }
-                  aiAvatarPreviewEl.src = initAiAvatarVal;
-                }
+                document.getElementById("ai-avatar-preview").src =
+                  chat.settings.aiAvatar || defaultAvatar;
                 document.getElementById("minimax-voice-id-input").value =
                   chat.settings.minimaxVoiceId || "";
                 const voiceModeBtn = document.getElementById("voice-mode-btn");
@@ -89980,19 +89925,8 @@ ${stickerContext || "无"}
             setGenderInputValue("member", member.gender);
             document.getElementById("member-gender-note-input").value =
               member.genderNote || "";
-            const memAvatarPreviewEl = document.getElementById("member-avatar-preview");
-            const initMemAvatarVal =
+            document.getElementById("member-avatar-preview").src =
               member.avatar || (sourceChat && sourceChat.settings?.aiAvatar) || (isStatusRole ? DEFAULT_STATUS_AVATAR : defaultAvatar);
-            if (memAvatarPreviewEl) {
-              if (typeof initMemAvatarVal === "string" && initMemAvatarVal.startsWith("vault://")) {
-                memAvatarPreviewEl.setAttribute("data-vault-ref", initMemAvatarVal);
-                memAvatarPreviewEl.setAttribute("data-vault-pending", "1");
-              } else {
-                memAvatarPreviewEl.removeAttribute("data-vault-ref");
-                memAvatarPreviewEl.removeAttribute("data-vault-pending");
-              }
-              memAvatarPreviewEl.src = initMemAvatarVal;
-            }
             if (!isStatusRole && window.memberCocPanel) {
               window.memberCocPanel.setData(member.cocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : null));
               const cocContainer = document.getElementById("member-coc-panel-container");
@@ -90153,13 +90087,9 @@ ${stickerContext || "无"}
                 member.genderNote = document
                   .getElementById("member-gender-note-input")
                   .value.trim();
-                const memPrevEl = document.getElementById("member-avatar-preview");
-                const memVaultRef = memPrevEl ? memPrevEl.getAttribute("data-vault-ref") : null;
-                const memRawSrc = memPrevEl ? memPrevEl.src : "";
-                member.avatar =
-                  (memVaultRef && memVaultRef.startsWith("vault://") && !memRawSrc.startsWith("data:image/"))
-                    ? memVaultRef
-                    : (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(memRawSrc)) || memRawSrc;
+                member.avatar = document.getElementById(
+                  "member-avatar-preview",
+                ).src;
                 if (window.memberCocPanel) {
                   member.cocPanel = window.memberCocPanel.getData();
                 }
@@ -91081,13 +91011,8 @@ ${stickerContext || "无"}
               if (window.myCocPanel) {
                 chat.settings.myCocPanel = window.myCocPanel.getData();
               }
-              const myPrevEl = document.getElementById("my-avatar-preview");
-              const myVaultRef = myPrevEl ? myPrevEl.getAttribute("data-vault-ref") : null;
-              const myRawSrc = myPrevEl ? myPrevEl.src : "";
               chat.settings.myAvatar =
-                (myVaultRef && myVaultRef.startsWith("vault://") && !myRawSrc.startsWith("data:image/"))
-                  ? myVaultRef
-                  : (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(myRawSrc)) || myRawSrc;
+                document.getElementById("my-avatar-preview").src;
               const checkedBooks = document.querySelectorAll(
                 "#world-book-checkboxes-container input.wb-book-checkbox:checked",
               );
@@ -91125,13 +91050,9 @@ ${stickerContext || "无"}
                 const resolvedMyGroupNick = enteredGroupNick || enteredMyName || "我";
                 chat.settings.myNickname = resolvedMyGroupNick;
                 chat.settings.myName = resolvedMyGroupNick;
-                const grpPrevEl = document.getElementById("group-avatar-preview");
-                const grpVaultRef = grpPrevEl ? grpPrevEl.getAttribute("data-vault-ref") : null;
-                const grpRawSrc = grpPrevEl ? grpPrevEl.src : "";
-                chat.settings.groupAvatar =
-                  (grpVaultRef && grpVaultRef.startsWith("vault://") && !grpRawSrc.startsWith("data:image/"))
-                    ? grpVaultRef
-                    : (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(grpRawSrc)) || grpRawSrc;
+                chat.settings.groupAvatar = document.getElementById(
+                  "group-avatar-preview",
+                ).src;
                 // 保存群聊后台活动设置
                 const groupActivityEnabled = document.getElementById(
                   "group-background-activity-switch",
@@ -91192,11 +91113,7 @@ ${stickerContext || "无"}
                 };
                 const statusAvatarEl = document.getElementById("ai-avatar-preview");
                 if (statusAvatarEl && statusAvatarEl.src) {
-                  const stVaultRef = statusAvatarEl.getAttribute("data-vault-ref");
-                  chat.settings.aiAvatar =
-                    (stVaultRef && stVaultRef.startsWith("vault://") && !statusAvatarEl.src.startsWith("data:image/"))
-                      ? stVaultRef
-                      : (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(statusAvatarEl.src)) || statusAvatarEl.src;
+                  chat.settings.aiAvatar = statusAvatarEl.src;
                 }
               } else {
                 if (chat.settings.isInvestigatorLocked) {
@@ -91218,13 +91135,8 @@ ${stickerContext || "无"}
                 if (window.aiCocPanel) {
                   chat.settings.aiCocPanel = window.aiCocPanel.getData();
                 }
-                const aiPrevEl = document.getElementById("ai-avatar-preview");
-                const aiVaultRef = aiPrevEl ? aiPrevEl.getAttribute("data-vault-ref") : null;
-                const aiRawSrc = aiPrevEl ? aiPrevEl.src : "";
                 chat.settings.aiAvatar =
-                  (aiVaultRef && aiVaultRef.startsWith("vault://") && !aiRawSrc.startsWith("data:image/"))
-                    ? aiVaultRef
-                    : (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(aiRawSrc)) || aiRawSrc;
+                  document.getElementById("ai-avatar-preview").src;
                 chat.settings.minimaxVoiceId = document
                   .getElementById("minimax-voice-id-input")
                   .value.trim();
@@ -91809,46 +91721,47 @@ ${stickerContext || "无"}
               });
           };
 
-          const applyUploadedPreviewSrc = (previewId, base64) => {
-            const el = document.getElementById(previewId);
-            if (!el) return;
-            el.removeAttribute("data-vault-ref");
-            el.removeAttribute("data-vault-pending");
-            el._vaultResolvingRef = null;
-            el.src = base64;
-          };
-          setupFileUpload("ai-avatar-input", (base64) =>
-            applyUploadedPreviewSrc("ai-avatar-preview", base64),
+          setupFileUpload(
+            "ai-avatar-input",
+            (base64) =>
+              (document.getElementById("ai-avatar-preview").src = base64),
           );
-          setupFileUpload("my-avatar-input", (base64) =>
-            applyUploadedPreviewSrc("my-avatar-preview", base64),
+          setupFileUpload(
+            "my-avatar-input",
+            (base64) =>
+              (document.getElementById("my-avatar-preview").src = base64),
           );
-          setupFileUpload("group-avatar-input", (base64) =>
-            applyUploadedPreviewSrc("group-avatar-preview", base64),
+          setupFileUpload(
+            "group-avatar-input",
+            (base64) =>
+              (document.getElementById("group-avatar-preview").src = base64),
           );
-          setupFileUpload("member-avatar-input", (base64) =>
-            applyUploadedPreviewSrc("member-avatar-preview", base64),
+          setupFileUpload(
+            "member-avatar-input",
+            (base64) =>
+              (document.getElementById("member-avatar-preview").src = base64),
           );
           setupFileUpload("bg-input", (base64) => {
             if (state.activeChatId) {
               state.chats[state.activeChatId].settings.background = base64;
               const bgPreview = document.getElementById("bg-preview");
-              if (bgPreview) {
-                bgPreview.removeAttribute("data-vault-ref");
-                bgPreview.removeAttribute("data-vault-pending");
-                bgPreview.src = base64;
-                bgPreview.style.display = "block";
-              }
+              bgPreview.src = base64;
+              bgPreview.style.display = "block";
               document.getElementById("remove-bg-btn").style.display =
                 "inline-block";
             }
           });
-          setupFileUpload("preset-avatar-input", (base64) =>
-            applyUploadedPreviewSrc("preset-avatar-preview", base64),
+          setupFileUpload(
+            "preset-avatar-input",
+            (base64) =>
+              (document.getElementById("preset-avatar-preview").src = base64),
           );
 
-          setupFileUpload("char-video-image-input", (base64) =>
-            applyUploadedPreviewSrc("char-video-image-preview", base64),
+          setupFileUpload(
+            "char-video-image-input",
+            (base64) =>
+              (document.getElementById("char-video-image-preview").src =
+                base64),
           );
           setupFileUpload(
             "user-video-image-input",
@@ -102797,7 +102710,9 @@ ${stickerContext || "无"}
               // 发现已失效的历史 blob: 头像，自动从有效数据源恢复并修复数据库
               let recovered = "";
               if (isUser) {
-                if (chat && Array.isArray(chat.history)) {
+                const gsAva = typeof state !== "undefined" && state.globalSettings?.widgetData?.["profile-avatar-img"];
+                if (isValidNonBlobAvatar(gsAva)) recovered = gsAva;
+                if (!recovered && chat && Array.isArray(chat.history)) {
                   for (let i = chat.history.length - 1; i >= 0; i--) {
                     const hm = chat.history[i];
                     if (hm && hm.role === "user" && isValidNonBlobAvatar(hm.senderAvatar)) {
@@ -102805,10 +102720,6 @@ ${stickerContext || "无"}
                       break;
                     }
                   }
-                }
-                if (!recovered) {
-                  const gsAva = typeof state !== "undefined" && state.globalSettings?.widgetData?.["profile-avatar-img"];
-                  if (isValidNonBlobAvatar(gsAva)) recovered = gsAva;
                 }
                 if (recovered && chat && chat.settings && chat.settings.myAvatar === avatarSrc) {
                   chat.settings.myAvatar = recovered;
@@ -103046,131 +102957,13 @@ ${stickerContext || "无"}
             return;
           }
 
-          let _folderPermGestureArmed = false;
-          let _inflightFolderPermRestore = null;
-          async function getAnySavedExternalDirectoryHandle() {
-            const h1 = await getSavedDirectoryHandle();
-            if (h1) return h1;
-            if (typeof window.getStoredDirHandle === "function") {
-              try {
-                const h2 = await window.getStoredDirHandle();
-                if (h2) return h2;
-              } catch (_) {}
-            }
-            return null;
-          }
-          function refreshAllVaultImagesAfterPermissionGranted() {
-            try {
-              failedVaultResolveTimestamps.clear();
-            } catch (_) {}
-            try {
-              const allVaultImgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref]');
-              allVaultImgs.forEach((img) => {
-                img._vaultResolvingRef = null;
-                img._vaultRetryCount = 0;
-                img._vaultRetryScheduled = false;
-              });
-            } catch (_) {}
-            if (typeof hydrateDomVaultImages === "function") {
-              hydrateDomVaultImages();
-            }
-            if (typeof applyWidgetData === "function") {
-              try {
-                applyWidgetData();
-              } catch (_) {}
-            }
-            if (typeof applyAppIcons === "function") {
-              try {
-                applyAppIcons();
-              } catch (_) {}
-            }
-            if (typeof applyGlobalWallpaper === "function") {
-              try {
-                applyGlobalWallpaper();
-              } catch (_) {}
-            }
-            if (typeof applyLockscreenWallpaper === "function") {
-              try {
-                applyLockscreenWallpaper();
-              } catch (_) {}
-            }
-            if (typeof testVaultConnection === "function") {
-              testVaultConnection(true).catch(() => {});
-            }
-          }
-          async function tryRestoreExternalFolderHandle(fromUserGesture = false) {
-            const saved = await getAnySavedExternalDirectoryHandle();
-            if (!saved) return null;
-            try {
-              if (typeof saved.queryPermission === "function") {
-                const readPerm = await saved.queryPermission({ mode: "read" });
-                if (readPerm === "granted") return saved;
-                const canRequestNow =
-                  fromUserGesture ||
-                  (typeof navigator !== "undefined" &&
-                    navigator.userActivation &&
-                    navigator.userActivation.isActive);
-                if (canRequestNow && typeof saved.requestPermission === "function") {
-                  if (!_inflightFolderPermRestore) {
-                    _inflightFolderPermRestore = (async () => {
-                      try {
-                        let reqPerm = "prompt";
-                        try {
-                          reqPerm = await saved.requestPermission({ mode: "readwrite" });
-                        } catch (_) {}
-                        if (reqPerm !== "granted") {
-                          try {
-                            reqPerm = await saved.requestPermission({ mode: "read" });
-                          } catch (_) {}
-                        }
-                        if (reqPerm === "granted") {
-                          setTimeout(refreshAllVaultImagesAfterPermissionGranted, 10);
-                          return saved;
-                        }
-                      } catch (_) {}
-                      return null;
-                    })().finally(() => {
-                      _inflightFolderPermRestore = null;
-                    });
-                  }
-                  return await _inflightFolderPermRestore;
-                }
-                armFolderPermissionRestoreOnFirstTouch();
-                return null;
-              }
-              return saved;
-            } catch (_) {
-              return null;
-            }
-          }
-          function armFolderPermissionRestoreOnFirstTouch() {
-            if (_folderPermGestureArmed) return;
-            _folderPermGestureArmed = true;
-            const gestureEvents = ["pointerdown", "touchend", "click", "keydown"];
-            const onFirstGesture = async () => {
-              const handle = await tryRestoreExternalFolderHandle(true);
-              if (handle) {
-                gestureEvents.forEach((evt) =>
-                  document.removeEventListener(evt, onFirstGesture, true)
-                );
-                _folderPermGestureArmed = false;
-              }
-            };
-            gestureEvents.forEach((evt) =>
-              document.addEventListener(evt, onFirstGesture, { capture: true, passive: true })
-            );
-          }
-
           async function getEffectiveDirectoryHandle() {
-            const saved = await getAnySavedExternalDirectoryHandle();
+            const saved = await getSavedDirectoryHandle();
             if (saved) {
               try {
                 if (typeof saved.queryPermission === "function") {
                   const perm = await saved.queryPermission({ mode: "readwrite" });
                   if (perm === "granted") return saved;
-                  const readPerm = await saved.queryPermission({ mode: "read" });
-                  if (readPerm === "granted") return saved;
-                  armFolderPermissionRestoreOnFirstTouch();
                 } else {
                   return saved;
                 }
@@ -103950,32 +103743,34 @@ ${stickerContext || "无"}
                 }
               }
 
-              // 2. 若用户授权了系统外部文件夹，同步写入外部文件夹，防止切换模式或未开 Termux 时丢失
-              try {
-                let mediaDir = sharedMediaDir;
-                if (!mediaDir) {
-                  const savedHandle = await getAnySavedExternalDirectoryHandle();
-                  if (savedHandle) {
-                    let perm = "granted";
-                    if (typeof savedHandle.queryPermission === "function") {
-                      perm = await savedHandle.queryPermission({ mode: "readwrite" });
-                    }
-                    if (perm === "granted") {
-                      await writeNoMediaFileInDir(savedHandle);
-                      mediaDir = await savedHandle.getDirectoryHandle("media", { create: true });
-                      await writeNoMediaFileInDir(mediaDir);
+              // 2. 若未存入 Termux 且用户授权了系统外部文件夹，则写入外部文件夹
+              if (!termuxSaved) {
+                try {
+                  let mediaDir = sharedMediaDir;
+                  if (!mediaDir) {
+                    const savedHandle = await getSavedDirectoryHandle();
+                    if (savedHandle) {
+                      let perm = "granted";
+                      if (typeof savedHandle.queryPermission === "function") {
+                        perm = await savedHandle.queryPermission({ mode: "readwrite" });
+                      }
+                      if (perm === "granted") {
+                        await writeNoMediaFileInDir(savedHandle);
+                        mediaDir = await savedHandle.getDirectoryHandle("media", { create: true });
+                        await writeNoMediaFileInDir(mediaDir);
+                      }
                     }
                   }
-                }
-                if (mediaDir) {
-                  const fileHandle = await mediaDir.getFileHandle(stealthName, { create: true });
-                  const writable = await fileHandle.createWritable();
-                  await writable.write(wrappedBytes);
-                  await writable.close();
-                  storedAny = true;
-                  externalFolderSaved = true;
-                }
-              } catch (_) {}
+                  if (mediaDir) {
+                    const fileHandle = await mediaDir.getFileHandle(stealthName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(wrappedBytes);
+                    await writable.close();
+                    storedAny = true;
+                    externalFolderSaved = true;
+                  }
+                } catch (_) {}
+              }
 
               // 3. 仅在存在内置后端服务时同步至后端磁盘目录
               if (!termuxSaved && !isStaticPagesHost() && _builtInServerAvailable === true) {
@@ -104069,59 +103864,7 @@ ${stickerContext || "无"}
                 if (mode === "server" || mode === "folder") {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
 
-                  // 1. 从用户授权的外部本地文件夹直接读取（若权限因浏览器重启处于待激活状态，在手指触碰屏幕时自动恢复）
-                  try {
-                    const savedHandle = await tryRestoreExternalFolderHandle(false);
-                    if (savedHandle) {
-                      const searchDirs = [];
-                      try {
-                        const mDir = await savedHandle.getDirectoryHandle("media", { create: false });
-                        if (mDir) searchDirs.push(mDir);
-                      } catch (_) {}
-                      searchDirs.push(savedHandle);
-                      const subFolderCandidates = ["EPhoneVault", "Download", "Downloads"];
-                      for (const folderName of subFolderCandidates) {
-                        try {
-                          const subDir = await savedHandle.getDirectoryHandle(folderName, { create: false });
-                          if (subDir) {
-                            try {
-                              const subMedia = await subDir.getDirectoryHandle("media", { create: false });
-                              if (subMedia) searchDirs.push(subMedia);
-                            } catch (_) {}
-                            try {
-                              const nestedVault = await subDir.getDirectoryHandle("EPhoneVault", { create: false });
-                              if (nestedVault) {
-                                try {
-                                  const nestedMedia = await nestedVault.getDirectoryHandle("media", { create: false });
-                                  if (nestedMedia) searchDirs.push(nestedMedia);
-                                } catch (_) {}
-                                searchDirs.push(nestedVault);
-                              }
-                            } catch (_) {}
-                            searchDirs.push(subDir);
-                          }
-                        } catch (_) {}
-                      }
-                      for (const dHandle of searchDirs) {
-                        for (const candidate of candidates) {
-                          try {
-                            const fh = await dHandle.getFileHandle(candidate, { create: false });
-                            const file = await fh.getFile();
-                            const ab = await file.arrayBuffer();
-                            const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                            if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
-                              const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                              setVaultBlobCache(fileName, objUrl);
-                              failedVaultResolveTimestamps.delete(fileName);
-                              return objUrl;
-                            }
-                          } catch (_) {}
-                        }
-                      }
-                    }
-                  } catch (_) {}
-
-                  // 2. 若 Termux 本地服务在线则从 Termux 读取
+                  // 1. 优先从 Termux 本地服务直接读取，绝不复制写入浏览器 OPFS
                   const termuxReady = cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl));
                   if (termuxReady) {
                     const urlPrefixes = [baseUrl + "/media/", baseUrl + "/"];
@@ -104148,6 +103891,51 @@ ${stickerContext || "无"}
                       }
                     }
                   }
+
+                  // 2. 从用户授权的外部本地文件夹直接读取
+                  try {
+                    const savedHandle = await getSavedDirectoryHandle();
+                    if (savedHandle) {
+                      let perm = "granted";
+                      if (typeof savedHandle.queryPermission === "function") {
+                        perm = await savedHandle.queryPermission({ mode: "read" });
+                      }
+                      if (perm === "granted") {
+                        const searchDirs = [];
+                        try {
+                          const mDir = await savedHandle.getDirectoryHandle("media", { create: false });
+                          if (mDir) searchDirs.push(mDir);
+                        } catch (_) {}
+                        searchDirs.push(savedHandle);
+                        try {
+                          const subVault = await savedHandle.getDirectoryHandle("EPhoneVault", { create: false });
+                          if (subVault) {
+                            try {
+                              const subMedia = await subVault.getDirectoryHandle("media", { create: false });
+                              if (subMedia) searchDirs.push(subMedia);
+                            } catch (_) {}
+                            searchDirs.push(subVault);
+                          }
+                        } catch (_) {}
+                        for (const dHandle of searchDirs) {
+                          for (const candidate of candidates) {
+                            try {
+                              const fh = await dHandle.getFileHandle(candidate, { create: false });
+                              const file = await fh.getFile();
+                              const ab = await file.arrayBuffer();
+                              const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                              if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
+                                const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                                setVaultBlobCache(fileName, objUrl);
+                                failedVaultResolveTimestamps.delete(fileName);
+                                return objUrl;
+                              }
+                            } catch (_) {}
+                          }
+                        }
+                      }
+                    }
+                  } catch (_) {}
 
                   // 3. 回退从浏览器 OPFS 读取（若此时 Termux 已在线则迁移至 Termux 并从浏览器 OPFS 删除）
                   try {
@@ -104717,32 +104505,6 @@ ${stickerContext || "无"}
             const imgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref]');
             imgs.forEach((img) => {
               const attrSrc = img.getAttribute("src") || "";
-              if (!attrSrc.startsWith("vault://")) {
-                const isPlaceholderGif = attrSrc.startsWith("data:image/gif;base64,R0lGODlhAQAB");
-                const isPendingVault =
-                  img.hasAttribute("data-vault-pending") ||
-                  img.classList.contains("cleared-image-placeholder");
-                if (attrSrc.startsWith("blob:")) {
-                  const mappedRef = blobUrlToVaultRefMap.get(attrSrc);
-                  if (mappedRef && mappedRef.startsWith("vault://")) {
-                    if (img.getAttribute("data-vault-ref") !== mappedRef) {
-                      img.setAttribute("data-vault-ref", mappedRef);
-                    }
-                    if (liveSessionBlobUrls.has(attrSrc) && !img.hasAttribute("data-vault-pending")) {
-                      return;
-                    }
-                  } else if (liveSessionBlobUrls.has(attrSrc)) {
-                    img.removeAttribute("data-vault-ref");
-                    img.removeAttribute("data-vault-pending");
-                    return;
-                  }
-                } else if (!isPlaceholderGif && !isPendingVault && attrSrc.length > 0) {
-                  img.removeAttribute("data-vault-ref");
-                  img.removeAttribute("data-vault-pending");
-                  img._vaultResolvingRef = null;
-                  return;
-                }
-              }
               const ref = attrSrc.startsWith("vault://") ? attrSrc : img.getAttribute("data-vault-ref");
               if (!ref || !ref.startsWith("vault://")) return;
               if (img.getAttribute("data-vault-ref") !== ref) {
@@ -105449,16 +105211,6 @@ ${stickerContext || "无"}
             if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
 
-            getAnySavedExternalDirectoryHandle().then(async (saved) => {
-              if (saved && typeof saved.queryPermission === "function") {
-                try {
-                  const p = await saved.queryPermission({ mode: "read" });
-                  if (p !== "granted") {
-                    armFolderPermissionRestoreOnFirstTouch();
-                  }
-                } catch (_) {}
-              }
-            });
             hydrateDomVaultImages();
             testVaultConnection(true);
             setTimeout(() => {
