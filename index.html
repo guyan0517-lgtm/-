@@ -21658,7 +21658,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             timeoutId = setTimeout(() => {
               didWatchdogTimeout = true;
               controller.abort(new Error("请求超时：等待模型响应超时，连接已切断"));
-            }, 480000);
+            }, 600000);
           };
           resetTimeout();
 
@@ -21743,7 +21743,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 : undefined;
 
               const directStartT = Date.now();
-              for (let attempt = 0; attempt < 2; attempt++) {
+              const maxDirectAttempts = options._noAutoRetry ? 1 : 2;
+              for (let attempt = 0; attempt < maxDirectAttempts; attempt++) {
                 try {
                   ensureBackgroundKeepAlive();
                   resetTimeout();
@@ -21758,7 +21759,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   currentDirectErr = err;
                   const elapsedSoFar = Date.now() - directStartT;
                   const callerAborted = Boolean(options.signal && options.signal.aborted);
-                  if (attempt === 0 && !didWatchdogTimeout && !callerAborted && elapsedSoFar < 45000) {
+                  if (attempt === 0 && attempt + 1 < maxDirectAttempts && !didWatchdogTimeout && !callerAborted && elapsedSoFar < 45000) {
                     if (controller.signal.aborted) {
                       controller = new AbortController();
                       bindCallerSignal(controller);
@@ -21772,8 +21773,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const directElapsedMs = Date.now() - directStartT;
 
               const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
-              if (!currentRes && directElapsedMs < 15000 && !isStaticHost && !controller.signal.aborted) {
+              if (!currentRes && !isStaticHost && !controller.signal.aborted && (!options._noAutoRetry || directElapsedMs < 3000)) {
                 try {
+                  resetTimeout();
                   const proxyRes = await origFetch("/api/proxy", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -21796,6 +21798,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let { res, directErr } = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body);
 
             if (
+              !options._noAutoRetry &&
               res &&
               !res.ok &&
               (res.status === 400 || res.status === 422) &&
@@ -21995,7 +21998,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 finishReason = "length";
               }
 
-              if (!fullText && !fullThinking && rawStreamText.trim().startsWith("{")) {
+              if (!fullText && !fullThinking && (rawStreamText.trim().startsWith("{") || rawStreamText.trim().startsWith("["))) {
                 return {
                   ok: true,
                   status: 200,
@@ -22750,6 +22753,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let res = await requestLlmapiWithFallback(targetUrl, {
               method: "POST",
               signal: init?.signal,
+              _noAutoRetry: Boolean(init?._noAutoRetry),
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${cleanKey}`,
@@ -22762,7 +22766,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               } : undefined,
             });
-            if (!res.ok && (res.status === 400 || res.status === 422) && openAiPayload.max_tokens) {
+            if (!init?._noAutoRetry && !res.ok && (res.status === 400 || res.status === 422) && openAiPayload.max_tokens) {
               const noMaxTokensPayload = { ...openAiPayload };
               delete noMaxTokensPayload.max_tokens;
               res = await requestLlmapiWithFallback(targetUrl, {
@@ -33874,9 +33878,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const domSubModel = document.getElementById("sub-model-select")?.value?.trim() || "";
             const domSubTemp = document.getElementById("sub-temperature-slider")?.value;
             const domSubProto = document.getElementById("sub-api-protocol-select")?.value;
-            window.__subApiCallWindowUntil = Date.now() + 500;
+            const domMainProxyForSub = document.getElementById("proxy-url")?.value?.trim() || "";
+            window.__subApiCallWindowUntil = Date.now() + 10000;
             return {
-              proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || domSubProxy || "https://api.openai.com",
+              proxyUrl: (cfg.subProxyUrl && cfg.subProxyUrl.trim()) || domSubProxy || (cfg.proxyUrl && cfg.proxyUrl.trim()) || domMainProxyForSub || "https://api.openai.com",
               apiKey: (cfg.subApiKey && cfg.subApiKey.trim()) || domSubKey || "",
               model: (cfg.subModel && cfg.subModel.trim()) || domSubModel || "gpt-4o-mini",
               temperature: cfg.subTemperature !== undefined ? parseFloat(cfg.subTemperature) : (domSubTemp ? parseFloat(domSubTemp) : 0.8),
@@ -42022,7 +42027,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (topGenBtn && String(state.activeChatId) === String(currentChatId)) {
                     topGenBtn.textContent = "继续";
                   }
-                  if (e?.name !== "AbortError" && typeof window.showCustomAlert === "function") {
+                  if (e?.name !== "AbortError" && !e?._alreadyAlerted && typeof window.showCustomAlert === "function") {
                     window.showCustomAlert("提示", "生成小地图中断，点击可继续生成");
                   }
                 }
@@ -45194,17 +45199,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (isGemini && respData?.candidates?.[0]?.content?.parts) {
                 return respData.candidates[0].content.parts.map(p => p.text || "").join("");
               }
-              return (
+              const msgContent =
                 respData?.choices?.[0]?.message?.content ||
                 respData?.choices?.[0]?.delta?.content ||
                 respData?.content?.[0]?.text ||
-                respData?.candidates?.[0]?.content?.parts?.[0]?.text ||
-                ""
-              );
+                respData?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") ||
+                "";
+              const msgReasoning =
+                respData?.choices?.[0]?.message?.reasoning_content ||
+                respData?.choices?.[0]?.message?.reasoning ||
+                respData?.choices?.[0]?.message?.thinking ||
+                "";
+              if (msgContent && msgContent.includes("<svg")) {
+                return msgContent;
+              }
+              if (msgReasoning) {
+                return (msgContent ? msgContent + "\n" : "") + msgReasoning;
+              }
+              return msgContent;
             } catch (_) {}
           }
           if (trimmed.startsWith("data:") || trimmed.includes("\ndata:")) {
             let acc = "";
+            let reasoningAcc = "";
             const lines = trimmed.split("\n");
             for (const line of lines) {
               const t = line.trim();
@@ -45218,9 +45235,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   parsed.choices?.[0]?.message?.content ||
                   parsed.content?.[0]?.text ||
                   "";
+                const rChunk =
+                  parsed.choices?.[0]?.delta?.reasoning_content ||
+                  parsed.choices?.[0]?.delta?.reasoning ||
+                  parsed.choices?.[0]?.delta?.thinking ||
+                  parsed.choices?.[0]?.message?.reasoning_content ||
+                  "";
                 if (chunk) acc += chunk;
+                if (rChunk) reasoningAcc += rChunk;
               } catch (_) {}
             }
+            if (acc && acc.includes("<svg")) return acc;
+            if (reasoningAcc) return (acc ? acc + "\n" : "") + reasoningAcc;
             if (acc) return acc;
           }
           return rawText;
@@ -45368,10 +45394,71 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? { "Content-Type": "application/json" }
                 : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, ...(useStreamForMap ? { Accept: "text/event-stream" } : {}) };
 
+              const resolveAndCompressRefImg = async (rawSrc) => {
+                if (!rawSrc || typeof rawSrc !== "string") return "";
+                let workingSrc = rawSrc.trim();
+                if (workingSrc.startsWith("vault://") && window.EPhoneVault) {
+                  try {
+                    if (typeof window.EPhoneVault.getDataUrl === "function") {
+                      const fromVaultData = await window.EPhoneVault.getDataUrl(workingSrc);
+                      if (fromVaultData) workingSrc = fromVaultData;
+                    }
+                    if (workingSrc.startsWith("vault://") && typeof window.EPhoneVault.resolveUrl === "function") {
+                      const fromVaultBlob = await window.EPhoneVault.resolveUrl(workingSrc);
+                      if (fromVaultBlob) workingSrc = fromVaultBlob;
+                    }
+                  } catch (_) {}
+                }
+                if (workingSrc.startsWith("data:image/") || workingSrc.startsWith("blob:")) {
+                  try {
+                    const compressed = await new Promise((resolve) => {
+                      const imageEl = new Image();
+                      const timer = setTimeout(() => resolve(""), 5000);
+                      imageEl.onload = () => {
+                        clearTimeout(timer);
+                        try {
+                          const maxSide = 1024;
+                          let w = imageEl.naturalWidth || imageEl.width || 800;
+                          let h = imageEl.naturalHeight || imageEl.height || 600;
+                          if (w > maxSide || h > maxSide) {
+                            if (w >= h) {
+                              h = Math.max(1, Math.round((h * maxSide) / w));
+                              w = maxSide;
+                            } else {
+                              w = Math.max(1, Math.round((w * maxSide) / h));
+                              h = maxSide;
+                            }
+                          }
+                          const cvs = document.createElement("canvas");
+                          cvs.width = w;
+                          cvs.height = h;
+                          const ctx = cvs.getContext("2d");
+                          ctx.fillStyle = "#ffffff";
+                          ctx.fillRect(0, 0, w, h);
+                          ctx.drawImage(imageEl, 0, 0, w, h);
+                          resolve(cvs.toDataURL("image/jpeg", 0.78));
+                        } catch (_) {
+                          resolve("");
+                        }
+                      };
+                      imageEl.onerror = () => {
+                        clearTimeout(timer);
+                        resolve("");
+                      };
+                      imageEl.src = workingSrc;
+                    });
+                    if (compressed && compressed.startsWith("data:image/")) {
+                      return compressed;
+                    }
+                  } catch (_) {}
+                }
+                return workingSrc;
+              };
+
               const geminiImageParts = [];
               const openaiImageParts = [];
               for (const img of (referenceImages || []).slice(0, 6)) {
-                let dUrl = img.dataUrl || img.url || '';
+                let dUrl = await resolveAndCompressRefImg(img.dataUrl || img.url || '');
                 if (dUrl) {
                   if (dUrl.startsWith('data:image/')) {
                     const mime = dUrl.substring(5, dUrl.indexOf(';')) || 'image/jpeg';
@@ -45417,7 +45504,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const fetchOptions = {
                 method: "POST",
                 headers: requestHeaders,
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(requestBody),
+                _noAutoRetry: true
               };
               if (abortSignal) {
                 fetchOptions.signal = abortSignal;
@@ -45444,11 +45532,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           if (!generationSucceeded || !svgCode) {
+            if (generationError && (generationError.name === "AbortError" || (abortSignal && abortSignal.aborted))) {
+              const abortErr = new Error("生成已暂停");
+              abortErr.name = "AbortError";
+              throw abortErr;
+            }
             const errorMsg = generationError ? (generationError.message || String(generationError)) : "未能从AI获取到有效的地图SVG代码，请检查API Key或模型配置";
             if (typeof window.showCustomAlert === "function") {
               window.showCustomAlert("生成失败", errorMsg);
             }
-            throw new Error(errorMsg);
+            const finalErr = new Error(errorMsg);
+            finalErr._alreadyAlerted = true;
+            throw finalErr;
           }
 
           // 生成成功后覆盖旧地图
@@ -54870,7 +54965,14 @@ ${stickerContext || "无"}
         function applyPersonaPreset(presetId) {
           const preset = (state.personaPresets || []).find((p) => p.id === presetId);
           if (preset) {
-            document.getElementById("my-avatar-preview").src = preset.avatar;
+            const myAvaEl = document.getElementById("my-avatar-preview");
+            if (typeof window.setCleanPreviewImgSrc === "function") {
+              window.setCleanPreviewImgSrc(myAvaEl, preset.avatar);
+            } else if (myAvaEl) {
+              myAvaEl.removeAttribute("data-vault-ref");
+              myAvaEl.removeAttribute("data-vault-hydrated-src");
+              myAvaEl.src = preset.avatar;
+            }
             document.getElementById("my-persona").value = preset.persona;
             if (preset.cocPanel && window.myCocPanel) {
               window.myCocPanel.setData(preset.cocPanel);
@@ -54884,7 +54986,14 @@ ${stickerContext || "无"}
 
           document.getElementById("persona-editor-title").textContent =
             "添加人设预设";
-          document.getElementById("preset-avatar-preview").src = defaultAvatar;
+          const presetAvaEl = document.getElementById("preset-avatar-preview");
+          if (typeof window.setCleanPreviewImgSrc === "function") {
+            window.setCleanPreviewImgSrc(presetAvaEl, defaultAvatar);
+          } else if (presetAvaEl) {
+            presetAvaEl.removeAttribute("data-vault-ref");
+            presetAvaEl.removeAttribute("data-vault-hydrated-src");
+            presetAvaEl.src = defaultAvatar;
+          }
           document.getElementById("preset-persona-input").value = "";
           if (window.presetCocPanel) {
             window.presetCocPanel.setData(null);
@@ -54914,7 +55023,14 @@ ${stickerContext || "无"}
 
           document.getElementById("persona-editor-title").textContent =
             "编辑人设预设";
-          document.getElementById("preset-avatar-preview").src = preset.avatar;
+          const presetAvaEl = document.getElementById("preset-avatar-preview");
+          if (typeof window.setCleanPreviewImgSrc === "function") {
+            window.setCleanPreviewImgSrc(presetAvaEl, preset.avatar);
+          } else if (presetAvaEl) {
+            presetAvaEl.removeAttribute("data-vault-ref");
+            presetAvaEl.removeAttribute("data-vault-hydrated-src");
+            presetAvaEl.src = preset.avatar;
+          }
           document.getElementById("preset-persona-input").value =
             preset.persona;
           if (window.presetCocPanel) {
@@ -54962,7 +55078,10 @@ ${stickerContext || "无"}
         }
 
         async function savePersonaPreset() {
-          const avatar = document.getElementById("preset-avatar-preview").src;
+          const presetAvaEl = document.getElementById("preset-avatar-preview");
+          const avatar = typeof window.getCleanPreviewImgSrc === "function"
+            ? window.getCleanPreviewImgSrc(presetAvaEl)
+            : (presetAvaEl ? presetAvaEl.src : defaultAvatar);
           const persona = document
             .getElementById("preset-persona-input")
             .value.trim();
@@ -72544,7 +72663,8 @@ ${stickerContext || "无"}
 
             if (avatarGenState.currentTarget === "ai") {
               const p = document.getElementById("ai-avatar-preview");
-              if (p) p.src = finalDataUrl;
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(p, finalDataUrl);
+              else if (p) { p.removeAttribute("data-vault-ref"); p.src = finalDataUrl; }
               if (chat) {
                 if (!chat.settings) chat.settings = {};
                 chat.settings.aiAvatar = finalDataUrl;
@@ -72555,7 +72675,8 @@ ${stickerContext || "无"}
               }
             } else if (avatarGenState.currentTarget === "my") {
               const p = document.getElementById("my-avatar-preview");
-              if (p) p.src = finalDataUrl;
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(p, finalDataUrl);
+              else if (p) { p.removeAttribute("data-vault-ref"); p.src = finalDataUrl; }
               if (chat) {
                 if (!chat.settings) chat.settings = {};
                 chat.settings.myAvatar = finalDataUrl;
@@ -72565,7 +72686,8 @@ ${stickerContext || "无"}
               }
             } else if (avatarGenState.currentTarget === "group") {
               const p = document.getElementById("group-avatar-preview");
-              if (p) p.src = finalDataUrl;
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(p, finalDataUrl);
+              else if (p) { p.removeAttribute("data-vault-ref"); p.src = finalDataUrl; }
               if (chat) {
                 if (!chat.settings) chat.settings = {};
                 chat.settings.groupAvatar = finalDataUrl;
@@ -89207,9 +89329,14 @@ ${stickerContext || "无"}
               if (typeof window.renderMyThoughtChainLockUI === "function") {
                 window.renderMyThoughtChainLockUI(chat);
               }
-              document.getElementById("my-avatar-preview").src =
+              const initialMyAvaVal =
                 chat.settings.myAvatar ||
                 (isGroup ? defaultMyGroupAvatar : defaultAvatar);
+              if (typeof window.setCleanPreviewImgSrc === "function") {
+                window.setCleanPreviewImgSrc(document.getElementById("my-avatar-preview"), initialMyAvaVal);
+              } else {
+                document.getElementById("my-avatar-preview").src = initialMyAvaVal;
+              }
               document.getElementById("max-memory").value =
                 chat.settings.maxMemory;
               const defaultMin = chat.isGroup ? 3 : 2;
@@ -89415,8 +89542,12 @@ ${stickerContext || "无"}
                     }
                   };
                 }
-                document.getElementById("group-avatar-preview").src =
-                  chat.settings.groupAvatar || defaultGroupAvatar;
+                if (typeof window.setCleanPreviewImgSrc === "function") {
+                  window.setCleanPreviewImgSrc(document.getElementById("group-avatar-preview"), chat.settings.groupAvatar || defaultGroupAvatar);
+                } else {
+                  document.getElementById("group-avatar-preview").src =
+                    chat.settings.groupAvatar || defaultGroupAvatar;
+                }
                 renderGroupMemberSettings(chat.members);
                 // 加载群聊后台活动设置
                 const groupActivityGroup = document.getElementById(
@@ -89595,8 +89726,12 @@ ${stickerContext || "无"}
                   chat.settings.weiboProfession || "";
                 document.getElementById("weibo-instruction-input").value =
                   chat.settings.weiboInstruction || "";
-                document.getElementById("ai-avatar-preview").src =
-                  chat.settings.aiAvatar || defaultAvatar;
+                if (typeof window.setCleanPreviewImgSrc === "function") {
+                  window.setCleanPreviewImgSrc(document.getElementById("ai-avatar-preview"), chat.settings.aiAvatar || defaultAvatar);
+                } else {
+                  document.getElementById("ai-avatar-preview").src =
+                    chat.settings.aiAvatar || defaultAvatar;
+                }
                 document.getElementById("minimax-voice-id-input").value =
                   chat.settings.minimaxVoiceId || "";
                 const voiceModeBtn = document.getElementById("voice-mode-btn");
@@ -89983,8 +90118,12 @@ ${stickerContext || "无"}
             setGenderInputValue("member", member.gender);
             document.getElementById("member-gender-note-input").value =
               member.genderNote || "";
-            document.getElementById("member-avatar-preview").src =
-              member.avatar || (sourceChat && sourceChat.settings?.aiAvatar) || (isStatusRole ? DEFAULT_STATUS_AVATAR : defaultAvatar);
+            const initMemAva = member.avatar || (sourceChat && sourceChat.settings?.aiAvatar) || (isStatusRole ? DEFAULT_STATUS_AVATAR : defaultAvatar);
+            if (typeof window.setCleanPreviewImgSrc === "function") {
+              window.setCleanPreviewImgSrc(document.getElementById("member-avatar-preview"), initMemAva);
+            } else {
+              document.getElementById("member-avatar-preview").src = initMemAva;
+            }
             if (!isStatusRole && window.memberCocPanel) {
               window.memberCocPanel.setData(member.cocPanel || (typeof getDefaultCocData === "function" ? getDefaultCocData() : null));
               const cocContainer = document.getElementById("member-coc-panel-container");
@@ -90145,9 +90284,10 @@ ${stickerContext || "无"}
                 member.genderNote = document
                   .getElementById("member-gender-note-input")
                   .value.trim();
-                member.avatar = document.getElementById(
-                  "member-avatar-preview",
-                ).src;
+                const memAvaEl = document.getElementById("member-avatar-preview");
+                member.avatar = typeof window.getCleanPreviewImgSrc === "function"
+                  ? window.getCleanPreviewImgSrc(memAvaEl)
+                  : memAvaEl.src;
                 if (window.memberCocPanel) {
                   member.cocPanel = window.memberCocPanel.getData();
                 }
@@ -90532,7 +90672,8 @@ ${stickerContext || "无"}
                     const importedAvatar = s.aiAvatar || sourceChat.avatar || "";
                     if (importedAvatar) {
                       const aiAvatarPreview = document.getElementById("ai-avatar-preview");
-                      if (aiAvatarPreview) aiAvatarPreview.src = importedAvatar;
+                      if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(aiAvatarPreview, importedAvatar);
+                      else if (aiAvatarPreview) aiAvatarPreview.src = importedAvatar;
                     }
                     if (s.aiCocPanel && window.aiCocPanel) {
                       window.aiCocPanel.setData(s.aiCocPanel);
@@ -90582,7 +90723,8 @@ ${stickerContext || "无"}
                     const importedMyAvatar = s.myAvatar || sourceChat.myAvatar || "";
                     if (importedMyAvatar) {
                       const myAvatarPreview = document.getElementById("my-avatar-preview");
-                      if (myAvatarPreview) myAvatarPreview.src = importedMyAvatar;
+                      if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(myAvatarPreview, importedMyAvatar);
+                      else if (myAvatarPreview) myAvatarPreview.src = importedMyAvatar;
                     }
                     if ((s.myCocPanel || sourceChat.myCocPanel) && window.myCocPanel) {
                       window.myCocPanel.setData(s.myCocPanel || sourceChat.myCocPanel);
@@ -91069,8 +91211,10 @@ ${stickerContext || "无"}
               if (window.myCocPanel) {
                 chat.settings.myCocPanel = window.myCocPanel.getData();
               }
-              chat.settings.myAvatar =
-                document.getElementById("my-avatar-preview").src;
+              const myAvaPreviewEl = document.getElementById("my-avatar-preview");
+              chat.settings.myAvatar = typeof window.getCleanPreviewImgSrc === "function"
+                ? window.getCleanPreviewImgSrc(myAvaPreviewEl)
+                : myAvaPreviewEl.src;
               const checkedBooks = document.querySelectorAll(
                 "#world-book-checkboxes-container input.wb-book-checkbox:checked",
               );
@@ -91108,9 +91252,10 @@ ${stickerContext || "无"}
                 const resolvedMyGroupNick = enteredGroupNick || enteredMyName || "我";
                 chat.settings.myNickname = resolvedMyGroupNick;
                 chat.settings.myName = resolvedMyGroupNick;
-                chat.settings.groupAvatar = document.getElementById(
-                  "group-avatar-preview",
-                ).src;
+                const grpAvaPreviewEl = document.getElementById("group-avatar-preview");
+                chat.settings.groupAvatar = typeof window.getCleanPreviewImgSrc === "function"
+                  ? window.getCleanPreviewImgSrc(grpAvaPreviewEl)
+                  : grpAvaPreviewEl.src;
                 // 保存群聊后台活动设置
                 const groupActivityEnabled = document.getElementById(
                   "group-background-activity-switch",
@@ -91171,7 +91316,9 @@ ${stickerContext || "无"}
                 };
                 const statusAvatarEl = document.getElementById("ai-avatar-preview");
                 if (statusAvatarEl && statusAvatarEl.src) {
-                  chat.settings.aiAvatar = statusAvatarEl.src;
+                  chat.settings.aiAvatar = typeof window.getCleanPreviewImgSrc === "function"
+                    ? window.getCleanPreviewImgSrc(statusAvatarEl)
+                    : statusAvatarEl.src;
                 }
               } else {
                 if (chat.settings.isInvestigatorLocked) {
@@ -91193,8 +91340,10 @@ ${stickerContext || "无"}
                 if (window.aiCocPanel) {
                   chat.settings.aiCocPanel = window.aiCocPanel.getData();
                 }
-                chat.settings.aiAvatar =
-                  document.getElementById("ai-avatar-preview").src;
+                const aiAvaPreviewEl = document.getElementById("ai-avatar-preview");
+                chat.settings.aiAvatar = typeof window.getCleanPreviewImgSrc === "function"
+                  ? window.getCleanPreviewImgSrc(aiAvaPreviewEl)
+                  : aiAvaPreviewEl.src;
                 chat.settings.minimaxVoiceId = document
                   .getElementById("minimax-voice-id-input")
                   .value.trim();
@@ -91781,29 +91930,42 @@ ${stickerContext || "无"}
 
           setupFileUpload(
             "ai-avatar-input",
-            (base64) =>
-              (document.getElementById("ai-avatar-preview").src = base64),
+            (base64) => {
+              const el = document.getElementById("ai-avatar-preview");
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(el, base64);
+              else if (el) el.src = base64;
+            }
           );
           setupFileUpload(
             "my-avatar-input",
-            (base64) =>
-              (document.getElementById("my-avatar-preview").src = base64),
+            (base64) => {
+              const el = document.getElementById("my-avatar-preview");
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(el, base64);
+              else if (el) el.src = base64;
+            }
           );
           setupFileUpload(
             "group-avatar-input",
-            (base64) =>
-              (document.getElementById("group-avatar-preview").src = base64),
+            (base64) => {
+              const el = document.getElementById("group-avatar-preview");
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(el, base64);
+              else if (el) el.src = base64;
+            }
           );
           setupFileUpload(
             "member-avatar-input",
-            (base64) =>
-              (document.getElementById("member-avatar-preview").src = base64),
+            (base64) => {
+              const el = document.getElementById("member-avatar-preview");
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(el, base64);
+              else if (el) el.src = base64;
+            }
           );
           setupFileUpload("bg-input", (base64) => {
             if (state.activeChatId) {
               state.chats[state.activeChatId].settings.background = base64;
               const bgPreview = document.getElementById("bg-preview");
-              bgPreview.src = base64;
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(bgPreview, base64);
+              else if (bgPreview) bgPreview.src = base64;
               bgPreview.style.display = "block";
               document.getElementById("remove-bg-btn").style.display =
                 "inline-block";
@@ -91811,8 +91973,11 @@ ${stickerContext || "无"}
           });
           setupFileUpload(
             "preset-avatar-input",
-            (base64) =>
-              (document.getElementById("preset-avatar-preview").src = base64),
+            (base64) => {
+              const el = document.getElementById("preset-avatar-preview");
+              if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(el, base64);
+              else if (el) el.src = base64;
+            }
           );
 
           setupFileUpload(
@@ -102755,6 +102920,46 @@ ${stickerContext || "无"}
             return blobUrlMemoryCache.get(cleanName) || null;
           };
 
+          window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
+
+          window.setCleanPreviewImgSrc = function (imgEl, newSrc) {
+            if (!imgEl) return;
+            const val = String(newSrc || "");
+            if (val.startsWith("vault://")) {
+              imgEl.setAttribute("data-vault-ref", val);
+              imgEl.removeAttribute("data-vault-hydrated-src");
+              imgEl.setAttribute("src", val);
+            } else {
+              const mappedRef = blobUrlToVaultRefMap.get(val);
+              if (mappedRef && mappedRef.startsWith("vault://")) {
+                imgEl.setAttribute("data-vault-ref", mappedRef);
+                imgEl.setAttribute("data-vault-hydrated-src", val);
+                imgEl.setAttribute("src", val);
+              } else {
+                imgEl.removeAttribute("data-vault-ref");
+                imgEl.removeAttribute("data-vault-hydrated-src");
+                imgEl.removeAttribute("data-vault-pending");
+                imgEl._vaultResolvingRef = null;
+                imgEl.setAttribute("src", val);
+              }
+            }
+          };
+
+          window.getCleanPreviewImgSrc = function (imgEl) {
+            if (!imgEl) return "";
+            const rawAttr = imgEl.getAttribute("src") || "";
+            const propSrc = imgEl.src || rawAttr;
+            if (rawAttr.startsWith("vault://")) return rawAttr;
+            const mappedFromBlob = blobUrlToVaultRefMap.get(propSrc) || blobUrlToVaultRefMap.get(rawAttr);
+            if (mappedFromBlob && mappedFromBlob.startsWith("vault://")) return mappedFromBlob;
+            const vRef = imgEl.getAttribute("data-vault-ref");
+            const hydratedSrc = imgEl.getAttribute("data-vault-hydrated-src");
+            if (vRef && vRef.startsWith("vault://") && hydratedSrc && (rawAttr === hydratedSrc || propSrc === hydratedSrc)) {
+              return vRef;
+            }
+            return propSrc;
+          };
+
           function isValidNonBlobAvatar(val) {
             return typeof val === "string" && val.length > 0 && !val.startsWith("blob:");
           }
@@ -102768,16 +102973,35 @@ ${stickerContext || "无"}
               // 发现已失效的历史 blob: 头像，自动从有效数据源恢复并修复数据库
               let recovered = "";
               if (isUser) {
+                const isPeerChatOrGroup = Boolean(chat && (chat.roleType === "peer" || chat.isPeerGroup));
                 const gsAva = typeof state !== "undefined" && state.globalSettings?.widgetData?.["profile-avatar-img"];
-                if (isValidNonBlobAvatar(gsAva)) recovered = gsAva;
+                if (isPeerChatOrGroup && isValidNonBlobAvatar(gsAva)) {
+                  recovered = gsAva;
+                }
                 if (!recovered && chat && Array.isArray(chat.history)) {
                   for (let i = chat.history.length - 1; i >= 0; i--) {
                     const hm = chat.history[i];
-                    if (hm && hm.role === "user" && isValidNonBlobAvatar(hm.senderAvatar)) {
+                    if (hm && hm.role === "user" && isValidNonBlobAvatar(hm.senderAvatar) && (!gsAva || hm.senderAvatar !== gsAva || isPeerChatOrGroup)) {
                       recovered = hm.senderAvatar;
                       break;
                     }
                   }
+                }
+                if (!recovered && chat && chat.settings && chat.settings.myPersona && typeof state !== "undefined" && Array.isArray(state.personaPresets)) {
+                  const matchedPreset = state.personaPresets.find(
+                    (p) => p && p.persona && p.persona.trim() === chat.settings.myPersona.trim() && isValidNonBlobAvatar(p.avatar)
+                  );
+                  if (matchedPreset) {
+                    recovered = matchedPreset.avatar;
+                  }
+                }
+                if (!recovered && isValidNonBlobAvatar(gsAva) && (!chat || !chat.isGroup)) {
+                  recovered = gsAva;
+                }
+                if (!recovered) {
+                  recovered = chat && chat.isGroup && typeof defaultMyGroupAvatar !== "undefined"
+                    ? defaultMyGroupAvatar
+                    : (typeof defaultAvatar !== "undefined" ? defaultAvatar : "");
                 }
                 if (recovered && chat && chat.settings && chat.settings.myAvatar === avatarSrc) {
                   chat.settings.myAvatar = recovered;
@@ -104565,7 +104789,24 @@ ${stickerContext || "无"}
             const imgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref]');
             imgs.forEach((img) => {
               const attrSrc = img.getAttribute("src") || "";
-              const ref = attrSrc.startsWith("vault://") ? attrSrc : img.getAttribute("data-vault-ref");
+              const existingRef = img.getAttribute("data-vault-ref");
+              const hydratedSrc = img.getAttribute("data-vault-hydrated-src");
+              if (
+                existingRef &&
+                !attrSrc.startsWith("vault://") &&
+                !img.hasAttribute("data-vault-pending")
+              ) {
+                const isSameHydrated =
+                  (hydratedSrc && attrSrc === hydratedSrc) ||
+                  (attrSrc.startsWith("blob:") && blobUrlToVaultRefMap.get(attrSrc) === existingRef);
+                if (!isSameHydrated) {
+                  img.removeAttribute("data-vault-ref");
+                  img.removeAttribute("data-vault-hydrated-src");
+                  img._vaultResolvingRef = null;
+                  return;
+                }
+              }
+              const ref = attrSrc.startsWith("vault://") ? attrSrc : existingRef;
               if (!ref || !ref.startsWith("vault://")) return;
               if (img.getAttribute("data-vault-ref") !== ref) {
                 img.setAttribute("data-vault-ref", ref);
@@ -104577,6 +104818,7 @@ ${stickerContext || "无"}
                 liveSessionBlobUrls.has(attrSrc)
               ) {
                 blobUrlToVaultRefMap.set(attrSrc, ref);
+                img.setAttribute("data-vault-hydrated-src", attrSrc);
                 return;
               }
               const cachedFast = window.getCachedVaultBlobUrl ? window.getCachedVaultBlobUrl(ref) : null;
@@ -104585,6 +104827,7 @@ ${stickerContext || "无"}
                 if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
                   img.className = "realimag-image";
                 }
+                img.setAttribute("data-vault-hydrated-src", cachedFast);
                 if (img.getAttribute("src") !== cachedFast) {
                   img.setAttribute("src", cachedFast);
                 }
@@ -104595,12 +104838,14 @@ ${stickerContext || "无"}
               resolveVaultRefToUrl(ref)
                 .then((resolved) => {
                   img._vaultResolvingRef = null;
+                  if (img.getAttribute("data-vault-ref") !== ref) return;
                   if (resolved && resolved !== ref && !resolved.startsWith("vault://")) {
                     img._vaultRetryCount = 0;
                     img.removeAttribute("data-vault-pending");
                     if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
                       img.className = "realimag-image";
                     }
+                    img.setAttribute("data-vault-hydrated-src", resolved);
                     if (img.getAttribute("src") !== resolved) {
                       img.setAttribute("src", resolved);
                     }
@@ -104612,12 +104857,14 @@ ${stickerContext || "无"}
                       setTimeout(() => {
                         img._vaultRetryScheduled = false;
                         resolveVaultRefToUrl(ref).then((retryResolved) => {
+                          if (img.getAttribute("data-vault-ref") !== ref) return;
                           if (retryResolved && retryResolved !== ref && !retryResolved.startsWith("vault://")) {
                             img._vaultRetryCount = 0;
                             img.removeAttribute("data-vault-pending");
                             if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
                               img.className = "realimag-image";
                             }
+                            img.setAttribute("data-vault-hydrated-src", retryResolved);
                             if (img.getAttribute("src") !== retryResolved) {
                               img.setAttribute("src", retryResolved);
                             }

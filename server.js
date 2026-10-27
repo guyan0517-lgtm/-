@@ -915,12 +915,23 @@ app.post('/api/anime-tts', async (req, res) => {
 
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
-  req.setTimeout(180000);
-  res.setTimeout(180000);
+  req.setTimeout(600000);
+  res.setTimeout(600000);
+
+  const proxyCtrl = new AbortController();
+  let proxyTimer = null;
+  const resetProxyTimeout = () => {
+    if (proxyTimer) clearTimeout(proxyTimer);
+    proxyTimer = setTimeout(() => {
+      proxyCtrl.abort(new Error('Proxy upstream timeout'));
+    }, 600000);
+  };
+  resetProxyTimeout();
 
   try {
     const { url, method = 'POST', headers = {}, body } = req.body;
     if (!url) {
+      if (proxyTimer) clearTimeout(proxyTimer);
       return res.status(400).json({ error: 'Missing target url' });
     }
 
@@ -932,7 +943,7 @@ app.post('/api/proxy', async (req, res) => {
     const fetchOptions = {
       method,
       headers: fetchHeaders,
-      signal: AbortSignal.timeout(180000)
+      signal: proxyCtrl.signal
     };
 
     if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
@@ -940,6 +951,7 @@ app.post('/api/proxy', async (req, res) => {
     }
 
     const response = await fetch(url, fetchOptions);
+    resetProxyTimeout();
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
 
@@ -955,6 +967,7 @@ app.post('/api/proxy', async (req, res) => {
         try {
           while (true) {
             const { done, value } = await reader.read();
+            resetProxyTimeout();
             if (done) break;
             res.write(value);
             const textChunk = decoder.decode(value, { stream: true });
@@ -966,6 +979,7 @@ app.post('/api/proxy', async (req, res) => {
         } catch (streamErr) {
           console.warn('[Proxy Stream] Stream reading error:', streamErr.message);
         } finally {
+          if (proxyTimer) clearTimeout(proxyTimer);
           res.end();
         }
         return;
@@ -978,12 +992,15 @@ app.post('/api/proxy', async (req, res) => {
 
     if (contentType.includes('application/json') || contentType.includes('text/')) {
       const text = await response.text();
+      if (proxyTimer) clearTimeout(proxyTimer);
       return res.send(text);
     } else {
       const arrayBuffer = await response.arrayBuffer();
+      if (proxyTimer) clearTimeout(proxyTimer);
       return res.send(Buffer.from(arrayBuffer));
     }
   } catch (err) {
+    if (proxyTimer) clearTimeout(proxyTimer);
     console.error('Proxy request error:', err);
     res.status(500).json({ error: err.message || 'Proxy request failed' });
   }

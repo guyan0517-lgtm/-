@@ -6364,13 +6364,11 @@
             const myAvatarEl = document.getElementById("my-avatar-preview");
             const myNickEl = document.getElementById("my-group-nickname-input");
             const myNameEl = document.getElementById("my-name-input");
-            let newAva = myAvatarEl ? myAvatarEl.src : currentChat.settings?.myAvatar;
-            if (myAvatarEl) {
-              const vRef = myAvatarEl.getAttribute("data-vault-ref") || (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(myAvatarEl.src));
-              if (vRef && vRef.startsWith("vault://")) {
-                newAva = vRef;
-              }
-            }
+            let newAva = myAvatarEl
+              ? (typeof window.getCleanPreviewImgSrc === "function"
+                  ? window.getCleanPreviewImgSrc(myAvatarEl)
+                  : myAvatarEl.src)
+              : currentChat.settings?.myAvatar;
             const newName =
               (myNickEl && myNickEl.value.trim()) ||
               (myNameEl && myNameEl.value.trim()) ||
