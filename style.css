@@ -29947,13 +29947,42 @@ input:checked + .slider::after {
 }
 
 /* 移除Chrome点击高亮与焦点蓝色方框 */
-*, *::before, *::after {
+html,
+body,
+#phone-screen,
+.screen,
+#peer-mini-phone-overlay,
+#peer-mini-phone-shell,
+#peer-mini-phone-bezel,
+#peer-mini-phone-screen,
+#character-phone-container,
+.character-phone-frame,
+.character-phone-inner-screen,
+*,
+*::before,
+*::after {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
   -webkit-tap-highlight-color: transparent !important;
+}
+
+#phone-screen,
+#peer-mini-phone-shell,
+#peer-mini-phone-bezel,
+#peer-mini-phone-screen,
+#character-phone-container,
+.character-phone-frame,
+.character-phone-inner-screen {
+  -webkit-touch-callout: none;
 }
 
 *:focus,
 *:focus-visible,
-*:active,
+*:active {
+  outline: none !important;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
 button:focus,
 button:focus-visible,
 .moe-btn:focus,
@@ -29978,6 +30007,7 @@ select:focus,
 select:focus-visible {
   outline: none !important;
   box-shadow: none !important;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
   -webkit-tap-highlight-color: transparent !important;
 }
 
