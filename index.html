@@ -102957,13 +102957,131 @@ ${stickerContext || "无"}
             return;
           }
 
+          let _folderPermGestureArmed = false;
+          let _inflightFolderPermRestore = null;
+          async function getAnySavedExternalDirectoryHandle() {
+            const h1 = await getSavedDirectoryHandle();
+            if (h1) return h1;
+            if (typeof window.getStoredDirHandle === "function") {
+              try {
+                const h2 = await window.getStoredDirHandle();
+                if (h2) return h2;
+              } catch (_) {}
+            }
+            return null;
+          }
+          function refreshAllVaultImagesAfterPermissionGranted() {
+            try {
+              failedVaultResolveTimestamps.clear();
+            } catch (_) {}
+            try {
+              const allVaultImgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref]');
+              allVaultImgs.forEach((img) => {
+                img._vaultResolvingRef = null;
+                img._vaultRetryCount = 0;
+                img._vaultRetryScheduled = false;
+              });
+            } catch (_) {}
+            if (typeof hydrateDomVaultImages === "function") {
+              hydrateDomVaultImages();
+            }
+            if (typeof applyWidgetData === "function") {
+              try {
+                applyWidgetData();
+              } catch (_) {}
+            }
+            if (typeof applyAppIcons === "function") {
+              try {
+                applyAppIcons();
+              } catch (_) {}
+            }
+            if (typeof applyGlobalWallpaper === "function") {
+              try {
+                applyGlobalWallpaper();
+              } catch (_) {}
+            }
+            if (typeof applyLockscreenWallpaper === "function") {
+              try {
+                applyLockscreenWallpaper();
+              } catch (_) {}
+            }
+            if (typeof testVaultConnection === "function") {
+              testVaultConnection(true).catch(() => {});
+            }
+          }
+          async function tryRestoreExternalFolderHandle(fromUserGesture = false) {
+            const saved = await getAnySavedExternalDirectoryHandle();
+            if (!saved) return null;
+            try {
+              if (typeof saved.queryPermission === "function") {
+                const readPerm = await saved.queryPermission({ mode: "read" });
+                if (readPerm === "granted") return saved;
+                const canRequestNow =
+                  fromUserGesture ||
+                  (typeof navigator !== "undefined" &&
+                    navigator.userActivation &&
+                    navigator.userActivation.isActive);
+                if (canRequestNow && typeof saved.requestPermission === "function") {
+                  if (!_inflightFolderPermRestore) {
+                    _inflightFolderPermRestore = (async () => {
+                      try {
+                        let reqPerm = "prompt";
+                        try {
+                          reqPerm = await saved.requestPermission({ mode: "readwrite" });
+                        } catch (_) {}
+                        if (reqPerm !== "granted") {
+                          try {
+                            reqPerm = await saved.requestPermission({ mode: "read" });
+                          } catch (_) {}
+                        }
+                        if (reqPerm === "granted") {
+                          setTimeout(refreshAllVaultImagesAfterPermissionGranted, 10);
+                          return saved;
+                        }
+                      } catch (_) {}
+                      return null;
+                    })().finally(() => {
+                      _inflightFolderPermRestore = null;
+                    });
+                  }
+                  return await _inflightFolderPermRestore;
+                }
+                armFolderPermissionRestoreOnFirstTouch();
+                return null;
+              }
+              return saved;
+            } catch (_) {
+              return null;
+            }
+          }
+          function armFolderPermissionRestoreOnFirstTouch() {
+            if (_folderPermGestureArmed) return;
+            _folderPermGestureArmed = true;
+            const gestureEvents = ["pointerdown", "touchend", "click", "keydown"];
+            const onFirstGesture = async () => {
+              const handle = await tryRestoreExternalFolderHandle(true);
+              if (handle) {
+                gestureEvents.forEach((evt) =>
+                  document.removeEventListener(evt, onFirstGesture, true)
+                );
+                _folderPermGestureArmed = false;
+              }
+            };
+            gestureEvents.forEach((evt) =>
+              document.addEventListener(evt, onFirstGesture, { capture: true, passive: true })
+            );
+          }
+
           async function getEffectiveDirectoryHandle() {
-            const saved = await getSavedDirectoryHandle();
+            const saved = await getAnySavedExternalDirectoryHandle();
             if (saved) {
               try {
                 if (typeof saved.queryPermission === "function") {
                   const perm = await saved.queryPermission({ mode: "readwrite" });
                   if (perm === "granted") return saved;
+                  const readPerm = await saved.queryPermission({ mode: "read" });
+                  if (readPerm === "granted") return saved;
+                  armFolderPermissionRestoreOnFirstTouch();
                 } else {
                   return saved;
                 }
@@ -103864,7 +103982,59 @@ ${stickerContext || "无"}
                 if (mode === "server" || mode === "folder") {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
 
-                  // 1. 优先从 Termux 本地服务直接读取，绝不复制写入浏览器 OPFS
+                  // 1. 从用户授权的外部本地文件夹直接读取（若权限因浏览器重启处于待激活状态，在手指触碰屏幕时自动恢复）
+                  try {
+                    const savedHandle = await tryRestoreExternalFolderHandle(false);
+                    if (savedHandle) {
+                      const searchDirs = [];
+                      try {
+                        const mDir = await savedHandle.getDirectoryHandle("media", { create: false });
+                        if (mDir) searchDirs.push(mDir);
+                      } catch (_) {}
+                      searchDirs.push(savedHandle);
+                      const subFolderCandidates = ["EPhoneVault", "Download", "Downloads"];
+                      for (const folderName of subFolderCandidates) {
+                        try {
+                          const subDir = await savedHandle.getDirectoryHandle(folderName, { create: false });
+                          if (subDir) {
+                            try {
+                              const subMedia = await subDir.getDirectoryHandle("media", { create: false });
+                              if (subMedia) searchDirs.push(subMedia);
+                            } catch (_) {}
+                            try {
+                              const nestedVault = await subDir.getDirectoryHandle("EPhoneVault", { create: false });
+                              if (nestedVault) {
+                                try {
+                                  const nestedMedia = await nestedVault.getDirectoryHandle("media", { create: false });
+                                  if (nestedMedia) searchDirs.push(nestedMedia);
+                                } catch (_) {}
+                                searchDirs.push(nestedVault);
+                              }
+                            } catch (_) {}
+                            searchDirs.push(subDir);
+                          }
+                        } catch (_) {}
+                      }
+                      for (const dHandle of searchDirs) {
+                        for (const candidate of candidates) {
+                          try {
+                            const fh = await dHandle.getFileHandle(candidate, { create: false });
+                            const file = await fh.getFile();
+                            const ab = await file.arrayBuffer();
+                            const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                            if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
+                              const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                              setVaultBlobCache(fileName, objUrl);
+                              failedVaultResolveTimestamps.delete(fileName);
+                              return objUrl;
+                            }
+                          } catch (_) {}
+                        }
+                      }
+                    }
+                  } catch (_) {}
+
+                  // 2. 若 Termux 本地服务在线则从 Termux 读取
                   const termuxReady = cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl));
                   if (termuxReady) {
                     const urlPrefixes = [baseUrl + "/media/", baseUrl + "/"];
@@ -103891,51 +104061,6 @@ ${stickerContext || "无"}
                       }
                     }
                   }
-
-                  // 2. 从用户授权的外部本地文件夹直接读取
-                  try {
-                    const savedHandle = await getSavedDirectoryHandle();
-                    if (savedHandle) {
-                      let perm = "granted";
-                      if (typeof savedHandle.queryPermission === "function") {
-                        perm = await savedHandle.queryPermission({ mode: "read" });
-                      }
-                      if (perm === "granted") {
-                        const searchDirs = [];
-                        try {
-                          const mDir = await savedHandle.getDirectoryHandle("media", { create: false });
-                          if (mDir) searchDirs.push(mDir);
-                        } catch (_) {}
-                        searchDirs.push(savedHandle);
-                        try {
-                          const subVault = await savedHandle.getDirectoryHandle("EPhoneVault", { create: false });
-                          if (subVault) {
-                            try {
-                              const subMedia = await subVault.getDirectoryHandle("media", { create: false });
-                              if (subMedia) searchDirs.push(subMedia);
-                            } catch (_) {}
-                            searchDirs.push(subVault);
-                          }
-                        } catch (_) {}
-                        for (const dHandle of searchDirs) {
-                          for (const candidate of candidates) {
-                            try {
-                              const fh = await dHandle.getFileHandle(candidate, { create: false });
-                              const file = await fh.getFile();
-                              const ab = await file.arrayBuffer();
-                              const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
-                              if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
-                                const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                                setVaultBlobCache(fileName, objUrl);
-                                failedVaultResolveTimestamps.delete(fileName);
-                                return objUrl;
-                              }
-                            } catch (_) {}
-                          }
-                        }
-                      }
-                    }
-                  } catch (_) {}
 
                   // 3. 回退从浏览器 OPFS 读取（若此时 Termux 已在线则迁移至 Termux 并从浏览器 OPFS 删除）
                   try {
@@ -105211,6 +105336,16 @@ ${stickerContext || "无"}
             if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
 
+            getAnySavedExternalDirectoryHandle().then(async (saved) => {
+              if (saved && typeof saved.queryPermission === "function") {
+                try {
+                  const p = await saved.queryPermission({ mode: "read" });
+                  if (p !== "granted") {
+                    armFolderPermissionRestoreOnFirstTouch();
+                  }
+                } catch (_) {}
+              }
+            });
             hydrateDomVaultImages();
             testVaultConnection(true);
             setTimeout(() => {
