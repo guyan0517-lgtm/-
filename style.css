@@ -10,6 +10,15 @@
   --accent-color: #007bff;
   --status-bar-text-color: var(--accent-color);
 }
+*,
+*::before,
+*::after,
+html,
+body,
+#phone-screen,
+#phone-screen * {
+  -webkit-tap-highlight-color: transparent !important;
+}
 html {
   -webkit-text-size-adjust: 100%;
   height: 100%;
