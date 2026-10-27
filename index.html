@@ -3242,6 +3242,86 @@
               </div>
             </div>
           </div>
+
+          <!-- 独立线上模组工坊面板 -->
+          <div class="module-library-panel" id="module-workshop-panel" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
+            <div style="flex: 1; overflow-y: auto; padding: 10px 14px 20px 14px; display: flex; flex-direction: column; gap: 10px;">
+              <!-- 卡片1：模组上传与仓库配置 -->
+              <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                  <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">工坊发布</span>
+                  <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                    <button type="button" class="mod-capsule-btn" id="module-workshop-config-toggle-btn" style="height: 28px; padding: 0 12px;">配置</button>
+                    <button type="button" class="mod-capsule-btn primary" id="module-workshop-upload-btn" style="height: 28px; padding: 0 14px;">上传</button>
+                  </div>
+                </div>
+
+                <!-- 折叠仓库配置框 -->
+                <div id="module-workshop-config-box" style="display: none; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                    <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">仓库连接</span>
+                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                      <button type="button" class="mod-capsule-btn" id="module-workshop-config-reset-btn" style="height: 26px; padding: 0 10px;">重置</button>
+                      <button type="button" class="mod-capsule-btn primary" id="module-workshop-config-save-btn" style="height: 26px; padding: 0 12px;">保存</button>
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">仓库</label>
+                    <input type="text" id="module-workshop-repo-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="输入GitHub仓库链接或用户名/仓库名" />
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">令牌</label>
+                    <input type="password" id="module-workshop-token-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="上传时填写GitHub令牌，仅下载可留空" />
+                  </div>
+                </div>
+
+                <!-- 选择本地模组与署名信息 -->
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">模组</label>
+                  <select id="module-workshop-upload-select" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;"></select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">作者</label>
+                    <input type="text" id="module-workshop-author-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="输入署名" />
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">简介</label>
+                    <input type="text" id="module-workshop-desc-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="简短介绍模组" />
+                  </div>
+                </div>
+
+                <div id="module-workshop-progress-wrap" style="display: none; height: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); border-radius: 999px; overflow: hidden;">
+                  <div id="module-workshop-progress-bar" style="width: 0%; height: 100%; background: var(--accent-color, #4A7A68); transition: width 0.2s ease;"></div>
+                </div>
+                <div id="module-workshop-status-text" style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">点配置填入GitHub仓库链接即可浏览与下载模组，填入令牌可将本地模组上传至仓库</div>
+              </div>
+
+              <!-- 卡片2：线上仓库模组列表 -->
+              <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                  <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">线上仓库</span>
+                  <button type="button" class="mod-capsule-btn" id="module-workshop-refresh-btn" style="height: 28px; padding: 0 12px; flex-shrink: 0;">刷新</button>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="text" id="module-workshop-search-input" class="module-tuning-input" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;" placeholder="搜索线上模组名称或作者..." />
+                </div>
+                <div class="module-library-empty" id="module-workshop-empty" style="padding: 24px 12px;">
+                  <div class="module-empty-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+                      <path d="M6 6h10"></path>
+                      <path d="M6 10h10"></path>
+                    </svg>
+                  </div>
+                  <div class="module-empty-title" id="module-workshop-empty-title">暂无线上模组</div>
+                  <div class="module-empty-desc" id="module-workshop-empty-desc">请在上方配置GitHub仓库链接后点击刷新或上传模组</div>
+                </div>
+                <div id="module-workshop-list" style="display: none; flex-direction: column; gap: 8px;"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 原文查看弹窗 -->
@@ -21290,7 +21370,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
           if (parsedBody && typeof parsedBody === "object" && Array.isArray(parsedBody.messages)) {
-            parsedBody.stream = Boolean(isApiStreamEnabled());
+            const streamNow = Boolean(isApiStreamEnabled());
+            parsedBody.stream = streamNow;
+            if (streamNow) {
+              headers["Accept"] = "text/event-stream";
+            } else {
+              if (headers["Accept"] === "text/event-stream") delete headers["Accept"];
+              if (headers["accept"] === "text/event-stream") delete headers["accept"];
+              if (!headers["Accept"] && !headers["accept"]) {
+                headers["Accept"] = "application/json";
+              }
+            }
             if (parsedBody.max_tokens === 100000) {
               delete parsedBody.max_tokens;
             }
@@ -21686,6 +21776,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     break;
                   }
                   resText += decoder.decode(value, { stream: true });
+                  const trimmedSoFar = resText.trim();
+                  if (trimmedSoFar.startsWith("{") && trimmedSoFar.endsWith("}")) {
+                    try {
+                      const parsedCheck = JSON.parse(trimmedSoFar);
+                      if (
+                        parsedCheck &&
+                        typeof parsedCheck === "object" &&
+                        (parsedCheck.choices || parsedCheck.candidates || parsedCheck.content || parsedCheck.error || parsedCheck.data || parsedCheck.models)
+                      ) {
+                        const tail = decoder.decode();
+                        if (tail) resText += tail;
+                        try { await reader.cancel(); } catch (_) {}
+                        break;
+                      }
+                    } catch (_) {}
+                  }
                 }
               } else {
                 resText = await res.text();
@@ -21699,7 +21805,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (timeoutId) clearTimeout(timeoutId);
             }
 
-            if (resText && (resText.trim().startsWith("data:") || resText.includes("\ndata:"))) {
+            if (resText && !resText.trim().startsWith("{") && (resText.trim().startsWith("data:") || resText.includes("\ndata:"))) {
               const sseSynthesized = parseSseTextToSynthesized(resText);
               if (sseSynthesized) {
                 return {
@@ -22254,33 +22360,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             const isStreamActive = isApiStreamEnabled();
 
-            if (!isClaudeOrLlmapi && protocol === "default") {
+            const isRawGeminiEndpoint =
+              urlStr.includes(":generateContent") || urlStr.includes(":streamGenerateContent");
+
+            if (!isClaudeOrLlmapi && protocol === "default" && isRawGeminiEndpoint) {
               fetchStartT = Date.now();
               let initForDefault = { ...init };
               let effectiveUrlStr = urlStr;
-              if (urlStr.includes("/chat/completions") && parsedBody && typeof parsedBody === "object") {
-                const updatedBody = {
-                  ...parsedBody,
-                  stream: Boolean(isStreamActive),
-                };
-                if (updatedBody.max_tokens === 100000) {
-                  delete updatedBody.max_tokens;
-                }
-                initForDefault.body = JSON.stringify(updatedBody);
-                const nextHeaders = { ...(init && init.headers ? init.headers : {}) };
-                if (isStreamActive) {
-                  nextHeaders.Accept = "text/event-stream";
-                } else {
-                  if (nextHeaders.Accept === "text/event-stream") delete nextHeaders.Accept;
-                  if (nextHeaders.accept === "text/event-stream") delete nextHeaders.accept;
-                }
-                initForDefault.headers = nextHeaders;
-              } else if (urlStr.includes(":generateContent") || urlStr.includes(":streamGenerateContent")) {
-                if (isStreamActive && urlStr.includes(":generateContent")) {
-                  effectiveUrlStr = urlStr.replace(":generateContent", ":streamGenerateContent") + (urlStr.includes("?") ? "&alt=sse" : "?alt=sse");
-                } else if (!isStreamActive && urlStr.includes(":streamGenerateContent")) {
-                  effectiveUrlStr = urlStr.replace(":streamGenerateContent", ":generateContent").replace(/([?&])alt=sse(&|$)/, "$1").replace(/[?&]$/, "");
-                }
+              if (isStreamActive && urlStr.includes(":generateContent")) {
+                effectiveUrlStr = urlStr.replace(":generateContent", ":streamGenerateContent") + (urlStr.includes("?") ? "&alt=sse" : "?alt=sse");
+              } else if (!isStreamActive && urlStr.includes(":streamGenerateContent")) {
+                effectiveUrlStr = urlStr.replace(":streamGenerateContent", ":generateContent").replace(/([?&])alt=sse(&|$)/, "$1").replace(/[?&]$/, "");
               }
               let fallbackRes = await requestLlmapiWithFallback(effectiveUrlStr, {
                 ...initForDefault,
@@ -48447,31 +48537,33 @@ ${stickerContext || "无"}
                 rawText += chunk;
                 buffer += chunk;
 
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || ""; // 留存最后一行可能不完整的数据
+                if (!rawText.trim().startsWith("{")) {
+                  const lines = buffer.split("\n");
+                  buffer = lines.pop() || ""; // 留存最后一行可能不完整的数据
 
-                for (const line of lines) {
-                  const trimmed = line.trim();
-                  if (!trimmed || !trimmed.startsWith("data:")) continue;
-                  const dataStr = trimmed.replace(/^data:\s*/, "");
-                  if (dataStr === "[DONE]") {
-                    chatStreamDone = true;
-                    break;
-                  }
-                  try {
-                    const parsed = JSON.parse(dataStr);
-                    const delta = parsed.choices?.[0]?.delta?.content 
-                               || parsed.choices?.[0]?.message?.content 
-                               || parsed.content?.[0]?.text 
-                               || "";
-                    fullContent += delta;
-                    const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
-                                        || parsed.choices?.[0]?.delta?.reasoning 
-                                        || parsed.choices?.[0]?.delta?.thinking 
-                                        || "";
-                    if (deltaReasoning) fullReasoning += deltaReasoning;
-                  } catch (e) {
-                    // 忽略单行半截 JSON 解析错误，继续拼接
+                  for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith("data:")) continue;
+                    const dataStr = trimmed.replace(/^data:\s*/, "");
+                    if (dataStr === "[DONE]") {
+                      chatStreamDone = true;
+                      break;
+                    }
+                    try {
+                      const parsed = JSON.parse(dataStr);
+                      const delta = parsed.choices?.[0]?.delta?.content 
+                                 || parsed.choices?.[0]?.message?.content 
+                                 || parsed.content?.[0]?.text 
+                                 || "";
+                      fullContent += delta;
+                      const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
+                                          || parsed.choices?.[0]?.delta?.reasoning 
+                                          || parsed.choices?.[0]?.delta?.thinking 
+                                          || "";
+                      if (deltaReasoning) fullReasoning += deltaReasoning;
+                    } catch (e) {
+                      // 忽略单行半截 JSON 解析错误，继续拼接
+                    }
                   }
                 }
                 if (chatStreamDone) {
@@ -48493,7 +48585,7 @@ ${stickerContext || "无"}
             }
 
             // 处理最后残留的 buffer
-            if (buffer.trim().startsWith("data:")) {
+            if (!rawText.trim().startsWith("{") && buffer.trim().startsWith("data:")) {
               const dataStr = buffer.trim().replace(/^data:\s*/, "");
               if (dataStr !== "[DONE]") {
                 try {

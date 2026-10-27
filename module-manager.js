@@ -1529,21 +1529,1022 @@
       this.activeSubPanel = panelName;
       const wizardPanel = document.getElementById('module-wizard-panel');
       const libraryPanel = document.getElementById('module-library-panel');
+      const workshopPanel = document.getElementById('module-workshop-panel');
+      const settingsBtn = document.getElementById('module-section-settings-btn');
       const tabs = document.querySelectorAll('.module-header-tab');
 
       tabs.forEach(tab => {
         tab.classList.toggle('active', tab.dataset.tab === panelName);
       });
 
+      if (settingsBtn) {
+        settingsBtn.style.color = panelName === 'workshop' ? 'var(--accent-color, #4A7A68)' : 'var(--text-primary)';
+      }
+
       if (panelName === 'library') {
         if (wizardPanel) wizardPanel.style.display = 'none';
+        if (workshopPanel) workshopPanel.style.display = 'none';
         if (libraryPanel) libraryPanel.style.display = 'flex';
         this.renderLibraryList();
+      } else if (panelName === 'workshop') {
+        if (wizardPanel) wizardPanel.style.display = 'none';
+        if (libraryPanel) libraryPanel.style.display = 'none';
+        if (workshopPanel) workshopPanel.style.display = 'flex';
+        this.openWorkshopPanel();
       } else {
         if (wizardPanel) wizardPanel.style.display = 'flex';
         if (libraryPanel) libraryPanel.style.display = 'none';
+        if (workshopPanel) workshopPanel.style.display = 'none';
       }
       this.saveDraft();
+    },
+
+    detectDefaultWorkshopRepo() {
+      try {
+        const host = (window.location && window.location.hostname) ? window.location.hostname : '';
+        const path = (window.location && window.location.pathname) ? window.location.pathname : '';
+        if (host.endsWith('.github.io')) {
+          const owner = host.replace(/\.github\.io$/i, '').trim();
+          const seg = path.split('/').filter(Boolean)[0] || '';
+          if (owner && seg) {
+            return `${owner}/${seg}`;
+          }
+        }
+      } catch (_) {}
+      return '';
+    },
+
+    parseGithubRepoInput(rawInput) {
+      const str = String(rawInput || '').trim();
+      if (!str) return '';
+      try {
+        if (/^https?:\/\//i.test(str)) {
+          const u = new URL(str);
+          if (u.hostname.endsWith('.github.io')) {
+            const owner = u.hostname.replace(/\.github\.io$/i, '').trim();
+            const seg = u.pathname.split('/').filter(Boolean)[0] || '';
+            if (owner && seg) return `${owner}/${seg}`;
+          }
+          const parts = u.pathname.replace(/\.git$/i, '').split('/').filter(Boolean);
+          if (parts.length >= 2) {
+            return `${parts[0]}/${parts[1]}`;
+          }
+        }
+      } catch (_) {}
+      const cleaned = str
+        .replace(/^https?:\/\/github\.com\//i, '')
+        .replace(/\.git$/i, '')
+        .replace(/^\/+|\/+$/g, '');
+      const segs = cleaned.split('/').filter(Boolean);
+      if (segs.length >= 2) {
+        return `${segs[0]}/${segs[1]}`;
+      }
+      return cleaned;
+    },
+
+    getWorkshopConfig() {
+      const savedRepo = localStorage.getItem('ephone_workshop_gh_repo') || localStorage.getItem('workshop-github-repo') || '';
+      const savedToken = localStorage.getItem('ephone_workshop_gh_token') || localStorage.getItem('workshop-github-token') || '';
+      const savedAuthor = localStorage.getItem('ephone_workshop_author') || '';
+      const repo = this.parseGithubRepoInput(savedRepo) || this.detectDefaultWorkshopRepo();
+      return {
+        githubRepo: repo,
+        githubToken: String(savedToken || '').trim(),
+        author: String(savedAuthor || '').trim()
+      };
+    },
+
+    saveWorkshopConfig(btnEl) {
+      const repoInput = document.getElementById('module-workshop-repo-input');
+      const tokenInput = document.getElementById('module-workshop-token-input');
+      const cleanRepo = this.parseGithubRepoInput(repoInput ? repoInput.value : '');
+      const cleanToken = String(tokenInput ? tokenInput.value : '').trim();
+
+      if (repoInput) repoInput.value = cleanRepo;
+      localStorage.setItem('ephone_workshop_gh_repo', cleanRepo);
+      localStorage.setItem('ephone_workshop_gh_token', cleanToken);
+
+      if (btnEl) {
+        const origText = btnEl.textContent;
+        btnEl.textContent = '已存';
+        setTimeout(() => { btnEl.textContent = origText; }, 900);
+      }
+
+      const statusEl = document.getElementById('module-workshop-status-text');
+      if (statusEl) {
+        statusEl.textContent = cleanRepo
+          ? `已连接仓库 ${cleanRepo}，正在同步线上模组列表...`
+          : '已清空仓库链接，请填入GitHub仓库链接后刷新';
+      }
+      this.refreshWorkshopList();
+    },
+
+    resetWorkshopConfig() {
+      localStorage.removeItem('ephone_workshop_gh_repo');
+      localStorage.removeItem('ephone_workshop_gh_token');
+      const defRepo = this.detectDefaultWorkshopRepo();
+      const repoInput = document.getElementById('module-workshop-repo-input');
+      const tokenInput = document.getElementById('module-workshop-token-input');
+      if (repoInput) repoInput.value = defRepo;
+      if (tokenInput) tokenInput.value = '';
+      const statusEl = document.getElementById('module-workshop-status-text');
+      if (statusEl) {
+        statusEl.textContent = '已重置仓库配置';
+      }
+      this._workshopRemoteList = [];
+      this.renderWorkshopList();
+    },
+
+    async openWorkshopPanel() {
+      const cfg = this.getWorkshopConfig();
+      const repoInput = document.getElementById('module-workshop-repo-input');
+      const tokenInput = document.getElementById('module-workshop-token-input');
+      const authorInput = document.getElementById('module-workshop-author-input');
+      const configBox = document.getElementById('module-workshop-config-box');
+
+      if (repoInput) repoInput.value = cfg.githubRepo || '';
+      if (tokenInput) tokenInput.value = cfg.githubToken || '';
+      if (authorInput && !authorInput.value && cfg.author) {
+        authorInput.value = cfg.author;
+      }
+      if (configBox && !cfg.githubRepo) {
+        configBox.style.display = 'flex';
+      }
+
+      await this.populateWorkshopUploadSelect();
+      await this.refreshWorkshopList();
+    },
+
+    async populateWorkshopUploadSelect() {
+      const selectEl = document.getElementById('module-workshop-upload-select');
+      const descInput = document.getElementById('module-workshop-desc-input');
+      if (!selectEl) return;
+
+      const allModules = await this.getAllModules();
+      const prevVal = selectEl.value;
+      selectEl.innerHTML = '';
+
+      if (!allModules || allModules.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '暂无本地模组，请先在模组库导入或切割模组';
+        selectEl.appendChild(opt);
+        if (descInput) descInput.value = '';
+        return;
+      }
+
+      allModules.forEach(mod => {
+        if (!mod || !mod.id) return;
+        const opt = document.createElement('option');
+        opt.value = String(mod.id);
+        opt.textContent = `${mod.name || '未命名模组'} · ${mod.chapterCount || 0}章`;
+        selectEl.appendChild(opt);
+      });
+
+      if (prevVal && allModules.some(m => String(m.id) === String(prevVal))) {
+        selectEl.value = prevVal;
+      } else if (allModules[0]) {
+        selectEl.value = String(allModules[0].id);
+      }
+
+      const selectedMod = allModules.find(m => String(m.id) === String(selectEl.value));
+      if (selectedMod && descInput) {
+        descInput.value = selectedMod.summary || '';
+      }
+    },
+
+    async fetchWorkshopGithubJson(relPath) {
+      const cleanRel = String(relPath || '').replace(/^\/+/, '');
+      const { githubRepo, githubToken } = this.getWorkshopConfig();
+      if (!githubRepo || !githubRepo.includes('/')) return null;
+
+      const rawFetch = window._rawNativeFetch || window.fetch;
+      const fetchWithTimeout = async (url, opts = {}, timeoutMs = 15000) => {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+          return await rawFetch(url, { ...opts, signal: ctrl.signal });
+        } finally {
+          clearTimeout(tid);
+        }
+      };
+
+      const decodeGithubApiContent = async (apiRes) => {
+        const meta = await apiRes.json();
+        if (meta && meta.content) {
+          const binStr = atob(String(meta.content).replace(/\s+/g, ''));
+          const bytes = new Uint8Array(binStr.length);
+          for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+          const decoded = new TextDecoder('utf-8').decode(bytes);
+          return JSON.parse(decoded);
+        }
+        if (meta && meta.download_url) {
+          const dlRes = await fetchWithTimeout(`${meta.download_url}?t=${Date.now()}`, { cache: 'no-store' }, 15000);
+          if (dlRes.ok) return await dlRes.json();
+        }
+        return null;
+      };
+
+      if (githubToken) {
+        try {
+          const headers = {
+            Accept: 'application/vnd.github.v3+json',
+            Authorization: `Bearer ${githubToken}`
+          };
+          const apiRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' }, 15000);
+          if (apiRes.ok) {
+            const parsed = await decodeGithubApiContent(apiRes);
+            if (parsed) return parsed;
+          }
+        } catch (_) {}
+      }
+
+      const rawUrls = [
+        `https://raw.githubusercontent.com/${githubRepo}/main/workshop-store/${cleanRel}?t=${Date.now()}`,
+        `https://raw.githubusercontent.com/${githubRepo}/master/workshop-store/${cleanRel}?t=${Date.now()}`,
+        `https://cdn.jsdelivr.net/gh/${githubRepo}@main/workshop-store/${cleanRel}?t=${Date.now()}`
+      ];
+
+      for (const u of rawUrls) {
+        try {
+          const res = await fetchWithTimeout(u, { cache: 'no-store' }, 12000);
+          if (res.ok) {
+            const text = await res.text();
+            if (text && !text.trim().startsWith('<')) {
+              return JSON.parse(text);
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!githubToken) {
+        try {
+          const headers = { Accept: 'application/vnd.github.v3+json' };
+          const apiRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' }, 15000);
+          if (apiRes.ok) {
+            const parsed = await decodeGithubApiContent(apiRes);
+            if (parsed) return parsed;
+          }
+        } catch (_) {}
+      }
+
+      return null;
+    },
+
+    async putWorkshopGithubFile(relPath, contentString, commitMsg) {
+      const { githubRepo, githubToken } = this.getWorkshopConfig();
+      if (!githubRepo || !githubRepo.includes('/') || !githubToken) {
+        throw new Error('请先在配置中填写有效的GitHub仓库链接与令牌');
+      }
+      const cleanRel = String(relPath || '').replace(/^\/+/, '');
+      const apiUrl = `https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}`;
+      const headers = {
+        Accept: 'application/vnd.github.v3+json',
+        Authorization: `Bearer ${githubToken}`,
+        'Content-Type': 'application/json'
+      };
+      const rawFetch = window._rawNativeFetch || window.fetch;
+      const isImmutablePack = cleanRel.startsWith('packs/');
+
+      const utf8Bytes = new TextEncoder().encode(String(contentString || ''));
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < utf8Bytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, utf8Bytes.subarray(i, i + chunkSize));
+      }
+      const b64Content = btoa(binary);
+
+      let lastErrMsg = '';
+      for (let attempt = 0; attempt < 3; attempt++) {
+        let existingSha = '';
+        if (!isImmutablePack || attempt > 0) {
+          try {
+            const getRes = await rawFetch(apiUrl, { headers, cache: 'no-store' });
+            if (getRes.ok) {
+              const getJson = await getRes.json();
+              if (getJson && getJson.sha) {
+                if (isImmutablePack) return true;
+                existingSha = getJson.sha;
+              }
+            }
+          } catch (_) {}
+        }
+
+        const bodyObj = {
+          message: commitMsg || `Sync workshop ${cleanRel}`,
+          content: b64Content
+        };
+        if (existingSha) bodyObj.sha = existingSha;
+
+        try {
+          const putRes = await rawFetch(apiUrl, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify(bodyObj)
+          });
+          if (putRes.ok) return true;
+          let errJson = null;
+          try { errJson = await putRes.json(); } catch (_) {}
+          lastErrMsg = (errJson && errJson.message) ? errJson.message : `HTTP ${putRes.status}`;
+          if (putRes.status === 409 || putRes.status === 422 || putRes.status >= 500) {
+            await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+            continue;
+          }
+          throw new Error(lastErrMsg);
+        } catch (err) {
+          lastErrMsg = err.message || String(err);
+          if (attempt === 2) throw new Error(lastErrMsg);
+          await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+        }
+      }
+      throw new Error(lastErrMsg || '写入GitHub仓库失败');
+    },
+
+    computeFastWorkshopHash(str) {
+      const s = String(str || '');
+      let h1 = 0xdeadbeef ^ s.length;
+      let h2 = 0x41c6ce57 ^ s.length;
+      const step = Math.max(1, Math.floor(s.length / 4096));
+      for (let i = 0; i < s.length; i += step) {
+        const ch = s.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+      }
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+      h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36) + '_' + s.length.toString(36);
+    },
+
+    async resolveImageToPortableDataUrl(rawUrl) {
+      if (!rawUrl || typeof rawUrl !== 'string') return '';
+      if (rawUrl.startsWith('data:')) return rawUrl;
+      if (rawUrl.startsWith('vault:') && typeof window.resolveVaultDataUrl === 'function') {
+        try {
+          const resolved = await window.resolveVaultDataUrl(rawUrl);
+          if (resolved && resolved.startsWith('data:')) return resolved;
+        } catch (_) {}
+      }
+      try {
+        const rawFetch = window._rawNativeFetch || window.fetch;
+        const res = await rawFetch(rawUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          if (blob && blob.size > 0) {
+            return await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+              reader.onerror = () => resolve('');
+              reader.readAsDataURL(blob);
+            });
+          }
+        }
+      } catch (_) {}
+      return rawUrl;
+    },
+
+    async refreshWorkshopList() {
+      const { githubRepo, githubToken } = this.getWorkshopConfig();
+      const statusEl = document.getElementById('module-workshop-status-text');
+      const emptyTitle = document.getElementById('module-workshop-empty-title');
+      const emptyDesc = document.getElementById('module-workshop-empty-desc');
+      const refreshBtn = document.getElementById('module-workshop-refresh-btn');
+
+      if (!githubRepo || !githubRepo.includes('/')) {
+        this._workshopRemoteList = [];
+        if (emptyTitle) emptyTitle.textContent = '未配置仓库链接';
+        if (emptyDesc) emptyDesc.textContent = '请点击上方配置按钮填入GitHub仓库链接并保存';
+        this.renderWorkshopList();
+        return;
+      }
+
+      if (refreshBtn) {
+        refreshBtn.textContent = '加载';
+        refreshBtn.disabled = true;
+      }
+      if (statusEl) {
+        statusEl.textContent = `正在从仓库 ${githubRepo} 同步线上模组列表...`;
+      }
+
+      try {
+        let indexList = await this.fetchWorkshopGithubJson('workshop-index.json');
+        if (!Array.isArray(indexList)) {
+          indexList = [];
+        }
+
+        if (indexList.length === 0) {
+          try {
+            const rawFetch = window._rawNativeFetch || window.fetch;
+            const headers = { Accept: 'application/vnd.github.v3+json' };
+            if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
+            const dirRes = await rawFetch(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/projects?t=${Date.now()}`, { headers, cache: 'no-store' });
+            if (dirRes.ok) {
+              const files = await dirRes.json();
+              if (Array.isArray(files)) {
+                const jsonFiles = files.filter(f => f && f.name && f.name.endsWith('.json')).slice(0, 30);
+                const fetchedItems = await Promise.all(jsonFiles.map(async (f) => {
+                  try {
+                    const p = await this.fetchWorkshopGithubJson(`projects/${f.name}`);
+                    if (!p) return null;
+                    const modObj = p.module || p;
+                    const chaps = Array.isArray(p.chapters) ? p.chapters : [];
+                    return {
+                      id: p.id || modObj.id || f.name.replace(/\.json$/i, ''),
+                      name: p.title || modObj.name || modObj.title || '未命名模组',
+                      author: p.author || modObj.author || '匿名',
+                      summary: p.desc || modObj.summary || modObj.desc || '',
+                      type: modObj.type || '线性',
+                      ruleSystem: modObj.ruleSystem || 'coc',
+                      scaleType: modObj.scaleType || '1v1',
+                      tags: Array.isArray(modObj.tags) ? modObj.tags : [],
+                      chapterCount: p.chapterCount || chaps.length || modObj.chapterCount || 0,
+                      wordCount: modObj.wordCount || 0,
+                      coverImage: p.avatarUrl || modObj.coverImage || '',
+                      updatedAt: p.updatedAt || modObj.createdAt || Date.now()
+                    };
+                  } catch (_) {
+                    return null;
+                  }
+                }));
+                indexList = fetchedItems.filter(Boolean);
+              }
+            }
+          } catch (_) {}
+        }
+
+        this._workshopRemoteList = indexList.map(item => ({
+          id: item.id || item.projectId,
+          name: item.name || item.title || '未命名模组',
+          author: item.author || '守秘人',
+          summary: item.summary || item.desc || '',
+          type: item.type || '线性',
+          ruleSystem: item.ruleSystem || 'coc',
+          scaleType: item.scaleType || '1v1',
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          chapterCount: item.chapterCount || (Array.isArray(item.chaptersMeta) ? item.chaptersMeta.length : 0),
+          wordCount: item.wordCount || 0,
+          coverImage: item.coverImage || item.avatarUrl || '',
+          updatedAt: item.updatedAt || Date.now()
+        })).filter(it => it && it.id);
+
+        if (statusEl) {
+          statusEl.textContent = this._workshopRemoteList.length > 0
+            ? `仓库 ${githubRepo} 已就绪，共发现 ${this._workshopRemoteList.length} 部线上模组`
+            : `已连接仓库 ${githubRepo}，当前仓库暂无已上传模组`;
+        }
+        if (emptyTitle) emptyTitle.textContent = '仓库暂无模组';
+        if (emptyDesc) emptyDesc.textContent = `当前连接的仓库 ${githubRepo} 尚未上传模组，可在上方选择本地模组点击上传`;
+      } catch (err) {
+        if (statusEl) {
+          statusEl.textContent = `同步仓库失败：${err.message || err}`;
+        }
+      } finally {
+        if (refreshBtn) {
+          refreshBtn.textContent = '刷新';
+          refreshBtn.disabled = false;
+        }
+        await this.renderWorkshopList();
+      }
+    },
+
+    async renderWorkshopList(searchKeyword = '') {
+      const listEl = document.getElementById('module-workshop-list');
+      const emptyEl = document.getElementById('module-workshop-empty');
+      if (!listEl || !emptyEl) return;
+
+      const kw = String(searchKeyword || document.getElementById('module-workshop-search-input')?.value || '').trim().toLowerCase();
+      const rawList = Array.isArray(this._workshopRemoteList) ? this._workshopRemoteList : [];
+      const filtered = kw
+        ? rawList.filter(it =>
+            String(it.name || '').toLowerCase().includes(kw) ||
+            String(it.author || '').toLowerCase().includes(kw) ||
+            String(it.summary || '').toLowerCase().includes(kw)
+          )
+        : rawList;
+
+      if (filtered.length === 0) {
+        listEl.style.display = 'none';
+        emptyEl.style.display = 'flex';
+        listEl.innerHTML = '';
+        return;
+      }
+
+      const localModules = await this.getAllModules();
+      const localNamesSet = new Set((localModules || []).map(m => String(m.name || '').trim().toLowerCase()));
+      const localIdsSet = new Set((localModules || []).map(m => String(m.id || '')));
+      const { githubToken } = this.getWorkshopConfig();
+
+      listEl.innerHTML = '';
+      filtered.forEach(item => {
+        const isSavedLocally = localIdsSet.has(String(item.id)) || localNamesSet.has(String(item.name || '').trim().toLowerCase());
+        const sysUpper = String(item.ruleSystem || 'coc').toUpperCase();
+        const scale = item.scaleType || '1v1';
+        const struct = item.type || '线性';
+        const tags = Array.isArray(item.tags) ? item.tags : [];
+
+        let tagsHtml = '';
+        tags.forEach(t => {
+          const cls = this.getTagClass(t);
+          tagsHtml += `<span class="mod-tag-badge ${cls}">${t}</span>`;
+        });
+
+        const hasValidCover = item.coverImage && (item.coverImage.startsWith('data:image/') || /^https?:\/\//i.test(item.coverImage));
+        const coverHtml = hasValidCover
+          ? `<div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border-color);"><img src="${item.coverImage}" style="width: 100%; height: 100%; object-fit: cover;" alt="封面" /></div>`
+          : `<div style="width: 44px; height: 44px; border-radius: 8px; background: var(--secondary-bg, #F0EFEA); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color, #4A7A68); border: 1px solid var(--border-color);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M6 6h10"></path><path d="M6 10h10"></path></svg></div>`;
+
+        const card = document.createElement('div');
+        card.className = 'mod-lib-card';
+        card.style.cursor = 'default';
+        card.innerHTML = `
+          <div style="display: flex; gap: 10px; align-items: flex-start; width: 100%;">
+            ${coverHtml}
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; min-width: 0; flex: 1;">
+                  <span style="font-weight: 600; font-size: 14px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</span>
+                  <span class="mod-category-pill ${sysUpper.toLowerCase()}" style="flex-shrink: 0;">${sysUpper}</span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                  <button type="button" class="mod-capsule-btn ${isSavedLocally ? '' : 'primary'} btn-ws-download" data-ws-id="${item.id}" style="height: 26px; padding: 0 10px;">${isSavedLocally ? '更新' : '下载'}</button>
+                  ${githubToken ? `<button type="button" class="mod-capsule-btn danger btn-ws-delete" data-ws-id="${item.id}" style="height: 26px; padding: 0 8px;">删除</button>` : ''}
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 5px; margin-top: 4px; flex-wrap: wrap;">
+                <span class="mod-category-pill">${scale}</span>
+                <span class="mod-category-pill">${struct}</span>
+                <span style="font-size: 11px; color: var(--accent-color, #4A7A68); font-weight: 600;">作者：${item.author || '守秘人'}</span>
+                ${isSavedLocally ? '<span class="mod-category-pill" style="color: var(--accent-color, #4A7A68);">已存</span>' : ''}
+              </div>
+              ${tagsHtml ? `<div class="mod-tags-horizontal-row" style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px;">${tagsHtml}</div>` : ''}
+              ${item.summary ? `<div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4; word-break: break-word;">${item.summary}</div>` : ''}
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${item.chapterCount || 0} 章节${item.wordCount ? ` · ${item.wordCount} 字` : ''} · ${new Date(item.updatedAt || Date.now()).toLocaleDateString()}</div>
+            </div>
+          </div>
+        `;
+
+        const dlBtn = card.querySelector('.btn-ws-download');
+        if (dlBtn) {
+          dlBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.downloadWorkshopModule(item.id, dlBtn);
+          });
+        }
+
+        const delBtn = card.querySelector('.btn-ws-delete');
+        if (delBtn) {
+          delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.deleteWorkshopModule(item.id, item.name, delBtn);
+          });
+        }
+
+        listEl.appendChild(card);
+      });
+
+      emptyEl.style.display = 'none';
+      listEl.style.display = 'flex';
+    },
+
+    async uploadModuleToWorkshop() {
+      if (this._isUploadingWorkshop) return;
+      const { githubRepo, githubToken } = this.getWorkshopConfig();
+      const configBox = document.getElementById('module-workshop-config-box');
+
+      if (!githubRepo || !githubRepo.includes('/')) {
+        if (configBox) configBox.style.display = 'flex';
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '请先在仓库连接中填写GitHub仓库链接并点击保存');
+        }
+        return;
+      }
+      if (!githubToken) {
+        if (configBox) configBox.style.display = 'flex';
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '上传模组到GitHub仓库需要填写访问令牌，请在配置中填入令牌并点击保存');
+        }
+        return;
+      }
+
+      const selectEl = document.getElementById('module-workshop-upload-select');
+      const authorInput = document.getElementById('module-workshop-author-input');
+      const descInput = document.getElementById('module-workshop-desc-input');
+      const uploadBtn = document.getElementById('module-workshop-upload-btn');
+      const progWrap = document.getElementById('module-workshop-progress-wrap');
+      const progBar = document.getElementById('module-workshop-progress-bar');
+      const statusEl = document.getElementById('module-workshop-status-text');
+
+      const targetModId = selectEl ? selectEl.value : '';
+      if (!targetModId) {
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '请先选择要上传的本地模组');
+        }
+        return;
+      }
+
+      const setProgress = (pct, text) => {
+        if (progWrap) progWrap.style.display = 'block';
+        if (progBar) progBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+        if (statusEl && text) statusEl.textContent = text;
+      };
+
+      this._isUploadingWorkshop = true;
+      if (uploadBtn) {
+        uploadBtn.textContent = '上传中';
+        uploadBtn.disabled = true;
+      }
+
+      try {
+        setProgress(8, '正在读取本地模组章节与插图数据...');
+        const database = this.getDB();
+        const mod = await database.modules.get(targetModId);
+        if (!mod) {
+          throw new Error('未找到选中的本地模组');
+        }
+
+        const chapters = database.moduleChapters
+          ? await database.moduleChapters.where('moduleId').equals(targetModId).sortBy('sortOrder')
+          : [];
+        const locationNav = database.moduleLocationNav
+          ? await database.moduleLocationNav.where('moduleId').equals(targetModId).toArray()
+          : [];
+        const rawImages = database.moduleImages
+          ? await database.moduleImages.where('moduleId').equals(targetModId).toArray()
+          : [];
+        const cluePointers = database.moduleCluePointers
+          ? await database.moduleCluePointers.where('moduleId').equals(targetModId).toArray()
+          : [];
+        const hoRoles = database.moduleHoRoles
+          ? await database.moduleHoRoles.where('moduleId').equals(targetModId).toArray()
+          : [];
+
+        const author = String(authorInput ? authorInput.value : '').trim() || mod.author || '守秘人';
+        const summary = String(descInput ? descInput.value : '').trim() || mod.summary || '';
+        localStorage.setItem('ephone_workshop_author', author);
+
+        let portableCover = '';
+        if (mod.coverImage) {
+          portableCover = await this.resolveImageToPortableDataUrl(mod.coverImage);
+        }
+
+        const packedImagesMeta = [];
+        const imageAssetByHash = new Map();
+
+        for (let i = 0; i < rawImages.length; i++) {
+          const img = rawImages[i];
+          const rawSrc = img.dataUrl || img.url || img.src || '';
+          const dataUrl = await this.resolveImageToPortableDataUrl(rawSrc);
+          if (dataUrl && dataUrl.startsWith('data:')) {
+            const hash = this.computeFastWorkshopHash(dataUrl);
+            imageAssetByHash.set(hash, { hash, dataUrl, byteLen: dataUrl.length });
+            packedImagesMeta.push({
+              ...img,
+              dataUrl: `__WS_ASSET__:${hash}`
+            });
+          } else {
+            packedImagesMeta.push({ ...img });
+          }
+        }
+
+        const assetPackIndex = {};
+        const allImageItems = Array.from(imageAssetByHash.values());
+        if (allImageItems.length > 0) {
+          const MAX_BYTES_PER_PACK = 3.5 * 1024 * 1024;
+          const MAX_ITEMS_PER_PACK = 25;
+          const batches = [];
+          let curBatch = [];
+          let curBytes = 0;
+
+          for (const it of allImageItems) {
+            if (curBatch.length > 0 && (curBatch.length >= MAX_ITEMS_PER_PACK || (curBytes + it.byteLen) > MAX_BYTES_PER_PACK)) {
+              batches.push(curBatch);
+              curBatch = [];
+              curBytes = 0;
+            }
+            curBatch.push(it);
+            curBytes += it.byteLen;
+          }
+          if (curBatch.length > 0) batches.push(curBatch);
+
+          for (let bIdx = 0; bIdx < batches.length; bIdx++) {
+            const batch = batches[bIdx];
+            const packHash = this.computeFastWorkshopHash(batch.map(x => x.hash).sort().join('_'));
+            const assetsMap = {};
+            batch.forEach(x => {
+              assetsMap[x.hash] = x.dataUrl;
+              assetPackIndex[x.hash] = packHash;
+            });
+            setProgress(
+              20 + Math.round(((bIdx + 1) / batches.length) * 50),
+              `正在上传模组插图分包 ${bIdx + 1} / ${batches.length}...`
+            );
+            await this.putWorkshopGithubFile(
+              `packs/pack_${packHash}.json`,
+              JSON.stringify({ packHash, count: batch.length, updatedAt: Date.now(), assets: assetsMap }),
+              `Upload module asset pack ${packHash}`
+            );
+          }
+        }
+
+        let chapsWords = 0;
+        chapters.forEach(c => {
+          chapsWords += (c.wordCount || this.countWords(c.content || ''));
+        });
+        const totalWordCount = mod.wordCount || chapsWords;
+
+        const cleanModRecord = {
+          ...mod,
+          author,
+          summary,
+          coverImage: portableCover && portableCover.length < 350000 ? portableCover : '',
+          chapterCount: chapters.length,
+          wordCount: totalWordCount,
+          updatedAt: Date.now()
+        };
+
+        const projectBundle = {
+          version: 2,
+          id: String(mod.id),
+          title: mod.name || '未命名模组',
+          author,
+          desc: summary,
+          updatedAt: Date.now(),
+          module: cleanModRecord,
+          chapters,
+          locationNav,
+          images: packedImagesMeta,
+          cluePointers,
+          hoRoles,
+          assetPackIndex
+        };
+
+        setProgress(80, '正在上传模组正文与目录结构至GitHub仓库...');
+        await this.putWorkshopGithubFile(
+          `projects/${mod.id}.json`,
+          JSON.stringify(projectBundle),
+          `Upload module ${mod.name}`
+        );
+
+        setProgress(92, '正在更新线上工坊目录索引...');
+        let currentIndex = await this.fetchWorkshopGithubJson('workshop-index.json');
+        if (!Array.isArray(currentIndex)) currentIndex = [];
+
+        const tags = Array.isArray(mod.tags) && mod.tags.length > 0
+          ? mod.tags
+          : this.sortModuleTags(mod.bgTag, mod.endingTag, mod.contentTags, mod.customTags);
+
+        const summaryEntry = {
+          id: String(mod.id),
+          name: mod.name || '未命名模组',
+          title: mod.name || '未命名模组',
+          author,
+          summary,
+          desc: summary,
+          type: mod.type || '线性',
+          ruleSystem: mod.ruleSystem || 'coc',
+          scaleType: mod.scaleType || '1v1',
+          tags,
+          chapterCount: chapters.length,
+          wordCount: totalWordCount,
+          coverImage: cleanModRecord.coverImage || '',
+          updatedAt: Date.now()
+        };
+
+        const existIdx = currentIndex.findIndex(it => it && (String(it.id) === String(mod.id) || String(it.name || it.title) === String(mod.name)));
+        if (existIdx >= 0) {
+          currentIndex[existIdx] = summaryEntry;
+        } else {
+          currentIndex.unshift(summaryEntry);
+        }
+
+        await this.putWorkshopGithubFile(
+          'workshop-index.json',
+          JSON.stringify(currentIndex, null, 2),
+          `Update workshop index for ${mod.name}`
+        );
+
+        setProgress(100, `模组 ${mod.name} 已成功上传至仓库 ${githubRepo}`);
+        await this.refreshWorkshopList();
+        setTimeout(() => {
+          if (progWrap) progWrap.style.display = 'none';
+        }, 1500);
+      } catch (err) {
+        if (progWrap) progWrap.style.display = 'none';
+        if (statusEl) statusEl.textContent = `上传失败：${err.message || err}`;
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('上传失败', String(err.message || err));
+        }
+      } finally {
+        this._isUploadingWorkshop = false;
+        if (uploadBtn) {
+          uploadBtn.textContent = '上传';
+          uploadBtn.disabled = false;
+        }
+      }
+    },
+
+    async downloadWorkshopModule(projectId, btnEl) {
+      if (!projectId) return;
+      const statusEl = document.getElementById('module-workshop-status-text');
+      const origText = btnEl ? btnEl.textContent : '下载';
+      if (btnEl) {
+        btnEl.textContent = '下载中';
+        btnEl.disabled = true;
+      }
+
+      try {
+        if (statusEl) statusEl.textContent = '正在从GitHub仓库拉取模组数据...';
+        const remoteData = await this.fetchWorkshopGithubJson(`projects/${projectId}.json`);
+        if (!remoteData) {
+          throw new Error('未能在仓库中找到该模组文件');
+        }
+
+        const packIndex = remoteData.assetPackIndex || {};
+        const uniquePackHashes = Array.from(new Set(Object.values(packIndex).filter(Boolean)));
+        const loadedAssetsMap = new Map();
+
+        if (uniquePackHashes.length > 0) {
+          if (statusEl) statusEl.textContent = `正在下载模组插图包 共 ${uniquePackHashes.length} 包...`;
+          await Promise.all(uniquePackHashes.map(async (pHash) => {
+            try {
+              const packData = await this.fetchWorkshopGithubJson(`packs/pack_${pHash}.json`);
+              if (packData && packData.assets && typeof packData.assets === 'object') {
+                Object.entries(packData.assets).forEach(([k, v]) => {
+                  loadedAssetsMap.set(k, v);
+                });
+              }
+            } catch (_) {}
+          }));
+        }
+
+        const modSource = remoteData.module || remoteData;
+        const targetModId = String(modSource.id || remoteData.id || ('mod_' + Date.now()));
+        const modName = modSource.name || remoteData.title || '下载模组';
+
+        const rawChapters = Array.isArray(remoteData.chapters) ? remoteData.chapters : [];
+        const chapters = rawChapters.map((c, idx) => {
+          const textContent = typeof c.content === 'string'
+            ? c.content
+            : (Array.isArray(c.lines) ? c.lines.map(l => `${l.speaker ? l.speaker + '：' : ''}${l.text || ''}`).join('\n') : '');
+          return {
+            ...c,
+            id: c.id || (`chap_${Date.now()}_${idx + 1}`),
+            moduleId: targetModId,
+            title: c.title || `章节 ${idx + 1}`,
+            category: c.category || '正文',
+            content: textContent,
+            sortOrder: c.sortOrder || (idx + 1),
+            wordCount: c.wordCount || this.countWords(textContent)
+          };
+        });
+
+        const locationNav = Array.isArray(remoteData.locationNav)
+          ? remoteData.locationNav.map(l => ({ ...l, id: undefined, moduleId: targetModId }))
+          : [];
+
+        const rawImages = Array.isArray(remoteData.images) ? remoteData.images : [];
+        const images = rawImages.map(img => {
+          let resolvedUrl = img.dataUrl || img.url || '';
+          if (typeof resolvedUrl === 'string' && resolvedUrl.startsWith('__WS_ASSET__:')) {
+            const h = resolvedUrl.slice('__WS_ASSET__:'.length);
+            resolvedUrl = loadedAssetsMap.get(h) || '';
+          }
+          return {
+            ...img,
+            id: undefined,
+            moduleId: targetModId,
+            dataUrl: resolvedUrl
+          };
+        }).filter(img => img.dataUrl);
+
+        const cluePointers = Array.isArray(remoteData.cluePointers)
+          ? remoteData.cluePointers.map(cp => ({ ...cp, id: undefined, moduleId: targetModId }))
+          : [];
+
+        const hoRoles = Array.isArray(remoteData.hoRoles)
+          ? remoteData.hoRoles.map(hr => ({ ...hr, id: undefined, moduleId: targetModId }))
+          : [];
+
+        let chapsWords = 0;
+        chapters.forEach(c => { chapsWords += (c.wordCount || 0); });
+
+        const moduleRecord = {
+          id: targetModId,
+          name: modName,
+          author: remoteData.author || modSource.author || '守秘人',
+          type: modSource.type || '线性',
+          ruleSystem: modSource.ruleSystem || 'coc',
+          scaleType: modSource.scaleType || '1v1',
+          summary: remoteData.desc || modSource.summary || '',
+          coverImage: modSource.coverImage || remoteData.avatarUrl || '',
+          bgTag: modSource.bgTag || '',
+          endingTag: modSource.endingTag || '普通',
+          contentTags: Array.isArray(modSource.contentTags) ? modSource.contentTags : [],
+          customTags: Array.isArray(modSource.customTags) ? modSource.customTags : [],
+          tags: Array.isArray(modSource.tags) && modSource.tags.length > 0 ? modSource.tags : ['普通'],
+          group: modSource.group || '默认分组',
+          tocData: modSource.tocData || null,
+          mapData: modSource.mapData || null,
+          musicList: Array.isArray(modSource.musicList) ? modSource.musicList : [],
+          wordCount: modSource.wordCount || chapsWords,
+          chapterCount: chapters.length,
+          status: 'ready',
+          githubSync: true,
+          createdAt: Date.now()
+        };
+
+        await this.safeDBOperation('下载工坊模组', async (db) => {
+          const allExist = await db.modules.toArray();
+          const duplicateMods = allExist.filter(m =>
+            String(m.id) === targetModId ||
+            String(m.name || '').trim().toLowerCase() === String(modName).trim().toLowerCase()
+          );
+          for (const oldMod of duplicateMods) {
+            await db.modules.delete(oldMod.id);
+            if (db.moduleChapters) await db.moduleChapters.where('moduleId').equals(oldMod.id).delete();
+            if (db.moduleLocationNav) await db.moduleLocationNav.where('moduleId').equals(oldMod.id).delete();
+            if (db.moduleImages) await db.moduleImages.where('moduleId').equals(oldMod.id).delete();
+            if (db.moduleCluePointers) await db.moduleCluePointers.where('moduleId').equals(oldMod.id).delete();
+            if (db.moduleHoRoles) await db.moduleHoRoles.where('moduleId').equals(oldMod.id).delete();
+          }
+
+          await db.modules.put(moduleRecord);
+          if (chapters.length > 0 && db.moduleChapters) {
+            await db.moduleChapters.bulkPut(chapters);
+          }
+          if (locationNav.length > 0 && db.moduleLocationNav) {
+            try { await db.moduleLocationNav.bulkAdd(locationNav); } catch (_) { await db.moduleLocationNav.bulkPut(locationNav); }
+          }
+          if (images.length > 0 && db.moduleImages) {
+            try { await db.moduleImages.bulkAdd(images); } catch (_) { await db.moduleImages.bulkPut(images); }
+          }
+          if (cluePointers.length > 0 && db.moduleCluePointers) {
+            try { await db.moduleCluePointers.bulkAdd(cluePointers); } catch (_) { await db.moduleCluePointers.bulkPut(cluePointers); }
+          }
+          if (hoRoles.length > 0 && db.moduleHoRoles) {
+            try { await db.moduleHoRoles.bulkAdd(hoRoles); } catch (_) { await db.moduleHoRoles.bulkPut(hoRoles); }
+          }
+          return true;
+        });
+
+        await this.populateWorkshopUploadSelect();
+        await this.renderWorkshopList();
+        await this.renderLibraryList();
+
+        if (statusEl) {
+          statusEl.textContent = `已将模组 ${modName} 下载至本地模组库，共 ${chapters.length} 个章节`;
+        }
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('下载成功', `模组 ${modName} 已存入本地模组库`);
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.textContent = `下载失败：${err.message || err}`;
+        }
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('下载失败', String(err.message || err));
+        }
+        if (btnEl) {
+          btnEl.textContent = origText;
+          btnEl.disabled = false;
+        }
+      }
+    },
+
+    async deleteWorkshopModule(projectId, modName, btnEl) {
+      if (!projectId) return;
+      let confirmed = true;
+      if (typeof global.showCustomConfirm === 'function') {
+        confirmed = await global.showCustomConfirm('删除确认', `确定从线上仓库索引中移除模组 ${modName} 吗`);
+      } else {
+        confirmed = confirm(`确定从线上仓库索引中移除模组 ${modName} 吗`);
+      }
+      if (!confirmed) return;
+
+      if (btnEl) {
+        btnEl.textContent = '移除中';
+        btnEl.disabled = true;
+      }
+
+      try {
+        let currentIndex = await this.fetchWorkshopGithubJson('workshop-index.json');
+        if (Array.isArray(currentIndex)) {
+          const nextIndex = currentIndex.filter(it => it && String(it.id) !== String(projectId));
+          await this.putWorkshopGithubFile(
+            'workshop-index.json',
+            JSON.stringify(nextIndex, null, 2),
+            `Remove module ${modName} from workshop index`
+          );
+        }
+        await this.refreshWorkshopList();
+      } catch (err) {
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('删除失败', String(err.message || err));
+        }
+        if (btnEl) {
+          btnEl.textContent = '删除';
+          btnEl.disabled = false;
+        }
+      }
     },
 
     switchStep2SubTab(subTabName) {
@@ -11475,11 +12476,68 @@ ${chaptersDigest}
       const sectionSettingsBtn = document.getElementById('module-section-settings-btn');
       if (sectionSettingsBtn) {
         sectionSettingsBtn.addEventListener('click', () => {
-          if (typeof global.showCustomAlert === 'function') {
-            global.showCustomAlert('模组设置', 'GitHub 云端同步与模组仓库功能正在接入中');
-          } else if (typeof alert === 'function') {
-            alert('GitHub 云端同步与模组仓库功能正在接入中');
+          if (this.activeSubPanel === 'workshop') {
+            this.switchSubPanel('library');
+          } else {
+            this.switchSubPanel('workshop');
           }
+        });
+      }
+
+      const wsConfigToggleBtn = document.getElementById('module-workshop-config-toggle-btn');
+      if (wsConfigToggleBtn) {
+        wsConfigToggleBtn.addEventListener('click', () => {
+          const box = document.getElementById('module-workshop-config-box');
+          if (!box) return;
+          const isHidden = box.style.display === 'none' || !box.style.display;
+          box.style.display = isHidden ? 'flex' : 'none';
+        });
+      }
+
+      const wsConfigSaveBtn = document.getElementById('module-workshop-config-save-btn');
+      if (wsConfigSaveBtn) {
+        wsConfigSaveBtn.addEventListener('click', () => {
+          this.saveWorkshopConfig(wsConfigSaveBtn);
+        });
+      }
+
+      const wsConfigResetBtn = document.getElementById('module-workshop-config-reset-btn');
+      if (wsConfigResetBtn) {
+        wsConfigResetBtn.addEventListener('click', () => {
+          this.resetWorkshopConfig();
+        });
+      }
+
+      const wsUploadSelect = document.getElementById('module-workshop-upload-select');
+      if (wsUploadSelect) {
+        wsUploadSelect.addEventListener('change', async () => {
+          const allModules = await this.getAllModules();
+          const selected = (allModules || []).find(m => String(m.id) === String(wsUploadSelect.value));
+          const descInput = document.getElementById('module-workshop-desc-input');
+          if (selected && descInput) {
+            descInput.value = selected.summary || '';
+          }
+        });
+      }
+
+      const wsUploadBtn = document.getElementById('module-workshop-upload-btn');
+      if (wsUploadBtn) {
+        wsUploadBtn.addEventListener('click', () => {
+          this.uploadModuleToWorkshop();
+        });
+      }
+
+      const wsRefreshBtn = document.getElementById('module-workshop-refresh-btn');
+      if (wsRefreshBtn) {
+        wsRefreshBtn.addEventListener('click', () => {
+          this.refreshWorkshopList();
+        });
+      }
+
+      const wsSearchInput = document.getElementById('module-workshop-search-input');
+      if (wsSearchInput) {
+        wsSearchInput.addEventListener('input', (e) => {
+          this.renderWorkshopList(e.target.value);
         });
       }
 
