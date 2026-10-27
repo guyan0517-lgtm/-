@@ -23789,6 +23789,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             addedTimestamp: Date.now(),
             musicId: songData.id,
             musicSource: songData.source || songData.originalSource || "netease",
+            _urlVerifiedAt: Date.now(),
           };
 
           const existingIndex = state.musicState.playlist.findIndex(
@@ -23798,7 +23799,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let targetIndex;
           if (existingIndex !== -1) {
             if (existingIndex === state.musicState.currentIndex && state.musicState.isPlaying && audioPlayer && !audioPlayer.paused) {
+              if (audioPlayer.volume <= 0) {
+                audioPlayer.volume = getTargetMusicVolume();
+              }
               return;
+            }
+            state.musicState.playlist[existingIndex].src = playableUrl;
+            state.musicState.playlist[existingIndex]._urlVerifiedAt = Date.now();
+            if (lrcContent) {
+              state.musicState.playlist[existingIndex].lrcContent = lrcContent;
             }
             targetIndex = existingIndex;
           } else {
@@ -23808,13 +23817,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             targetIndex = state.musicState.playlist.length - 1;
           }
 
-          playSong(targetIndex);
-
           if (!state.musicState.isActive) {
             state.musicState.isActive = true;
             state.musicState.activeChatId = state.activeChatId;
             updatePlayerUI();
           }
+
+          await playSong(targetIndex);
 
           const floatingBar = document.getElementById("floating-lyrics-bar");
           const floatingText = document.getElementById("floating-lyric-text");
@@ -53910,7 +53919,8 @@ ${stickerContext || "无"}
           let track = state.musicState.playlist[index];
 
           if (!track.isLocal && track.src) {
-            const isUrlValid = await checkAudioAvailability(track.src);
+            const recentlyVerified = track._urlVerifiedAt && (Date.now() - track._urlVerifiedAt < 45000);
+            const isUrlValid = recentlyVerified ? true : await checkAudioAvailability(track.src);
 
             if (!isUrlValid) {
               console.log(
@@ -53922,6 +53932,7 @@ ${stickerContext || "无"}
               const renewal = await renewTrackPlayableUrl(track);
               if (renewal && renewal.url) {
                 track.src = renewal.url;
+                track._urlVerifiedAt = Date.now();
                 if (renewal.id) track.musicId = renewal.id;
                 if (renewal.source) track.musicSource = renewal.source;
                 if (renewal.apiProvider) track.apiProvider = renewal.apiProvider;
@@ -54036,20 +54047,64 @@ ${stickerContext || "无"}
         }
 
         function getTargetMusicVolume() {
-          if (typeof window._userMusicVolume === "number") {
-            return window._userMusicVolume;
+          if (typeof window._userMusicVolume === "number" && !isNaN(window._userMusicVolume) && window._userMusicVolume > 0) {
+            return Math.max(0.05, Math.min(1, window._userMusicVolume));
+          }
+          const playerVolSlider = document.getElementById("player-volume-slider");
+          if (playerVolSlider && !isNaN(parseFloat(playerVolSlider.value))) {
+            const sliderVol = parseFloat(playerVolSlider.value) / 100;
+            if (sliderVol > 0) {
+              return Math.max(0.05, Math.min(1, sliderVol));
+            }
+          }
+          const lyricsVolSlider = document.getElementById("music-volume-slider");
+          if (lyricsVolSlider && !isNaN(parseFloat(lyricsVolSlider.value))) {
+            const lSliderVol = parseFloat(lyricsVolSlider.value) / 100;
+            if (lSliderVol > 0) {
+              return Math.max(0.05, Math.min(1, lSliderVol));
+            }
           }
           const saved = localStorage.getItem("app_music_volume");
           if (saved !== null && !isNaN(parseFloat(saved))) {
-            return Math.max(0, Math.min(1, parseFloat(saved)));
+            const parsed = parseFloat(saved);
+            if (parsed > 0) {
+              return Math.max(0.05, Math.min(1, parsed));
+            }
           }
           return 1;
         }
 
+        function bindPendingMusicUnlockOnGesture() {
+          if (window._musicGestureUnlockBound) return;
+          window._musicGestureUnlockBound = true;
+          const unlockHandler = () => {
+            if (!window._pendingMusicAutoPlay) return;
+            window._pendingMusicAutoPlay = false;
+            if (audioPlayer && state.musicState && state.musicState.isActive && audioPlayer.src) {
+              try {
+                cancelMusicFade();
+                audioPlayer.muted = false;
+                audioPlayer.volume = getTargetMusicVolume();
+              } catch (_) {}
+              if (audioPlayer.paused) {
+                audioPlayer.play().then(() => {
+                  state.musicState.isPlaying = true;
+                  updatePlayerUI();
+                }).catch(() => {});
+              }
+            }
+          };
+          document.addEventListener("touchstart", unlockHandler, { passive: true, capture: true });
+          document.addEventListener("pointerdown", unlockHandler, { passive: true, capture: true });
+          document.addEventListener("mousedown", unlockHandler, { passive: true, capture: true });
+          document.addEventListener("click", unlockHandler, { passive: true, capture: true });
+          document.addEventListener("keydown", unlockHandler, { passive: true, capture: true });
+        }
+        bindPendingMusicUnlockOnGesture();
+
         function fadeOutMusic(duration = getFadeDurationMs()) {
           return new Promise((resolve) => {
             if (!audioPlayer || audioPlayer.paused || audioPlayer.volume <= 0) {
-              if (audioPlayer) audioPlayer.volume = 0;
               resolve();
               return;
             }
@@ -54069,9 +54124,6 @@ ${stickerContext || "无"}
               } catch (e) {}
               if (currentStep >= totalSteps || curVol <= 0) {
                 cancelMusicFade();
-                try {
-                  audioPlayer.volume = 0;
-                } catch (e) {}
                 resolve();
               }
             }, stepMs);
@@ -54085,68 +54137,79 @@ ${stickerContext || "无"}
               return;
             }
             cancelMusicFade();
-            window._isFadingAudio = true;
             const targetVol = getTargetMusicVolume();
-            if (targetVol <= 0) {
-              try {
-                audioPlayer.volume = 0;
-              } catch (e) {}
-              cancelMusicFade();
-              resolve();
-              return;
-            }
             try {
-              audioPlayer.volume = 0;
+              audioPlayer.muted = false;
+              audioPlayer.volume = targetVol;
             } catch (e) {}
-            const stepMs = 20;
-            const totalSteps = Math.max(1, Math.round(duration / stepMs));
-            const volStep = targetVol / totalSteps;
-            let currentStep = 0;
-
-            musicFadeTimer = setInterval(() => {
-              currentStep++;
-              const curVol = Math.min(targetVol, volStep * currentStep);
-              try {
-                audioPlayer.volume = curVol;
-              } catch (e) {}
-              if (currentStep >= totalSteps || curVol >= targetVol) {
-                cancelMusicFade();
-                try {
-                  audioPlayer.volume = targetVol;
-                } catch (e) {}
-                resolve();
-              }
-            }, stepMs);
+            resolve();
           });
         }
 
+        let _playSongRequestSeq = 0;
+
         async function playSong(index) {
+          if (index < 0 || index >= state.musicState.playlist.length) return;
+          const mySeq = ++_playSongRequestSeq;
+          state.musicState.currentIndex = index;
+          cancelMusicFade();
+
           const fadeMs = getFadeDurationMs();
-          if (audioPlayer && !audioPlayer.paused && audioPlayer.volume > 0) {
-            await fadeOutMusic(fadeMs);
-          } else if (audioPlayer) {
-            audioPlayer.volume = 0;
+          const targetVol = getTargetMusicVolume();
+          if (audioPlayer) {
+            try {
+              audioPlayer.muted = false;
+              audioPlayer.volume = targetVol;
+            } catch (_) {}
           }
+
           await loadSong(index);
+          if (mySeq !== _playSongRequestSeq) return;
+
           const track = state.musicState.playlist[index];
           try {
             if (audioPlayer) {
-              audioPlayer.volume = 0;
+              audioPlayer.muted = false;
+              audioPlayer.volume = getTargetMusicVolume();
               audioPlayer.loop = (state.musicState.playMode === "single");
             }
             await audioPlayer.play();
 
+            if (audioPlayer) {
+              audioPlayer.muted = false;
+              audioPlayer.volume = getTargetMusicVolume();
+            }
+            window._pendingMusicAutoPlay = false;
             state.musicState.isPlaying = true;
             updatePlayerUI();
-            fadeInMusic(fadeMs);
           } catch (error) {
+            if (mySeq !== _playSongRequestSeq) return;
+            const errName = String(error?.name || "");
+            const errMsg = String(error?.message || "");
+            if (errName === "NotAllowedError" || /interact|gesture|not allowed|permission/i.test(errMsg)) {
+              if (audioPlayer) {
+                try {
+                  audioPlayer.muted = false;
+                  audioPlayer.volume = getTargetMusicVolume();
+                } catch (_) {}
+              }
+              window._pendingMusicAutoPlay = true;
+              state.musicState.isPlaying = true;
+              updatePlayerUI();
+              return;
+            }
+            if (errName === "AbortError") {
+              return;
+            }
             console.warn("音频播放初次尝试失败，正在尝试自动续期与重新拉取:", error);
             if (track && !track.isLocal) {
               const statusEl = document.getElementById("music-player-artist");
               if (statusEl) statusEl.textContent = "链接失效，正在重新获取...";
               const renewal = await renewTrackPlayableUrl(track);
+              if (mySeq !== _playSongRequestSeq) return;
               if (renewal && renewal.url) {
                 track.src = renewal.url;
+                track._urlVerifiedAt = Date.now();
                 if (renewal.id) track.musicId = renewal.id;
                 if (renewal.source) track.musicSource = renewal.source;
                 if (renewal.apiProvider) track.apiProvider = renewal.apiProvider;
@@ -54154,15 +54217,30 @@ ${stickerContext || "无"}
                 await saveGlobalPlaylist();
                 audioPlayer.src = track.src;
                 try {
+                  audioPlayer.muted = false;
+                  audioPlayer.volume = getTargetMusicVolume();
                   await audioPlayer.play();
+                  audioPlayer.volume = getTargetMusicVolume();
                   state.musicState.isPlaying = true;
                   updatePlayerUI();
-                  fadeInMusic(fadeMs);
                   return;
                 } catch (retryErr) {
+                  const rName = String(retryErr?.name || "");
+                  if (rName === "NotAllowedError") {
+                    audioPlayer.volume = getTargetMusicVolume();
+                    window._pendingMusicAutoPlay = true;
+                    state.musicState.isPlaying = true;
+                    updatePlayerUI();
+                    return;
+                  }
                   console.error("重新获取后播放依然失败:", retryErr);
                 }
               }
+            }
+            if (audioPlayer) {
+              try {
+                audioPlayer.volume = getTargetMusicVolume();
+              } catch (_) {}
             }
             state.musicState.isPlaying = false;
             updatePlayerUI();
@@ -54178,11 +54256,13 @@ ${stickerContext || "无"}
             if (state.musicState.currentIndex > -1) {
               if (audioPlayer.src) {
                 try {
-                  audioPlayer.volume = 0;
+                  cancelMusicFade();
+                  audioPlayer.muted = false;
+                  audioPlayer.volume = getTargetMusicVolume();
                   await audioPlayer.play();
+                  audioPlayer.volume = getTargetMusicVolume();
                   state.musicState.isPlaying = true;
                   updatePlayerUI();
-                  fadeInMusic(fadeMs);
                 } catch (e) {
                   playSong(state.musicState.currentIndex);
                 }
@@ -54194,7 +54274,12 @@ ${stickerContext || "无"}
             state.musicState.isPlaying = false;
             updatePlayerUI();
             await fadeOutMusic(fadeMs);
-            if (audioPlayer) audioPlayer.pause();
+            if (audioPlayer) {
+              audioPlayer.pause();
+              try {
+                audioPlayer.volume = getTargetMusicVolume();
+              } catch (_) {}
+            }
           }
         }
 
@@ -93986,6 +94071,12 @@ ${stickerContext || "无"}
             }
           });
           audioPlayer.addEventListener("play", () => {
+            if (!window._isFadingAudio && audioPlayer.volume <= 0) {
+              try {
+                audioPlayer.muted = false;
+                audioPlayer.volume = getTargetMusicVolume();
+              } catch (_) {}
+            }
             if (state.musicState.isActive) {
               state.musicState.isPlaying = true;
               updatePlayerUI();
@@ -94005,12 +94096,17 @@ ${stickerContext || "无"}
               currentTrack._isRenewing = false;
               if (renewal && renewal.url) {
                 currentTrack.src = renewal.url;
+                currentTrack._urlVerifiedAt = Date.now();
                 if (renewal.id) currentTrack.musicId = renewal.id;
                 if (renewal.source) currentTrack.musicSource = renewal.source;
                 if (renewal.apiProvider) currentTrack.apiProvider = renewal.apiProvider;
                 state.musicState.playlist[curIdx] = currentTrack;
                 await saveGlobalPlaylist();
                 audioPlayer.src = currentTrack.src;
+                try {
+                  audioPlayer.muted = false;
+                  audioPlayer.volume = getTargetMusicVolume();
+                } catch (_) {}
                 if (state.musicState.isPlaying) {
                   audioPlayer.play().catch(() => {});
                 }
@@ -94818,11 +94914,17 @@ ${stickerContext || "无"}
               applyLyricsSettings();
             });
 
-          const initMusicVolume =
-            localStorage.getItem("app_music_volume") !== null
-              ? parseFloat(localStorage.getItem("app_music_volume"))
-              : 1;
-          if (audioPlayer) audioPlayer.volume = initMusicVolume;
+          const rawSavedMusicVol = localStorage.getItem("app_music_volume");
+          const parsedSavedMusicVol = rawSavedMusicVol !== null ? parseFloat(rawSavedMusicVol) : 1;
+          const initMusicVolume = (!isNaN(parsedSavedMusicVol) && parsedSavedMusicVol > 0)
+            ? Math.max(0.05, Math.min(1, parsedSavedMusicVol))
+            : 1;
+          window._userMusicVolume = initMusicVolume;
+          localStorage.setItem("app_music_volume", String(initMusicVolume));
+          if (audioPlayer) {
+            audioPlayer.muted = false;
+            audioPlayer.volume = initMusicVolume;
+          }
           const lyricsVolSlider = document.getElementById("music-volume-slider");
           const lyricsVolValue = document.getElementById("music-volume-value");
           const playerVolSlider = document.getElementById("player-volume-slider");
@@ -94831,8 +94933,18 @@ ${stickerContext || "无"}
           window.setMusicVolume = function (val) {
             const vol = Math.max(0, Math.min(1, parseFloat(val)));
             window._userMusicVolume = vol;
-            if (!window._isFadingAudio && audioPlayer) audioPlayer.volume = vol;
-            localStorage.setItem("app_music_volume", vol);
+            cancelMusicFade();
+            if (audioPlayer) {
+              audioPlayer.muted = false;
+              audioPlayer.volume = vol;
+              if (vol > 0 && audioPlayer.paused && state.musicState && state.musicState.isActive && audioPlayer.src) {
+                audioPlayer.play().then(() => {
+                  state.musicState.isPlaying = true;
+                  updatePlayerUI();
+                }).catch(() => {});
+              }
+            }
+            localStorage.setItem("app_music_volume", String(vol));
             const pct = Math.round(vol * 100);
             if (lyricsVolSlider) lyricsVolSlider.value = pct;
             if (lyricsVolValue) lyricsVolValue.textContent = `${pct}%`;
