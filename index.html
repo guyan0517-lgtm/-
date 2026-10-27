@@ -40389,8 +40389,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const isPeerGroupForHeader = Boolean(typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
           if (!isPeerGroupForHeader && chat.activeLineMode === "solo") {
             chat.activeLineMode = "main";
-            if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
+            if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length >= (Array.isArray(chat.history) ? chat.history.length : 0)) {
               chat.history = [...chat.mainLineHistory];
+            } else if (Array.isArray(chat.history)) {
+              chat.mainLineHistory = [...chat.history];
             }
           }
           const soloLineBtn = document.getElementById("group-solo-line-btn");
@@ -49473,9 +49475,6 @@ ${stickerContext || "无"}
                   fields: Object.keys(extractedFields).length > 0 ? extractedFields : undefined
                 };
                 messagesArray.unshift(statusMsgObj);
-                if (isPeerGroupChatInstance(chat) && typeof window.onPeerPhoneStatusBarUpdated === "function") {
-                  try { window.onPeerPhoneStatusBarUpdated(chat, statusMsgObj); } catch (e) {}
-                }
               }
             }
 
@@ -53128,6 +53127,8 @@ ${stickerContext || "无"}
                       chat.viewingPeerSoloThread.publicHistory = [...chat.history];
                     }
                   }
+                } else if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
+                  chat.mainLineHistory = [...chat.history];
                 }
                 if (aiMessage.type === "system_status" && isPeerGroupChatInstance(chat) && typeof window.onPeerPhoneStatusBarUpdated === "function") {
                   try { window.onPeerPhoneStatusBarUpdated(chat, aiMessage); } catch (e) {}
@@ -53410,6 +53411,8 @@ ${stickerContext || "无"}
                             chat.viewingPeerSoloThread.publicHistory = [...chat.history];
                           }
                         }
+                      } else if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
+                        chat.mainLineHistory = [...chat.history];
                       }
                       if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
                         window.PeerManager.broadcastGroupMessage(chat, diceMsg, false);
@@ -53423,6 +53426,9 @@ ${stickerContext || "无"}
                             exMsg.isSoloMessage = true;
                           }
                           chat.history.push(exMsg);
+                          if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.mainLineHistory)) {
+                            chat.mainLineHistory = [...chat.history];
+                          }
                           if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
                             window.PeerManager.broadcastGroupMessage(chat, exMsg, false);
                           }
@@ -71816,6 +71822,24 @@ ${stickerContext || "无"}
         }
         window.updateNaiBubbleInDom = updateNaiBubbleInDom;
 
+        window._globalNaiSerialQueuePromise = Promise.resolve();
+        window._lastNaiGenerationFinishTime = 0;
+        window.enqueueNovelAiSerialTask = function (taskFn) {
+          const nextTask = window._globalNaiSerialQueuePromise.then(async () => {
+            const elapsed = Date.now() - (window._lastNaiGenerationFinishTime || 0);
+            if (window._lastNaiGenerationFinishTime > 0 && elapsed < 800) {
+              await new Promise((r) => setTimeout(r, 800 - elapsed));
+            }
+            try {
+              return await taskFn();
+            } finally {
+              window._lastNaiGenerationFinishTime = Date.now();
+            }
+          });
+          window._globalNaiSerialQueuePromise = nextTask.catch(() => {});
+          return nextTask;
+        };
+
         window.executeChatNaiImageGeneration = async function (chat, targetNaiMsg) {
           if (!chat || !targetNaiMsg || targetNaiMsg.imageUrl || targetNaiMsg._naiGenerating) return;
           targetNaiMsg._naiGenerating = true;
@@ -71823,43 +71847,88 @@ ${stickerContext || "无"}
             ? window.acquireBackgroundTaskKeepAlive()
             : null;
           try {
-            const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
-            const apiKey = domKey || localStorage.getItem("novelai-api-key");
-            if (!apiKey) {
-              throw new Error("NovelAI API Key未配置。请在NovelAI设置中填写API Key。");
-            }
-            const naiPrompts = getCharacterNAIPrompts(chat.id);
-            const aiPrompt = (targetNaiMsg.prompt || targetNaiMsg.content || "a beautiful scene").trim();
-            const basePrompt = (targetNaiMsg.fullPrompt || aiPrompt || "").trim();
-            const promptParts = [];
-            if (naiPrompts.artist && !basePrompt.includes(naiPrompts.artist)) {
-              promptParts.push(naiPrompts.artist);
-            }
-            if (naiPrompts.positive && !basePrompt.includes(naiPrompts.positive)) {
-              promptParts.push(naiPrompts.positive);
-            }
-            if (basePrompt) {
-              promptParts.push(basePrompt);
-            }
-            const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
-            const finalNegativePrompt = (targetNaiMsg.negativePrompt && String(targetNaiMsg.negativePrompt).trim())
-              ? targetNaiMsg.negativePrompt
-              : (naiPrompts.negative || "");
-            targetNaiMsg.fullPrompt = finalPositivePrompt;
-            targetNaiMsg.negativePrompt = finalNegativePrompt;
-            const model = resolveNovelAIModel(targetNaiMsg.model);
-            targetNaiMsg.model = model;
-            const settings = Object.assign({}, getNovelAISettings(), targetNaiMsg.naiSettings || {});
-            const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
+            await window.enqueueNovelAiSerialTask(async () => {
+              if (targetNaiMsg.imageUrl) return;
+              const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
+              const apiKey = domKey || localStorage.getItem("novelai-api-key");
+              if (!apiKey) {
+                throw new Error("NovelAI API Key未配置。请在NovelAI设置中填写API Key。");
+              }
+              const naiPrompts = getCharacterNAIPrompts(chat.id);
+              const aiPrompt = (targetNaiMsg.prompt || targetNaiMsg.content || "a beautiful scene").trim();
+              const basePrompt = (targetNaiMsg.fullPrompt || aiPrompt || "").trim();
+              const promptParts = [];
+              if (naiPrompts.artist && !basePrompt.includes(naiPrompts.artist)) {
+                promptParts.push(naiPrompts.artist);
+              }
+              if (naiPrompts.positive && !basePrompt.includes(naiPrompts.positive)) {
+                promptParts.push(naiPrompts.positive);
+              }
+              if (basePrompt) {
+                promptParts.push(basePrompt);
+              }
+              const finalPositivePrompt = promptParts.filter(Boolean).join(", ");
+              const finalNegativePrompt = (targetNaiMsg.negativePrompt && String(targetNaiMsg.negativePrompt).trim())
+                ? targetNaiMsg.negativePrompt
+                : (naiPrompts.negative || "");
+              targetNaiMsg.fullPrompt = finalPositivePrompt;
+              targetNaiMsg.negativePrompt = finalNegativePrompt;
+              const model = resolveNovelAIModel(targetNaiMsg.model);
+              targetNaiMsg.model = model;
+              const settings = Object.assign({}, getNovelAISettings(), targetNaiMsg.naiSettings || {});
+              const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
 
-            const buildRequestBody = () => {
-              if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+              const buildRequestBody = () => {
+                if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+                  return {
+                    input: finalPositivePrompt,
+                    model: model,
+                    action: "generate",
+                    parameters: {
+                      params_version: model.includes("nai-diffusion-5") ? 4 : 3,
+                      width: width || 1024,
+                      height: height || 1024,
+                      scale: settings.cfg_scale,
+                      sampler: settings.sampler,
+                      steps: settings.steps,
+                      seed: settings.seed === -1 || settings.seed === undefined ? Math.floor(Math.random() * 4294967295) : settings.seed,
+                      n_samples: 1,
+                      ucPreset: settings.uc_preset,
+                      qualityToggle: settings.quality_toggle,
+                      autoSmea: false,
+                      dynamic_thresholding: false,
+                      controlnet_strength: 1,
+                      legacy: false,
+                      add_original_image: true,
+                      cfg_rescale: 0,
+                      noise_schedule: "karras",
+                      legacy_v3_extend: false,
+                      skip_cfg_above_sigma: null,
+                      use_coords: false,
+                      legacy_uc: false,
+                      normalize_reference_strength_multiple: true,
+                      inpaintImg2ImgStrength: 1,
+                      characterPrompts: [],
+                      v4_prompt: {
+                        caption: { base_caption: finalPositivePrompt, char_captions: [] },
+                        use_coords: false,
+                        use_order: true,
+                      },
+                      v4_negative_prompt: {
+                        caption: { base_caption: finalNegativePrompt, char_captions: [] },
+                        legacy_uc: false,
+                      },
+                      negative_prompt: finalNegativePrompt,
+                      deliberate_euler_ancestral_bug: false,
+                      prefer_brownian: true,
+                    },
+                  };
+                }
                 return {
                   input: finalPositivePrompt,
                   model: model,
                   action: "generate",
                   parameters: {
-                    params_version: model.includes("nai-diffusion-5") ? 4 : 3,
                     width: width || 1024,
                     height: height || 1024,
                     scale: settings.cfg_scale,
@@ -71869,104 +71938,62 @@ ${stickerContext || "无"}
                     n_samples: 1,
                     ucPreset: settings.uc_preset,
                     qualityToggle: settings.quality_toggle,
-                    autoSmea: false,
+                    sm: settings.smea,
+                    sm_dyn: settings.smea_dyn,
                     dynamic_thresholding: false,
                     controlnet_strength: 1,
                     legacy: false,
-                    add_original_image: true,
+                    add_original_image: false,
                     cfg_rescale: 0,
-                    noise_schedule: "karras",
-                    legacy_v3_extend: false,
-                    skip_cfg_above_sigma: null,
-                    use_coords: false,
-                    legacy_uc: false,
-                    normalize_reference_strength_multiple: true,
-                    inpaintImg2ImgStrength: 1,
-                    characterPrompts: [],
-                    v4_prompt: {
-                      caption: { base_caption: finalPositivePrompt, char_captions: [] },
-                      use_coords: false,
-                      use_order: true,
-                    },
-                    v4_negative_prompt: {
-                      caption: { base_caption: finalNegativePrompt, char_captions: [] },
-                      legacy_uc: false,
-                    },
+                    noise_schedule: "native",
                     negative_prompt: finalNegativePrompt,
-                    deliberate_euler_ancestral_bug: false,
-                    prefer_brownian: true,
                   },
                 };
-              }
-              return {
-                input: finalPositivePrompt,
-                model: model,
-                action: "generate",
-                parameters: {
-                  width: width || 1024,
-                  height: height || 1024,
-                  scale: settings.cfg_scale,
-                  sampler: settings.sampler,
-                  steps: settings.steps,
-                  seed: settings.seed === -1 || settings.seed === undefined ? Math.floor(Math.random() * 4294967295) : settings.seed,
-                  n_samples: 1,
-                  ucPreset: settings.uc_preset,
-                  qualityToggle: settings.quality_toggle,
-                  sm: settings.smea,
-                  sm_dyn: settings.smea_dyn,
-                  dynamic_thresholding: false,
-                  controlnet_strength: 1,
-                  legacy: false,
-                  add_original_image: false,
-                  cfg_rescale: 0,
-                  noise_schedule: "native",
-                  negative_prompt: finalNegativePrompt,
-                },
               };
-            };
 
-            const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-              ? "https://image.novelai.net/ai/generate-image-stream"
-              : "https://image.novelai.net/ai/generate-image";
-            const corsProxy = settings.cors_proxy === "custom" ? (settings.custom_proxy_url || "") : settings.cors_proxy;
+              const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+                ? "https://image.novelai.net/ai/generate-image-stream"
+                : "https://image.novelai.net/ai/generate-image";
+              const corsProxy = settings.cors_proxy === "custom" ? (settings.custom_proxy_url || "") : settings.cors_proxy;
 
-            let imageDataUrl = null;
-            let lastErr = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
-              try {
-                if (attempt > 0) {
-                  await new Promise((r) => setTimeout(r, 1200 * attempt));
+              let imageDataUrl = null;
+              let lastErr = null;
+              for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                  if (attempt > 0) {
+                    await new Promise((r) => setTimeout(r, 1200 * attempt));
+                  }
+                  const response = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, {
+                    "Content-Type": "application/json",
+                    Authorization: "Bearer " + apiKey,
+                  }, buildRequestBody());
+                  imageDataUrl = await parseNovelAiResponseToDataUrl(response);
+                  if (imageDataUrl) break;
+                } catch (err) {
+                  lastErr = err;
                 }
-                const response = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, {
-                  "Content-Type": "application/json",
-                  Authorization: "Bearer " + apiKey,
-                }, buildRequestBody());
-                imageDataUrl = await parseNovelAiResponseToDataUrl(response);
-                if (imageDataUrl) break;
-              } catch (err) {
-                lastErr = err;
               }
-            }
-            if (!imageDataUrl) {
-              throw lastErr || new Error("NovelAI生图未返回有效图片");
-            }
+              if (!imageDataUrl) {
+                throw lastErr || new Error("NovelAI生图未返回有效图片");
+              }
 
-            targetNaiMsg.imageUrl = imageDataUrl;
-            delete targetNaiMsg._naiGenerating;
-            if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
-              try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(targetNaiMsg); } catch (_) {}
-            }
-            await db.chats.put(chat);
-            updateNaiBubbleInDom(chat, targetNaiMsg);
-            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
-              window.PeerManager.broadcastGroupMessage(chat, { ...targetNaiMsg, eventId: undefined, isMessageUpdate: true }, false);
-            }
-            const isAppBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
-            if (isAppBgNow && !targetNaiMsg._suppressTurnNotify && typeof showNotification === "function") {
-              const notifTxt = chat.isGroup ? `${targetNaiMsg.senderName || chat.name}: [图片]` : "[图片]";
-              const notifyAv = targetNaiMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
-              showNotification(chat.id, notifTxt, notifyAv);
-            }
+              targetNaiMsg.imageUrl = imageDataUrl;
+              delete targetNaiMsg._naiGenerating;
+              if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
+                try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(targetNaiMsg); } catch (_) {}
+              }
+              await db.chats.put(chat);
+              updateNaiBubbleInDom(chat, targetNaiMsg);
+              if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                window.PeerManager.broadcastGroupMessage(chat, { ...targetNaiMsg, eventId: undefined, isMessageUpdate: true }, false);
+              }
+              const isAppBgNow = Boolean(document.hidden || document.visibilityState === "hidden");
+              if (isAppBgNow && !targetNaiMsg._suppressTurnNotify && typeof showNotification === "function") {
+                const notifTxt = chat.isGroup ? `${targetNaiMsg.senderName || chat.name}: [图片]` : "[图片]";
+                const notifyAv = targetNaiMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
+                showNotification(chat.id, notifTxt, notifyAv);
+              }
+            });
           } catch (error) {
             console.warn("NAI图片生成失败:", error);
           } finally {
@@ -72994,21 +73021,31 @@ ${stickerContext || "无"}
             } catch (_) {
               const objMatches = cleanedRaw.match(/\{[^{}]*\}/g) || [];
               for (const om of objMatches) {
+                const beforeLen = promptsToGenerate.length;
                 try {
                   const parsedObj = JSON.parse(om);
                   pushPromptItem(parsedObj);
                 } catch (e2) {}
+                if (promptsToGenerate.length === beforeLen) {
+                  const singleMatch = /"(?:prompt|description|content|image_prompt|imagePrompt)"\s*:\s*"([^"]+)"/i.exec(om);
+                  if (singleMatch && singleMatch[1] && singleMatch[1].trim()) {
+                    promptsToGenerate.push(singleMatch[1].trim());
+                  }
+                }
               }
             }
 
-            if (promptsToGenerate.length === 0) {
-              const regexGlobal = /"(?:prompt|description|content)"\s*:\s*"([^"]+)"/gi;
-              let m;
-              while ((m = regexGlobal.exec(cleanedRaw)) !== null) {
-                if (m[1] && m[1].trim()) {
-                  promptsToGenerate.push(m[1].trim());
-                }
+            const regexExtracted = [];
+            const regexGlobal = /"(?:prompt|description|content|image_prompt|imagePrompt)"\s*:\s*"([^"]+)"/gi;
+            let m;
+            while ((m = regexGlobal.exec(cleanedRaw)) !== null) {
+              if (m[1] && m[1].trim()) {
+                regexExtracted.push(m[1].trim());
               }
+            }
+            if (regexExtracted.length > promptsToGenerate.length) {
+              promptsToGenerate.length = 0;
+              regexExtracted.forEach((p) => promptsToGenerate.push(p));
             }
 
             if (promptsToGenerate.length === 0) {
@@ -73218,6 +73255,9 @@ ${stickerContext || "无"}
           };
 
           chat.history.push(pendingMsg);
+          if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.mainLineHistory)) {
+            chat.mainLineHistory = [...chat.history];
+          }
           if (state.chats) {
             state.chats[chat.id] = chat;
             state.chats[String(chat.id)] = chat;
@@ -73239,6 +73279,7 @@ ${stickerContext || "无"}
 
         async function generateAndAppendKeeperNaiImage(chat, aiPrompt, existingMsg = null) {
           const targetMsg = existingMsg || await createImmediateKeeperNaiBubble(chat, aiPrompt, 0);
+          targetMsg._naiGenerating = true;
           const naiPrompts = getCharacterNAIPrompts(chat.id);
           const basePrompt = (targetMsg.fullPrompt || aiPrompt || "").trim();
           const promptParts = [];
@@ -73265,118 +73306,135 @@ ${stickerContext || "无"}
           const settings = getNovelAISettings();
 
           if (!apiKey) {
+            delete targetMsg._naiGenerating;
             const noKeyErr = new Error("未配置 NovelAI API Key，请先在设置中填写 NovelAI 密钥");
             return { ok: false, error: noKeyErr };
           }
 
           try {
-            const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
-            let requestBody;
-            if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
-              requestBody = {
-                input: finalPositivePrompt,
-                model: model,
-                action: "generate",
-                parameters: {
-                  params_version: model.includes("nai-diffusion-5") ? 4 : 3,
-                  width: width || 1024,
-                  height: height || 1024,
-                  scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
-                  sampler: settings.sampler || "k_euler_ancestral",
-                  steps: settings.steps !== undefined ? settings.steps : 28,
-                  seed: (settings.seed === -1 || settings.seed === undefined) ? Math.floor(Math.random() * 4294967295) : settings.seed,
-                  n_samples: 1,
-                  ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
-                  qualityToggle: settings.quality_toggle !== false,
-                  negative_prompt: finalNegativePrompt,
-                  noise_schedule: "karras",
-                  deliberate_euler_ancestral_bug: false,
-                  prefer_brownian: true,
-                  add_original_image: true,
-                  cfg_rescale: 0,
-                  dynamic_thresholding: false,
-                  legacy: false,
-                  legacy_uc: false,
-                  inpaintImg2ImgStrength: 1,
-                  normalize_reference_strength_multiple: true,
-                  characterPrompts: [],
-                  v4_prompt: { caption: { base_caption: finalPositivePrompt, char_captions: [] }, use_coords: false, use_order: true },
-                  v4_negative_prompt: { caption: { base_caption: finalNegativePrompt, char_captions: [] }, legacy_uc: false },
-                },
+            return await window.enqueueNovelAiSerialTask(async () => {
+              const [width, height] = (settings.resolution || "1024x1024").split("x").map(Number);
+              const buildKeeperRequestBody = () => {
+                if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
+                  return {
+                    input: finalPositivePrompt,
+                    model: model,
+                    action: "generate",
+                    parameters: {
+                      params_version: model.includes("nai-diffusion-5") ? 4 : 3,
+                      width: width || 1024,
+                      height: height || 1024,
+                      scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
+                      sampler: settings.sampler || "k_euler_ancestral",
+                      steps: settings.steps !== undefined ? settings.steps : 28,
+                      seed: (settings.seed === -1 || settings.seed === undefined) ? Math.floor(Math.random() * 4294967295) : settings.seed,
+                      n_samples: 1,
+                      ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+                      qualityToggle: settings.quality_toggle !== false,
+                      negative_prompt: finalNegativePrompt,
+                      noise_schedule: "karras",
+                      deliberate_euler_ancestral_bug: false,
+                      prefer_brownian: true,
+                      add_original_image: true,
+                      cfg_rescale: 0,
+                      dynamic_thresholding: false,
+                      legacy: false,
+                      legacy_uc: false,
+                      inpaintImg2ImgStrength: 1,
+                      normalize_reference_strength_multiple: true,
+                      characterPrompts: [],
+                      v4_prompt: { caption: { base_caption: finalPositivePrompt, char_captions: [] }, use_coords: false, use_order: true },
+                      v4_negative_prompt: { caption: { base_caption: finalNegativePrompt, char_captions: [] }, legacy_uc: false },
+                    },
+                  };
+                }
+                return {
+                  input: finalPositivePrompt,
+                  model: model,
+                  action: "generate",
+                  parameters: {
+                    width: width || 1024,
+                    height: height || 1024,
+                    scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
+                    sampler: settings.sampler || "k_euler_ancestral",
+                    steps: settings.steps !== undefined ? settings.steps : 28,
+                    seed: (settings.seed === -1 || settings.seed === undefined) ? Math.floor(Math.random() * 4294967295) : settings.seed,
+                    n_samples: 1,
+                    ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
+                    qualityToggle: settings.quality_toggle !== false,
+                    negative_prompt: finalNegativePrompt,
+                    sm: settings.smea,
+                    sm_dyn: settings.smea_dyn,
+                    noise_schedule: "native",
+                    add_original_image: false,
+                  },
+                };
               };
-            } else {
-              requestBody = {
-                input: finalPositivePrompt,
-                model: model,
-                action: "generate",
-                parameters: {
-                  width: width || 1024,
-                  height: height || 1024,
-                  scale: settings.cfg_scale !== undefined ? settings.cfg_scale : 5,
-                  sampler: settings.sampler || "k_euler_ancestral",
-                  steps: settings.steps !== undefined ? settings.steps : 28,
-                  seed: (settings.seed === -1 || settings.seed === undefined) ? Math.floor(Math.random() * 4294967295) : settings.seed,
-                  n_samples: 1,
-                  ucPreset: settings.uc_preset !== undefined ? settings.uc_preset : 1,
-                  qualityToggle: settings.quality_toggle !== false,
-                  negative_prompt: finalNegativePrompt,
-                  sm: settings.smea,
-                  sm_dyn: settings.smea_dyn,
-                  noise_schedule: "native",
-                  add_original_image: false,
-                },
+
+              const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+                ? "https://image.novelai.net/ai/generate-image-stream"
+                : "https://image.novelai.net/ai/generate-image";
+              const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
+
+              const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
+              let headers = {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + apiKey,
               };
-            }
+              if (isChrome) {
+                const cleanHeaders = {};
+                for (const [k, v] of Object.entries(headers)) cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
+                headers = cleanHeaders;
+              }
 
-            const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-              ? "https://image.novelai.net/ai/generate-image-stream"
-              : "https://image.novelai.net/ai/generate-image";
-            const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
+              let imageDataUrl = null;
+              let lastErr = null;
+              for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                  if (attempt > 0) {
+                    await new Promise((r) => setTimeout(r, 1200 * attempt));
+                  }
+                  const res = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, headers, buildKeeperRequestBody());
+                  imageDataUrl = await parseNovelAiResponseToDataUrl(res);
+                  if (imageDataUrl) break;
+                } catch (errAttempt) {
+                  lastErr = errAttempt;
+                }
+              }
 
-            const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
-            let headers = {
-              "Content-Type": "application/json",
-              Authorization: "Bearer " + apiKey,
-            };
-            if (isChrome) {
-              const cleanHeaders = {};
-              for (const [k, v] of Object.entries(headers)) cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
-              headers = cleanHeaders;
-            }
+              if (!imageDataUrl) throw lastErr || new Error("无法解析生图数据");
 
-            const res = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, headers, requestBody);
-            const imageDataUrl = await parseNovelAiResponseToDataUrl(res);
+              targetMsg.imageUrl = imageDataUrl;
+              delete targetMsg._naiGenerating;
+              if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
+                try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(targetMsg); } catch (_) {}
+              }
 
-            if (!imageDataUrl) throw new Error("无法解析生图数据");
-
-            targetMsg.imageUrl = imageDataUrl;
-            if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
-              try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(targetMsg); } catch (_) {}
-            }
-
-            if (state.chats) {
-              state.chats[chat.id] = chat;
-              state.chats[String(chat.id)] = chat;
-            }
-            await db.chats.put(chat);
-            updateNaiBubbleInDom(chat, targetMsg);
-            if (typeof playNotificationSound === "function" && String(state.activeChatId) === String(chat.id)) {
-              playNotificationSound();
-            }
-            const isAppBgForKeeper = Boolean(document.hidden || document.visibilityState === "hidden");
-            if (isAppBgForKeeper && typeof showNotification === "function") {
-              const notifTxt = chat.isGroup ? `${targetMsg.senderName || chat.name}: [图片]` : "[图片]";
-              const notifyAv = targetMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
-              showNotification(chat.id, notifTxt, notifyAv);
-            }
-            if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
-              window.PeerManager.broadcastGroupMessage(chat, { ...targetMsg, eventId: undefined, isMessageUpdate: true }, false);
-            }
-            if (typeof renderChatList === "function") {
-              renderChatList();
-            }
-            return { ok: true };
+              if (state.chats) {
+                state.chats[chat.id] = chat;
+                state.chats[String(chat.id)] = chat;
+              }
+              await db.chats.put(chat);
+              updateNaiBubbleInDom(chat, targetMsg);
+              if (typeof playNotificationSound === "function" && String(state.activeChatId) === String(chat.id)) {
+                playNotificationSound();
+              }
+              const isAppBgForKeeper = Boolean(document.hidden || document.visibilityState === "hidden");
+              if (isAppBgForKeeper && typeof showNotification === "function") {
+                const notifTxt = chat.isGroup ? `${targetMsg.senderName || chat.name}: [图片]` : "[图片]";
+                const notifyAv = targetMsg.senderAvatar || (chat.isGroup ? chat.settings?.groupAvatar : chat.settings?.aiAvatar) || defaultAvatar;
+                showNotification(chat.id, notifTxt, notifyAv);
+              }
+              if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                window.PeerManager.broadcastGroupMessage(chat, { ...targetMsg, eventId: undefined, isMessageUpdate: true }, false);
+              }
+              if (typeof renderChatList === "function") {
+                renderChatList();
+              }
+              return { ok: true };
+            });
           } catch (err) {
+            delete targetMsg._naiGenerating;
             console.warn("NovelAI图片生成失败:", err);
             return { ok: false, error: err };
           }
@@ -103220,7 +103278,9 @@ ${stickerContext || "无"}
                   cachedTermuxOk = false;
                 }
                 if (!wasOk && cachedTermuxOk) {
-                  if (typeof hydrateDomVaultImages === "function") {
+                  if (typeof refreshAllVaultImagesAfterTermuxConnected === "function") {
+                    setTimeout(refreshAllVaultImagesAfterTermuxConnected, 20);
+                  } else if (typeof hydrateDomVaultImages === "function") {
                     setTimeout(hydrateDomVaultImages, 20);
                   }
                   setTimeout(() => {
@@ -104653,10 +104713,35 @@ ${stickerContext || "无"}
             }
           };
 
+          function refreshAllVaultImagesAfterTermuxConnected() {
+            try {
+              failedVaultResolveTimestamps.clear();
+              const imgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref]');
+              imgs.forEach((img) => {
+                img._vaultRetryCount = 0;
+                img._vaultRetryScheduled = false;
+                img._vaultResolvingRef = null;
+              });
+              hydrateDomVaultImages();
+            } catch (_) {}
+          }
+
           window.copyVaultStartupCmd = async function (platform) {
             const pyScript = [
-              "import os,http.server,socketserver",
-              "root=os.path.expanduser('~/storage/downloads/EPhoneVault' if os.path.exists(os.path.expanduser('~/storage/downloads')) else '~/Documents/EPhoneVault' if os.path.exists(os.path.expanduser('~/Documents')) else '~/EPhoneVault')",
+              "import os,sys,socket,http.server,socketserver",
+              "s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)",
+              "try:",
+              " s.connect(('127.0.0.1',8765)); s.close(); sys.exit(0)",
+              "except Exception:",
+              " pass",
+              "finally:",
+              " try: s.close()",
+              " except Exception: pass",
+              "cands=['/sdcard/Download/EPhoneVault','/storage/emulated/0/Download/EPhoneVault',os.path.expanduser('~/storage/downloads/EPhoneVault'),os.path.expanduser('~/Documents/EPhoneVault'),os.path.expanduser('~/EPhoneVault')]",
+              "root=next((p for p in cands if os.path.exists(os.path.dirname(p))),os.path.expanduser('~/EPhoneVault'))",
+              "for d in cands:",
+              " if os.path.isdir(d) and os.path.isdir(os.path.join(d,'media')):",
+              "  root=d; break",
               "mdir=os.path.join(root,'media')",
               "os.makedirs(mdir,exist_ok=True)",
               "open(os.path.join(root,'.nomedia'),'a').close()",
@@ -104669,25 +104754,50 @@ ${stickerContext || "无"}
               "  s.send_header('Access-Control-Allow-Headers','*')",
               " def do_OPTIONS(s): s.send_response(200); s._c(); s.end_headers()",
               " def do_GET(s):",
-              "  if s.path=='/ping': s.send_response(200); s._c(); s.end_headers(); s.wfile.write(b'ok'); return",
-              "  p=os.path.join(root,s.path.lstrip('/'))",
-              "  if os.path.isfile(p):",
-              "   s.send_response(200); s._c(); s.end_headers()",
-              "   with open(p,'rb') as f: s.wfile.write(f.read())",
-              "  else: s.send_response(404); s._c(); s.end_headers()",
+              "  if s.path.startswith('/ping'): s.send_response(200); s._c(); s.end_headers(); s.wfile.write(b'ok'); return",
+              "  rel=s.path.split('?')[0].lstrip('/')",
+              "  for base in [root]+([d for d in cands if os.path.isdir(d) and d!=root]):",
+              "   p=os.path.join(base,rel)",
+              "   if os.path.isfile(p):",
+              "    s.send_response(200); s._c(); s.end_headers()",
+              "    with open(p,'rb') as f: s.wfile.write(f.read())",
+              "    return",
+              "  s.send_response(404); s._c(); s.end_headers()",
               " def do_PUT(s):",
               "  n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n)",
-              "  p=os.path.join(root,s.path.lstrip('/')); os.makedirs(os.path.dirname(p),exist_ok=True)",
+              "  rel=s.path.split('?')[0].lstrip('/')",
+              "  p=os.path.join(root,rel); os.makedirs(os.path.dirname(p),exist_ok=True)",
               "  with open(p,'wb') as f: f.write(b)",
               "  s.send_response(200); s._c(); s.end_headers(); s.wfile.write(b'ok')",
-              "class S(socketserver.ThreadingMixIn,http.server.HTTPServer): daemon_threads=True",
+              "class S(socketserver.ThreadingMixIn,http.server.HTTPServer):",
+              " daemon_threads=True",
+              " allow_reuse_address=True",
               "print('Vault Ready on 127.0.0.1:8765 ->',root)",
               "S(('127.0.0.1',8765),H).serve_forever()",
             ].join("\n");
             const b64Script = btoa(pyScript);
-            const cmd = platform === "ios"
-              ? `python3 -c "import base64;exec(base64.b64decode('${b64Script}').decode())"`
-              : `pkg install -y python >/dev/null 2>&1; python3 -c "import base64;exec(base64.b64decode('${b64Script}').decode())"`;
+            let cmd = "";
+            if (platform === "ios") {
+              cmd = `python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w').write(base64.b64decode('${b64Script}').decode())" && python3 ~/.ephone_vault.py`;
+            } else {
+              const bashPanel = [
+                "# === EPhoneVault Auto Panel ===",
+                "ephone_vault_start() {",
+                "  python3 ~/.ephone_vault.py >/dev/null 2>&1 &",
+                "  sleep 0.3",
+                "  echo '----------------------------------------'",
+                "  echo '  [EPhone 本地图片服务面板]'",
+                "  echo '  状态: 已在后台启动 (127.0.0.1:8765)'",
+                "  echo '  输入 1 回车: 立即重新启动图片服务'",
+                "  echo '----------------------------------------'",
+                "}",
+                "alias 1='pkill -f .ephone_vault.py 2>/dev/null; ephone_vault_start'",
+                "ephone_vault_start",
+                "# === End EPhoneVault ===",
+              ].join("\n");
+              const b64Panel = btoa(unescape(encodeURIComponent(bashPanel)));
+              cmd = `pkg install -y python >/dev/null 2>&1; python3 -c "import base64,os;p=os.path.expanduser('~/.ephone_vault.py');open(p,'w').write(base64.b64decode('${b64Script}').decode());rc=os.path.expanduser('~/.bashrc');txt=open(rc).read() if os.path.exists(rc) else '';s='# === EPhoneVault Auto Panel ===';e='# === End EPhoneVault ===';nt= base64.b64decode('${b64Panel}').decode('utf-8');txt=(txt[:txt.find(s)]+txt[txt.find(e)+len(e):]).strip() if (s in txt and e in txt) else txt.strip();open(rc,'w').write((txt+'\\n\\n'+nt+'\\n').lstrip())" && source ~/.bashrc`;
+            }
             try {
               if (navigator.clipboard && navigator.clipboard.writeText) {
                 await navigator.clipboard.writeText(cmd);
@@ -104700,7 +104810,7 @@ ${stickerContext || "无"}
                 document.body.removeChild(ta);
               }
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", platform === "ios" ? "苹果 a-Shell 启动命令已复制" : "安卓 Termux 启动命令已复制");
+                window.showCustomAlert("提示", platform === "ios" ? "苹果 a-Shell 启动命令已复制" : "安卓 Termux 自动面板命令已复制，粘贴运行一次后每次打开 Termux 自动启动服务");
               }
             } catch (_) {
               if (typeof window.showCustomAlert === "function") {
@@ -105181,16 +105291,13 @@ ${stickerContext || "无"}
 
             if (pickBtn) {
               pickBtn.addEventListener("click", async () => {
-                if (typeof window.showDirectoryPicker === "function") {
-                  try {
-                    const handle = await window.showDirectoryPicker({ mode: "readwrite" });
-                    if (handle) {
-                      if (folderDisp) folderDisp.value = "EPhoneVault";
-                      await runVaultHideGalleryImages(false, handle);
-                      await testVaultConnection(true);
-                      return;
-                    }
-                  } catch (_) {}
+                const curCfg = getCurrentFormVaultConfig();
+                const baseUrl = (curCfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                if (await checkTermuxEndpointReachable(baseUrl, true)) {
+                  if (folderDisp) folderDisp.value = "EPhoneVault";
+                  refreshAllVaultImagesAfterTermuxConnected();
+                  await testVaultConnection(false);
+                  return;
                 }
                 const autoHandle = await getAutoOpfsDirectoryHandle();
                 const defaultName = (autoHandle && autoHandle.name) || "EPhoneVault";
@@ -105204,12 +105311,28 @@ ${stickerContext || "无"}
               });
             }
             if (connBtn) connBtn.addEventListener("click", async () => {
+              refreshAllVaultImagesAfterTermuxConnected();
               await testVaultConnection(false);
             });
             if (offloadBtn) offloadBtn.addEventListener("click", () => runVaultImageOffload());
             if (hideBtn) hideBtn.addEventListener("click", () => runVaultHideGalleryImages(false));
             if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
+
+            const handlePageWakeReconnect = async () => {
+              if (document.visibilityState && document.visibilityState !== "visible") return;
+              const curCfg = loadVaultConfig();
+              const baseUrl = (curCfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+              const ok = await checkTermuxEndpointReachable(baseUrl, true);
+              if (ok) {
+                updateVaultStatusBadge("已连接", true);
+                refreshAllVaultImagesAfterTermuxConnected();
+              } else {
+                hydrateDomVaultImages();
+              }
+            };
+            document.addEventListener("visibilitychange", handlePageWakeReconnect);
+            window.addEventListener("focus", handlePageWakeReconnect);
 
             hydrateDomVaultImages();
             testVaultConnection(true);

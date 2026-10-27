@@ -12,6 +12,7 @@
 }
 html {
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
   height: 100%;
 }
 
@@ -30,6 +31,12 @@ body {
   background-color: #f0f2f5;
   height: 100%;
   overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#phone-screen,
+#phone-screen * {
+  -webkit-tap-highlight-color: transparent;
 }
 
 button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .dropdown-item, .action-btn, .preset-btn-capsule, .setting-item {

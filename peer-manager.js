@@ -3968,7 +3968,11 @@
         if (miniMapModal && miniMapModal.classList.contains("visible") && typeof window.renderChatMiniMap === "function") {
           window.renderChatMiniMap();
         }
-        if (typeof window.renderChatInterfaceProxy === "function") {
+        const isActivelyRenderingTurn = Boolean(
+          (window.activeGeneratingChats && (window.activeGeneratingChats[groupChat.id] || window.activeGeneratingChats[String(groupChat.id)])) ||
+          (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(groupChat.id)])
+        );
+        if (!isActivelyRenderingTurn && typeof window.renderChatInterfaceProxy === "function") {
           window.renderChatInterfaceProxy(groupChat.id);
         }
       }
@@ -4289,6 +4293,9 @@
         );
         if (isDup) return;
         groupChat.history.push(msgToInsert);
+        if (groupChat.activeLineMode !== "solo" && Array.isArray(groupChat.mainLineHistory)) {
+          groupChat.mainLineHistory = [...groupChat.history];
+        }
       }
 
       if (typeof window.evaluatePeerPhonePendingMessages === "function") {
