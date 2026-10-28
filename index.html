@@ -21937,7 +21937,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       deltaReasoning,
                     });
                   }
-                  if (sawFinishReason && !deltaContent && !deltaReasoning) {
+                  if (fullText.includes("</svg>") && /<svg[\s\S]*?<\/svg>/i.test(fullText)) {
+                    if (finishGraceTimer) clearTimeout(finishGraceTimer);
+                    finishGraceTimer = setTimeout(() => {
+                      sawDoneMarker = true;
+                      try { reader.cancel(); } catch (_) {}
+                    }, 1500);
+                  } else if (sawFinishReason && !deltaContent && !deltaReasoning) {
                     if (finishGraceTimer) clearTimeout(finishGraceTimer);
                     finishGraceTimer = setTimeout(() => {
                       sawDoneMarker = true;
@@ -30489,7 +30495,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (screenId === "chat-interface-screen") {
             updateListenTogetherIcon(state.activeChatId);
+            const activeChat =
+              state.activeChatId !== null && state.activeChatId !== undefined && state.chats
+                ? state.chats[state.activeChatId] || state.chats[String(state.activeChatId)]
+                : null;
             const msgsContainer = document.getElementById("chat-messages");
+            if (activeChat && Array.isArray(activeChat.history) && msgsContainer) {
+              const visibleTail = activeChat.history
+                .filter((m) => m && !m.isTemporary && (typeof isMessageVisibleToCurrentUser !== "function" || isMessageVisibleToCurrentUser(m, activeChat)))
+                .slice(-5);
+              const hasMissingDomMsg = visibleTail.some(
+                (m) => m.timestamp && !msgsContainer.querySelector(`[data-timestamp="${m.timestamp}"]`)
+              );
+              if (hasMissingDomMsg && typeof renderChatInterface === "function") {
+                activeChat.unreadCount = 0;
+                renderChatInterface(activeChat.id);
+              }
+            }
             if (msgsContainer) {
               msgsContainer.scrollTop = msgsContainer.scrollHeight;
               requestAnimationFrame(() => {
@@ -40361,7 +40383,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           // 把 openChat 函数挂载到全局 window 对象上
           window.openChat = openChat;
 
-          if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && chat.activeLineMode === "solo") {
+          const isPeerGroupForHeader = Boolean(typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
+          if (!isPeerGroupForHeader && chat.activeLineMode === "solo") {
+            chat.activeLineMode = "main";
+            if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > (Array.isArray(chat.history) ? chat.history.length : 0)) {
+              chat.history = [...chat.mainLineHistory];
+            } else if (Array.isArray(chat.history)) {
+              chat.mainLineHistory = [...chat.history];
+            }
+          } else if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && chat.activeLineMode === "solo") {
             const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(chat) : null;
             if (cfg) {
               const allThreads = typeof window.getAllGroupSoloThreads === "function" ? window.getAllGroupSoloThreads(chat) : [];
@@ -40370,15 +40400,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (curThread.isPeerThread) {
                   chat.viewingPeerSoloThread = curThread;
                   const histArr = Array.isArray(curThread.history) ? curThread.history : (Array.isArray(curThread.publicHistory) ? curThread.publicHistory : []);
-                  if (histArr.length > 0 || !Array.isArray(chat.history) || chat.history.length === 0) {
+                  if (histArr.length >= (Array.isArray(chat.history) ? chat.history.length : 0)) {
                     chat.history = [...histArr];
                   }
                 } else {
                   chat.viewingPeerSoloThread = null;
                   const localT = cfg.threads.find((t) => t.id === curThread.id);
                   if (localT && Array.isArray(localT.history)) {
-                    if (localT.history.length > 0 || !Array.isArray(chat.history) || chat.history.length === 0) {
+                    if (localT.history.length >= (Array.isArray(chat.history) ? chat.history.length : 0)) {
                       chat.history = [...localT.history];
+                    } else if (Array.isArray(chat.history)) {
+                      localT.history = [...chat.history];
                     }
                   }
                 }
@@ -40404,15 +40436,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const heartBtn = document.getElementById("char-heart-btn");
           if (heartBtn) {
             heartBtn.style.display = chat.isGroup ? "none" : "inline-flex";
-          }
-          const isPeerGroupForHeader = Boolean(typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
-          if (!isPeerGroupForHeader && chat.activeLineMode === "solo") {
-            chat.activeLineMode = "main";
-            if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length >= (Array.isArray(chat.history) ? chat.history.length : 0)) {
-              chat.history = [...chat.mainLineHistory];
-            } else if (Array.isArray(chat.history)) {
-              chat.mainLineHistory = [...chat.history];
-            }
           }
           const soloLineBtn = document.getElementById("group-solo-line-btn");
           if (soloLineBtn) {
@@ -45400,13 +45423,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               let cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
 
               let requestUrl = isGemini
-                ? `${GEMINI_API_URL}/${model || 'gemini-1.5-flash'}:generateContent?key=${getRandomValue(apiKey)}`
+                ? `${GEMINI_API_URL}/${model || 'gemini-1.5-flash'}:streamGenerateContent?alt=sse&key=${getRandomValue(apiKey)}`
                 : (cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`);
 
-              const useStreamForMap = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
+              const useStreamForMap = true;
               let requestHeaders = isGemini
-                ? { "Content-Type": "application/json" }
-                : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, ...(useStreamForMap ? { Accept: "text/event-stream" } : {}) };
+                ? { "Content-Type": "application/json", Accept: "text/event-stream" }
+                : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, Accept: "text/event-stream" };
 
               const resolveAndCompressRefImg = async (rawSrc) => {
                 if (!rawSrc || typeof rawSrc !== "string") return "";
@@ -45515,11 +45538,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     stream: useStreamForMap
                   };
 
+              let streamedMapText = "";
               const fetchOptions = {
                 method: "POST",
                 headers: requestHeaders,
                 body: JSON.stringify(requestBody),
-                _noAutoRetry: true
+                _noAutoRetry: true,
+                onStreamChunk: (chunk) => {
+                  if (chunk && typeof chunk.content === "string" && chunk.content) {
+                    streamedMapText = chunk.content;
+                  }
+                }
               };
               if (abortSignal) {
                 fetchOptions.signal = abortSignal;
@@ -45527,7 +45556,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const resp = await fetch(requestUrl, fetchOptions);
 
               if (resp.ok) {
-                const rawAiText = await extractAiTextFromResponse(resp, isGemini);
+                const rawAiText = (await extractAiTextFromResponse(resp, isGemini)) || streamedMapText;
                 if (rawAiText) {
                   const salvaged = salvageMiniMapSvgCode(rawAiText);
                   if (salvaged) {
@@ -45536,12 +45565,31 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   }
                 }
               } else {
-                const errData = await resp.json().catch(() => null);
-                throw new Error(errData?.error?.message || `请求失败 (${resp.status})`);
+                if (streamedMapText) {
+                  const salvagedFromPartial = salvageMiniMapSvgCode(streamedMapText);
+                  if (salvagedFromPartial) {
+                    svgCode = salvagedFromPartial;
+                    generationSucceeded = true;
+                  }
+                }
+                if (!generationSucceeded) {
+                  const errData = await resp.json().catch(() => null);
+                  throw new Error(errData?.error?.message || `请求失败 (${resp.status})`);
+                }
               }
             } catch (err) {
-              console.error("AI 生成地图异常:", err);
-              generationError = err;
+              if (typeof streamedMapText === "string" && streamedMapText) {
+                const salvagedOnErr = salvageMiniMapSvgCode(streamedMapText);
+                if (salvagedOnErr) {
+                  svgCode = salvagedOnErr;
+                  generationSucceeded = true;
+                  generationError = null;
+                }
+              }
+              if (!generationSucceeded) {
+                console.error("AI 生成地图异常:", err);
+                generationError = err;
+              }
             }
           }
 
@@ -45650,13 +45698,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
 
           let requestUrl = isGemini
-            ? `${GEMINI_API_URL}/${model || 'gemini-1.5-flash'}:generateContent?key=${getRandomValue(apiKey)}`
+            ? `${GEMINI_API_URL}/${model || 'gemini-1.5-flash'}:streamGenerateContent?alt=sse&key=${getRandomValue(apiKey)}`
             : (cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`);
 
-          const useStreamForModMap = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
+          const useStreamForModMap = true;
           let requestHeaders = isGemini
-            ? { "Content-Type": "application/json" }
-            : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, ...(useStreamForModMap ? { Accept: "text/event-stream" } : {}) };
+            ? { "Content-Type": "application/json", Accept: "text/event-stream" }
+            : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, Accept: "text/event-stream" };
 
           let requestBody = isGemini
             ? {
@@ -45674,21 +45722,39 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 stream: useStreamForModMap
               };
 
-          const resp = await fetch(requestUrl, {
-            method: "POST",
-            headers: requestHeaders,
-            body: JSON.stringify(requestBody)
-          });
-
+          let streamedModMapText = "";
           let newSvgCode = "";
-          if (resp.ok) {
-            const rawAiText = await extractAiTextFromResponse(resp, isGemini);
-            if (rawAiText) {
-              newSvgCode = salvageMiniMapSvgCode(rawAiText);
+          try {
+            const resp = await fetch(requestUrl, {
+              method: "POST",
+              headers: requestHeaders,
+              body: JSON.stringify(requestBody),
+              onStreamChunk: (chunk) => {
+                if (chunk && typeof chunk.content === "string" && chunk.content) {
+                  streamedModMapText = chunk.content;
+                }
+              }
+            });
+
+            if (resp.ok) {
+              const rawAiText = (await extractAiTextFromResponse(resp, isGemini)) || streamedModMapText;
+              if (rawAiText) {
+                newSvgCode = salvageMiniMapSvgCode(rawAiText);
+              }
+            } else {
+              if (streamedModMapText) {
+                newSvgCode = salvageMiniMapSvgCode(streamedModMapText);
+              }
+              if (!newSvgCode) {
+                const errData = await resp.json().catch(() => null);
+                throw new Error(errData?.error?.message || `请求失败 (${resp.status})`);
+              }
             }
-          } else {
-            const errData = await resp.json().catch(() => null);
-            throw new Error(errData?.error?.message || `请求失败 (${resp.status})`);
+          } catch (modErr) {
+            if (streamedModMapText) {
+              newSvgCode = salvageMiniMapSvgCode(streamedModMapText);
+            }
+            if (!newSvgCode) throw modErr;
           }
 
           if (!newSvgCode) {
@@ -49054,6 +49120,13 @@ ${stickerContext || "无"}
             }
 
             console.log(`AI '${chat.name}' 的原始回复:`, aiResponseContent);
+            const latestMemChat =
+              (state.chats && (state.chats[chatId] || state.chats[String(chatId)] || state.chats[chat.id])) || null;
+            if (latestMemChat && latestMemChat !== chat) {
+              if (Array.isArray(latestMemChat.history) && latestMemChat.history.length >= (Array.isArray(chat.history) ? chat.history.length : 0)) {
+                chat = latestMemChat;
+              }
+            }
             chat.history = chat.history.filter((msg) => !msg.isTemporary);
 
             // 智能解析AI回复，确保心声与思维链数据不丢失
@@ -53352,10 +53425,11 @@ ${stickerContext || "无"}
                   chat.unreadCount = 0;
                 }
 
-                // 2. 只有在当前正在查看此聊天界面时，才执行追加到 DOM；处于后台时不等待逐条延迟，立即完成全部渲染与推送
-                if (isCurrentlyViewingThisChat && isVisibleToMeLocal) {
+                // 2. 只要当前活跃会话 ID 是此聊天（包含用户在聊天设置、调试台、世界书等子页面），都同步追加到 #chat-messages DOM，确保返回聊天时立即看到新消息
+                const isThisChatLoadedInDom = String(state.activeChatId) === String(chat.id);
+                if ((isCurrentlyViewingThisChat || isThisChatLoadedInDom) && isVisibleToMeLocal) {
                   appendMessage(aiMessage, chat);
-                  if (!isAppInBackground) {
+                  if (isCurrentlyViewingThisChat && !isAppInBackground) {
                     playNotificationSound();
                     if (typeof window.waitDelay === "function") {
                       await window.waitDelay(Math.random() * 600 + 300);
@@ -56272,6 +56346,12 @@ ${stickerContext || "无"}
                   chat.unreadCount = 0;
                 }
                 chat.history.push(aiMessage);
+                if (chat.isGroup && Array.isArray(chat.mainLineHistory) && chat.activeLineMode !== "solo") {
+                  chat.mainLineHistory = [...chat.history];
+                }
+                if (String(state.activeChatId) === String(chatId) && typeof appendMessage === "function") {
+                  appendMessage(aiMessage, chat);
+                }
                 await db.chats.put(chat);
                 showNotification(chatId, aiMessage.content);
                 renderChatList();
@@ -61539,6 +61619,12 @@ ${stickerContext || "无"}
                     timestamp: messageTimestamp++,
                   };
                   chat.history.push(aiMessage);
+                  if (chat.isGroup && Array.isArray(chat.mainLineHistory) && chat.activeLineMode !== "solo") {
+                    chat.mainLineHistory = [...chat.history];
+                  }
+                  if (String(state.activeChatId) === String(chat.id) && typeof appendMessage === "function") {
+                    appendMessage(aiMessage, chat);
+                  }
                   if (index === 0) {
                     firstMessageContent = `${msgData.name}: ${msgData.message}`;
                   }
@@ -103251,8 +103337,50 @@ ${stickerContext || "无"}
 
           let _isPurgingOpfs = false;
           async function purgeBrowserOpfsMediaCacheIfExternalActive() {
-            // 保留 OPFS 内的媒体副本作为零延迟本地缓存，不再清理删除，防止外部权限重置或 Termux 未就绪时图片无法读取
-            return;
+            if (_isPurgingOpfs || !cachedTermuxOk) return;
+            if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") return;
+            _isPurgingOpfs = true;
+            try {
+              const cfg = loadVaultConfig();
+              const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+              const root = await navigator.storage.getDirectory();
+              let vaultDir = null;
+              try {
+                vaultDir = await root.getDirectoryHandle("EPhoneVault", { create: false });
+              } catch (_) {}
+              if (!vaultDir) return;
+              const dirsToClean = [vaultDir];
+              try {
+                const mDir = await vaultDir.getDirectoryHandle("media", { create: false });
+                if (mDir) dirsToClean.unshift(mDir);
+              } catch (_) {}
+              for (const dHandle of dirsToClean) {
+                if (!dHandle || typeof dHandle.entries !== "function") continue;
+                const entries = [];
+                for await (const [name, handle] of dHandle.entries()) {
+                  if (handle && handle.kind === "file") entries.push({ name, handle });
+                }
+                for (const item of entries) {
+                  if (item.name === ".nomedia") {
+                    try { await dHandle.removeEntry(item.name); } catch (_) {}
+                    continue;
+                  }
+                  try {
+                    const f = await item.handle.getFile();
+                    const ab = await f.arrayBuffer();
+                    const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
+                    const stealth = toStealthVaultFileName(item.name);
+                    const ok = await uploadToTermuxWithRetry(baseUrl, stealth, wrapped);
+                    if (ok) {
+                      await dHandle.removeEntry(item.name);
+                    }
+                  } catch (_) {}
+                }
+              }
+            } catch (_) {
+            } finally {
+              _isPurgingOpfs = false;
+            }
           }
 
           async function getEffectiveDirectoryHandle() {
@@ -103485,7 +103613,7 @@ ${stickerContext || "无"}
 
           async function checkTermuxEndpointReachable(baseUrlInput, force = false) {
             const now = Date.now();
-            const cacheWindow = cachedTermuxOk ? 20000 : 2000;
+            const cacheWindow = cachedTermuxOk ? 15000 : 1200;
             if (!force && lastTermuxCheckTime > 0 && now - lastTermuxCheckTime < cacheWindow) {
               return cachedTermuxOk;
             }
@@ -103501,40 +103629,52 @@ ${stickerContext || "无"}
             const baseUrl = (rawUrl.trim() || "http://127.0.0.1:8765").replace(/\/+$/, "");
             inflightTermuxPingPromise = (async () => {
               const wasOk = cachedTermuxOk;
-              try {
-                const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 2500);
-                const res = await fetch(baseUrl + "/ping", {
-                  method: "GET",
-                  cache: "no-store",
-                  signal: controller.signal,
-                });
-                clearTimeout(timer);
-                lastTermuxCheckTime = Date.now();
-                if (res && res.ok) {
-                  const txt = (await res.text()).trim();
-                  cachedTermuxOk = txt === "ok";
-                } else {
-                  cachedTermuxOk = false;
-                }
-                if (!wasOk && cachedTermuxOk) {
-                  if (typeof refreshAllVaultImagesAfterTermuxConnected === "function") {
-                    setTimeout(refreshAllVaultImagesAfterTermuxConnected, 20);
-                  } else if (typeof hydrateDomVaultImages === "function") {
-                    setTimeout(hydrateDomVaultImages, 20);
-                  }
-                  setTimeout(() => {
-                    purgeBrowserOpfsMediaCacheIfExternalActive().catch(() => {});
-                  }, 500);
-                }
-                return cachedTermuxOk;
-              } catch (_) {
-                lastTermuxCheckTime = Date.now();
-                cachedTermuxOk = false;
-                return false;
-              } finally {
-                inflightTermuxPingPromise = null;
+              const pingUrls = [baseUrl + "/ping"];
+              if (baseUrl.includes("127.0.0.1")) {
+                pingUrls.push(baseUrl.replace("127.0.0.1", "localhost") + "/ping");
+              } else if (baseUrl.includes("localhost")) {
+                pingUrls.push(baseUrl.replace("localhost", "127.0.0.1") + "/ping");
               }
+              let pingSuccess = false;
+              for (let attempt = 0; attempt < 2 && !pingSuccess; attempt++) {
+                if (attempt > 0) {
+                  await new Promise((r) => setTimeout(r, 180));
+                }
+                for (const pUrl of pingUrls) {
+                  try {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 1600);
+                    const res = await fetch(pUrl, {
+                      method: "GET",
+                      cache: "no-store",
+                      signal: controller.signal,
+                    });
+                    clearTimeout(timer);
+                    if (res && res.ok) {
+                      const txt = (await res.text()).trim();
+                      if (txt === "ok") {
+                        pingSuccess = true;
+                        break;
+                      }
+                    }
+                  } catch (_) {}
+                }
+              }
+              lastTermuxCheckTime = Date.now();
+              cachedTermuxOk = pingSuccess;
+              if (!wasOk && cachedTermuxOk) {
+                updateVaultStatusBadge("已连接", true);
+                if (typeof refreshAllVaultImagesAfterTermuxConnected === "function") {
+                  setTimeout(refreshAllVaultImagesAfterTermuxConnected, 10);
+                } else if (typeof hydrateDomVaultImages === "function") {
+                  setTimeout(hydrateDomVaultImages, 10);
+                }
+                setTimeout(() => {
+                  purgeBrowserOpfsMediaCacheIfExternalActive().catch(() => {});
+                }, 400);
+              }
+              inflightTermuxPingPromise = null;
+              return cachedTermuxOk;
             })();
             return inflightTermuxPingPromise;
           }
@@ -103888,16 +104028,22 @@ ${stickerContext || "无"}
           async function runVaultHideGalleryImages(silent = false, explicitHandle = null) {
             let totalConverted = 0;
             let opfsMediaDir = null;
-            try {
-              const opfsRoot = await getAutoOpfsDirectoryHandle();
-              if (opfsRoot) {
-                await writeNoMediaFileInDir(opfsRoot);
-                opfsMediaDir = await opfsRoot.getDirectoryHandle("media", { create: true });
-                await writeNoMediaFileInDir(opfsMediaDir);
-                totalConverted += await migrateExposedImagesInDir(opfsRoot, opfsMediaDir);
-                totalConverted += await migrateExposedImagesInDir(opfsMediaDir, null);
-              }
-            } catch (_) {}
+            if (!cachedTermuxOk) {
+              try {
+                const opfsRoot = await getAutoOpfsDirectoryHandle();
+                if (opfsRoot) {
+                  await writeNoMediaFileInDir(opfsRoot);
+                  const omDir = await opfsRoot.getDirectoryHandle("media", { create: false }).catch(() => null);
+                  if (omDir) {
+                    await writeNoMediaFileInDir(omDir);
+                    totalConverted += await migrateExposedImagesInDir(opfsRoot, omDir);
+                    totalConverted += await migrateExposedImagesInDir(omDir, null);
+                  }
+                }
+              } catch (_) {}
+            } else {
+              purgeBrowserOpfsMediaCacheIfExternalActive().catch(() => {});
+            }
 
             if (explicitHandle) {
               try {
@@ -103986,6 +104132,24 @@ ${stickerContext || "无"}
             activeTermuxUploads = Math.max(0, activeTermuxUploads - 1);
             if (termuxUploadWaitQueue.length > 0) {
               const next = termuxUploadWaitQueue.shift();
+              if (next) next();
+            }
+          }
+
+          let activeTermuxFetches = 0;
+          const termuxFetchWaitQueue = [];
+          async function acquireTermuxFetchSlot() {
+            if (activeTermuxFetches < 4) {
+              activeTermuxFetches++;
+              return;
+            }
+            await new Promise((resolve) => termuxFetchWaitQueue.push(resolve));
+            activeTermuxFetches++;
+          }
+          function releaseTermuxFetchSlot() {
+            activeTermuxFetches = Math.max(0, activeTermuxFetches - 1);
+            if (termuxFetchWaitQueue.length > 0) {
+              const next = termuxFetchWaitQueue.shift();
               if (next) next();
             }
           }
@@ -104093,8 +104257,8 @@ ${stickerContext || "无"}
                 }
               }
 
-              // 4. 仅在 Termux 与外部文件夹均未开启时，才回退写入浏览器 OPFS
-              if (!termuxSaved && !externalFolderSaved) {
+              // 4. 严禁在 server (Termux) 模式下往浏览器 OPFS 塞副本！仅在用户明确未选择 server 模式且无任何外部目录时才回退
+              if (!termuxSaved && !externalFolderSaved && mode !== "server") {
                 try {
                   const opfsRoot = await getAutoOpfsDirectoryHandle();
                   if (opfsRoot) {
@@ -104108,7 +104272,7 @@ ${stickerContext || "无"}
                 } catch (_) {}
               }
 
-              if (!storedAny) throw new Error("写入本地目录失败");
+              if (!storedAny) throw new Error("写入本地目录失败，请确认 Termux 服务已开启");
               writtenVaultFiles.add(fileName);
               const blob = new Blob([bytes], { type: parts.mime });
               setVaultBlobCache(fileName, URL.createObjectURL(blob));
@@ -104151,7 +104315,7 @@ ${stickerContext || "无"}
               return inflightVaultResolves.get(fileName);
             }
             const lastFail = failedVaultResolveTimestamps.get(fileName) || 0;
-            if (lastFail > 0 && Date.now() - lastFail < 1800) {
+            if (lastFail > 0 && Date.now() - lastFail < 900) {
               return vaultRef;
             }
             const task = (async () => {
@@ -104164,31 +104328,39 @@ ${stickerContext || "无"}
                 if (mode === "server" || mode === "folder") {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
 
-                  // 1. 优先从 Termux 本地服务直接读取，绝不复制写入浏览器 OPFS
+                  // 1. 优先从 Termux 本地服务按并发队列稳健读取，防止并发过高打满 Python 监听队列，且绝不复制写入浏览器 OPFS
                   const termuxReady = cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl));
                   if (termuxReady) {
-                    const urlPrefixes = [baseUrl + "/media/", baseUrl + "/"];
-                    for (const prefix of urlPrefixes) {
-                      for (const candidate of candidates) {
-                        try {
-                          const tRes = await fetch(prefix + encodeURIComponent(candidate), {
-                            cache: "no-store",
-                          });
-                          if (tRes && tRes.ok) {
-                            const ab = await tRes.arrayBuffer();
-                            const rawBytes = new Uint8Array(ab);
-                            if (!isHtmlFallbackResponse(rawBytes, tRes)) {
-                              const cleanBytes = unwrapVaultBinary(rawBytes);
-                              if (cleanBytes && cleanBytes.byteLength > 0) {
-                                const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
-                                setVaultBlobCache(fileName, objUrl);
-                                failedVaultResolveTimestamps.delete(fileName);
-                                return objUrl;
+                    await acquireTermuxFetchSlot();
+                    try {
+                      const urlPrefixes = [baseUrl + "/media/", baseUrl + "/"];
+                      for (const prefix of urlPrefixes) {
+                        for (const candidate of candidates) {
+                          try {
+                            const controller = new AbortController();
+                            const tTimer = setTimeout(() => controller.abort(), 3500);
+                            const tRes = await fetch(prefix + encodeURIComponent(candidate), {
+                              signal: controller.signal,
+                            });
+                            clearTimeout(tTimer);
+                            if (tRes && tRes.ok) {
+                              const ab = await tRes.arrayBuffer();
+                              const rawBytes = new Uint8Array(ab);
+                              if (!isHtmlFallbackResponse(rawBytes, tRes)) {
+                                const cleanBytes = unwrapVaultBinary(rawBytes);
+                                if (cleanBytes && cleanBytes.byteLength > 0) {
+                                  const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                                  setVaultBlobCache(fileName, objUrl);
+                                  failedVaultResolveTimestamps.delete(fileName);
+                                  return objUrl;
+                                }
                               }
                             }
-                          }
-                        } catch (_) {}
+                          } catch (_) {}
+                        }
                       }
+                    } finally {
+                      releaseTermuxFetchSlot();
                     }
                   }
 
@@ -104991,14 +105163,12 @@ ${stickerContext || "无"}
 
           window.copyVaultStartupCmd = async function (platform) {
             const pyScript = [
-              "import os,sys,socket,http.server,socketserver",
-              "s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)",
-              "try:",
-              " s.connect(('127.0.0.1',8765)); s.close(); sys.exit(0)",
-              "except Exception:",
-              " pass",
-              "finally:",
-              " try: s.close()",
+              "import os,sys,time,urllib.request,http.server,socketserver",
+              "force='--force' in sys.argv",
+              "if not force:",
+              " try:",
+              "  r=urllib.request.urlopen('http://127.0.0.1:8765/ping',timeout=0.6)",
+              "  if r.read().strip()==b'ok': sys.exit(0)",
               " except Exception: pass",
               "cands=['/sdcard/Download/EPhoneVault','/storage/emulated/0/Download/EPhoneVault',os.path.expanduser('~/storage/downloads/EPhoneVault'),os.path.expanduser('~/Documents/EPhoneVault'),os.path.expanduser('~/EPhoneVault')]",
               "root=next((p for p in cands if os.path.exists(os.path.dirname(p))),os.path.expanduser('~/EPhoneVault'))",
@@ -105010,56 +105180,77 @@ ${stickerContext || "无"}
               "open(os.path.join(root,'.nomedia'),'a').close()",
               "open(os.path.join(mdir,'.nomedia'),'a').close()",
               "class H(http.server.BaseHTTPRequestHandler):",
+              " protocol_version='HTTP/1.1'",
               " def log_message(s,*a): pass",
-              " def _c(s):",
+              " def _c(s,n=0):",
               "  s.send_header('Access-Control-Allow-Origin','*')",
               "  s.send_header('Access-Control-Allow-Methods','GET,PUT,POST,OPTIONS')",
               "  s.send_header('Access-Control-Allow-Headers','*')",
-              " def do_OPTIONS(s): s.send_response(200); s._c(); s.end_headers()",
+              "  s.send_header('Cache-Control','public, max-age=31536000, immutable')",
+              "  s.send_header('Content-Length',str(n))",
+              " def do_OPTIONS(s): s.send_response(200); s._c(0); s.end_headers()",
               " def do_GET(s):",
-              "  if s.path.startswith('/ping'): s.send_response(200); s._c(); s.end_headers(); s.wfile.write(b'ok'); return",
-              "  rel=s.path.split('?')[0].lstrip('/')",
+              "  if s.path.startswith('/ping'):",
+              "   s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok'); return",
+              "  rel=urllib.request.unquote(s.path.split('?')[0].lstrip('/'))",
+              "  fn=os.path.basename(rel)",
+              "  stem=os.path.splitext(fn)[0]",
+              "  names=[rel,os.path.join('media',fn),fn,os.path.join('media',stem+'.epdat'),stem+'.epdat']",
               "  for base in [root]+([d for d in cands if os.path.isdir(d) and d!=root]):",
-              "   p=os.path.join(base,rel)",
-              "   if os.path.isfile(p):",
-              "    s.send_response(200); s._c(); s.end_headers()",
-              "    with open(p,'rb') as f: s.wfile.write(f.read())",
-              "    return",
-              "  s.send_response(404); s._c(); s.end_headers()",
+              "   for nm in names:",
+              "    p=os.path.join(base,nm)",
+              "    if os.path.isfile(p):",
+              "     with open(p,'rb') as f: data=f.read()",
+              "     s.send_response(200); s._c(len(data)); s.end_headers(); s.wfile.write(data); return",
+              "  s.send_response(404); s._c(0); s.end_headers()",
               " def do_PUT(s):",
               "  n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n)",
-              "  rel=s.path.split('?')[0].lstrip('/')",
+              "  rel=urllib.request.unquote(s.path.split('?')[0].lstrip('/'))",
               "  p=os.path.join(root,rel); os.makedirs(os.path.dirname(p),exist_ok=True)",
               "  with open(p,'wb') as f: f.write(b)",
-              "  s.send_response(200); s._c(); s.end_headers(); s.wfile.write(b'ok')",
+              "  s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok')",
               "class S(socketserver.ThreadingMixIn,http.server.HTTPServer):",
               " daemon_threads=True",
               " allow_reuse_address=True",
-              "print('Vault Ready on 127.0.0.1:8765 ->',root)",
-              "S(('127.0.0.1',8765),H).serve_forever()",
+              " request_queue_size=128",
+              "srv=None",
+              "for _ in range(20):",
+              " try:",
+              "  srv=S(('127.0.0.1',8765),H); break",
+              " except Exception: time.sleep(0.2)",
+              "if srv:",
+              " print('Vault Ready on 127.0.0.1:8765 ->',root)",
+              " srv.serve_forever()",
             ].join("\n");
             const b64Script = btoa(pyScript);
             let cmd = "";
             if (platform === "ios") {
-              cmd = `python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w').write(base64.b64decode('${b64Script}').decode())" && python3 ~/.ephone_vault.py`;
+              cmd = `python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w').write(base64.b64decode('${b64Script}').decode())" && python3 ~/.ephone_vault.py --force`;
             } else {
               const bashPanel = [
                 "# === EPhoneVault Auto Panel ===",
                 "ephone_vault_start() {",
-                "  python3 ~/.ephone_vault.py >/dev/null 2>&1 &",
+                "  termux-wake-lock 2>/dev/null || true",
+                "  if [ \"$1\" = \"restart\" ]; then",
+                "    pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true",
+                "    sleep 0.3",
+                "    nohup python3 ~/.ephone_vault.py --force >/dev/null 2>&1 &",
+                "  else",
+                "    nohup python3 ~/.ephone_vault.py >/dev/null 2>&1 &",
+                "  fi",
                 "  sleep 0.3",
                 "  echo '----------------------------------------'",
                 "  echo '  [EPhone 本地图片服务面板]'",
-                "  echo '  状态: 已在后台启动 (127.0.0.1:8765)'",
+                "  echo '  状态: 已在后台高速运行 (127.0.0.1:8765)'",
                 "  echo '  输入 1 回车: 立即重新启动图片服务'",
                 "  echo '----------------------------------------'",
                 "}",
-                "alias 1='pkill -f .ephone_vault.py 2>/dev/null; ephone_vault_start'",
+                "alias 1='ephone_vault_start restart'",
                 "ephone_vault_start",
                 "# === End EPhoneVault ===",
               ].join("\n");
               const b64Panel = btoa(unescape(encodeURIComponent(bashPanel)));
-              cmd = `pkg install -y python >/dev/null 2>&1; python3 -c "import base64,os;p=os.path.expanduser('~/.ephone_vault.py');open(p,'w').write(base64.b64decode('${b64Script}').decode());rc=os.path.expanduser('~/.bashrc');txt=open(rc).read() if os.path.exists(rc) else '';s='# === EPhoneVault Auto Panel ===';e='# === End EPhoneVault ===';nt= base64.b64decode('${b64Panel}').decode('utf-8');txt=(txt[:txt.find(s)]+txt[txt.find(e)+len(e):]).strip() if (s in txt and e in txt) else txt.strip();open(rc,'w').write((txt+'\\n\\n'+nt+'\\n').lstrip())" && source ~/.bashrc`;
+              cmd = `pkg install -y python >/dev/null 2>&1; python3 -c "import base64,os;p=os.path.expanduser('~/.ephone_vault.py');open(p,'w').write(base64.b64decode('${b64Script}').decode());rc=os.path.expanduser('~/.bashrc');txt=open(rc).read() if os.path.exists(rc) else '';s='# === EPhoneVault Auto Panel ===';e='# === End EPhoneVault ===';nt= base64.b64decode('${b64Panel}').decode('utf-8');txt=(txt[:txt.find(s)]+txt[txt.find(e)+len(e):]).strip() if (s in txt and e in txt) else txt.strip();open(rc,'w').write((txt+'\\n\\n'+nt+'\\n').lstrip())" && ephone_vault_start restart`;
             }
             try {
               if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -105584,6 +105775,22 @@ ${stickerContext || "无"}
 
             const handlePageWakeReconnect = async () => {
               if (document.visibilityState && document.visibilityState !== "visible") return;
+              if (state && state.activeChatId !== null && state.activeChatId !== undefined && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
+                const activeChat = state.chats && (state.chats[state.activeChatId] || state.chats[String(state.activeChatId)]);
+                const msgsContainer = document.getElementById("chat-messages");
+                if (activeChat && Array.isArray(activeChat.history) && msgsContainer) {
+                  const visibleTail = activeChat.history
+                    .filter((m) => m && !m.isTemporary && (typeof isMessageVisibleToCurrentUser !== "function" || isMessageVisibleToCurrentUser(m, activeChat)))
+                    .slice(-5);
+                  const hasMissingDomMsg = visibleTail.some(
+                    (m) => m.timestamp && !msgsContainer.querySelector(`[data-timestamp="${m.timestamp}"]`)
+                  );
+                  if (hasMissingDomMsg && typeof renderChatInterface === "function") {
+                    activeChat.unreadCount = 0;
+                    renderChatInterface(activeChat.id);
+                  }
+                }
+              }
               const curCfg = loadVaultConfig();
               const baseUrl = (curCfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
               const ok = await checkTermuxEndpointReachable(baseUrl, true);
@@ -105596,6 +105803,20 @@ ${stickerContext || "无"}
             };
             document.addEventListener("visibilitychange", handlePageWakeReconnect);
             window.addEventListener("focus", handlePageWakeReconnect);
+
+            // 自动侦测重连定时器：无论用户用悬浮小窗还是后台启动 Termux，只要尚未连接或页面仍有未加载出的 vault 图片，自动秒级探测并刷新图片
+            setInterval(async () => {
+              if (document.visibilityState && document.visibilityState !== "visible") return;
+              const hasUnresolvedDomImg = Boolean(document.querySelector('img[src^="vault://"]'));
+              if (!cachedTermuxOk || hasUnresolvedDomImg) {
+                const curCfg = loadVaultConfig();
+                const baseUrl = (curCfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                const ok = await checkTermuxEndpointReachable(baseUrl, !cachedTermuxOk);
+                if (ok && hasUnresolvedDomImg) {
+                  refreshAllVaultImagesAfterTermuxConnected();
+                }
+              }
+            }, 2200);
 
             hydrateDomVaultImages();
             testVaultConnection(true);
