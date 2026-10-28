@@ -2423,7 +2423,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -34441,13 +34441,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             if (isSystemNotifyEnabled) {
               const uniqueTag = "ai_msg_" + chatId;
-              const isValidIcon =
-                typeof avatarUrl === "string" &&
-                avatarUrl.trim() !== "" &&
-                !avatarUrl.startsWith("data:") &&
-                !avatarUrl.startsWith("blob:") &&
-                !avatarUrl.startsWith("vault:");
-              const safeIcon = isValidIcon ? avatarUrl : "./icon-192.png";
+              const safeIcon = "./icon-192.png";
               const safeBody = String(messageContent || "收到一条新消息");
               const targetChatIdStr = String(chat.id);
 
@@ -36736,14 +36730,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 } else if (Notification.permission === "granted") {
                   // 已有权限，直接开启成功
                   new Notification("EPhone", {
-                    body: "系统通知已开启！别忘了点击底部的【保存】按钮哦。",
+                    body: "系统通知已开启！",
                   });
                 } else if (Notification.permission !== "denied") {
                   // 请求权限
                   const permission = await Notification.requestPermission();
                   if (permission === "granted") {
                     new Notification("EPhone", {
-                      body: "权限获取成功！请点击【保存】。",
+                      body: "权限获取成功！系统通知已开启。",
                     });
                   } else {
                     e.target.checked = false;
@@ -36756,8 +36750,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     "权限已被拒绝。请去手机/浏览器设置中手动开启通知权限。",
                   );
                 }
-              } else {
               }
+              state.globalSettings.enableSystemNotifications = Boolean(e.target.checked);
+              try {
+                await db.globalSettings.put(state.globalSettings);
+              } catch (_) {}
             });
           }
           const checkPermBtn = document.getElementById(
@@ -53832,17 +53829,6 @@ ${stickerContext || "无"}
                   state.chats[String(chat.id)] = chat;
                   state.chats[chatId] = chat;
                 }
-                if (typeof db !== "undefined" && db.chats) {
-                  try {
-                    await db.chats.put(chat);
-                  } catch (syncErr) {
-                    console.warn("即时同步AI新消息异常:", syncErr);
-                  }
-                }
-                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
-                  window.PeerManager.broadcastGroupMessage(chat, aiMessage, false);
-                }
-
                 const isVisibleToMeLocal = typeof isMessageVisibleToCurrentUser === "function" ? isMessageVisibleToCurrentUser(aiMessage, chat) : true;
                 const isCurrentlyViewingThisChat =
                   document.getElementById("chat-interface-screen")?.classList.contains("active") &&
@@ -53855,7 +53841,6 @@ ${stickerContext || "无"}
                   aiMessage.type === "naiimag" && !aiMessage.imageUrl;
                 if (isAsyncGeneratingNaiPlaceholder) {
                   aiMessage._suppressTurnNotify = notificationShown;
-                  notificationShown = true;
                 }
 
                 if (!notificationShown && (!isCurrentlyViewingThisChat || isAppInBackground) && isVisibleToMeLocal && aiMessage.type !== "system_status" && !isAsyncGeneratingNaiPlaceholder) {
@@ -53926,9 +53911,19 @@ ${stickerContext || "无"}
                   );
                 }
 
-                if (!isCurrentlyViewingThisChat) {
+                if (typeof db !== "undefined" && db.chats) {
+                  try {
+                    await db.chats.put(chat);
+                  } catch (syncErr) {
+                    console.warn("即时同步AI新消息异常:", syncErr);
+                  }
+                }
+                if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
+                  window.PeerManager.broadcastGroupMessage(chat, aiMessage, false);
+                }
+
+                if (!isCurrentlyViewingThisChat || isAppInBackground) {
                   if (isVisibleToMeLocal) {
-                    // 如果用户不在当前聊天界面，就把这个聊天的未读数 +1
                     chat.unreadCount = (chat.unreadCount || 0) + 1;
                     if (typeof renderChatList === "function") renderChatList();
                     if (typeof updateGlobalChatUnreadBadge === "function") updateGlobalChatUnreadBadge();
@@ -90670,6 +90665,13 @@ ${stickerContext || "无"}
               document
                 .getElementById("manage-bubble-presets-btn")
                 .addEventListener("click", openBubblePresetManager);
+              if (window.PeerManager) {
+                if (chat.roleType === "peer" && !chat.isGroup && typeof window.PeerManager.applyPeerChatSettingsUI === "function") {
+                  window.PeerManager.applyPeerChatSettingsUI(chat);
+                } else if (typeof window.PeerManager.resetPeerChatSettingsUI === "function") {
+                  window.PeerManager.resetPeerChatSettingsUI(chat);
+                }
+              }
               document
                 .getElementById("chat-settings-modal")
                 .classList.add("visible");
@@ -91731,7 +91733,8 @@ ${stickerContext || "无"}
               const newName = document
                 .getElementById("chat-name-input")
                 .value.trim();
-              if (!newName) return alert("备注名/群名不能为空！");
+              const isSinglePeerChat = Boolean(chat.roleType === "peer" && !chat.isGroup);
+              if (!newName && !isSinglePeerChat) return alert("备注名/群名不能为空！");
               if (chat.isGroup && typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && chat.activeLineMode === "solo") {
                 const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
                 if (activeThread) {
@@ -91754,6 +91757,8 @@ ${stickerContext || "无"}
                 if (chat.mainGroupName) {
                   chat.name = chat.mainGroupName;
                 }
+              } else if (isSinglePeerChat) {
+                chat.name = chat.name || newName || "密友";
               } else {
                 chat.name = newName;
                 if (chat.isGroup) {
@@ -91766,6 +91771,9 @@ ${stickerContext || "无"}
                   .getElementById("chat-remark-input")
                   .value.trim();
                 chat.settings.remarkName = newRemark;
+                if (isSinglePeerChat) {
+                  chat.settings.hasCustomRemark = Boolean(newRemark && newRemark !== chat.name);
+                }
               }
               // --- 新增代码结束 ---
 
@@ -91865,9 +91873,15 @@ ${stickerContext || "无"}
                 .getElementById("custom-css-input")
                 .value.trim();
 
-              chat.settings.myName = document
-                .getElementById("my-name-input")
-                .value.trim();
+              if (chat.roleType === "peer" && !chat.isGroup) {
+                const peerMyNickEl = document.getElementById("my-group-nickname-input");
+                const peerMyNickVal = peerMyNickEl ? peerMyNickEl.value.trim() : "";
+                chat.settings.myName = peerMyNickVal || document.getElementById("my-name-input").value.trim() || chat.settings.myName || "";
+              } else {
+                chat.settings.myName = document
+                  .getElementById("my-name-input")
+                  .value.trim();
+              }
               chat.settings.myAge = getAgeSelectValue("my-age-input");
               chat.settings.myPersona =
                 document.getElementById("my-persona").value;
@@ -92248,6 +92262,14 @@ ${stickerContext || "无"}
               renderChatList();
               if (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
                 window.PeerManager.syncGroupSettingsToPeers(chat);
+              }
+              if (chat.roleType === "peer" && !chat.isGroup && window.PeerManager) {
+                if (typeof window.PeerManager.saveFriendToBackup === "function") {
+                  window.PeerManager.saveFriendToBackup(chat);
+                }
+                if (typeof window.PeerManager.syncSinglePeerChatProfile === "function") {
+                  window.PeerManager.syncSinglePeerChatProfile(chat);
+                }
               }
             });
 

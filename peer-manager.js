@@ -292,13 +292,15 @@
           );
         const curName = !isGenericName(chat.name) ? chat.name : (!isGenericName(prev.name) ? prev.name : (chat.name || prev.name || "密友"));
         const rawRemark = chat.settings && chat.settings.remarkName;
-        const curRemark = !isGenericName(rawRemark) ? rawRemark : (!isGenericName(prev.remarkName) ? prev.remarkName : curName);
+        const hasCustomRemark = Boolean(chat.settings && chat.settings.hasCustomRemark && rawRemark && !isGenericName(rawRemark) && rawRemark.trim() !== curName);
+        const curRemark = hasCustomRemark ? rawRemark.trim() : "";
         const rawAva = chat.settings && chat.settings.aiAvatar;
         const curAva = isRealAva(rawAva) ? rawAva : (isRealAva(prev.avatar) ? prev.avatar : (rawAva || prev.avatar || ""));
         map[chat.peerCode] = {
           peerCode: chat.peerCode,
           name: curName,
           remarkName: curRemark,
+          hasCustomRemark: hasCustomRemark,
           avatar: curAva,
           avatarFrame: (chat.settings && chat.settings.aiAvatarFrame) || prev.avatarFrame || "",
           groupId: chat.groupId || prev.groupId || null
@@ -611,32 +613,12 @@
         myAvatarFrame = profileFrameEl.getAttribute("src");
       }
 
-      if (this.isGenericPeerName(name) && window.state && window.state.chats) {
-        for (const c of Object.values(window.state.chats)) {
-          if (!c || !c.settings) continue;
-          const cand = c.settings.myNickname || c.settings.myName;
-          if (cand && !this.isGenericPeerName(cand)) {
-            name = cand.trim();
-            break;
-          }
-        }
-      }
-      if (this.isPlaceholderAvatar(avatar) && window.state && window.state.chats) {
-        for (const c of Object.values(window.state.chats)) {
-          if (!c || !c.settings) continue;
-          if (c.settings.myAvatar && !this.isPlaceholderAvatar(c.settings.myAvatar)) {
-            avatar = c.settings.myAvatar;
-            break;
-          }
-        }
-      }
-
       return { name, avatar, myAvatarFrame };
     },
 
     resolveBestMyName: function (chat) {
       if (chat && chat.settings) {
-        if (chat.settings.myNickname && !this.isGenericPeerName(chat.settings.myNickname)) {
+        if (chat.isGroup && chat.settings.myNickname && !this.isGenericPeerName(chat.settings.myNickname)) {
           return chat.settings.myNickname.trim();
         }
         if (chat.settings.myName && !this.isGenericPeerName(chat.settings.myName)) {
@@ -647,7 +629,7 @@
       if (mp.name && !this.isGenericPeerName(mp.name)) {
         return mp.name;
       }
-      return (chat && chat.settings && (chat.settings.myNickname || chat.settings.myName)) || mp.name || "我";
+      return (chat && chat.settings && (chat.isGroup ? (chat.settings.myNickname || chat.settings.myName) : chat.settings.myName)) || mp.name || "我";
     },
 
     resolveBestMyAvatar: function (chat) {
@@ -686,12 +668,10 @@
         !this.isGenericPeerName(incomingName) ? incomingName : "",
         existingMember && !this.isGenericPeerName(existingMember.groupNickname) ? existingMember.groupNickname : "",
         existingMember && !this.isGenericPeerName(existingMember.originalName) ? existingMember.originalName : "",
-        pChat && pChat.settings && !this.isGenericPeerName(pChat.settings.remarkName) ? pChat.settings.remarkName : "",
         pChat && !this.isGenericPeerName(pChat.name) ? pChat.name : "",
-        backupInfo && !this.isGenericPeerName(backupInfo.remarkName) ? backupInfo.remarkName : "",
         backupInfo && !this.isGenericPeerName(backupInfo.name) ? backupInfo.name : "",
-        outInfo && !this.isGenericPeerName(outInfo.remarkName) ? outInfo.remarkName : "",
-        inInfo && !this.isGenericPeerName(inInfo.fromName) ? inInfo.fromName : ""
+        inInfo && !this.isGenericPeerName(inInfo.fromName) ? inInfo.fromName : "",
+        outInfo && !this.isGenericPeerName(outInfo.remarkName) ? outInfo.remarkName : ""
       ];
       for (const cand of nameCandidates) {
         if (cand && typeof cand === "string" && cand.trim()) {
@@ -700,7 +680,7 @@
         }
       }
       if (!bestName) {
-        bestName = (pChat && (pChat.settings?.remarkName || pChat.name)) || (backupInfo && (backupInfo.remarkName || backupInfo.name)) || "密友";
+        bestName = (pChat && pChat.name) || (backupInfo && backupInfo.name) || "密友";
         if (bestName === "我") bestName = "密友";
       }
 
@@ -721,34 +701,11 @@
       }
       if (!bestAvatar) {
         bestAvatar =
-          (pChat && pChat.settings && pChat.settings.aiAvatar) ||
           (existingMember && existingMember.avatar) ||
+          (pChat && pChat.settings && pChat.settings.aiAvatar) ||
           (backupInfo && backupInfo.avatar) ||
           incomingAvatar ||
           defaultAva;
-      }
-
-      if (pChat) {
-        let pChatChanged = false;
-        if (!pChat.settings) pChat.settings = {};
-        if (!this.isPlaceholderAvatar(bestAvatar) && this.isPlaceholderAvatar(pChat.settings.aiAvatar)) {
-          pChat.settings.aiAvatar = bestAvatar;
-          pChatChanged = true;
-        }
-        if (!this.isGenericPeerName(bestName) && this.isGenericPeerName(pChat.name)) {
-          pChat.name = bestName;
-          pChatChanged = true;
-        }
-        if (!this.isGenericPeerName(bestName) && this.isGenericPeerName(pChat.settings.remarkName)) {
-          pChat.settings.remarkName = bestName;
-          pChatChanged = true;
-        }
-        if (pChatChanged) {
-          this.saveFriendToBackup(pChat);
-          if (window.db && window.db.chats) {
-            window.db.chats.put(pChat).catch(() => {});
-          }
-        }
       }
 
       return { name: bestName, avatar: bestAvatar };
@@ -2296,15 +2253,7 @@
         }
         if (Notification.permission !== "granted") return false;
 
-        const isValidHttpOrRelativeIcon =
-          typeof avatarUrl === "string" &&
-          avatarUrl.trim() !== "" &&
-          !avatarUrl.startsWith("data:") &&
-          !avatarUrl.startsWith("blob:") &&
-          !avatarUrl.startsWith("vault:");
-        const safeIcon = isValidHttpOrRelativeIcon
-          ? avatarUrl
-          : "./icon-192.png";
+        const safeIcon = "./icon-192.png";
         const tag = (meta && meta.tag) || "peer_msg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
         const notifData = {
           chatId: (meta && meta.chatId) || "",
@@ -2571,6 +2520,12 @@
                 only.inMessageList = true;
                 itemChanged = true;
               }
+              if (only.settings && only.settings.remarkName && (only.settings.remarkName === only.name || !only.settings.hasCustomRemark)) {
+                if (only.settings.remarkName === only.name) {
+                  only.settings.remarkName = "";
+                  itemChanged = true;
+                }
+              }
               const existingMem = window.state && window.state.chats && (window.state.chats[only.id] || window.state.chats[String(only.id)]);
               if (existingMem && Array.isArray(existingMem.history) && existingMem.history.length > 0) {
                 const merged = mergeChatHistories(existingMem.history, only.history);
@@ -2648,7 +2603,7 @@
               info.name || "密友",
               info.avatar || "",
               info.groupId || null,
-              info.remarkName || info.name || "密友",
+              info.hasCustomRemark ? (info.remarkName || "") : "",
               info.avatarFrame || ""
             );
             changed = true;
@@ -2839,15 +2794,17 @@
       const existing = await this.findPeerChatByCodeAsync(peerCode);
       const defaultAva = window.defaultAvatar || "https://api.iconify.design/lucide:user.svg?color=%23888888";
       const myProfile = this.getMyProfile();
-      const finalName = peerName || remarkName || "密友";
-      const finalRemark = remarkName || finalName;
+      const isGeneric = (n) => !n || n === "我" || n === "密友" || n === "你的昵称" || n === "点击修改昵称";
+      const cleanPeerName = peerName && !isGeneric(peerName) ? peerName.trim() : "";
+      const cleanRemark = remarkName && !isGeneric(remarkName) ? remarkName.trim() : "";
+      const finalName = cleanPeerName || cleanRemark || peerName || remarkName || "密友";
+      const finalRemark = cleanRemark && cleanRemark !== finalName ? cleanRemark : "";
       const finalAva = peerAvatar || defaultAva;
       const finalGroupId = groupId || (await this.ensureDefaultGroupId());
 
       this.unmarkPeerDeletedByUser(peerCode);
 
       if (existing) {
-        const isGeneric = (n) => !n || n === "我" || n === "密友" || n === "你的昵称" || n === "点击修改昵称";
         const isPlaceholderAva = (a) =>
           !a ||
           String(a).startsWith("blob:") ||
@@ -2855,14 +2812,16 @@
           a === defaultAva ||
           a === "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" ||
           a === "https://i.postimg.cc/y8xWzCqj/anime-boy.jpg";
-        if (peerName && (!isGeneric(peerName) || isGeneric(existing.name))) {
-          existing.name = peerName;
+        if (cleanPeerName) {
+          existing.name = cleanPeerName;
+        } else if (cleanRemark && isGeneric(existing.name)) {
+          existing.name = cleanRemark;
         }
         if (!existing.settings) existing.settings = {};
-        if (remarkName && (!isGeneric(remarkName) || isGeneric(existing.settings.remarkName))) {
-          existing.settings.remarkName = remarkName;
-        } else if (peerName && !isGeneric(peerName) && isGeneric(existing.settings.remarkName)) {
-          existing.settings.remarkName = peerName;
+        if (cleanRemark && cleanRemark !== existing.name) {
+          existing.settings.remarkName = cleanRemark;
+        } else if (!existing.settings.hasCustomRemark) {
+          existing.settings.remarkName = "";
         }
         if (peerAvatar && (!isPlaceholderAva(peerAvatar) || !existing.settings.aiAvatar)) {
           existing.settings.aiAvatar = peerAvatar;
@@ -2902,6 +2861,7 @@
         history: [],
         settings: {
           remarkName: finalRemark,
+          hasCustomRemark: false,
           aiAvatar: finalAva,
           aiAvatarFrame: peerAvatarFrame || "",
           aiCocPanel: this.sanitizeCocPanelForPeerUI(null),
@@ -3004,7 +2964,7 @@
         friendName,
         friendAvatar,
         selectedGroupId,
-        customRemark || friendName,
+        customRemark,
         friendFrame
       );
 
@@ -3061,7 +3021,7 @@
       if (!savedOut && this.isPeerDeletedByUser(fromCode)) return;
       const safeOut = savedOut || {};
       const peerName = data.fromName || safeOut.remarkName || "密友";
-      const remarkName = safeOut.remarkName || peerName;
+      const remarkName = safeOut.remarkName || "";
       const groupId = safeOut.groupId || (await this.ensureDefaultGroupId());
 
       const peerChat = await this.createOrUpdatePeerChatSession(
@@ -5372,7 +5332,7 @@
           data.senderName || savedInfo.name || "密友",
           data.senderAvatar || savedInfo.avatar || "",
           savedInfo.groupId || null,
-          savedInfo.remarkName || data.senderName || "密友",
+          savedInfo.hasCustomRemark ? (savedInfo.remarkName || "") : "",
           data.senderAvatarFrame || savedInfo.avatarFrame || ""
         );
       }
@@ -5380,10 +5340,19 @@
       if (!peerChat) return;
 
       if (!peerChat.settings) peerChat.settings = {};
-      if (data.senderName && data.senderName !== "我") {
-        peerChat.name = data.senderName;
+      const prevPeerName = peerChat.name;
+      if (data.senderName && !this.isGenericPeerName(data.senderName)) {
+        peerChat.name = data.senderName.trim();
+        if (
+          !peerChat.settings.hasCustomRemark ||
+          this.isGenericPeerName(peerChat.settings.remarkName) ||
+          peerChat.settings.remarkName === prevPeerName
+        ) {
+          peerChat.settings.remarkName = "";
+          peerChat.settings.hasCustomRemark = false;
+        }
       }
-      if (data.senderAvatar && !String(data.senderAvatar).startsWith("blob:")) {
+      if (data.senderAvatar && !this.isPlaceholderAvatar(data.senderAvatar)) {
         peerChat.settings.aiAvatar = data.senderAvatar;
       }
       if (data.senderAvatarFrame !== undefined && data.senderAvatarFrame !== "") {
@@ -5392,6 +5361,7 @@
       if (data.peerAvatarFrame !== undefined && data.peerAvatarFrame !== "") {
         peerChat.settings.myAvatarFrame = data.peerAvatarFrame;
       }
+      this.saveFriendToBackup(peerChat);
 
       if (!Array.isArray(peerChat.history)) {
         peerChat.history = [];
@@ -5446,6 +5416,9 @@
       }
 
       if (window.state && String(window.state.activeChatId) === String(peerChat.id)) {
+        const titleEl = document.getElementById("chat-header-title");
+        const showName = (peerChat.settings && peerChat.settings.remarkName) || peerChat.name;
+        if (titleEl && showName) titleEl.textContent = showName;
         if (typeof window.appendMessage === "function") {
           window.appendMessage(incomingMsg, peerChat);
         } else if (typeof window.renderChatInterfaceProxy === "function") {
@@ -5519,7 +5492,7 @@
           safeName,
           safeAva,
           savedInfo.groupId || null,
-          savedInfo.remarkName || safeName,
+          savedInfo.hasCustomRemark ? (savedInfo.remarkName || "") : "",
           newPeerOwnFrame || savedInfo.avatarFrame || ""
         );
       }
@@ -5529,8 +5502,9 @@
       const oldName = chat.name;
       if (newName && !isGenericName(newName)) {
         chat.name = newName;
-        if (isGenericName(chat.settings.remarkName) || chat.settings.remarkName === oldName) {
-          chat.settings.remarkName = newName;
+        if (!chat.settings.hasCustomRemark || isGenericName(chat.settings.remarkName) || chat.settings.remarkName === oldName) {
+          chat.settings.remarkName = "";
+          chat.settings.hasCustomRemark = false;
         }
       }
       if (newAvatar && !isPlaceholderAva(newAvatar)) {
@@ -5549,25 +5523,6 @@
         await window.db.chats.put(chat);
       }
       this.saveFriendToBackup(chat);
-
-      if (window.state && window.state.chats && !isPlaceholderAva(newAvatar)) {
-        for (const grp of Object.values(window.state.chats)) {
-          if (grp && grp.isGroup && Array.isArray(grp.members)) {
-            let grpChanged = false;
-            grp.members.forEach((m) => {
-              if (m && m.peerCode === peerCode) {
-                if (isPlaceholderAva(m.avatar) || m.avatar === window.defaultGroupMemberAvatar) {
-                  m.avatar = newAvatar;
-                  grpChanged = true;
-                }
-              }
-            });
-            if (grpChanged && window.db && window.db.chats) {
-              try { await window.db.chats.put(grp); } catch (_) {}
-            }
-          }
-        }
-      }
 
       if (window.state && String(window.state.activeChatId) === String(chat.id)) {
         const titleEl = document.getElementById("chat-header-title");
@@ -6572,7 +6527,10 @@
         const lbl = chatNameGroup.querySelector("label");
         if (lbl) lbl.textContent = "对方昵称";
         const inp = document.getElementById("chat-name-input");
-        if (inp) inp.readOnly = true;
+        if (inp) {
+          inp.readOnly = true;
+          inp.value = chat.name || "密友";
+        }
       }
 
       const chatRemarkGroup = document.getElementById("chat-remark-group");
@@ -6580,18 +6538,30 @@
         chatRemarkGroup.style.display = "block";
         const lbl = chatRemarkGroup.querySelector("label");
         if (lbl) lbl.textContent = "备注名";
+        const remInp = document.getElementById("chat-remark-input");
+        if (remInp) {
+          remInp.value = (chat.settings && chat.settings.remarkName) || "";
+        }
       }
 
+      const myProfile = this.getMyProfile();
+      const resolvedMyNick =
+        (chat.settings && !this.isGenericPeerName(chat.settings.myName) ? chat.settings.myName : "") ||
+        myProfile.name ||
+        "我";
       const myGroupNick = document.getElementById("my-group-nickname-group");
       if (myGroupNick) {
         myGroupNick.style.display = "block";
         const lbl = myGroupNick.querySelector("label");
         if (lbl) lbl.textContent = "我的昵称";
         const myNickInput = document.getElementById("my-group-nickname-input");
-        const myProfile = this.getMyProfile();
         if (myNickInput) {
-          myNickInput.value = (chat.settings && chat.settings.myName) || myProfile.name || "我";
+          myNickInput.value = resolvedMyNick;
         }
+      }
+      const myNameInput = document.getElementById("my-name-input");
+      if (myNameInput) {
+        myNameInput.value = resolvedMyNick;
       }
 
       const assignGroupSection = document.getElementById("assign-group-section");
@@ -6614,7 +6584,21 @@
       }
 
       const myAvatarGroup = document.getElementById("my-avatar-group");
-      if (myAvatarGroup) myAvatarGroup.style.display = "block";
+      if (myAvatarGroup) {
+        myAvatarGroup.style.display = "block";
+        const myAvaPreview = document.getElementById("my-avatar-preview");
+        const resolvedMyAva =
+          (chat.settings && !this.isPlaceholderAvatar(chat.settings.myAvatar) ? chat.settings.myAvatar : "") ||
+          myProfile.avatar ||
+          window.defaultAvatar;
+        if (myAvaPreview && resolvedMyAva) {
+          if (typeof window.setCleanPreviewImgSrc === "function") {
+            window.setCleanPreviewImgSrc(myAvaPreview, resolvedMyAva);
+          } else {
+            myAvaPreview.src = resolvedMyAva;
+          }
+        }
+      }
 
       const visualBeautifyCard = document.getElementById("visual-beautify-card");
       if (visualBeautifyCard) visualBeautifyCard.style.display = "block";

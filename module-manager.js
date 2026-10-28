@@ -4108,8 +4108,14 @@
     salvagePartialAiPlan(rawText) {
       if (!rawText || typeof rawText !== 'string') return null;
       try {
+        const cleanRaw = rawText
+          .replace(/<think>[\s\S]*?<\/think>/gi, '')
+          .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+          .trim();
+
         const chunks = [];
         const mapNodes = [];
+        const contentTags = [];
         let moduleType = '线性';
         let ruleSystem = 'coc';
         let scaleType = '1v1';
@@ -4117,70 +4123,141 @@
         let endingTag = '普通';
         let summary = '模组概览';
 
-        const typeMatch = rawText.match(/"moduleType"\s*:\s*"([^"]+)"/);
-        if (typeMatch) moduleType = typeMatch[1];
-        const ruleMatch = rawText.match(/"ruleSystem"\s*:\s*"([^"]+)"/);
-        if (ruleMatch) ruleSystem = ruleMatch[1];
-        const scaleMatch = rawText.match(/"scaleType"\s*:\s*"([^"]+)"/);
-        if (scaleMatch) scaleType = scaleMatch[1];
-        const bgMatch = rawText.match(/"bgTag"\s*:\s*"([^"]+)"/);
-        if (bgMatch) bgTag = bgMatch[1];
-        const endMatch = rawText.match(/"endingTag"\s*:\s*"([^"]+)"/);
-        if (endMatch) endingTag = endMatch[1];
-        const sumMatch = rawText.match(/"summary"\s*:\s*"([^"]+)"/);
-        if (sumMatch) summary = sumMatch[1];
+        const typeMatch = cleanRaw.match(/"moduleType"\s*:\s*"([^"\n\r]+)"/);
+        if (typeMatch) moduleType = typeMatch[1].trim();
+        const ruleMatch = cleanRaw.match(/"ruleSystem"\s*:\s*"([^"\n\r]+)"/);
+        if (ruleMatch) ruleSystem = ruleMatch[1].trim();
+        const scaleMatch = cleanRaw.match(/"scaleType"\s*:\s*"([^"\n\r]+)"/);
+        if (scaleMatch) scaleType = scaleMatch[1].trim();
+        const bgMatch = cleanRaw.match(/"bgTag"\s*:\s*"([^"\n\r]+)"/);
+        if (bgMatch) bgTag = bgMatch[1].trim();
+        const endMatch = cleanRaw.match(/"endingTag"\s*:\s*"([^"\n\r]+)"/);
+        if (endMatch) endingTag = endMatch[1].trim();
+        const sumMatch = cleanRaw.match(/"summary"\s*:\s*"([\s\\S]*?)"(?=\s*,\s*"(?:bgTag|endingTag|contentTags|mapNodes|chunks|imageAnalysis|moduleType|ruleSystem|scaleType)"\s*:|\s*\})/);
+        if (sumMatch && sumMatch[1].trim()) {
+          summary = sumMatch[1].trim();
+        } else {
+          const sumSimple = cleanRaw.match(/"summary"\s*:\s*"([^"\n\r]+)"/);
+          if (sumSimple && sumSimple[1].trim()) summary = sumSimple[1].trim();
+        }
 
-        const objRegex = /\{[^{}]+\}/g;
-        let objMatch;
+        const tagsBlockMatch = cleanRaw.match(/"contentTags"\s*:\s*\[([^\]]*)\]/);
+        if (tagsBlockMatch && tagsBlockMatch[1]) {
+          const tagMatches = tagsBlockMatch[1].match(/"([^"]+)"/g);
+          if (tagMatches) {
+            tagMatches.forEach(tm => {
+              const val = tm.replace(/^"|"$/g, '').trim();
+              if (val && !contentTags.includes(val)) contentTags.push(val);
+            });
+          }
+        }
+
+        const extractFieldValue = (block, keyPattern) => {
+          const reg = new RegExp(`"(?:${keyPattern})"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"(?:order|name|title|chapterName|category|type|wordCount|words|reason|prefixPreview|suffixPreview|remarks|notes|desc|description|parent|parentName|level|imageIndex|shouldInclude|isSensitive|isHorror|annotation|id)"\\s*:|\\s*\\}|\\s*$)`);
+          const m = block.match(reg);
+          if (m && typeof m[1] === 'string') return m[1].trim();
+          const fallbackReg = new RegExp(`"(?:${keyPattern})"\\s*:\\s*"([^"\\n\\r]*)"`);
+          const fm = block.match(fallbackReg);
+          return fm && typeof fm[1] === 'string' ? fm[1].trim() : '';
+        };
+
         const seenM = new Set();
         const seenC = new Set();
 
-        while ((objMatch = objRegex.exec(rawText)) !== null) {
-          const block = objMatch[0];
-          const nameM = block.match(/"name"\s*:\s*"([^"]+)"/);
-          if (!nameM) continue;
-          const itemName = nameM[1].trim();
+        const blockStarts = [];
+        const startRegex = /\{\s*(?="(?:order|name|title|chapterName|category|type|parent|level|imageIndex|shouldInclude)"\s*:)/g;
+        let sm;
+        while ((sm = startRegex.exec(cleanRaw)) !== null) {
+          blockStarts.push(sm.index);
+        }
+
+        const candidateBlocks = [];
+        if (blockStarts.length > 0) {
+          for (let i = 0; i < blockStarts.length; i++) {
+            const start = blockStarts[i];
+            const end = (i + 1 < blockStarts.length) ? blockStarts[i + 1] : cleanRaw.length;
+            candidateBlocks.push(cleanRaw.slice(start, end));
+          }
+        } else {
+          const simpleObjRegex = /\{[^{}]+\}/g;
+          let om;
+          while ((om = simpleObjRegex.exec(cleanRaw)) !== null) {
+            candidateBlocks.push(om[0]);
+          }
+        }
+
+        for (let i = 0; i < candidateBlocks.length; i++) {
+          const block = candidateBlocks[i];
+          const hasImageFields = /"(?:imageIndex|shouldInclude|isSensitive|isHorror|annotation)"\s*:/.test(block);
+          if (hasImageFields) continue;
+
+          const itemName = extractFieldValue(block, 'name|title|chapterName');
           if (!itemName) continue;
 
-          const hasChunkFields = /"(?:category|prefixPreview|suffixPreview|wordCount|reason|remarks|order)"\s*:/.test(block);
-          const hasMapFields = /"(?:parent|level|desc)"\s*:/.test(block) && !hasChunkFields;
-          const hasImageFields = /"(?:imageIndex|shouldInclude|isSensitive)"\s*:/.test(block);
-
-          if (hasImageFields) continue;
+          const hasChunkFields = /"(?:category|prefixPreview|suffixPreview|wordCount|reason|remarks|notes|order)"\s*:/.test(block);
+          const hasMapFields = /"(?:parent|parentName|level|desc|description)"\s*:/.test(block) && !hasChunkFields;
 
           if (hasMapFields) {
             if (!seenM.has(itemName) && !itemName.includes('大区域') && !itemName.includes('建筑分区') && !itemName.includes('核心探索主区域')) {
               seenM.add(itemName);
-              const parentM = block.match(/"parent"\s*:\s*"([^"]*)"/);
+              const parentVal = extractFieldValue(block, 'parent|parentName');
               const levelM = block.match(/"level"\s*:\s*([0-9]+)/);
-              const descM = block.match(/"desc"\s*:\s*"([^"]*)"/);
+              const descVal = extractFieldValue(block, 'desc|description');
               mapNodes.push({
                 name: itemName,
-                parent: parentM ? parentM[1].trim() : '',
+                parent: parentVal,
                 level: levelM ? (parseInt(levelM[1], 10) || 2) : 2,
-                desc: descM ? descM[1].trim() : ''
+                desc: descVal
               });
             }
           } else if (hasChunkFields) {
             if (!seenC.has(itemName)) {
               seenC.add(itemName);
               const orderM = block.match(/"order"\s*:\s*([0-9]+)/);
-              const catM = block.match(/"category"\s*:\s*"([^"]*)"/);
-              const wcM = block.match(/"wordCount"\s*:\s*([0-9]+)/);
-              const reasonM = block.match(/"reason"\s*:\s*"([^"]*)"/);
-              const prefM = block.match(/"prefixPreview"\s*:\s*"([^"]*)"/);
-              const suffM = block.match(/"suffixPreview"\s*:\s*"([^"]*)"/);
-              const remM = block.match(/"remarks"\s*:\s*"([^"]*)"/);
+              const catVal = extractFieldValue(block, 'category|type');
+              const wcM = block.match(/"(?:wordCount|words)"\s*:\s*([0-9]+)/);
+              const reasonVal = extractFieldValue(block, 'reason');
+              const prefVal = extractFieldValue(block, 'prefixPreview');
+              const suffVal = extractFieldValue(block, 'suffixPreview');
+              const remVal = extractFieldValue(block, 'remarks|notes');
               chunks.push({
                 order: orderM ? (parseInt(orderM[1], 10) || (chunks.length + 1)) : (chunks.length + 1),
                 name: itemName,
-                category: catM ? (catM[1].trim() || '正文') : '正文',
+                category: catVal || '正文',
                 wordCount: wcM ? (parseInt(wcM[1], 10) || 1200) : 1200,
-                reason: reasonM ? reasonM[1].trim() : '',
-                prefixPreview: prefM ? prefM[1].trim() : '',
-                suffixPreview: suffM ? suffM[1].trim() : '',
-                remarks: remM ? remM[1].trim() : ''
+                reason: reasonVal,
+                prefixPreview: prefVal,
+                suffixPreview: suffVal,
+                remarks: remVal
               });
+            }
+          }
+        }
+
+        if (chunks.length === 0) {
+          const lines = cleanRaw.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line || line.startsWith('{') || line.startsWith('}') || line.startsWith('"')) continue;
+            const slashMatch = line.match(/^(?:[-*•]|\d+[\.、\)])\s*([^\/\n]+?)\s*\/\s*(?:约?\s*(\d+)\s*字\s*\/\s*)?([^\/\n]+?)\s*\/\s*(.+)$/);
+            if (slashMatch) {
+              const cName = slashMatch[1].replace(/\*\*/g, '').replace(/^[【\[]|[】\]]$/g, '').trim();
+              const cWords = slashMatch[2] ? (parseInt(slashMatch[2], 10) || 1200) : 1200;
+              const cCat = slashMatch[3].replace(/\*\*/g, '').trim() || '正文';
+              const cReason = slashMatch[4].trim();
+              if (cName && !seenC.has(cName) && cName !== '段落名') {
+                seenC.add(cName);
+                chunks.push({
+                  order: chunks.length + 1,
+                  name: cName,
+                  category: cCat,
+                  wordCount: cWords,
+                  reason: cReason,
+                  prefixPreview: '',
+                  suffixPreview: '',
+                  remarks: cReason
+                });
+              }
             }
           }
         }
@@ -4193,6 +4270,7 @@
             scaleType,
             bgTag,
             endingTag,
+            contentTags,
             summary,
             chunks,
             mapNodes
@@ -4376,49 +4454,57 @@ JSON 格式如下：
             }).join('\n');
             userPrompt += `\n\n【提取到的候选插图列表（已结合视觉特征与排版顺序）】：\n${imgListDesc}`;
           }
-          userPrompt += `\n\n模组参考全文（当前分卷内容）：\n${segText}`;
+          userPrompt += `\n\n模组参考全文（当前分卷内容）：\n${segText}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【最终输出格式强制指令】：\n请严格按照系统提示词中的 JSON 结构输出规划方案（必须包含 moduleType、ruleSystem、scaleType、summary、bgTag、endingTag、contentTags、mapNodes、chunks、imageAnalysis 字段）。\n注意：JSON 字符串值内部如需引用原文对话或词汇，请一律使用中文引号「」或“”，严禁在 JSON 字符串值内部使用未转义的英文双引号 "！严禁输出 Markdown 列表或任何 JSON 以外的解释文字！`;
 
           const aiResultText = await this.callAI(systemPrompt, userPrompt);
           let parsedAiPlan = null;
           if (aiResultText) {
-            let jsonStr = aiResultText.trim();
-            const startIdx = jsonStr.indexOf('{');
-            const endIdx = jsonStr.lastIndexOf('}');
-            if (startIdx !== -1 && endIdx > startIdx) {
-              jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+            parsedAiPlan = this.parseJsonFromAiResponse(aiResultText);
+            if (parsedAiPlan) {
+              const altChunks = parsedAiPlan.chunks || parsedAiPlan.chapters || parsedAiPlan.sections || parsedAiPlan.moduleChunks || parsedAiPlan.paragraphList;
+              if (Array.isArray(altChunks) && !Array.isArray(parsedAiPlan.chunks)) {
+                parsedAiPlan.chunks = altChunks;
+              }
             }
-            try {
-              parsedAiPlan = JSON.parse(jsonStr);
-            } catch (pErr) {
-              try {
-                const sanitized = jsonStr.replace(/,\s*([\]}])/g, '$1');
-                parsedAiPlan = JSON.parse(sanitized);
-              } catch (pErr2) {
-                parsedAiPlan = this.salvagePartialAiPlan(aiResultText);
+            if (!parsedAiPlan || !Array.isArray(parsedAiPlan.chunks) || parsedAiPlan.chunks.length === 0) {
+              const salvaged = this.salvagePartialAiPlan(aiResultText);
+              if (salvaged) {
                 if (!parsedAiPlan) {
-                  console.warn('[模组] 解析 AI JSON 规划大纲重试失败:', pErr2);
+                  parsedAiPlan = salvaged;
+                } else {
+                  if ((!Array.isArray(parsedAiPlan.chunks) || parsedAiPlan.chunks.length === 0) && Array.isArray(salvaged.chunks) && salvaged.chunks.length > 0) {
+                    parsedAiPlan.chunks = salvaged.chunks;
+                  }
+                  if ((!Array.isArray(parsedAiPlan.mapNodes) || parsedAiPlan.mapNodes.length === 0) && Array.isArray(salvaged.mapNodes) && salvaged.mapNodes.length > 0) {
+                    parsedAiPlan.mapNodes = salvaged.mapNodes;
+                  }
+                  parsedAiPlan._isSalvagedPartial = true;
                 }
               }
             }
 
-            if (parsedAiPlan && parsedAiPlan._isSalvagedPartial && (!Array.isArray(parsedAiPlan.chunks) || parsedAiPlan.chunks.length < 3)) {
+            if (parsedAiPlan && (!Array.isArray(parsedAiPlan.chunks) || parsedAiPlan.chunks.length < 2)) {
               try {
                 this.analysisStatusText = `流式规划补全中：正在继续生成本卷章节切割目录...`;
                 this.updateBottomActionBar();
                 const existingChunksDesc = (parsedAiPlan.chunks && parsedAiPlan.chunks.length > 0)
-                  ? `目前已规划章节：${parsedAiPlan.chunks.map(c => c.name).join('、')}（截止于：「${parsedAiPlan.chunks[parsedAiPlan.chunks.length - 1].suffixPreview || ''}」）。请紧接其后继续规划剩余章节！`
+                  ? `目前已规划章节：${parsedAiPlan.chunks.map(c => c.name || c.title).join('、')}（截止于：「${parsedAiPlan.chunks[parsedAiPlan.chunks.length - 1].suffixPreview || ''}」）。请紧接其后继续规划剩余章节！`
                   : `地图节点已生成完毕，现在请只输出本卷完整的 chunks 章节规划列表！`;
-                const contPrompt = `请直接输出本卷的 chunks 章节规划 JSON 对象（无需重复输出 mapNodes 和 imageAnalysis），格式严格为：\n{"chunks": [{"order": 1, "name": "章节名", "category": "分类", "wordCount": 1200, "reason": "说明", "prefixPreview": "起始前100字", "suffixPreview": "末尾后100字", "remarks": "本章归纳要点"}]}\n\n${existingChunksDesc}\n\n模组原文：\n${segText}`;
+                const contPrompt = `请直接输出本卷的 chunks 章节规划 JSON 对象（无需重复输出 mapNodes 和 imageAnalysis），注意字符串内部引用请用中文引号「」，格式严格为：\n{"chunks": [{"order": 1, "name": "章节名", "category": "分类", "wordCount": 1200, "reason": "说明", "prefixPreview": "起始前100字", "suffixPreview": "末尾后100字", "remarks": "本章归纳要点"}]}\n\n${existingChunksDesc}\n\n模组原文：\n${segText}`;
                 const contText = await this.callAI(systemPrompt, contPrompt);
                 if (contText) {
-                  const contSalvaged = this.salvagePartialAiPlan(contText);
-                  if (contSalvaged && Array.isArray(contSalvaged.chunks) && contSalvaged.chunks.length > 0) {
-                    const existingNames = new Set((parsedAiPlan.chunks || []).map(c => c.name));
+                  let contParsed = this.parseJsonFromAiResponse(contText);
+                  if (!contParsed || !Array.isArray(contParsed.chunks) || contParsed.chunks.length === 0) {
+                    contParsed = this.salvagePartialAiPlan(contText);
+                  }
+                  if (contParsed && Array.isArray(contParsed.chunks) && contParsed.chunks.length > 0) {
+                    const existingNames = new Set((parsedAiPlan.chunks || []).map(c => c.name || c.title));
                     if (!Array.isArray(parsedAiPlan.chunks)) parsedAiPlan.chunks = [];
-                    contSalvaged.chunks.forEach(c => {
-                      if (!existingNames.has(c.name)) {
-                        existingNames.add(c.name);
-                        parsedAiPlan.chunks.push(c);
+                    contParsed.chunks.forEach(c => {
+                      const cName = c.name || c.title || c.chapterName;
+                      if (cName && !existingNames.has(cName)) {
+                        existingNames.add(cName);
+                        parsedAiPlan.chunks.push({ ...c, name: cName });
                       }
                     });
                   }
@@ -4493,14 +4579,16 @@ JSON 格式如下：
 
             if (Array.isArray(parsedAiPlan.chunks)) {
               parsedAiPlan.chunks.forEach(c => {
+                const chunkName = (c && (c.name || c.title || c.chapterName || c.sectionName) || '').trim();
+                if (!chunkName) return;
                 allParsedChunks.push({
                   order: allParsedChunks.length + 1,
-                  name: c.name,
-                  category: c.category || '正文',
-                  wordCount: c.wordCount || 1000,
-                  reason: c.reason || '',
-                  prefixPreview: c.prefixPreview || '',
-                  suffixPreview: c.suffixPreview || '',
+                  name: chunkName,
+                  category: c.category || c.type || '正文',
+                  wordCount: parseInt(c.wordCount || c.words, 10) || 1000,
+                  reason: c.reason || c.description || '',
+                  prefixPreview: c.prefixPreview || c.startPreview || '',
+                  suffixPreview: c.suffixPreview || c.endPreview || '',
                   remarks: c.remarks || c.notes || ''
                 });
               });
@@ -13542,6 +13630,7 @@ ${chaptersDigest}
       let out = '';
       let inString = false;
       let isEscaped = false;
+      let expectingKey = false;
       const stack = [];
       const len = text.length;
 
@@ -13552,12 +13641,19 @@ ${chaptersDigest}
             inString = true;
           } else if (ch === '{') {
             stack.push('}');
+            expectingKey = true;
           } else if (ch === '[') {
             stack.push(']');
+            expectingKey = false;
+          } else if (ch === ':') {
+            expectingKey = false;
+          } else if (ch === ',') {
+            expectingKey = stack.length > 0 && stack[stack.length - 1] === '}';
           } else if (ch === '}' || ch === ']') {
             if (stack.length > 0 && stack[stack.length - 1] === ch) {
               stack.pop();
             }
+            expectingKey = false;
           }
           out += ch;
         } else {
@@ -13588,12 +13684,29 @@ ${chaptersDigest}
               j++;
             }
             const nextNonWs = j < len ? text[j] : '';
-            const isClosingQuote =
-              nextNonWs === ':' ||
-              nextNonWs === ',' ||
-              nextNonWs === '}' ||
-              nextNonWs === ']' ||
-              nextNonWs === '';
+            let isClosingQuote = false;
+            if (expectingKey) {
+              isClosingQuote = nextNonWs === ':' || nextNonWs === '}' || nextNonWs === '';
+            } else if (nextNonWs === '') {
+              isClosingQuote = true;
+            } else if (nextNonWs === '}' || nextNonWs === ']') {
+              let k = j + 1;
+              while (k < len && (text[k] === ' ' || text[k] === '\t' || text[k] === '\r' || text[k] === '\n')) {
+                k++;
+              }
+              const afterBracket = k < len ? text[k] : '';
+              isClosingQuote = afterBracket === ',' || afterBracket === '}' || afterBracket === ']' || afterBracket === '';
+            } else if (nextNonWs === ',') {
+              const topContainer = stack.length > 0 ? stack[stack.length - 1] : '';
+              const restAfterComma = text.slice(j + 1, j + 120);
+              if (topContainer === '}') {
+                isClosingQuote = /^\s*(?:"[^"\n\r]{1,50}"\s*:|\})/.test(restAfterComma);
+              } else if (topContainer === ']') {
+                isClosingQuote = /^\s*(?:"|\{|\[|\]|-?\d|true|false|null)/.test(restAfterComma);
+              } else {
+                isClosingQuote = true;
+              }
+            }
             if (isClosingQuote) {
               inString = false;
               out += '"';
