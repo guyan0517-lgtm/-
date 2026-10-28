@@ -2422,6 +2422,9 @@
           <div style="height: 80px"></div>
         </div>
 
+        <!-- 左下角版本号 -->
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.2</div>
+
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
@@ -4154,7 +4157,7 @@
 
           <div id="chat-input-actions-top">
             <!-- “重新生成回复”按钮的新家 -->
-            <button id="reroll-btn" class="action-button" title="重新生成回复" onclick="if(typeof handleRerollClick==='function')handleRerollClick();">
+            <button id="reroll-btn" class="action-button" title="重新生成回复">
               <svg
                 width="24"
                 height="24"
@@ -26493,7 +26496,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               cb.checked = grp.enabled !== false;
               cb.onchange = (e) => {
                 grp.enabled = e.target.checked;
+                currentTcEditorEntries.forEach((ent) => {
+                  if (ent && ent.groupId === grp.id) {
+                    ent.enabled = grp.enabled;
+                  }
+                });
                 invalidateTcLookupCache();
+                renderTcEditorGroupsAndEntries(false);
                 updateStaticTcBubblesActiveState();
               };
 
@@ -26634,6 +26643,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               cb.checked = ent.enabled !== false;
               cb.onchange = (e) => {
                 ent.enabled = e.target.checked;
+                if (ent.enabled && ent.groupId) {
+                  const parentGrp = currentTcEditorGroups.find((g) => g && String(g.id) === String(ent.groupId));
+                  if (parentGrp && parentGrp.enabled === false) {
+                    parentGrp.enabled = true;
+                    renderTcEditorGroupsOnly();
+                  }
+                }
                 invalidateTcLookupCache();
                 updateStaticTcBubblesActiveState();
               };
@@ -27342,31 +27358,52 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!updatedPreset || !state.chats) return;
           const targetIdStr = String(updatedPreset.id || "");
           const targetName = String(updatedPreset.name || "").trim();
+          const seenChatIds = new Set();
           for (const cid of Object.keys(state.chats)) {
             const c = state.chats[cid];
-            if (!c || !c.settings || !Array.isArray(c.settings.sharedThoughtChains)) continue;
+            if (!c || !c.settings) continue;
+            const realIdStr = String(c.id || cid);
+            if (seenChatIds.has(realIdStr)) continue;
+            seenChatIds.add(realIdStr);
             let changed = false;
-            c.settings.sharedThoughtChains = c.settings.sharedThoughtChains.map((stc) => {
-              if (!stc) return stc;
-              const matchById = targetIdStr && String(stc.id || "") === targetIdStr;
-              const matchByName = targetName && String(stc.name || "").trim() === targetName;
-              if (matchById || matchByName) {
-                changed = true;
-                return {
-                  ...stc,
-                  headerContent: updatedPreset.headerContent,
-                  generalContent: updatedPreset.generalContent,
-                  cocContent: updatedPreset.cocContent,
-                  headerCollapsed: updatedPreset.headerCollapsed,
-                  generalCollapsed: updatedPreset.generalCollapsed,
-                  groupsCollapsed: updatedPreset.groupsCollapsed,
-                  groups: JSON.parse(JSON.stringify(updatedPreset.groups || [])),
-                  entries: JSON.parse(JSON.stringify(updatedPreset.entries || [])),
-                  updatedAt: updatedPreset.updatedAt || Date.now(),
-                };
-              }
-              return stc;
-            });
+            const cPresetIdStr = String(c.thoughtChainId || c.settings.thinkingPresetId || "");
+            const boundSnap = c.settings.boundThoughtChainPreset;
+            if (
+              (targetIdStr && cPresetIdStr === targetIdStr) ||
+              (boundSnap && (
+                (targetIdStr && String(boundSnap.id || "") === targetIdStr) ||
+                (targetName && String(boundSnap.name || "").trim() === targetName)
+              ))
+            ) {
+              c.settings.boundThoughtChainPreset = JSON.parse(JSON.stringify({
+                ...updatedPreset,
+                updatedAt: updatedPreset.updatedAt || Date.now(),
+              }));
+              changed = true;
+            }
+            if (Array.isArray(c.settings.sharedThoughtChains)) {
+              c.settings.sharedThoughtChains = c.settings.sharedThoughtChains.map((stc) => {
+                if (!stc) return stc;
+                const matchById = targetIdStr && String(stc.id || "") === targetIdStr;
+                const matchByName = targetName && String(stc.name || "").trim() === targetName;
+                if (matchById || matchByName) {
+                  changed = true;
+                  return {
+                    ...stc,
+                    headerContent: updatedPreset.headerContent,
+                    generalContent: updatedPreset.generalContent,
+                    cocContent: updatedPreset.cocContent,
+                    headerCollapsed: updatedPreset.headerCollapsed,
+                    generalCollapsed: updatedPreset.generalCollapsed,
+                    groupsCollapsed: updatedPreset.groupsCollapsed,
+                    groups: JSON.parse(JSON.stringify(updatedPreset.groups || [])),
+                    entries: JSON.parse(JSON.stringify(updatedPreset.entries || [])),
+                    updatedAt: updatedPreset.updatedAt || Date.now(),
+                  };
+                }
+                return stc;
+              });
+            }
             if (changed && typeof db !== "undefined" && db.chats) {
               try {
                 await db.chats.put(c);
@@ -27742,6 +27779,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 localPreset.groups = JSON.parse(JSON.stringify(clonedGroups));
                 localPreset.entries = JSON.parse(JSON.stringify(clonedEntries));
                 localPreset.updatedAt = preset.updatedAt;
+                if (!preset.headerContent && localPreset.headerContent) preset.headerContent = localPreset.headerContent;
+                if (!preset.generalContent && localPreset.generalContent) preset.generalContent = localPreset.generalContent;
+                if (!preset.cocContent && localPreset.cocContent) preset.cocContent = localPreset.cocContent;
                 await db.thoughtChainPresets.put(localPreset);
               }
             }
@@ -27752,6 +27792,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             chat.thoughtChainId = preset.id;
             if (!chat.settings) chat.settings = {};
             chat.settings.thinkingPresetId = preset.id;
+            chat.settings.boundThoughtChainPreset = JSON.parse(JSON.stringify({
+              ...preset,
+              groups: clonedGroups,
+              entries: clonedEntries,
+              updatedAt: preset.updatedAt,
+            }));
             if (state.globalSettings) state.globalSettings.defaultThoughtChainId = preset.id;
             if (Array.isArray(chat.settings.sharedThoughtChains)) {
               let matchedInShared = false;
@@ -27764,6 +27810,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   matchedInShared = true;
                   return {
                     ...t,
+                    headerContent: preset.headerContent !== undefined ? preset.headerContent : t.headerContent,
+                    generalContent: preset.generalContent !== undefined ? preset.generalContent : t.generalContent,
+                    cocContent: preset.cocContent !== undefined ? preset.cocContent : t.cocContent,
                     groups: JSON.parse(JSON.stringify(clonedGroups)),
                     entries: JSON.parse(JSON.stringify(clonedEntries)),
                     updatedAt: preset.updatedAt,
@@ -27789,10 +27838,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
             if (typeof db !== "undefined" && db.chats) {
               try {
-                const dbChat = await db.chats.get(chat.id);
-                if (dbChat && Array.isArray(dbChat.history) && (!Array.isArray(chat.history) || dbChat.history.length > chat.history.length)) {
-                  chat.history = dbChat.history;
-                }
                 await db.chats.put(chat);
               } catch (e) {}
             }
@@ -27839,10 +27884,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               if (typeof db !== "undefined" && db.chats) {
                 try {
-                  const dbChat = await db.chats.get(latestChat.id);
-                  if (dbChat && Array.isArray(dbChat.history) && (!Array.isArray(latestChat.history) || dbChat.history.length > latestChat.history.length)) {
-                    latestChat.history = dbChat.history;
-                  }
                   await db.chats.put(latestChat);
                 } catch (e) {}
               }
@@ -27856,6 +27897,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const mergedMap = new Map();
           const localPresets = (await db.thoughtChainPresets.toArray()) || [];
+          const boundSnap = chat.settings?.boundThoughtChainPreset || null;
+          const applyNewerSnapIfMatch = (targetObj) => {
+            if (!targetObj || !boundSnap) return targetObj;
+            const tName = String(targetObj.name || "").trim();
+            const bName = String(boundSnap.name || "").trim();
+            const isMatch = (targetObj.id && boundSnap.id && String(targetObj.id) === String(boundSnap.id)) || (tName && bName && tName === bName);
+            if (isMatch && (Number(boundSnap.updatedAt) || 0) >= (Number(targetObj.updatedAt) || 0)) {
+              targetObj.groups = JSON.parse(JSON.stringify(boundSnap.groups || targetObj.groups || []));
+              targetObj.entries = JSON.parse(JSON.stringify(boundSnap.entries || targetObj.entries || []));
+              targetObj.updatedAt = boundSnap.updatedAt;
+            }
+            return targetObj;
+          };
           if (isPeerGrp) {
             if (Array.isArray(chat.settings?.sharedThoughtChains)) {
               chat.settings.sharedThoughtChains.forEach((sp) => {
@@ -27867,7 +27921,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     (spName && String(lp.name || "").trim() === spName)
                   )
                 );
-                if (localMatch && (Number(localMatch.updatedAt) || 0) > (Number(sp.updatedAt) || 0)) {
+                if (localMatch && (Number(localMatch.updatedAt) || 0) >= (Number(sp.updatedAt) || 0)) {
                   sp.headerContent = localMatch.headerContent;
                   sp.generalContent = localMatch.generalContent;
                   sp.cocContent = localMatch.cocContent;
@@ -27875,6 +27929,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   sp.entries = JSON.parse(JSON.stringify(localMatch.entries || []));
                   sp.updatedAt = localMatch.updatedAt;
                 }
+                applyNewerSnapIfMatch(sp);
                 mergedMap.set(String(sp.id), sp);
               });
             }
@@ -27883,13 +27938,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const pName = String(p.name || "").trim();
                 const alreadyByName = Array.from(mergedMap.values()).some(ex => ex && String(ex.name || "").trim() === pName);
                 if (!alreadyByName) {
+                  applyNewerSnapIfMatch(p);
                   mergedMap.set(String(p.id), p);
                 }
               }
             });
           } else {
             localPresets.forEach((p) => {
-              if (p && p.id) mergedMap.set(String(p.id), p);
+              if (p && p.id) {
+                applyNewerSnapIfMatch(p);
+                mergedMap.set(String(p.id), p);
+              }
             });
           }
           const presets = Array.from(mergedMap.values());
@@ -27902,10 +27961,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : (chat.thoughtChainEnabled !== false);
             if (typeof db !== "undefined" && db.chats) {
               try {
-                const dbChat = await db.chats.get(chat.id);
-                if (dbChat && Array.isArray(dbChat.history) && (!Array.isArray(chat.history) || dbChat.history.length > chat.history.length)) {
-                  chat.history = dbChat.history;
-                }
                 await db.chats.put(chat);
               } catch (e) {}
             }
@@ -27923,6 +27978,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               activePreset = mergedMap.get(String(selectedThoughtChainBindId)) || (!isPeerGrp ? (await db.thoughtChainPresets.get(selectedThoughtChainBindId)) : null);
               if (!activePreset) {
                 activePreset = presets.find(p => p && String(p.id) === String(selectedThoughtChainBindId)) || null;
+              }
+              if (activePreset) {
+                applyNewerSnapIfMatch(activePreset);
               }
             }
             currentBindModalActivePreset = activePreset;
@@ -27943,7 +28001,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return;
             }
 
-            const buildBindEntryRow = (ent) => {
+            const buildBindEntryRow = (ent, parentGrp = null, parentGrpCb = null) => {
               const row = document.createElement("label");
               row.className = "tc-sub-row";
               row.style.cssText = "padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer;";
@@ -27954,6 +28012,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               cb.checked = ent.enabled !== false;
               cb.onchange = async (e) => {
                 ent.enabled = e.target.checked;
+                if (ent.enabled && parentGrp && parentGrp.enabled === false) {
+                  parentGrp.enabled = true;
+                  if (parentGrpCb) parentGrpCb.checked = true;
+                }
                 await syncModifiedPresetFromBindModal(activePreset, (state.chats && state.chats[chat.id]) || chat, isPeerGrp);
               };
 
@@ -27978,6 +28040,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const groupHeader = document.createElement("div");
               groupHeader.className = "tc-entry-group-header";
 
+              const groupBody = document.createElement("div");
+              groupBody.className = "tc-entry-group-body";
+
               const grpCb = document.createElement("input");
               grpCb.type = "checkbox";
               grpCb.className = "tc-sub-checkbox";
@@ -27985,6 +28050,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               grpCb.onclick = (e) => e.stopPropagation();
               grpCb.onchange = async (e) => {
                 grp.enabled = e.target.checked;
+                grpEntries.forEach((ge) => {
+                  if (ge) ge.enabled = grp.enabled;
+                });
+                groupBody.querySelectorAll("input.tc-sub-checkbox").forEach((el) => {
+                  el.checked = grp.enabled;
+                });
                 await syncModifiedPresetFromBindModal(activePreset, (state.chats && state.chats[chat.id]) || chat, isPeerGrp);
               };
 
@@ -28022,8 +28093,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               groupHeader.appendChild(titleEl);
               groupHeader.appendChild(foldBtn);
 
-              const groupBody = document.createElement("div");
-              groupBody.className = "tc-entry-group-body";
               if (grpEntries.length === 0) {
                 const emptyTip = document.createElement("div");
                 emptyTip.style.cssText = "font-size: 11px; color: var(--text-secondary); padding: 4px 2px;";
@@ -28031,7 +28100,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 groupBody.appendChild(emptyTip);
               } else {
                 grpEntries.forEach(ent => {
-                  groupBody.appendChild(buildBindEntryRow(ent));
+                  groupBody.appendChild(buildBindEntryRow(ent, grp, grpCb));
                 });
               }
 
@@ -28042,7 +28111,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             const ungrouped = pEntries.filter(ent => ent && (!ent.groupId || !validGroupIds.has(ent.groupId)));
             ungrouped.forEach(ent => {
-              listEl.appendChild(buildBindEntryRow(ent));
+              listEl.appendChild(buildBindEntryRow(ent, null, null));
             });
           };
 
@@ -28068,10 +28137,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               latestChat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
               if (typeof db !== "undefined" && db.chats) {
                 try {
-                  const dbChat = await db.chats.get(latestChat.id);
-                  if (dbChat && Array.isArray(dbChat.history) && (!Array.isArray(latestChat.history) || dbChat.history.length > latestChat.history.length)) {
-                    latestChat.history = dbChat.history;
-                  }
                   await db.chats.put(latestChat);
                 } catch (e) {}
               }
@@ -28093,18 +28158,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let chat = state.chats[state.activeChatId];
           if (!chat) return;
 
-          if (typeof db !== "undefined" && db.chats) {
-            try {
-              const dbChat = await db.chats.get(chat.id);
-              if (dbChat && Array.isArray(dbChat.history)) {
-                if (!Array.isArray(chat.history)) chat.history = [];
-                if (dbChat.history.length > chat.history.length) {
-                  chat.history = dbChat.history;
-                }
-              }
-            } catch (_) {}
-          }
-
           const masterSwitch = document.getElementById("tc-enable-master-switch");
           chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
           chat.thoughtChainId = selectedThoughtChainBindId;
@@ -28118,11 +28171,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (currentBindModalActivePreset && String(currentBindModalActivePreset.id) === String(selectedThoughtChainBindId)) {
             await syncModifiedPresetFromBindModal(currentBindModalActivePreset, chat, isPeerGrp);
-          } else if (isPeerGrp && selectedThoughtChainBindId) {
+          } else if (selectedThoughtChainBindId) {
             if (!chat.settings) chat.settings = {};
-            if (!Array.isArray(chat.settings.sharedThoughtChains)) {
-              chat.settings.sharedThoughtChains = [];
-            }
             let foundTc = null;
             try {
               foundTc = await db.thoughtChainPresets.get(selectedThoughtChainBindId);
@@ -28134,9 +28184,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               foundTc = chat.settings.sharedThoughtChains.find(t => String(t.id) === String(selectedThoughtChainBindId));
             }
             if (foundTc) {
-              const exIdx = chat.settings.sharedThoughtChains.findIndex(t => String(t.id) === String(foundTc.id));
-              if (exIdx >= 0) chat.settings.sharedThoughtChains[exIdx] = foundTc;
-              else chat.settings.sharedThoughtChains.push(foundTc);
+              chat.settings.boundThoughtChainPreset = JSON.parse(JSON.stringify(foundTc));
+              if (isPeerGrp) {
+                if (!Array.isArray(chat.settings.sharedThoughtChains)) {
+                  chat.settings.sharedThoughtChains = [];
+                }
+                const exIdx = chat.settings.sharedThoughtChains.findIndex(t => String(t.id) === String(foundTc.id));
+                if (exIdx >= 0) chat.settings.sharedThoughtChains[exIdx] = foundTc;
+                else chat.settings.sharedThoughtChains.push(foundTc);
+              }
             }
           }
 
@@ -28399,10 +28455,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const presetId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId);
           let sharedPreset = null;
           let localPreset = null;
+          let boundPreset = null;
           const isPeerGrp = typeof window.isPeerGroupChat === "function"
             ? window.isPeerGroupChat(chat)
             : Boolean(chat && chat.isGroup && chat.isPeerGroup);
           if (presetId) {
+            const rawBound = chat.settings?.boundThoughtChainPreset || null;
+            if (rawBound && String(rawBound.id) === String(presetId)) {
+              boundPreset = rawBound;
+            }
             if (Array.isArray(chat.settings?.sharedThoughtChains)) {
               sharedPreset = chat.settings.sharedThoughtChains.find(p => p && String(p.id) === String(presetId)) || null;
             }
@@ -28414,24 +28475,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (!localPreset) {
                 const allPresets = (await db.thoughtChainPresets.toArray()) || [];
                 localPreset = allPresets.find(p => p && String(p.id) === String(presetId)) || null;
-                if (!localPreset && sharedPreset && sharedPreset.name) {
-                  const sName = String(sharedPreset.name).trim();
-                  localPreset = allPresets.find(p => p && String(p.name || "").trim() === sName) || null;
+                const refName = String((boundPreset && boundPreset.name) || (sharedPreset && sharedPreset.name) || "").trim();
+                if (!localPreset && refName) {
+                  localPreset = allPresets.find(p => p && String(p.name || "").trim() === refName) || null;
                 }
               }
             } catch (e) {}
-            if (!sharedPreset && localPreset && localPreset.name && Array.isArray(chat.settings?.sharedThoughtChains)) {
-              const lName = String(localPreset.name).trim();
-              sharedPreset = chat.settings.sharedThoughtChains.find(p => p && String(p.name || "").trim() === lName) || null;
+            const knownName = String((localPreset && localPreset.name) || (sharedPreset && sharedPreset.name) || "").trim();
+            if (!boundPreset && rawBound && knownName && String(rawBound.name || "").trim() === knownName) {
+              boundPreset = rawBound;
+            }
+            if (!sharedPreset && knownName && Array.isArray(chat.settings?.sharedThoughtChains)) {
+              sharedPreset = chat.settings.sharedThoughtChains.find(p => p && String(p.name || "").trim() === knownName) || null;
             }
           }
+          const candidates = [boundPreset, localPreset, sharedPreset].filter(Boolean);
           let preset = null;
-          if (localPreset && sharedPreset) {
-            const localTime = Number(localPreset.updatedAt) || 0;
-            const sharedTime = Number(sharedPreset.updatedAt) || 0;
-            preset = localTime >= sharedTime ? localPreset : sharedPreset;
-          } else {
-            preset = localPreset || sharedPreset || null;
+          if (candidates.length > 0) {
+            candidates.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+            const newest = candidates[0];
+            const baseContent = localPreset || sharedPreset || boundPreset;
+            preset = {
+              ...baseContent,
+              ...newest,
+              headerContent: newest.headerContent || baseContent.headerContent || "",
+              generalContent: newest.generalContent || baseContent.generalContent || "",
+              cocContent: newest.cocContent || baseContent.cocContent || "",
+              groups: Array.isArray(newest.groups) ? newest.groups : (baseContent.groups || []),
+              entries: Array.isArray(newest.entries) ? newest.entries : (baseContent.entries || []),
+            };
           }
           if (!preset && !isPeerGrp) {
             try {
@@ -28446,7 +28518,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         function resolveThoughtChainEntries(rawText, preset) {
           if (!rawText || typeof rawText !== "string") return "";
-          if (!preset || !Array.isArray(preset.entries) || preset.entries.length === 0) return rawText;
+          let cleanInput = rawText.replace(/\u200B/g, "");
+          if (!preset || !Array.isArray(preset.entries) || preset.entries.length === 0) return cleanInput;
 
           const groupEnabledMap = new Map();
           if (Array.isArray(preset.groups)) {
@@ -28465,40 +28538,95 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             return true;
           };
 
-          let result = rawText;
-          const sortedEntries = [...preset.entries].sort((a, b) => {
-            const ka = String(a && a.key ? a.key : "").trim().length;
-            const kb = String(b && b.key ? b.key : "").trim().length;
-            if (kb !== ka) return kb - ka;
-            const actA = isEntActive(a) ? 1 : 0;
-            const actB = isEntActive(b) ? 1 : 0;
-            return actB - actA;
-          });
-          sortedEntries.forEach((ent) => {
-            if (!ent) return;
-            const rawKey = String(ent.key || "").trim();
+          const activeByKey = new Map();
+          const fallbackByKey = new Map();
+          const bareCustomKeys = [];
+          const seenBare = new Set();
+
+          const registerKey = (k, ent, isAct) => {
+            if (!k) return;
+            if (isAct) {
+              if (!activeByKey.has(k)) activeByKey.set(k, ent);
+            } else {
+              if (!fallbackByKey.has(k)) fallbackByKey.set(k, ent);
+            }
+          };
+
+          preset.entries.forEach((ent) => {
+            if (!ent || !ent.key) return;
+            const rawKey = String(ent.key || "").replace(/\u200B/g, "").trim();
+            if (!rawKey) return;
             const cleanKey = normalizeTcPlaceholderKey(rawKey);
-            if (!cleanKey) return;
-            const strippedKey = cleanKey.replace(/^麻薯-/, "").trim();
-            const active = isEntActive(ent);
-            const replacement = active ? String(ent.content || "") : "";
-            const candidateTokens = [
-              `{{${cleanKey}}}`,
-              strippedKey ? `{{麻薯-${strippedKey}}}` : "",
-              strippedKey ? `{{${strippedKey}}}` : "",
-              rawKey,
-              cleanKey,
-              strippedKey,
-            ].filter(Boolean);
-            const seenTokens = new Set();
-            candidateTokens.forEach((tok) => {
-              if (seenTokens.has(tok)) return;
-              seenTokens.add(tok);
-              if (result.includes(tok)) {
-                result = result.split(tok).join(replacement);
+            const strippedKey = cleanKey.replace(/^麻薯[-—_:\s]*/, "").trim();
+            const isAct = isEntActive(ent);
+
+            registerKey(rawKey, ent, isAct);
+            registerKey(cleanKey, ent, isAct);
+            registerKey(strippedKey, ent, isAct);
+            if (strippedKey) {
+              registerKey(`麻薯-${strippedKey}`, ent, isAct);
+            }
+
+            [rawKey, cleanKey].forEach((bk) => {
+              if (bk && bk.length >= 2 && bk.length <= 60 && !bk.includes("\n") && !bk.startsWith("{{") && !seenBare.has(bk)) {
+                seenBare.add(bk);
+                bareCustomKeys.push(bk);
               }
             });
           });
+
+          const findEntryByToken = (tokenStr) => {
+            const t = String(tokenStr || "").replace(/\u200B/g, "").trim();
+            if (!t) return null;
+            if (activeByKey.has(t)) return activeByKey.get(t);
+            const cl = normalizeTcPlaceholderKey(t);
+            const st = cl.replace(/^麻薯[-—_:\s]*/, "").trim();
+            if (cl && activeByKey.has(cl)) return activeByKey.get(cl);
+            if (st && activeByKey.has(st)) return activeByKey.get(st);
+            if (fallbackByKey.has(t)) return fallbackByKey.get(t);
+            if (cl && fallbackByKey.has(cl)) return fallbackByKey.get(cl);
+            if (st && fallbackByKey.has(st)) return fallbackByKey.get(st);
+            return null;
+          };
+
+          bareCustomKeys.sort((a, b) => b.length - a.length);
+          const firstPassParts = ["\\{\\{[^{}\\n]{1,80}\\}\\}"];
+          bareCustomKeys.forEach((bk) => {
+            firstPassParts.push(escapeRegExpForTc(bk));
+          });
+          const firstPassRegex = new RegExp(firstPassParts.join("|"), "g");
+
+          let result = cleanInput.replace(firstPassRegex, (fullMatch) => {
+            if (fullMatch.startsWith("{{") && fullMatch.endsWith("}}")) {
+              const inner = fullMatch.slice(2, -2).replace(/\u200B/g, "").trim();
+              const matchedEnt = findEntryByToken(inner);
+              if (matchedEnt) {
+                return isEntActive(matchedEnt) ? String(matchedEnt.content || "").replace(/\u200B/g, "") : "";
+              }
+              return fullMatch;
+            }
+            const matchedBare = findEntryByToken(fullMatch);
+            if (matchedBare) {
+              return isEntActive(matchedBare) ? String(matchedBare.content || "").replace(/\u200B/g, "") : "";
+            }
+            return fullMatch;
+          });
+
+          const braceOnlyRegex = /\{\{[^{}\n]{1,80}\}\}/g;
+          for (let pass = 0; pass < 2; pass++) {
+            let changedInPass = false;
+            result = result.replace(braceOnlyRegex, (fullMatch) => {
+              const inner = fullMatch.slice(2, -2).replace(/\u200B/g, "").trim();
+              const matchedEnt = findEntryByToken(inner);
+              if (matchedEnt) {
+                changedInPass = true;
+                return isEntActive(matchedEnt) ? String(matchedEnt.content || "").replace(/\u200B/g, "") : "";
+              }
+              return fullMatch;
+            });
+            if (!changedInPass) break;
+          }
+
           return result;
         }
 
@@ -40763,18 +40891,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const isPeerGroupForHeader = Boolean(typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat));
           if (!isPeerGroupForHeader && chat.activeLineMode === "solo") {
             chat.activeLineMode = "main";
-            if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > (Array.isArray(chat.history) ? chat.history.length : 0)) {
+            if ((!Array.isArray(chat.history) || chat.history.length === 0) && Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
               chat.history = [...chat.mainLineHistory];
             } else if (Array.isArray(chat.history)) {
               chat.mainLineHistory = [...chat.history];
             }
           } else if (chat.isGroup && chat.activeLineMode !== "solo") {
-            if (Array.isArray(chat.mainLineHistory) && Array.isArray(chat.history)) {
-              if (chat.history.length >= chat.mainLineHistory.length) {
-                chat.mainLineHistory = [...chat.history];
-              } else {
-                chat.history = [...chat.mainLineHistory];
-              }
+            if ((!Array.isArray(chat.history) || chat.history.length === 0) && Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
+              chat.history = [...chat.mainLineHistory];
+            } else if (Array.isArray(chat.history)) {
+              chat.mainLineHistory = [...chat.history];
             }
           } else if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && chat.activeLineMode === "solo") {
             const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(chat) : null;
@@ -40792,45 +40918,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   chat.viewingPeerSoloThread = null;
                   const localT = cfg.threads.find((t) => t.id === curThread.id);
                   if (localT && Array.isArray(localT.history)) {
-                    if (localT.history.length >= (Array.isArray(chat.history) ? chat.history.length : 0)) {
+                    if (!Array.isArray(chat.history) || chat.history.length === 0) {
                       chat.history = [...localT.history];
-                    } else if (Array.isArray(chat.history)) {
+                    } else {
                       localT.history = [...chat.history];
                     }
                   }
                 }
-              }
-            }
-          }
-
-          if (Array.isArray(chat.history) && chat.history.length > 0) {
-            const seenTs = new Set();
-            let tsFixed = false;
-            let runningMaxTs = 0;
-            for (let i = 0; i < chat.history.length; i++) {
-              const m = chat.history[i];
-              if (!m || typeof m !== "object") continue;
-              let curTs = Number(m.timestamp) || 0;
-              if (!curTs || seenTs.has(curTs)) {
-                curTs = Math.max(curTs, runningMaxTs) + 1;
-                while (seenTs.has(curTs)) {
-                  curTs++;
-                }
-                m.timestamp = curTs;
-                tsFixed = true;
-              }
-              seenTs.add(curTs);
-              if (curTs > runningMaxTs) runningMaxTs = curTs;
-            }
-            if (runningMaxTs > (window.lastAssignedMessageTimestamp || 0)) {
-              window.lastAssignedMessageTimestamp = runningMaxTs;
-            }
-            if (tsFixed) {
-              if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.mainLineHistory)) {
-                chat.mainLineHistory = [...chat.history];
-              }
-              if (typeof db !== "undefined" && db.chats) {
-                db.chats.put(chat).catch(() => {});
               }
             }
           }
@@ -46433,70 +46527,19 @@ ${recentHistoryText}
                      (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
           if (typeof db !== "undefined" && db.chats) {
             try {
-              let dbChat = null;
-              try { dbChat = await db.chats.get(chatId); } catch (e) {}
-              if (!dbChat && typeof chatId === "string" && !isNaN(Number(chatId)) && chatId.trim() !== "") {
-                try { dbChat = await db.chats.get(Number(chatId)); } catch (e) {}
-              }
-              if (!dbChat) {
-                try { dbChat = await db.chats.get(String(chatId)); } catch (e) {}
-              }
-              if (!dbChat && chat && chat.id !== undefined) {
-                try { dbChat = await db.chats.get(chat.id); } catch (e) {}
-              }
-              if (dbChat) {
-                const sameLineMode = (dbChat.activeLineMode || "main") === (chat?.activeLineMode || "main");
-                if (sameLineMode && chat && Array.isArray(chat.history) && chat.history.length > 0) {
-                  const dbHist = Array.isArray(dbChat.history) ? dbChat.history : [];
-                  const mergedMap = new Map();
-                  const makeMsgKey = (m) => {
-                    if (!m) return "";
-                    if (m.eventId) return "evt_" + m.eventId;
-                    const cStr = typeof m.content === "string" ? m.content.slice(0, 120) : JSON.stringify(m.content || "").slice(0, 120);
-                    return `${m.role}_${m.timestamp}_${m.type || ""}_${cStr}`;
-                  };
-                  for (const m of dbHist) {
-                    if (m) mergedMap.set(makeMsgKey(m), m);
-                  }
-                  let addedFromMem = false;
-                  for (const m of chat.history) {
-                    if (!m) continue;
-                    const k = makeMsgKey(m);
-                    if (!mergedMap.has(k)) {
-                      mergedMap.set(k, m);
-                      addedFromMem = true;
-                    }
-                  }
-                  if (addedFromMem || chat.history.length > dbHist.length) {
-                    dbChat.history = Array.from(mergedMap.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-                    try { await db.chats.put(dbChat); } catch (_) {}
-                  }
+              if (!chat) {
+                try { chat = await db.chats.get(chatId); } catch (e) {}
+                if (!chat && typeof chatId === "string" && !isNaN(Number(chatId)) && chatId.trim() !== "") {
+                  try { chat = await db.chats.get(Number(chatId)); } catch (e) {}
                 }
-                if (chat && chat.activeLineMode === "solo") {
-                  dbChat.activeLineMode = "solo";
-                  dbChat.viewingPeerSoloThread = chat.viewingPeerSoloThread;
-                  dbChat.history = chat.history;
+                if (!chat) {
+                  try { chat = await db.chats.get(String(chatId)); } catch (e) {}
                 }
-                if (chat && chat.thoughtChainId !== undefined && dbChat.thoughtChainId !== chat.thoughtChainId) {
-                  dbChat.thoughtChainId = chat.thoughtChainId;
+              } else {
+                if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.history)) {
+                  chat.mainLineHistory = [...chat.history];
                 }
-                if (chat && chat.thoughtChainEnabled !== undefined && dbChat.thoughtChainEnabled !== chat.thoughtChainEnabled) {
-                  dbChat.thoughtChainEnabled = chat.thoughtChainEnabled;
-                }
-                if (chat && chat.settings) {
-                  if (!dbChat.settings) dbChat.settings = {};
-                  if (chat.settings.thinkingPresetId !== undefined) {
-                    dbChat.settings.thinkingPresetId = chat.settings.thinkingPresetId;
-                  }
-                  if (Array.isArray(chat.settings.sharedThoughtChains) && chat.settings.sharedThoughtChains.length > 0) {
-                    dbChat.settings.sharedThoughtChains = chat.settings.sharedThoughtChains;
-                  }
-                }
-                if (!state.chats) state.chats = {};
-                state.chats[dbChat.id] = dbChat;
-                state.chats[String(dbChat.id)] = dbChat;
-                state.chats[chatId] = dbChat;
-                chat = dbChat;
+                try { await db.chats.put(chat); } catch (_) {}
               }
             } catch (e) {}
           }
@@ -54229,7 +54272,7 @@ ${stickerContext || "无"}
                 const isKeeperDrawing = !!(window.activeGeneratingKeeperDraw && (window.activeGeneratingKeeperDraw[chat.id] || window.activeGeneratingKeeperDraw[chatId]));
                 const sGrpId = chat.peerGroupId || chat.id;
                 const isRemoteGenStill = !!(window.remoteGeneratingChats && (window.remoteGeneratingChats[chat.id] || window.remoteGeneratingChats[String(chat.id)] || window.remoteGeneratingChats[chatId] || (sGrpId && window.remoteGeneratingChats[String(sGrpId)])));
-                if (chat.isGroup && (chat.settings?.keeperForcedDraw || isKeeperDrawing || isRemoteGenStill)) {
+                if (chat.isGroup && (isKeeperDrawing || isRemoteGenStill)) {
                   curTypingInd.textContent = "群成员正在回复中...";
                   curTypingInd.style.display = "block";
                 } else {
@@ -65139,36 +65182,59 @@ ${stickerContext || "无"}
           if (!state.activeChatId) return;
           const targetId = state.activeChatId;
           const chat = state.chats[targetId];
-          if (!chat || !chat.history || chat.history.length === 0) return;
+          if (!chat || !Array.isArray(chat.history) || chat.history.length === 0) return;
+          if (window.activeGeneratingChats && (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[targetId])) {
+            return;
+          }
 
           const isDiceMsg = (m) => Boolean(m && (m.isDiceMessage || m.type === "dice" || m.roleType === "dice" || (m.htmlContent && m.htmlContent.includes("dice-result"))));
+          const isUserTurnMsg = (m) => Boolean(m && (m.role === "user" || m.isPeerUserMessage));
 
-          // 1. 查找玩家最后一条消息或最后一次骰子检定的位置作为锚点
-          let anchorIndex = -1;
+          // 1. 查找最后一条玩家消息的位置
+          let lastUserIdx = -1;
           for (let i = chat.history.length - 1; i >= 0; i--) {
-            const m = chat.history[i];
-            if (m.role === "user" || isDiceMsg(m)) {
-              anchorIndex = i;
+            if (isUserTurnMsg(chat.history[i])) {
+              lastUserIdx = i;
               break;
             }
           }
 
-          // 2. 将锚点之后的非骰子消息全部删除，保留历史中的骰子判定
-          let removedMessages = [];
-          if (anchorIndex !== -1) {
-            const afterMessages = chat.history.slice(anchorIndex + 1);
-            removedMessages = afterMessages.filter((m) => !isDiceMsg(m));
-            const keptAfterMessages = afterMessages.filter((m) => isDiceMsg(m));
-            chat.history = chat.history.slice(0, anchorIndex + 1).concat(keptAfterMessages);
+          // 2. 找到玩家消息之后第一条非骰子的AI回复位置，保留玩家消息之后、AI回复之前的玩家检定骰子，删除本轮AI回复及其触发的末尾骰子
+          let cutStartIndex = -1;
+          if (lastUserIdx !== -1) {
+            for (let i = lastUserIdx + 1; i < chat.history.length; i++) {
+              const m = chat.history[i];
+              if (m && !isDiceMsg(m)) {
+                cutStartIndex = i;
+                break;
+              }
+            }
+            if (cutStartIndex === -1) {
+              cutStartIndex = lastUserIdx + 1;
+            }
           } else {
-            const afterMessages = chat.history.slice(1);
-            removedMessages = afterMessages.filter((m) => !isDiceMsg(m));
-            const keptAfterMessages = afterMessages.filter((m) => isDiceMsg(m));
-            chat.history = [chat.history[0], ...keptAfterMessages];
+            cutStartIndex = 1;
+          }
+
+          let removedMessages = [];
+          if (cutStartIndex < chat.history.length) {
+            removedMessages = chat.history.slice(cutStartIndex);
+            chat.history = chat.history.slice(0, cutStartIndex);
+          }
+
+          if (chat.isGroup && chat.activeLineMode !== "solo") {
+            chat.mainLineHistory = [...chat.history];
+          } else if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
+            window.syncCurrentSoloThreadHistory(chat);
           }
 
           // 3. 保存更新后的聊天记录到数据库
           await db.chats.put(chat);
+          if (state.chats) {
+            state.chats[chat.id] = chat;
+            state.chats[String(chat.id)] = chat;
+            state.chats[targetId] = chat;
+          }
 
           const isPeerGrpReroll = Boolean(chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
           if (isPeerGrpReroll && removedMessages.length > 0 && window.PeerManager && typeof window.PeerManager.broadcastMessageDelete === "function") {
@@ -65182,7 +65248,7 @@ ${stickerContext || "无"}
           }
 
           // 4. 刷新聊天界面，消除被删除的消息
-          if (state.activeChatId === targetId) {
+          if (String(state.activeChatId) === String(targetId)) {
             renderChatInterface(targetId);
           }
 
