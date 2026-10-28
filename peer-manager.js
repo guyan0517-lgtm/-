@@ -3851,7 +3851,36 @@
       }
 
       if (Array.isArray(data.sharedThoughtChains)) {
-        groupChat.settings.sharedThoughtChains = data.sharedThoughtChains;
+        const currentShared = Array.isArray(groupChat.settings.sharedThoughtChains)
+          ? groupChat.settings.sharedThoughtChains
+          : [];
+        groupChat.settings.sharedThoughtChains = data.sharedThoughtChains.map((incomingTc) => {
+          if (!incomingTc || !incomingTc.id) return incomingTc;
+          const inName = String(incomingTc.name || "").trim();
+          const existingTc = currentShared.find((ex) =>
+            ex && (
+              String(ex.id) === String(incomingTc.id) ||
+              (inName && String(ex.name || "").trim() === inName)
+            )
+          );
+          if (existingTc && (Number(existingTc.updatedAt) || 0) > (Number(incomingTc.updatedAt) || 0)) {
+            return existingTc;
+          }
+          return incomingTc;
+        });
+        currentShared.forEach((ex) => {
+          if (!ex || !ex.id) return;
+          const exName = String(ex.name || "").trim();
+          const existsInMerged = groupChat.settings.sharedThoughtChains.some((m) =>
+            m && (
+              String(m.id) === String(ex.id) ||
+              (exName && String(m.name || "").trim() === exName)
+            )
+          );
+          if (!existsInMerged) {
+            groupChat.settings.sharedThoughtChains.push(ex);
+          }
+        });
       }
       if (data.thoughtChainEnabled !== undefined) {
         groupChat.thoughtChainEnabled = data.thoughtChainEnabled;

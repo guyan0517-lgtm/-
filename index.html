@@ -27293,7 +27293,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               preset.groupsCollapsed = groupsCollapsed;
               preset.groups = groups;
               preset.entries = entries;
+              preset.updatedAt = Date.now();
               await db.thoughtChainPresets.put(preset);
+              await syncPresetToAllGroupSharedThoughtChains(preset);
             }
           } else {
             const allPresets = (await db.thoughtChainPresets.toArray()) || [];
@@ -27307,9 +27309,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               existing.groupsCollapsed = groupsCollapsed;
               existing.groups = groups;
               existing.entries = entries;
+              existing.updatedAt = Date.now();
               await db.thoughtChainPresets.put(existing);
+              await syncPresetToAllGroupSharedThoughtChains(existing);
             } else {
-              await db.thoughtChainPresets.add({
+              const newId = await db.thoughtChainPresets.add({
                 name,
                 headerContent,
                 generalContent,
@@ -27320,7 +27324,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 groups,
                 entries,
                 createdAt: Date.now(),
+                updatedAt: Date.now(),
               });
+              const createdPreset = await db.thoughtChainPresets.get(newId);
+              if (createdPreset) {
+                await syncPresetToAllGroupSharedThoughtChains(createdPreset);
+              }
             }
           }
 
@@ -27328,6 +27337,43 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           await renderThoughtChainPresets();
         }
         window.saveThoughtChainPreset = saveThoughtChainPreset;
+
+        async function syncPresetToAllGroupSharedThoughtChains(updatedPreset) {
+          if (!updatedPreset || !state.chats) return;
+          const targetIdStr = String(updatedPreset.id || "");
+          const targetName = String(updatedPreset.name || "").trim();
+          for (const cid of Object.keys(state.chats)) {
+            const c = state.chats[cid];
+            if (!c || !c.settings || !Array.isArray(c.settings.sharedThoughtChains)) continue;
+            let changed = false;
+            c.settings.sharedThoughtChains = c.settings.sharedThoughtChains.map((stc) => {
+              if (!stc) return stc;
+              const matchById = targetIdStr && String(stc.id || "") === targetIdStr;
+              const matchByName = targetName && String(stc.name || "").trim() === targetName;
+              if (matchById || matchByName) {
+                changed = true;
+                return {
+                  ...stc,
+                  headerContent: updatedPreset.headerContent,
+                  generalContent: updatedPreset.generalContent,
+                  cocContent: updatedPreset.cocContent,
+                  headerCollapsed: updatedPreset.headerCollapsed,
+                  generalCollapsed: updatedPreset.generalCollapsed,
+                  groupsCollapsed: updatedPreset.groupsCollapsed,
+                  groups: JSON.parse(JSON.stringify(updatedPreset.groups || [])),
+                  entries: JSON.parse(JSON.stringify(updatedPreset.entries || [])),
+                  updatedAt: updatedPreset.updatedAt || Date.now(),
+                };
+              }
+              return stc;
+            });
+            if (changed && typeof db !== "undefined" && db.chats) {
+              try {
+                await db.chats.put(c);
+              } catch (_) {}
+            }
+          }
+        }
 
         async function deleteThoughtChainPreset(presetId) {
           const preset = await db.thoughtChainPresets.get(presetId);
@@ -27675,21 +27721,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
+        let currentBindModalActivePreset = null;
+
         async function syncModifiedPresetFromBindModal(preset, chat, isPeerGrp) {
-          if (!preset || !preset.id) return;
+          if (!preset) return;
+          preset.updatedAt = Date.now();
+          const clonedGroups = JSON.parse(JSON.stringify(preset.groups || []));
+          const clonedEntries = JSON.parse(JSON.stringify(preset.entries || []));
+          const targetName = String(preset.name || "").trim();
           try {
             if (typeof db !== "undefined" && db.thoughtChainPresets) {
-              let localPreset = await db.thoughtChainPresets.get(preset.id);
-              if (!localPreset && !isNaN(Number(preset.id))) {
-                localPreset = await db.thoughtChainPresets.get(Number(preset.id));
-              }
-              if (!localPreset) {
-                const allLocal = (await db.thoughtChainPresets.toArray()) || [];
-                localPreset = allLocal.find(p => p && String(p.id) === String(preset.id));
-              }
-              if (localPreset) {
-                localPreset.groups = preset.groups;
-                localPreset.entries = preset.entries;
+              const allLocal = (await db.thoughtChainPresets.toArray()) || [];
+              const matchingLocals = allLocal.filter(p =>
+                p && (
+                  (preset.id && String(p.id) === String(preset.id)) ||
+                  (targetName && String(p.name || "").trim() === targetName)
+                )
+              );
+              for (const localPreset of matchingLocals) {
+                localPreset.groups = JSON.parse(JSON.stringify(clonedGroups));
+                localPreset.entries = JSON.parse(JSON.stringify(clonedEntries));
+                localPreset.updatedAt = preset.updatedAt;
                 await db.thoughtChainPresets.put(localPreset);
               }
             }
@@ -27701,22 +27753,55 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (!chat.settings) chat.settings = {};
             chat.settings.thinkingPresetId = preset.id;
             if (state.globalSettings) state.globalSettings.defaultThoughtChainId = preset.id;
-            if (isPeerGrp && chat.settings && Array.isArray(chat.settings.sharedThoughtChains)) {
-              const exIdx = chat.settings.sharedThoughtChains.findIndex(t => t && String(t.id) === String(preset.id));
-              if (exIdx >= 0) {
-                chat.settings.sharedThoughtChains[exIdx] = preset;
+            if (Array.isArray(chat.settings.sharedThoughtChains)) {
+              let matchedInShared = false;
+              chat.settings.sharedThoughtChains = chat.settings.sharedThoughtChains.map((t) => {
+                if (!t) return t;
+                if (
+                  (preset.id && String(t.id) === String(preset.id)) ||
+                  (targetName && String(t.name || "").trim() === targetName)
+                ) {
+                  matchedInShared = true;
+                  return {
+                    ...t,
+                    groups: JSON.parse(JSON.stringify(clonedGroups)),
+                    entries: JSON.parse(JSON.stringify(clonedEntries)),
+                    updatedAt: preset.updatedAt,
+                  };
+                }
+                return t;
+              });
+              if (!matchedInShared && isPeerGrp) {
+                chat.settings.sharedThoughtChains.push({
+                  ...preset,
+                  groups: JSON.parse(JSON.stringify(clonedGroups)),
+                  entries: JSON.parse(JSON.stringify(clonedEntries)),
+                  updatedAt: preset.updatedAt,
+                });
               }
+            } else if (isPeerGrp) {
+              chat.settings.sharedThoughtChains = [{
+                ...preset,
+                groups: JSON.parse(JSON.stringify(clonedGroups)),
+                entries: JSON.parse(JSON.stringify(clonedEntries)),
+                updatedAt: preset.updatedAt,
+              }];
+            }
+            if (typeof db !== "undefined" && db.chats) {
+              try {
+                const dbChat = await db.chats.get(chat.id);
+                if (dbChat && Array.isArray(dbChat.history) && (!Array.isArray(chat.history) || dbChat.history.length > chat.history.length)) {
+                  chat.history = dbChat.history;
+                }
+                await db.chats.put(chat);
+              } catch (e) {}
             }
             if (state.chats) {
               state.chats[chat.id] = chat;
               state.chats[String(chat.id)] = chat;
             }
-            if (typeof db !== "undefined" && db.chats) {
-              try {
-                await db.chats.put(chat);
-              } catch (e) {}
-            }
           }
+          await syncPresetToAllGroupSharedThoughtChains(preset);
           await refreshChatSettingsTokenDisplay(chat ? chat.id : state.activeChatId);
         }
 
@@ -27747,34 +27832,62 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (masterSwitch) {
             masterSwitch.checked = chat.thoughtChainEnabled !== false;
             masterSwitch.onchange = async () => {
-              chat.thoughtChainEnabled = masterSwitch.checked;
+              const latestChat = (state.chats && state.chats[chat.id]) || chat;
+              latestChat.thoughtChainEnabled = masterSwitch.checked;
               if (selectedThoughtChainBindId) {
-                chat.thoughtChainId = selectedThoughtChainBindId;
-              }
-              if (state.chats) {
-                state.chats[chat.id] = chat;
-                state.chats[String(chat.id)] = chat;
+                latestChat.thoughtChainId = selectedThoughtChainBindId;
               }
               if (typeof db !== "undefined" && db.chats) {
                 try {
-                  await db.chats.put(chat);
+                  const dbChat = await db.chats.get(latestChat.id);
+                  if (dbChat && Array.isArray(dbChat.history) && (!Array.isArray(latestChat.history) || dbChat.history.length > latestChat.history.length)) {
+                    latestChat.history = dbChat.history;
+                  }
+                  await db.chats.put(latestChat);
                 } catch (e) {}
               }
-              await refreshChatSettingsTokenDisplay(chat.id);
+              if (state.chats) {
+                state.chats[latestChat.id] = latestChat;
+                state.chats[String(latestChat.id)] = latestChat;
+              }
+              await refreshChatSettingsTokenDisplay(latestChat.id);
             };
           }
 
           const mergedMap = new Map();
+          const localPresets = (await db.thoughtChainPresets.toArray()) || [];
           if (isPeerGrp) {
             if (Array.isArray(chat.settings?.sharedThoughtChains)) {
               chat.settings.sharedThoughtChains.forEach((sp) => {
-                if (sp && sp.id) {
-                  mergedMap.set(String(sp.id), sp);
+                if (!sp || !sp.id) return;
+                const spName = String(sp.name || "").trim();
+                const localMatch = localPresets.find(lp =>
+                  lp && (
+                    String(lp.id) === String(sp.id) ||
+                    (spName && String(lp.name || "").trim() === spName)
+                  )
+                );
+                if (localMatch && (Number(localMatch.updatedAt) || 0) > (Number(sp.updatedAt) || 0)) {
+                  sp.headerContent = localMatch.headerContent;
+                  sp.generalContent = localMatch.generalContent;
+                  sp.cocContent = localMatch.cocContent;
+                  sp.groups = JSON.parse(JSON.stringify(localMatch.groups || []));
+                  sp.entries = JSON.parse(JSON.stringify(localMatch.entries || []));
+                  sp.updatedAt = localMatch.updatedAt;
                 }
+                mergedMap.set(String(sp.id), sp);
               });
             }
+            localPresets.forEach((p) => {
+              if (p && p.id && !mergedMap.has(String(p.id))) {
+                const pName = String(p.name || "").trim();
+                const alreadyByName = Array.from(mergedMap.values()).some(ex => ex && String(ex.name || "").trim() === pName);
+                if (!alreadyByName) {
+                  mergedMap.set(String(p.id), p);
+                }
+              }
+            });
           } else {
-            const localPresets = (await db.thoughtChainPresets.toArray()) || [];
             localPresets.forEach((p) => {
               if (p && p.id) mergedMap.set(String(p.id), p);
             });
@@ -27787,14 +27900,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (!chat.settings) chat.settings = {};
             chat.settings.thinkingPresetId = selectedThoughtChainBindId;
             chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : (chat.thoughtChainEnabled !== false);
+            if (typeof db !== "undefined" && db.chats) {
+              try {
+                const dbChat = await db.chats.get(chat.id);
+                if (dbChat && Array.isArray(dbChat.history) && (!Array.isArray(chat.history) || dbChat.history.length > chat.history.length)) {
+                  chat.history = dbChat.history;
+                }
+                await db.chats.put(chat);
+              } catch (e) {}
+            }
             if (state.chats) {
               state.chats[chat.id] = chat;
               state.chats[String(chat.id)] = chat;
-            }
-            if (typeof db !== "undefined" && db.chats) {
-              try {
-                await db.chats.put(chat);
-              } catch (e) {}
             }
             await refreshChatSettingsTokenDisplay(chat.id);
           }
@@ -27804,7 +27921,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let activePreset = null;
             if (selectedThoughtChainBindId) {
               activePreset = mergedMap.get(String(selectedThoughtChainBindId)) || (!isPeerGrp ? (await db.thoughtChainPresets.get(selectedThoughtChainBindId)) : null);
+              if (!activePreset) {
+                activePreset = presets.find(p => p && String(p.id) === String(selectedThoughtChainBindId)) || null;
+              }
             }
+            currentBindModalActivePreset = activePreset;
             if (currentNameEl) {
               currentNameEl.textContent = activePreset ? activePreset.name : "无";
             }
@@ -27833,7 +27954,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               cb.checked = ent.enabled !== false;
               cb.onchange = async (e) => {
                 ent.enabled = e.target.checked;
-                await syncModifiedPresetFromBindModal(activePreset, chat, isPeerGrp);
+                await syncModifiedPresetFromBindModal(activePreset, (state.chats && state.chats[chat.id]) || chat, isPeerGrp);
               };
 
               const keySpan = document.createElement("span");
@@ -27864,7 +27985,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               grpCb.onclick = (e) => e.stopPropagation();
               grpCb.onchange = async (e) => {
                 grp.enabled = e.target.checked;
-                await syncModifiedPresetFromBindModal(activePreset, chat, isPeerGrp);
+                await syncModifiedPresetFromBindModal(activePreset, (state.chats && state.chats[chat.id]) || chat, isPeerGrp);
               };
 
               const swatch = document.createElement("span");
@@ -27890,7 +28011,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 grp.collapsed = !grp.collapsed;
                 groupBox.classList.toggle("collapsed", grp.collapsed);
                 foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
-                await syncModifiedPresetFromBindModal(activePreset, chat, isPeerGrp);
+                await syncModifiedPresetFromBindModal(activePreset, (state.chats && state.chats[chat.id]) || chat, isPeerGrp);
               };
 
               groupHeader.onclick = toggleFold;
@@ -27939,22 +28060,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const matched = presets.find(p => String(p.id) === String(chosen));
                 selectedThoughtChainBindId = matched ? matched.id : (isNaN(Number(chosen)) ? chosen : Number(chosen));
               }
-              chat.thoughtChainId = selectedThoughtChainBindId;
-              if (!chat.settings) chat.settings = {};
-              chat.settings.thinkingPresetId = selectedThoughtChainBindId;
+              const latestChat = (state.chats && state.chats[chat.id]) || chat;
+              latestChat.thoughtChainId = selectedThoughtChainBindId;
+              if (!latestChat.settings) latestChat.settings = {};
+              latestChat.settings.thinkingPresetId = selectedThoughtChainBindId;
               if (state.globalSettings) state.globalSettings.defaultThoughtChainId = selectedThoughtChainBindId;
-              chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
-              if (state.chats) {
-                state.chats[chat.id] = chat;
-                state.chats[String(chat.id)] = chat;
-              }
+              latestChat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
               if (typeof db !== "undefined" && db.chats) {
                 try {
-                  await db.chats.put(chat);
+                  const dbChat = await db.chats.get(latestChat.id);
+                  if (dbChat && Array.isArray(dbChat.history) && (!Array.isArray(latestChat.history) || dbChat.history.length > latestChat.history.length)) {
+                    latestChat.history = dbChat.history;
+                  }
+                  await db.chats.put(latestChat);
                 } catch (e) {}
               }
+              if (state.chats) {
+                state.chats[latestChat.id] = latestChat;
+                state.chats[String(latestChat.id)] = latestChat;
+              }
               await renderSelectedPresetGroupsAndEntries();
-              await refreshChatSettingsTokenDisplay(chat.id);
+              await refreshChatSettingsTokenDisplay(latestChat.id);
             };
           }
 
@@ -27989,7 +28115,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const isPeerGrp = typeof window.isPeerGroupChat === "function"
             ? window.isPeerGroupChat(chat)
             : Boolean(chat.isGroup && chat.isPeerGroup);
-          if (isPeerGrp && selectedThoughtChainBindId) {
+
+          if (currentBindModalActivePreset && String(currentBindModalActivePreset.id) === String(selectedThoughtChainBindId)) {
+            await syncModifiedPresetFromBindModal(currentBindModalActivePreset, chat, isPeerGrp);
+          } else if (isPeerGrp && selectedThoughtChainBindId) {
             if (!chat.settings) chat.settings = {};
             if (!Array.isArray(chat.settings.sharedThoughtChains)) {
               chat.settings.sharedThoughtChains = [];
@@ -27997,6 +28126,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let foundTc = null;
             try {
               foundTc = await db.thoughtChainPresets.get(selectedThoughtChainBindId);
+              if (!foundTc && !isNaN(Number(selectedThoughtChainBindId))) {
+                foundTc = await db.thoughtChainPresets.get(Number(selectedThoughtChainBindId));
+              }
             } catch (e) {}
             if (!foundTc && Array.isArray(chat.settings.sharedThoughtChains)) {
               foundTc = chat.settings.sharedThoughtChains.find(t => String(t.id) === String(selectedThoughtChainBindId));
@@ -28265,29 +28397,41 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function getActiveThoughtChainPreset(chat) {
           if (!isChatThoughtChainActive(chat)) return null;
           const presetId = chat.thoughtChainId || chat.settings?.thinkingPresetId || (state.globalSettings && state.globalSettings.defaultThoughtChainId);
-          let preset = null;
+          let sharedPreset = null;
+          let localPreset = null;
           const isPeerGrp = typeof window.isPeerGroupChat === "function"
             ? window.isPeerGroupChat(chat)
             : Boolean(chat && chat.isGroup && chat.isPeerGroup);
           if (presetId) {
-            if (isPeerGrp && Array.isArray(chat.settings?.sharedThoughtChains)) {
-              preset = chat.settings.sharedThoughtChains.find(p => p && String(p.id) === String(presetId)) || null;
+            if (Array.isArray(chat.settings?.sharedThoughtChains)) {
+              sharedPreset = chat.settings.sharedThoughtChains.find(p => p && String(p.id) === String(presetId)) || null;
             }
-            if (!preset) {
-              try {
-                preset = await db.thoughtChainPresets.get(presetId);
-                if (!preset && !isNaN(Number(presetId))) {
-                  preset = await db.thoughtChainPresets.get(Number(presetId));
+            try {
+              localPreset = await db.thoughtChainPresets.get(presetId);
+              if (!localPreset && !isNaN(Number(presetId))) {
+                localPreset = await db.thoughtChainPresets.get(Number(presetId));
+              }
+              if (!localPreset) {
+                const allPresets = (await db.thoughtChainPresets.toArray()) || [];
+                localPreset = allPresets.find(p => p && String(p.id) === String(presetId)) || null;
+                if (!localPreset && sharedPreset && sharedPreset.name) {
+                  const sName = String(sharedPreset.name).trim();
+                  localPreset = allPresets.find(p => p && String(p.name || "").trim() === sName) || null;
                 }
-                if (!preset) {
-                  const allPresets = (await db.thoughtChainPresets.toArray()) || [];
-                  preset = allPresets.find(p => p && String(p.id) === String(presetId)) || null;
-                }
-              } catch (e) {}
+              }
+            } catch (e) {}
+            if (!sharedPreset && localPreset && localPreset.name && Array.isArray(chat.settings?.sharedThoughtChains)) {
+              const lName = String(localPreset.name).trim();
+              sharedPreset = chat.settings.sharedThoughtChains.find(p => p && String(p.name || "").trim() === lName) || null;
             }
-            if (!preset && Array.isArray(chat.settings?.sharedThoughtChains)) {
-              preset = chat.settings.sharedThoughtChains.find(p => p && String(p.id) === String(presetId)) || null;
-            }
+          }
+          let preset = null;
+          if (localPreset && sharedPreset) {
+            const localTime = Number(localPreset.updatedAt) || 0;
+            const sharedTime = Number(sharedPreset.updatedAt) || 0;
+            preset = localTime >= sharedTime ? localPreset : sharedPreset;
+          } else {
+            preset = localPreset || sharedPreset || null;
           }
           if (!preset && !isPeerGrp) {
             try {
@@ -28313,11 +28457,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             });
           }
 
+          const isEntActive = (ent) => {
+            if (!ent || ent.enabled === false) return false;
+            if (ent.groupId && groupEnabledMap.has(String(ent.groupId))) {
+              return groupEnabledMap.get(String(ent.groupId));
+            }
+            return true;
+          };
+
           let result = rawText;
           const sortedEntries = [...preset.entries].sort((a, b) => {
             const ka = String(a && a.key ? a.key : "").trim().length;
             const kb = String(b && b.key ? b.key : "").trim().length;
-            return kb - ka;
+            if (kb !== ka) return kb - ka;
+            const actA = isEntActive(a) ? 1 : 0;
+            const actB = isEntActive(b) ? 1 : 0;
+            return actB - actA;
           });
           sortedEntries.forEach((ent) => {
             if (!ent) return;
@@ -28325,11 +28480,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const cleanKey = normalizeTcPlaceholderKey(rawKey);
             if (!cleanKey) return;
             const strippedKey = cleanKey.replace(/^麻薯-/, "").trim();
-            const isEntryEnabled = ent.enabled !== false;
-            const isGroupEnabled = ent.groupId && groupEnabledMap.has(String(ent.groupId))
-              ? groupEnabledMap.get(String(ent.groupId))
-              : true;
-            const replacement = (isEntryEnabled && isGroupEnabled) ? String(ent.content || "") : "";
+            const active = isEntActive(ent);
+            const replacement = active ? String(ent.content || "") : "";
             const candidateTokens = [
               `{{${cleanKey}}}`,
               strippedKey ? `{{麻薯-${strippedKey}}}` : "",
@@ -38300,6 +38452,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (msg.type === "module_switch_notice") {
             const wrapper = document.createElement("div");
             wrapper.className = "message-wrapper system-pat";
+            wrapper.dataset.timestamp = msg.timestamp;
             wrapper.style.maxWidth = "88%";
             wrapper.style.width = "100%";
             wrapper.style.display = "flex";
@@ -38324,6 +38477,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (msg.type === "module_semi_switch_card") {
             const wrapper = document.createElement("div");
             wrapper.className = "message-wrapper system-pat";
+            wrapper.dataset.timestamp = msg.timestamp;
             wrapper.style.maxWidth = "92%";
             wrapper.style.width = "100%";
             wrapper.style.display = "flex";
@@ -38405,6 +38559,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (msg.type === "combat_confirm_card") {
             const wrapper = document.createElement("div");
             wrapper.className = "message-wrapper system-pat";
+            wrapper.dataset.timestamp = msg.timestamp;
             wrapper.style.display = "flex";
             wrapper.style.justifyContent = "center";
             wrapper.style.margin = "6px auto";
@@ -38501,6 +38656,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (msg.type === "combat_exit_confirm_card") {
             const wrapper = document.createElement("div");
             wrapper.className = "message-wrapper system-pat";
+            wrapper.dataset.timestamp = msg.timestamp;
             wrapper.style.display = "flex";
             wrapper.style.justifyContent = "center";
             wrapper.style.margin = "6px auto";
@@ -38594,6 +38750,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (msg.type === "pat_message") {
             const wrapper = document.createElement("div");
             wrapper.className = "message-wrapper system-pat";
+            wrapper.dataset.timestamp = msg.timestamp;
             const bubble = document.createElement("div");
             bubble.className = "message-bubble system-bubble";
             bubble.dataset.timestamp = msg.timestamp;
@@ -38609,6 +38766,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           } else if (msg.type === "narrative") {
             const wrapper = document.createElement("div");
             wrapper.className = "message-wrapper system-pat"; // 复用系统消息的居中样式
+            wrapper.dataset.timestamp = msg.timestamp;
             const bubble = document.createElement("div");
             bubble.className = "message-bubble system-bubble";
             bubble.dataset.timestamp = msg.timestamp;
@@ -38662,6 +38820,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           const wrapper = document.createElement("div");
           wrapper.className = `message-wrapper ${isUser ? "user" : "ai"}`;
+          wrapper.dataset.timestamp = msg.timestamp;
 
           if (chat.isGroup) {
             const senderLine = document.createElement("div");
@@ -40609,6 +40768,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             } else if (Array.isArray(chat.history)) {
               chat.mainLineHistory = [...chat.history];
             }
+          } else if (chat.isGroup && chat.activeLineMode !== "solo") {
+            if (Array.isArray(chat.mainLineHistory) && Array.isArray(chat.history)) {
+              if (chat.history.length >= chat.mainLineHistory.length) {
+                chat.mainLineHistory = [...chat.history];
+              } else {
+                chat.history = [...chat.mainLineHistory];
+              }
+            }
           } else if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && chat.activeLineMode === "solo") {
             const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(chat) : null;
             if (cfg) {
@@ -40632,6 +40799,38 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     }
                   }
                 }
+              }
+            }
+          }
+
+          if (Array.isArray(chat.history) && chat.history.length > 0) {
+            const seenTs = new Set();
+            let tsFixed = false;
+            let runningMaxTs = 0;
+            for (let i = 0; i < chat.history.length; i++) {
+              const m = chat.history[i];
+              if (!m || typeof m !== "object") continue;
+              let curTs = Number(m.timestamp) || 0;
+              if (!curTs || seenTs.has(curTs)) {
+                curTs = Math.max(curTs, runningMaxTs) + 1;
+                while (seenTs.has(curTs)) {
+                  curTs++;
+                }
+                m.timestamp = curTs;
+                tsFixed = true;
+              }
+              seenTs.add(curTs);
+              if (curTs > runningMaxTs) runningMaxTs = curTs;
+            }
+            if (runningMaxTs > (window.lastAssignedMessageTimestamp || 0)) {
+              window.lastAssignedMessageTimestamp = runningMaxTs;
+            }
+            if (tsFixed) {
+              if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.mainLineHistory)) {
+                chat.mainLineHistory = [...chat.history];
+              }
+              if (typeof db !== "undefined" && db.chats) {
+                db.chats.put(chat).catch(() => {});
               }
             }
           }
@@ -46284,6 +46483,15 @@ ${recentHistoryText}
                 if (chat && chat.thoughtChainEnabled !== undefined && dbChat.thoughtChainEnabled !== chat.thoughtChainEnabled) {
                   dbChat.thoughtChainEnabled = chat.thoughtChainEnabled;
                 }
+                if (chat && chat.settings) {
+                  if (!dbChat.settings) dbChat.settings = {};
+                  if (chat.settings.thinkingPresetId !== undefined) {
+                    dbChat.settings.thinkingPresetId = chat.settings.thinkingPresetId;
+                  }
+                  if (Array.isArray(chat.settings.sharedThoughtChains) && chat.settings.sharedThoughtChains.length > 0) {
+                    dbChat.settings.sharedThoughtChains = chat.settings.sharedThoughtChains;
+                  }
+                }
                 if (!state.chats) state.chats = {};
                 state.chats[dbChat.id] = dbChat;
                 state.chats[String(dbChat.id)] = dbChat;
@@ -49920,6 +50128,20 @@ ${stickerContext || "无"}
             let callHasBeenHandled = false;
 
             let messageTimestamp = Date.now();
+            const getNextUniqueAiMsgTs = () => {
+              const lastHistoryTs = Array.isArray(chat.history) && chat.history.length > 0
+                ? (Number(chat.history[chat.history.length - 1].timestamp) || 0)
+                : 0;
+              const nextTs = Math.max(
+                Date.now(),
+                messageTimestamp,
+                (window.lastAssignedMessageTimestamp || 0) + 1,
+                lastHistoryTs + 1
+              );
+              messageTimestamp = nextTs + 1;
+              window.lastAssignedMessageTimestamp = nextTs;
+              return nextTs;
+            };
 
             // 初始化一个新数组，用于收集需要渲染的消息
             let newMessagesToRender = [];
@@ -49983,7 +50205,7 @@ ${stickerContext || "无"}
                   const aiMessage = {
                     role: "assistant",
                     content: "对方拒绝了你的视频通话请求。",
-                    timestamp: Date.now(),
+                    timestamp: getNextUniqueAiMsgTs(),
                   };
                   chat.history.push(aiMessage);
                   await db.chats.put(chat);
@@ -50042,12 +50264,7 @@ ${stickerContext || "无"}
                 : (typeof rawVisibleField === "string" && rawVisibleField.trim()
                   ? rawVisibleField.split(/[,，、]/).map(normalizeVisibleTarget).filter(Boolean)
                   : null);
-              const assignedMsgTs = Math.max(
-                messageTimestamp++,
-                (window.lastAssignedMessageTimestamp || 0) + 1
-              );
-              messageTimestamp = assignedMsgTs + 1;
-              window.lastAssignedMessageTimestamp = assignedMsgTs;
+              const assignedMsgTs = getNextUniqueAiMsgTs();
               const baseMessage = {
                 role: "assistant",
                 senderName: msgData.name || chat.name,
@@ -50171,9 +50388,10 @@ ${stickerContext || "无"}
                     targetName: targetRecipient,
                     item: itemObj,
                     content: `[获得了物品：${itemObj.name || "道具"}]`,
-                    timestamp: messageTimestamp++
+                    timestamp: getNextUniqueAiMsgTs()
                   };
                   chat.history.push(cardMsg);
+                  await db.chats.put(chat);
                   if (isViewingThisChat) {
                     appendMessage(cardMsg, chat);
                   }
@@ -50196,7 +50414,7 @@ ${stickerContext || "无"}
                         nextChapterId: targetId,
                         nextChapterTitle: targetTitle
                       },
-                      timestamp: messageTimestamp++
+                      timestamp: getNextUniqueAiMsgTs()
                     };
                     chat.history.push(cardMsg);
                     await db.chats.put(chat);
@@ -50227,7 +50445,7 @@ ${stickerContext || "无"}
                           nextChapterId: targetId,
                           nextChapterTitle: targetTitle
                         },
-                        timestamp: messageTimestamp++
+                        timestamp: getNextUniqueAiMsgTs()
                       };
                       chat.history.push(cardMsg);
                       await db.chats.put(chat);
@@ -50273,7 +50491,7 @@ ${stickerContext || "无"}
                         closeChapterTitles: closeTitles,
                         summary: msgData.summary || "本章已带完，是否切换下一章？"
                       },
-                      timestamp: messageTimestamp++
+                      timestamp: getNextUniqueAiMsgTs()
                     };
                     chat.history.push(cardMsg);
                     await db.chats.put(chat);
@@ -50325,7 +50543,7 @@ ${stickerContext || "无"}
                           closeChapterTitles: closeTitles,
                           summary: msgData.summary || "本章已带完，是否切换下一章？"
                         },
-                        timestamp: messageTimestamp++
+                        timestamp: getNextUniqueAiMsgTs()
                       };
                       chat.history.push(cardMsg);
                       await db.chats.put(chat);
@@ -50346,7 +50564,7 @@ ${stickerContext || "无"}
                       pendingData: {
                         combatants: msgData.combatants || []
                       },
-                      timestamp: messageTimestamp++
+                      timestamp: getNextUniqueAiMsgTs()
                     };
                     chat.history.push(cardMsg);
                     await db.chats.put(chat);
@@ -50425,7 +50643,7 @@ ${stickerContext || "无"}
                       role: "system",
                       type: "pat_message",
                       content: `[${chat.name} 觉得现在的氛围很适合，将情侣头像更换为：${targetPair.description}]`,
-                      timestamp: Date.now(),
+                      timestamp: getNextUniqueAiMsgTs(),
                     };
                     chat.history.push(sysMsg);
 
@@ -50537,9 +50755,10 @@ ${stickerContext || "无"}
                       role: "system",
                       type: "pat_message",
                       content: `[已更换情侣头像，并存入库中]`,
-                      timestamp: Date.now(),
+                      timestamp: getNextUniqueAiMsgTs(),
                     };
                     chat.history.push(successTip);
+                    await db.chats.put(chat);
 
                     if (isViewingThisChat) {
                       appendMessage(successTip, chat);
@@ -51122,9 +51341,10 @@ ${stickerContext || "无"}
                         role: "system",
                         type: "pat_message",
                         content: `[系统：你和“${chat.name}”的情侣空间已成功开启！]`,
-                        timestamp: Date.now(),
+                        timestamp: getNextUniqueAiMsgTs(),
                       };
                       chat.history.push(systemNotice);
+                      await db.chats.put(chat);
                       if (isViewingThisChat) {
                         appendMessage(systemNotice, chat);
                       }
@@ -51191,16 +51411,17 @@ ${stickerContext || "无"}
                       role: "system",
                       type: "pat_message",
                       content: `[系统：${actionText}]`,
-                      timestamp: Date.now(),
+                      timestamp: getNextUniqueAiMsgTs(),
                     };
                     chat.history.push(visibleMessage);
+                    await db.chats.put(chat);
                     if (isViewingThisChat) {
                       appendMessage(visibleMessage, chat);
                     }
 
                     // 如果 AI 在互动后还想说点什么
                     if (msgData.response) {
-                      aiMessage = { ...baseMessage, content: msgData.response };
+                      aiMessage = { ...baseMessage, timestamp: getNextUniqueAiMsgTs(), content: msgData.response };
                     }
                   }
                   // 如果AI只是互动没说话，就不创建aiMessage，直接跳到下一个指令
@@ -51248,9 +51469,10 @@ ${stickerContext || "无"}
                       role: "system",
                       type: "pat_message",
                       content: visibleLog,
-                      timestamp: messageTimestamp++,
+                      timestamp: getNextUniqueAiMsgTs(),
                     };
                     chat.history.push(visibleMessage);
+                    await db.chats.put(chat);
 
                     if (isViewingThisChat) {
                       appendMessage(visibleMessage, chat);
@@ -51685,9 +51907,10 @@ ${stickerContext || "无"}
                         role: "system",
                         type: "pat_message",
                         content: `[系统：你和“${chat.name}”的情侣空间已成功开启！]`,
-                        timestamp: Date.now(),
+                        timestamp: getNextUniqueAiMsgTs(),
                       };
                       chat.history.push(systemNotice);
+                      await db.chats.put(chat);
                       if (isViewingThisChat) {
                         appendMessage(systemNotice, chat);
                       }
@@ -52318,9 +52541,10 @@ ${stickerContext || "无"}
                     role: "system",
                     type: "pat_message",
                     content: patText,
-                    timestamp: Date.now(),
+                    timestamp: getNextUniqueAiMsgTs(),
                   };
                   chat.history.push(patMessage);
+                  await db.chats.put(chat);
                   if (isViewingThisChat) {
                     const phoneScreen = document.getElementById("phone-screen");
                     phoneScreen.classList.remove("pat-animation");
@@ -52346,9 +52570,10 @@ ${stickerContext || "无"}
                     role: "system",
                     type: "pat_message",
                     content: `[${chat.name}的状态已更新为: ${msgData.status_text}]`,
-                    timestamp: Date.now(),
+                    timestamp: getNextUniqueAiMsgTs(),
                   };
                   chat.history.push(statusUpdateMessage);
+                  await db.chats.put(chat);
 
                   if (isViewingThisChat) {
                     appendMessage(statusUpdateMessage, chat);
@@ -52379,9 +52604,10 @@ ${stickerContext || "无"}
                         role: "system",
                         type: "pat_message",
                         content: `[♪ ${chat.name} 为你切歌: 《${track.name}》 - ${track.artist}]`,
-                        timestamp: Date.now(),
+                        timestamp: getNextUniqueAiMsgTs(),
                       };
                       chat.history.push(musicChangeMessage);
+                      await db.chats.put(chat);
 
                       if (isViewingThisChat) {
                         appendMessage(musicChangeMessage, chat);
@@ -52637,7 +52863,7 @@ ${stickerContext || "无"}
                         type: "pat_message",
                         // 系统消息里也使用 displayName
                         content: `${displayName} 领取了 ${packetToOpen.senderName} 的红包`,
-                        timestamp: Date.now(),
+                        timestamp: getNextUniqueAiMsgTs(),
                       };
                       chat.history.push(aiClaimedMessage);
 
@@ -52657,7 +52883,7 @@ ${stickerContext || "无"}
                           role: "system",
                           type: "pat_message",
                           content: `${packetToOpen.senderName} 的红包已被领完`,
-                          timestamp: Date.now() + 1,
+                          timestamp: getNextUniqueAiMsgTs(),
                         };
                         chat.history.push(finishedMessage);
 
@@ -52689,10 +52915,11 @@ ${stickerContext || "无"}
                       const hiddenMessageForAI = {
                         role: "system",
                         content: hiddenContentForAI,
-                        timestamp: Date.now() + 2, // 确保时间戳在后
+                        timestamp: getNextUniqueAiMsgTs(), // 确保时间戳在后
                         isHidden: true,
                       };
                       chat.history.push(hiddenMessageForAI);
+                      await db.chats.put(chat);
                     }
 
                     // 7. 刷新UI（如果用户正在看的话）
@@ -52719,9 +52946,10 @@ ${stickerContext || "无"}
                       role: "system",
                       type: "pat_message", // 复用居中样式
                       content: `[${chat.name} 更换了头像]`,
-                      timestamp: Date.now(),
+                      timestamp: getNextUniqueAiMsgTs(),
                     };
                     chat.history.push(systemNotice);
+                    await db.chats.put(chat);
 
                     // 如果在当前聊天界面，则实时渲染
                     if (isViewingThisChat) {
@@ -52770,11 +52998,12 @@ ${stickerContext || "无"}
                       isRefund: true, // 标记这是一条退款消息
                       amount: originalMsg.amount,
                       note: "转账已被拒收",
-                      timestamp: messageTimestamp++, // 使用递增的时间戳
+                      timestamp: getNextUniqueAiMsgTs(), // 使用递增的时间戳
                     };
 
                     // 将新消息推入历史记录，它会被后续的循环处理并渲染
                     chat.history.push(refundMessage);
+                    await db.chats.put(chat);
 
                     if (isViewingThisChat) {
                       // 因为退款消息是新生成的，所以我们直接将它添加到界面上
@@ -52791,7 +53020,7 @@ ${stickerContext || "无"}
                     role: "system",
                     type: "pat_message",
                     content: msgData.content,
-                    timestamp: Date.now(),
+                    timestamp: baseMessage.timestamp,
                   };
                   break;
 
@@ -52923,12 +53152,13 @@ ${stickerContext || "无"}
                   const hiddenMemoryMessage = {
                     role: "system", // 必须是 system，这样AI才知道这是上下文信息
                     content: `[系统提示：你刚刚说了一句“${msgData.content}”，但立刻就撤回了它。]`,
-                    timestamp: tempMessageData.timestamp + 1, // 确保在撤回消息之后
+                    timestamp: getNextUniqueAiMsgTs(), // 确保在撤回消息之后
                     isHidden: true, // 这个标记让它不在UI上显示
                   };
 
                   // 3. 将这两条消息都添加到历史记录中
                   chat.history.push(recalledMessage, hiddenMemoryMessage);
+                  await db.chats.put(chat);
 
                   // 4. 替换DOM，显示“已撤回”提示
                   const placeholder = createMessageElement(
@@ -53038,7 +53268,7 @@ ${stickerContext || "无"}
                             pendingData: {
                               combatants: combatObj.combatants || []
                             },
-                            timestamp: messageTimestamp++
+                            timestamp: getNextUniqueAiMsgTs()
                           };
                           chat.history.push(cardMsg);
                           if (isViewingThisChat) {
@@ -53055,7 +53285,7 @@ ${stickerContext || "无"}
                             type: "combat_confirm_card",
                             content: "是否进入战斗？",
                             pendingData: { combatants: [] },
-                            timestamp: messageTimestamp++
+                            timestamp: getNextUniqueAiMsgTs()
                           };
                           chat.history.push(cardMsg);
                           if (isViewingThisChat) {
@@ -53084,7 +53314,7 @@ ${stickerContext || "无"}
                                 type: "module_semi_switch_card",
                                 content: chObj.summary || "本章已带完，是否切换下一章？",
                                 pendingData: { nextChapterId: tId, nextChapterTitle: tTitle },
-                                timestamp: messageTimestamp++
+                                timestamp: getNextUniqueAiMsgTs()
                               };
                               chat.history.push(cardMsg);
                               if (isViewingThisChat) appendMessage(cardMsg, chat);
@@ -53103,7 +53333,7 @@ ${stickerContext || "无"}
                                 type: "module_semi_switch_card",
                                 content: chObj.summary || "本章已带完，是否切换下一章？",
                                 pendingData: { openChapterIds: chObj.openChapterIds || [], closeChapterIds: chObj.closeChapterIds || [], summary: chObj.summary || "本章已带完，是否切换下一章？" },
-                                timestamp: messageTimestamp++
+                                timestamp: getNextUniqueAiMsgTs()
                               };
                               chat.history.push(cardMsg);
                               if (isViewingThisChat) appendMessage(cardMsg, chat);
@@ -53121,7 +53351,7 @@ ${stickerContext || "无"}
                             type: "module_semi_switch_card",
                             content: "本章已带完，是否切换下一章？",
                             pendingData: { nextChapterTitle: tTitle },
-                            timestamp: messageTimestamp++
+                            timestamp: getNextUniqueAiMsgTs()
                           };
                           chat.history.push(cardMsg);
                           if (isViewingThisChat) appendMessage(cardMsg, chat);
@@ -53505,6 +53735,9 @@ ${stickerContext || "无"}
 
               // 将渲染逻辑移出循环
               if (aiMessage) {
+                if (!aiMessage.timestamp || (Array.isArray(chat.history) && chat.history.some((m) => m && m.timestamp === aiMessage.timestamp))) {
+                  aiMessage.timestamp = getNextUniqueAiMsgTs();
+                }
                 if (typeof aiMessage.content === "string" && aiMessage.content && typeof window.sanitizeAiHumanDiceCommands === "function") {
                   aiMessage.content = window.sanitizeAiHumanDiceCommands(aiMessage.content, chat);
                 }
@@ -53792,7 +54025,7 @@ ${stickerContext || "无"}
                         senderAvatar: diceRole.avatar,
                         content: diceRes.text,
                         htmlContent: diceRes.html || null,
-                        timestamp: Date.now(),
+                        timestamp: getNextUniqueAiMsgTs(),
                       };
                       if (chat.isGroup && chat.activeLineMode === "solo") {
                         const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
@@ -53820,6 +54053,9 @@ ${stickerContext || "无"}
                       }
                       if (Array.isArray(diceRes.extraMessages) && diceRes.extraMessages.length > 0) {
                         for (const exMsg of diceRes.extraMessages) {
+                          if (!exMsg.timestamp || chat.history.some((m) => m && m.timestamp === exMsg.timestamp)) {
+                            exMsg.timestamp = getNextUniqueAiMsgTs();
+                          }
                           if (chat.isGroup && chat.activeLineMode === "solo") {
                             const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
                             const activeTId = activeThread ? activeThread.id : (chat.settings?.soloLineConfig?.activeThreadId || null);
@@ -53834,6 +54070,9 @@ ${stickerContext || "无"}
                             window.PeerManager.broadcastGroupMessage(chat, exMsg, false);
                           }
                         }
+                      }
+                      if (typeof db !== "undefined" && db.chats) {
+                        try { await db.chats.put(chat); } catch (e) {}
                       }
                       if (diceRes.persistChat && chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
                         window.PeerManager.syncGroupSettingsToPeers(chat);
@@ -57936,11 +58175,24 @@ ${stickerContext || "无"}
 
           chat.history.splice(messageIndex, 1, ...messagesToInsert);
 
-          // 后续的时间戳重新分配和UI刷新逻辑保持不变
-          let reassignTimestamp = timestamp;
+          // 后续的时间戳重新分配和UI刷新逻辑：仅在发生冲突时順延，保留后续气泡原有独立时间戳
+          let minNextTimestamp = Number(timestamp) || Date.now();
           for (let i = messageIndex; i < chat.history.length; i++) {
-            chat.history[i].timestamp = reassignTimestamp;
-            reassignTimestamp++;
+            const curTs = Number(chat.history[i].timestamp) || 0;
+            if (i < messageIndex + messagesToInsert.length || curTs < minNextTimestamp) {
+              chat.history[i].timestamp = minNextTimestamp;
+              minNextTimestamp++;
+            } else {
+              minNextTimestamp = curTs + 1;
+            }
+          }
+          if (minNextTimestamp > (window.lastAssignedMessageTimestamp || 0)) {
+            window.lastAssignedMessageTimestamp = minNextTimestamp;
+          }
+          if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
+            window.syncCurrentSoloThreadHistory(chat);
+          } else if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
+            chat.mainLineHistory = [...chat.history];
           }
 
           await db.chats.put(chat);
@@ -92705,6 +92957,13 @@ ${stickerContext || "无"}
                 chat.history = (chat.history || []).filter(
                   (msg) => !selectedMessages.has(msg.timestamp) && !(msg.isHidden && msg.content && msg.content.includes("已被用户删除")),
                 );
+                if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
+                  window.syncCurrentSoloThreadHistory(chat);
+                } else if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
+                  chat.mainLineHistory = (chat.mainLineHistory || []).filter(
+                    (msg) => !selectedMessages.has(msg.timestamp) && !(msg.isHidden && msg.content && msg.content.includes("已被用户删除")),
+                  );
+                }
 
                 // 3. 将更新后的chat对象存回数据库
                 await db.chats.put(chat);
