@@ -24828,9 +24828,74 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return pool[Math.floor(Math.random() * pool.length)];
         }
 
+        let tcLookupCache = null;
+        function invalidateTcLookupCache() {
+          tcLookupCache = null;
+        }
+
+        function getTcLookupCache() {
+          if (tcLookupCache) return tcLookupCache;
+          const groupById = new Map();
+          currentTcEditorGroups.forEach((g) => {
+            if (g && g.id) {
+              groupById.set(String(g.id), g);
+            }
+          });
+
+          const activeByRaw = new Map();
+          const fallbackByRaw = new Map();
+          const activeByClean = new Map();
+          const fallbackByClean = new Map();
+          const customRawKeys = [];
+          const seenRaw = new Set();
+
+          for (let i = 0; i < currentTcEditorEntries.length; i++) {
+            const ent = currentTcEditorEntries[i];
+            if (!ent || !ent.key) continue;
+            const entRaw = String(ent.key || "").trim();
+            if (!entRaw) continue;
+            const entClean = normalizeTcPlaceholderKey(entRaw).replace(/^麻薯-/, "").trim();
+            let isAct = ent.enabled !== false;
+            if (isAct && ent.groupId) {
+              const grp = groupById.get(String(ent.groupId));
+              if (grp && grp.enabled === false) isAct = false;
+            }
+            if (isAct) {
+              if (!activeByRaw.has(entRaw)) activeByRaw.set(entRaw, ent);
+              if (entClean && !activeByClean.has(entClean)) activeByClean.set(entClean, ent);
+            } else {
+              if (!fallbackByRaw.has(entRaw)) fallbackByRaw.set(entRaw, ent);
+              if (entClean && !fallbackByClean.has(entClean)) fallbackByClean.set(entClean, ent);
+            }
+            if (entRaw.length >= 2 && entRaw.length <= 60 && !entRaw.includes("\n") && !seenRaw.has(entRaw)) {
+              seenRaw.add(entRaw);
+              customRawKeys.push(entRaw);
+            }
+          }
+
+          customRawKeys.sort((a, b) => b.length - a.length);
+          const patternParts = ["\\{\\{[^{}\\n]{1,80}\\}\\}"];
+          customRawKeys.forEach((rk) => {
+            patternParts.push(escapeRegExpForTc(rk));
+          });
+
+          tcLookupCache = {
+            groupById,
+            activeByRaw,
+            fallbackByRaw,
+            activeByClean,
+            fallbackByClean,
+            customRawKeys,
+            masterPatternWithCustom: patternParts.join("|"),
+            masterPatternBuiltinOnly: "\\{\\{[^{}\\n]{1,80}\\}\\}",
+          };
+          return tcLookupCache;
+        }
+
         function getTcGroupColorById(groupId) {
           if (!groupId) return "";
-          const grp = currentTcEditorGroups.find(g => g && String(g.id) === String(groupId));
+          const cache = getTcLookupCache();
+          const grp = cache.groupById.get(String(groupId));
           return (grp && grp.color) ? String(grp.color) : "";
         }
 
@@ -25070,24 +25135,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function findMatchingCustomTcEntry(rawName) {
           const rawTrim = String(rawName || "").trim();
           if (!rawTrim) return null;
+          const cache = getTcLookupCache();
+          if (cache.activeByRaw.has(rawTrim)) return cache.activeByRaw.get(rawTrim);
           const clean = normalizeTcPlaceholderKey(rawTrim).replace(/^麻薯-/, "").trim();
-          let fallbackMatch = null;
-          for (let i = 0; i < currentTcEditorEntries.length; i++) {
-            const ent = currentTcEditorEntries[i];
-            if (!ent || !ent.key) continue;
-            const entRaw = String(ent.key || "").trim();
-            if (!entRaw) continue;
-            const entClean = normalizeTcPlaceholderKey(entRaw).replace(/^麻薯-/, "").trim();
-            if (entRaw === rawTrim || (clean && entClean && entClean === clean)) {
-              if (isTcCustomEntryActive(ent)) {
-                return ent;
-              }
-              if (!fallbackMatch) {
-                fallbackMatch = ent;
-              }
-            }
-          }
-          return fallbackMatch;
+          if (clean && cache.activeByClean.has(clean)) return cache.activeByClean.get(clean);
+          if (cache.fallbackByRaw.has(rawTrim)) return cache.fallbackByRaw.get(rawTrim);
+          if (clean && cache.fallbackByClean.has(clean)) return cache.fallbackByClean.get(clean);
+          return null;
         }
 
         function getAllMashuSuggestOptions() {
@@ -25101,7 +25155,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           currentTcEditorEntries.forEach((ent) => {
             if (!ent || !ent.key) return;
             const cleanKey = normalizeTcPlaceholderKey(ent.key).replace(/^麻薯-/, "").trim();
-            if (cleanKey && !existingNames.has(cleanKey) && !MASHU_ALIAS_TO_CANONICAL.has(cleanKey)) {
+            if (cleanKey && cleanKey.length <= 60 && !cleanKey.includes("\n") && !existingNames.has(cleanKey) && !MASHU_ALIAS_TO_CANONICAL.has(cleanKey)) {
               existingNames.add(cleanKey);
               list.push({
                 name: cleanKey,
@@ -25121,13 +25175,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function isTcCustomEntryActive(ent) {
           if (!ent || ent.enabled === false) return false;
           if (ent.groupId) {
-            const grp = currentTcEditorGroups.find((g) => g && g.id === ent.groupId);
+            const cache = getTcLookupCache();
+            const grp = cache.groupById.get(String(ent.groupId));
             if (grp && grp.enabled === false) return false;
           }
           return true;
         }
 
         function serializeTcRichEditorNode(node, isRoot = true) {
+          if (isRoot && !node.firstElementChild) {
+            return (node.textContent || "").replace(/\u200B/g, "");
+          }
           let out = "";
           const children = node.childNodes;
           for (let i = 0; i < children.length; i++) {
@@ -25429,25 +25487,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const text = String(rawText || "");
           if (!text) return { frag, lastInsertedNode: null };
 
-          const customRawKeys = [];
-          if (includePlainCustomKeys) {
-            const seenRaw = new Set();
-            currentTcEditorEntries.forEach((ent) => {
-              if (!ent || !ent.key) return;
-              const rk = String(ent.key || "").trim();
-              if (rk.length >= 2 && !seenRaw.has(rk)) {
-                seenRaw.add(rk);
-                customRawKeys.push(rk);
-              }
-            });
-            customRawKeys.sort((a, b) => b.length - a.length);
+          if (!includePlainCustomKeys && !text.includes("{{")) {
+            const singleNode = document.createTextNode(text);
+            frag.appendChild(singleNode);
+            return { frag, lastInsertedNode: singleNode };
           }
 
-          let patternParts = ["\\{\\{[^}\\n]+\\}\\}"];
-          customRawKeys.forEach((rk) => {
-            patternParts.push(escapeRegExpForTc(rk));
-          });
-          const masterRegex = new RegExp(patternParts.join("|"), "g");
+          const cache = getTcLookupCache();
+          if (includePlainCustomKeys && cache.customRawKeys.length === 0 && !text.includes("{{")) {
+            const singleNode = document.createTextNode(text);
+            frag.appendChild(singleNode);
+            return { frag, lastInsertedNode: singleNode };
+          }
+
+          const masterRegex = new RegExp(
+            includePlainCustomKeys ? cache.masterPatternWithCustom : cache.masterPatternBuiltinOnly,
+            "g"
+          );
 
           let lastIndex = 0;
           let match;
@@ -25511,7 +25567,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               textareaEl._richEl.style.height = defaultHeight;
               textareaEl._richEl.scrollTop = 0;
             }
-            textareaEl._syncFromTextarea();
+            if (!textareaEl._deferInitialHydrate) {
+              textareaEl._syncFromTextarea();
+            }
             return;
           }
 
@@ -25524,9 +25582,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const richEl = document.createElement("div");
           richEl.className = "moe-input tc-rich-textarea" + (isEntryBox ? " tc-entry-rich-textarea" : "");
           richEl.contentEditable = "true";
+          richEl.spellcheck = false;
+          richEl.setAttribute("spellcheck", "false");
+          richEl.setAttribute("autocorrect", "off");
+          richEl.setAttribute("autocapitalize", "off");
+          richEl.setAttribute("autocomplete", "off");
           richEl.setAttribute("data-placeholder", textareaEl.getAttribute("placeholder") || "");
           richEl.style.minHeight = defaultHeight;
           richEl.style.height = defaultHeight;
+          richEl._isRichHydrated = false;
+          richEl._isDirty = false;
           textareaEl._richEl = richEl;
 
           const suggestBox = document.createElement("div");
@@ -25539,12 +25604,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let currentTriggerState = null;
           let syncTimer = null;
           let isImeComposing = false;
+          let lastPasteHandledAt = 0;
+          let justPastedFlag = false;
 
           const syncToTextarea = () => {
             if (syncTimer) {
               clearTimeout(syncTimer);
               syncTimer = null;
             }
+            if (!richEl._isRichHydrated) return;
+            richEl._isDirty = false;
             const val = serializeTcRichEditorNode(richEl, true);
             textareaEl.value = val;
             if (typeof onValueChange === "function") {
@@ -25559,13 +25628,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
 
           const scheduleSyncToTextarea = () => {
+            richEl._isDirty = true;
             if (syncTimer) clearTimeout(syncTimer);
             syncTimer = setTimeout(() => {
               syncTimer = null;
               if (!isImeComposing) {
                 syncToTextarea();
               }
-            }, 120);
+            }, 180);
           };
 
           const syncFromTextarea = () => {
@@ -25573,18 +25643,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               clearTimeout(syncTimer);
               syncTimer = null;
             }
+            richEl._isRichHydrated = true;
+            richEl._isDirty = false;
             const raw = String(textareaEl.value || "");
             richEl.innerHTML = "";
             if (!raw) return;
-            const { frag } = buildTcRichFragmentFromText(raw, syncToTextarea, !isEntryBox);
+            const { frag } = buildTcRichFragmentFromText(raw, scheduleSyncToTextarea, !isEntryBox);
             richEl.appendChild(frag);
             if (richEl._isPreviewMode && typeof renderPreviewBlocksInRichEl === "function") {
               renderPreviewBlocksInRichEl();
             }
           };
 
+          const ensureRichHydrated = () => {
+            if (!richEl._isRichHydrated) {
+              syncFromTextarea();
+            }
+          };
+
           const clearPreviewBlocksInRichEl = () => {
-            richEl.querySelectorAll(".tc-inline-entry-preview-block").forEach((el) => el.remove());
+            richEl.querySelectorAll(".tc-inline-entry-preview-block").forEach((el) => {
+              if (el._syncTimer) {
+                clearTimeout(el._syncTimer);
+                el._syncTimer = null;
+                if (typeof el._syncEntryContent === "function") el._syncEntryContent();
+              }
+              el.remove();
+            });
           };
 
           const renderPreviewBlocksInRichEl = () => {
@@ -25601,6 +25686,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const previewEl = document.createElement("div");
                 previewEl.className = "tc-inline-entry-preview-block";
                 previewEl.contentEditable = "true";
+                previewEl.spellcheck = false;
+                previewEl.setAttribute("spellcheck", "false");
+                previewEl.setAttribute("autocorrect", "off");
+                previewEl.setAttribute("autocapitalize", "off");
                 previewEl._boundEntry = ent;
                 if (ent.groupId) {
                   const grpColor = getTcGroupColorById(ent.groupId);
@@ -25611,20 +25700,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 previewEl.textContent = bodyText;
 
                 const syncPreviewToEntry = () => {
+                  if (previewEl._syncTimer) {
+                    clearTimeout(previewEl._syncTimer);
+                    previewEl._syncTimer = null;
+                  }
                   const newText = serializeTcRichEditorNode(previewEl, true);
                   ent.content = newText;
-                  const entriesContainer = document.getElementById("tc-entries-list");
-                  if (entriesContainer) {
-                    let entryTa = ent._entryTextarea && entriesContainer.contains(ent._entryTextarea) ? ent._entryTextarea : null;
-                    if (!entryTa) {
-                      const entryIdx = currentTcEditorEntries.indexOf(ent);
-                      if (entryIdx >= 0) {
-                        entryTa = entriesContainer.querySelector(`textarea.tc-entry-textarea[data-entry-idx="${entryIdx}"]`);
-                      }
-                    }
-                    if (entryTa) {
-                      entryTa.value = newText;
-                      if (typeof entryTa._syncFromTextarea === "function") {
+                  const entryTa = ent._entryTextarea;
+                  if (entryTa) {
+                    entryTa.value = newText;
+                    if (entryTa._richEl) {
+                      if (ent.collapsed) {
+                        entryTa._richEl._isRichHydrated = false;
+                        entryTa._richEl._isDirty = false;
+                      } else if (typeof entryTa._syncFromTextarea === "function") {
                         entryTa._syncFromTextarea();
                       }
                     }
@@ -25641,10 +25730,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   });
                 };
 
+                const scheduleSyncPreviewToEntry = () => {
+                  if (previewEl._syncTimer) clearTimeout(previewEl._syncTimer);
+                  previewEl._syncTimer = setTimeout(() => {
+                    previewEl._syncTimer = null;
+                    syncPreviewToEntry();
+                  }, 200);
+                };
+
                 previewEl._syncEntryContent = syncPreviewToEntry;
+                previewEl._scheduleSyncEntryContent = scheduleSyncPreviewToEntry;
                 previewEl.addEventListener("input", (ev) => {
                   ev.stopPropagation();
-                  syncPreviewToEntry();
+                  scheduleSyncPreviewToEntry();
+                });
+                previewEl.addEventListener("blur", () => {
+                  if (previewEl._syncTimer) {
+                    syncPreviewToEntry();
+                  }
                 });
 
                 const insertAfterNode = (b.nextSibling && b.nextSibling.nodeType === Node.TEXT_NODE && b.nextSibling.nodeValue === "\u200B")
@@ -25701,7 +25804,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return;
             }
 
-            const bubbleNode = createMashuBubbleElement(chosenName, syncToTextarea, explicitFullTag);
+            const bubbleNode = createMashuBubbleElement(chosenName, scheduleSyncToTextarea, explicitFullTag);
             const afterNode = document.createTextNode("\u200B" + afterStr);
 
             if (beforeStr) {
@@ -25724,10 +25827,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             hideSuggest();
-            syncToTextarea();
+            scheduleSyncToTextarea();
           };
 
           const checkTriggerAndRenderSuggest = () => {
+            if (justPastedFlag) return;
             const sel = window.getSelection();
             if (!sel || sel.rangeCount === 0) {
               hideSuggest();
@@ -25756,11 +25860,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const textNode = range.startContainer;
             const offset = range.startOffset;
             const textVal = textNode.nodeValue || "";
-            const windowStart = Math.max(0, offset - 120);
+            const windowStart = Math.max(0, offset - 80);
             const before = textVal.slice(windowStart, offset);
             const after = textVal.slice(offset, offset + 10);
 
-            const completeMatch = before.match(/\{\{([^}\n]+)\}\}$/);
+            const completeMatch = before.match(/\{\{([^{}\n]{1,60})\}\}$/);
             if (completeMatch) {
               const rawInner = completeMatch[1].trim();
               const strippedInner = rawInner.replace(/^麻薯-/, "").trim();
@@ -25779,13 +25883,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             if (!isEntryBox && !before.includes("{{")) {
-              const customRawKeys = [];
-              currentTcEditorEntries.forEach((ent) => {
-                if (!ent || !ent.key) return;
-                const rk = String(ent.key || "").trim();
-                if (rk.length >= 2) customRawKeys.push(rk);
-              });
-              customRawKeys.sort((a, b) => b.length - a.length);
+              const cache = getTcLookupCache();
+              const customRawKeys = cache.customRawKeys;
               for (let i = 0; i < customRawKeys.length; i++) {
                 const rk = customRawKeys[i];
                 if (before.endsWith(rk)) {
@@ -25818,7 +25917,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               startOffset = windowStart + emptyBraceAfterMatch.index;
               endOffset = offset;
             } else {
-              const openMatch = before.match(/\{\{(?:麻薯-)?([^}\n]*)$/);
+              const openMatch = before.match(/\{\{(?:麻薯-)?([^{}\n]*)$/);
               if (openMatch) {
                 query = openMatch[1];
                 startOffset = windowStart + openMatch.index;
@@ -25882,6 +25981,66 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             suggestBox.classList.add("visible");
           };
 
+          const insertPlainTextIntoRichEditor = (rawClipText) => {
+            const text = String(rawClipText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+            if (!text) return;
+            ensureRichHydrated();
+            justPastedFlag = true;
+            setTimeout(() => {
+              justPastedFlag = false;
+            }, 150);
+
+            const sel = window.getSelection();
+            let range = null;
+            if (sel && sel.rangeCount > 0 && richEl.contains(sel.getRangeAt(0).startContainer)) {
+              range = sel.getRangeAt(0);
+            } else {
+              range = document.createRange();
+              range.selectNodeContents(richEl);
+              range.collapse(false);
+            }
+
+            const previewBlockAnc = range.startContainer.nodeType === Node.ELEMENT_NODE
+              ? range.startContainer.closest(".tc-inline-entry-preview-block")
+              : (range.startContainer.parentElement ? range.startContainer.parentElement.closest(".tc-inline-entry-preview-block") : null);
+            range.deleteContents();
+
+            if (previewBlockAnc) {
+              const tn = document.createTextNode(text);
+              range.insertNode(tn);
+              if (sel) {
+                const newRange = document.createRange();
+                newRange.setStartAfter(tn);
+                newRange.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(newRange);
+              }
+              if (typeof previewBlockAnc._scheduleSyncEntryContent === "function") {
+                previewBlockAnc._scheduleSyncEntryContent();
+              } else if (typeof previewBlockAnc._syncEntryContent === "function") {
+                previewBlockAnc._syncEntryContent();
+              }
+              hideSuggest();
+              return;
+            }
+
+            const { frag, lastInsertedNode } = buildTcRichFragmentFromText(text, scheduleSyncToTextarea, !isEntryBox);
+            range.insertNode(frag);
+            if (lastInsertedNode && sel) {
+              const newRange = document.createRange();
+              newRange.setStartAfter(lastInsertedNode);
+              newRange.collapse(true);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+            }
+            scheduleSyncToTextarea();
+            hideSuggest();
+          };
+
+          richEl.addEventListener("focus", () => {
+            ensureRichHydrated();
+          });
+
           richEl.addEventListener("compositionstart", () => {
             isImeComposing = true;
           });
@@ -25889,12 +26048,37 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           richEl.addEventListener("compositionend", () => {
             isImeComposing = false;
             scheduleSyncToTextarea();
-            checkTriggerAndRenderSuggest();
+            if (!justPastedFlag) {
+              checkTriggerAndRenderSuggest();
+            }
+          });
+
+          richEl.addEventListener("beforeinput", (e) => {
+            const inputType = e.inputType || "";
+            if (Date.now() - lastPasteHandledAt < 60 && (inputType === "insertFromPaste" || inputType === "insertText" || inputType === "insertReplacementText")) {
+              e.preventDefault();
+              return;
+            }
+            if (inputType === "insertFromPaste" || inputType === "insertFromDrop") {
+              const dtText = (e.dataTransfer && e.dataTransfer.getData("text/plain")) || e.data || "";
+              if (dtText) {
+                lastPasteHandledAt = Date.now();
+                e.preventDefault();
+                insertPlainTextIntoRichEditor(dtText);
+              }
+              return;
+            }
+            if ((inputType === "insertText" || inputType === "insertReplacementText") && e.data && (e.data.length > 40 || e.data.includes("\n") || e.data.includes("\r"))) {
+              lastPasteHandledAt = Date.now();
+              e.preventDefault();
+              insertPlainTextIntoRichEditor(e.data);
+            }
           });
 
           richEl.addEventListener("input", () => {
+            richEl._isRichHydrated = true;
             scheduleSyncToTextarea();
-            if (!isImeComposing) {
+            if (!isImeComposing && !justPastedFlag) {
               checkTriggerAndRenderSuggest();
             }
           });
@@ -25906,57 +26090,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
 
           richEl.addEventListener("mouseup", () => {
-            setTimeout(checkTriggerAndRenderSuggest, 10);
+            if (suggestBox.classList.contains("visible")) {
+              setTimeout(checkTriggerAndRenderSuggest, 10);
+            }
           });
 
           richEl.addEventListener("blur", () => {
             setTimeout(() => {
               hideSuggest();
               if (!richEl.isConnected) return;
-              syncToTextarea();
+              if (richEl._isDirty) {
+                syncToTextarea();
+              }
             }, 150);
           });
 
           richEl.addEventListener("paste", (e) => {
+            lastPasteHandledAt = Date.now();
             e.preventDefault();
             const rawClip = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
-            const text = rawClip.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-            if (!text) return;
-            const sel = window.getSelection();
-            if (!sel || sel.rangeCount === 0) return;
-            const range = sel.getRangeAt(0);
-            const previewBlockAnc = range.startContainer.nodeType === Node.ELEMENT_NODE
-              ? range.startContainer.closest(".tc-inline-entry-preview-block")
-              : (range.startContainer.parentElement ? range.startContainer.parentElement.closest(".tc-inline-entry-preview-block") : null);
-            range.deleteContents();
-
-            if (previewBlockAnc) {
-              const tn = document.createTextNode(text);
-              range.insertNode(tn);
-              const newRange = document.createRange();
-              newRange.setStartAfter(tn);
-              newRange.collapse(true);
-              sel.removeAllRanges();
-              sel.addRange(newRange);
-              if (typeof previewBlockAnc._syncEntryContent === "function") {
-                previewBlockAnc._syncEntryContent();
-              }
-              hideSuggest();
-              return;
-            }
-
-            const { frag, lastInsertedNode } = buildTcRichFragmentFromText(text, syncToTextarea, !isEntryBox);
-
-            range.insertNode(frag);
-            if (lastInsertedNode) {
-              const newRange = document.createRange();
-              newRange.setStartAfter(lastInsertedNode);
-              newRange.collapse(true);
-              sel.removeAllRanges();
-              sel.addRange(newRange);
-            }
-            syncToTextarea();
-            hideSuggest();
+            insertPlainTextIntoRichEditor(rawClip);
           });
 
           richEl.addEventListener("keydown", (e) => {
@@ -26005,10 +26158,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               newRange.collapse(true);
               sel.removeAllRanges();
               sel.addRange(newRange);
-              if (previewBlockAnc && typeof previewBlockAnc._syncEntryContent === "function") {
+              if (previewBlockAnc && typeof previewBlockAnc._scheduleSyncEntryContent === "function") {
+                previewBlockAnc._scheduleSyncEntryContent();
+              } else if (previewBlockAnc && typeof previewBlockAnc._syncEntryContent === "function") {
                 previewBlockAnc._syncEntryContent();
               } else {
-                syncToTextarea();
+                scheduleSyncToTextarea();
               }
               hideSuggest();
               return;
@@ -26026,7 +26181,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (beforeClean === "" && sc.previousSibling && sc.previousSibling.classList && sc.previousSibling.classList.contains("tc-inline-mashu-bubble")) {
                       e.preventDefault();
                       sc.previousSibling.remove();
-                      syncToTextarea();
+                      scheduleSyncToTextarea();
                       hideSuggest();
                       return;
                     }
@@ -26035,7 +26190,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (prev && prev.classList && prev.classList.contains("tc-inline-mashu-bubble")) {
                       e.preventDefault();
                       prev.remove();
-                      syncToTextarea();
+                      scheduleSyncToTextarea();
                       hideSuggest();
                       return;
                     }
@@ -26048,12 +26203,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           textareaEl._mashuRichAttached = true;
           textareaEl._syncFromTextarea = syncFromTextarea;
           textareaEl._syncToTextarea = syncToTextarea;
+          textareaEl._ensureRichHydrated = ensureRichHydrated;
           textareaEl._setPreviewMode = setPreviewMode;
           textareaEl._renderPreviewBlocks = renderPreviewBlocksInRichEl;
-          syncFromTextarea();
+          if (!textareaEl._deferInitialHydrate) {
+            syncFromTextarea();
+          }
         }
 
         function updateStaticTcBubblesActiveState() {
+          invalidateTcLookupCache();
           const ids = ["tc-preset-header-input", "tc-preset-general-input"];
           ids.forEach((id) => {
             const ta = document.getElementById(id);
@@ -26064,6 +26223,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const ent = findMatchingCustomTcEntry(rawTag);
               const isAct = isTcCustomEntryActive(ent);
               b.classList.toggle("is-disabled-entry", !isAct);
+              if (ent && ent.groupId) {
+                const grpColor = getTcGroupColorById(ent.groupId);
+                if (grpColor) {
+                  b.style.borderColor = grpColor;
+                  b.style.color = grpColor;
+                  b.style.backgroundColor = `color-mix(in srgb, ${grpColor} 12%, var(--card-bg))`;
+                }
+              }
             });
             if (ta._richEl._isPreviewMode && typeof ta._renderPreviewBlocks === "function") {
               ta._renderPreviewBlocks();
@@ -26072,6 +26239,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         function syncStaticTcRichEditors() {
+          invalidateTcLookupCache();
           const headerInput = document.getElementById("tc-preset-header-input");
           const generalInput = document.getElementById("tc-preset-general-input");
           const cocInput = document.getElementById("tc-preset-coc-input");
@@ -26081,14 +26249,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         function refreshStaticTcRichEditorsDisplay() {
+          invalidateTcLookupCache();
           const ids = ["tc-preset-header-input", "tc-preset-general-input", "tc-preset-coc-input"];
-          ids.forEach((id) => {
-            const ta = document.getElementById(id);
-            if (ta) {
-              if (typeof ta._syncToTextarea === "function") ta._syncToTextarea();
-              if (typeof ta._syncFromTextarea === "function") ta._syncFromTextarea();
-            }
-          });
+          isFlushingTcRichEditors = true;
+          try {
+            ids.forEach((id) => {
+              const ta = document.getElementById(id);
+              if (ta) {
+                if (ta._richEl && ta._richEl._isDirty && typeof ta._syncToTextarea === "function") {
+                  ta._syncToTextarea();
+                }
+                if (typeof ta._syncFromTextarea === "function") {
+                  ta._syncFromTextarea();
+                }
+              }
+            });
+          } finally {
+            isFlushingTcRichEditors = false;
+          }
           if (typeof updateTcEntryLocateIcons === "function") {
             updateTcEntryLocateIcons();
           }
@@ -26134,15 +26312,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             bubbles.forEach((b) => {
               const rawTag = String(b.dataset.mashuTag || b.textContent || "").trim();
               if (!rawTag) return;
-              const cleanTag = normalizeTcPlaceholderKey(rawTag).replace(/^麻薯-/, "").trim();
-              currentTcEditorEntries.forEach((ent) => {
-                if (!ent || !ent.key || rankMap.has(ent)) return;
-                const entRaw = String(ent.key || "").trim();
-                const entClean = normalizeTcPlaceholderKey(entRaw).replace(/^麻薯-/, "").trim();
-                if (entRaw === rawTag || (cleanTag && entClean && entClean === cleanTag)) {
-                  rankMap.set(ent, nextRank++);
-                }
-              });
+              const ent = findMatchingCustomTcEntry(rawTag);
+              if (ent && !rankMap.has(ent)) {
+                rankMap.set(ent, nextRank++);
+              }
             });
           });
           return rankMap;
@@ -26211,7 +26384,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           isUpdatingTcLocateIcons = true;
           try {
             const rankMap = getTcBubbleRankMap();
-            let statusChanged = false;
             const locateBtns = entriesContainer.querySelectorAll(".tc-entry-locate-btn");
             locateBtns.forEach((btn) => {
               const ent = btn._boundEntry || (!isNaN(Number(btn.dataset.entryIdx)) ? currentTcEditorEntries[Number(btn.dataset.entryIdx)] : null);
@@ -26219,17 +26391,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               btn.style.display = "inline-flex";
               if (btn.disabled !== nextDisabled) {
                 btn.disabled = nextDisabled;
-                statusChanged = true;
               }
             });
-
-            const isEditingInsideEntries = Boolean(document.activeElement && entriesContainer.contains(document.activeElement));
-            if (!isEditingInsideEntries) {
-              const orderChanged = syncTcEntriesOrderByBubbles(rankMap);
-              if (orderChanged || statusChanged) {
-                renderTcEditorGroupsAndEntries(false);
-              }
-            }
           } finally {
             isUpdatingTcLocateIcons = false;
           }
@@ -26290,9 +26453,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!modal) return;
           isFlushingTcRichEditors = true;
           try {
+            modal.querySelectorAll(".tc-inline-entry-preview-block").forEach((pb) => {
+              if (pb._syncTimer && typeof pb._syncEntryContent === "function") {
+                pb._syncEntryContent();
+              }
+            });
             const textareas = modal.querySelectorAll("textarea");
             textareas.forEach((ta) => {
-              if (typeof ta._syncToTextarea === "function") {
+              if (ta._richEl && ta._richEl._isDirty && typeof ta._syncToTextarea === "function") {
                 ta._syncToTextarea();
               }
             });
@@ -26302,6 +26470,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         function renderTcEditorGroupsOnly() {
+          invalidateTcLookupCache();
           const groupsContainer = document.getElementById("tc-groups-list");
           if (!groupsContainer) return;
           groupsContainer.innerHTML = "";
@@ -26324,6 +26493,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               cb.checked = grp.enabled !== false;
               cb.onchange = (e) => {
                 grp.enabled = e.target.checked;
+                invalidateTcLookupCache();
                 updateStaticTcBubblesActiveState();
               };
 
@@ -26351,14 +26521,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 openTcGroupColorPickerPopover(colorBtn, grp.color, (newHex) => {
                   grp.color = newHex;
                   colorInner.style.backgroundColor = newHex;
-                  refreshStaticTcRichEditorsDisplay();
-                  const modal = document.getElementById("thought-chain-editor-modal");
-                  if (modal) {
-                    modal.querySelectorAll("textarea.tc-entry-textarea").forEach((ta) => {
-                      if (typeof ta._syncToTextarea === "function") ta._syncToTextarea();
-                      if (typeof ta._syncFromTextarea === "function") ta._syncFromTextarea();
-                    });
-                  }
+                  invalidateTcLookupCache();
+                  updateStaticTcBubblesActiveState();
                 });
               };
 
@@ -26438,6 +26602,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (shouldFlushFirst) {
             flushAllTcRichEditors();
           }
+          invalidateTcLookupCache();
           syncTcEntriesOrderByBubbles();
           renderTcEditorGroupsOnly();
 
@@ -26449,10 +26614,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             entriesContainer.appendChild(emptyEl);
           } else {
             const rankMap = getTcBubbleRankMap();
-            const buildEntryCard = (ent, idx, siblingList = null, siblingPos = -1) => {
+            const buildEntryCard = (ent, idx, siblingList = null, siblingPos = -1, isGroupCollapsed = false) => {
+              if (ent._cardEl && typeof ent._updateCardState === "function") {
+                ent._updateCardState(idx, siblingList, siblingPos, isGroupCollapsed);
+                return ent._cardEl;
+              }
+
               const card = document.createElement("div");
               card.className = "tc-entry-item-card";
               card._boundEntry = ent;
+              ent._cardEl = card;
 
               const topRow = document.createElement("div");
               topRow.className = "tc-sub-row";
@@ -26463,10 +26634,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               cb.checked = ent.enabled !== false;
               cb.onchange = (e) => {
                 ent.enabled = e.target.checked;
+                invalidateTcLookupCache();
                 updateStaticTcBubblesActiveState();
               };
 
               let keyRefreshTimer = null;
+              let lastRefreshedKey = ent.key || "";
               const keyInput = document.createElement("input");
               keyInput.type = "text";
               keyInput.className = "moe-input tc-sub-input";
@@ -26475,14 +26648,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               keyInput.value = ent.key || "";
               keyInput.oninput = (e) => {
                 ent.key = e.target.value;
+                invalidateTcLookupCache();
                 if (keyRefreshTimer) clearTimeout(keyRefreshTimer);
                 keyRefreshTimer = setTimeout(() => {
-                  refreshStaticTcRichEditorsDisplay();
-                }, 380);
+                  keyRefreshTimer = null;
+                  if (ent.key !== lastRefreshedKey) {
+                    lastRefreshedKey = ent.key;
+                    refreshStaticTcRichEditorsDisplay();
+                  }
+                }, 650);
               };
               keyInput.onchange = () => {
-                if (keyRefreshTimer) clearTimeout(keyRefreshTimer);
-                refreshStaticTcRichEditorsDisplay();
+                if (keyRefreshTimer) {
+                  clearTimeout(keyRefreshTimer);
+                  keyRefreshTimer = null;
+                }
+                if (ent.key !== lastRefreshedKey) {
+                  lastRefreshedKey = ent.key;
+                  setTimeout(() => {
+                    refreshStaticTcRichEditorsDisplay();
+                  }, 80);
+                }
               };
 
               const doCopyEntryKey = async () => {
@@ -26538,18 +26724,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const secondRow = document.createElement("div");
               secondRow.className = "tc-sub-row";
 
-              const isLoadedInText = Boolean(
-                (siblingList && siblingList[siblingPos] && siblingList[siblingPos].isLoadedInText) ||
-                rankMap.has(ent)
-              );
-
               const locateBtn = document.createElement("button");
               locateBtn.type = "button";
               locateBtn.className = "tc-btn-action tc-entry-locate-btn";
-              locateBtn.dataset.entryIdx = String(idx);
               locateBtn._boundEntry = ent;
               locateBtn.title = "定位到气泡";
-              locateBtn.disabled = !isLoadedInText;
               locateBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>`;
               locateBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -26559,37 +26738,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const groupSelect = document.createElement("select");
               groupSelect.className = "moe-input tc-sub-select";
-              groupSelect.dataset.entryIdx = String(idx);
               groupSelect._boundEntry = ent;
-              const defaultOpt = document.createElement("option");
-              defaultOpt.value = "";
-              defaultOpt.textContent = "无分组";
-              groupSelect.appendChild(defaultOpt);
-              currentTcEditorGroups.forEach((g) => {
-                const opt = document.createElement("option");
-                opt.value = g.id;
-                opt.textContent = g.name || "未命名";
-                groupSelect.appendChild(opt);
-              });
-              groupSelect.value = ent.groupId || "";
               groupSelect.onchange = (e) => {
                 flushAllTcRichEditors();
                 ent.groupId = e.target.value;
+                invalidateTcLookupCache();
                 renderTcEditorGroupsAndEntries(false);
                 refreshStaticTcRichEditorsDisplay();
               };
+
+              let curSiblingList = siblingList;
+              let curSiblingPos = siblingPos;
+              let canMoveUp = false;
+              let canMoveDown = false;
 
               const upBtn = document.createElement("button");
               upBtn.type = "button";
               upBtn.className = "tc-btn-action tc-entry-move-btn";
               upBtn.title = "上移";
               upBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
-              const canMoveUp = !isLoadedInText && Array.isArray(siblingList) && siblingPos > 0 && !siblingList[siblingPos - 1].isLoadedInText;
-              upBtn.disabled = !canMoveUp;
               upBtn.onclick = () => {
-                if (!canMoveUp) return;
+                if (!canMoveUp || !Array.isArray(curSiblingList)) return;
                 flushAllTcRichEditors();
-                const prevEnt = siblingList[siblingPos - 1].ent;
+                const prevEnt = curSiblingList[curSiblingPos - 1].ent;
                 const realIdx = currentTcEditorEntries.indexOf(ent);
                 const prevIdx = currentTcEditorEntries.indexOf(prevEnt);
                 if (realIdx !== -1 && prevIdx !== -1) {
@@ -26605,12 +26776,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               downBtn.className = "tc-btn-action tc-entry-move-btn";
               downBtn.title = "下移";
               downBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
-              const canMoveDown = !isLoadedInText && Array.isArray(siblingList) && siblingPos >= 0 && siblingPos < siblingList.length - 1 && !siblingList[siblingPos + 1].isLoadedInText;
-              downBtn.disabled = !canMoveDown;
               downBtn.onclick = () => {
-                if (!canMoveDown) return;
+                if (!canMoveDown || !Array.isArray(curSiblingList)) return;
                 flushAllTcRichEditors();
-                const nextEnt = siblingList[siblingPos + 1].ent;
+                const nextEnt = curSiblingList[curSiblingPos + 1].ent;
                 const realIdx = currentTcEditorEntries.indexOf(ent);
                 const nextIdx = currentTcEditorEntries.indexOf(nextEnt);
                 if (realIdx !== -1 && nextIdx !== -1) {
@@ -26633,6 +26802,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (realIdx !== -1) {
                   currentTcEditorEntries.splice(realIdx, 1);
                 }
+                invalidateTcLookupCache();
                 renderTcEditorGroupsAndEntries(false);
                 refreshStaticTcRichEditorsDisplay();
               };
@@ -26647,6 +26817,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               contentArea.className = "moe-input tc-entry-textarea";
               contentArea.dataset.entryIdx = String(idx);
               contentArea._boundEntry = ent;
+              contentArea._deferInitialHydrate = Boolean(ent.collapsed || isGroupCollapsed);
               ent._entryTextarea = contentArea;
               contentArea.rows = 3;
               contentArea.placeholder = "输入该指代词对应的正文内容...";
@@ -26673,15 +26844,54 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               });
 
               const editorWrap = contentArea.parentNode !== card ? contentArea.parentNode : contentArea;
-              if (ent.collapsed) {
-                editorWrap.style.display = "none";
-              }
               foldBlankArea.onclick = () => {
                 ent.collapsed = !ent.collapsed;
                 editorWrap.style.display = ent.collapsed ? "none" : "";
+                if (!ent.collapsed && typeof contentArea._ensureRichHydrated === "function") {
+                  contentArea._ensureRichHydrated();
+                }
                 persistTcFoldStateToDb();
               };
 
+              ent._updateCardState = (nextIdx, nextSiblingList, nextSiblingPos, nextGroupCollapsed) => {
+                curSiblingList = nextSiblingList;
+                curSiblingPos = nextSiblingPos;
+                locateBtn.dataset.entryIdx = String(nextIdx);
+                groupSelect.dataset.entryIdx = String(nextIdx);
+                contentArea.dataset.entryIdx = String(nextIdx);
+
+                groupSelect.innerHTML = "";
+                const defaultOpt = document.createElement("option");
+                defaultOpt.value = "";
+                defaultOpt.textContent = "无分组";
+                groupSelect.appendChild(defaultOpt);
+                currentTcEditorGroups.forEach((g) => {
+                  const opt = document.createElement("option");
+                  opt.value = g.id;
+                  opt.textContent = g.name || "未命名";
+                  groupSelect.appendChild(opt);
+                });
+                groupSelect.value = ent.groupId || "";
+
+                const isLoadedInText = Boolean(
+                  (nextSiblingList && nextSiblingList[nextSiblingPos] && nextSiblingList[nextSiblingPos].isLoadedInText) ||
+                  rankMap.has(ent)
+                );
+                locateBtn.disabled = !isLoadedInText;
+
+                canMoveUp = !isLoadedInText && Array.isArray(nextSiblingList) && nextSiblingPos > 0 && !nextSiblingList[nextSiblingPos - 1].isLoadedInText;
+                upBtn.disabled = !canMoveUp;
+
+                canMoveDown = !isLoadedInText && Array.isArray(nextSiblingList) && nextSiblingPos >= 0 && nextSiblingPos < nextSiblingList.length - 1 && !nextSiblingList[nextSiblingPos + 1].isLoadedInText;
+                downBtn.disabled = !canMoveDown;
+
+                editorWrap.style.display = ent.collapsed ? "none" : "";
+                if (!ent.collapsed && !nextGroupCollapsed && typeof contentArea._ensureRichHydrated === "function") {
+                  contentArea._ensureRichHydrated();
+                }
+              };
+
+              ent._updateCardState(idx, siblingList, siblingPos, isGroupCollapsed);
               return card;
             };
 
@@ -26792,6 +27002,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 grp.collapsed = !grp.collapsed;
                 groupBox.classList.toggle("collapsed", grp.collapsed);
                 foldBtn.textContent = grp.collapsed ? "展开" : "折叠";
+                if (!grp.collapsed) {
+                  groupEntries.forEach(({ ent }) => {
+                    if (ent && !ent.collapsed && ent._entryTextarea && typeof ent._entryTextarea._ensureRichHydrated === "function") {
+                      ent._entryTextarea._ensureRichHydrated();
+                    }
+                  });
+                }
                 persistTcFoldStateToDb();
               };
 
@@ -26809,7 +27026,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const groupBody = document.createElement("div");
               groupBody.className = "tc-entry-group-body";
               groupEntries.forEach(({ ent, idx }, pos) => {
-                groupBody.appendChild(buildEntryCard(ent, idx, groupEntries, pos));
+                groupBody.appendChild(buildEntryCard(ent, idx, groupEntries, pos, Boolean(grp.collapsed)));
               });
 
               const bottomAddRow = document.createElement("div");
@@ -26835,7 +27052,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             });
             ungroupedEntries.forEach(({ ent, idx }, pos) => {
-              entriesContainer.appendChild(buildEntryCard(ent, idx, ungroupedEntries, pos));
+              entriesContainer.appendChild(buildEntryCard(ent, idx, ungroupedEntries, pos, false));
             });
             updateTcEntryLocateIcons();
           }
@@ -26962,6 +27179,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             currentTcEditorEntries = [];
           }
 
+          invalidateTcLookupCache();
           syncStaticTcRichEditors();
           const switchConfigs = [
             { switchBtnId: "tc-switch-header-btn", taId: "tc-preset-header-input", bodyId: "tc-preset-header-body", foldBtnId: "tc-toggle-header-btn", foldKey: "headerCollapsed" },
@@ -105773,8 +105991,12 @@ ${stickerContext || "无"}
             if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
 
+            let lastWakeReconnectTime = 0;
             const handlePageWakeReconnect = async () => {
               if (document.visibilityState && document.visibilityState !== "visible") return;
+              const now = Date.now();
+              if (now - lastWakeReconnectTime < 1500) return;
+              lastWakeReconnectTime = now;
               if (state && state.activeChatId !== null && state.activeChatId !== undefined && document.getElementById("chat-interface-screen")?.classList.contains("active")) {
                 const activeChat = state.chats && (state.chats[state.activeChatId] || state.chats[String(state.activeChatId)]);
                 const msgsContainer = document.getElementById("chat-messages");
@@ -105826,12 +106048,37 @@ ${stickerContext || "无"}
             }, 200);
 
             let hydrateTimer = null;
-            const obs = new MutationObserver(() => {
+            const obs = new MutationObserver((mutations) => {
               if (hydrateTimer) return;
+              let mayContainVaultImg = false;
+              for (let i = 0; i < mutations.length; i++) {
+                const m = mutations[i];
+                const target = m.target;
+                if (target && target.nodeType === 1 && target.closest && target.closest("#thought-chain-editor-modal")) {
+                  continue;
+                }
+                if (m.type === "attributes") {
+                  const val = target.getAttribute && (target.getAttribute("src") || target.getAttribute("style") || "");
+                  if (val && val.includes("vault://")) {
+                    mayContainVaultImg = true;
+                    break;
+                  }
+                } else if (m.type === "childList" && m.addedNodes && m.addedNodes.length > 0) {
+                  for (let j = 0; j < m.addedNodes.length; j++) {
+                    const n = m.addedNodes[j];
+                    if (n.nodeType === 1) {
+                      mayContainVaultImg = true;
+                      break;
+                    }
+                  }
+                  if (mayContainVaultImg) break;
+                }
+              }
+              if (!mayContainVaultImg) return;
               hydrateTimer = setTimeout(() => {
                 hydrateTimer = null;
                 hydrateDomVaultImages();
-              }, 32);
+              }, 80);
             });
             obs.observe(document.body, {
               childList: true,
