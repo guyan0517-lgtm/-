@@ -66,7 +66,7 @@
     },
 
     getOrCreateMyPeerCode: function () {
-      if (this.myPeerCode) {
+      if (this.myPeerCode && !this._generatedBeforeDbReady) {
         return this.myPeerCode;
       }
 
@@ -80,9 +80,24 @@
         window.state.globalSettings &&
         window.state.globalSettings.myPeerCode
       ) {
-        if (!savedCode) {
-          savedCode = window.state.globalSettings.myPeerCode;
+        const gsCode = this.normalizePeerCode(window.state.globalSettings.myPeerCode);
+        if (gsCode && (!savedCode || this._generatedBeforeDbReady)) {
+          savedCode = gsCode;
           localStorage.setItem("tukey_my_peer_code", savedCode);
+          this._generatedBeforeDbReady = false;
+        }
+      }
+      if (!savedCode && window.state && window.state.chats) {
+        for (const c of Object.values(window.state.chats)) {
+          if (c && c.myPeerCode) {
+            const cCode = this.normalizePeerCode(c.myPeerCode);
+            if (cCode) {
+              savedCode = cCode;
+              localStorage.setItem("tukey_my_peer_code", savedCode);
+              this._generatedBeforeDbReady = false;
+              break;
+            }
+          }
         }
       }
 
@@ -91,9 +106,18 @@
         return savedCode;
       }
 
+      if (this.myPeerCode) {
+        return this.myPeerCode;
+      }
+
       const newCode = this.generateRandomCode();
       this.myPeerCode = newCode;
-      localStorage.setItem("tukey_my_peer_code", newCode);
+      if (this.isAppDbReady()) {
+        localStorage.setItem("tukey_my_peer_code", newCode);
+        this._generatedBeforeDbReady = false;
+      } else {
+        this._generatedBeforeDbReady = true;
+      }
       return newCode;
     },
 
@@ -215,7 +239,21 @@
           window.state.globalSettings.deletedPeerCodes = this.getDeletedPeerCodes();
         }
         if (window.db && window.db.globalSettings) {
-          const mainSettings = (await window.db.globalSettings.get("main")) || { id: "main" };
+          const existingDbSettings = await window.db.globalSettings.get("main");
+          const mainSettings =
+            (existingDbSettings && typeof existingDbSettings === "object" ? existingDbSettings : null) ||
+            (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object"
+              ? Object.assign({ id: "main" }, window.state.globalSettings)
+              : { id: "main" });
+          if (
+            window.state &&
+            window.state.globalSettings &&
+            window.state.globalSettings.widgetData &&
+            (!mainSettings.widgetData || Object.keys(mainSettings.widgetData).length === 0)
+          ) {
+            mainSettings.widgetData = window.state.globalSettings.widgetData;
+          }
+          mainSettings.id = "main";
           mainSettings.myPeerCode = myCode;
           mainSettings.peerFriendsBackup = this.getSavedFriendsBackup();
           mainSettings.deletedPeerCodes = this.getDeletedPeerCodes();
@@ -240,11 +278,28 @@
       try {
         const map = this.getSavedFriendsBackup();
         const prev = map[chat.peerCode] || {};
+        const isGenericName = (n) => !n || n === "我" || n === "密友" || n === "你的昵称" || n === "点击修改昵称";
+        const defaultAva = window.defaultAvatar || "https://api.iconify.design/lucide:user.svg?color=%23888888";
+        const isRealAva = (a) =>
+          Boolean(
+            a &&
+              typeof a === "string" &&
+              !a.startsWith("blob:") &&
+              !a.startsWith("data:image/gif;base64,R0lGODlhAQAB") &&
+              a !== defaultAva &&
+              a !== "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" &&
+              a !== "https://i.postimg.cc/y8xWzCqj/anime-boy.jpg"
+          );
+        const curName = !isGenericName(chat.name) ? chat.name : (!isGenericName(prev.name) ? prev.name : (chat.name || prev.name || "密友"));
+        const rawRemark = chat.settings && chat.settings.remarkName;
+        const curRemark = !isGenericName(rawRemark) ? rawRemark : (!isGenericName(prev.remarkName) ? prev.remarkName : curName);
+        const rawAva = chat.settings && chat.settings.aiAvatar;
+        const curAva = isRealAva(rawAva) ? rawAva : (isRealAva(prev.avatar) ? prev.avatar : (rawAva || prev.avatar || ""));
         map[chat.peerCode] = {
           peerCode: chat.peerCode,
-          name: chat.name || prev.name || "密友",
-          remarkName: (chat.settings && chat.settings.remarkName) || prev.remarkName || chat.name || "密友",
-          avatar: (chat.settings && chat.settings.aiAvatar) || prev.avatar || "",
+          name: curName,
+          remarkName: curRemark,
+          avatar: curAva,
           avatarFrame: (chat.settings && chat.settings.aiAvatarFrame) || prev.avatarFrame || "",
           groupId: chat.groupId || prev.groupId || null
         };
@@ -507,7 +562,8 @@
         profileNameEl &&
         profileNameEl.textContent &&
         profileNameEl.textContent.trim() &&
-        profileNameEl.textContent.trim() !== "你的昵称"
+        profileNameEl.textContent.trim() !== "你的昵称" &&
+        profileNameEl.textContent.trim() !== "点击修改昵称"
       ) {
         name = profileNameEl.textContent.trim();
       }
@@ -515,7 +571,12 @@
         const vRef = profileAvatarEl.getAttribute("data-vault-ref") || (window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.get(profileAvatarEl.src));
         if (vRef && vRef.startsWith("vault://")) {
           avatar = vRef;
-        } else if (!profileAvatarEl.src.startsWith("blob:") || !avatar || avatar.startsWith("blob:")) {
+        } else if (
+          !profileAvatarEl.hasAttribute("data-vault-pending") &&
+          !profileAvatarEl.src.startsWith("data:image/gif;base64,R0lGODlhAQAB") &&
+          profileAvatarEl.src !== "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" &&
+          (!profileAvatarEl.src.startsWith("blob:") || !avatar || avatar.startsWith("blob:"))
+        ) {
           avatar = profileAvatarEl.src;
         }
       }
@@ -1326,21 +1387,24 @@
     },
 
     publishMyRetainedProfile: async function (specificClient) {
+      if (!this.isAppDbReady()) return;
       const clients = specificClient ? [specificClient] : this.mqttClients || [];
       if (clients.length === 0) return;
       const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const profile = this.getMyProfile();
       const smallAva = await this.compressAvatarForWire(profile.avatar);
-      const pkt = JSON.stringify({
+      const profilePayload = {
         type: "profile_update",
         isRetainedProfile: true,
         eventId: "prof_ret_" + myCode + "_" + Date.now(),
         peerCode: myCode,
-        name: profile.name,
-        avatar: smallAva,
+        name: profile.name && profile.name !== "我" ? profile.name : undefined,
+        avatar: smallAva || undefined,
         myAvatarFrame: profile.myAvatarFrame || "",
         timestamp: Date.now()
-      });
+      };
+      if (!profilePayload.name && !profilePayload.avatar) return;
+      const pkt = JSON.stringify(profilePayload);
 
       clients.forEach((c) => {
         if (c && c.connected) {
@@ -1579,16 +1643,44 @@
     },
 
     onAppDbLoaded: async function () {
+      let recoveredCode = "";
       if (
         window.state &&
         window.state.globalSettings &&
         window.state.globalSettings.myPeerCode
       ) {
-        const gsCode = this.normalizePeerCode(window.state.globalSettings.myPeerCode);
-        if (gsCode && gsCode !== this.myPeerCode) {
-          this.myPeerCode = gsCode;
-          localStorage.setItem("tukey_my_peer_code", gsCode);
+        recoveredCode = this.normalizePeerCode(window.state.globalSettings.myPeerCode);
+      }
+      if (!recoveredCode && window.state && window.state.chats) {
+        for (const c of Object.values(window.state.chats)) {
+          if (c && c.myPeerCode) {
+            recoveredCode = this.normalizePeerCode(c.myPeerCode);
+            if (recoveredCode) break;
+          }
         }
+      }
+      if (recoveredCode && (this._generatedBeforeDbReady || !localStorage.getItem("tukey_my_peer_code") || recoveredCode !== this.myPeerCode)) {
+        const hadTempDiff = this.myPeerCode && this.myPeerCode !== recoveredCode;
+        this.myPeerCode = recoveredCode;
+        this._generatedBeforeDbReady = false;
+        localStorage.setItem("tukey_my_peer_code", recoveredCode);
+        if (hadTempDiff) {
+          this.loadSeenEventIds();
+          if (this.mqttClients && this.mqttClients.length > 0) {
+            this.mqttClients.forEach((client) => {
+              try { client.end(true); } catch (e) {}
+            });
+            this.mqttClients = [];
+            this.mqttClient = null;
+          }
+          this.connectMqttBroker();
+        }
+      } else if (this.myPeerCode) {
+        this._generatedBeforeDbReady = false;
+        localStorage.setItem("tukey_my_peer_code", this.myPeerCode);
+      }
+
+      if (window.state && window.state.globalSettings) {
         if (
           window.state.globalSettings.peerFriendsBackup &&
           typeof window.state.globalSettings.peerFriendsBackup === "object"
@@ -1611,6 +1703,7 @@
       await this.refreshAppChatAndContactsUI();
       this.subscribeAllKnownFriendsMqtt();
       this.publishMyRetainedPresence("online");
+      this.publishMyRetainedProfile();
       this.flushIncomingQueue();
       this.retryOutboxPackets();
       this.pollOnce();
@@ -2505,14 +2598,26 @@
       this.unmarkPeerDeletedByUser(peerCode);
 
       if (existing) {
-        if (peerName) existing.name = peerName;
+        const isGeneric = (n) => !n || n === "我" || n === "密友" || n === "你的昵称" || n === "点击修改昵称";
+        const isPlaceholderAva = (a) =>
+          !a ||
+          String(a).startsWith("blob:") ||
+          String(a).startsWith("data:image/gif;base64,R0lGODlhAQAB") ||
+          a === defaultAva ||
+          a === "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" ||
+          a === "https://i.postimg.cc/y8xWzCqj/anime-boy.jpg";
+        if (peerName && (!isGeneric(peerName) || isGeneric(existing.name))) {
+          existing.name = peerName;
+        }
         if (!existing.settings) existing.settings = {};
-        if (remarkName) {
+        if (remarkName && (!isGeneric(remarkName) || isGeneric(existing.settings.remarkName))) {
           existing.settings.remarkName = remarkName;
-        } else if (peerName && (!existing.settings.remarkName || existing.settings.remarkName === "密友")) {
+        } else if (peerName && !isGeneric(peerName) && isGeneric(existing.settings.remarkName)) {
           existing.settings.remarkName = peerName;
         }
-        if (peerAvatar && !String(peerAvatar).startsWith("blob:")) existing.settings.aiAvatar = peerAvatar;
+        if (peerAvatar && (!isPlaceholderAva(peerAvatar) || !existing.settings.aiAvatar)) {
+          existing.settings.aiAvatar = peerAvatar;
+        }
         if (peerAvatarFrame !== undefined && peerAvatarFrame !== "") {
           existing.settings.aiAvatarFrame = peerAvatarFrame;
         }
@@ -5111,7 +5216,7 @@
 
     receivePeerProfileUpdate: async function (data) {
       const peerCode = data.peerCode;
-      const newName = data.name;
+      const newName = typeof data.name === "string" ? data.name.trim() : "";
       const newAvatar = data.avatar;
       const newPeerOwnFrame = data.myAvatarFrame;
       const newFrameForMe = data.peerAvatarFrame;
@@ -5119,18 +5224,31 @@
       if (!peerCode || peerCode === myCode) return;
       if (this.isPeerDeletedByUser(peerCode)) return;
 
+      const isGenericName = (n) => !n || n === "我" || n === "密友" || n === "你的昵称" || n === "点击修改昵称";
+      const defaultAva = window.defaultAvatar || "https://api.iconify.design/lucide:user.svg?color=%23888888";
+      const isPlaceholderAva = (a) =>
+        !a ||
+        typeof a !== "string" ||
+        a.startsWith("blob:") ||
+        a.startsWith("data:image/gif;base64,R0lGODlhAQAB") ||
+        a === defaultAva ||
+        a === "https://i.postimg.cc/qRqpK5kP/anime-avatar.jpg" ||
+        a === "https://i.postimg.cc/y8xWzCqj/anime-boy.jpg";
+
       let chat = await this.findPeerChatByCodeAsync(peerCode);
       if (!chat) {
         const outMap = this.getOutgoingRequests();
         const backupMap = this.getSavedFriendsBackup();
         const savedInfo = backupMap[peerCode] || outMap[peerCode];
         if (!savedInfo) return;
+        const safeName = !isGenericName(newName) ? newName : (savedInfo.name || savedInfo.remarkName || "密友");
+        const safeAva = !isPlaceholderAva(newAvatar) ? newAvatar : (savedInfo.avatar || "");
         chat = await this.createOrUpdatePeerChatSession(
           peerCode,
-          newName || savedInfo.name || savedInfo.remarkName || "密友",
-          newAvatar || savedInfo.avatar || "",
+          safeName,
+          safeAva,
           savedInfo.groupId || null,
-          savedInfo.remarkName || newName || "密友",
+          savedInfo.remarkName || safeName,
           newPeerOwnFrame || savedInfo.avatarFrame || ""
         );
       }
@@ -5138,20 +5256,22 @@
 
       if (!chat.settings) chat.settings = {};
       const oldName = chat.name;
-      if (newName) {
+      if (newName && !isGenericName(newName)) {
         chat.name = newName;
-        if (!chat.settings.remarkName || chat.settings.remarkName === oldName) {
+        if (isGenericName(chat.settings.remarkName) || chat.settings.remarkName === oldName) {
           chat.settings.remarkName = newName;
         }
       }
-      if (newAvatar && !String(newAvatar).startsWith("blob:")) {
+      if (newAvatar && !isPlaceholderAva(newAvatar)) {
+        chat.settings.aiAvatar = newAvatar;
+      } else if (newAvatar && !String(newAvatar).startsWith("blob:") && !chat.settings.aiAvatar) {
         chat.settings.aiAvatar = newAvatar;
       }
-      if (newPeerOwnFrame !== undefined) {
-        chat.settings.aiAvatarFrame = newPeerOwnFrame || "";
+      if (newPeerOwnFrame !== undefined && newPeerOwnFrame !== "") {
+        chat.settings.aiAvatarFrame = newPeerOwnFrame;
       }
-      if (newFrameForMe !== undefined) {
-        chat.settings.myAvatarFrame = newFrameForMe || "";
+      if (newFrameForMe !== undefined && newFrameForMe !== "") {
+        chat.settings.myAvatarFrame = newFrameForMe;
       }
 
       if (window.db && window.db.chats) {
@@ -5159,12 +5279,31 @@
       }
       this.saveFriendToBackup(chat);
 
+      if (window.state && window.state.chats && !isPlaceholderAva(newAvatar)) {
+        for (const grp of Object.values(window.state.chats)) {
+          if (grp && grp.isGroup && Array.isArray(grp.members)) {
+            let grpChanged = false;
+            grp.members.forEach((m) => {
+              if (m && m.peerCode === peerCode) {
+                if (isPlaceholderAva(m.avatar) || m.avatar === window.defaultGroupMemberAvatar) {
+                  m.avatar = newAvatar;
+                  grpChanged = true;
+                }
+              }
+            });
+            if (grpChanged && window.db && window.db.chats) {
+              try { await window.db.chats.put(grp); } catch (_) {}
+            }
+          }
+        }
+      }
+
       if (window.state && String(window.state.activeChatId) === String(chat.id)) {
         const titleEl = document.getElementById("chat-header-title");
         const showName = (chat.settings && chat.settings.remarkName) || chat.name;
         if (titleEl && showName) titleEl.textContent = showName;
         const chatAvatarEl = document.getElementById("chat-header-avatar");
-        if (chatAvatarEl && newAvatar) chatAvatarEl.src = newAvatar;
+        if (chatAvatarEl && chat.settings.aiAvatar) chatAvatarEl.src = chat.settings.aiAvatar;
         if (typeof window.renderChatInterfaceProxy === "function") {
           window.renderChatInterfaceProxy(chat.id);
         }
@@ -5217,9 +5356,12 @@
     syncSinglePeerChatProfile: async function (chat) {
       if (!chat || chat.roleType !== "peer" || !chat.peerCode) return;
       const myCode = this.getOrCreateMyPeerCode();
-      const name = (chat.settings && chat.settings.myName) || "我";
-      const avatar = (chat.settings && chat.settings.myAvatar) || "";
-      const myFrame = (chat.settings && chat.settings.myAvatarFrame) || "";
+      const myProfile = this.getMyProfile();
+      const rawName = (chat.settings && chat.settings.myName) || "";
+      const name = (rawName && rawName !== "我" ? rawName : "") || (myProfile.name && myProfile.name !== "我" ? myProfile.name : "");
+      const rawAvatar = (chat.settings && chat.settings.myAvatar) || "";
+      const avatar = (rawAvatar && !rawAvatar.startsWith("data:image/gif;base64,R0lGODlhAQAB") ? rawAvatar : "") || myProfile.avatar || "";
+      const myFrame = (chat.settings && chat.settings.myAvatarFrame) || myProfile.myAvatarFrame || "";
       const peerFrame = (chat.settings && chat.settings.aiAvatarFrame) || "";
       const smallAva = await this.compressAvatarForWire(avatar);
 
@@ -5228,8 +5370,8 @@
         eventId: "evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9) + "_" + chat.peerCode,
         peerCode: myCode,
         toCode: chat.peerCode,
-        name: name,
-        avatar: smallAva,
+        name: name || undefined,
+        avatar: smallAva || undefined,
         myAvatarFrame: myFrame,
         peerAvatarFrame: peerFrame,
         targetCodes: [chat.peerCode],
@@ -6390,6 +6532,7 @@
             if (assignSelect) {
               currentChat.groupId = parseInt(assignSelect.value, 10) || null;
             }
+            const myProfile = PeerManager.getMyProfile();
             const myAvatarEl = document.getElementById("my-avatar-preview");
             const myNickEl = document.getElementById("my-group-nickname-input");
             const myNameEl = document.getElementById("my-name-input");
@@ -6398,10 +6541,14 @@
                   ? window.getCleanPreviewImgSrc(myAvatarEl)
                   : myAvatarEl.src)
               : currentChat.settings?.myAvatar;
+            if (!newAva || String(newAva).startsWith("data:image/gif;base64,R0lGODlhAQAB")) {
+              newAva = currentChat.settings?.myAvatar || myProfile.avatar;
+            }
+            const inputNick = (myNickEl && myNickEl.value.trim()) || (myNameEl && myNameEl.value.trim()) || "";
             const newName =
-              (myNickEl && myNickEl.value.trim()) ||
-              (myNameEl && myNameEl.value.trim()) ||
-              currentChat.settings?.myName ||
+              (inputNick && inputNick !== "我" ? inputNick : "") ||
+              (currentChat.settings?.myName && currentChat.settings.myName !== "我" ? currentChat.settings.myName : "") ||
+              myProfile.name ||
               "我";
 
             if (!currentChat.settings) currentChat.settings = {};
@@ -6412,6 +6559,7 @@
             if (window.db && window.db.chats) {
               await window.db.chats.put(currentChat);
             }
+            PeerManager.saveFriendToBackup(currentChat);
             await PeerManager.refreshAppChatAndContactsUI();
             await PeerManager.syncSinglePeerChatProfile(currentChat);
           } else if (currentChat.isGroup && currentChat.isPeerGroup) {

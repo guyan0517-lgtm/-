@@ -2423,7 +2423,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -21750,37 +21750,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 : undefined;
 
               const directStartT = Date.now();
-              const maxDirectAttempts = options._noAutoRetry ? 1 : 2;
-              for (let attempt = 0; attempt < maxDirectAttempts; attempt++) {
-                try {
-                  ensureBackgroundKeepAlive();
-                  resetTimeout();
-                  currentRes = await origFetch(finalUrl, {
-                    method,
-                    headers,
-                    body: currentPayload,
-                    signal: controller.signal,
-                  });
-                  if (currentRes) break;
-                } catch (err) {
-                  currentDirectErr = err;
-                  const elapsedSoFar = Date.now() - directStartT;
-                  const callerAborted = Boolean(options.signal && options.signal.aborted);
-                  if (attempt === 0 && attempt + 1 < maxDirectAttempts && !didWatchdogTimeout && !callerAborted && elapsedSoFar < 45000) {
-                    if (controller.signal.aborted) {
-                      controller = new AbortController();
-                      bindCallerSignal(controller);
-                    }
-                    await new Promise((r) => setTimeout(r, 800));
-                    continue;
-                  }
-                  break;
-                }
+              try {
+                ensureBackgroundKeepAlive();
+                resetTimeout();
+                currentRes = await origFetch(finalUrl, {
+                  method,
+                  headers,
+                  body: currentPayload,
+                  signal: controller.signal,
+                });
+              } catch (err) {
+                currentDirectErr = err;
               }
               const directElapsedMs = Date.now() - directStartT;
 
               const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
-              if (!currentRes && !isStaticHost && !controller.signal.aborted && (!options._noAutoRetry || directElapsedMs < 3000)) {
+              if (!currentRes && !isStaticHost && !controller.signal.aborted && !options._noAutoRetry && directElapsedMs < 1500) {
                 try {
                   resetTimeout();
                   const proxyRes = await origFetch("/api/proxy", {
@@ -21803,27 +21788,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             };
 
             let { res, directErr } = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body);
-
-            if (
-              !options._noAutoRetry &&
-              res &&
-              !res.ok &&
-              (res.status === 400 || res.status === 422) &&
-              parsedBody &&
-              typeof parsedBody === "object" &&
-              (parsedBody.max_tokens || (parsedBody.generationConfig && parsedBody.generationConfig.maxOutputTokens))
-            ) {
-              const fallbackBody = { ...parsedBody };
-              delete fallbackBody.max_tokens;
-              if (fallbackBody.generationConfig && typeof fallbackBody.generationConfig === "object") {
-                fallbackBody.generationConfig = { ...fallbackBody.generationConfig };
-                delete fallbackBody.generationConfig.maxOutputTokens;
-              }
-              const retryOut = await executeUpstreamFetch(fallbackBody);
-              if (retryOut.res) {
-                res = retryOut.res;
-              }
-            }
 
             if (!res) {
               if (timeoutId) clearTimeout(timeoutId);
@@ -21851,9 +21815,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
-            // 流式数据处理与实时分片回调（无论是否传入 onStreamChunk，都将 SSE 流安全拼接为完整/截断保留的 JSON，防止中途断流丢弃内容）
-            const isStreamReq = Boolean((parsedBody && parsedBody.stream) || finalUrl.includes("streamGenerateContent"));
-            if (res.body && (contentType.includes("event-stream") || isStreamReq)) {
+            // 严格区分流式与非流式：仅当请求明确开启流式时才走流式读取
+            const isStreamReq = Boolean((parsedBody && parsedBody.stream === true) || finalUrl.includes("streamGenerateContent"));
+            if (isStreamReq && res.body) {
               const reader = res.body.getReader();
               const decoder = new TextDecoder();
               let fullText = "";
@@ -21865,7 +21829,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               let sawDoneMarker = false;
               let streamInterruptedErr = null;
 
-              let finishGraceTimer = null;
               const processSseLine = (line) => {
                 const trimmed = line.trim();
                 if (!trimmed || !trimmed.startsWith("data:")) return;
@@ -21912,10 +21875,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       : null;
 
                   if (deltaContent || deltaReasoning) {
-                    if (finishGraceTimer) {
-                      clearTimeout(finishGraceTimer);
-                      finishGraceTimer = null;
-                    }
                     sawFinishReason = null;
                   }
 
@@ -21940,29 +21899,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       deltaReasoning,
                     });
                   }
-                  if (fullText.includes("</svg>") && /<svg[\s\S]*?<\/svg>/i.test(fullText)) {
-                    if (finishGraceTimer) clearTimeout(finishGraceTimer);
-                    finishGraceTimer = setTimeout(() => {
-                      sawDoneMarker = true;
-                      try { reader.cancel(); } catch (_) {}
-                    }, 1500);
-                  } else if (sawFinishReason && !deltaContent && !deltaReasoning) {
-                    if (finishGraceTimer) clearTimeout(finishGraceTimer);
-                    finishGraceTimer = setTimeout(() => {
-                      sawDoneMarker = true;
-                      try { reader.cancel(); } catch (_) {}
-                    }, 12000);
-                  }
                 } catch (_) {}
               };
 
               try {
                 while (true) {
                   const { done, value } = await reader.read();
-                  if (finishGraceTimer) {
-                    clearTimeout(finishGraceTimer);
-                    finishGraceTimer = null;
-                  }
                   resetTimeout();
                   ensureBackgroundKeepAlive();
                   if (done) {
@@ -21995,7 +21937,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   console.warn("[流式保活] 传输中途截断或连接断开，保留已接收到的全部内容:", streamErr);
                 }
               } finally {
-                if (finishGraceTimer) clearTimeout(finishGraceTimer);
                 if (timeoutId) clearTimeout(timeoutId);
               }
 
@@ -22054,60 +21995,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
+            // 非流式请求：直接一次性等待完整文本返回，不做分片猜测或流式混用
             let resText = "";
             try {
-              if (res.body && typeof res.body.getReader === "function") {
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                while (true) {
-                  const { done, value } = await reader.read();
-                  resetTimeout();
-                  ensureBackgroundKeepAlive();
-                  if (done) {
-                    const tail = decoder.decode();
-                    if (tail) resText += tail;
-                    break;
-                  }
-                  resText += decoder.decode(value, { stream: true });
-                  const trimmedSoFar = resText.trim();
-                  if (trimmedSoFar.startsWith("{") && trimmedSoFar.endsWith("}")) {
-                    try {
-                      const parsedCheck = JSON.parse(trimmedSoFar);
-                      if (
-                        parsedCheck &&
-                        typeof parsedCheck === "object" &&
-                        (parsedCheck.choices || parsedCheck.candidates || parsedCheck.content || parsedCheck.error || parsedCheck.data || parsedCheck.models)
-                      ) {
-                        const tail = decoder.decode();
-                        if (tail) resText += tail;
-                        try { await reader.cancel(); } catch (_) {}
-                        break;
-                      }
-                    } catch (_) {}
-                  }
-                }
-              } else {
-                resText = await res.text();
-              }
-            } catch (readErr) {
-              if (!resText || !resText.trim()) {
-                throw readErr;
-              }
-              console.warn("读取响应体中途断开，尝试解析已接收内容:", readErr);
+              resText = await res.text();
             } finally {
               if (timeoutId) clearTimeout(timeoutId);
-            }
-
-            if (resText && !resText.trim().startsWith("{") && (resText.trim().startsWith("data:") || resText.includes("\ndata:"))) {
-              const sseSynthesized = parseSseTextToSynthesized(resText);
-              if (sseSynthesized) {
-                return {
-                  ok: true,
-                  status: 200,
-                  text: JSON.stringify(sseSynthesized),
-                  headers: new Headers({ "Content-Type": "application/json" }),
-                };
-              }
             }
 
             return {
@@ -22766,7 +22659,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             let res = await requestLlmapiWithFallback(targetUrl, {
               method: "POST",
               signal: init?.signal,
-              _noAutoRetry: Boolean(init?._noAutoRetry),
+              _noAutoRetry: true,
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${cleanKey}`,
@@ -22779,20 +22672,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               } : undefined,
             });
-            if (!init?._noAutoRetry && !res.ok && (res.status === 400 || res.status === 422) && openAiPayload.max_tokens) {
-              const noMaxTokensPayload = { ...openAiPayload };
-              delete noMaxTokensPayload.max_tokens;
-              res = await requestLlmapiWithFallback(targetUrl, {
-                method: "POST",
-                signal: init?.signal,
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${cleanKey}`,
-                  ...(noMaxTokensPayload.stream ? { Accept: "text/event-stream" } : {})
-                },
-                body: JSON.stringify(noMaxTokensPayload),
-              });
-            }
 
             if (!res.ok) {
               const errMsg = extractApiErrorMessage(res.status, res.text);
@@ -39079,18 +38958,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               avatarSrc = chat.settings.myAvatar || defaultMyGroupAvatar;
               avatarFrameSrc = chat.settings.myAvatarFrame || ""; // <--- 获取“我”的头像框
             } else {
+              const msgSenderNameTrim = typeof msg.senderName === "string" ? msg.senderName.trim() : "";
+              const msgSenderTrim = typeof msg.sender === "string" ? msg.sender.trim() : "";
               let member = (chat.members || []).find(
                 (m) =>
-                  (msg.senderPeerCode && m.peerCode === msg.senderPeerCode) ||
-                  (msg.senderId && m.id === msg.senderId) ||
-                  (msg.senderName && (m.originalName === msg.senderName || m.groupNickname === msg.senderName)) ||
-                  (msg.sender && (m.originalName === msg.sender || m.groupNickname === msg.sender)),
+                  m &&
+                  ((msg.senderPeerCode && m.peerCode === msg.senderPeerCode) ||
+                    (msg.senderId && m.id === msg.senderId) ||
+                    (msgSenderNameTrim && ((m.originalName && m.originalName.trim() === msgSenderNameTrim) || (m.groupNickname && m.groupNickname.trim() === msgSenderNameTrim))) ||
+                    (msgSenderTrim && ((m.originalName && m.originalName.trim() === msgSenderTrim) || (m.groupNickname && m.groupNickname.trim() === msgSenderTrim)))),
               );
               if (!member && msg.senderPeerCode && typeof window.getGroupHumanPlayersList === "function") {
                 const hps = window.getGroupHumanPlayersList(chat);
                 const foundHp = hps.find(h => h.peerCode === msg.senderPeerCode);
                 if (foundHp) {
-                  member = { groupNickname: foundHp.name, originalName: foundHp.name, avatar: defaultGroupMemberAvatar };
+                  member = { groupNickname: foundHp.name, originalName: foundHp.name, avatar: foundHp.avatar || defaultGroupMemberAvatar };
                 }
               }
               if (!member && msg.isPeerUserMessage && chat.activeLineMode === "solo") {
@@ -39105,11 +38987,46 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const statusMem = (msg.type === "system_status") ? (chat.members || []).find(
                 (m) => m.roleType === "system_status" || (state.chats && state.chats[m.id] && state.chats[m.id].roleType === "system_status") || m.originalName === "系统状态" || m.groupNickname === "系统状态" || m.originalName === "系统状态栏" || m.groupNickname === "系统状态栏"
               ) : null;
+              const isUsableAvatar = (ava) =>
+                Boolean(
+                  ava &&
+                    typeof ava === "string" &&
+                    ava !== defaultGroupMemberAvatar &&
+                    !ava.startsWith("data:image/gif;base64,R0lGODlhAQAB")
+                );
               if (msg.isPeerUserMessage || msg.senderPeerCode) {
-                avatarSrc = msg.senderAvatar || (member && member.avatar && member.avatar !== defaultGroupMemberAvatar ? member.avatar : null) || defaultGroupMemberAvatar;
-                avatarFrameSrc = msg.senderAvatarFrame || (member ? member.avatarFrame : "") || "";
+                let peerSingleAva = "";
+                let peerSingleFrame = "";
+                if (msg.senderPeerCode && state.chats) {
+                  const pChat = Object.values(state.chats).find(
+                    (c) => c && c.roleType === "peer" && !c.isGroup && c.peerCode === msg.senderPeerCode
+                  );
+                  if (pChat && pChat.settings) {
+                    if (isUsableAvatar(pChat.settings.aiAvatar)) peerSingleAva = pChat.settings.aiAvatar;
+                    if (pChat.settings.aiAvatarFrame) peerSingleFrame = pChat.settings.aiAvatarFrame;
+                  }
+                }
+                const memAva = member && isUsableAvatar(member.avatar) ? member.avatar : "";
+                const msgAva = isUsableAvatar(msg.senderAvatar) ? msg.senderAvatar : "";
+                avatarSrc = memAva || peerSingleAva || msgAva || (member && member.avatar) || msg.senderAvatar || defaultGroupMemberAvatar;
+                avatarFrameSrc = (member && member.avatarFrame) || peerSingleFrame || msg.senderAvatarFrame || "";
               } else {
-                avatarSrc = member ? (member.avatar || msg.senderAvatar || defaultGroupMemberAvatar) : (statusMem ? statusMem.avatar : (msg.senderAvatar || defaultGroupMemberAvatar));
+                let linkedSingleAva = "";
+                if (member && state.chats) {
+                  const sChat =
+                    (member.id && state.chats[member.id]) ||
+                    Object.values(state.chats).find(
+                      (c) => c && !c.isGroup && c.name && (c.name === member.originalName || c.name === member.groupNickname)
+                    );
+                  if (sChat && sChat.settings && isUsableAvatar(sChat.settings.aiAvatar)) {
+                    linkedSingleAva = sChat.settings.aiAvatar;
+                  }
+                }
+                const memAva = member && isUsableAvatar(member.avatar) ? member.avatar : "";
+                const msgAva = isUsableAvatar(msg.senderAvatar) ? msg.senderAvatar : "";
+                avatarSrc = member
+                  ? (memAva || linkedSingleAva || msgAva || member.avatar || msg.senderAvatar || defaultGroupMemberAvatar)
+                  : (statusMem ? statusMem.avatar : (msgAva || msg.senderAvatar || defaultGroupMemberAvatar));
                 avatarFrameSrc = member ? member.avatarFrame || "" : (statusMem ? statusMem.avatarFrame || "" : (msg.senderAvatarFrame || ""));
               }
             }
@@ -39118,7 +39035,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               avatarSrc = chat.settings.myAvatar || defaultAvatar;
               avatarFrameSrc = chat.settings.myAvatarFrame || ""; // <--- 获取“我”的头像框
             } else {
-              avatarSrc = msg.senderAvatar || chat.settings.aiAvatar || defaultAvatar;
+              const singleAiAva = chat.settings && chat.settings.aiAvatar && !String(chat.settings.aiAvatar).startsWith("data:image/gif;base64,R0lGODlhAQAB")
+                ? chat.settings.aiAvatar
+                : "";
+              avatarSrc = (chat.roleType === "peer" ? (singleAiAva || msg.senderAvatar) : (msg.senderAvatar || singleAiAva)) || defaultAvatar;
               avatarFrameSrc = chat.settings.aiAvatarFrame || ""; // <--- 获取AI的头像框
             }
           }
@@ -39128,11 +39048,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           let avatarVaultAttr = "";
           if (typeof avatarSrc === "string" && avatarSrc.startsWith("vault://")) {
-            avatarVaultAttr = ` data-vault-ref="${avatarSrc}"`;
             const cachedAva = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(avatarSrc) : null;
-            avatarSrc = cachedAva || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+            if (cachedAva) {
+              avatarVaultAttr = ` data-vault-ref="${avatarSrc}" data-vault-hydrated-src="${cachedAva}"`;
+              avatarSrc = cachedAva;
+            } else {
+              avatarVaultAttr = ` data-vault-ref="${avatarSrc}" data-vault-pending="1"`;
+              avatarSrc = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+            }
           } else if (typeof avatarSrc === "string" && avatarSrc.startsWith("blob:") && window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.has(avatarSrc)) {
-            avatarVaultAttr = ` data-vault-ref="${window.blobUrlToVaultRefMap.get(avatarSrc)}"`;
+            avatarVaultAttr = ` data-vault-ref="${window.blobUrlToVaultRefMap.get(avatarSrc)}" data-vault-hydrated-src="${avatarSrc}"`;
           }
 
           let avatarHtml;
@@ -39914,8 +39839,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const imageUrl = msg.content[0].image_url.url;
             if (typeof imageUrl === "string" && imageUrl.startsWith("vault://")) {
               const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(imageUrl) : null;
-              const initSrc = cachedUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-              contentHtml = `<img src="${initSrc}" data-vault-ref="${imageUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+              if (cachedUrl) {
+                contentHtml = `<img src="${cachedUrl}" data-vault-ref="${imageUrl}" data-vault-hydrated-src="${cachedUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+              } else {
+                contentHtml = `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${imageUrl}" data-vault-pending="1" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+              }
             } else {
               contentHtml = `<img src="${imageUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
             }
@@ -47496,7 +47424,7 @@ ${recentHistoryText}
             }
             // 1. 获取最近的历史记录
             let historySlice = chat.history
-              .filter((msg) => !msg.isTemporary && !msg.noAi && !msg.isKeeperForcedDraw && !msg.isForcedDraw && !msg.isSystemDraw && !(typeof msg.content === "string" && (msg.content.includes("强制生图调用失败") || msg.content.includes("NovelAI生图提示词") || msg.content.includes("系统生图") || msg.content.includes("图片生成异常"))))
+              .filter((msg) => !msg.isTemporary && !msg.noAi && !msg.isPlayerHidden && !msg.isKeeperForcedDraw && !msg.isForcedDraw && !msg.isSystemDraw && !(typeof msg.content === "string" && (msg.content.includes("强制生图调用失败") || msg.content.includes("NovelAI生图提示词") || msg.content.includes("系统生图") || msg.content.includes("图片生成异常"))))
               .slice(-chat.settings.maxMemory);
 
             // ======================= [修复开始] =======================
@@ -48230,20 +48158,18 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
 
                   if (msg.type === "share_card" || msg.type === "transfer" || msg.type === "waimai_request" || msg.type === "red_packet" || msg.type === "module_pure_image" || msg.isModuleImageOnly || msg.isKeeperForcedDraw || msg.isForcedDraw || msg.isSystemDraw) return null;
                   if (typeof effectiveContent === "string" && (effectiveContent.includes("强制生图调用失败") || effectiveContent.includes("NovelAI生图提示词") || effectiveContent.includes("系统生图") || effectiveContent.includes("图片生成异常"))) return null;
-                  if (msg.type === "narrative") {
-                    // 将旁白包装成系统指令发送给AI，强调这是剧情/环境描述
-                    return {
-                      role: "user",
-                      content: `${tsPrefix}[剧情/环境旁白: ${effectiveContent}]`,
-                    };
-                  }
                   if ((msg.role === "user" || msg.isPeerUserMessage) && typeof effectiveContent === "string" && isOutOfCharacterChineseBracketMsg(effectiveContent)) {
                     return null;
                   }
-                  if (msg.role === "assistant" && !msg.isPeerUserMessage && msg.type !== "pat_message") {
-                    // AI消息的处理逻辑保持不变...
-                    let assistantMsgObject = { type: msg.type || "text" };
-                    assistantMsgObject.name = msg.senderName;
+                  const isGenuineUserGroupMsg = Boolean(
+                    msg.isPeerUserMessage ||
+                    (msg.role === "user" && msg.type !== "narrative" && msg.type !== "pat_message")
+                  );
+                  if (!isGenuineUserGroupMsg) {
+                    let assistantMsgObject = {
+                      type: msg.type === "pat_message" ? "system_message" : (msg.type || "text"),
+                    };
+                    assistantMsgObject.name = msg.senderName || (msg.type === "narrative" ? "旁白" : (msg.type === "pat_message" ? "系统" : ""));
                     if (Array.isArray(msg.visibleTo) && msg.visibleTo.length > 0) {
                       assistantMsgObject.visibleTo = msg.visibleTo;
                     }
@@ -48307,7 +48233,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                       role: "assistant",
                       content: `${tsPrefix}${assistantContent}`,
                       _msgTimestamp: Number(msg.timestamp) || 0,
-                      _senderName: msg.senderName || "",
+                      _senderName: assistantMsgObject.name || "",
                     };
                   }
 
@@ -48400,10 +48326,10 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                   }
 
                   return {
-                    role: msg.role,
+                    role: "user",
                     content: contentStr,
                     _msgTimestamp: Number(msg.timestamp) || 0,
-                    _senderName: msg.role === "user" ? myNickname : (msg.senderName || ""),
+                    _senderName: myNickname,
                   };
                 })
                 .filter(Boolean);
@@ -49422,7 +49348,7 @@ ${stickerContext || "无"}
               ...messagesPayload,
             ];
 
-            // 1. 发起请求时强制开启流式保活，防止长连接超时被掐断
+            // 1. 发起请求时开启保活，并提前写入调试台发送记录
             if (typeof ensureBackgroundKeepAlive === "function") {
               ensureBackgroundKeepAlive(null, true);
             }
@@ -49430,109 +49356,146 @@ ${stickerContext || "无"}
               ? window.acquireBackgroundTaskKeepAlive()
               : null;
             const useStreamInChat = typeof window.isApiStreamEnabled === "function" ? window.isApiStreamEnabled() : Boolean(state?.apiConfig?.streamEnabled);
-            const response = isGemini
-              ? await fetch(geminiConfig.url, geminiConfig.data)
-              : await fetch(`${proxyUrl}/v1/chat/completions`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${apiKey}`,
-                    ...(useStreamInChat ? { Accept: "text/event-stream" } : {}),
-                  },
-                  body: JSON.stringify({
-                    model: model,
-                    messages: openAiMessages,
-                    temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                    stream: Boolean(useStreamInChat),
-                  }),
-                });
+            const currentDebugLogId = "dbg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+            const debugSentPayload = {
+              systemPrompt: systemPrompt,
+              messages: messagesPayload,
+              allSentMessages: openAiMessages,
+              model: model,
+              temperature: state.apiConfig?.temperature || 0.8,
+            };
+            if (typeof recordChatDebugLog === "function") {
+              recordChatDebugLog(chatId, debugSentPayload, {
+                rawContent: "请求已发出，正在等待API响应...",
+                reasoningContent: null,
+                fullData: "",
+              }, currentDebugLogId);
+            }
 
-            // 2. 收到 response 后的万能解析逻辑（后台流式保活拼接 + 前台一次性返回）：
+            let response;
+            try {
+              response = isGemini
+                ? await fetch(geminiConfig.url, geminiConfig.data)
+                : await fetch(`${proxyUrl}/v1/chat/completions`, {
+                    method: "POST",
+                    _noAutoRetry: true,
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${apiKey}`,
+                      ...(useStreamInChat ? { Accept: "text/event-stream" } : {}),
+                    },
+                    body: JSON.stringify({
+                      model: model,
+                      messages: openAiMessages,
+                      temperature: parseFloat(state.apiConfig.temperature) || 0.8,
+                      stream: Boolean(useStreamInChat),
+                    }),
+                  });
+            } catch (fetchErr) {
+              if (typeof recordChatDebugLog === "function") {
+                recordChatDebugLog(chatId, debugSentPayload, {
+                  rawContent: "请求异常中断: " + (fetchErr?.message || String(fetchErr)),
+                  reasoningContent: null,
+                  fullData: "",
+                }, currentDebugLogId);
+              }
+              throw fetchErr;
+            }
+
             if (!response.ok) {
               const errText = await response.text();
+              if (typeof recordChatDebugLog === "function") {
+                recordChatDebugLog(chatId, debugSentPayload, {
+                  rawContent: `HTTP ${response.status}: ${errText}`,
+                  reasoningContent: null,
+                  fullData: errText,
+                }, currentDebugLogId);
+              }
               throw new Error(`HTTP ${response.status}: ${errText}`);
             }
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8");
             let rawText = "";
             let fullContent = "";
             let fullReasoning = "";
-            let buffer = "";
-            let chatStreamDone = false;
 
-            try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                rawText += chunk;
-                buffer += chunk;
+            if (useStreamInChat && response.body && typeof response.body.getReader === "function") {
+              const reader = response.body.getReader();
+              const decoder = new TextDecoder("utf-8");
+              let buffer = "";
+              let chatStreamDone = false;
 
-                if (!rawText.trim().startsWith("{")) {
-                  const lines = buffer.split("\n");
-                  buffer = lines.pop() || ""; // 留存最后一行可能不完整的数据
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  const chunk = decoder.decode(value, { stream: true });
+                  rawText += chunk;
+                  buffer += chunk;
 
-                  for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed || !trimmed.startsWith("data:")) continue;
-                    const dataStr = trimmed.replace(/^data:\s*/, "");
-                    if (dataStr === "[DONE]") {
-                      chatStreamDone = true;
-                      break;
-                    }
-                    try {
-                      const parsed = JSON.parse(dataStr);
-                      const delta = parsed.choices?.[0]?.delta?.content 
-                                 || parsed.choices?.[0]?.message?.content 
-                                 || parsed.content?.[0]?.text 
-                                 || "";
-                      fullContent += delta;
-                      const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
-                                          || parsed.choices?.[0]?.delta?.reasoning 
-                                          || parsed.choices?.[0]?.delta?.thinking 
-                                          || "";
-                      if (deltaReasoning) fullReasoning += deltaReasoning;
-                    } catch (e) {
-                      // 忽略单行半截 JSON 解析错误，继续拼接
+                  if (!rawText.trim().startsWith("{")) {
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop() || "";
+
+                    for (const line of lines) {
+                      const trimmed = line.trim();
+                      if (!trimmed || !trimmed.startsWith("data:")) continue;
+                      const dataStr = trimmed.replace(/^data:\s*/, "");
+                      if (dataStr === "[DONE]") {
+                        chatStreamDone = true;
+                        break;
+                      }
+                      try {
+                        const parsed = JSON.parse(dataStr);
+                        const delta = parsed.choices?.[0]?.delta?.content 
+                                   || parsed.choices?.[0]?.message?.content 
+                                   || parsed.content?.[0]?.text 
+                                   || "";
+                        fullContent += delta;
+                        const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
+                                            || parsed.choices?.[0]?.delta?.reasoning 
+                                            || parsed.choices?.[0]?.delta?.thinking 
+                                            || "";
+                        if (deltaReasoning) fullReasoning += deltaReasoning;
+                      } catch (e) {}
                     }
                   }
+                  if (chatStreamDone) {
+                    try { await reader.cancel(); } catch (_) {}
+                    break;
+                  }
                 }
-                if (chatStreamDone) {
-                  try { await reader.cancel(); } catch (_) {}
-                  break;
+              } catch (streamReadErr) {
+                if (!fullContent && !fullReasoning && !rawText.trim()) {
+                  throw streamReadErr;
+                }
+                console.warn("流式读取中途截断，保留已接收到的内容:", streamReadErr);
+              }
+
+              const tailDecoded = decoder.decode();
+              if (tailDecoded) {
+                rawText += tailDecoded;
+                buffer += tailDecoded;
+              }
+
+              if (!rawText.trim().startsWith("{") && buffer.trim().startsWith("data:")) {
+                const dataStr = buffer.trim().replace(/^data:\s*/, "");
+                if (dataStr !== "[DONE]") {
+                  try {
+                    const parsed = JSON.parse(dataStr);
+                    fullContent += (parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.message?.content || parsed.content?.[0]?.text || "");
+                    const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
+                                        || parsed.choices?.[0]?.delta?.reasoning 
+                                        || parsed.choices?.[0]?.delta?.thinking 
+                                        || "";
+                    if (deltaReasoning) fullReasoning += deltaReasoning;
+                  } catch (e) {}
                 }
               }
-            } catch (streamReadErr) {
-              if (!fullContent && !fullReasoning && !rawText.trim()) {
-                throw streamReadErr;
-              }
-              console.warn("流式读取中途截断，保留已接收到的内容:", streamReadErr);
+            } else {
+              // 非流式模式：直接一次性读取完整响应文本，不与流式逻辑交互
+              rawText = await response.text();
             }
 
-            const tailDecoded = decoder.decode();
-            if (tailDecoded) {
-              rawText += tailDecoded;
-              buffer += tailDecoded;
-            }
-
-            // 处理最后残留的 buffer
-            if (!rawText.trim().startsWith("{") && buffer.trim().startsWith("data:")) {
-              const dataStr = buffer.trim().replace(/^data:\s*/, "");
-              if (dataStr !== "[DONE]") {
-                try {
-                  const parsed = JSON.parse(dataStr);
-                  fullContent += (parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.message?.content || parsed.content?.[0]?.text || "");
-                  const deltaReasoning = parsed.choices?.[0]?.delta?.reasoning_content 
-                                      || parsed.choices?.[0]?.delta?.reasoning 
-                                      || parsed.choices?.[0]?.delta?.thinking 
-                                      || "";
-                  if (deltaReasoning) fullReasoning += deltaReasoning;
-                } catch (e) {}
-              }
-            }
-
-            // 3. 终极兜底：如果中转站返回的根本不是 data: 流式，而是完整的普通 JSON 对象
             let reasoningFromData = fullReasoning;
             if (!fullContent && rawText.trim().startsWith("{")) {
               try {
@@ -49573,19 +49536,13 @@ ${stickerContext || "无"}
 
             let aiResponseContent = fullContent;
 
-            // 记录调试台日志（记录单次API调用的完整发送字段与完整返回字段）
+            // 更新调试台日志（写入完整返回字段）
             if (typeof recordChatDebugLog === "function") {
-              recordChatDebugLog(chatId, {
-                systemPrompt: systemPrompt,
-                messages: messagesPayload,
-                allSentMessages: openAiMessages,
-                model: model,
-                temperature: state.apiConfig?.temperature || 0.8,
-              }, {
+              recordChatDebugLog(chatId, debugSentPayload, {
                 rawContent: aiResponseContent,
                 reasoningContent: reasoningFromData || null,
                 fullData: rawText,
-              });
+              }, currentDebugLogId);
             }
 
             console.log(`AI '${chat.name}' 的原始回复:`, aiResponseContent);
@@ -57183,29 +57140,6 @@ ${stickerContext || "无"}
           // --- 新增逻辑开始 ---
           const chat = state.chats[state.activeChatId];
           let message = (chat?.history || []).find((m) => String(m.timestamp) === String(timestamp));
-          if (!message && chat) {
-            const domBubble = document.querySelector(`#chat-messages .message-bubble[data-timestamp="${timestamp}"], #chat-messages .message-wrapper[data-timestamp="${timestamp}"]`);
-            if (domBubble) {
-              const wrapperEl = domBubble.closest(".message-wrapper") || domBubble;
-              const isUserBubble = wrapperEl.classList.contains("user") || domBubble.classList.contains("user");
-              const contentEl = wrapperEl.querySelector(".content") || domBubble;
-              const naiImgEl = wrapperEl.querySelector(".nai-generated-image");
-              const restoredMsg = {
-                role: isUserBubble ? "user" : "assistant",
-                senderName: isUserBubble ? (chat.settings?.myNickname || chat.settings?.myName || "我") : (chat.name || "AI"),
-                type: naiImgEl ? "naiimag" : "text",
-                content: naiImgEl ? (naiImgEl.getAttribute("data-prompt") || "") : (contentEl ? contentEl.innerText.trim() : ""),
-                imageUrl: naiImgEl ? naiImgEl.src : undefined,
-                prompt: naiImgEl ? (naiImgEl.getAttribute("data-prompt") || "") : undefined,
-                timestamp: Number(timestamp) || timestamp,
-              };
-              if (!Array.isArray(chat.history)) chat.history = [];
-              chat.history.push(restoredMsg);
-              chat.history.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-              try { db.chats.put(chat); } catch (_) {}
-              message = restoredMsg;
-            }
-          }
           const rerollNaiBtn = document.getElementById("reroll-nai-btn");
 
           // 检查消息类型是否为 naiimag
@@ -57923,29 +57857,6 @@ ${stickerContext || "无"}
           let message = (chat?.history || []).find(
             (m) => String(m.timestamp) === String(timestampToEdit),
           );
-          if (!message && chat) {
-            const domBubble = document.querySelector(`#chat-messages .message-bubble[data-timestamp="${timestampToEdit}"], #chat-messages .message-wrapper[data-timestamp="${timestampToEdit}"]`);
-            if (domBubble) {
-              const wrapperEl = domBubble.closest(".message-wrapper") || domBubble;
-              const isUserBubble = wrapperEl.classList.contains("user") || domBubble.classList.contains("user");
-              const contentEl = wrapperEl.querySelector(".content") || domBubble;
-              const naiImgEl = wrapperEl.querySelector(".nai-generated-image");
-              const restoredMsg = {
-                role: isUserBubble ? "user" : "assistant",
-                senderName: isUserBubble ? (chat.settings?.myNickname || chat.settings?.myName || "我") : (chat.name || "AI"),
-                type: naiImgEl ? "naiimag" : "text",
-                content: naiImgEl ? (naiImgEl.getAttribute("data-prompt") || "") : (contentEl ? contentEl.innerText.trim() : ""),
-                imageUrl: naiImgEl ? naiImgEl.src : undefined,
-                prompt: naiImgEl ? (naiImgEl.getAttribute("data-prompt") || "") : undefined,
-                timestamp: Number(timestampToEdit) || timestampToEdit,
-              };
-              if (!Array.isArray(chat.history)) chat.history = [];
-              chat.history.push(restoredMsg);
-              chat.history.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-              try { db.chats.put(chat); } catch (_) {}
-              message = restoredMsg;
-            }
-          }
           if (!message) {
             hideMessageActions();
             return;
@@ -61816,10 +61727,15 @@ ${stickerContext || "无"}
                       ? window.getCachedVaultBlobUrl(savedValue)
                       : null;
                   if (cachedBlob) {
+                    element.removeAttribute("data-vault-pending");
+                    element.setAttribute("data-vault-hydrated-src", cachedBlob);
                     element.src = cachedBlob;
                   } else if (typeof window.resolveVaultRefToUrl === "function") {
+                    element.setAttribute("data-vault-pending", "1");
                     window.resolveVaultRefToUrl(savedValue).then((resolved) => {
                       if (resolved && !resolved.startsWith("vault://")) {
+                        element.removeAttribute("data-vault-pending");
+                        element.setAttribute("data-vault-hydrated-src", resolved);
                         element.src = resolved;
                       }
                     });
@@ -62313,10 +62229,15 @@ ${stickerContext || "无"}
                   ? window.getCachedVaultBlobUrl(iconUrl)
                   : null;
               if (cachedBlob) {
+                imgElement.removeAttribute("data-vault-pending");
+                imgElement.setAttribute("data-vault-hydrated-src", cachedBlob);
                 imgElement.src = cachedBlob;
               } else if (typeof window.resolveVaultRefToUrl === "function") {
+                imgElement.setAttribute("data-vault-pending", "1");
                 window.resolveVaultRefToUrl(iconUrl).then((resolved) => {
                   if (resolved && !resolved.startsWith("vault://")) {
+                    imgElement.removeAttribute("data-vault-pending");
+                    imgElement.setAttribute("data-vault-hydrated-src", resolved);
                     imgElement.src = resolved;
                   }
                 });
@@ -65188,7 +65109,11 @@ ${stickerContext || "无"}
           }
 
           const isDiceMsg = (m) => Boolean(m && (m.isDiceMessage || m.type === "dice" || m.roleType === "dice" || (m.htmlContent && m.htmlContent.includes("dice-result"))));
-          const isUserTurnMsg = (m) => Boolean(m && (m.role === "user" || m.isPeerUserMessage));
+          const isUserTurnMsg = (m) => Boolean(
+            m &&
+            !m.isHidden &&
+            (m.isPeerUserMessage || (m.role === "user" && m.type !== "narrative" && m.type !== "pat_message"))
+          );
 
           // 1. 查找最后一条玩家消息的位置
           let lastUserIdx = -1;
@@ -71907,7 +71832,7 @@ ${stickerContext || "无"}
           return escapeDebugHtml(cleaned);
         }
 
-        function recordChatDebugLog(chatId, sentPayload, receivedPayload) {
+        function recordChatDebugLog(chatId, sentPayload, receivedPayload, logId) {
           if (!state.chatDebugLogs) state.chatDebugLogs = {};
           if (!state.chatDebugLogs[chatId]) {
             try {
@@ -71917,11 +71842,23 @@ ${stickerContext || "无"}
               state.chatDebugLogs[chatId] = [];
             }
           }
-          state.chatDebugLogs[chatId].push({
-            timestamp: Date.now(),
-            sent: sentPayload,
-            received: receivedPayload,
-          });
+          const existingIdx = logId
+            ? state.chatDebugLogs[chatId].findIndex((item) => item && item.logId === logId)
+            : -1;
+          if (existingIdx !== -1) {
+            state.chatDebugLogs[chatId][existingIdx] = {
+              ...state.chatDebugLogs[chatId][existingIdx],
+              sent: sentPayload || state.chatDebugLogs[chatId][existingIdx].sent,
+              received: receivedPayload,
+            };
+          } else {
+            state.chatDebugLogs[chatId].push({
+              logId: logId || ("dbg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
+              timestamp: Date.now(),
+              sent: sentPayload,
+              received: receivedPayload,
+            });
+          }
           while (state.chatDebugLogs[chatId].length > 5) {
             state.chatDebugLogs[chatId].shift();
           }
@@ -93018,17 +92955,16 @@ ${stickerContext || "无"}
               if (confirmed) {
                 const chat = state.chats[state.activeChatId];
                 const deletedTsList = Array.from(selectedMessages);
+                const selectedTsStrSet = new Set(deletedTsList.map((t) => String(t)));
 
                 // 2. 更新后端的历史记录（彻底移除选中消息及过去的删除提示，不留任何字样与token占用）
                 chat.history = (chat.history || []).filter(
-                  (msg) => !selectedMessages.has(msg.timestamp) && !(msg.isHidden && msg.content && msg.content.includes("已被用户删除")),
+                  (msg) => !selectedTsStrSet.has(String(msg.timestamp)) && !(msg.isHidden && msg.content && msg.content.includes("已被用户删除")),
                 );
                 if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
                   window.syncCurrentSoloThreadHistory(chat);
-                } else if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
-                  chat.mainLineHistory = (chat.mainLineHistory || []).filter(
-                    (msg) => !selectedMessages.has(msg.timestamp) && !(msg.isHidden && msg.content && msg.content.includes("已被用户删除")),
-                  );
+                } else if (chat.isGroup) {
+                  chat.mainLineHistory = [...chat.history];
                 }
 
                 // 3. 将更新后的chat对象存回数据库
@@ -105522,10 +105458,12 @@ ${stickerContext || "无"}
               const attrSrc = img.getAttribute("src") || "";
               const existingRef = img.getAttribute("data-vault-ref");
               const hydratedSrc = img.getAttribute("data-vault-hydrated-src");
+              const isTransparentPlaceholder = attrSrc.startsWith("data:image/gif;base64,R0lGODlhAQAB");
               if (
                 existingRef &&
                 !attrSrc.startsWith("vault://") &&
-                !img.hasAttribute("data-vault-pending")
+                !img.hasAttribute("data-vault-pending") &&
+                !isTransparentPlaceholder
               ) {
                 const isSameHydrated =
                   (hydratedSrc && attrSrc === hydratedSrc) ||
