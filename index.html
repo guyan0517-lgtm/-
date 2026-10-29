@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -83309,6 +83309,11 @@ ${stickerContext || "无"}
               latestInnerVoice: chat.latestInnerVoice
                 ? JSON.parse(JSON.stringify(chat.latestInnerVoice))
                 : null,
+
+              deletedMessageTimestamps: JSON.parse(
+                JSON.stringify(chat.settings?.deletedMessageTimestamps || []),
+              ),
+              historyClearedAt: Number(chat.settings?.historyClearedAt) || 0,
             };
 
             chat.checkpoints.push(newCheckpoint);
@@ -83338,6 +83343,30 @@ ${stickerContext || "无"}
           if (confirmed) {
             // 1. 恢复聊天历史
             chat.history = JSON.parse(JSON.stringify(checkpoint.history));
+            if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
+              chat.mainLineHistory = JSON.parse(JSON.stringify(checkpoint.history));
+            }
+
+            // 恢复该时间线对应的删除标记与清空标记，确保存档里的消息不会被误当成已删除
+            if (!chat.settings) chat.settings = {};
+            const restoredTsSet = new Set(
+              (checkpoint.history || [])
+                .map((m) => (m && m.timestamp != null ? String(m.timestamp) : ""))
+                .filter(Boolean),
+            );
+            if (Array.isArray(checkpoint.deletedMessageTimestamps)) {
+              chat.settings.deletedMessageTimestamps = checkpoint.deletedMessageTimestamps
+                .map((t) => String(t))
+                .filter((t) => !restoredTsSet.has(t));
+            } else if (Array.isArray(chat.settings.deletedMessageTimestamps)) {
+              chat.settings.deletedMessageTimestamps = chat.settings.deletedMessageTimestamps
+                .map((t) => String(t))
+                .filter((t) => !restoredTsSet.has(t));
+            }
+            chat.settings.historyClearedAt =
+              typeof checkpoint.historyClearedAt === "number"
+                ? checkpoint.historyClearedAt
+                : 0;
 
             // 2. 恢复心声历史
             chat.innerVoiceHistory = JSON.parse(
