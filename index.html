@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -47379,7 +47379,7 @@ ${recentHistoryText}
                   post.content ||
                   post.hiddenContent ||
                   "(图片微博)"
-                ).substring(0, 30);
+                );
 
                 // 只有当 post.comments 确实是一个数组时，我们才去调用 .some() 方法
                 const hasCommented =
@@ -47390,7 +47390,7 @@ ${recentHistoryText}
                   ? "[你已评论]"
                   : "[你未互动]";
 
-                weiboContextForActiveChat += `- (ID: ${post.id}) 作者: ${authorName}, 内容: "${contentPreview}..." ${interactionStatus}\n`;
+                weiboContextForActiveChat += `- (ID: ${post.id}) 作者: ${authorName}, 内容: "${contentPreview}" ${interactionStatus}\n`;
               });
               weiboContextForActiveChat +=
                 " - 【重要提示】请优先与你【未互动】的微博进行评论。如果都互动过了，可以考虑自己发一条新微博。";
@@ -47472,7 +47472,7 @@ ${recentHistoryText}
                 .slice(-10, -5) // 获取拉黑前的最后5条消息
                 .map((msg) => {
                   const sender = msg.role === "user" ? "用户" : chat.name;
-                  return `${sender}: ${String(msg.content).substring(0, 50)}...`;
+                  return `${sender}: ${String(msg.content)}`;
                 })
                 .join("\n");
 
@@ -49115,7 +49115,7 @@ ${stickerContext || "无"}
                   .slice(-10)
                   .map((msg) => {
                     const sender = msg.role === "user" ? "用户" : chat.name;
-                    return `${sender}: ${String(msg.content).substring(0, 50)}...`;
+                    return `${sender}: ${String(msg.content)}`;
                   })
                   .join("\n");
 
@@ -49155,10 +49155,10 @@ ${stickerContext || "无"}
                   post.content ||
                   post.hiddenContent ||
                   "(图片微博)"
-                ).substring(0, 30);
+                );
                 weiboContext += `- (ID: ${post.id}) [${formatPostTimestamp(
                   post.timestamp,
-                )}] 内容: "${contentPreview}..." [👍${likes} 💬${comments}]\n`;
+                )}] 内容: "${contentPreview}" [👍${likes} 💬${comments}]\n`;
               });
             }
 
@@ -49191,8 +49191,8 @@ ${stickerContext || "无"}
                 if (userComments.length > 0) {
                   const postContentPreview = (
                     post.content || "(图片微博)"
-                  ).substring(0, 20);
-                  userCommentsOnMyPosts += `- 在你的微博 (ID: ${post.id}) "${postContentPreview}..." 下:\n`;
+                  );
+                  userCommentsOnMyPosts += `- 在你的微博 (ID: ${post.id}) "${postContentPreview}" 下:\n`;
 
                   userComments.forEach((comment) => {
                     // 1. 检查AI是否已经回复过这条评论
@@ -49257,7 +49257,7 @@ ${stickerContext || "无"}
                   post.publicText ||
                   post.content ||
                   "图片动态"
-                ).substring(0, 30)}..."${interactionStatus}`;
+                )}"${interactionStatus}`;
 
                 const { contextString: commentsContext, visibilityFlag } =
                   buildCommentsContextForAI(post, chat, userNickname);
@@ -49294,7 +49294,7 @@ ${stickerContext || "无"}
                     post.content ||
                     post.hiddenContent ||
                     "(图片微博)"
-                  ).substring(0, 30);
+                  );
 
                   // 1. 检查AI（char.name）是否已经评论过这条用户的微博
                   const hasCommented = (post.comments || []).some(
@@ -49309,7 +49309,7 @@ ${stickerContext || "无"}
                   // 3. 将带有状态标签的完整信息添加到上下文中
                   weiboContext += `- (ID: ${post.id}) [${formatPostTimestamp(
                     post.timestamp,
-                  )}] 内容: "${contentPreview}..." [👍${likes} 💬${comments}] ${interactionStatus}\n`;
+                  )}] 内容: "${contentPreview}" [👍${likes} 💬${comments}] ${interactionStatus}\n`;
                 });
               }
 
@@ -49338,8 +49338,8 @@ ${stickerContext || "无"}
                   if (userComments.length > 0) {
                     const postContentPreview = (
                       post.content || "(图片微博)"
-                    ).substring(0, 20);
-                    userCommentsOnMyPosts += `- 在你的微博 (ID: ${post.id}) "${postContentPreview}..." 下:\n`;
+                    );
+                    userCommentsOnMyPosts += `- 在你的微博 (ID: ${post.id}) "${postContentPreview}" 下:\n`;
                     userComments.forEach((comment) => {
                       userCommentsOnMyPosts += `  └ (评论ID: ${comment.commentId}) 用户: "${comment.commentText}"\n`;
                     });
@@ -56743,7 +56743,7 @@ ${stickerContext || "无"}
                 post.publicText ||
                 post.content ||
                 "图片动态"
-              ).substring(0, 30)}..."${interactionStatus}`;
+              )}"${interactionStatus}`;
               const { contextString: commentsContext, visibilityFlag } =
                 buildCommentsContextForAI(post, chat, userNickname);
               const audience = getVisibleAudienceForPost(
@@ -56775,14 +56775,14 @@ ${stickerContext || "无"}
                   post.content ||
                   post.hiddenContent ||
                   "(图片微博)"
-                ).substring(0, 30);
+                );
                 const hasCommented = (post.comments || []).some(
                   (c) => c.authorNickname === chat.name,
                 );
                 const interactionStatus = hasCommented
                   ? "[你已评论]"
                   : "[你未互动]";
-                weiboContextForAction += `- (ID: ${post.id}) 作者: ${authorName}, 内容: "${contentPreview}..." ${interactionStatus}\n`;
+                weiboContextForAction += `- (ID: ${post.id}) 作者: ${authorName}, 内容: "${contentPreview}" ${interactionStatus}\n`;
               });
               weiboContextForAction +=
                 " - 【重要提示】请优先与你【未互动】的微博进行评论。如果都互动过了，可以考虑自己发一条新微博。";
@@ -59746,7 +59746,7 @@ ${stickerContext || "无"}
                   msg.role === "user"
                     ? chat.settings.myNickname || "我"
                     : msg.senderName || chat.name
-                }: ${String(msg.content).substring(0, 50)}...`,
+                }: ${String(msg.content)}`,
             )
             .join("\n");
 
@@ -59890,7 +59890,7 @@ ${stickerContext || "无"}
                   msg.role === "user"
                     ? chat.settings.myNickname || "我"
                     : msg.senderName || chat.name
-                }: ${String(msg.content).substring(0, 50)}...`,
+                }: ${String(msg.content)}`,
             )
             .join("\n");
 
@@ -61014,7 +61014,7 @@ ${stickerContext || "无"}
                 msg.role === "user"
                   ? chat.settings.myNickname || "我"
                   : msg.senderName || chat.name;
-              return `${sender}: ${String(msg.content).substring(0, 50)}...`;
+              return `${sender}: ${String(msg.content)}`;
             })
             .join("\n");
 
@@ -65959,7 +65959,7 @@ ${stickerContext || "无"}
 
           try {
             const userNickname = state.qzoneSettings.nickname || "我";
-            const persona = (chat.settings.aiPersona || "").substring(0, 4000);
+            const persona = chat.settings.aiPersona || "";
             // updated by lrq 251028 修改最大记忆条数
             const maxMemory = chat.settings.maxMemory || 20;
             const recentHistory = chat.history
@@ -66373,9 +66373,7 @@ ${stickerContext || "无"}
           try {
             const userNickname = state.qzoneSettings.nickname || "我";
 
-            // 限制人设长度，这是防止503错误的根本方法！
-            // 只取人设的前4000个字符，避免整个人设过长导致请求失败。
-            const persona = (chat.settings.aiPersona || "").substring(0, 4000);
+            const persona = chat.settings.aiPersona || "";
 
             const recentHistory = chat.history
               .slice(-chat.settings.maxMemory || 20)

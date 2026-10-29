@@ -1061,7 +1061,7 @@ async function openCocFillModal(cocPanel) {
 角色名称: ${charName}
 角色设定: ${charPersona}
 选中的世界书内容:
-${combinedWbText.slice(0, 4000)}
+${combinedWbText}
 
 【判定规则】:
 1. 仔细检索世界书文本中是否有关于“${charName}”的数值信息或技能描述。

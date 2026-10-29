@@ -4434,7 +4434,7 @@ JSON 格式如下：
             this.analysisStatusText = `正在分析第 ${segIdx + 1} / ${segments.length} 卷...`;
             this.updateBottomActionBar();
           }
-          const segText = segments[segIdx].substring(0, 42000);
+          const segText = segments[segIdx];
           let userPrompt = `模组名称：${this.currentParsedData.moduleName}\n总字数：${this.currentParsedData.wordCount}\n当前分析分卷：第 ${segIdx + 1} / ${segments.length} 卷\n\n重构分析提示词：\n${activePrompt}`;
           if (this.globalOpinion) {
             userPrompt += `\n\n用户针对此重构方案的个性化补充意见：\n${this.globalOpinion}`;
@@ -4448,7 +4448,7 @@ JSON 格式如下：
           if (segIdx === 0 && this.currentParsedData.images && this.currentParsedData.images.length > 0) {
             const imgListDesc = this.currentParsedData.images.map((img, i) => {
               const origName = img.fileName || img.name || `插图_${i + 1}`;
-              const nearby = img.nearbyText ? `，所在页面上下文: "${img.nearbyText.substring(0, 100)}"` : '';
+              const nearby = img.nearbyText ? `，所在页面上下文: "${img.nearbyText}"` : '';
               const mapHint = img.isMap ? '【视觉确认为地图】' : (img.name && (img.name.includes('图') || img.name.includes('平面') || img.name.includes('地图')) ? '【判定为地图】' : '');
               return `图${i + 1}: 名称【${origName}】${mapHint}，第${img.pageNumber || '1'}页，尺寸${img.width || 800}x${img.height || 600} (${img.format || 'JPEG'})${nearby}`;
             }).join('\n');
@@ -4471,6 +4471,7 @@ JSON 格式如下：
               if (salvaged) {
                 if (!parsedAiPlan) {
                   parsedAiPlan = salvaged;
+                  parsedAiPlan._isSalvagedPartial = true;
                 } else {
                   if ((!Array.isArray(parsedAiPlan.chunks) || parsedAiPlan.chunks.length === 0) && Array.isArray(salvaged.chunks) && salvaged.chunks.length > 0) {
                     parsedAiPlan.chunks = salvaged.chunks;
@@ -4483,34 +4484,85 @@ JSON 格式如下：
               }
             }
 
-            if (parsedAiPlan && (!Array.isArray(parsedAiPlan.chunks) || parsedAiPlan.chunks.length < 2)) {
+            const findLastPlannedOffset = (chunksArr, textStr) => {
+              if (!Array.isArray(chunksArr) || chunksArr.length === 0 || !textStr) return 0;
+              for (let i = chunksArr.length - 1; i >= 0; i--) {
+                const suf = String(chunksArr[i].suffixPreview || chunksArr[i].endPreview || '').trim();
+                if (suf.length >= 6) {
+                  const probe = suf.slice(-Math.min(30, suf.length));
+                  const idx = textStr.lastIndexOf(probe);
+                  if (idx !== -1) return idx + probe.length;
+                  const probeHead = suf.slice(0, Math.min(30, suf.length));
+                  const idx2 = textStr.lastIndexOf(probeHead);
+                  if (idx2 !== -1) return idx2 + suf.length;
+                }
+                const pre = String(chunksArr[i].prefixPreview || chunksArr[i].startPreview || '').trim();
+                if (pre.length >= 6) {
+                  const probePre = pre.slice(0, Math.min(30, pre.length));
+                  const idx3 = textStr.lastIndexOf(probePre);
+                  if (idx3 !== -1) return idx3 + pre.length;
+                }
+              }
+              return -1;
+            };
+
+            let planContRound = 0;
+            const maxPlanContRounds = 8;
+            while (parsedAiPlan && planContRound < maxPlanContRounds) {
+              const curChunks = Array.isArray(parsedAiPlan.chunks) ? parsedAiPlan.chunks : [];
+              const lastOffset = findLastPlannedOffset(curChunks, segText);
+              const hasUnplannedTail = lastOffset !== -1 && (segText.length - lastOffset) > 3000;
+              const needsMorePlanning = curChunks.length < 2 || Boolean(parsedAiPlan._isSalvagedPartial) || hasUnplannedTail;
+              if (!needsMorePlanning) break;
+
+              planContRound++;
               try {
-                this.analysisStatusText = `流式规划补全中：正在继续生成本卷章节切割目录...`;
+                this.analysisStatusText = `流式规划补全中（第 ${planContRound} 轮）：正在继续生成本卷剩余章节目录...`;
                 this.updateBottomActionBar();
-                const existingChunksDesc = (parsedAiPlan.chunks && parsedAiPlan.chunks.length > 0)
-                  ? `目前已规划章节：${parsedAiPlan.chunks.map(c => c.name || c.title).join('、')}（截止于：「${parsedAiPlan.chunks[parsedAiPlan.chunks.length - 1].suffixPreview || ''}」）。请紧接其后继续规划剩余章节！`
+                const lastChunkObj = curChunks.length > 0 ? curChunks[curChunks.length - 1] : null;
+                const existingChunksDesc = lastChunkObj
+                  ? `目前已规划 ${curChunks.length} 个章节：${curChunks.map(c => c.name || c.title).join('、')}。\n最后一个已规划章节为【${lastChunkObj.name || lastChunkObj.title}】，截止于原文：「${lastChunkObj.suffixPreview || lastChunkObj.endPreview || lastChunkObj.prefixPreview || ''}」。\n请紧接该位置之后，继续往后规划本卷剩余的全部章节，直到本卷原文彻底结束！严禁重复已规划章节！`
                   : `地图节点已生成完毕，现在请只输出本卷完整的 chunks 章节规划列表！`;
-                const contPrompt = `请直接输出本卷的 chunks 章节规划 JSON 对象（无需重复输出 mapNodes 和 imageAnalysis），注意字符串内部引用请用中文引号「」，格式严格为：\n{"chunks": [{"order": 1, "name": "章节名", "category": "分类", "wordCount": 1200, "reason": "说明", "prefixPreview": "起始前100字", "suffixPreview": "末尾后100字", "remarks": "本章归纳要点"}]}\n\n${existingChunksDesc}\n\n模组原文：\n${segText}`;
+                const remainingRefText = (lastOffset > 200 && (segText.length - lastOffset) > 1000)
+                  ? segText.substring(Math.max(0, lastOffset - 200))
+                  : segText;
+                const contPrompt = `请直接输出本卷剩余部分的 chunks 章节规划 JSON 对象（无需重复输出 mapNodes 和 imageAnalysis），注意字符串内部引用请用中文引号「」，格式严格为：\n{"chunks": [{"order": ${curChunks.length + 1}, "name": "章节名", "category": "分类", "wordCount": 1200, "reason": "说明", "prefixPreview": "起始前100字", "suffixPreview": "末尾后100字", "remarks": "本章归纳要点"}]}\n\n${existingChunksDesc}\n\n待继续规划的模组原文：\n${remainingRefText}`;
                 const contText = await this.callAI(systemPrompt, contPrompt);
-                if (contText) {
-                  let contParsed = this.parseJsonFromAiResponse(contText);
-                  if (!contParsed || !Array.isArray(contParsed.chunks) || contParsed.chunks.length === 0) {
-                    contParsed = this.salvagePartialAiPlan(contText);
+                if (!contText) break;
+
+                let contParsed = this.parseJsonFromAiResponse(contText);
+                let contSalvaged = false;
+                if (contParsed) {
+                  const altContChunks = contParsed.chunks || contParsed.chapters || contParsed.sections || contParsed.moduleChunks || contParsed.paragraphList;
+                  if (Array.isArray(altContChunks) && !Array.isArray(contParsed.chunks)) {
+                    contParsed.chunks = altContChunks;
                   }
-                  if (contParsed && Array.isArray(contParsed.chunks) && contParsed.chunks.length > 0) {
-                    const existingNames = new Set((parsedAiPlan.chunks || []).map(c => c.name || c.title));
-                    if (!Array.isArray(parsedAiPlan.chunks)) parsedAiPlan.chunks = [];
-                    contParsed.chunks.forEach(c => {
-                      const cName = c.name || c.title || c.chapterName;
-                      if (cName && !existingNames.has(cName)) {
-                        existingNames.add(cName);
-                        parsedAiPlan.chunks.push({ ...c, name: cName });
-                      }
-                    });
-                  }
+                }
+                if (!contParsed || !Array.isArray(contParsed.chunks) || contParsed.chunks.length === 0) {
+                  contParsed = this.salvagePartialAiPlan(contText);
+                  contSalvaged = true;
+                }
+                parsedAiPlan._isSalvagedPartial = contSalvaged;
+
+                if (contParsed && Array.isArray(contParsed.chunks) && contParsed.chunks.length > 0) {
+                  const existingNames = new Set((parsedAiPlan.chunks || []).map(c => c.name || c.title));
+                  if (!Array.isArray(parsedAiPlan.chunks)) parsedAiPlan.chunks = [];
+                  let addedCount = 0;
+                  contParsed.chunks.forEach(c => {
+                    const cName = (c.name || c.title || c.chapterName || '').trim();
+                    if (cName && !existingNames.has(cName)) {
+                      existingNames.add(cName);
+                      parsedAiPlan.chunks.push({ ...c, name: cName });
+                      addedCount++;
+                    }
+                  });
+                  if (addedCount === 0) break;
+                } else {
+                  break;
                 }
               } catch (contErr) {
                 console.warn('[模组] 流式补全章节目录失败:', contErr);
+                break;
               }
             }
           }
@@ -4940,7 +4992,7 @@ JSON 格式如下：
       if (!modal || !titleEl || !bodyEl) return;
 
       titleEl.textContent = `原文：${chunk.name}`;
-      bodyEl.textContent = chunk.rawSlice || this.currentParsedData?.text?.substring(0, 3000) || '暂无对应原文';
+      bodyEl.textContent = chunk.rawSlice || this.currentParsedData?.text || '暂无对应原文';
       modal.style.display = 'flex';
     },
 
@@ -6039,7 +6091,7 @@ ${fullText}`;
 
       const analysisPrompt = this.currentParsedData?.analysisPrompt || this.currentParsedData?.prompt || DEFAULT_TRPG_ANALYSIS_PROMPT;
       const cuttingPrompt = this.currentParsedData?.cuttingPrompt || DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT;
-      const rawExcerpt = (this.currentParsedData?.text || '').substring(0, 8000);
+      const rawExcerpt = this.currentParsedData?.text || '';
 
       let planChunkInfo = '';
       if (this.currentPlan?.chunks) {
@@ -6135,7 +6187,7 @@ ${chapterObj.content}
         fixBtn.disabled = true;
       }
 
-      const rawExcerpt = (this.currentParsedData?.text || '').substring(0, 8000);
+      const rawExcerpt = this.currentParsedData?.text || '';
       const cuttingPrompt = this.currentParsedData?.cuttingPrompt || DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT;
 
       const prompt = `你是模组精准清理与打标修复专家。请严格依照既定的模组切割整理规范以及以下具体修改要求，对章节【${this.activeAuditChapter.title}】的内容进行净化与修复：
@@ -6214,11 +6266,11 @@ ${this.activeAuditChapter.content}
 
       try {
         const chapterOverview = this.cutChapters.map((c, idx) => {
-          const snippet = c.content ? c.content.substring(0, 200).replace(/\n+/g, ' ') : '';
-          return `第${idx + 1}章 【${c.title}】[${c.category}, 约${c.wordCount}字]:\n${snippet}...`;
+          const snippet = c.content ? c.content.replace(/\n+/g, ' ') : '';
+          return `第${idx + 1}章 【${c.title}】[${c.category}, 约${c.wordCount}字]:\n${snippet}`;
         }).join('\n\n');
 
-        const rawExcerpt = (this.currentParsedData?.text || '').substring(0, 8000);
+        const rawExcerpt = this.currentParsedData?.text || '';
         const analysisPrompt = this.currentParsedData?.analysisPrompt || this.currentParsedData?.prompt || DEFAULT_TRPG_ANALYSIS_PROMPT;
         const cuttingPrompt = this.currentParsedData?.cuttingPrompt || DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT;
 
@@ -6286,7 +6338,7 @@ ${chapterOverview}
 
       const total = this.cutChapters.length;
       let successCount = 0;
-      const rawExcerpt = (this.currentParsedData?.text || '').substring(0, 6000);
+      const rawExcerpt = this.currentParsedData?.text || '';
 
       for (let i = 0; i < total; i++) {
         const chap = this.cutChapters[i];
@@ -7587,7 +7639,7 @@ ${chap.content}
       }
 
       // 汇总模组上下文文本
-      const allText = (chapters || []).map(c => `${c.title} ${c.content || ''}`).join('\n').substring(0, 8000);
+      const allText = (chapters || []).map(c => `${c.title} ${c.content || ''}`).join('\n');
 
       // 一次最多生成10个prompt
       const batchSize = 10;
@@ -7596,7 +7648,7 @@ ${chap.content}
         const locNames = chunk.map(l => `- 地点名称：${l.name}，简介：${l.desc || '无'}`).join('\n');
 
         const systemPrompt = '你是一位跑团插画提示词专家。请根据模组设定，为各地点编写唯美场景图像的英文绘图提示词。只输出合法JSON数组。';
-        const userPrompt = `模组节选：\n${allText.substring(0, 3000)}\n\n` +
+        const userPrompt = `模组节选：\n${allText}\n\n` +
           `请为以下地点编写提示词：\n${locNames}\n\n` +
           `格式要求：只输出JSON数组，格式如下：\n` +
           `[{"name": "地点名称", "prompt": "masterpiece, scenery, highly detailed, landscape, ..."}, ...]`;
@@ -8600,7 +8652,7 @@ ${chap.content}
               moduleText = targetMod.description || targetMod.name || '模组';
             }
             const promptContent = promptTextarea ? promptTextarea.value.trim() : DEFAULT_TRPG_MUSIC_PROMPT;
-            const fullPrompt = `${promptContent}\n\n以下为模组文本内容：\n${moduleText.slice(0, 15000)}`;
+            const fullPrompt = `${promptContent}\n\n以下为模组文本内容：\n${moduleText}`;
 
             const aiRes = await this.callAI('你是一个专业的跑团带团音频总监与模组剧情配乐专家，输出严格的JSON数组。', fullPrompt);
             let musicList = [];
@@ -14465,7 +14517,7 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
             content: cleanSceneText
           });
 
-          previousSceneTail = cleanSceneText.replace(boundarySuffix, '').slice(-420);
+          previousSceneTail = cleanSceneText.replace(boundarySuffix, '');
         }
 
         // 6. 撰写结局分歧章节
