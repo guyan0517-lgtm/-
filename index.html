@@ -1195,6 +1195,25 @@
                   class="moe-slider"
                 />
               </div>
+              <div class="form-group">
+                <label
+                  >上限:
+                  <span
+                    id="max-tokens-value"
+                    style="color: var(--accent-color)"
+                    >默认</span
+                  ></label
+                >
+                <input
+                  type="range"
+                  id="max-tokens-slider"
+                  min="0"
+                  max="200000"
+                  step="1000"
+                  value="0"
+                  class="moe-slider"
+                />
+              </div>
               <button id="fetch-models-btn" class="moe-btn-secondary" style="margin-top: 15px;">
                 拉取模型列表
               </button>
@@ -2423,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -21644,6 +21663,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (parsedBody.max_tokens === 100000) {
               delete parsedBody.max_tokens;
             }
+            const cfgMax = typeof getConfiguredMaxTokens === "function" ? getConfiguredMaxTokens() : 0;
+            if (cfgMax > 0 && (!parsedBody.max_tokens || parsedBody.max_tokens > 30)) {
+              parsedBody.max_tokens = cfgMax;
+            }
+          } else if (parsedBody && typeof parsedBody === "object" && Array.isArray(parsedBody.contents)) {
+            const cfgMax = typeof getConfiguredMaxTokens === "function" ? getConfiguredMaxTokens() : 0;
+            if (cfgMax > 0) {
+              if (!parsedBody.generationConfig) parsedBody.generationConfig = {};
+              if (!parsedBody.generationConfig.maxOutputTokens) {
+                parsedBody.generationConfig.maxOutputTokens = cfgMax;
+              }
+            }
           }
 
           let controller = new AbortController();
@@ -21799,20 +21830,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const contentType = (res.headers.get("content-type") || "").toLowerCase();
 
             if (!res.ok) {
-              if (timeoutId) clearTimeout(timeoutId);
               let errText = "";
               try {
                 errText = await res.text();
               } catch (_) {}
-              console.error(`HTTP ${res.status} [${method}] (请求地址: ${finalUrl}): ${errText}`);
-              const simplifiedMsg = extractApiErrorMessage(res.status, errText);
-              return {
-                ok: false,
-                status: res.status,
-                text: errText,
-                error: simplifiedMsg,
-                headers: new Headers({ "Content-Type": "application/json" }),
-              };
+              if (
+                res.status === 400 &&
+                parsedBody &&
+                typeof parsedBody === "object" &&
+                (parsedBody.max_tokens || parsedBody.generationConfig?.maxOutputTokens) &&
+                /max_tokens|max_completion_tokens|maxoutputtokens|maximum|token|limit/i.test(errText)
+              ) {
+                const retryBody = JSON.parse(JSON.stringify(parsedBody));
+                delete retryBody.max_tokens;
+                if (retryBody.generationConfig) {
+                  delete retryBody.generationConfig.maxOutputTokens;
+                }
+                const retryAttempt = await executeUpstreamFetch(retryBody);
+                if (retryAttempt && retryAttempt.res && retryAttempt.res.ok) {
+                  res = retryAttempt.res;
+                  parsedBody = retryBody;
+                } else {
+                  if (timeoutId) clearTimeout(timeoutId);
+                  console.error(`HTTP ${res.status} [${method}] (请求地址: ${finalUrl}): ${errText}`);
+                  const simplifiedMsg = extractApiErrorMessage(res.status, errText);
+                  return {
+                    ok: false,
+                    status: res.status,
+                    text: errText,
+                    error: simplifiedMsg,
+                    headers: new Headers({ "Content-Type": "application/json" }),
+                  };
+                }
+              } else {
+                if (timeoutId) clearTimeout(timeoutId);
+                console.error(`HTTP ${res.status} [${method}] (请求地址: ${finalUrl}): ${errText}`);
+                const simplifiedMsg = extractApiErrorMessage(res.status, errText);
+                return {
+                  ok: false,
+                  status: res.status,
+                  text: errText,
+                  error: simplifiedMsg,
+                  headers: new Headers({ "Content-Type": "application/json" }),
+                };
+              }
             }
 
             // 严格区分流式与非流式：仅当请求明确开启流式时才走流式读取
@@ -22476,6 +22537,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.isApiStreamEnabled = isApiStreamEnabled;
 
+        function getConfiguredMaxTokens() {
+          const sl = document.getElementById("max-tokens-slider");
+          if (sl && window._apiMaxTokensSyncedOnce && sl.value !== undefined) {
+            const v = parseInt(sl.value, 10);
+            if (!isNaN(v) && v >= 0) return v;
+          }
+          const savedStr = localStorage.getItem("api_max_tokens");
+          if (savedStr !== null && savedStr !== "") {
+            const v = parseInt(savedStr, 10);
+            if (!isNaN(v) && v >= 0) return v;
+          }
+          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || null;
+          if (cfg && typeof cfg.maxTokens === "number" && cfg.maxTokens >= 0) {
+            return cfg.maxTokens;
+          }
+          return 0;
+        }
+        window.getConfiguredMaxTokens = getConfiguredMaxTokens;
+
         window.fetch = async function (input, init) {
           let isSubCall = false;
           let modelId = "默认模型";
@@ -22651,8 +22731,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               temperature: parsedBody.temperature !== undefined ? parsedBody.temperature : (parseFloat(apiCfg.temperature) || 0.8),
               stream: Boolean(isStreamActive),
             };
+            const cfgMax = getConfiguredMaxTokens();
             if (parsedBody.max_tokens && parsedBody.max_tokens !== 100000) {
               openAiPayload.max_tokens = parsedBody.max_tokens;
+            } else if (cfgMax > 0) {
+              openAiPayload.max_tokens = cfgMax;
             }
 
             fetchStartT = Date.now();
@@ -34103,6 +34186,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             initStreamSwitch.checked = Boolean(state.apiConfig.streamEnabled);
             window._apiStreamSwitchSyncedOnce = true;
           }
+          if (typeof state.apiConfig.maxTokens !== "number") {
+            const savedMaxT = parseInt(localStorage.getItem("api_max_tokens") || "0", 10);
+            state.apiConfig.maxTokens = !isNaN(savedMaxT) && savedMaxT >= 0 ? savedMaxT : 0;
+          } else {
+            localStorage.setItem("api_max_tokens", String(state.apiConfig.maxTokens));
+          }
+          const initMaxTokensSlider = document.getElementById("max-tokens-slider");
+          const initMaxTokensVal = document.getElementById("max-tokens-value");
+          if (initMaxTokensSlider && initMaxTokensVal) {
+            const mt = state.apiConfig.maxTokens || 0;
+            initMaxTokensSlider.value = mt;
+            initMaxTokensVal.textContent = mt > 0 ? String(mt) : "默认";
+            window._apiMaxTokensSyncedOnce = true;
+          }
 
           state.globalSettings = globalSettings || {
             id: "main",
@@ -34903,7 +35000,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               const lastBracketIdx = trimmedContent.lastIndexOf("]");
               const lastBraceInTrimmed = trimmedContent.lastIndexOf("}");
-              if (bracketOpenIdx !== -1 && lastBracketIdx > bracketOpenIdx && lastBracketIdx > lastBraceInTrimmed) {
+              const lastOpenBraceInTrimmed = trimmedContent.lastIndexOf("{");
+              if (bracketOpenIdx !== -1 && lastBracketIdx > bracketOpenIdx && lastBracketIdx > lastBraceInTrimmed && lastBraceInTrimmed > lastOpenBraceInTrimmed) {
                 trimmedContent = trimmedContent.substring(bracketOpenIdx, lastBracketIdx + 1).trim();
               } else if (bracketOpenIdx !== -1) {
                 trimmedContent = trimmedContent.substring(bracketOpenIdx + 1).trim();
@@ -36676,6 +36774,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               1,
             );
           });
+
+          const maxTokensSlider = document.getElementById("max-tokens-slider");
+          const maxTokensValDisplay = document.getElementById("max-tokens-value");
+          if (maxTokensSlider && maxTokensValDisplay) {
+            const curMaxT = parseInt(state.apiConfig.maxTokens, 10) || 0;
+            maxTokensSlider.value = curMaxT;
+            maxTokensValDisplay.textContent = curMaxT > 0 ? String(curMaxT) : "默认";
+            window._apiMaxTokensSyncedOnce = true;
+            maxTokensSlider.oninput = () => {
+              const v = parseInt(maxTokensSlider.value, 10) || 0;
+              maxTokensValDisplay.textContent = v > 0 ? String(v) : "默认";
+              window._apiMaxTokensSyncedOnce = true;
+              state.apiConfig.maxTokens = v;
+              localStorage.setItem("api_max_tokens", String(v));
+            };
+          }
 
           const qualitySlider = document.getElementById("image-quality-slider");
           const qualityValue = document.getElementById("image-quality-value");
@@ -88247,6 +88361,11 @@ ${stickerContext || "无"}
               state.apiConfig.temperature = parseFloat(
                 document.getElementById("temperature-slider").value,
               );
+              const maxTokensSliderEl = document.getElementById("max-tokens-slider");
+              if (maxTokensSliderEl) {
+                state.apiConfig.maxTokens = parseInt(maxTokensSliderEl.value, 10) || 0;
+                localStorage.setItem("api_max_tokens", String(state.apiConfig.maxTokens));
+              }
               if (!state.apiConfig.protocolProfiles) state.apiConfig.protocolProfiles = {};
               state.apiConfig.protocolProfiles[state.apiConfig.apiProtocol || "default"] = {
                 proxyUrl: state.apiConfig.proxyUrl,

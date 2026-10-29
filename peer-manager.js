@@ -1013,10 +1013,12 @@
       } else {
         this.subscribeAllKnownFriendsMqtt();
         this.publishMyRetainedPresence("online");
+        this.publishMyRetainedProfile();
         this.publishAllRetainedMailboxes();
       }
       this.retryOutboxPackets();
       this.sendOnlinePingToFriends();
+      this.syncAllSinglePeerChatProfiles();
       this.syncAllPeerPresenceUI();
       if (
         window.state &&
@@ -1573,6 +1575,7 @@
             this.publishAllRetainedMailboxes(client);
             this.retryOutboxPackets();
             this.sendOnlinePingToFriends();
+            this.syncAllSinglePeerChatProfiles();
           });
 
           client.on("message", (topic, messageBuffer) => {
@@ -1597,15 +1600,34 @@
       if (clients.length === 0) return;
       const myCode = this.normalizePeerCode(this.getOrCreateMyPeerCode());
       const profile = this.getMyProfile();
-      const smallAva = await this.compressAvatarForWire(profile.avatar);
+      let pubName = profile.name && !this.isGenericPeerName(profile.name) ? profile.name : "";
+      let pubAva = profile.avatar && !this.isPlaceholderAvatar(profile.avatar) ? profile.avatar : "";
+      let pubFrame = profile.myAvatarFrame || "";
+      if ((!pubName || !pubAva) && window.state && window.state.chats) {
+        for (const c of Object.values(window.state.chats)) {
+          if (c && c.roleType === "peer" && !c.isGroup && c.settings) {
+            if (!pubName && c.settings.myName && !this.isGenericPeerName(c.settings.myName)) {
+              pubName = c.settings.myName.trim();
+            }
+            if (!pubAva && c.settings.myAvatar && !this.isPlaceholderAvatar(c.settings.myAvatar)) {
+              pubAva = c.settings.myAvatar;
+            }
+            if (!pubFrame && c.settings.myAvatarFrame) {
+              pubFrame = c.settings.myAvatarFrame;
+            }
+            if (pubName && pubAva) break;
+          }
+        }
+      }
+      const smallAva = await this.compressAvatarForWire(pubAva || profile.avatar);
       const profilePayload = {
         type: "profile_update",
         isRetainedProfile: true,
         eventId: "prof_ret_" + myCode + "_" + Date.now(),
         peerCode: myCode,
-        name: profile.name && profile.name !== "我" ? profile.name : undefined,
+        name: pubName || undefined,
         avatar: smallAva || undefined,
-        myAvatarFrame: profile.myAvatarFrame || "",
+        myAvatarFrame: pubFrame,
         timestamp: Date.now()
       };
       if (!profilePayload.name && !profilePayload.avatar) return;
@@ -1909,6 +1931,7 @@
       this.subscribeAllKnownFriendsMqtt();
       this.publishMyRetainedPresence("online");
       this.publishMyRetainedProfile();
+      this.syncAllSinglePeerChatProfiles();
       this.flushIncomingQueue();
       this.retryOutboxPackets();
       this.pollOnce();
@@ -1948,6 +1971,7 @@
             if (this.isAppDbReady()) {
               this.retryOutboxPackets(fromCode);
               this.publishRetainedMailboxForTarget(fromCode);
+              this.syncSinglePeerChatProfileByCode(fromCode);
             }
           }
         }
@@ -1960,6 +1984,9 @@
         if (fromCode && fromCode !== myCode) {
           if (!data.timestamp || Date.now() - data.timestamp < 30000) {
             this.markPeerOnline(fromCode);
+            if (this.isAppDbReady()) {
+              this.syncSinglePeerChatProfileByCode(fromCode);
+            }
           }
         }
         if (data.eventId) this.ackEventsToServer([data.eventId]);
@@ -2507,11 +2534,33 @@
           return Array.from(map.values()).sort((x, y) => (x.timestamp || 0) - (y.timestamp || 0));
         };
 
+        const groupNamesByPeer = new Map();
+        const groupAvasByPeer = new Map();
+        for (const c of allChats) {
+          if (!c || !c.isGroup || !Array.isArray(c.members)) continue;
+          for (const m of c.members) {
+            if (!m || !(m.isPeerMember || m.roleType === "peer" || m.peerCode)) continue;
+            const mCode = this.normalizePeerCode(m.peerCode);
+            if (!mCode || mCode === this.normalizePeerCode(myCode)) continue;
+            if (!groupNamesByPeer.has(mCode)) groupNamesByPeer.set(mCode, new Set());
+            if (!groupAvasByPeer.has(mCode)) groupAvasByPeer.set(mCode, new Set());
+            if (m.groupNickname && !this.isGenericPeerName(m.groupNickname)) {
+              groupNamesByPeer.get(mCode).add(m.groupNickname.trim());
+            }
+            if (m.avatar && !this.isPlaceholderAvatar(m.avatar)) {
+              groupAvasByPeer.get(mCode).add(m.avatar);
+            }
+          }
+        }
+        const outMapForRepair = this.getOutgoingRequests();
+        const inListForRepair = this.getIncomingRequests();
+
         for (const [peerCode, list] of byPeerCode.entries()) {
           if (list.length <= 1) {
             const only = list[0];
             if (only) {
               let itemChanged = false;
+              const normPCode = this.normalizePeerCode(peerCode);
               if (only.myPeerCode !== myCode) {
                 only.myPeerCode = myCode;
                 itemChanged = true;
@@ -2519,12 +2568,6 @@
               if (only.inMessageList === undefined) {
                 only.inMessageList = true;
                 itemChanged = true;
-              }
-              if (only.settings && only.settings.remarkName && (only.settings.remarkName === only.name || !only.settings.hasCustomRemark)) {
-                if (only.settings.remarkName === only.name) {
-                  only.settings.remarkName = "";
-                  itemChanged = true;
-                }
               }
               const existingMem = window.state && window.state.chats && (window.state.chats[only.id] || window.state.chats[String(only.id)]);
               if (existingMem && Array.isArray(existingMem.history) && existingMem.history.length > 0) {
@@ -2534,6 +2577,70 @@
                   itemChanged = true;
                 }
               }
+
+              const grpNamesSet = groupNamesByPeer.get(normPCode) || new Set();
+              const grpAvasSet = groupAvasByPeer.get(normPCode) || new Set();
+              const outRec = outMapForRepair[normPCode] || outMapForRepair[peerCode] || null;
+              const inRec = inListForRepair.find((r) => r && this.normalizePeerCode(r.fromCode) === normPCode) || null;
+
+              let singleHistName = "";
+              let singleHistAva = "";
+              if (Array.isArray(only.history)) {
+                for (let hi = only.history.length - 1; hi >= 0; hi--) {
+                  const hm = only.history[hi];
+                  if (!hm || hm.role !== "assistant") continue;
+                  const candN = (hm.senderName || hm.sender || "").trim();
+                  if (!singleHistName && candN && !this.isGenericPeerName(candN) && !grpNamesSet.has(candN)) {
+                    singleHistName = candN;
+                  }
+                  const candA = hm.senderAvatar || "";
+                  if (!singleHistAva && candA && !this.isPlaceholderAvatar(candA) && !grpAvasSet.has(candA)) {
+                    singleHistAva = candA;
+                  }
+                  if (singleHistName && singleHistAva) break;
+                }
+              }
+              const initFriendName =
+                (inRec && !this.isGenericPeerName(inRec.fromName) ? inRec.fromName.trim() : "") ||
+                (outRec && !this.isGenericPeerName(outRec.remarkName) ? outRec.remarkName.trim() : "");
+              const initFriendAva =
+                inRec && !this.isPlaceholderAvatar(inRec.fromAvatar) ? inRec.fromAvatar : "";
+
+              const recovered1v1Name = singleHistName || initFriendName;
+              if (recovered1v1Name && (this.isGenericPeerName(only.name) || grpNamesSet.has((only.name || "").trim())) && only.name !== recovered1v1Name) {
+                only.name = recovered1v1Name;
+                itemChanged = true;
+              }
+              if (!only.settings) only.settings = {};
+              const recovered1v1Ava = singleHistAva || initFriendAva;
+              if (recovered1v1Ava && (this.isPlaceholderAvatar(only.settings.aiAvatar) || grpAvasSet.has(only.settings.aiAvatar)) && only.settings.aiAvatar !== recovered1v1Ava) {
+                only.settings.aiAvatar = recovered1v1Ava;
+                itemChanged = true;
+              }
+              if (only.settings.remarkName) {
+                const remTrim = only.settings.remarkName.trim();
+                if (!only.settings.hasCustomRemark || remTrim === only.name || this.isGenericPeerName(remTrim) || grpNamesSet.has(remTrim)) {
+                  only.settings.remarkName = "";
+                  only.settings.hasCustomRemark = false;
+                  itemChanged = true;
+                }
+              }
+              if (Array.isArray(only.history)) {
+                for (const hm of only.history) {
+                  if (hm && hm.role === "assistant") {
+                    if (only.name && !this.isGenericPeerName(only.name) && hm.senderName !== only.name) {
+                      hm.senderName = only.name;
+                      hm.sender = only.name;
+                      itemChanged = true;
+                    }
+                    if (only.settings.aiAvatar && !this.isPlaceholderAvatar(only.settings.aiAvatar) && hm.senderAvatar !== only.settings.aiAvatar) {
+                      hm.senderAvatar = only.settings.aiAvatar;
+                      itemChanged = true;
+                    }
+                  }
+                }
+              }
+
               if (window.state && window.state.chats) {
                 window.state.chats[only.id] = only;
                 window.state.chats[String(only.id)] = only;
@@ -5499,15 +5606,20 @@
       if (!chat) return;
 
       if (!chat.settings) chat.settings = {};
+      const isRetained = Boolean(data.isRetainedProfile && !data.isSingleChatProfile);
+      const canOverwriteSingle = !isRetained || !chat.settings.hasSyncedSingleProfile;
+      if (!isRetained) {
+        chat.settings.hasSyncedSingleProfile = true;
+      }
       const oldName = chat.name;
-      if (newName && !isGenericName(newName)) {
+      if (newName && !isGenericName(newName) && (canOverwriteSingle || isGenericName(chat.name))) {
         chat.name = newName;
         if (!chat.settings.hasCustomRemark || isGenericName(chat.settings.remarkName) || chat.settings.remarkName === oldName) {
           chat.settings.remarkName = "";
           chat.settings.hasCustomRemark = false;
         }
       }
-      if (newAvatar && !isPlaceholderAva(newAvatar)) {
+      if (newAvatar && !isPlaceholderAva(newAvatar) && (canOverwriteSingle || isPlaceholderAva(chat.settings.aiAvatar))) {
         chat.settings.aiAvatar = newAvatar;
       } else if (newAvatar && !String(newAvatar).startsWith("blob:") && !chat.settings.aiAvatar) {
         chat.settings.aiAvatar = newAvatar;
@@ -5518,6 +5630,19 @@
       if (newFrameForMe !== undefined && newFrameForMe !== "") {
         chat.settings.myAvatarFrame = newFrameForMe;
       }
+      if (Array.isArray(chat.history)) {
+        for (const hm of chat.history) {
+          if (hm && hm.role === "assistant") {
+            if (chat.name && !isGenericName(chat.name)) {
+              hm.senderName = chat.name;
+              hm.sender = chat.name;
+            }
+            if (chat.settings.aiAvatar && !isPlaceholderAva(chat.settings.aiAvatar)) {
+              hm.senderAvatar = chat.settings.aiAvatar;
+            }
+          }
+        }
+      }
 
       if (window.db && window.db.chats) {
         await window.db.chats.put(chat);
@@ -5526,7 +5651,7 @@
 
       if (window.state && String(window.state.activeChatId) === String(chat.id)) {
         const titleEl = document.getElementById("chat-header-title");
-        const showName = (chat.settings && chat.settings.remarkName) || chat.name;
+        const showName = (chat.settings && chat.settings.hasCustomRemark && chat.settings.remarkName) || chat.name;
         if (titleEl && showName) titleEl.textContent = showName;
         const chatAvatarEl = document.getElementById("chat-header-avatar");
         if (chatAvatarEl && chat.settings.aiAvatar) chatAvatarEl.src = chat.settings.aiAvatar;
@@ -5580,19 +5705,21 @@
     },
 
     syncSinglePeerChatProfile: async function (chat) {
-      if (!chat || chat.roleType !== "peer" || !chat.peerCode) return;
+      if (!chat || chat.roleType !== "peer" || chat.isGroup || !chat.peerCode) return;
       const myCode = this.getOrCreateMyPeerCode();
       const myProfile = this.getMyProfile();
       const rawName = (chat.settings && chat.settings.myName) || "";
-      const name = (rawName && rawName !== "我" ? rawName : "") || (myProfile.name && myProfile.name !== "我" ? myProfile.name : "");
+      const name = (rawName && !this.isGenericPeerName(rawName) ? rawName.trim() : "") || (myProfile.name && !this.isGenericPeerName(myProfile.name) ? myProfile.name.trim() : "");
       const rawAvatar = (chat.settings && chat.settings.myAvatar) || "";
-      const avatar = (rawAvatar && !rawAvatar.startsWith("data:image/gif;base64,R0lGODlhAQAB") ? rawAvatar : "") || myProfile.avatar || "";
+      const avatar = (rawAvatar && !this.isPlaceholderAvatar(rawAvatar) ? rawAvatar : "") || (!this.isPlaceholderAvatar(myProfile.avatar) ? myProfile.avatar : "");
       const myFrame = (chat.settings && chat.settings.myAvatarFrame) || myProfile.myAvatarFrame || "";
       const peerFrame = (chat.settings && chat.settings.aiAvatarFrame) || "";
       const smallAva = await this.compressAvatarForWire(avatar);
+      if (!name && !smallAva) return;
 
       const payload = {
         type: "profile_update",
+        isSingleChatProfile: true,
         eventId: "evt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9) + "_" + chat.peerCode,
         peerCode: myCode,
         toCode: chat.peerCode,
@@ -5604,6 +5731,37 @@
         timestamp: Date.now()
       };
       this.dispatchPacketToNetwork(chat.peerCode, payload, "/api/peer/profile", false);
+    },
+
+    syncSinglePeerChatProfileByCode: async function (peerCode) {
+      const norm = this.normalizePeerCode(peerCode);
+      if (!norm) return;
+      if (!this._lastSingleProfileSyncAt) this._lastSingleProfileSyncAt = {};
+      const now = Date.now();
+      if (this._lastSingleProfileSyncAt[norm] && now - this._lastSingleProfileSyncAt[norm] < 15000) {
+        return;
+      }
+      this._lastSingleProfileSyncAt[norm] = now;
+      const chat = await this.findPeerChatByCodeAsync(norm);
+      if (chat && !chat.isGroup) {
+        await this.syncSinglePeerChatProfile(chat);
+      }
+    },
+
+    syncAllSinglePeerChatProfiles: async function () {
+      if (!window.state || !window.state.chats) return;
+      for (const chat of Object.values(window.state.chats)) {
+        if (chat && chat.roleType === "peer" && !chat.isGroup && chat.peerCode) {
+          const norm = this.normalizePeerCode(chat.peerCode);
+          if (!this._lastSingleProfileSyncAt) this._lastSingleProfileSyncAt = {};
+          const now = Date.now();
+          if (this._lastSingleProfileSyncAt[norm] && now - this._lastSingleProfileSyncAt[norm] < 12000) {
+            continue;
+          }
+          this._lastSingleProfileSyncAt[norm] = now;
+          await this.syncSinglePeerChatProfile(chat);
+        }
+      }
     },
 
     ensureVoiceRecordPanel: function () {
