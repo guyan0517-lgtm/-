@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v1.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -47581,9 +47581,31 @@ ${recentHistoryText}
               return;
             }
             // 1. 获取最近的历史记录
+            const deletedTsSetForAi = new Set(
+              Array.isArray(chat.settings?.deletedMessageTimestamps)
+                ? chat.settings.deletedMessageTimestamps.map((t) => String(t))
+                : []
+            );
+            const historyClearedAtForAi = Number(chat.settings?.historyClearedAt) || 0;
             let historySlice = chat.history
-              .filter((msg) => !msg.isTemporary && !msg.noAi && !msg.isPlayerHidden && !msg.isKeeperForcedDraw && !msg.isForcedDraw && !msg.isSystemDraw && !(typeof msg.content === "string" && (msg.content.includes("强制生图调用失败") || msg.content.includes("NovelAI生图提示词") || msg.content.includes("系统生图") || msg.content.includes("图片生成异常"))))
+              .filter((msg) => msg && !deletedTsSetForAi.has(String(msg.timestamp)) && (!historyClearedAtForAi || (Number(msg.timestamp) || 0) > historyClearedAtForAi) && !msg.isTemporary && !msg.noAi && !msg.isPlayerHidden && !msg.isKeeperForcedDraw && !msg.isForcedDraw && !msg.isSystemDraw && !(typeof msg.content === "string" && (msg.content.includes("强制生图调用失败") || msg.content.includes("NovelAI生图提示词") || msg.content.includes("系统生图") || msg.content.includes("图片生成异常"))))
               .slice(-chat.settings.maxMemory);
+            const isQuoteTargetStillInChat = (quoteObj) => {
+              if (!quoteObj) return false;
+              if (quoteObj.timestamp !== undefined && quoteObj.timestamp !== null) {
+                if (deletedTsSetForAi.has(String(quoteObj.timestamp))) return false;
+                if (historyClearedAtForAi && (Number(quoteObj.timestamp) || 0) <= historyClearedAtForAi) return false;
+                return (chat.history || []).some((m) => m && !deletedTsSetForAi.has(String(m.timestamp)) && String(m.timestamp) === String(quoteObj.timestamp));
+              }
+              const qText = String(quoteObj.optimizedContent || quoteObj.content || "").trim();
+              if (!qText) return false;
+              return (chat.history || []).some((m) => {
+                if (!m || deletedTsSetForAi.has(String(m.timestamp))) return false;
+                if (historyClearedAtForAi && (Number(m.timestamp) || 0) <= historyClearedAtForAi) return false;
+                const mText = String(m.optimizedContent || m.content || "").trim();
+                return mText === qText;
+              });
+            };
 
             // ======================= [修复开始] =======================
             // 防止情书死循环逻辑：
@@ -47873,7 +47895,7 @@ ${recentHistoryText}
                 }
                 if (Array.isArray(mainHist) && mainHist.length > 0) {
                   const recentMain = mainHist
-                    .filter((msg) => msg && !msg.isHidden && msg.type !== "summary")
+                    .filter((msg) => msg && !deletedTsSetForAi.has(String(msg.timestamp)) && (!historyClearedAtForAi || (Number(msg.timestamp) || 0) > historyClearedAtForAi) && !msg.isHidden && msg.type !== "summary")
                     .slice(-mainDepth);
                   if (recentMain.length > 0) {
                     const formattedMain = recentMain
@@ -47900,7 +47922,7 @@ ${recentHistoryText}
                     if (!matchedSolo || !Array.isArray(matchedSolo.history)) return "";
                     const depthVal = Math.max(1, Number(link.depth) || 200);
                     const recentSolo = matchedSolo.history
-                      .filter((msg) => msg && !msg.isHidden && msg.type !== "summary")
+                      .filter((msg) => msg && !deletedTsSetForAi.has(String(msg.timestamp)) && (!historyClearedAtForAi || (Number(msg.timestamp) || 0) > historyClearedAtForAi) && !msg.isHidden && msg.type !== "summary")
                       .slice(-depthVal);
                     if (recentSolo.length === 0) return "";
                     const formattedSolo = recentSolo
@@ -47915,8 +47937,14 @@ ${recentHistoryText}
                   const freshLinkedChat = await db.chats.get(link.chatId);
                   if (!freshLinkedChat) return "";
 
+                  const linkedDelSet = new Set(
+                    Array.isArray(freshLinkedChat.settings?.deletedMessageTimestamps)
+                      ? freshLinkedChat.settings.deletedMessageTimestamps.map((t) => String(t))
+                      : []
+                  );
+                  const linkedClearedAt = Number(freshLinkedChat.settings?.historyClearedAt) || 0;
                   const recentHistory = freshLinkedChat.history
-                    .filter((msg) => !msg.isHidden)
+                    .filter((msg) => msg && !linkedDelSet.has(String(msg.timestamp)) && (!linkedClearedAt || (Number(msg.timestamp) || 0) > linkedClearedAt) && !msg.isHidden)
                     .slice(-link.depth);
 
                   if (recentHistory.length === 0) return "";
@@ -48370,7 +48398,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                       if (typeof cleanedEffectiveContent === "string" && /<thinking>[\s\S]*?<\/thinking>/i.test(cleanedEffectiveContent)) {
                         cleanedEffectiveContent = cleanedEffectiveContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
                       }
-                      if (msg.quote) {
+                      if (msg.quote && isQuoteTargetStillInChat(msg.quote)) {
                         const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
                         assistantMsgObject.quote_reply = {
                           target_sender: msg.quote.senderName,
@@ -48423,7 +48451,7 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                   // 如果不是投票，再执行原来的其他消息类型判断
                   contentStr += tsPrefix;
 
-                  if (msg.quote) {
+                  if (msg.quote && isQuoteTargetStillInChat(msg.quote)) {
                     // 1. 获取被引用者的名字
                     const quotedSender = msg.quote.senderName || "未知用户";
                     // 2. 获取完整的被引用内容 (移除了截断)
@@ -48988,7 +49016,7 @@ ${stickerContext || "无"}
                       if (typeof cleanedEffectiveContent === "string" && /<thinking>[\s\S]*?<\/thinking>/i.test(cleanedEffectiveContent)) {
                         cleanedEffectiveContent = cleanedEffectiveContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
                       }
-                      if (msg.quote) {
+                      if (msg.quote && isQuoteTargetStillInChat(msg.quote)) {
                         const targetQuoteText = (msg.quote && typeof msg.quote.optimizedContent === "string" && msg.quote.optimizedContent !== "") ? msg.quote.optimizedContent : (msg.quote ? msg.quote.content : "");
                         assistantMsgObject.quote_reply = {
                           target_sender: msg.quote.senderName,
@@ -49023,7 +49051,7 @@ ${stickerContext || "无"}
                   let contentStr = "";
                   contentStr += tsPrefix;
 
-                  if (msg.quote) {
+                  if (msg.quote && isQuoteTargetStillInChat(msg.quote)) {
                     // 1. 获取被引用者的名字
                     const quotedSender = msg.quote.senderName || "未知用户";
                     // 2. 获取完整的被引用内容 (移除了截断)
@@ -92392,6 +92420,111 @@ ${stickerContext || "无"}
               }
             });
 
+          window.purgeDeletedMessagesFromChat = function (chat, deletedTsList) {
+            if (!chat) return;
+            if (!chat.settings) chat.settings = {};
+            if (!Array.isArray(chat.settings.deletedMessageTimestamps)) {
+              chat.settings.deletedMessageTimestamps = [];
+            }
+            const incomingStrList = Array.isArray(deletedTsList)
+              ? deletedTsList.map((t) => String(t)).filter(Boolean)
+              : [];
+            const delSet = new Set([
+              ...chat.settings.deletedMessageTimestamps.map((t) => String(t)),
+              ...incomingStrList
+            ]);
+            chat.settings.deletedMessageTimestamps = Array.from(delSet).slice(-2000);
+
+            const deletedContentSet = new Set();
+            const collectDeletedContents = (arr) => {
+              if (!Array.isArray(arr)) return;
+              arr.forEach((m) => {
+                if (m && delSet.has(String(m.timestamp))) {
+                  if (typeof m.content === "string" && m.content.trim()) {
+                    deletedContentSet.add(m.content.trim());
+                  }
+                  if (typeof m.optimizedContent === "string" && m.optimizedContent.trim()) {
+                    deletedContentSet.add(m.optimizedContent.trim());
+                  }
+                }
+              });
+            };
+
+            collectDeletedContents(chat.history);
+            collectDeletedContents(chat.mainLineHistory);
+            if (chat.settings.soloLineConfig && Array.isArray(chat.settings.soloLineConfig.threads)) {
+              chat.settings.soloLineConfig.threads.forEach((t) => collectDeletedContents(t && t.history));
+            }
+            if (chat.settings.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+              Object.values(chat.settings.sharedSoloRecords).forEach((tList) => {
+                if (Array.isArray(tList)) {
+                  tList.forEach((t) => {
+                    collectDeletedContents(t && t.history);
+                    collectDeletedContents(t && t.publicHistory);
+                  });
+                }
+              });
+            }
+
+            const filterAndCleanArray = (arr) => {
+              if (!Array.isArray(arr)) return arr;
+              const filtered = arr.filter(
+                (msg) =>
+                  msg &&
+                  !delSet.has(String(msg.timestamp)) &&
+                  !(msg.isHidden && typeof msg.content === "string" && msg.content.includes("已被用户删除"))
+              );
+              filtered.forEach((msg) => {
+                if (msg && msg.quote) {
+                  const qTs = msg.quote.timestamp !== undefined && msg.quote.timestamp !== null ? String(msg.quote.timestamp) : "";
+                  const qTxt = String(msg.quote.optimizedContent || msg.quote.content || "").trim();
+                  if ((qTs && delSet.has(qTs)) || (qTxt && deletedContentSet.has(qTxt))) {
+                    delete msg.quote;
+                  }
+                }
+              });
+              return filtered;
+            };
+
+            if (Array.isArray(chat.history)) {
+              chat.history = filterAndCleanArray(chat.history);
+            }
+            if (Array.isArray(chat.mainLineHistory)) {
+              chat.mainLineHistory = filterAndCleanArray(chat.mainLineHistory);
+            }
+            if (chat.settings.soloLineConfig && Array.isArray(chat.settings.soloLineConfig.threads)) {
+              chat.settings.soloLineConfig.threads.forEach((t) => {
+                if (t && Array.isArray(t.history)) {
+                  t.history = filterAndCleanArray(t.history);
+                }
+              });
+            }
+            if (chat.settings.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+              Object.keys(chat.settings.sharedSoloRecords).forEach((pCode) => {
+                const tList = chat.settings.sharedSoloRecords[pCode];
+                if (Array.isArray(tList)) {
+                  tList.forEach((t) => {
+                    if (t && Array.isArray(t.history)) t.history = filterAndCleanArray(t.history);
+                    if (t && Array.isArray(t.publicHistory)) t.publicHistory = filterAndCleanArray(t.publicHistory);
+                  });
+                }
+              });
+            }
+            if (chat.viewingPeerSoloThread) {
+              if (Array.isArray(chat.viewingPeerSoloThread.history)) {
+                chat.viewingPeerSoloThread.history = filterAndCleanArray(chat.viewingPeerSoloThread.history);
+              }
+              if (Array.isArray(chat.viewingPeerSoloThread.publicHistory)) {
+                chat.viewingPeerSoloThread.publicHistory = filterAndCleanArray(chat.viewingPeerSoloThread.publicHistory);
+              }
+            }
+            if (Array.isArray(chat.settings.essenceMessages)) {
+              chat.settings.essenceMessages = chat.settings.essenceMessages.filter(
+                (em) => em && !delSet.has(String(em.timestamp))
+              );
+            }
+          };
+
           document
             .getElementById("clear-chat-btn")
             .addEventListener("click", async () => {
@@ -92399,27 +92532,65 @@ ${stickerContext || "无"}
               const chat = state.chats[state.activeChatId];
               const confirmed = await showCustomConfirm(
                 "清空记录",
-                "确定要清空此聊天的【消息和心声】吗？\n（聊天总结将被保留）",
+                "确定要彻底清空此聊天的全部消息、总结与小手机短信吗？",
                 { confirmButtonClass: "btn-danger" },
               );
               if (confirmed) {
-                // 使用 filter 方法，只保留类型为 'summary' 的消息
-                chat.history = chat.history.filter(
-                  (msg) => msg.type === "summary",
-                );
-
-                // 同时清空心声记录
+                const nowTs = Date.now();
+                chat.history = [];
+                if (Array.isArray(chat.mainLineHistory)) {
+                  chat.mainLineHistory = [];
+                }
                 if (chat.innerVoiceHistory) {
                   chat.innerVoiceHistory = [];
                 }
                 chat.latestInnerVoice = null;
 
+                if (!chat.settings) chat.settings = {};
+                chat.settings.historyClearedAt = nowTs;
+                if (chat.settings.summary && typeof chat.settings.summary === "object") {
+                  chat.settings.summary.lastSummaryIndex = -1;
+                }
+                if (chat.settings.soloLineConfig && Array.isArray(chat.settings.soloLineConfig.threads)) {
+                  chat.settings.soloLineConfig.threads.forEach((t) => {
+                    if (t) {
+                      t.history = [];
+                      t.summaryText = "";
+                    }
+                  });
+                }
+                if (chat.settings.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+                  chat.settings.sharedSoloRecords = {};
+                }
+                if (chat.viewingPeerSoloThread) {
+                  chat.viewingPeerSoloThread.history = [];
+                  chat.viewingPeerSoloThread.publicHistory = [];
+                }
+                if (Array.isArray(chat.settings.essenceMessages)) {
+                  chat.settings.essenceMessages = [];
+                }
+                if (chat.settings.peerPhoneData && typeof chat.settings.peerPhoneData === "object") {
+                  chat.settings.peerPhoneData.messages = [];
+                  chat.settings.peerPhoneData.clearedAt = nowTs;
+                }
+
                 await db.chats.put(chat);
+                if (window.PeerManager) {
+                  if (typeof window.PeerManager.broadcastMessageDelete === "function") {
+                    window.PeerManager.broadcastMessageDelete(chat, [], null, true);
+                  }
+                  if (chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))) && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                    window.PeerManager.syncGroupSettingsToPeers(chat);
+                  }
+                }
+                if (typeof window.updatePeerPhoneBtnUI === "function") {
+                  window.updatePeerPhoneBtnUI(chat);
+                }
                 renderChatInterface(state.activeChatId);
                 renderChatList();
                 chatSettingsModal.classList.remove("visible");
 
-                alert("聊天消息和心声已清空！");
+                alert("聊天记录已彻底清空！");
               }
             });
 
@@ -93189,12 +93360,16 @@ ${stickerContext || "无"}
               if (confirmed) {
                 const chat = state.chats[state.activeChatId];
                 const deletedTsList = Array.from(selectedMessages);
-                const selectedTsStrSet = new Set(deletedTsList.map((t) => String(t)));
 
-                // 2. 更新后端的历史记录（彻底移除选中消息及过去的删除提示，不留任何字样与token占用）
-                chat.history = (chat.history || []).filter(
-                  (msg) => !selectedTsStrSet.has(String(msg.timestamp)) && !(msg.isHidden && msg.content && msg.content.includes("已被用户删除")),
-                );
+                if (typeof window.purgeDeletedMessagesFromChat === "function") {
+                  window.purgeDeletedMessagesFromChat(chat, deletedTsList);
+                } else {
+                  const selectedTsStrSet = new Set(deletedTsList.map((t) => String(t)));
+                  chat.history = (chat.history || []).filter(
+                    (msg) => !selectedTsStrSet.has(String(msg.timestamp)) && !(msg.isHidden && msg.content && msg.content.includes("已被用户删除")),
+                  );
+                }
+
                 if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
                   window.syncCurrentSoloThreadHistory(chat);
                 } else if (chat.isGroup) {
@@ -93203,8 +93378,13 @@ ${stickerContext || "无"}
 
                 // 3. 将更新后的chat对象存回数据库
                 await db.chats.put(chat);
-                if ((chat.isPeerGroup || chat.roleType === "peer") && window.PeerManager && typeof window.PeerManager.broadcastMessageDelete === "function") {
-                  window.PeerManager.broadcastMessageDelete(chat, deletedTsList);
+                if ((chat.isPeerGroup || chat.roleType === "peer" || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))) && window.PeerManager) {
+                  if (typeof window.PeerManager.broadcastMessageDelete === "function") {
+                    window.PeerManager.broadcastMessageDelete(chat, deletedTsList);
+                  }
+                  if (chat.isGroup && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                    window.PeerManager.syncGroupSettingsToPeers(chat);
+                  }
                 }
 
                 // 5. 最后才更新UI
@@ -102112,6 +102292,8 @@ ${stickerContext || "无"}
               chat.settings.peerPhoneData = {
                 friendships: [],
                 messages: [],
+                deletedMessageIds: [],
+                clearedAt: 0,
                 signalByLine: { main: true },
                 playerActiveLine: {},
                 lineGameTime: {}
@@ -102120,6 +102302,8 @@ ${stickerContext || "无"}
             const pd = chat.settings.peerPhoneData;
             if (!Array.isArray(pd.friendships)) pd.friendships = [];
             if (!Array.isArray(pd.messages)) pd.messages = [];
+            if (!Array.isArray(pd.deletedMessageIds)) pd.deletedMessageIds = [];
+            if (typeof pd.clearedAt !== "number") pd.clearedAt = Number(pd.clearedAt) || 0;
             if (!pd.signalByLine || typeof pd.signalByLine !== "object") pd.signalByLine = { main: true };
             if (!pd.playerActiveLine || typeof pd.playerActiveLine !== "object") pd.playerActiveLine = {};
             if (!pd.lineGameTime || typeof pd.lineGameTime !== "object") pd.lineGameTime = {};
@@ -102756,13 +102940,17 @@ ${stickerContext || "无"}
             }
 
             const seenMsgIds = new Set();
+            const delSmsIdSet = new Set((pd.deletedMessageIds || []).map(String));
+            const phoneClearedAt = Number(pd.clearedAt) || 0;
             const validSmsList = [];
             let dirty = false;
 
             pd.messages.forEach(m => {
               if (!m || !m.content) return;
               const msgId = String(m.id || "");
-              if (msgId && seenMsgIds.has(msgId)) return;
+              if (msgId && (seenMsgIds.has(msgId) || delSmsIdSet.has(msgId))) return;
+              const mTs = Number(m.createdAt) || 0;
+              if (phoneClearedAt > 0 && mTs > 0 && mTs <= phoneClearedAt) return;
 
               const mLine = m.senderLineKey || "main";
               const mLineSignal = isLineSignalAvailable(chat, mLine);
@@ -102777,7 +102965,6 @@ ${stickerContext || "无"}
 
               // 只记录发送消息，不重复记录接收消息；只要发出时有信号或已送达即计入上下文
               if (m.delivered || mLineSignal) {
-                const mTs = Number(m.createdAt) || 0;
                 if (minAllowedTs > 0 && mTs > 0 && mTs < minAllowedTs) return;
                 if (msgId) seenMsgIds.add(msgId);
                 validSmsList.push(m);
@@ -102988,11 +103175,33 @@ ${stickerContext || "无"}
                 }
               });
             }
+            if (Array.isArray(incomingPhoneData.deletedMessageIds)) {
+              const combinedDel = new Set([
+                ...(pd.deletedMessageIds || []).map(String),
+                ...incomingPhoneData.deletedMessageIds.map(String)
+              ]);
+              pd.deletedMessageIds = Array.from(combinedDel).slice(-2000);
+            }
+            if (incomingPhoneData.clearedAt) {
+              pd.clearedAt = Math.max(Number(pd.clearedAt) || 0, Number(incomingPhoneData.clearedAt) || 0);
+            }
+            const delSmsSet = new Set((pd.deletedMessageIds || []).map(String));
+            const clearedAtTs = Number(pd.clearedAt) || 0;
+            if (delSmsSet.size > 0 || clearedAtTs > 0) {
+              pd.messages = pd.messages.filter(m => {
+                if (!m) return false;
+                if (m.id && delSmsSet.has(String(m.id))) return false;
+                if (clearedAtTs > 0 && (Number(m.createdAt) || 0) <= clearedAtTs) return false;
+                return true;
+              });
+            }
             if (Array.isArray(incomingPhoneData.messages)) {
               const myContactId = getMyPhoneContactId();
               let gotNewUnread = false;
               incomingPhoneData.messages.forEach(incM => {
                 if (!incM || !incM.id) return;
+                if (delSmsSet.has(String(incM.id))) return;
+                if (clearedAtTs > 0 && (Number(incM.createdAt) || 0) <= clearedAtTs) return;
                 const localM = pd.messages.find(m => m && m.id === incM.id);
                 if (!localM) {
                   pd.messages.push({ ...incM });
@@ -103162,8 +103371,12 @@ ${stickerContext || "无"}
                 window.updatePeerPhoneBtnUI(targetChat);
               }
 
+              const delSmsSet = new Set((pd.deletedMessageIds || []).map(String));
+              const clearedAtTs = Number(pd.clearedAt) || 0;
               const convMsgs = pd.messages.filter(m =>
                 m &&
+                (!m.id || !delSmsSet.has(String(m.id))) &&
+                (!clearedAtTs || (Number(m.createdAt) || 0) > clearedAtTs) &&
                 ((m.fromId === myId && m.toId === activePhoneContactId) ||
                  (m.fromId === activePhoneContactId && m.toId === myId && m.delivered))
               );
@@ -103180,6 +103393,7 @@ ${stickerContext || "无"}
                         <div style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-secondary); padding: 0 2px;">
                           ${tLabel ? `<span>${escapePhoneHtml(tLabel)}</span>` : ""}
                           ${isMine ? `<span style="font-weight: 600; color: ${m.delivered ? "var(--text-secondary)" : "var(--accent-color)"};">${readStatusLabel}</span>` : ""}
+                          <span class="peer-phone-del-msg-btn" data-msg-id="${escapePhoneHtml(m.id)}" style="cursor: pointer; color: var(--text-secondary); opacity: 0.75;">删除</span>
                         </div>
                       </div>
                     `;
@@ -103190,7 +103404,7 @@ ${stickerContext || "无"}
                 <div class="peer-phone-header">
                   <button type="button" id="peer-phone-back-btn" class="moe-btn" style="height: 24px; padding: 0 8px; font-size: 11px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; flex-shrink: 0;">返回</button>
                   <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px;">${escapePhoneHtml(contactInfo.name)}</span>
-                  <span style="width: 38px; flex-shrink: 0;"></span>
+                  <button type="button" id="peer-phone-clear-btn" class="moe-btn" style="height: 24px; padding: 0 8px; font-size: 11px; background: var(--secondary-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; flex-shrink: 0;">清空</button>
                 </div>
                 <div id="peer-phone-msg-scroll" style="flex: 1; min-height: 0; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; box-sizing: border-box;">
                   ${msgsHtml}
@@ -103212,6 +103426,42 @@ ${stickerContext || "无"}
                   renderPeerMiniPhoneScreen(targetChat);
                 };
               }
+
+              const clearPhoneBtn = document.getElementById("peer-phone-clear-btn");
+              if (clearPhoneBtn) {
+                clearPhoneBtn.onclick = async () => {
+                  if (convMsgs.length === 0) return;
+                  const ok = await showCustomConfirm("清空短信", "确定要清空与该联系人的全部短信记录吗？", { confirmButtonClass: "btn-danger" });
+                  if (!ok) return;
+                  const toDeleteIds = new Set(convMsgs.map(m => String(m.id || "")).filter(Boolean));
+                  if (!Array.isArray(pd.deletedMessageIds)) pd.deletedMessageIds = [];
+                  const mergedDel = new Set([...pd.deletedMessageIds.map(String), ...toDeleteIds]);
+                  pd.deletedMessageIds = Array.from(mergedDel).slice(-2000);
+                  pd.messages = pd.messages.filter(m => !m || !toDeleteIds.has(String(m.id || "")));
+                  saveAndSyncPhoneData(targetChat);
+                  window.updatePeerPhoneBtnUI(targetChat);
+                  renderPeerMiniPhoneScreen(targetChat);
+                };
+              }
+
+              screenEl.querySelectorAll(".peer-phone-del-msg-btn").forEach(btn => {
+                btn.onclick = (ev) => {
+                  ev.stopPropagation();
+                  const msgId = btn.getAttribute("data-msg-id");
+                  if (!msgId) return;
+                  if (!Array.isArray(pd.deletedMessageIds)) pd.deletedMessageIds = [];
+                  if (!pd.deletedMessageIds.includes(String(msgId))) {
+                    pd.deletedMessageIds.push(String(msgId));
+                    if (pd.deletedMessageIds.length > 2000) {
+                      pd.deletedMessageIds = pd.deletedMessageIds.slice(-2000);
+                    }
+                  }
+                  pd.messages = pd.messages.filter(m => !m || String(m.id) !== String(msgId));
+                  saveAndSyncPhoneData(targetChat);
+                  window.updatePeerPhoneBtnUI(targetChat);
+                  renderPeerMiniPhoneScreen(targetChat);
+                };
+              });
 
               const inputEl = document.getElementById("peer-phone-msg-input");
               const sendBtn = document.getElementById("peer-phone-msg-send-btn");

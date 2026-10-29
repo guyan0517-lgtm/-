@@ -2513,9 +2513,21 @@
 
         let changed = false;
 
-        const mergeChatHistories = (memHist, dbHist) => {
-          const a = Array.isArray(memHist) ? memHist : [];
-          const b = Array.isArray(dbHist) ? dbHist : [];
+        const mergeChatHistories = (memHist, dbHist, chatObj) => {
+          const delSet = new Set(
+            Array.isArray(chatObj?.settings?.deletedMessageTimestamps)
+              ? chatObj.settings.deletedMessageTimestamps.map((t) => String(t))
+              : []
+          );
+          const clearedAt = Number(chatObj?.settings?.historyClearedAt) || 0;
+          const isMsgValid = (m) => {
+            if (!m) return false;
+            if (delSet.has(String(m.timestamp))) return false;
+            if (clearedAt > 0 && (Number(m.timestamp) || 0) <= clearedAt) return false;
+            return true;
+          };
+          const a = Array.isArray(memHist) ? memHist.filter(isMsgValid) : [];
+          const b = Array.isArray(dbHist) ? dbHist.filter(isMsgValid) : [];
           if (a.length === 0) return b;
           if (b.length === 0) return a;
           const map = new Map();
@@ -2571,7 +2583,7 @@
               }
               const existingMem = window.state && window.state.chats && (window.state.chats[only.id] || window.state.chats[String(only.id)]);
               if (existingMem && Array.isArray(existingMem.history) && existingMem.history.length > 0) {
-                const merged = mergeChatHistories(existingMem.history, only.history);
+                const merged = mergeChatHistories(existingMem.history, only.history, existingMem || only);
                 if (merged.length > (only.history || []).length) {
                   only.history = merged;
                   itemChanged = true;
@@ -2670,7 +2682,7 @@
 
           for (const chatItem of list) {
             const memPeer = window.state && window.state.chats && (window.state.chats[chatItem.id] || window.state.chats[String(chatItem.id)]);
-            const combinedItemHist = memPeer ? mergeChatHistories(memPeer.history, chatItem.history) : (chatItem.history || []);
+            const combinedItemHist = memPeer ? mergeChatHistories(memPeer.history, chatItem.history, memPeer || chatItem) : (chatItem.history || []);
             for (const msg of combinedItemHist) {
               if (!msg) continue;
               const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
@@ -2735,7 +2747,7 @@
                     onlyGrp.settings.soloLineConfig = existingGrpMem.settings.soloLineConfig;
                   }
                 } else if (Array.isArray(existingGrpMem.history) && existingGrpMem.history.length > 0) {
-                  const merged = mergeChatHistories(existingGrpMem.history, onlyGrp.history);
+                  const merged = mergeChatHistories(existingGrpMem.history, onlyGrp.history, existingGrpMem || onlyGrp);
                   if (merged.length > (onlyGrp.history || []).length) {
                     onlyGrp.history = merged;
                     try { await window.db.chats.put(onlyGrp); } catch (_) {}
@@ -2766,7 +2778,7 @@
             const itemHist = (chatItem.activeLineMode === "solo" && Array.isArray(chatItem.mainLineHistory))
               ? chatItem.mainLineHistory
               : (chatItem.history || []);
-            const combinedGrpHist = mergeChatHistories(baseHist, itemHist);
+            const combinedGrpHist = mergeChatHistories(baseHist, itemHist, memGrp || chatItem);
             for (const msg of combinedGrpHist) {
               if (!msg) continue;
               const key = msg.eventId || `${msg.role}_${msg.timestamp}_${msg.content}`;
@@ -3839,6 +3851,8 @@
             sharedSoloPayload: typeof window.buildMySharedSoloPayload === "function" ? window.buildMySharedSoloPayload(groupChat) : [],
             essenceMessages: Array.isArray(groupChat.settings?.essenceMessages) ? groupChat.settings.essenceMessages : undefined,
             peerPhoneData: groupChat.settings?.peerPhoneData ? JSON.parse(JSON.stringify(groupChat.settings.peerPhoneData)) : undefined,
+            deletedMessageTimestamps: Array.isArray(groupChat.settings?.deletedMessageTimestamps) ? groupChat.settings.deletedMessageTimestamps : undefined,
+            historyClearedAt: groupChat.settings?.historyClearedAt || undefined,
             timestamp: Date.now()
           };
           this.dispatchPacketToNetwork(m.peerCode, pkt, "/api/peer/send", false);
@@ -4030,6 +4044,30 @@
         groupChat.settings.maxMemory = data.maxMemory;
       }
 
+      if (Array.isArray(data.deletedMessageTimestamps) && data.deletedMessageTimestamps.length > 0) {
+        if (typeof window.purgeDeletedMessagesFromChat === "function") {
+          window.purgeDeletedMessagesFromChat(groupChat, data.deletedMessageTimestamps);
+        } else {
+          const mergedDel = new Set([
+            ...(groupChat.settings.deletedMessageTimestamps || []).map(String),
+            ...data.deletedMessageTimestamps.map(String)
+          ]);
+          groupChat.settings.deletedMessageTimestamps = Array.from(mergedDel).slice(-2000);
+        }
+      }
+      if (data.historyClearedAt) {
+        groupChat.settings.historyClearedAt = Math.max(
+          Number(groupChat.settings.historyClearedAt) || 0,
+          Number(data.historyClearedAt) || 0
+        );
+      }
+      const groupDelTsSet = new Set(
+        Array.isArray(groupChat.settings.deletedMessageTimestamps)
+          ? groupChat.settings.deletedMessageTimestamps.map((t) => String(t))
+          : []
+      );
+      const groupClearedAt = Number(groupChat.settings.historyClearedAt) || 0;
+
       if (Array.isArray(data.sharedSoloPayload) && data.fromCode) {
         if (!groupChat.settings.sharedSoloRecords || typeof groupChat.settings.sharedSoloRecords !== "object") {
           groupChat.settings.sharedSoloRecords = {};
@@ -4042,29 +4080,33 @@
           if (!incomingT || !incomingT.id) return incomingT;
           const matchedExisting = existingList.find((ex) => ex && (ex.id === incomingT.id || ("solo_" + ex.id) === incomingT.id || ex.id === ("solo_" + incomingT.id)));
           const inHist = Array.isArray(incomingT.history) ? incomingT.history : (Array.isArray(incomingT.publicHistory) ? incomingT.publicHistory : []);
-          const exHist = matchedExisting && Array.isArray(matchedExisting.history) ? matchedExisting.history : [];
+          const exHist = (matchedExisting && Array.isArray(matchedExisting.history) ? matchedExisting.history : []).filter(
+            (m) => m && !groupDelTsSet.has(String(m.timestamp)) && (!groupClearedAt || (Number(m.timestamp) || 0) > groupClearedAt)
+          );
 
-          const normalizedIncomingHist = inHist.map((m) => {
-            if (!m) return m;
-            if (m.role === "user" && (!m.senderPeerCode || m.senderPeerCode !== myCode)) {
-              const pCode = m.senderPeerCode || data.fromCode;
-              const resolvedSoloSender = this.resolvePeerDisplayInfo(
-                pCode,
-                m.senderName || incomingT.ownerName || data.senderName,
-                m.senderAvatar || data.senderAvatar,
-                null
-              );
-              return {
-                ...m,
-                role: "assistant",
-                isPeerUserMessage: true,
-                senderPeerCode: pCode,
-                senderName: resolvedSoloSender.name,
-                senderAvatar: resolvedSoloSender.avatar
-              };
-            }
-            return m;
-          });
+          const normalizedIncomingHist = inHist
+            .filter((m) => m && !groupDelTsSet.has(String(m.timestamp)) && (!groupClearedAt || (Number(m.timestamp) || 0) > groupClearedAt))
+            .map((m) => {
+              if (!m) return m;
+              if (m.role === "user" && (!m.senderPeerCode || m.senderPeerCode !== myCode)) {
+                const pCode = m.senderPeerCode || data.fromCode;
+                const resolvedSoloSender = this.resolvePeerDisplayInfo(
+                  pCode,
+                  m.senderName || incomingT.ownerName || data.senderName,
+                  m.senderAvatar || data.senderAvatar,
+                  null
+                );
+                return {
+                  ...m,
+                  role: "assistant",
+                  isPeerUserMessage: true,
+                  senderPeerCode: pCode,
+                  senderName: resolvedSoloSender.name,
+                  senderAvatar: resolvedSoloSender.avatar
+                };
+              }
+              return m;
+            });
 
           const combined = [...exHist];
           normalizedIncomingHist.forEach((m) => {
@@ -4078,6 +4120,9 @@
             const localT = cfg.threads.find((t) => t && (t.id === incomingT.id || ("solo_" + t.id) === incomingT.id || t.id === ("solo_" + incomingT.id)));
             if (localT) {
               if (!Array.isArray(localT.history)) localT.history = [];
+              localT.history = localT.history.filter(
+                (m) => m && !groupDelTsSet.has(String(m.timestamp)) && (!groupClearedAt || (Number(m.timestamp) || 0) > groupClearedAt)
+              );
               normalizedIncomingHist.forEach((m) => {
                 if (!m) return;
                 const dup = localT.history.some((em) => (m.eventId && em.eventId === m.eventId) || (em.timestamp === m.timestamp && em.content === m.content));
@@ -4123,7 +4168,9 @@
         groupChat.settings.sharedSoloRecords[data.fromCode] = mergedList;
       }
       if (Array.isArray(data.essenceMessages)) {
-        groupChat.settings.essenceMessages = data.essenceMessages;
+        groupChat.settings.essenceMessages = data.essenceMessages.filter(
+          (em) => em && !groupDelTsSet.has(String(em.timestamp)) && (!groupClearedAt || (Number(em.timestamp) || 0) > groupClearedAt)
+        );
         if (typeof window.renderGroupEssenceList === "function") {
           const activeId = window.state && window.state.activeChatId;
           if (String(activeId) === String(groupChat.id)) {
@@ -4140,23 +4187,26 @@
       }
 
       if (Array.isArray(data.summaries)) {
+        const validSummaries = data.summaries.filter(
+          (s) => s && !groupDelTsSet.has(String(s.timestamp)) && (!groupClearedAt || (Number(s.timestamp) || 0) > groupClearedAt)
+        );
         if (groupChat.activeLineMode === "solo") {
           if (!Array.isArray(groupChat.mainLineHistory)) groupChat.mainLineHistory = [];
-          const nonSummariesMain = groupChat.mainLineHistory.filter((m) => !m || m.type !== "summary");
-          groupChat.mainLineHistory = [...nonSummariesMain, ...data.summaries].sort(
+          const nonSummariesMain = groupChat.mainLineHistory.filter((m) => m && m.type !== "summary" && !groupDelTsSet.has(String(m.timestamp)) && (!groupClearedAt || (Number(m.timestamp) || 0) > groupClearedAt));
+          groupChat.mainLineHistory = [...nonSummariesMain, ...validSummaries].sort(
             (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
           );
         } else {
           if (!Array.isArray(groupChat.history)) groupChat.history = [];
-          const nonSummaries = groupChat.history.filter((m) => !m || m.type !== "summary");
-          const combined = [...nonSummaries, ...data.summaries].sort(
+          const nonSummaries = groupChat.history.filter((m) => m && m.type !== "summary" && !groupDelTsSet.has(String(m.timestamp)) && (!groupClearedAt || (Number(m.timestamp) || 0) > groupClearedAt));
+          const combined = [...nonSummaries, ...validSummaries].sort(
             (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
           );
           groupChat.history = combined;
           if (Array.isArray(groupChat.mainLineHistory)) {
             groupChat.mainLineHistory = [...combined];
           }
-          const lastSum = [...data.summaries].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).pop();
+          const lastSum = [...validSummaries].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).pop();
           if (groupChat.settings.summary) {
             if (lastSum) {
               const idxInHist = groupChat.history.findIndex((m) => m.timestamp === lastSum.timestamp);
@@ -5074,9 +5124,9 @@
       }
     },
 
-    broadcastMessageDelete: function (chat, deletedTimestamps, rerollAfterTimestamp) {
+    broadcastMessageDelete: function (chat, deletedTimestamps, rerollAfterTimestamp, clearAll) {
       if (!chat) return;
-      if ((!Array.isArray(deletedTimestamps) || deletedTimestamps.length === 0) && !rerollAfterTimestamp) return;
+      if ((!Array.isArray(deletedTimestamps) || deletedTimestamps.length === 0) && !rerollAfterTimestamp && !clearAll) return;
       const myCode = this.getOrCreateMyPeerCode();
       const targetSet = new Set();
 
@@ -5110,6 +5160,7 @@
           groupId: sharedGroupId,
           deletedTimestamps: Array.isArray(deletedTimestamps) ? deletedTimestamps : [],
           rerollAfterTimestamp: rerollAfterTimestamp || null,
+          clearAll: Boolean(clearAll),
           timestamp: Date.now()
         };
         this.dispatchPacketToNetwork(peerCode, pkt, "/api/peer/send", false);
@@ -5126,29 +5177,79 @@
         : await this.findPeerChatByCodeAsync(data.fromCode);
       if (!chat || !Array.isArray(chat.history)) return;
 
-      const delSet = new Set(Array.isArray(data.deletedTimestamps) ? data.deletedTimestamps : []);
-      const rerollAfterTs = data.rerollAfterTimestamp ? Number(data.rerollAfterTimestamp) : null;
-
-      const beforeLen = chat.history.length;
-      chat.history = chat.history.filter((m) => {
-        if (!m) return false;
-        if (delSet.has(m.timestamp)) return false;
-        if (
-          rerollAfterTs &&
-          m.timestamp > rerollAfterTs &&
-          m.type !== "summary" &&
-          !m.isPeerUserMessage &&
-          !m.isDiceMessage &&
-          m.senderName !== "骰娘" &&
-          m.sender !== "骰娘" &&
-          m.role === "assistant"
-        ) {
-          return false;
+      let changed = false;
+      if (data.clearAll) {
+        const clearTs = Number(data.timestamp) || Date.now();
+        chat.history = [];
+        if (Array.isArray(chat.mainLineHistory)) chat.mainLineHistory = [];
+        if (chat.innerVoiceHistory) chat.innerVoiceHistory = [];
+        chat.latestInnerVoice = null;
+        if (!chat.settings) chat.settings = {};
+        chat.settings.historyClearedAt = Math.max(Number(chat.settings.historyClearedAt) || 0, clearTs);
+        if (chat.settings.summary && typeof chat.settings.summary === "object") {
+          chat.settings.summary.lastSummaryIndex = -1;
         }
-        return true;
-      });
+        if (chat.settings.soloLineConfig && Array.isArray(chat.settings.soloLineConfig.threads)) {
+          chat.settings.soloLineConfig.threads.forEach((t) => {
+            if (t) {
+              t.history = [];
+              t.summaryText = "";
+            }
+          });
+        }
+        if (chat.settings.sharedSoloRecords && typeof chat.settings.sharedSoloRecords === "object") {
+          chat.settings.sharedSoloRecords = {};
+        }
+        if (chat.viewingPeerSoloThread) {
+          chat.viewingPeerSoloThread.history = [];
+          chat.viewingPeerSoloThread.publicHistory = [];
+        }
+        if (Array.isArray(chat.settings.essenceMessages)) {
+          chat.settings.essenceMessages = [];
+        }
+        if (chat.settings.peerPhoneData && typeof chat.settings.peerPhoneData === "object") {
+          chat.settings.peerPhoneData.messages = [];
+          chat.settings.peerPhoneData.clearedAt = clearTs;
+        }
+        if (typeof window.updatePeerPhoneBtnUI === "function") {
+          window.updatePeerPhoneBtnUI(chat);
+        }
+        changed = true;
+      } else {
+        const delTsList = Array.isArray(data.deletedTimestamps) ? data.deletedTimestamps : [];
+        const delSet = new Set(delTsList.map((t) => String(t)));
+        const rerollAfterTs = data.rerollAfterTimestamp ? Number(data.rerollAfterTimestamp) : null;
+        const beforeLen = chat.history.length;
 
-      if (chat.history.length !== beforeLen) {
+        if (delTsList.length > 0 && typeof window.purgeDeletedMessagesFromChat === "function") {
+          window.purgeDeletedMessagesFromChat(chat, delTsList);
+          changed = true;
+        }
+
+        chat.history = chat.history.filter((m) => {
+          if (!m) return false;
+          if (delSet.has(String(m.timestamp))) return false;
+          if (
+            rerollAfterTs &&
+            m.timestamp > rerollAfterTs &&
+            m.type !== "summary" &&
+            !m.isPeerUserMessage &&
+            !m.isDiceMessage &&
+            m.senderName !== "骰娘" &&
+            m.sender !== "骰娘" &&
+            m.role === "assistant"
+          ) {
+            return false;
+          }
+          return true;
+        });
+
+        if (chat.history.length !== beforeLen) {
+          changed = true;
+        }
+      }
+
+      if (changed) {
         if (window.state && window.state.chats) {
           window.state.chats[chat.id] = chat;
         }
