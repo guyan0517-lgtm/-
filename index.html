@@ -543,12 +543,12 @@
               </div>
             </div>
             <div style="position: absolute; bottom: 15px; left: 35px">
-              <div class="desktop-app-icon" id="tukey-accounting-app-icon">
+              <div class="desktop-app-icon" id="tukey-accounting-app-icon" onclick="if(window.QQBotConsole){window.QQBotConsole.openScreen();}else{showScreen('tukey-accounting-screen');}">
                 <div class="icon-bg-desktop">
                   <img
                     id="icon-img-tukey-accounting"
                     src="https://i.postimg.cc/k4fZKVXP/tu-tu.png"
-                    alt="兔兔记账"
+                    alt="群控"
                   />
                 </div>
                 <span
@@ -557,7 +557,7 @@
                     color: white;
                     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
                   "
-                  >兔兔记账</span
+                  >群控</span
                 >
               </div>
             </div>
@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v3.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v3.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -17508,16 +17508,328 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
       hidden
     />
 
-    <div id="tukey-accounting-screen" class="screen">
-      <!-- 1. 页面头部 (保持不变) -->
-      <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
-        <span id="tukey-header-title">记账群聊</span>
-        <span style="width: 30px"></span>
+    <div id="tukey-accounting-screen" class="screen" style="background: var(--background-color); display: flex; flex-direction: column;">
+      <div class="header" style="background: var(--card-bg); border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+        <span class="back-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.closeScreen();}else{showScreen('home-screen');}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+        </span>
+        <span style="font-weight: 600; color: var(--text-primary);">群控</span>
+        <div class="header-actions" style="display: flex; gap: 6px; align-items: center;">
+          <button type="button" class="mod-capsule-btn" id="qqbot-open-tutorial-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.openTutorialModal();}" style="height: 28px; padding: 0 12px; font-size: 12px;">教程</button>
+          <button type="button" class="mod-capsule-btn primary" id="qqbot-save-config-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.saveAllSettings(true);}" style="height: 28px; padding: 0 12px; font-size: 12px;">保存</button>
+        </div>
       </div>
 
-      <!-- 2. 页面内容容器 (保持不变) -->
-      <div class="tukey-content">
+      <div id="qqbot-main-scroll" style="flex: 1; overflow-y: auto; padding: 10px 12px 28px; display: flex; flex-direction: column; gap: 10px;">
+        <!-- 1. OneBot 节点与账号连接卡片 -->
+        <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">QQ账号与接口连接</span>
+            </div>
+            <span id="qqbot-conn-badge" style="font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0;">本地待命</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">接口</label>
+            <input type="text" id="qqbot-endpoint-input" list="qqbot-endpoint-datalist" class="moe-input" placeholder="点击下拉或输入 OneBot 接口地址" value="ws://127.0.0.1:3000/api/qqbot/ws" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+            <datalist id="qqbot-endpoint-datalist">
+              <option value="ws://127.0.0.1:3000/api/qqbot/ws">内置反向WS通道</option>
+              <option value="http://127.0.0.1:3000">NapCat本地HTTP端口</option>
+              <option value="ws://127.0.0.1:3001">NapCat正向WS端口</option>
+              <option value="http://127.0.0.1:5700">Lagrange标准HTTP端口</option>
+              <option value="ws://127.0.0.1:8080">OneBot通用WS端口</option>
+            </datalist>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">账号</label>
+            <input type="text" id="qqbot-selfid-input" list="qqbot-selfid-datalist" class="moe-input" placeholder="机器人QQ号" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+            <datalist id="qqbot-selfid-datalist">
+              <option value="自动识别">连接后自动读取QQ号</option>
+            </datalist>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">密钥</label>
+            <input type="password" id="qqbot-token-input" list="qqbot-token-datalist" class="moe-input" placeholder="可留空" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+            <datalist id="qqbot-token-datalist">
+              <option value="">无密钥</option>
+            </datalist>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-top: 2px;">
+            <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.connectOneBot();}" style="height: 32px; justify-content: center; font-size: 12px;">连接</button>
+            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.refreshGroups();}" style="height: 32px; justify-content: center; font-size: 12px;">刷新</button>
+            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.openSandboxModal();}" style="height: 32px; justify-content: center; font-size: 12px;">演练</button>
+          </div>
+
+          <div id="qqbot-status-line" style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; display: flex; justify-content: space-between; align-items: center;">
+            <span id="qqbot-status-text">支持安卓 Termux 本地反向连接，消息与记忆直存本地磁盘，零网页内存占用</span>
+          </div>
+        </div>
+
+        <!-- 2. 群聊独立开关与双层API唤醒策略 -->
+        <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">分群管理与真人场面判断</span>
+            </div>
+            <span id="qqbot-group-count-badge" style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">已载入群聊</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">群聊</label>
+            <select id="qqbot-group-select" onchange="if(window.QQBotConsole){window.QQBotConsole.selectGroup(this.value);}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="88482026">八月二十二日跑团群 · 88482026</option>
+            </select>
+            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.promptAddGroup();}" style="height: 36px; padding: 0 12px; font-size: 12px; flex-shrink: 0;">添加</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">状态</label>
+            <select id="qqbot-group-enabled" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="true" selected>启用本群</option>
+              <option value="false">停用本群</option>
+            </select>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">模式</label>
+            <select id="qqbot-group-mode" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="trpg_kp" selected>跑团带团</option>
+              <option value="oc_chat">日常陪聊</option>
+            </select>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">缓冲</label>
+            <input type="text" id="qqbot-group-debounce" list="qqbot-debounce-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" value="8秒" placeholder="等待秒数" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+            <datalist id="qqbot-debounce-datalist">
+              <option value="5秒">5秒快速判断</option>
+              <option value="8秒">8秒标准防抖</option>
+              <option value="12秒">12秒从容等待</option>
+              <option value="20秒">20秒长段对戏缓冲</option>
+            </datalist>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">条数</label>
+            <input type="text" id="qqbot-group-context" list="qqbot-context-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" value="150条" placeholder="上下文条数" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+            <datalist id="qqbot-context-datalist">
+              <option value="80条">80条轻量上下文</option>
+              <option value="150条">150条标准跑团上下文</option>
+              <option value="250条">250条长线剧情上下文</option>
+              <option value="400条">400条深度全览上下文</option>
+              <option value="600条">600条超长记忆上下文</option>
+            </datalist>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">盯梢</label>
+            <input type="text" id="qqbot-group-idle" list="qqbot-idle-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" value="15分钟" placeholder="挂机询问" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+            <datalist id="qqbot-idle-datalist">
+              <option value="10分钟">10分钟无人RP发图询问一次</option>
+              <option value="15分钟">15分钟无人RP发图询问一次</option>
+              <option value="25分钟">25分钟无人RP发图询问一次</option>
+              <option value="关闭">关闭挂机询问</option>
+            </datalist>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">间隔</label>
+            <input type="text" id="qqbot-group-cooldown" list="qqbot-cooldown-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" value="5秒" placeholder="防封间隔" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+            <datalist id="qqbot-cooldown-datalist">
+              <option value="3秒">3秒拟人打字延迟</option>
+              <option value="5秒">5秒稳妥防风控间隔</option>
+              <option value="10秒">10秒慢速安全间隔</option>
+            </datalist>
+          </div>
+        </div>
+
+        <!-- 3. 人设、思维链、世界书与表情包注入 -->
+        <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">OC人设、思维链与世界书配置</span>
+            </div>
+            <span style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">含括号内容识别</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">人设</label>
+            <select id="qqbot-persona-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onSelectPersona(this.value);}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="">自定义守秘人或OC人设</option>
+            </select>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">表情</label>
+            <select id="qqbot-sticker-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="all">全部表情包分类</option>
+            </select>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">思维</label>
+            <select id="qqbot-tc-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="">默认真人場面思维链</option>
+            </select>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">世界</label>
+            <select id="qqbot-wb-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="">不额外挂载世界书</option>
+            </select>
+          </div>
+
+          <textarea id="qqbot-custom-persona" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" rows="3" placeholder="在这里填写或微调当前群聊的OC人设、KPC性格与说话口吻..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);"></textarea>
+        </div>
+
+        <!-- 4. 跑团模组挂载、同回合生图与调查员小窗绑定 -->
+        <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">跑团模组、强制生图与单人小窗</span>
+            </div>
+            <span style="font-size: 11px; color: var(--accent-color); font-weight: 600; flex-shrink: 0;">支持私发秘密</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">模组</label>
+            <select id="qqbot-module-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onSelectModule(this.value);}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="">不挂载跑团模组</option>
+            </select>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">章节</label>
+            <select id="qqbot-chapter-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="auto">按剧情自动检索章节与线索</option>
+            </select>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">生图</label>
+            <select id="qqbot-nai-mode" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="trpg_every_round" selected>跑团正文每轮生图</option>
+              <option value="off">关闭自动生图</option>
+            </select>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">原画</label>
+            <select id="qqbot-modimg-mode" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="auto" selected>自动发模组插图</option>
+              <option value="manual">仅文字描述</option>
+            </select>
+          </div>
+
+          <div style="border-top: 1px dashed var(--border-color); padding-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary);">调查员QQ号、HO位置与角色卡绑定</div>
+            <div id="qqbot-players-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+
+            <div style="display: flex; align-items: center; gap: 6px; padding-top: 2px;">
+              <input type="text" id="qqbot-new-player-qq" list="qqbot-player-qq-datalist" class="moe-input" placeholder="玩家QQ或小群号" style="width: 108px; flex-shrink: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+              <datalist id="qqbot-player-qq-datalist">
+                <option value="10001">示例玩家1号</option>
+                <option value="10002">示例玩家2号</option>
+              </datalist>
+              <select id="qqbot-new-player-ho" class="moe-input" style="width: 78px; flex-shrink: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 18px 0 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                <option value="HO1">HO1</option>
+                <option value="HO2">HO2</option>
+                <option value="HO3">HO3</option>
+                <option value="HO4">HO4</option>
+                <option value="PC">调查员</option>
+                <option value="单人群">单人群</option>
+              </select>
+              <select id="qqbot-new-player-card" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 20px 0 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                <option value="">选择角色卡</option>
+              </select>
+              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.bindPlayerCard();}" style="height: 36px; padding: 0 12px; font-size: 12px; flex-shrink: 0;">绑定</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. 酒馆式双层滚动记忆账本与副API提炼 -->
+        <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">副API滚动记忆账本与本地磁盘</span>
+            </div>
+            <span id="qqbot-disk-msg-count" style="font-size: 11px; color: var(--accent-color); font-weight: 600; flex-shrink: 0;">本地已存 0 条</span>
+          </div>
+
+          <textarea id="qqbot-memory-textarea" onchange="if(window.QQBotConsole){window.QQBotConsole.onMemoryTextChange();}" class="moe-input" rows="4" placeholder="由副API按酒馆结构化账本方式自动提炼：一、已发生关键事件与时间线；二、当前位置与持有线索道具；三、人物关系与未解伏笔..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 12px; line-height: 1.55; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);"></textarea>
+
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+            <button type="button" class="mod-capsule-btn primary" id="qqbot-summarize-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.summarizeMemoryNow();}" style="height: 32px; justify-content: center; font-size: 12px;">总结</button>
+            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.clearGroupHistory();}" style="height: 32px; justify-content: center; font-size: 12px;">清空</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 一步一步连接QQ号与防封配置教程弹窗 -->
+      <div id="qqbot-tutorial-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 360px; width: 92%; max-height: 82vh; display: flex; flex-direction: column; border-radius: 16px; background: var(--card-bg); border: 1px solid var(--border-color); overflow: hidden;">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color);">
+            <span style="font-size: 14px; font-weight: 700; color: var(--text-primary);">安卓手机与电脑连接QQ号保姆级教程</span>
+            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.closeTutorialModal();}" style="height: 26px; padding: 0 10px; font-size: 11px;">关闭</button>
+          </div>
+          <div class="modal-body" style="padding: 12px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; font-size: 12px; line-height: 1.6; color: var(--text-primary);">
+            <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第一步：准备QQ小号与本地协议端</div>
+              <div>为了保护你的大号，强烈建议准备一个注册满一个月、平时有正常登录的QQ小号来当你的OC或守秘人KP。</div>
+              <div style="margin-top: 4px;">如果你用的是安卓手机，无需电脑，直接在手机上安装 NapCat 或 Termux 容器版 Lagrange；如果你有电脑或云服务器，直接解压打开 NapCat 桌面端并用小号扫码登录。</div>
+            </div>
+
+            <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第二步：复制反向连接地址填入客户端</div>
+              <div>打开你手机或电脑上的 NapCat 网络配置，新增一个反向 WebSocket 客户端，把下面这串地址直接粘贴进去并启用：</div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                <input type="text" id="qqbot-tutorial-ws-url" class="moe-input" readonly value="ws://127.0.0.1:3000/api/qqbot/ws" style="flex: 1; height: 32px; font-size: 11px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);" />
+                <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyTutorialWsUrl();}" style="height: 32px; padding: 0 10px; font-size: 11px; flex-shrink: 0;">复制</button>
+              </div>
+            </div>
+
+            <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第三步：点击连接与刷新拉取群聊</div>
+              <div>回到本界面顶部，点一下连接按钮，再点旁边的刷新按钮，你的QQ小号加入的所有群聊就会自动出现在群聊下拉框里。选中你要开启的群，把状态设为启用本群即可。未启用的群或没人说话的群绝不会消耗任何API请求。</div>
+            </div>
+
+            <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第四步：防封号安全守则与运行逻辑</div>
+              <div>1. 消息来了之后会等待设定的缓冲秒数，把大家连续发的多句话合并成一次，交给便宜的副API像真人一样看场面。</div>
+              <div>2. 单人跟NPC搭话或括号问KP时，会立即引用那条消息直接回复；玩家们自己对戏且不需要NPC插嘴时，会自动安静看戏。</div>
+              <div>3. 跑团等大家RP超过十五分钟没人说话时，会自动发一张表情包询问大家是否还在RP；如果有人发还在RP的表情包就继续安静等待，如果大家说RP完了就立刻推进剧情。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 实时场面判断与群聊演练弹窗 -->
+      <div id="qqbot-sandbox-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 368px; width: 94%; max-height: 85vh; display: flex; flex-direction: column; border-radius: 16px; background: var(--card-bg); border: 1px solid var(--border-color); overflow: hidden;">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color);">
+            <span id="qqbot-sandbox-title" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">群聊实时监控与场面演练</span>
+            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.closeSandboxModal();}" style="height: 26px; padding: 0 10px; font-size: 11px;">关闭</button>
+          </div>
+          <div class="modal-body" style="padding: 10px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1;">
+            <div id="qqbot-judge-status-box" style="padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); font-size: 11.5px; color: var(--text-primary); line-height: 1.5;">
+              副API场面裁判就绪：可点击下方快捷场景模拟群友发言，或直接向真实QQ群发送消息。
+            </div>
+
+            <div id="qqbot-sandbox-log" style="height: 220px; overflow-y: auto; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; font-size: 12px;"></div>
+
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;">
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('single_npc');}" style="height: 30px; justify-content: center; font-size: 11.5px;">单人问店员</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('bracket_ask');}" style="height: 30px; justify-content: center; font-size: 11.5px;">括号问KP</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('still_rp');}" style="height: 30px; justify-content: center; font-size: 11.5px;">发还在RP图</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('dice_check');}" style="height: 30px; justify-content: center; font-size: 11.5px;">投掷侦查骰</button>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px; padding-top: 2px;">
+              <select id="qqbot-sim-sender" class="moe-input" style="width: 96px; flex-shrink: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 18px 0 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;">
+                <option value="10001|早川秋">早川秋</option>
+                <option value="10002|佐藤葵">佐藤葵</option>
+                <option value="BOT|主动发群消息">直接发群</option>
+              </select>
+              <input type="text" id="qqbot-sim-input" class="moe-input" placeholder="输入模拟群友发言或直接发送到群..." style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.submitSandboxInput();}" style="height: 36px; padding: 0 12px; font-size: 12px; flex-shrink: 0;">发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 隐藏旧版DOM节点以确保旧脚本零报错 -->
+      <div id="tukey-legacy-hidden" style="display: none !important;">
+        <span id="tukey-header-title">记账群聊</span>
+        <div class="tukey-content">
         <!-- 视图1: 钱包 (这是我们要修改的核心) -->
         <div id="tukey-wallet-view" class="tukey-view">
           <div id="wallet-summary-card">
@@ -17921,6 +18233,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           </svg>
           <span>设置</span>
         </div>
+      </div>
       </div>
     </div>
 
@@ -24526,7 +24839,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           taobao: "沙盘",
           "persona-creator": "人设",
           "date-a-live": "约会大作战",
-          "tukey-accounting": "兔兔记账",
+          "tukey-accounting": "群控",
           "kk-checkin": "kk查岗",
           studio: "lrq小剧场",
         };
@@ -62888,7 +63201,7 @@ ${stickerContext || "无"}
             taobao: "桃宝",
             "persona-creator": "人设",
             "date-a-live": "约会大作战",
-            "tukey-accounting": "兔兔记账",
+            "tukey-accounting": "群控",
             "kk-checkin": "kk查岗",
             studio: "lrq小剧场",
           };
@@ -76403,7 +76716,7 @@ ${stickerContext || "无"}
             if (DEFAULT_APP_LABELS.hasOwnProperty(appId)) {
               const defaultName = DEFAULT_APP_LABELS[appId];
               const rawSaved = appLabels[appId];
-              const customName = (appId === "taobao" && rawSaved === "桃宝") ? defaultName : (rawSaved || defaultName);
+              const customName = ((appId === "taobao" && rawSaved === "桃宝") || (appId === "tukey-accounting" && rawSaved === "兔兔记账")) ? defaultName : (rawSaved || defaultName);
 
               // 这个选择器会同时找到主屏幕和Dock栏上的所有图标
               const icons = document.querySelectorAll(
@@ -99328,13 +99641,15 @@ ${stickerContext || "无"}
               }
             });
 
-          // 1. 绑定主屏幕上的“兔k记账”图标点击事件
+          // 1. 绑定主屏幕上的“群控”图标点击事件
           document
             .getElementById("tukey-accounting-app-icon")
             .addEventListener("click", () => {
-              // 打开时，确保默认显示记账群聊
-              switchTukeyView("tukey-group-chat-view");
-              showScreen("tukey-accounting-screen");
+              if (window.QQBotConsole && typeof window.QQBotConsole.openScreen === "function") {
+                window.QQBotConsole.openScreen();
+              } else {
+                showScreen("tukey-accounting-screen");
+              }
             });
 
           // 2. 为“兔k记账”的底部导航栏绑定事件委托

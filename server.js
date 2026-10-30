@@ -3,7 +3,7 @@ import http from 'http';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { PDFDocument } from 'pdf-lib';
 import { isEncrypted, decryptPDF } from '@pdfsmaller/pdf-decrypt';
 
@@ -1505,6 +1505,763 @@ app.post('/api/local-vault/webdav', async (req, res) => {
   }
 });
 
+// ===================================================================
+// QQ 群控中枢 OneBot v11 双模网桥与本地磁盘存储引擎
+// ===================================================================
+const QQBOT_DIR = path.join(LOCAL_VAULT_ROOT, 'qq_bot');
+const QQBOT_CONFIG_PATH = path.join(QQBOT_DIR, 'config.json');
+try {
+  fs.mkdirSync(QQBOT_DIR, { recursive: true });
+} catch (_) {}
+
+const qqBotRuntime = {
+  reverseSockets: new Set(),
+  forwardSocket: null,
+  pendingEchoes: new Map(),
+  selfId: '',
+  nickname: '',
+  connected: false,
+  connectionMode: 'reverse_ws',
+  lastEventAt: 0,
+  lastError: '',
+  pendingGroupEvents: new Map()
+};
+
+function getDefaultQqBotConfig() {
+  return {
+    endpoint: 'ws://127.0.0.1:3000/api/qqbot/ws',
+    accessToken: '',
+    selfId: '',
+    nickname: '群控助手',
+    activeGroupId: '88482026',
+    groups: {
+      '88482026': {
+        groupId: '88482026',
+        groupName: '八月二十二日跑团群',
+        enabled: true,
+        mode: 'trpg_kp',
+        debounceSec: 8,
+        contextLimit: 150,
+        idleCheckMin: 15,
+        cooldownSec: 5,
+        personaId: '',
+        personaName: '守秘人KP',
+        customPersona: '你是一位经验丰富、沉稳自然的真人跑团守秘人KP兼群友。说话自然流畅，绝不说教，绝不端架子，遇到单人向NPC搭话或独立行动时直接回应对应玩家，遇到全员关键节点时引导大家自然互动。',
+        thoughtChainId: '',
+        worldBookId: '',
+        stickerCategoryId: 'all',
+        moduleId: '',
+        chapterId: 'auto',
+        naiMode: 'trpg_every_round',
+        modImgMode: 'auto',
+        players: [
+          {
+            qq: '10001',
+            name: '早川秋',
+            hoCode: 'HO1',
+            cardId: '',
+            skillsSummary: '侦查70 图书馆65 心理学60 闪避50',
+            allowPrivate: true
+          },
+          {
+            qq: '10002',
+            name: '佐藤葵',
+            hoCode: 'HO2',
+            cardId: '',
+            skillsSummary: '话术75 聆听65 急救60 神秘学55',
+            allowPrivate: true
+          }
+        ]
+      }
+    }
+  };
+}
+
+function loadQqBotConfig() {
+  try {
+    if (fs.existsSync(QQBOT_CONFIG_PATH)) {
+      const raw = fs.readFileSync(QQBOT_CONFIG_PATH, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        const def = getDefaultQqBotConfig();
+        return {
+          ...def,
+          ...parsed,
+          groups: (parsed.groups && Object.keys(parsed.groups).length > 0) ? parsed.groups : def.groups
+        };
+      }
+    }
+  } catch (_) {}
+  const def = getDefaultQqBotConfig();
+  saveQqBotConfig(def);
+  return def;
+}
+
+function saveQqBotConfig(cfg) {
+  try {
+    fs.mkdirSync(QQBOT_DIR, { recursive: true });
+    fs.writeFileSync(QQBOT_CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+  } catch (_) {}
+}
+
+function getGroupHistoryPath(groupId) {
+  const safeId = String(groupId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(QQBOT_DIR, `history_${safeId}.json`);
+}
+
+function getGroupMemoryPath(groupId) {
+  const safeId = String(groupId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(QQBOT_DIR, `memory_${safeId}.json`);
+}
+
+function loadGroupHistoryFromDisk(groupId, limit = 150) {
+  try {
+    const p = getGroupHistoryPath(groupId);
+    if (!fs.existsSync(p)) return { total: 0, messages: [] };
+    const raw = fs.readFileSync(p, 'utf8');
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return { total: 0, messages: [] };
+    const cleanLimit = Math.max(1, Math.min(1000, Number(limit) || 150));
+    return {
+      total: arr.length,
+      messages: arr.slice(-cleanLimit)
+    };
+  } catch (_) {
+    return { total: 0, messages: [] };
+  }
+}
+
+function appendGroupMessageToDisk(groupId, msgObj) {
+  try {
+    const p = getGroupHistoryPath(groupId);
+    let arr = [];
+    if (fs.existsSync(p)) {
+      try {
+        arr = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (!Array.isArray(arr)) arr = [];
+      } catch (_) {
+        arr = [];
+      }
+    }
+    if (msgObj.messageId && arr.some(m => String(m.messageId) === String(msgObj.messageId))) {
+      return arr.length;
+    }
+    arr.push(msgObj);
+    if (arr.length > 2000) {
+      arr = arr.slice(-2000);
+    }
+    fs.writeFileSync(p, JSON.stringify(arr), 'utf8');
+    return arr.length;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function loadGroupMemoryFromDisk(groupId) {
+  try {
+    const p = getGroupMemoryPath(groupId);
+    if (fs.existsSync(p)) {
+      const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (parsed && typeof parsed.ledger === 'string') return parsed;
+    }
+  } catch (_) {}
+  return {
+    groupId: String(groupId),
+    updatedAt: 0,
+    summarizedCount: 0,
+    ledger: [
+      '一、已发生关键事件与时间线：暂无已归档事件，等待群聊推进后自动提炼。',
+      '二、当前所处场景与持有线索道具：全员处于初始准备阶段。',
+      '三、人物态度关系与待回收伏笔：各角色关系正常，暂无未决检定。'
+    ].join('\n')
+  };
+}
+
+function saveGroupMemoryToDisk(groupId, memoryData) {
+  try {
+    const p = getGroupMemoryPath(groupId);
+    const prev = loadGroupMemoryFromDisk(groupId);
+    const next = {
+      ...prev,
+      ...memoryData,
+      groupId: String(groupId),
+      updatedAt: Date.now()
+    };
+    fs.writeFileSync(p, JSON.stringify(next, null, 2), 'utf8');
+    return next;
+  } catch (_) {
+    return memoryData;
+  }
+}
+
+function extractOneBotMessageText(rawEvt) {
+  if (!rawEvt) return { text: '', replyId: '', hasSticker: false, stickerHint: '' };
+  let replyId = '';
+  let hasSticker = false;
+  let stickerHint = '';
+  let textParts = [];
+
+  if (Array.isArray(rawEvt.message)) {
+    for (const seg of rawEvt.message) {
+      if (!seg || typeof seg !== 'object') continue;
+      if (seg.type === 'text') {
+        textParts.push(String(seg.data?.text || ''));
+      } else if (seg.type === 'reply') {
+        replyId = String(seg.data?.id || '');
+      } else if (seg.type === 'at') {
+        const qq = seg.data?.qq || '';
+        textParts.push(`@${qq} `);
+      } else if (seg.type === 'image' || seg.type === 'mface') {
+        hasSticker = true;
+        const summary = String(seg.data?.summary || seg.data?.file || '表情图片');
+        stickerHint = summary;
+        textParts.push(`[发送了图片或表情：${summary}]`);
+      } else if (seg.type === 'face') {
+        textParts.push(`[QQ表情${seg.data?.id || ''}]`);
+      }
+    }
+  } else {
+    const rawStr = String(rawEvt.raw_message || rawEvt.message || '');
+    const repMatch = rawStr.match(/\[CQ:reply,id=([^\],]+)\]/);
+    if (repMatch) replyId = repMatch[1];
+    if (/\[CQ:image/.test(rawStr)) {
+      hasSticker = true;
+      stickerHint = '图片或表情包';
+    }
+    const cleaned = rawStr
+      .replace(/\[CQ:reply,id=[^\]]+\]/g, '')
+      .replace(/\[CQ:at,qq=([^\],]+)[^\]]*\]/g, '@$1 ')
+      .replace(/\[CQ:image,[^\]]*summary=([^,\]]+)[^\]]*\]/g, '[发送了表情：$1]')
+      .replace(/\[CQ:image,[^\]]+\]/g, '[发送了图片或表情包]');
+    textParts.push(cleaned);
+  }
+
+  return {
+    text: textParts.join('').trim(),
+    replyId,
+    hasSticker,
+    stickerHint
+  };
+}
+
+function handleIncomingOneBotEvent(data) {
+  if (!data || typeof data !== 'object') return;
+  if (data.echo && qqBotRuntime.pendingEchoes.has(data.echo)) {
+    const pending = qqBotRuntime.pendingEchoes.get(data.echo);
+    clearTimeout(pending.timer);
+    qqBotRuntime.pendingEchoes.delete(data.echo);
+    pending.resolve(data.data !== undefined ? data.data : data);
+    return;
+  }
+
+  if (data.self_id) {
+    qqBotRuntime.selfId = String(data.self_id);
+    qqBotRuntime.connected = true;
+    qqBotRuntime.lastEventAt = Date.now();
+  }
+
+  if (data.post_type === 'meta_event') {
+    qqBotRuntime.connected = true;
+    qqBotRuntime.lastEventAt = Date.now();
+    return;
+  }
+
+  if (data.post_type === 'message' && data.message_type === 'group') {
+    const groupId = String(data.group_id || '');
+    if (!groupId) return;
+    const senderId = String(data.user_id || data.sender?.user_id || '');
+    const senderName = String(data.sender?.card || data.sender?.nickname || senderId || '群成员');
+    const parsed = extractOneBotMessageText(data);
+    if (!parsed.text && !parsed.hasSticker) return;
+
+    const cfg = loadQqBotConfig();
+    if (!cfg.groups[groupId]) {
+      cfg.groups[groupId] = {
+        groupId,
+        groupName: String(data.group_name || `QQ群 ${groupId}`),
+        enabled: false,
+        mode: 'oc_chat',
+        debounceSec: 8,
+        contextLimit: 150,
+        idleCheckMin: 15,
+        cooldownSec: 5,
+        personaId: '',
+        personaName: cfg.nickname || '群控助手',
+        customPersona: '',
+        thoughtChainId: '',
+        worldBookId: '',
+        stickerCategoryId: 'all',
+        moduleId: '',
+        chapterId: 'auto',
+        naiMode: 'off',
+        modImgMode: 'auto',
+        players: []
+      };
+      saveQqBotConfig(cfg);
+    }
+
+    const isSelf = Boolean(qqBotRuntime.selfId && senderId === qqBotRuntime.selfId);
+    const msgEntry = {
+      messageId: String(data.message_id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
+      groupId,
+      senderId,
+      senderName,
+      content: parsed.text,
+      replyId: parsed.replyId || '',
+      hasSticker: parsed.hasSticker,
+      stickerHint: parsed.stickerHint || '',
+      isBot: isSelf,
+      timestamp: (data.time ? Number(data.time) * 1000 : Date.now())
+    };
+
+    appendGroupMessageToDisk(groupId, msgEntry);
+
+    if (!isSelf && cfg.groups[groupId] && cfg.groups[groupId].enabled) {
+      qqBotRuntime.pendingGroupEvents.set(groupId, {
+        lastMessageAt: Date.now(),
+        lastMessageId: msgEntry.messageId,
+        lastSenderId: senderId,
+        lastSenderName: senderName,
+        lastContent: msgEntry.content
+      });
+    }
+  }
+}
+
+async function callOneBotApi(action, params = {}) {
+  const cfg = loadQqBotConfig();
+  const endpoint = String(cfg.endpoint || '').trim();
+  const token = String(cfg.accessToken || '').trim();
+
+  // 1. 优先通过已连接的反向或正向 WebSocket 发送 OneBot 动作
+  let activeWs = null;
+  for (const ws of qqBotRuntime.reverseSockets) {
+    if (ws.readyState === 1) {
+      activeWs = ws;
+      break;
+    }
+  }
+  if (!activeWs && qqBotRuntime.forwardSocket && qqBotRuntime.forwardSocket.readyState === 1) {
+    activeWs = qqBotRuntime.forwardSocket;
+  }
+
+  if (activeWs) {
+    const echo = 'echo_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    return await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        qqBotRuntime.pendingEchoes.delete(echo);
+        reject(new Error(`OneBot WebSocket 动作 ${action} 响应超时`));
+      }, 10000);
+      qqBotRuntime.pendingEchoes.set(echo, { resolve, reject, timer });
+      try {
+        activeWs.send(JSON.stringify({ action, params, echo }));
+      } catch (err) {
+        clearTimeout(timer);
+        qqBotRuntime.pendingEchoes.delete(echo);
+        reject(err);
+      }
+    });
+  }
+
+  // 2. 若配置的是正向 HTTP 地址，则直接发起 HTTP 请求
+  if (/^https?:\/\//i.test(endpoint) && !endpoint.includes('/api/qqbot/ws')) {
+    const base = endpoint.replace(/\/+$/, '');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${base}/${action}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) {
+      throw new Error(`OneBot HTTP 状态码 ${res.status}`);
+    }
+    const json = await res.json();
+    if (json && json.status === 'failed') {
+      throw new Error(json.msg || json.wording || 'OneBot 接口返回失败');
+    }
+    qqBotRuntime.connected = true;
+    qqBotRuntime.lastEventAt = Date.now();
+    return json.data !== undefined ? json.data : json;
+  }
+
+  throw new Error('当前未检测到活跃的 OneBot 连接，请先在 NapCat 或 Lagrange 中配置反向 WS 或启动本地端');
+}
+
+function connectForwardOneBotWsIfNeeded(endpoint, token) {
+  if (!/^wss?:\/\//i.test(endpoint) || endpoint.includes('/api/qqbot/ws')) {
+    return;
+  }
+  try {
+    if (qqBotRuntime.forwardSocket) {
+      try { qqBotRuntime.forwardSocket.close(); } catch (_) {}
+      qqBotRuntime.forwardSocket = null;
+    }
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const ws = new WebSocket(endpoint, { headers });
+    qqBotRuntime.forwardSocket = ws;
+    qqBotRuntime.connectionMode = 'forward_ws';
+
+    ws.on('open', () => {
+      qqBotRuntime.connected = true;
+      qqBotRuntime.lastEventAt = Date.now();
+      qqBotRuntime.lastError = '';
+      callOneBotApi('get_login_info', {}).then((info) => {
+        if (info && info.user_id) {
+          qqBotRuntime.selfId = String(info.user_id);
+          qqBotRuntime.nickname = String(info.nickname || '');
+        }
+      }).catch(() => {});
+    });
+
+    ws.on('message', (raw) => {
+      try {
+        const parsed = JSON.parse(String(raw));
+        handleIncomingOneBotEvent(parsed);
+      } catch (_) {}
+    });
+
+    ws.on('error', (err) => {
+      qqBotRuntime.lastError = err.message || '正向 WebSocket 连接错误';
+    });
+
+    ws.on('close', () => {
+      if (qqBotRuntime.forwardSocket === ws) {
+        qqBotRuntime.forwardSocket = null;
+        if (qqBotRuntime.reverseSockets.size === 0) {
+          qqBotRuntime.connected = false;
+        }
+      }
+    });
+  } catch (err) {
+    qqBotRuntime.lastError = err.message;
+  }
+}
+
+app.post('/api/qqbot/webhook', (req, res) => {
+  try {
+    handleIncomingOneBotEvent(req.body);
+    return res.json({ status: 'ok' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/qqbot/state', (req, res) => {
+  const cfg = loadQqBotConfig();
+  const groupStats = {};
+  for (const gid of Object.keys(cfg.groups || {})) {
+    const hist = loadGroupHistoryFromDisk(gid, 1);
+    const mem = loadGroupMemoryFromDisk(gid);
+    const pending = qqBotRuntime.pendingGroupEvents.get(gid) || null;
+    groupStats[gid] = {
+      totalMessages: hist.total,
+      lastMessage: hist.messages[0] || null,
+      memoryUpdatedAt: mem.updatedAt || 0,
+      pendingTrigger: pending
+    };
+  }
+  const hasReverse = Array.from(qqBotRuntime.reverseSockets).some(w => w.readyState === 1);
+  const hasForward = Boolean(qqBotRuntime.forwardSocket && qqBotRuntime.forwardSocket.readyState === 1);
+  return res.json({
+    ok: true,
+    runtime: {
+      connected: Boolean(hasReverse || hasForward || qqBotRuntime.connected),
+      hasReverseWs: hasReverse,
+      hasForwardWs: hasForward,
+      selfId: qqBotRuntime.selfId || cfg.selfId || '',
+      nickname: qqBotRuntime.nickname || cfg.nickname || '',
+      lastEventAt: qqBotRuntime.lastEventAt,
+      lastError: qqBotRuntime.lastError
+    },
+    config: cfg,
+    groupStats
+  });
+});
+
+app.post('/api/qqbot/config', (req, res) => {
+  try {
+    const incoming = req.body || {};
+    const current = loadQqBotConfig();
+    const merged = {
+      ...current,
+      ...incoming,
+      groups: incoming.groups ? { ...current.groups, ...incoming.groups } : current.groups
+    };
+    saveQqBotConfig(merged);
+    if (merged.selfId) qqBotRuntime.selfId = String(merged.selfId);
+    if (merged.nickname) qqBotRuntime.nickname = String(merged.nickname);
+    return res.json({ ok: true, config: merged });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/connect', async (req, res) => {
+  try {
+    const { endpoint, accessToken, selfId, nickname } = req.body || {};
+    const cfg = loadQqBotConfig();
+    if (endpoint !== undefined) cfg.endpoint = String(endpoint).trim();
+    if (accessToken !== undefined) cfg.accessToken = String(accessToken).trim();
+    if (selfId !== undefined) cfg.selfId = String(selfId).trim();
+    if (nickname !== undefined) cfg.nickname = String(nickname).trim();
+    saveQqBotConfig(cfg);
+
+    if (/^wss?:\/\//i.test(cfg.endpoint) && !cfg.endpoint.includes('/api/qqbot/ws')) {
+      connectForwardOneBotWsIfNeeded(cfg.endpoint, cfg.accessToken);
+      await new Promise(r => setTimeout(r, 600));
+    }
+
+    let loginInfo = null;
+    try {
+      loginInfo = await callOneBotApi('get_login_info', {});
+      if (loginInfo && loginInfo.user_id) {
+        qqBotRuntime.selfId = String(loginInfo.user_id);
+        qqBotRuntime.nickname = String(loginInfo.nickname || cfg.nickname || '');
+        cfg.selfId = qqBotRuntime.selfId;
+        cfg.nickname = qqBotRuntime.nickname;
+        saveQqBotConfig(cfg);
+      }
+    } catch (apiErr) {
+      qqBotRuntime.lastError = apiErr.message;
+    }
+
+    const hasReverse = Array.from(qqBotRuntime.reverseSockets).some(w => w.readyState === 1);
+    const hasForward = Boolean(qqBotRuntime.forwardSocket && qqBotRuntime.forwardSocket.readyState === 1);
+    return res.json({
+      ok: true,
+      connected: Boolean(hasReverse || hasForward || loginInfo),
+      selfId: qqBotRuntime.selfId || cfg.selfId,
+      nickname: qqBotRuntime.nickname || cfg.nickname,
+      message: (hasReverse || hasForward || loginInfo)
+        ? `已成功连接 OneBot 节点，当前登录账号：${qqBotRuntime.nickname || ''} ${qqBotRuntime.selfId || ''}`
+        : '配置已存入本地磁盘，反向 WebSocket 监听通道已就绪，等待本地 NapCat 或 Lagrange 接入'
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/refresh-groups', async (req, res) => {
+  try {
+    const cfg = loadQqBotConfig();
+    let remoteGroups = [];
+    let fetchedFromOneBot = false;
+    try {
+      const list = await callOneBotApi('get_group_list', {});
+      if (Array.isArray(list)) {
+        remoteGroups = list;
+        fetchedFromOneBot = true;
+      }
+    } catch (_) {}
+
+    remoteGroups.forEach(g => {
+      const gid = String(g.group_id || '');
+      if (!gid) return;
+      const gname = String(g.group_name || `QQ群 ${gid}`);
+      if (!cfg.groups[gid]) {
+        cfg.groups[gid] = {
+          groupId: gid,
+          groupName: gname,
+          enabled: false,
+          mode: 'oc_chat',
+          debounceSec: 8,
+          contextLimit: 150,
+          idleCheckMin: 15,
+          cooldownSec: 5,
+          personaId: '',
+          personaName: cfg.nickname || '群控助手',
+          customPersona: '',
+          thoughtChainId: '',
+          worldBookId: '',
+          stickerCategoryId: 'all',
+          moduleId: '',
+          chapterId: 'auto',
+          naiMode: 'off',
+          modImgMode: 'auto',
+          players: []
+        };
+      } else {
+        cfg.groups[gid].groupName = gname;
+      }
+    });
+
+    saveQqBotConfig(cfg);
+    return res.json({
+      ok: true,
+      fetchedFromOneBot,
+      groups: cfg.groups,
+      count: Object.keys(cfg.groups).length
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/qqbot/group/:groupId/context', (req, res) => {
+  try {
+    const groupId = String(req.params.groupId || '');
+    const limit = Math.max(10, Math.min(800, Number(req.query.limit) || 150));
+    const hist = loadGroupHistoryFromDisk(groupId, limit);
+    const memory = loadGroupMemoryFromDisk(groupId);
+    const pending = qqBotRuntime.pendingGroupEvents.get(groupId) || null;
+    if (req.query.ackPending === '1') {
+      qqBotRuntime.pendingGroupEvents.delete(groupId);
+    }
+    return res.json({
+      ok: true,
+      groupId,
+      totalMessages: hist.total,
+      messages: hist.messages,
+      memory,
+      pending
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/group/:groupId/memory', (req, res) => {
+  try {
+    const groupId = String(req.params.groupId || '');
+    const { ledger, summarizedCount } = req.body || {};
+    const saved = saveGroupMemoryToDisk(groupId, {
+      ledger: String(ledger || ''),
+      summarizedCount: Number(summarizedCount) || 0
+    });
+    return res.json({ ok: true, memory: saved });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/group/:groupId/clear', (req, res) => {
+  try {
+    const groupId = String(req.params.groupId || '');
+    const p = getGroupHistoryPath(groupId);
+    if (fs.existsSync(p)) {
+      fs.writeFileSync(p, '[]', 'utf8');
+    }
+    qqBotRuntime.pendingGroupEvents.delete(groupId);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/simulate', (req, res) => {
+  try {
+    const { groupId, senderId = '10001', senderName = '早川秋', content = '', hasSticker = false, stickerHint = '' } = req.body || {};
+    const gid = String(groupId || '88482026');
+    const msgEntry = {
+      messageId: 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      groupId: gid,
+      senderId: String(senderId),
+      senderName: String(senderName),
+      content: String(content || ''),
+      replyId: '',
+      hasSticker: Boolean(hasSticker),
+      stickerHint: String(stickerHint || ''),
+      isBot: false,
+      timestamp: Date.now()
+    };
+    const total = appendGroupMessageToDisk(gid, msgEntry);
+    qqBotRuntime.pendingGroupEvents.set(gid, {
+      lastMessageAt: Date.now(),
+      lastMessageId: msgEntry.messageId,
+      lastSenderId: msgEntry.senderId,
+      lastSenderName: msgEntry.senderName,
+      lastContent: msgEntry.content
+    });
+    return res.json({ ok: true, message: msgEntry, total });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/send', async (req, res) => {
+  try {
+    const {
+      targetType = 'group',
+      groupId = '',
+      userId = '',
+      content = '',
+      replyToMessageId = '',
+      imageUrl = '',
+      stickerName = '',
+      botName = '守秘人KP'
+    } = req.body || {};
+
+    const segments = [];
+    if (replyToMessageId) {
+      segments.push({ type: 'reply', data: { id: String(replyToMessageId) } });
+    }
+    if (content && String(content).trim()) {
+      segments.push({ type: 'text', data: { text: String(content).trim() } });
+    }
+    if (imageUrl && String(imageUrl).trim()) {
+      let fileVal = String(imageUrl).trim();
+      if (fileVal.startsWith('data:image/')) {
+        const b64 = fileVal.split(',')[1] || '';
+        if (b64) fileVal = 'base64://' + b64;
+      }
+      segments.push({ type: 'image', data: { file: fileVal } });
+    }
+
+    let deliveredToOneBot = false;
+    let oneBotError = '';
+    try {
+      if (targetType === 'private' && userId) {
+        await callOneBotApi('send_private_msg', {
+          user_id: Number(userId) || String(userId),
+          message: segments
+        });
+        deliveredToOneBot = true;
+      } else if (groupId) {
+        await callOneBotApi('send_group_msg', {
+          group_id: Number(groupId) || String(groupId),
+          message: segments
+        });
+        deliveredToOneBot = true;
+      }
+    } catch (err) {
+      oneBotError = err.message;
+    }
+
+    if (groupId) {
+      const displayParts = [];
+      if (replyToMessageId) displayParts.push(`[引用回复 ${replyToMessageId}]`);
+      if (targetType === 'private' && userId) displayParts.push(`[私聊小窗发给 ${userId}]`);
+      if (content) displayParts.push(String(content).trim());
+      if (stickerName) displayParts.push(`[发送表情包：${stickerName}]`);
+      else if (imageUrl) displayParts.push('[发送场景插图]');
+
+      appendGroupMessageToDisk(groupId, {
+        messageId: 'bot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        groupId: String(groupId),
+        senderId: qqBotRuntime.selfId || 'BOT',
+        senderName: String(botName || qqBotRuntime.nickname || '守秘人KP'),
+        content: displayParts.join(' '),
+        replyId: String(replyToMessageId || ''),
+        imageUrl: imageUrl || '',
+        isBot: true,
+        isPrivateNotice: targetType === 'private',
+        timestamp: Date.now()
+      });
+    }
+
+    return res.json({
+      ok: true,
+      deliveredToOneBot,
+      oneBotError
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.use(express.static(__dirname));
 
 // Client-side fallback to index.html
@@ -1515,12 +2272,44 @@ app.get('*', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  const reqUrl = String(req?.url || '');
+  const selfIdHeader = req?.headers?.['x-self-id'];
+  if (reqUrl.startsWith('/api/qqbot/ws') || selfIdHeader) {
+    qqBotRuntime.reverseSockets.add(ws);
+    qqBotRuntime.connected = true;
+    qqBotRuntime.connectionMode = 'reverse_ws';
+    qqBotRuntime.lastEventAt = Date.now();
+    if (selfIdHeader) {
+      qqBotRuntime.selfId = String(selfIdHeader);
+    }
+    ws.on('message', (raw) => {
+      try {
+        const parsed = JSON.parse(String(raw));
+        handleIncomingOneBotEvent(parsed);
+      } catch (_) {}
+    });
+    ws.on('close', () => {
+      qqBotRuntime.reverseSockets.delete(ws);
+      if (qqBotRuntime.reverseSockets.size === 0 && !qqBotRuntime.forwardSocket) {
+        qqBotRuntime.connected = false;
+      }
+    });
+    ws.on('error', () => {
+      qqBotRuntime.reverseSockets.delete(ws);
+    });
+    return;
+  }
+
   let boundCode = null;
 
   ws.on('message', (raw) => {
     try {
       const data = JSON.parse(raw);
+      if (data && data.post_type) {
+        handleIncomingOneBotEvent(data);
+        return;
+      }
       if (data.type === 'register') {
         boundCode = data.peerCode ? String(data.peerCode).trim().toUpperCase() : null;
         if (boundCode) {

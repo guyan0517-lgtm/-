@@ -2278,3 +2278,1858 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
   });
 }
+
+/* ============================================================================
+ * QQ 群控中枢控制器 - Local Disk Storage + Sub-API Situational Judge + Main-API KP/OC
+ * ============================================================================ */
+(function () {
+  const QQBotConsole = {
+    initialized: false,
+    serverState: null,
+    currentGroupId: "",
+    pollTimer: null,
+    busyGroups: {},
+    localWaitNormalized: {},
+    cachedResources: {
+      personas: [],
+      thoughts: [],
+      worldbooks: [],
+      stickerCats: [],
+      stickers: [],
+      modules: [],
+      moduleChapters: [],
+      moduleImages: [],
+      charCards: [],
+    },
+
+    async openScreen() {
+      if (typeof window.showScreen === "function") {
+        window.showScreen("tukey-accounting-screen");
+      }
+      await this.init();
+      await this.refreshLocalResources();
+      await this.syncFromServer(true);
+    },
+
+    closeScreen() {
+      if (typeof window.showScreen === "function") {
+        window.showScreen("home-screen");
+      }
+    },
+
+    async init() {
+      if (this.initialized) return;
+      this.initialized = true;
+      this.populateTutorialReverseWsUrl();
+      await this.refreshLocalResources();
+      await this.syncFromServer(true);
+      this.startBackgroundWatcher();
+    },
+
+    populateTutorialReverseWsUrl() {
+      const input = document.getElementById("qqbot-rev-ws-copy-input");
+      if (!input) return;
+      const host = window.location.host || "127.0.0.1:3000";
+      const isLocal =
+        host.includes("127.0.0.1") ||
+        host.includes("localhost") ||
+        host.startsWith("192.168.");
+      input.value = isLocal
+        ? `ws://${host}/api/qqbot/ws`
+        : "ws://127.0.0.1:3000/api/qqbot/ws";
+    },
+
+    openTutorialModal() {
+      this.populateTutorialReverseWsUrl();
+      const modal = document.getElementById("qqbot-tutorial-modal");
+      if (modal) modal.style.display = "flex";
+    },
+
+    closeTutorialModal() {
+      const modal = document.getElementById("qqbot-tutorial-modal");
+      if (modal) modal.style.display = "none";
+    },
+
+    async copyReverseWsUrl() {
+      const input = document.getElementById("qqbot-rev-ws-copy-input");
+      const val = input ? input.value : "ws://127.0.0.1:3000/api/qqbot/ws";
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(val);
+        } else if (input) {
+          input.select();
+          document.execCommand("copy");
+        }
+        this.notify("已复制反向WS地址");
+      } catch (e) {
+        this.notify("复制完成：" + val);
+      }
+    },
+
+    async openSandboxModal() {
+      const modal = document.getElementById("qqbot-sandbox-modal");
+      if (modal) modal.style.display = "flex";
+      await this.refreshSandboxLog();
+    },
+
+    closeSandboxModal() {
+      const modal = document.getElementById("qqbot-sandbox-modal");
+      if (modal) modal.style.display = "none";
+    },
+
+    notify(msg) {
+      const badge = document.getElementById("qqbot-conn-badge");
+      if (badge) {
+        badge.textContent = msg;
+      }
+      if (typeof window.showCustomAlert === "function" && false) {
+        window.showCustomAlert("提示", msg);
+      }
+    },
+
+    async refreshLocalResources() {
+      const dbRef = window.db;
+      if (!dbRef) return;
+      try {
+        const [
+          chats,
+          personaPresets,
+          thoughtPresets,
+          worldBooks,
+          stickerCats,
+          stickers,
+          modules,
+          moduleChapters,
+          moduleImages,
+        ] = await Promise.all([
+          dbRef.chats ? dbRef.chats.toArray().catch(() => []) : [],
+          dbRef.personaPresets ? dbRef.personaPresets.toArray().catch(() => []) : [],
+          dbRef.thoughtChainPresets
+            ? dbRef.thoughtChainPresets.toArray().catch(() => [])
+            : [],
+          dbRef.worldBooks ? dbRef.worldBooks.toArray().catch(() => []) : [],
+          dbRef.userStickerCategories
+            ? dbRef.userStickerCategories.toArray().catch(() => [])
+            : [],
+          dbRef.userStickers ? dbRef.userStickers.toArray().catch(() => []) : [],
+          dbRef.modules ? dbRef.modules.toArray().catch(() => []) : [],
+          dbRef.moduleChapters ? dbRef.moduleChapters.toArray().catch(() => []) : [],
+          dbRef.moduleImages ? dbRef.moduleImages.toArray().catch(() => []) : [],
+        ]);
+
+        const personas = [];
+        (chats || []).forEach((c) => {
+          if (!c.isGroup) {
+            personas.push({
+              id: "chat:" + c.id,
+              name: c.name || "角色 " + c.id,
+              prompt:
+                (c.settings && c.settings.aiPersona) ||
+                c.description ||
+                c.personality ||
+                "",
+            });
+          }
+        });
+        (personaPresets || []).forEach((p) => {
+          personas.push({
+            id: "preset:" + p.id,
+            name: p.name || p.title || "预设 " + p.id,
+            prompt: p.content || p.persona || p.prompt || "",
+          });
+        });
+
+        const charCards = [];
+        (chats || []).forEach((c) => {
+          if (!c.isGroup) {
+            charCards.push({
+              id: String(c.id),
+              name: c.name || "角色卡",
+              cocData: c.cocData || (c.settings && c.settings.cocData) || null,
+              persona:
+                (c.settings && c.settings.aiPersona) ||
+                (c.settings && c.settings.myPersona) ||
+                c.description ||
+                "",
+            });
+          }
+        });
+
+        this.cachedResources = {
+          personas,
+          thoughts: thoughtPresets || [],
+          worldbooks: worldBooks || [],
+          stickerCats: stickerCats || [],
+          stickers: stickers || [],
+          modules: modules || [],
+          moduleChapters: moduleChapters || [],
+          moduleImages: moduleImages || [],
+          charCards,
+        };
+
+        this.renderResourceSelects();
+      } catch (err) {
+        console.warn("加载本地数据库资源异常:", err);
+      }
+    },
+
+    renderResourceSelects() {
+      const g = this.getCurrentGroupConfig();
+
+      const personaEl = document.getElementById("qqbot-persona-select");
+      if (personaEl) {
+        const cur = g ? g.personaId : personaEl.value;
+        personaEl.innerHTML =
+          '<option value="">默认守秘人或温润群友</option>' +
+          this.cachedResources.personas
+            .map(
+              (p) =>
+                `<option value="${this.escapeAttr(p.id)}">${this.escapeHtml(p.name)}</option>`,
+            )
+            .join("");
+        if (cur) personaEl.value = cur;
+      }
+
+      const thoughtEl = document.getElementById("qqbot-thought-select");
+      if (thoughtEl) {
+        const cur = g ? g.thoughtChainId : thoughtEl.value;
+        thoughtEl.innerHTML =
+          '<option value="">内置真人跑团与群聊思维链</option>' +
+          this.cachedResources.thoughts
+            .map(
+              (t) =>
+                `<option value="${this.escapeAttr(String(t.id))}">${this.escapeHtml(t.name || t.title || "思维链")}</option>`,
+            )
+            .join("");
+        if (cur) thoughtEl.value = cur;
+      }
+
+      const wbEl = document.getElementById("qqbot-worldbook-select");
+      if (wbEl) {
+        const cur = g ? g.worldBookId : wbEl.value;
+        wbEl.innerHTML =
+          '<option value="">不挂载额外世界书</option>' +
+          '<option value="ALL">挂载全部启用世界书</option>' +
+          this.cachedResources.worldbooks
+            .map(
+              (w) =>
+                `<option value="${this.escapeAttr(String(w.id))}">${this.escapeHtml(w.name || "世界书")}</option>`,
+            )
+            .join("");
+        if (cur) wbEl.value = cur;
+      }
+
+      const stEl = document.getElementById("qqbot-sticker-select");
+      if (stEl) {
+        const cur = g ? g.stickerCategoryId : stEl.value;
+        stEl.innerHTML =
+          '<option value="ALL">全部可用表情包</option>' +
+          '<option value="NONE">不自动发表情包</option>' +
+          this.cachedResources.stickerCats
+            .map(
+              (c) =>
+                `<option value="${this.escapeAttr(String(c.id))}">${this.escapeHtml(c.name || "分类")}</option>`,
+            )
+            .join("");
+        if (cur) stEl.value = cur;
+      }
+
+      const modEl = document.getElementById("qqbot-module-select");
+      if (modEl) {
+        const cur = g ? g.moduleId : modEl.value;
+        modEl.innerHTML =
+          '<option value="">不加载跑团模组</option>' +
+          this.cachedResources.modules
+            .map(
+              (m) =>
+                `<option value="${this.escapeAttr(String(m.id))}">${this.escapeHtml(m.title || m.name || "未命名模组")}</option>`,
+            )
+            .join("");
+        if (cur) modEl.value = cur;
+      }
+
+      this.renderModuleChaptersSelect(
+        g ? g.moduleId : modEl ? modEl.value : "",
+        g ? g.chapterId : "",
+      );
+
+      const cardEl = document.getElementById("qqbot-bind-card-select");
+      if (cardEl) {
+        const cur = cardEl.value;
+        cardEl.innerHTML =
+          '<option value="">选择绑定角色卡或留空</option>' +
+          this.cachedResources.charCards
+            .map(
+              (c) =>
+                `<option value="${this.escapeAttr(c.id)}">${this.escapeHtml(c.name)}</option>`,
+            )
+            .join("");
+        if (cur) cardEl.value = cur;
+      }
+    },
+
+    renderModuleChaptersSelect(moduleId, selectedChapterId) {
+      const chapEl = document.getElementById("qqbot-chapter-select");
+      if (!chapEl) return;
+      if (!moduleId) {
+        chapEl.innerHTML = '<option value="ALL">全部章节自动检索</option>';
+        return;
+      }
+      const chaps = this.cachedResources.moduleChapters
+        .filter((c) => String(c.moduleId) === String(moduleId))
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      chapEl.innerHTML =
+        '<option value="ALL">全部章节与KP真相</option>' +
+        chaps
+          .map(
+            (c, idx) =>
+              `<option value="${this.escapeAttr(String(c.id))}">第${idx + 1}章 ${this.escapeHtml(c.title || "章节")}</option>`,
+          )
+          .join("");
+      if (selectedChapterId) chapEl.value = selectedChapterId;
+    },
+
+    onModuleSelectChange() {
+      const modEl = document.getElementById("qqbot-module-select");
+      const moduleId = modEl ? modEl.value : "";
+      this.renderModuleChaptersSelect(moduleId, "ALL");
+      this.onCurrentGroupFieldChange();
+    },
+
+    async syncFromServer(populateInputs = false) {
+      try {
+        const res = await fetch("/api/qqbot/state");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || !data.ok) return;
+        this.serverState = data;
+
+        const badge = document.getElementById("qqbot-conn-badge");
+        if (badge && data.runtime) {
+          badge.textContent = data.runtime.statusText || "本地待命";
+        }
+
+        if (populateInputs && data.config) {
+          const epInput = document.getElementById("qqbot-endpoint-input");
+          const selfInput = document.getElementById("qqbot-selfid-input");
+          const tkInput = document.getElementById("qqbot-token-input");
+          if (epInput && data.config.onebotUrl) {
+            epInput.value = data.config.onebotUrl;
+          }
+          if (selfInput && data.config.selfId) {
+            selfInput.value = data.config.selfId;
+          }
+          if (tkInput && data.config.accessToken !== undefined) {
+            tkInput.value = data.config.accessToken;
+          }
+        }
+
+        const groupsObj = (data.config && data.config.groups) || {};
+        const discovered =
+          (data.runtime && data.runtime.discoveredGroups) || [];
+
+        discovered.forEach((dg) => {
+          const gid = String(dg.groupId || "");
+          if (gid && !groupsObj[gid]) {
+            groupsObj[gid] = this.createDefaultGroupConfig(gid, dg.groupName);
+          }
+        });
+
+        const groupIds = Object.keys(groupsObj);
+        if (groupIds.length === 0) {
+          const defaultGid = "8848001";
+          groupsObj[defaultGid] = this.createDefaultGroupConfig(
+            defaultGid,
+            "跑团演练测试群",
+          );
+        }
+
+        if (!this.currentGroupId || !groupsObj[this.currentGroupId]) {
+          this.currentGroupId = Object.keys(groupsObj)[0];
+        }
+
+        if (populateInputs) {
+          this.renderGroupSelectDropdown();
+          this.populateCurrentGroupUI();
+          await this.loadCurrentGroupMemoryUI();
+        }
+      } catch (e) {
+        console.warn("同步群控状态失败:", e);
+      }
+    },
+
+    createDefaultGroupConfig(groupId, groupName) {
+      return {
+        groupId: String(groupId),
+        groupName: groupName || "QQ群 " + groupId,
+        enabled: true,
+        mode: "trpg",
+        debounceSec: 8,
+        contextLimit: 180,
+        idleAskMin: 12,
+        cooldownSec: 4,
+        autoNaiImage: false,
+        personaId: "",
+        thoughtChainId: "",
+        worldBookId: "",
+        stickerCategoryId: "ALL",
+        moduleId: "",
+        chapterId: "ALL",
+        customPrompt: "",
+        playerBindings: [],
+      };
+    },
+
+    getCurrentGroupConfig() {
+      if (
+        !this.serverState ||
+        !this.serverState.config ||
+        !this.serverState.config.groups
+      ) {
+        return null;
+      }
+      if (!this.currentGroupId) return null;
+      return this.serverState.config.groups[this.currentGroupId] || null;
+    },
+
+    renderGroupSelectDropdown() {
+      const sel = document.getElementById("qqbot-group-select");
+      const dl = document.getElementById("qqbot-group-datalist");
+      if (!sel || !this.serverState || !this.serverState.config) return;
+      const groups = this.serverState.config.groups || {};
+      const entries = Object.values(groups);
+      sel.innerHTML = entries
+        .map((g) => {
+          const stateMark = g.enabled ? "监听中" : "已暂停";
+          return `<option value="${this.escapeAttr(g.groupId)}">${this.escapeHtml(g.groupName || g.groupId)} · ${g.groupId} · ${stateMark}</option>`;
+        })
+        .join("");
+      if (this.currentGroupId && groups[this.currentGroupId]) {
+        sel.value = this.currentGroupId;
+      }
+      if (dl) {
+        dl.innerHTML = entries
+          .map(
+            (g) =>
+              `<option value="${this.escapeAttr(g.groupId)}">${this.escapeHtml(g.groupName || "")}</option>`,
+          )
+          .join("");
+      }
+    },
+
+    populateCurrentGroupUI() {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null) el.value = String(val);
+      };
+      const setChk = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = Boolean(val);
+      };
+
+      setChk("qqbot-group-enabled-chk", g.enabled);
+      setChk("qqbot-group-nai-chk", g.autoNaiImage);
+      setVal("qqbot-group-mode-select", g.mode || "trpg");
+      setVal("qqbot-debounce-input", g.debounceSec ?? 8);
+      setVal("qqbot-context-limit-input", g.contextLimit ?? 180);
+      setVal("qqbot-idle-ask-input", g.idleAskMin ?? 12);
+      setVal("qqbot-cooldown-input", g.cooldownSec ?? 4);
+      setVal("qqbot-custom-prompt-input", g.customPrompt || "");
+
+      this.renderResourceSelects();
+      this.renderPlayerBindingsList();
+    },
+
+    onCurrentGroupFieldChange() {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+
+      const getVal = (id, fallback) => {
+        const el = document.getElementById(id);
+        return el ? el.value : fallback;
+      };
+      const getChk = (id) => {
+        const el = document.getElementById(id);
+        return el ? Boolean(el.checked) : false;
+      };
+
+      g.enabled = getChk("qqbot-group-enabled-chk");
+      g.autoNaiImage = getChk("qqbot-group-nai-chk");
+      g.mode = getVal("qqbot-group-mode-select", "trpg");
+      g.debounceSec = Math.max(
+        2,
+        parseInt(getVal("qqbot-debounce-input", "8"), 10) || 8,
+      );
+      g.contextLimit = Math.max(
+        20,
+        parseInt(getVal("qqbot-context-limit-input", "180"), 10) || 180,
+      );
+      g.idleAskMin = Math.max(
+        0,
+        parseInt(getVal("qqbot-idle-ask-input", "12"), 10) || 0,
+      );
+      g.cooldownSec = Math.max(
+        1,
+        parseInt(getVal("qqbot-cooldown-input", "4"), 10) || 4,
+      );
+      g.personaId = getVal("qqbot-persona-select", "");
+      g.thoughtChainId = getVal("qqbot-thought-select", "");
+      g.worldBookId = getVal("qqbot-worldbook-select", "");
+      g.stickerCategoryId = getVal("qqbot-sticker-select", "ALL");
+      g.moduleId = getVal("qqbot-module-select", "");
+      g.chapterId = getVal("qqbot-chapter-select", "ALL");
+      g.customPrompt = getVal("qqbot-custom-prompt-input", "");
+
+      this.renderGroupSelectDropdown();
+      this.saveAllSettings(false);
+    },
+
+    async onGroupSelectChange() {
+      const sel = document.getElementById("qqbot-group-select");
+      if (!sel) return;
+      this.currentGroupId = sel.value;
+      this.populateCurrentGroupUI();
+      await this.loadCurrentGroupMemoryUI();
+    },
+
+    async addOrSelectGroup() {
+      const idInput = document.getElementById("qqbot-new-group-id");
+      const nameInput = document.getElementById("qqbot-new-group-name");
+      const rawId = idInput ? idInput.value.trim() : "";
+      const rawName = nameInput ? nameInput.value.trim() : "";
+      if (!rawId) {
+        this.notify("请先输入QQ群号");
+        return;
+      }
+      if (!this.serverState) {
+        await this.syncFromServer(true);
+      }
+      if (!this.serverState.config.groups) {
+        this.serverState.config.groups = {};
+      }
+      if (!this.serverState.config.groups[rawId]) {
+        this.serverState.config.groups[rawId] = this.createDefaultGroupConfig(
+          rawId,
+          rawName || "QQ群 " + rawId,
+        );
+      } else if (rawName) {
+        this.serverState.config.groups[rawId].groupName = rawName;
+      }
+      this.currentGroupId = rawId;
+      if (idInput) idInput.value = "";
+      if (nameInput) nameInput.value = "";
+      this.renderGroupSelectDropdown();
+      this.populateCurrentGroupUI();
+      await this.saveAllSettings(true);
+      await this.loadCurrentGroupMemoryUI();
+    },
+
+    addPlayerBinding() {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      const qqInput = document.getElementById("qqbot-bind-qq-input");
+      const hoSelect = document.getElementById("qqbot-bind-ho-select");
+      const cardSelect = document.getElementById("qqbot-bind-card-select");
+
+      const qq = qqInput ? qqInput.value.trim() : "";
+      const ho = hoSelect ? hoSelect.value : "HO1";
+      const cardId = cardSelect ? cardSelect.value : "";
+
+      if (!qq) {
+        this.notify("请输入玩家QQ号或单人线群号");
+        return;
+      }
+
+      const cardObj = this.cachedResources.charCards.find(
+        (c) => String(c.id) === String(cardId),
+      );
+      if (!Array.isArray(g.playerBindings)) g.playerBindings = [];
+
+      const existingIdx = g.playerBindings.findIndex(
+        (b) => String(b.qq) === String(qq),
+      );
+      const item = {
+        qq,
+        slot: ho,
+        cardId: cardId || "",
+        cardName: cardObj ? cardObj.name : "未绑定角色卡",
+      };
+
+      if (existingIdx >= 0) {
+        g.playerBindings[existingIdx] = item;
+      } else {
+        g.playerBindings.push(item);
+      }
+
+      if (qqInput) qqInput.value = "";
+      this.renderPlayerBindingsList();
+      this.saveAllSettings(false);
+    },
+
+    removePlayerBinding(qq) {
+      const g = this.getCurrentGroupConfig();
+      if (!g || !Array.isArray(g.playerBindings)) return;
+      g.playerBindings = g.playerBindings.filter(
+        (b) => String(b.qq) !== String(qq),
+      );
+      this.renderPlayerBindingsList();
+      this.saveAllSettings(false);
+    },
+
+    renderPlayerBindingsList() {
+      const container = document.getElementById("qqbot-player-bindings-list");
+      const g = this.getCurrentGroupConfig();
+      if (!container) return;
+      const list = (g && g.playerBindings) || [];
+      if (list.length === 0) {
+        container.innerHTML =
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px 2px;">暂未绑定调查员卡片，绑定后AI会自动读取玩家技能值并通过小窗发送专属秘密线索</div>';
+        return;
+      }
+      container.innerHTML = list
+        .map(
+          (b) => `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+          <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); font-size: 11px; font-weight: 700; color: var(--accent-color); flex-shrink: 0;">${this.escapeHtml(b.slot)}</span>
+          <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-primary);">
+            <span style="font-weight: 600;">${this.escapeHtml(b.cardName)}</span>
+            <span style="font-size: 11px; color: var(--text-secondary); margin-left: 6px;">QQ:${this.escapeHtml(b.qq)}</span>
+          </div>
+          <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.removePlayerBinding('${this.escapeAttr(b.qq)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">移除</button>
+        </div>
+      `,
+        )
+        .join("");
+    },
+
+    async saveAllSettings(showToast = false) {
+      if (!this.serverState || !this.serverState.config) return;
+      const epInput = document.getElementById("qqbot-endpoint-input");
+      const selfInput = document.getElementById("qqbot-selfid-input");
+      const tkInput = document.getElementById("qqbot-token-input");
+
+      const rawUrl = epInput ? epInput.value.trim() : "";
+      let mode = "reverse_ws";
+      if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+        mode = "http";
+      } else if (rawUrl.startsWith("ws://") || rawUrl.startsWith("wss://")) {
+        if (!rawUrl.includes("/api/qqbot/ws")) {
+          mode = "forward_ws";
+        }
+      }
+
+      const payload = {
+        connectionMode: mode,
+        onebotUrl: rawUrl || "ws://127.0.0.1:3000/api/qqbot/ws",
+        selfId: selfInput ? selfInput.value.trim() : "",
+        accessToken: tkInput ? tkInput.value.trim() : "",
+        groups: this.serverState.config.groups || {},
+      };
+
+      try {
+        const res = await fetch("/api/qqbot/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data && data.config) {
+          this.serverState.config = data.config;
+        }
+        if (showToast) {
+          this.notify("设置已存盘");
+        }
+      } catch (e) {
+        if (showToast) {
+          this.notify("保存失败");
+        }
+      }
+    },
+
+    async connectOneBot() {
+      await this.saveAllSettings(false);
+      this.notify("正在连接...");
+      try {
+        const epInput = document.getElementById("qqbot-endpoint-input");
+        const tkInput = document.getElementById("qqbot-token-input");
+        const rawUrl = epInput ? epInput.value.trim() : "";
+        let mode = "reverse_ws";
+        if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+          mode = "http";
+        } else if (
+          (rawUrl.startsWith("ws://") || rawUrl.startsWith("wss://")) &&
+          !rawUrl.includes("/api/qqbot/ws")
+        ) {
+          mode = "forward_ws";
+        }
+
+        const res = await fetch("/api/qqbot/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            connectionMode: mode,
+            onebotUrl: rawUrl,
+            accessToken: tkInput ? tkInput.value.trim() : "",
+          }),
+        });
+        const data = await res.json();
+        if (data && data.runtime) {
+          this.notify(data.runtime.statusText || "已就绪");
+          const selfInput = document.getElementById("qqbot-selfid-input");
+          if (selfInput && data.runtime.selfId) {
+            selfInput.value = data.runtime.selfId;
+          }
+        }
+        await this.refreshOneBotGroups(true);
+      } catch (e) {
+        this.notify("连接异常");
+      }
+    },
+
+    async refreshOneBotGroups(silent = false) {
+      if (!silent) this.notify("正在拉取群列表...");
+      try {
+        const res = await fetch("/api/qqbot/refresh-groups", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        if (data && Array.isArray(data.groups) && data.groups.length > 0) {
+          if (!this.serverState.config.groups) {
+            this.serverState.config.groups = {};
+          }
+          data.groups.forEach((dg) => {
+            const gid = String(dg.groupId || "");
+            if (!gid) return;
+            if (!this.serverState.config.groups[gid]) {
+              this.serverState.config.groups[gid] =
+                this.createDefaultGroupConfig(gid, dg.groupName);
+            } else if (dg.groupName) {
+              this.serverState.config.groups[gid].groupName = dg.groupName;
+            }
+          });
+          this.renderGroupSelectDropdown();
+          await this.saveAllSettings(false);
+          if (!silent) this.notify(`已同步${data.groups.length}个群`);
+        } else if (!silent) {
+          this.notify("待命或手动加群");
+        }
+      } catch (e) {
+        if (!silent) this.notify("拉取失败");
+      }
+    },
+
+    async loadCurrentGroupMemoryUI() {
+      if (!this.currentGroupId) return;
+      try {
+        const res = await fetch(
+          `/api/qqbot/group/${encodeURIComponent(this.currentGroupId)}/context?limit=30`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const memBox = document.getElementById("qqbot-memory-textarea");
+        const badge = document.getElementById("qqbot-disk-status-badge");
+        if (memBox && data.memory) {
+          memBox.value = data.memory.summaryText || "";
+        }
+        if (badge) {
+          badge.textContent = `本地磁盘已存 ${data.totalStored || 0} 条`;
+        }
+      } catch (e) {
+        console.warn("读取本地记忆账本失败:", e);
+      }
+    },
+
+    async saveManualMemory() {
+      if (!this.currentGroupId) return;
+      const memBox = document.getElementById("qqbot-memory-textarea");
+      const summaryText = memBox ? memBox.value.trim() : "";
+      try {
+        await fetch(
+          `/api/qqbot/group/${encodeURIComponent(this.currentGroupId)}/memory`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ summaryText }),
+          },
+        );
+        const badge = document.getElementById("qqbot-disk-status-badge");
+        if (badge) badge.textContent = "本地账本已保存";
+      } catch (e) {
+        console.warn("保存本地账本失败:", e);
+      }
+    },
+
+    async clearCurrentGroupDisk() {
+      if (!this.currentGroupId) return;
+      try {
+        await fetch(
+          `/api/qqbot/group/${encodeURIComponent(this.currentGroupId)}/clear`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+        await this.loadCurrentGroupMemoryUI();
+        await this.refreshSandboxLog();
+        const badge = document.getElementById("qqbot-disk-status-badge");
+        if (badge) badge.textContent = "本地磁盘已清空";
+      } catch (e) {
+        console.warn("清空群磁盘记录失败:", e);
+      }
+    },
+
+    /* ============================================================================
+     * 事件驱动唤醒与挂机盯梢循环 - 无新消息零API消耗
+     * ============================================================================ */
+    startBackgroundWatcher() {
+      if (this.pollTimer) clearInterval(this.pollTimer);
+      this.pollTimer = setInterval(() => {
+        this.tickGroupWatchers();
+      }, 2500);
+    },
+
+    async tickGroupWatchers() {
+      try {
+        const res = await fetch("/api/qqbot/state");
+        if (!res.ok) return;
+        const stateData = await res.json();
+        if (!stateData || !stateData.ok) return;
+        this.serverState = stateData;
+
+        const badge = document.getElementById("qqbot-conn-badge");
+        if (badge && stateData.runtime && badge.textContent === "本地待命") {
+          badge.textContent = stateData.runtime.statusText || "本地待命";
+        }
+
+        const groups = (stateData.config && stateData.config.groups) || {};
+        const groupStats =
+          (stateData.runtime && stateData.runtime.groupStats) || {};
+        const now = Date.now();
+
+        for (const gid of Object.keys(groups)) {
+          const gCfg = groups[gid];
+          if (!gCfg || !gCfg.enabled) continue;
+          if (this.busyGroups[gid]) continue;
+
+          const st = groupStats[gid];
+          if (!st) continue;
+
+          if (!this.localWaitNormalized[gid]) {
+            this.localWaitNormalized[gid] = {
+              lastSeenSeq: st.lastProcessedSeq || 0,
+              waitingSince: st.waitingForRpSince || 0,
+              idleAsked: Boolean(st.idleAsked),
+              lastReplyAt: 0,
+            };
+          }
+          const lw = this.localWaitNormalized[gid];
+
+          // 1. 有未处理的新群消息，且已经过防抖缓冲秒数
+          if (st.lastMessageSeq > Math.max(st.lastProcessedSeq || 0, lw.lastSeenSeq)) {
+            const debounceMs = Math.max(2, Number(gCfg.debounceSec) || 8) * 1000;
+            const cooldownMs = Math.max(1, Number(gCfg.cooldownSec) || 4) * 1000;
+            if (
+              now - (st.lastMessageAt || 0) >= debounceMs &&
+              now - lw.lastReplyAt >= cooldownMs
+            ) {
+              lw.lastSeenSeq = st.lastMessageSeq;
+              await this.processGroupTurn(gid, gCfg, st.lastMessageSeq, false);
+            }
+            continue;
+          }
+
+          // 2. 挂机超时询问：AI发完消息后等待玩家RP，若超过设定分钟数无人说话，且本轮尚未询问过
+          const idleMin = Number(gCfg.idleAskMin) || 0;
+          const waitStart = st.waitingForRpSince || lw.waitingSince || 0;
+          const alreadyAsked = Boolean(st.idleAsked || lw.idleAsked);
+          if (idleMin > 0 && waitStart > 0 && !alreadyAsked) {
+            const idleMs = idleMin * 60 * 1000;
+            if (now - waitStart >= idleMs) {
+              lw.idleAsked = true;
+              await this.triggerIdleRpCheck(gid, gCfg, st.lastMessageSeq);
+            }
+          }
+        }
+      } catch (e) {
+        // 静默忽略网络抖动
+      }
+    },
+
+    /* ============================================================================
+     * 副API 真人级场面判断 + 主API 回复生成与小窗派发
+     * ============================================================================ */
+    async processGroupTurn(groupId, gCfg, targetSeq, forceReply = false) {
+      if (this.busyGroups[groupId]) return;
+      this.busyGroups[groupId] = true;
+
+      try {
+        const limit = Math.max(30, Math.min(800, Number(gCfg.contextLimit) || 180));
+        const ctxRes = await fetch(
+          `/api/qqbot/group/${encodeURIComponent(groupId)}/context?limit=${limit}`,
+        );
+        if (!ctxRes.ok) return;
+        const ctxData = await ctxRes.json();
+        const messages = ctxData.messages || [];
+        const memory = ctxData.memory || { summaryText: "", lastSummarizedSeq: 0 };
+        if (messages.length === 0) return;
+
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.isSelf && !forceReply) {
+          await this.markGroupSeqProcessed(groupId, targetSeq, false);
+          return;
+        }
+
+        // 先检测是否是玩家发送了 还在RP 表情包或口令
+        const rawLastText = String((lastMsg && lastMsg.rawMessage) || "").trim();
+        if (
+          !forceReply &&
+          /还在\s*rp|等一下.*rp|先别推进|正在码字|还在打字/i.test(rawLastText)
+        ) {
+          this.updateJudgeStatusUI(
+            `检测到群友 [${lastMsg.senderName}] 发送还在RP信号，已自动顺延等待计时，暂不打断玩家对戏`,
+          );
+          await fetch("/api/qqbot/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              groupId,
+              markProcessedSeq: targetSeq,
+              waitingForRpSince: Date.now(),
+              idleAsked: false,
+            }),
+          });
+          if (this.localWaitNormalized[groupId]) {
+            this.localWaitNormalized[groupId].waitingSince = Date.now();
+            this.localWaitNormalized[groupId].idleAsked = false;
+          }
+          await this.refreshSandboxLog();
+          return;
+        }
+
+        // 调用副API进行真人级场面判断
+        let judgeResult = {
+          shouldReply: true,
+          sceneType: "DIRECT_REPLY",
+          reason: "手动触发或默认回应",
+          targetUserId: lastMsg ? String(lastMsg.senderId || "") : "",
+          replyToMessageId: lastMsg ? String(lastMsg.messageId || "") : "",
+          needPrivateHint: false,
+          privateTargetUserId: "",
+        };
+
+        if (!forceReply) {
+          this.updateJudgeStatusUI("副API正在阅读群聊上下文与括号内容，判断当前场面...");
+          judgeResult = await this.runSubApiSceneJudge(gCfg, messages, memory);
+        }
+
+        const unsummarizedCount =
+          (ctxData.totalStored || messages.length) -
+          (Number(memory.lastSummarizedSeq) || 0);
+        if (unsummarizedCount >= 40) {
+          this.summarizeCurrentGroupMemory(groupId, true).catch(() => {});
+        }
+
+        if (!judgeResult.shouldReply) {
+          this.updateJudgeStatusUI(
+            `副API判定暂不插话 · 场景类型：${judgeResult.sceneType || "等待群友对戏"} · 原因：${judgeResult.reason || "等待其他玩家行动或继续RP"}`,
+          );
+          await this.markGroupSeqProcessed(groupId, targetSeq, false);
+          await this.refreshSandboxLog();
+          return;
+        }
+
+        this.updateJudgeStatusUI(
+          `副API判定需要回应 · 场景类型：${judgeResult.sceneType || "即时互动"} · 原因：${judgeResult.reason || "回应玩家行动或推进剧情"} · 正在唤醒主API...`,
+        );
+
+        // 唤醒主API生成正式回复、小窗密信、表情包与生图指令
+        const replyPack = await this.runMainApiResponder(
+          gCfg,
+          messages,
+          memory,
+          judgeResult,
+        );
+
+        await this.dispatchReplyPack(
+          groupId,
+          gCfg,
+          targetSeq,
+          judgeResult,
+          replyPack,
+        );
+
+        if (this.localWaitNormalized[groupId]) {
+          this.localWaitNormalized[groupId].lastReplyAt = Date.now();
+          this.localWaitNormalized[groupId].waitingSince = Date.now();
+          this.localWaitNormalized[groupId].idleAsked = false;
+        }
+        await this.refreshSandboxLog();
+      } catch (err) {
+        console.error("处理QQ群回合出错:", err);
+        this.updateJudgeStatusUI("处理群消息异常：" + (err.message || "请检查API配置"));
+      } finally {
+        this.busyGroups[groupId] = false;
+      }
+    },
+
+    async markGroupSeqProcessed(groupId, seq, idleAsked) {
+      try {
+        await fetch("/api/qqbot/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            groupId,
+            markProcessedSeq: seq,
+            waitingForRpSince: Date.now(),
+            idleAsked: Boolean(idleAsked),
+          }),
+        });
+      } catch (_) {}
+    },
+
+    async triggerIdleRpCheck(groupId, gCfg, currentSeq) {
+      if (this.busyGroups[groupId]) return;
+      this.busyGroups[groupId] = true;
+      try {
+        const stickerUrl = this.pickMatchedStickerUrl(
+          gCfg.stickerCategoryId,
+          "还在RP吗",
+        );
+        const askText =
+          gCfg.mode === "trpg"
+            ? "我看大家有一会儿没动静啦，请问还有调查员在继续RP或者补行动吗？如果还在RP可以发个还在RP的表情或吱一声，要是大家都行动完毕我就继续往下推剧情咯。"
+            : "群里突然安静下来啦，大家还在聊吗？";
+
+        await fetch("/api/qqbot/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            groupId,
+            message: askText,
+            imageUrl: stickerUrl || "",
+            markProcessedSeq: currentSeq,
+            waitingForRpSince: Date.now(),
+            idleAsked: true,
+          }),
+        });
+
+        this.updateJudgeStatusUI(
+          "已触发超时盯梢询问：发送了单次询问消息，若无人回应将保持安静不再刷屏",
+        );
+        await this.refreshSandboxLog();
+      } catch (e) {
+        console.warn("挂机询问发送失败:", e);
+      } finally {
+        this.busyGroups[groupId] = false;
+      }
+    },
+
+    /* ============================================================================
+     * 副API：真人级场面裁判 Prompt 与调用
+     * ============================================================================ */
+    async runSubApiSceneJudge(gCfg, messages, memory) {
+      const recentSlice = messages.slice(-25);
+      const bindings = gCfg.playerBindings || [];
+      const bindingDesc =
+        bindings.length > 0
+          ? bindings
+              .map((b) => `QQ:${b.qq} 对应 ${b.slot} 角色:${b.cardName}`)
+              .join("；")
+          : "未显式绑定固定HO，按群内发言昵称区分玩家";
+
+      const transcript = recentSlice
+        .map((m) => {
+          const roleTag = m.isSelf ? "[我方KP或OC]" : `[群友:${m.senderName}|QQ:${m.senderId}|消息ID:${m.messageId}]`;
+          return `${roleTag}: ${m.rawMessage}`;
+        })
+        .join("\n");
+
+      const modeLabel =
+        gCfg.mode === "trpg"
+          ? "跑团带团守秘人KP模式"
+          : "日常陪聊与设定OC群友模式";
+
+      const sysPrompt = `你是QQ群控中枢的副API真人场面裁判。当前模式：${modeLabel}。
+请完整阅读群聊上下文，注意群友在括号内讨论的内容同样非常重要，不能忽略括号内对KP的提问、行动声明或检定沟通。
+绑定调查员列表：${bindingDesc}
+
+请你像一个真正的资深人类跑团KP或真人OC群友一样，精准判断此刻是否应该开口说话：
+1. 单人独立互动 SINGLE_INTERACTION：某位玩家单独和NPC搭话、单独向KP声明调查某个角落、或者提出一个不牵连其他人的独立行动，此时不需要死等全员，应立即决定回复该玩家，并在 replyToMessageId 中填入该玩家的消息ID以便引用回复他。
+2. 括号提问或检定结算 BRACKET_QUESTION_OR_DICE：玩家在括号里向KP确认规则、询问环境细节，或者刚投出了技能检定骰子结果，应立即回复并给出检定描写或解答。
+3. 玩家结伴RP且NPC在场 PC_RP_NPC_PRESENT：玩家们正在互相角色扮演对戏，如果对戏内容涉及在场NPC或主动向我方搭话，则自然接话；如果只是两位玩家私下交流且不需要NPC打断，则保持安静等待他们聊完。
+4. 全员大场面等待 WAIT_ALL_ACTIONS：当前处于转场或全员危机鉴定阶段，我方刚要求所有在场调查员过骰子或表态，而目前只有部分人表态、还有活跃玩家正在行动中，则暂不回复，等待其他人行动完毕。
+5. 还在RP等待信号 STILL_RP_WAIT：有人表示还在RP、等一下、正在打字，则立即保持安静不回复。
+6. 结束RP推进信号 FINISH_RP_ADVANCE：玩家们表示RP结束、可以继续推剧情了，则立即回复并推进下一幕。
+
+只输出严格的JSON对象，格式如下：
+{
+  "shouldReply": true,
+  "sceneType": "SINGLE_INTERACTION | BRACKET_QUESTION_OR_DICE | PC_RP_NPC_PRESENT | WAIT_ALL_ACTIONS | STILL_RP_WAIT | FINISH_RP_ADVANCE",
+  "reason": "简短说明为什么此时应该回复或应该继续等待",
+  "targetUserId": "如果是针对某位玩家的独立行动或回答，填入其QQ号，否则留空",
+  "replyToMessageId": "如果需要引用回复某条具体消息，填入其消息ID，否则留空",
+  "needPrivateHint": false,
+  "privateTargetUserId": "如果该行动触发了只有某位调查员能看到的秘密线索或单人线，填入其QQ号，否则留空"
+}`;
+
+      const userPrompt = `【过往记忆摘要】\n${memory.summaryText || "暂无历史摘要"}\n\n【最新群聊记录】\n${transcript}\n\n请判断当前场面并输出JSON：`;
+
+      try {
+        const raw = await this.callBotAI(sysPrompt, userPrompt, true);
+        const parsed = this.extractJsonObject(raw);
+        if (parsed && typeof parsed.shouldReply === "boolean") {
+          return parsed;
+        }
+      } catch (e) {
+        console.warn("副API判断调用异常，回退为默认回复:", e);
+      }
+
+      const lastMsg = messages[messages.length - 1];
+      return {
+        shouldReply: true,
+        sceneType: "SINGLE_INTERACTION",
+        reason: "默认响应最新群消息",
+        targetUserId: lastMsg ? String(lastMsg.senderId || "") : "",
+        replyToMessageId: lastMsg ? String(lastMsg.messageId || "") : "",
+        needPrivateHint: false,
+        privateTargetUserId: "",
+      };
+    },
+
+    /* ============================================================================
+     * 主API：完整挂载人设、思维链、世界书、角色卡、模组、双层记忆与生图指令
+     * ============================================================================ */
+    async runMainApiResponder(gCfg, messages, memory, judgeResult) {
+      const personaText = this.resolvePersonaPrompt(gCfg.personaId);
+      const thoughtText = this.resolveThoughtPrompt(gCfg.thoughtChainId, gCfg.mode);
+      const worldbookText = this.resolveWorldbookPrompt(gCfg.worldBookId);
+      const moduleContext = this.resolveModulePrompt(gCfg.moduleId, gCfg.chapterId);
+      const playerCardsContext = this.resolvePlayerCardsPrompt(gCfg.playerBindings);
+      const stickerNames = this.resolveAvailableStickerNames(gCfg.stickerCategoryId);
+
+      const transcript = messages
+        .map((m) => {
+          const tag = m.isSelf
+            ? "[我方已发消息]"
+            : `[${m.senderName}|QQ:${m.senderId}|消息ID:${m.messageId}]`;
+          return `${tag}: ${m.rawMessage}`;
+        })
+        .join("\n");
+
+      const naiRule = gCfg.autoNaiImage
+        ? "当前已开启跑团正文每轮生图：只要本轮回复包含跑团正文的场景推进、环境描写、关键NPC登场或调查发现，必须在返回的 naiPrompt 字段中填写高质量英文NovelAI生图Tag串，聚焦画面光影、场景构图与人物动作；若仅是简短规则解答则 naiPrompt 留空。"
+        : "当前未开启每轮强制生图，naiPrompt 字段留空即可。";
+
+      const sysPrompt = `你是运行在真实QQ群中的${gCfg.mode === "trpg" ? "跑团守秘人KP与NPC演绎者" : "真人感OC群友"}。
+请严格遵守以下准则：
+1. 自然真人语气：像真人一样在QQ群里说话或带团描写，绝不机械复读，绝不替玩家扮演他们的调查员角色，绝不强行篡改玩家的行动意愿。
+2. 括号与场外互动：你能看到群友在括号里说的话。如果群友用括号问规则或闲聊，你可以自然解答或回应；正剧描写则保持沉浸细腻的文学质感。
+3. 单人回应与引用：如果当前是某位玩家单独向NPC搭话或单独过检定，直接针对该玩家给出回应与结果，不需要强行把其他没表态的玩家一起拖进结算。
+4. 单人线与秘密小窗：如果某位玩家触发了专属HO秘密、高难侦查独享情报、发狂幻觉或单人线剧情，在群里只发公开可见的表象，同时把专属秘密写进 privateMessages 数组中，系统会自动通过QQ小窗或单人群单独发给该玩家。
+5. 分段气泡感：群内发言 groupMessages 数组可包含 1 到 3 条消息，单条不要冗长刷屏，模拟真人在QQ群里的自然分段发言。
+6. ${naiRule}
+
+【人设与身份设定】
+${personaText}
+
+【思维链与带团准则】
+${thoughtText}
+
+${worldbookText ? `【世界书设定】\n${worldbookText}\n` : ""}
+${moduleContext.text ? `【当前挂载跑团模组与KP真相】\n${moduleContext.text}\n` : ""}
+${moduleContext.imageTitles.length > 0 ? `【可用模组插图列表】\n${moduleContext.imageTitles.join("、")}\n若本轮剧情恰好揭示其中某张模组插图或地图，可在 moduleImageTitle 中填入对应标题。\n` : ""}
+${playerCardsContext ? `【本群绑定调查员角色卡与技能】\n${playerCardsContext}\n` : ""}
+${stickerNames.length > 0 ? `【可用表情包名称】\n${stickerNames.join("、")}\n若气氛合适可在 stickerName 中填入一个表情包名称。\n` : ""}
+${gCfg.customPrompt ? `【本群额外指令】\n${gCfg.customPrompt}\n` : ""}
+
+请只输出严格的JSON格式，结构如下：
+{
+  "groupMessages": [
+    "发送到QQ群的第1条消息文本",
+    "可选的第2条群消息文本"
+  ],
+  "quoteMessageId": "若需引用回复某位玩家的消息，填入其消息ID，否则留空",
+  "privateMessages": [
+    {
+      "targetUserId": "接收秘密小窗的玩家QQ号或单人群号",
+      "targetSlot": "对应的HO或角色名",
+      "text": "单独发给该玩家小窗的秘密线索或单人线描写"
+    }
+  ],
+  "stickerName": "可选的表情包名称，不发则留空",
+  "moduleImageTitle": "可选的模组插图标题，不发则留空",
+  "naiPrompt": "若开启生图且本轮为跑团正文，填入英文NovelAI Tag串，否则留空"
+}`;
+
+      const userPrompt = `【本地双层滚动记忆账本】
+${memory.summaryText || "尚无归档记忆"}
+
+【副API场面裁判分析】
+场景类型：${judgeResult.sceneType || "常规互动"}
+判断依据：${judgeResult.reason || "正常接话"}
+目标玩家QQ：${judgeResult.targetUserId || "全员"}
+建议引用消息ID：${judgeResult.replyToMessageId || "无"}
+
+【最近群聊完整上下文】
+${transcript}
+
+请生成本轮响应JSON：`;
+
+      const raw = await this.callBotAI(sysPrompt, userPrompt, false);
+      const parsed = this.extractJsonObject(raw);
+      if (parsed && Array.isArray(parsed.groupMessages)) {
+        return parsed;
+      }
+      return {
+        groupMessages: [String(raw || "").trim() || "收到。"],
+        quoteMessageId: judgeResult.replyToMessageId || "",
+        privateMessages: [],
+        stickerName: "",
+        moduleImageTitle: "",
+        naiPrompt: "",
+      };
+    },
+
+    async dispatchReplyPack(groupId, gCfg, targetSeq, judgeResult, replyPack) {
+      const groupMsgs = Array.isArray(replyPack.groupMessages)
+        ? replyPack.groupMessages.filter((t) => String(t || "").trim())
+        : [];
+      const quoteId =
+        replyPack.quoteMessageId || judgeResult.replyToMessageId || "";
+
+      // 1. 发送群聊公开消息
+      for (let i = 0; i < groupMsgs.length; i++) {
+        let text = String(groupMsgs[i]).trim();
+        if (i === 0 && quoteId && !text.includes("[CQ:reply")) {
+          text = `[CQ:reply,id=${quoteId}]${text}`;
+        }
+        await fetch("/api/qqbot/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            groupId,
+            message: text,
+            markProcessedSeq: targetSeq,
+            waitingForRpSince: Date.now(),
+            idleAsked: false,
+          }),
+        });
+      }
+
+      // 2. 派发单人线小窗或秘密线索
+      const privList = Array.isArray(replyPack.privateMessages)
+        ? replyPack.privateMessages
+        : [];
+      for (const pm of privList) {
+        if (!pm || !pm.text) continue;
+        let targetId = String(pm.targetUserId || "").trim();
+        let isSoloGroup = false;
+
+        if (!targetId && pm.targetSlot && Array.isArray(gCfg.playerBindings)) {
+          const found = gCfg.playerBindings.find(
+            (b) =>
+              b.slot === pm.targetSlot ||
+              b.cardName === pm.targetSlot,
+          );
+          if (found) {
+            targetId = found.qq;
+            if (found.slot === "单人群") isSoloGroup = true;
+          }
+        } else if (targetId && Array.isArray(gCfg.playerBindings)) {
+          const found = gCfg.playerBindings.find(
+            (b) => String(b.qq) === targetId,
+          );
+          if (found && found.slot === "单人群") isSoloGroup = true;
+        }
+
+        if (!targetId) continue;
+
+        if (isSoloGroup) {
+          await fetch("/api/qqbot/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              groupId: targetId,
+              message: `【单人线】${pm.text}`,
+            }),
+          });
+        } else {
+          await fetch("/api/qqbot/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              groupId,
+              userId: targetId,
+              message: `【专属秘密线索】${pm.text}`,
+            }),
+          });
+        }
+      }
+
+      // 3. 发送匹配的表情包
+      if (replyPack.stickerName && gCfg.stickerCategoryId !== "NONE") {
+        const stickerUrl = this.pickMatchedStickerUrl(
+          gCfg.stickerCategoryId,
+          replyPack.stickerName,
+        );
+        if (stickerUrl) {
+          await fetch("/api/qqbot/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              groupId,
+              message: `[表情:${replyPack.stickerName}]`,
+              imageUrl: stickerUrl,
+            }),
+          });
+        }
+      }
+
+      // 4. 发送模组自带插图
+      if (replyPack.moduleImageTitle && gCfg.moduleId) {
+        const modImg = this.cachedResources.moduleImages.find(
+          (img) =>
+            String(img.moduleId) === String(gCfg.moduleId) &&
+            (img.title === replyPack.moduleImageTitle ||
+              (img.title &&
+                img.title.includes(replyPack.moduleImageTitle))),
+        );
+        if (modImg && modImg.dataUrl) {
+          await fetch("/api/qqbot/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              groupId,
+              message: `【模组情报插图：${modImg.title || "现场画面"}】`,
+              imageUrl: modImg.dataUrl,
+            }),
+          });
+        }
+      }
+
+      // 5. 同回合强制调用 NovelAI 生图并发送到群
+      if (
+        gCfg.autoNaiImage &&
+        replyPack.naiPrompt &&
+        typeof window.callNovelAiDirect === "function"
+      ) {
+        this.updateJudgeStatusUI(
+          "主API正文已发送，正在同回合调用NovelAI生成现场插图...",
+        );
+        try {
+          const imgDataUrl = await window.callNovelAiDirect(
+            String(replyPack.naiPrompt).trim(),
+          );
+          if (imgDataUrl) {
+            await fetch("/api/qqbot/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                groupId,
+                message: "【跑团现场实时插图】",
+                imageUrl: imgDataUrl,
+              }),
+            });
+            this.updateJudgeStatusUI("本轮跑团回复与NovelAI现场生图已全部发送完毕");
+          }
+        } catch (naiErr) {
+          console.warn("群控同回合NovelAI生图失败:", naiErr);
+          this.updateJudgeStatusUI("正文已发送，NovelAI生图接口未响应");
+        }
+      } else {
+        this.updateJudgeStatusUI("本轮主API回复已发送完毕，正在监听后续群消息");
+      }
+    },
+
+    /* ============================================================================
+     * 酒馆式双层滚动记忆总结 - 副API自动压缩并写入本地磁盘
+     * ============================================================================ */
+    async summarizeCurrentGroupMemory(targetGroupId, silent = false) {
+      const gid = targetGroupId || this.currentGroupId;
+      if (!gid) return;
+      if (!silent) {
+        const badge = document.getElementById("qqbot-disk-status-badge");
+        if (badge) badge.textContent = "副API总结中...";
+      }
+
+      try {
+        const res = await fetch(
+          `/api/qqbot/group/${encodeURIComponent(gid)}/context?limit=260`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const messages = data.messages || [];
+        const oldMem = (data.memory && data.memory.summaryText) || "";
+        if (messages.length === 0) {
+          if (!silent) {
+            const badge = document.getElementById("qqbot-disk-status-badge");
+            if (badge) badge.textContent = "暂无新消息可总结";
+          }
+          return;
+        }
+
+        const transcript = messages
+          .slice(-120)
+          .map(
+            (m) =>
+              `${m.isSelf ? "[KP或OC]" : `[${m.senderName}]`}: ${m.rawMessage}`,
+          )
+          .join("\n");
+
+        const sysPrompt = `你是酒馆式双层滚动记忆总结引擎。请将旧记忆账本与最新群聊记录合并提炼为结构紧凑、极省Token但关键细节零丢失的三段式结构化账本：
+一、已发生关键事件与时间线
+二、当前所处场景与已获线索道具
+三、人物关系态度、技能检定结果与待回收伏笔
+
+直接输出整理后的三段式纯文本账本，不要寒暄。`;
+
+        const userPrompt = `【原有记忆账本】\n${oldMem || "无"}\n\n【近期群聊记录】\n${transcript}\n\n请输出更新后的三段式记忆账本：`;
+        const summaryText = await this.callBotAI(sysPrompt, userPrompt, true);
+
+        if (summaryText && summaryText.trim()) {
+          const lastSeq = messages[messages.length - 1].seq || data.totalStored;
+          await fetch(`/api/qqbot/group/${encodeURIComponent(gid)}/memory`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              summaryText: summaryText.trim(),
+              lastSummarizedSeq: lastSeq,
+            }),
+          });
+
+          if (String(gid) === String(this.currentGroupId)) {
+            const memBox = document.getElementById("qqbot-memory-textarea");
+            if (memBox) memBox.value = summaryText.trim();
+            const badge = document.getElementById("qqbot-disk-status-badge");
+            if (badge) badge.textContent = "副API已更新本地账本";
+          }
+        }
+      } catch (e) {
+        console.warn("副API总结记忆失败:", e);
+        if (!silent) {
+          const badge = document.getElementById("qqbot-disk-status-badge");
+          if (badge) badge.textContent = "总结失败，请检查API";
+        }
+      }
+    },
+
+    /* ============================================================================
+     * 演练沙盒：一键模拟群友发言、括号问KP、还在RP表情与骰子检定
+     * ============================================================================ */
+    async refreshSandboxLog() {
+      const box = document.getElementById("qqbot-sandbox-log");
+      if (!box || !this.currentGroupId) return;
+      try {
+        const res = await fetch(
+          `/api/qqbot/group/${encodeURIComponent(this.currentGroupId)}/context?limit=40`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const msgs = data.messages || [];
+        if (msgs.length === 0) {
+          box.innerHTML =
+            '<div style="text-align: center; color: var(--text-secondary); padding: 24px 8px;">当前群暂无消息记录，可点击下方快捷按钮演练群友互动</div>';
+          return;
+        }
+        box.innerHTML = msgs
+          .map((m) => {
+            const align = m.isSelf ? "flex-end" : "flex-start";
+            const bg = m.isSelf ? "var(--accent-color)" : "var(--card-bg)";
+            const color = m.isSelf ? "#ffffff" : "var(--text-primary)";
+            return `
+            <div style="display: flex; flex-direction: column; align-items: ${align}; gap: 2px;">
+              <span style="font-size: 10px; color: var(--text-secondary);">${this.escapeHtml(m.senderName || "群友")} · #${m.messageId || m.seq}</span>
+              <div style="max-width: 88%; padding: 6px 10px; border-radius: 10px; background: ${bg}; color: ${color}; border: 1px solid var(--border-color); font-size: 12px; line-height: 1.45; word-break: break-word;">
+                ${this.escapeHtml(m.rawMessage || "")}
+              </div>
+            </div>
+          `;
+          })
+          .join("");
+        box.scrollTop = box.scrollHeight;
+      } catch (_) {}
+    },
+
+    updateJudgeStatusUI(text) {
+      const el = document.getElementById("qqbot-judge-status-box");
+      if (el) el.textContent = text;
+    },
+
+    async simulateQuickScene(sceneKey) {
+      if (!this.currentGroupId) return;
+      const presets = {
+        single_npc: {
+          senderId: "10001",
+          senderName: "早川秋",
+          text: "我走到柜台前敲了敲木桌，低声问店员：昨晚八点左右，有没有一个穿黑色雨衣的人来寄存过手提箱？",
+        },
+        bracket_ask: {
+          senderId: "10002",
+          senderName: "佐藤葵",
+          text: "【问一下KP，房间里的老式座机电话现在还有忙音吗？我能不能直接拨号或者撬开听筒看线路？】",
+        },
+        still_rp: {
+          senderId: "10001",
+          senderName: "早川秋",
+          text: "[表情:等一下我还在RP] 等一下，我和佐藤再对两句词！",
+        },
+        dice_check: {
+          senderId: "10002",
+          senderName: "佐藤葵",
+          text: "我对书桌抽屉夹层过一个侦查检定：.rd100=18 / 70 困难成功！",
+        },
+      };
+      const item = presets[sceneKey];
+      if (!item) return;
+      await this.injectSimulatedMessage(
+        item.senderId,
+        item.senderName,
+        item.text,
+      );
+    },
+
+    async submitSandboxInput() {
+      const senderSel = document.getElementById("qqbot-sim-sender");
+      const inputEl = document.getElementById("qqbot-sim-input");
+      const text = inputEl ? inputEl.value.trim() : "";
+      if (!text || !this.currentGroupId) return;
+      if (inputEl) inputEl.value = "";
+
+      const rawSender = senderSel ? senderSel.value : "10001|早川秋";
+      if (rawSender.startsWith("BOT|")) {
+        await fetch("/api/qqbot/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            groupId: this.currentGroupId,
+            message: text,
+          }),
+        });
+        await this.refreshSandboxLog();
+        return;
+      }
+
+      const [senderId, senderName] = rawSender.split("|");
+      await this.injectSimulatedMessage(
+        senderId || "10001",
+        senderName || "群友",
+        text,
+      );
+    },
+
+    async injectSimulatedMessage(senderId, senderName, text) {
+      if (!this.currentGroupId) return;
+      const gCfg = this.getCurrentGroupConfig();
+      const res = await fetch("/api/qqbot/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          groupId: this.currentGroupId,
+          groupName: gCfg ? gCfg.groupName : "测试群",
+          senderId,
+          senderName,
+          message: text,
+        }),
+      });
+      const data = await res.json();
+      await this.refreshSandboxLog();
+      await this.loadCurrentGroupMemoryUI();
+
+      if (data && data.entry && gCfg) {
+        await this.processGroupTurn(
+          this.currentGroupId,
+          gCfg,
+          data.entry.seq,
+          false,
+        );
+      }
+    },
+
+    /* ============================================================================
+     * 资源解析与主副API统一调用底层
+     * ============================================================================ */
+    resolvePersonaPrompt(personaId) {
+      if (!personaId) {
+        return "你是一位温和、细腻、极具画面感与公平裁决力的跑团守秘人KP，在日常闲聊时则是自然亲切的群友。";
+      }
+      const found = this.cachedResources.personas.find(
+        (p) => String(p.id) === String(personaId),
+      );
+      return found && found.prompt
+        ? found.prompt
+        : "保持角色鲜明性格，以自然真人口吻在群内互动。";
+    },
+
+    resolveThoughtPrompt(thoughtId, mode) {
+      if (thoughtId) {
+        const found = this.cachedResources.thoughts.find(
+          (t) => String(t.id) === String(thoughtId),
+        );
+        if (found && (found.content || found.prompt)) {
+          return found.content || found.prompt;
+        }
+      }
+      if (mode === "trpg") {
+        return "1. 先梳理现场每位调查员所处位置与行动因果；2. 区分公开可见环境与个人私密情报；3. 用具体感官细节展现氛围，绝不替玩家做决定或强行煽情说教。";
+      }
+      return "1. 读懂群友话里的情绪与梗；2. 简短自然地接话，像真人在手机上打字聊天一样。";
+    },
+
+    resolveWorldbookPrompt(wbId) {
+      if (!wbId) return "";
+      if (wbId === "ALL") {
+        return this.cachedResources.worldbooks
+          .slice(0, 12)
+          .map((w) => `【${w.name}】${w.content}`)
+          .join("\n");
+      }
+      const found = this.cachedResources.worldbooks.find(
+        (w) => String(w.id) === String(wbId),
+      );
+      return found ? `【${found.name}】\n${found.content}` : "";
+    },
+
+    resolveModulePrompt(moduleId, chapterId) {
+      if (!moduleId) return { text: "", imageTitles: [] };
+      const mod = this.cachedResources.modules.find(
+        (m) => String(m.id) === String(moduleId),
+      );
+      const chaps = this.cachedResources.moduleChapters
+        .filter((c) => String(c.moduleId) === String(moduleId))
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+      let selectedChaps = chaps;
+      if (chapterId && chapterId !== "ALL") {
+        const target = chaps.find((c) => String(c.id) === String(chapterId));
+        if (target) selectedChaps = [target];
+      }
+
+      const chapText = selectedChaps
+        .map(
+          (c) =>
+            `章节《${c.title || ""}》\n正文与场景：${(c.content || "").slice(0, 2200)}\nKP真相与暗线：${(c.kpNotes || c.truth || "").slice(0, 1200)}`,
+        )
+        .join("\n\n");
+
+      const imgs = this.cachedResources.moduleImages
+        .filter((img) => String(img.moduleId) === String(moduleId))
+        .map((img) => img.title || "模组插图")
+        .filter(Boolean);
+
+      return {
+        text: `模组名称：${(mod && (mod.title || mod.name)) || ""}\n简介与真相：${(mod && (mod.description || mod.summary || mod.truth)) || ""}\n\n${chapText}`,
+        imageTitles: imgs,
+      };
+    },
+
+    resolvePlayerCardsPrompt(bindings) {
+      if (!Array.isArray(bindings) || bindings.length === 0) return "";
+      return bindings
+        .map((b) => {
+          const card = this.cachedResources.charCards.find(
+            (c) => String(c.id) === String(b.cardId),
+          );
+          let detail = "";
+          if (card) {
+            if (card.cocData) {
+              try {
+                const stats = JSON.stringify(
+                  card.cocData.characteristics || card.cocData.stats || {},
+                );
+                const skills = JSON.stringify(card.cocData.skills || {});
+                detail = ` 属性:${stats.slice(0, 260)} 技能:${skills.slice(0, 400)}`;
+              } catch (_) {}
+            }
+            if (card.persona) {
+              detail += ` 设定:${String(card.persona).slice(0, 220)}`;
+            }
+          }
+          return `- 位置:${b.slot} | 玩家QQ:${b.qq} | 调查员:${b.cardName}${detail}`;
+        })
+        .join("\n");
+    },
+
+    resolveAvailableStickerNames(catId) {
+      if (catId === "NONE") return [];
+      let list = this.cachedResources.stickers || [];
+      if (catId && catId !== "ALL") {
+        list = list.filter((s) => String(s.categoryId) === String(catId));
+      }
+      return list
+        .slice(0, 30)
+        .map((s) => s.name || s.meaning || "")
+        .filter(Boolean);
+    },
+
+    pickMatchedStickerUrl(catId, keyword) {
+      if (catId === "NONE") return "";
+      let list = this.cachedResources.stickers || [];
+      if (catId && catId !== "ALL") {
+        list = list.filter((s) => String(s.categoryId) === String(catId));
+      }
+      if (list.length === 0) return "";
+      const kw = String(keyword || "").trim();
+      const matched =
+        list.find(
+          (s) =>
+            (s.name && s.name.includes(kw)) ||
+            (s.meaning && s.meaning.includes(kw)),
+        ) || list[0];
+      return matched ? matched.url || matched.dataUrl || "" : "";
+    },
+
+    async callBotAI(sysPrompt, userPrompt, useSubApi = false) {
+      // 优先使用副API配置进行场面判断与记忆总结，若未配置副API则自动回退到主API
+      const getInputVal = (id) => {
+        const el = document.getElementById(id);
+        return el ? el.value.trim() : "";
+      };
+
+      const stCfg = (window.state && window.state.apiConfig) || {};
+      let proxyUrl = "";
+      let apiKey = "";
+      let model = "";
+
+      if (useSubApi) {
+        proxyUrl =
+          getInputVal("sub-proxy-url") ||
+          stCfg.subProxyUrl ||
+          getInputVal("proxy-url") ||
+          stCfg.proxyUrl;
+        apiKey =
+          getInputVal("sub-api-key") ||
+          stCfg.subApiKey ||
+          getInputVal("api-key") ||
+          stCfg.apiKey;
+        model =
+          getInputVal("sub-model-select") ||
+          stCfg.subModel ||
+          getInputVal("model-select") ||
+          stCfg.model;
+      } else {
+        proxyUrl =
+          getInputVal("proxy-url") ||
+          stCfg.proxyUrl ||
+          getInputVal("sub-proxy-url") ||
+          stCfg.subProxyUrl;
+        apiKey =
+          getInputVal("api-key") ||
+          stCfg.apiKey ||
+          getInputVal("sub-api-key") ||
+          stCfg.subApiKey;
+        model =
+          getInputVal("model-select") ||
+          stCfg.model ||
+          getInputVal("sub-model-select") ||
+          stCfg.subModel;
+      }
+
+      if (
+        (!proxyUrl || !apiKey) &&
+        typeof window.ModuleManager !== "undefined" &&
+        typeof window.ModuleManager.callAI === "function"
+      ) {
+        return await window.ModuleManager.callAI(
+          sysPrompt,
+          userPrompt,
+          [],
+          useSubApi ? "sub" : "main",
+        );
+      }
+
+      let endpoint = String(proxyUrl || "").replace(/\/+$/, "");
+      if (!endpoint.endsWith("/chat/completions")) {
+        if (endpoint.endsWith("/v1")) {
+          endpoint += "/chat/completions";
+        } else {
+          endpoint += "/v1/chat/completions";
+        }
+      }
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: model || "gpt-4o-mini",
+          messages: [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: useSubApi ? 0.25 : 0.78,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`API HTTP ${res.status}: ${errText.slice(0, 120)}`);
+      }
+      const data = await res.json();
+      return (
+        (data.choices &&
+          data.choices[0] &&
+          data.choices[0].message &&
+          data.choices[0].message.content) ||
+        ""
+      );
+    },
+
+    extractJsonObject(raw) {
+      const text = String(raw || "").trim();
+      if (!text) return null;
+      const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      const candidate = fenced ? fenced[1].trim() : text;
+      const firstBrace = candidate.indexOf("{");
+      const lastBrace = candidate.lastIndexOf("}");
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        try {
+          return JSON.parse(candidate.slice(firstBrace, lastBrace + 1));
+        } catch (_) {}
+      }
+      try {
+        return JSON.parse(candidate);
+      } catch (_) {
+        return null;
+      }
+    },
+
+    escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    },
+
+    escapeAttr(str) {
+      return this.escapeHtml(str).replace(/'/g, "&#39;");
+    },
+  };
+
+  window.QQBotConsole = QQBotConsole;
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const icon = document.getElementById("tukey-accounting-app-icon");
+    if (icon) {
+      icon.addEventListener(
+        "click",
+        (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          QQBotConsole.openScreen();
+        },
+        true,
+      );
+    }
+    setTimeout(() => {
+      QQBotConsole.init().catch(() => {});
+    }, 1200);
+  });
+})();
+
