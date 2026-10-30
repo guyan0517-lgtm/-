@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -24056,9 +24056,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let targetIndex;
           if (existingIndex !== -1) {
             if (existingIndex === state.musicState.currentIndex && state.musicState.isPlaying && audioPlayer && !audioPlayer.paused) {
-              if (audioPlayer.volume <= 0) {
-                audioPlayer.volume = getTargetMusicVolume();
-              }
+              audioPlayer.volume = getTargetMusicVolume();
               return;
             }
             state.musicState.playlist[existingIndex].src = playableUrl;
@@ -54807,6 +54805,9 @@ ${stickerContext || "无"}
               single: "单曲",
             }[state.musicState.playMode] || "顺序";
           }
+          if (typeof syncMusicVolumeControls === "function") {
+            syncMusicVolumeControls();
+          }
         }
 
         function updateElapsedTimeDisplay() {
@@ -55169,32 +55170,93 @@ ${stickerContext || "无"}
         }
 
         function getTargetMusicVolume() {
-          if (typeof window._userMusicVolume === "number" && !isNaN(window._userMusicVolume) && window._userMusicVolume > 0) {
-            return Math.max(0.05, Math.min(1, window._userMusicVolume));
+          if (typeof window._userMusicVolume === "number" && !isNaN(window._userMusicVolume)) {
+            return Math.max(0, Math.min(1, window._userMusicVolume));
+          }
+          const saved = localStorage.getItem("app_music_volume");
+          if (saved !== null && saved !== "" && !isNaN(parseFloat(saved))) {
+            const parsed = Math.max(0, Math.min(1, parseFloat(saved)));
+            window._userMusicVolume = parsed;
+            return parsed;
           }
           const playerVolSlider = document.getElementById("player-volume-slider");
           if (playerVolSlider && !isNaN(parseFloat(playerVolSlider.value))) {
             const sliderVol = parseFloat(playerVolSlider.value) / 100;
-            if (sliderVol > 0) {
-              return Math.max(0.05, Math.min(1, sliderVol));
-            }
+            return Math.max(0, Math.min(1, sliderVol));
           }
           const lyricsVolSlider = document.getElementById("music-volume-slider");
           if (lyricsVolSlider && !isNaN(parseFloat(lyricsVolSlider.value))) {
             const lSliderVol = parseFloat(lyricsVolSlider.value) / 100;
-            if (lSliderVol > 0) {
-              return Math.max(0.05, Math.min(1, lSliderVol));
-            }
-          }
-          const saved = localStorage.getItem("app_music_volume");
-          if (saved !== null && !isNaN(parseFloat(saved))) {
-            const parsed = parseFloat(saved);
-            if (parsed > 0) {
-              return Math.max(0.05, Math.min(1, parsed));
-            }
+            return Math.max(0, Math.min(1, lSliderVol));
           }
           return 1;
         }
+
+        function syncMusicVolumeControls() {
+          const targetVol = getTargetMusicVolume();
+          window._userMusicVolume = targetVol;
+          if (audioPlayer && !window._isFadingAudio) {
+            try {
+              audioPlayer.muted = false;
+              audioPlayer.volume = targetVol;
+            } catch (_) {}
+          }
+          const pct = Math.round(targetVol * 100);
+          const lyricsVolSlider = document.getElementById("music-volume-slider");
+          const lyricsVolValue = document.getElementById("music-volume-value");
+          const playerVolSlider = document.getElementById("player-volume-slider");
+          const playerVolValue = document.getElementById("player-volume-value");
+          if (lyricsVolSlider) {
+            lyricsVolSlider.value = pct;
+            if (!lyricsVolSlider._volBound) {
+              lyricsVolSlider._volBound = true;
+              lyricsVolSlider.addEventListener("input", (e) => window.setMusicVolume(e.target.value / 100));
+              lyricsVolSlider.addEventListener("change", (e) => window.setMusicVolume(e.target.value / 100));
+            }
+          }
+          if (lyricsVolValue) lyricsVolValue.textContent = `${pct}%`;
+          if (playerVolSlider) {
+            playerVolSlider.value = pct;
+            if (!playerVolSlider._volBound) {
+              playerVolSlider._volBound = true;
+              playerVolSlider.addEventListener("input", (e) => window.setMusicVolume(e.target.value / 100));
+              playerVolSlider.addEventListener("change", (e) => window.setMusicVolume(e.target.value / 100));
+            }
+          }
+          if (playerVolValue) playerVolValue.textContent = `${pct}%`;
+        }
+
+        window.setMusicVolume = function (val) {
+          const parsed = parseFloat(val);
+          if (isNaN(parsed)) return;
+          const vol = Math.max(0, Math.min(1, parsed));
+          window._userMusicVolume = vol;
+          cancelMusicFade();
+          if (audioPlayer) {
+            try {
+              audioPlayer.muted = false;
+              audioPlayer.volume = vol;
+            } catch (_) {}
+            if (vol > 0 && audioPlayer.paused && state.musicState && state.musicState.isActive && audioPlayer.src) {
+              audioPlayer.play().then(() => {
+                state.musicState.isPlaying = true;
+                updatePlayerUI();
+              }).catch(() => {});
+            }
+          }
+          localStorage.setItem("app_music_volume", String(vol));
+          const pct = Math.round(vol * 100);
+          const lyricsVolSlider = document.getElementById("music-volume-slider");
+          const lyricsVolValue = document.getElementById("music-volume-value");
+          const playerVolSlider = document.getElementById("player-volume-slider");
+          const playerVolValue = document.getElementById("player-volume-value");
+          if (lyricsVolSlider) lyricsVolSlider.value = pct;
+          if (lyricsVolValue) lyricsVolValue.textContent = `${pct}%`;
+          if (playerVolSlider) playerVolSlider.value = pct;
+          if (playerVolValue) playerVolValue.textContent = `${pct}%`;
+        };
+
+        syncMusicVolumeControls();
 
         function bindPendingMusicUnlockOnGesture() {
           if (window._musicGestureUnlockBound) return;
@@ -95600,7 +95662,7 @@ ${stickerContext || "无"}
             }
           });
           audioPlayer.addEventListener("play", () => {
-            if (!window._isFadingAudio && audioPlayer.volume <= 0) {
+            if (!window._isFadingAudio) {
               try {
                 audioPlayer.muted = false;
                 audioPlayer.volume = getTargetMusicVolume();
@@ -96444,9 +96506,9 @@ ${stickerContext || "无"}
             });
 
           const rawSavedMusicVol = localStorage.getItem("app_music_volume");
-          const parsedSavedMusicVol = rawSavedMusicVol !== null ? parseFloat(rawSavedMusicVol) : 1;
-          const initMusicVolume = (!isNaN(parsedSavedMusicVol) && parsedSavedMusicVol > 0)
-            ? Math.max(0.05, Math.min(1, parsedSavedMusicVol))
+          const parsedSavedMusicVol = (rawSavedMusicVol !== null && rawSavedMusicVol !== "") ? parseFloat(rawSavedMusicVol) : 1;
+          const initMusicVolume = !isNaN(parsedSavedMusicVol)
+            ? Math.max(0, Math.min(1, parsedSavedMusicVol))
             : 1;
           window._userMusicVolume = initMusicVolume;
           localStorage.setItem("app_music_volume", String(initMusicVolume));
@@ -96459,33 +96521,14 @@ ${stickerContext || "无"}
           const playerVolSlider = document.getElementById("player-volume-slider");
           const playerVolValue = document.getElementById("player-volume-value");
 
-          window.setMusicVolume = function (val) {
-            const vol = Math.max(0, Math.min(1, parseFloat(val)));
-            window._userMusicVolume = vol;
-            cancelMusicFade();
-            if (audioPlayer) {
-              audioPlayer.muted = false;
-              audioPlayer.volume = vol;
-              if (vol > 0 && audioPlayer.paused && state.musicState && state.musicState.isActive && audioPlayer.src) {
-                audioPlayer.play().then(() => {
-                  state.musicState.isPlaying = true;
-                  updatePlayerUI();
-                }).catch(() => {});
-              }
-            }
-            localStorage.setItem("app_music_volume", String(vol));
-            const pct = Math.round(vol * 100);
-            if (lyricsVolSlider) lyricsVolSlider.value = pct;
-            if (lyricsVolValue) lyricsVolValue.textContent = `${pct}%`;
-            if (playerVolSlider) playerVolSlider.value = pct;
-            if (playerVolValue) playerVolValue.textContent = `${pct}%`;
-          };
-
           if (lyricsVolSlider) {
             lyricsVolSlider.value = Math.round(initMusicVolume * 100);
             if (lyricsVolValue)
               lyricsVolValue.textContent = `${Math.round(initMusicVolume * 100)}%`;
             lyricsVolSlider.addEventListener("input", (e) =>
+              window.setMusicVolume(e.target.value / 100),
+            );
+            lyricsVolSlider.addEventListener("change", (e) =>
               window.setMusicVolume(e.target.value / 100),
             );
           }
@@ -96494,6 +96537,9 @@ ${stickerContext || "无"}
             if (playerVolValue)
               playerVolValue.textContent = `${Math.round(initMusicVolume * 100)}%`;
             playerVolSlider.addEventListener("input", (e) =>
+              window.setMusicVolume(e.target.value / 100),
+            );
+            playerVolSlider.addEventListener("change", (e) =>
               window.setMusicVolume(e.target.value / 100),
             );
           }
