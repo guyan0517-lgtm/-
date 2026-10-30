@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v3.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -15217,8 +15217,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         </span>
         <span style="font-weight: 600; color: var(--text-primary);">沙盘</span>
         <div class="header-actions" style="display: flex; gap: 6px; align-items: center;">
-          <button type="button" class="mod-capsule-btn primary" id="atlas-generate-btn" style="height: 28px; padding: 0 12px; font-size: 12px;">生成</button>
-          <button type="button" class="mod-capsule-btn" id="atlas-save-local-btn" style="height: 28px; padding: 0 12px; font-size: 12px;">存盘</button>
+          <button type="button" class="mod-capsule-btn primary" id="atlas-generate-btn" onclick="if(window.ModuleAtlas3D){window.ModuleAtlas3D.generateAi3DAtlas();}" style="height: 28px; padding: 0 12px; font-size: 12px;">生成</button>
+          <button type="button" class="mod-capsule-btn" id="atlas-save-local-btn" onclick="if(window.ModuleAtlas3D){window.ModuleAtlas3D.saveCurrentAtlasToTermux(true);}" style="height: 28px; padding: 0 12px; font-size: 12px;">存盘</button>
         </div>
       </div>
 
@@ -15227,13 +15227,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">模组</label>
-            <select id="atlas-module-select" class="moe-input" style="flex: 1; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+            <select id="atlas-module-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.selectModule(this.value);}" class="moe-input" style="flex: 1; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
               <option value="">正在读取模组库...</option>
             </select>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">画风</label>
-            <select id="atlas-style-select" class="moe-input" style="flex: 1; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+            <select id="atlas-style-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.setStyleTheme(this.value);}" class="moe-input" style="flex: 1; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
               <option value="auto" selected>贴合模组氛围自动配色</option>
               <option value="rose_gothic">黑粉蔷薇哥特学院</option>
               <option value="ivory_courtyard">纯白琉璃圣殿庭院</option>
@@ -15268,10 +15268,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <div id="atlas-labels-layer" style="position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3;"></div>
             <!-- 右上角巡航与左下角区域数显示 -->
             <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 5;">
-              <button type="button" class="mod-capsule-btn" id="atlas-orbit-btn" style="height: 26px; padding: 0 10px; font-size: 11px; background: var(--card-bg);">巡航</button>
+              <button type="button" class="mod-capsule-btn" id="atlas-orbit-btn" onclick="if(window.ModuleAtlas3D){window.ModuleAtlas3D.toggleOrbit();}" style="height: 26px; padding: 0 10px; font-size: 11px; background: var(--card-bg);">巡航</button>
             </div>
             <!-- 右下角罗盘全览按钮 -->
-            <button type="button" class="mod-capsule-btn" id="atlas-allview-btn" style="position: absolute; bottom: 10px; right: 10px; height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 5px; z-index: 5; background: var(--card-bg); font-weight: 600;">
+            <button type="button" class="mod-capsule-btn" id="atlas-allview-btn" onclick="if(window.ModuleAtlas3D){window.ModuleAtlas3D.focusZone(-1, true);}" style="position: absolute; bottom: 10px; right: 10px; height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 5px; z-index: 5; background: var(--card-bg); font-weight: 600;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;">
                 <circle cx="12" cy="12" r="10"></circle>
                 <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
