@@ -818,11 +818,13 @@
         this.renderPlanUI();
       }
 
-      if (this.currentParsedData?.splitParts) {
-        const step2SplitSelect = document.getElementById('module-step2-split-select');
-        const step1SplitSelect = document.getElementById('module-split-parts-select');
-        if (step2SplitSelect) step2SplitSelect.value = this.currentParsedData.splitParts;
-        if (step1SplitSelect) step1SplitSelect.value = this.currentParsedData.splitParts;
+      const step2SplitSelect = document.getElementById('module-step2-split-select');
+      const step1SplitSelect = document.getElementById('module-split-parts-select');
+      if (step1SplitSelect) {
+        step1SplitSelect.value = this.currentParsedData?.analysisSplitParts || '1';
+      }
+      if (step2SplitSelect) {
+        step2SplitSelect.value = this.currentParsedData?.cutSplitParts || this.currentParsedData?.splitParts || '1';
       }
 
       if (this.currentStep === 3 || this.cutChapters.length > 0) {
@@ -3471,34 +3473,54 @@
       const cuttingPromptTextarea = document.getElementById('module-cutting-prompt-textarea');
       if (cuttingPromptTextarea) cuttingPromptTextarea.value = data.cuttingPrompt;
 
-      if (data.splitParts) {
-        const step2SplitSelect = document.getElementById('module-step2-split-select');
-        const step1SplitSelect = document.getElementById('module-split-parts-select');
-        if (step2SplitSelect) step2SplitSelect.value = data.splitParts;
-        if (step1SplitSelect) step1SplitSelect.value = data.splitParts;
+      const step2SplitSelect = document.getElementById('module-step2-split-select');
+      const step1SplitSelect = document.getElementById('module-split-parts-select');
+      if (step1SplitSelect) {
+        step1SplitSelect.value = data.analysisSplitParts || '1';
+      }
+      if (step2SplitSelect) {
+        step2SplitSelect.value = data.cutSplitParts || data.splitParts || '1';
       }
 
       this.updateBottomActionBar();
     },
 
-    getEffectiveSplitParts() {
-      const step2SplitSelect = document.getElementById('module-step2-split-select');
+    getAnalysisSplitParts() {
       const step1SplitSelect = document.getElementById('module-split-parts-select');
-      let requestedParts = '';
-      if (this.currentStep === 2 && step2SplitSelect && step2SplitSelect.value) {
-        requestedParts = step2SplitSelect.value;
-      } else if (this.currentStep === 1 && step1SplitSelect && step1SplitSelect.value) {
-        requestedParts = step1SplitSelect.value;
-      } else if (step2SplitSelect && step2SplitSelect.value) {
-        requestedParts = step2SplitSelect.value;
-      } else if (step1SplitSelect && step1SplitSelect.value) {
-        requestedParts = step1SplitSelect.value;
-      } else {
-        requestedParts = this.currentParsedData?.splitParts || 'auto';
-      }
+      let requestedParts = (step1SplitSelect && step1SplitSelect.value)
+        ? step1SplitSelect.value
+        : (this.currentParsedData?.analysisSplitParts || '1');
 
       if (this.currentParsedData) {
+        this.currentParsedData.analysisSplitParts = requestedParts;
+      }
+      if (step1SplitSelect && step1SplitSelect.value !== requestedParts) {
+        step1SplitSelect.value = requestedParts;
+      }
+
+      const fullText = this.currentParsedData?.text || '';
+      const totalWords = this.currentParsedData?.wordCount || fullText.length;
+      if (requestedParts === 'auto') {
+        if (totalWords > 80000) return 4;
+        if (totalWords > 40000) return 3;
+        if (totalWords > 20000) return 2;
+        return 1;
+      }
+      return parseInt(requestedParts, 10) || 1;
+    },
+
+    getCuttingSplitParts() {
+      const step2SplitSelect = document.getElementById('module-step2-split-select');
+      let requestedParts = (step2SplitSelect && step2SplitSelect.value)
+        ? step2SplitSelect.value
+        : (this.currentParsedData?.cutSplitParts || this.currentParsedData?.splitParts || '1');
+
+      if (this.currentParsedData) {
+        this.currentParsedData.cutSplitParts = requestedParts;
         this.currentParsedData.splitParts = requestedParts;
+      }
+      if (step2SplitSelect && step2SplitSelect.value !== requestedParts) {
+        step2SplitSelect.value = requestedParts;
       }
 
       const fullText = this.currentParsedData?.text || '';
@@ -3513,13 +3535,15 @@
         numParts = parseInt(requestedParts, 10) || 1;
       }
 
-      if (step2SplitSelect && step2SplitSelect.value !== requestedParts) {
-        step2SplitSelect.value = requestedParts;
+      const totalChunks = this.currentPlan?.chunks?.length || 0;
+      if (totalChunks > 0 && numParts > totalChunks) {
+        numParts = totalChunks;
       }
-      if (step1SplitSelect && step1SplitSelect.value !== requestedParts) {
-        step1SplitSelect.value = requestedParts;
-      }
-      return numParts;
+      return Math.max(1, numParts);
+    },
+
+    getEffectiveSplitParts() {
+      return this.getCuttingSplitParts();
     },
 
     cleanChapterTitle(rawName, moduleName) {
@@ -4015,14 +4039,6 @@
             }
           }
         });
-      }
-
-      if (nodes.length <= 1) {
-        nodes.push({ name: '核心调查区域', parent: modName, level: 2, desc: '调查员主要活动分区' });
-        nodes.push({ name: '建筑外景与正门', parent: '核心调查区域', level: 3, desc: '入口探索与外部线索调查' });
-        nodes.push({ name: '一层主探索大厅', parent: '核心调查区域', level: 3, desc: '关键线索与NPC交涉地点' });
-        nodes.push({ name: '二层走廊与私密房间', parent: '核心调查区域', level: 3, desc: '深层秘密搜查与资料检定' });
-        nodes.push({ name: '地下暗室与决战地点', parent: '核心调查区域', level: 3, desc: '幕后高潮对峙与结局触发点' });
       }
 
       return nodes;
@@ -4556,7 +4572,7 @@ JSON 格式如下：
           }
         }
 
-        const numParts = this.getEffectiveSplitParts();
+        const numParts = this.getAnalysisSplitParts();
         const segments = this.splitTextIntoBalancedSegments(this.currentParsedData.text, numParts);
         const allParsedChunks = [];
         let combinedMapNodes = [];
@@ -4630,88 +4646,6 @@ JSON 格式如下：
                   }
                   parsedAiPlan._isSalvagedPartial = true;
                 }
-              }
-            }
-
-            const findLastPlannedOffset = (chunksArr, textStr) => {
-              if (!Array.isArray(chunksArr) || chunksArr.length === 0 || !textStr) return 0;
-              for (let i = chunksArr.length - 1; i >= 0; i--) {
-                const suf = String(chunksArr[i].suffixPreview || chunksArr[i].endPreview || '').trim();
-                if (suf.length >= 6) {
-                  const probe = suf.slice(-Math.min(30, suf.length));
-                  const idx = textStr.lastIndexOf(probe);
-                  if (idx !== -1) return idx + probe.length;
-                  const probeHead = suf.slice(0, Math.min(30, suf.length));
-                  const idx2 = textStr.lastIndexOf(probeHead);
-                  if (idx2 !== -1) return idx2 + suf.length;
-                }
-                const pre = String(chunksArr[i].prefixPreview || chunksArr[i].startPreview || '').trim();
-                if (pre.length >= 6) {
-                  const probePre = pre.slice(0, Math.min(30, pre.length));
-                  const idx3 = textStr.lastIndexOf(probePre);
-                  if (idx3 !== -1) return idx3 + pre.length;
-                }
-              }
-              return -1;
-            };
-
-            let planContRound = 0;
-            const maxPlanContRounds = 8;
-            while (parsedAiPlan && planContRound < maxPlanContRounds) {
-              const curChunks = Array.isArray(parsedAiPlan.chunks) ? parsedAiPlan.chunks : [];
-              const lastOffset = findLastPlannedOffset(curChunks, segText);
-              const hasUnplannedTail = lastOffset !== -1 && (segText.length - lastOffset) > 3000;
-              const needsMorePlanning = curChunks.length < 2 || Boolean(parsedAiPlan._isSalvagedPartial) || hasUnplannedTail;
-              if (!needsMorePlanning) break;
-
-              planContRound++;
-              try {
-                this.analysisStatusText = `流式规划补全中（第 ${planContRound} 轮）：正在继续生成本卷剩余章节目录...`;
-                this.updateBottomActionBar();
-                const lastChunkObj = curChunks.length > 0 ? curChunks[curChunks.length - 1] : null;
-                const existingChunksDesc = lastChunkObj
-                  ? `目前已规划 ${curChunks.length} 个章节：${curChunks.map(c => c.name || c.title).join('、')}。\n最后一个已规划章节为【${lastChunkObj.name || lastChunkObj.title}】，截止于原文：「${lastChunkObj.suffixPreview || lastChunkObj.endPreview || lastChunkObj.prefixPreview || ''}」。\n请紧接该位置之后，继续往后规划本卷剩余的全部章节，直到本卷原文彻底结束！严禁重复已规划章节！`
-                  : `地图节点已生成完毕，现在请只输出本卷完整的 chunks 章节规划列表！`;
-                const remainingRefText = (lastOffset > 200 && (segText.length - lastOffset) > 1000)
-                  ? segText.substring(Math.max(0, lastOffset - 200))
-                  : segText;
-                const contPrompt = `请直接输出本卷剩余部分的 chunks 章节规划 JSON 对象（无需重复输出 mapNodes 和 imageAnalysis），注意字符串内部引用请用中文引号「」，格式严格为：\n{"chunks": [{"order": ${curChunks.length + 1}, "name": "章节名", "category": "分类", "wordCount": 1200, "reason": "说明", "prefixPreview": "起始前100字", "suffixPreview": "末尾后100字", "remarks": "本章归纳要点"}]}\n\n${existingChunksDesc}\n\n待继续规划的模组原文：\n${remainingRefText}`;
-                const contText = await this.callAI(systemPrompt, contPrompt);
-                if (!contText) break;
-
-                let contParsed = this.parseJsonFromAiResponse(contText);
-                let contSalvaged = false;
-                if (contParsed) {
-                  const altContChunks = contParsed.chunks || contParsed.chapters || contParsed.sections || contParsed.moduleChunks || contParsed.paragraphList;
-                  if (Array.isArray(altContChunks) && !Array.isArray(contParsed.chunks)) {
-                    contParsed.chunks = altContChunks;
-                  }
-                }
-                if (!contParsed || !Array.isArray(contParsed.chunks) || contParsed.chunks.length === 0) {
-                  contParsed = this.salvagePartialAiPlan(contText);
-                  contSalvaged = true;
-                }
-                parsedAiPlan._isSalvagedPartial = contSalvaged;
-
-                if (contParsed && Array.isArray(contParsed.chunks) && contParsed.chunks.length > 0) {
-                  const existingNames = new Set((parsedAiPlan.chunks || []).map(c => c.name || c.title));
-                  if (!Array.isArray(parsedAiPlan.chunks)) parsedAiPlan.chunks = [];
-                  let addedCount = 0;
-                  contParsed.chunks.forEach(c => {
-                    const cName = (c.name || c.title || c.chapterName || '').trim();
-                    if (cName && !existingNames.has(cName)) {
-                      existingNames.add(cName);
-                      parsedAiPlan.chunks.push({ ...c, name: cName });
-                      addedCount++;
-                    }
-                  });
-                  if (addedCount === 0) break;
-                } else {
-                  break;
-                }
-              } catch (contErr) {
-                console.warn('[模组] 流式补全章节目录失败:', contErr);
-                break;
               }
             }
           }
@@ -4913,10 +4847,11 @@ JSON 格式如下：
       }
 
       if (!plan) {
+        this.isAnalyzing = false;
         if (lastAiError) {
           throw lastAiError;
         }
-        plan = this.generateLocalPlan(this.currentParsedData);
+        throw new Error('AI 未能解析出有效的章节规划列表，请检查接口返回或重新点击分析');
       }
 
       this.currentPlan = plan;
@@ -5393,18 +5328,6 @@ ${fullText}`;
           const rawTitle = (m[1] || '').trim();
           const category = (m[2] || '正文').trim();
           const content = (m[3] || '').trim();
-          const closingToken = (m[4] || '').trim();
-          const isLastMatch = mIdx === matches.length - 1;
-          const isUnclosedTail = isLastMatch && closingToken !== '===CHAPTER_END===' && !content.includes(ENDING_NOTE);
-
-          // 若流式输出在最后一章中途截断，且当前还有未生成的章节（非单章兜底），则丢弃该半截章节，留给下一轮续切完整生成
-          if (isUnclosedTail && !isFinalAttempt && (matches.length > 1 || targetChunks.length > 1) && content.length < 600) {
-            continue;
-          }
-          if (isUnclosedTail && !isFinalAttempt && matches.length > 1 && (baseIndexOffset + matches.length) <= targetChunks.length) {
-            continue;
-          }
-
           if (content.length > 20) {
             localIdx++;
             const globalOrder = baseIndexOffset + localIdx;
@@ -5494,6 +5417,22 @@ ${fullText}`;
           });
         }
 
+        if (Array.isArray(targetChunks) && targetChunks.length > 0 && list.length > targetChunks.length) {
+          const allowed = list.slice(0, targetChunks.length);
+          const overflow = list.slice(targetChunks.length);
+          const lastAllowed = allowed[allowed.length - 1];
+          const extraText = overflow.map(ch => `【${ch.title}】\n${ch.content}`).join('\n\n');
+          lastAllowed.content = `${lastAllowed.content}\n\n${extraText}`.trim();
+          lastAllowed.wordCount = this.countWords(lastAllowed.content);
+          lastAllowed.stats = {
+            mainTextCount: (lastAllowed.content.match(/【正文】/g) || []).length,
+            kpInfoCount: (lastAllowed.content.match(/【KP信息】/g) || []).length,
+            secretCount: (lastAllowed.content.match(/【秘密/g) || []).length,
+            totalWords: lastAllowed.wordCount
+          };
+          return allowed;
+        }
+
         return list;
       };
 
@@ -5502,68 +5441,7 @@ ${fullText}`;
         throw new Error('AI 全篇返回内容为空');
       }
 
-      const parsedChapters = parseChaptersFromRawOutput(generated, assignedChunks, 0, false);
-
-      // 流式/单次输出长度受限时自动接续切割本卷剩余章节，防止切到一半停止
-      let contRound = 0;
-      const maxContRounds = Math.max(3, Math.ceil((assignedChunks?.length || 1) / 2));
-      while (
-        Array.isArray(assignedChunks) &&
-        assignedChunks.length > 1 &&
-        parsedChapters.length > 0 &&
-        parsedChapters.length < assignedChunks.length &&
-        contRound < maxContRounds &&
-        !this.isCuttingCancelled
-      ) {
-        contRound++;
-        while (this.isCuttingPaused) {
-          await new Promise(r => setTimeout(r, 300));
-          if (this.isCuttingCancelled) break;
-        }
-        if (this.isCuttingCancelled) break;
-
-        const remainingChunks = assignedChunks.slice(parsedChapters.length);
-        if (remainingChunks.length === 0) break;
-
-        const progressText = document.getElementById('module-progress-text');
-        if (progressText) {
-          progressText.textContent = `流式续切中：本卷已完成 ${parsedChapters.length}/${assignedChunks.length} 章，正在继续生成【${remainingChunks[0].name}】等剩余 ${remainingChunks.length} 章...`;
-        }
-
-        const remOutline = remainingChunks.map((c, idx) => {
-          const orderNum = parsedChapters.length + idx + 1;
-          const prefixHint = c.prefixPreview ? `\n     - 原文起始定位（从哪开始）: 「${c.prefixPreview}」` : '';
-          const suffixHint = c.suffixPreview ? `\n     - 原文截止定位（到哪结束）: 「${c.suffixPreview}」` : '';
-          const remarkHint = c.remarks ? `\n     - 章节内容与跨处归纳要求: ${c.remarks}` : (c.reason ? `\n     - 章节定位说明: ${c.reason}` : '');
-          return `  ${orderNum}. 章节名: ${c.name} | 分类: ${c.category}${prefixHint}${suffixHint}${remarkHint}`;
-        }).join('\n');
-
-        const doneTitles = parsedChapters.map(c => `【${c.title}】`).join('、');
-        const contUserPrompt = `模组名称：${this.currentParsedData?.moduleName || '跑团模组'}
-在上一轮流式输出中，你已经完成了前 ${parsedChapters.length} 个章节（${doneTitles}），但本卷还有以下 ${remainingChunks.length} 个章节尚未输出！
-现在请紧接上一轮中断处，严格按照 ===CHAPTER_START: 章节名称 | 分类=== ... ===CHAPTER_END=== 格式，继续完整输出以下剩余的 ${remainingChunks.length} 个章节（严禁重复已输出的章节，严禁缩写省略原文）：
-${remOutline}
-${this.globalOpinion ? `\n【用户全局修改意见】：\n${this.globalOpinion}\n` : ''}
-【全模组完整参考原文】：
-${fullText}`;
-
-        try {
-          const moreGenerated = await this.callAI(systemPrompt, contUserPrompt);
-          if (!moreGenerated || !moreGenerated.trim()) break;
-          const moreParsed = parseChaptersFromRawOutput(
-            moreGenerated,
-            remainingChunks,
-            parsedChapters.length,
-            contRound >= maxContRounds
-          );
-          if (!moreParsed || moreParsed.length === 0) break;
-          parsedChapters.push(...moreParsed);
-        } catch (contErr) {
-          console.warn('[模组] 流式续切剩余章节中断:', contErr);
-          break;
-        }
-      }
-
+      const parsedChapters = parseChaptersFromRawOutput(generated, assignedChunks, 0, true);
       return parsedChapters;
     },
 
@@ -5975,9 +5853,7 @@ ${fullText}`;
         const resumeBtn = document.getElementById('module-resume-btn');
         const cancelBtn = document.getElementById('module-cancel-btn');
 
-        const numParts = this.getEffectiveSplitParts();
-        const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
-        const totalSegs = segments.length;
+        const totalSegs = this.getCuttingSplitParts();
 
         this.isCuttingRunning = true;
         this.isCuttingPaused = false;
@@ -6090,11 +5966,9 @@ ${fullText}`;
         return;
       }
       const fullText = this.currentParsedData?.text || '';
-      const numParts = this.getEffectiveSplitParts();
-      const segments = this.splitTextIntoBalancedSegments(fullText, numParts);
-      if (segIdx < 0 || segIdx >= segments.length) return;
+      const totalSegs = this.getCuttingSplitParts();
+      if (segIdx < 0 || segIdx >= totalSegs) return;
 
-      const totalSegs = segments.length;
       const progressText = document.getElementById('module-progress-text');
       const assignedChunks = this.getAssignedChunksForSegment(segIdx, totalSegs);
 
@@ -12182,15 +12056,22 @@ ${chaptersDigest}
       const step1SplitSelect = document.getElementById('module-split-parts-select');
       if (step2SplitSelect) {
         step2SplitSelect.addEventListener('change', () => {
-          if (step1SplitSelect) step1SplitSelect.value = step2SplitSelect.value;
-          if (this.currentParsedData) this.currentParsedData.splitParts = step2SplitSelect.value;
+          if (this.currentParsedData) {
+            this.currentParsedData.cutSplitParts = step2SplitSelect.value;
+            this.currentParsedData.splitParts = step2SplitSelect.value;
+          }
+          if (!this.isCuttingRunning) {
+            this.cutChaptersBySegment = [];
+            this.cutChapters = [];
+          }
           this.saveDraft();
         });
       }
       if (step1SplitSelect) {
         step1SplitSelect.addEventListener('change', () => {
-          if (step2SplitSelect) step2SplitSelect.value = step1SplitSelect.value;
-          if (this.currentParsedData) this.currentParsedData.splitParts = step1SplitSelect.value;
+          if (this.currentParsedData) {
+            this.currentParsedData.analysisSplitParts = step1SplitSelect.value;
+          }
           this.saveDraft();
         });
       }
@@ -13559,7 +13440,161 @@ ${chaptersDigest}
       tropeTags: [],
       customTags: [],
       selectedTcIds: [],
-      lastGeneratedBundle: null
+      lastGeneratedBundle: null,
+      pipelineCheckpoint: null,
+      draftLoaded: false
+    },
+
+    async saveAiWriterDraftToIDB() {
+      try {
+        const formValues = {
+          ruleSystem: document.getElementById('ai-mod-rule-select')?.value || 'coc',
+          scaleType: document.getElementById('ai-mod-scale-select')?.value || '1v1',
+          modType: document.getElementById('ai-mod-type-select')?.value || '线性',
+          difficulty: document.getElementById('ai-mod-diff-select')?.value || '普通',
+          lengthMode: document.getElementById('ai-mod-len-select')?.value || 'medium',
+          drawMode: document.getElementById('ai-mod-draw-select')?.value || 'off',
+          refMode: document.getElementById('ai-mod-ref-select')?.value || 'free',
+          title: document.getElementById('ai-mod-title-input')?.value || '',
+          author: document.getElementById('ai-mod-author-input')?.value || '守秘人',
+          hook: document.getElementById('ai-mod-hook-input')?.value || ''
+        };
+        const statusEl = document.getElementById('ai-mod-status-text');
+        const barEl = document.getElementById('ai-mod-progress-bar');
+        const pctVal = barEl && barEl.style.width ? parseInt(barEl.style.width, 10) || 0 : 0;
+
+        const payload = {
+          updatedAt: Date.now(),
+          bgTags: [...(this.aiWriterState.bgTags || [])],
+          relTags: [...(this.aiWriterState.relTags || [])],
+          toneTags: [...(this.aiWriterState.toneTags || [])],
+          tropeTags: [...(this.aiWriterState.tropeTags || [])],
+          customTags: [...(this.aiWriterState.customTags || [])],
+          selectedTcIds: [...(this.aiWriterState.selectedTcIds || [])],
+          formValues,
+          lastGeneratedBundle: this.aiWriterState.lastGeneratedBundle || null,
+          pipelineCheckpoint: this.aiWriterState.pipelineCheckpoint || null,
+          statusText: statusEl ? statusEl.textContent : '',
+          statusPct: pctVal
+        };
+
+        const idb = await _openDraftDB();
+        if (idb) {
+          await new Promise((resolve) => {
+            const tx = idb.transaction('drafts', 'readwrite');
+            tx.objectStore('drafts').put(payload, 'active_ai_writer_draft');
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+          });
+        }
+      } catch (e) {
+        console.warn('[AI写模] 保存本地草稿提示:', e);
+      }
+    },
+
+    async loadAiWriterDraftFromIDB() {
+      try {
+        const idb = await _openDraftDB();
+        if (!idb) return false;
+        const draft = await new Promise((resolve) => {
+          const tx = idb.transaction('drafts', 'readonly');
+          const req = tx.objectStore('drafts').get('active_ai_writer_draft');
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+        if (!draft) return false;
+
+        if (Array.isArray(draft.bgTags)) this.aiWriterState.bgTags = draft.bgTags;
+        if (Array.isArray(draft.relTags)) this.aiWriterState.relTags = draft.relTags;
+        if (Array.isArray(draft.toneTags)) this.aiWriterState.toneTags = draft.toneTags;
+        if (Array.isArray(draft.tropeTags)) this.aiWriterState.tropeTags = draft.tropeTags;
+        if (Array.isArray(draft.customTags)) this.aiWriterState.customTags = draft.customTags;
+        if (Array.isArray(draft.selectedTcIds)) this.aiWriterState.selectedTcIds = draft.selectedTcIds;
+        this.aiWriterState.lastGeneratedBundle = draft.lastGeneratedBundle || null;
+        this.aiWriterState.pipelineCheckpoint = draft.pipelineCheckpoint || null;
+
+        const fv = draft.formValues || {};
+        const setVal = (id, val) => {
+          const el = document.getElementById(id);
+          if (el && val !== undefined && val !== null) el.value = val;
+        };
+        setVal('ai-mod-rule-select', fv.ruleSystem || 'coc');
+        setVal('ai-mod-scale-select', fv.scaleType || '1v1');
+        setVal('ai-mod-type-select', fv.modType || '线性');
+        setVal('ai-mod-diff-select', fv.difficulty || '普通');
+        setVal('ai-mod-len-select', fv.lengthMode || 'medium');
+        setVal('ai-mod-draw-select', fv.drawMode || 'off');
+        setVal('ai-mod-ref-select', fv.refMode || 'free');
+        setVal('ai-mod-title-input', fv.title || '');
+        setVal('ai-mod-author-input', fv.author || '守秘人');
+        setVal('ai-mod-hook-input', fv.hook || '');
+
+        this.renderAiWriterTags();
+        await this.refreshAiWriterThoughtChains();
+
+        const previewBox = document.getElementById('ai-mod-preview-box');
+        const previewTitleEl = document.getElementById('ai-mod-preview-title');
+        const previewMetaEl = document.getElementById('ai-mod-preview-meta');
+        const previewPublicEl = document.getElementById('ai-mod-preview-public');
+        const saveBtn = document.getElementById('ai-mod-save-btn');
+        const resumeBtn = document.getElementById('ai-mod-resume-btn');
+
+        const cp = this.aiWriterState.pipelineCheckpoint;
+        const bundle = this.aiWriterState.lastGeneratedBundle;
+
+        if (bundle && Array.isArray(bundle.chapters) && bundle.chapters.length > 0) {
+          if (saveBtn) saveBtn.disabled = false;
+          if (resumeBtn) resumeBtn.style.display = 'none';
+          this.setAiWriterStepActive(4);
+          let totalWords = 0;
+          bundle.chapters.forEach(c => { totalWords += this.countWords(c.content || ''); });
+          if (previewBox && previewTitleEl && previewPublicEl) {
+            previewBox.style.display = 'flex';
+            previewTitleEl.textContent = bundle.title || '未命名模组';
+            if (previewMetaEl) previewMetaEl.textContent = `${bundle.chapters.length}章 · ${totalWords}字`;
+            const pubChap = bundle.chapters[0]?.content || bundle.summary || '';
+            previewPublicEl.textContent = pubChap.replace(/^【正文】\s*/, '').replace(/\n\n至此本小章节结束[\s\S]*$/, '');
+          }
+          this.updateAiWriterStatus(100, draft.statusText || `已恢复《${bundle.title || '模组'}》草稿，共 ${bundle.chapters.length} 章`);
+        } else if (cp && !cp.isCompleted) {
+          if (resumeBtn) {
+            resumeBtn.style.display = 'inline-flex';
+            resumeBtn.disabled = false;
+          }
+          if (cp.activeStep) {
+            this.setAiWriterStepActive(cp.activeStep);
+          }
+          if (cp.ai1Data && previewBox && previewTitleEl && previewPublicEl) {
+            previewBox.style.display = 'flex';
+            previewTitleEl.textContent = cp.finalModTitle || cp.ai1Data.title || '未命名模组';
+            const doneScenes = typeof cp.completedSceneCount === 'number' ? cp.completedSceneCount : 0;
+            const totalScenes = Array.isArray(cp.resolvedScenes) ? cp.resolvedScenes.length : (Array.isArray(cp.ai1Data.plannedScenes) ? cp.ai1Data.plannedScenes.length : 0);
+            if (previewMetaEl) previewMetaEl.textContent = `已保存进度 · 正文 ${doneScenes}/${totalScenes} 章`;
+            previewPublicEl.textContent = this.cleanModuleChapterOutput(String(cp.ai1Data.publicInfoChapter || cp.ai1Data.summary || ''));
+          }
+          this.updateAiWriterStatus(draft.statusPct || 30, draft.statusText || '检测到上次未完成的写模组进度，可点击继续接着往后生成');
+        } else {
+          if (resumeBtn) resumeBtn.style.display = 'none';
+        }
+        return true;
+      } catch (e) {
+        console.warn('[AI写模] 读取本地草稿提示:', e);
+        return false;
+      }
+    },
+
+    async clearAiWriterDraftFromIDB() {
+      try {
+        const idb = await _openDraftDB();
+        if (idb) {
+          await new Promise((resolve) => {
+            const tx = idb.transaction('drafts', 'readwrite');
+            tx.objectStore('drafts').delete('active_ai_writer_draft');
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+          });
+        }
+      } catch (_) {}
     },
 
     getAiWriterTagCatalog() {
@@ -13636,10 +13671,19 @@ ${chaptersDigest}
       return shuffled.slice(0, 5);
     },
 
-    openAiWriterScreen() {
+    async openAiWriterScreen() {
       this.initAiWriterEvents();
-      this.renderAiWriterTags();
-      this.refreshAiWriterThoughtChains();
+      if (!this.aiWriterState.draftLoaded) {
+        this.aiWriterState.draftLoaded = true;
+        const restored = await this.loadAiWriterDraftFromIDB();
+        if (!restored) {
+          this.renderAiWriterTags();
+          await this.refreshAiWriterThoughtChains();
+        }
+      } else {
+        this.renderAiWriterTags();
+        await this.refreshAiWriterThoughtChains();
+      }
       if (typeof global.showScreen === 'function') {
         global.showScreen('ai-module-writer-screen');
       }
@@ -13664,23 +13708,55 @@ ${chaptersDigest}
 
       const resetBtn = document.getElementById('ai-mod-reset-btn');
       if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
+        resetBtn.addEventListener('click', async () => {
           if (this.aiWriterState.isRunning) return;
           this.aiWriterState.bgTags = ['日模'];
           this.aiWriterState.relTags = ['搭档'];
           this.aiWriterState.toneTags = ['纯爱'];
           this.aiWriterState.tropeTags = [];
           this.aiWriterState.customTags = [];
+          this.aiWriterState.lastGeneratedBundle = null;
+          this.aiWriterState.pipelineCheckpoint = null;
           const titleInput = document.getElementById('ai-mod-title-input');
           const hookInput = document.getElementById('ai-mod-hook-input');
           const customInput = document.getElementById('ai-mod-custom-tag-input');
+          const previewBox = document.getElementById('ai-mod-preview-box');
+          const saveBtn = document.getElementById('ai-mod-save-btn');
+          const resumeBtn = document.getElementById('ai-mod-resume-btn');
           if (titleInput) titleInput.value = '';
           if (hookInput) hookInput.value = '';
           if (customInput) customInput.value = '';
+          if (previewBox) previewBox.style.display = 'none';
+          if (saveBtn) saveBtn.disabled = true;
+          if (resumeBtn) resumeBtn.style.display = 'none';
+          this.setAiWriterStepActive(0);
           this.renderAiWriterTags();
-          this.updateAiWriterStatus(0, '已重置全部选项，可重新勾选标签后点击生成');
+          this.updateAiWriterStatus(0, '已清空全部草稿与选项，可重新勾选标签后点击生成');
+          await this.clearAiWriterDraftFromIDB();
         });
       }
+
+      const formIds = [
+        'ai-mod-rule-select',
+        'ai-mod-scale-select',
+        'ai-mod-type-select',
+        'ai-mod-diff-select',
+        'ai-mod-len-select',
+        'ai-mod-draw-select',
+        'ai-mod-ref-select',
+        'ai-mod-title-input',
+        'ai-mod-author-input',
+        'ai-mod-hook-input'
+      ];
+      formIds.forEach(fid => {
+        const el = document.getElementById(fid);
+        if (el) {
+          el.addEventListener('change', () => { this.saveAiWriterDraftToIDB(); });
+          if (el.tagName === 'INPUT') {
+            el.addEventListener('input', () => { this.saveAiWriterDraftToIDB(); });
+          }
+        }
+      });
 
       const addTagBtn = document.getElementById('ai-mod-add-tag-btn');
       const customTagInput = document.getElementById('ai-mod-custom-tag-input');
@@ -13693,6 +13769,7 @@ ${chaptersDigest}
         }
         customTagInput.value = '';
         this.renderAiWriterTags();
+        this.saveAiWriterDraftToIDB();
       };
       if (addTagBtn) addTagBtn.addEventListener('click', handleAddCustomTag);
       if (customTagInput) {
@@ -13714,7 +13791,14 @@ ${chaptersDigest}
       const genBtn = document.getElementById('ai-mod-generate-btn');
       if (genBtn) {
         genBtn.addEventListener('click', () => {
-          this.runAiModulePipeline();
+          this.runAiModulePipeline(false);
+        });
+      }
+
+      const resumeBtn = document.getElementById('ai-mod-resume-btn');
+      if (resumeBtn) {
+        resumeBtn.addEventListener('click', () => {
+          this.runAiModulePipeline(true);
         });
       }
 
@@ -13725,6 +13809,11 @@ ${chaptersDigest}
             this.saveAiGeneratedModuleToDB(this.aiWriterState.lastGeneratedBundle, true);
           }
         });
+      }
+
+      if (!this.aiWriterState.draftLoaded) {
+        this.aiWriterState.draftLoaded = true;
+        this.loadAiWriterDraftFromIDB();
       }
     },
 
@@ -13755,6 +13844,7 @@ ${chaptersDigest}
                 this.aiWriterState[stateKey] = this.aiWriterState[stateKey].filter(t => t !== tag);
               }
               this.updateAiWriterSelectedTagCount();
+              this.saveAiWriterDraftToIDB();
             });
           }
           container.appendChild(label);
@@ -13777,6 +13867,7 @@ ${chaptersDigest}
           chip.addEventListener('click', () => {
             this.aiWriterState.customTags = this.aiWriterState.customTags.filter(t => t !== tag);
             this.renderAiWriterTags();
+            this.saveAiWriterDraftToIDB();
           });
           customListEl.appendChild(chip);
         });
@@ -13842,6 +13933,7 @@ ${chaptersDigest}
               } else {
                 this.aiWriterState.selectedTcIds = this.aiWriterState.selectedTcIds.filter(x => x !== idStr);
               }
+              this.saveAiWriterDraftToIDB();
             });
           }
           container.appendChild(label);
@@ -14262,39 +14354,7 @@ ${chaptersDigest}
       };
     },
 
-    buildDefaultScenesFromBlueprint(ai1Data, targetSceneCount = 5) {
-      const title = ai1Data?.title || '本模组';
-      const fallbackList = [
-        {
-          sceneTitle: '03-模组导入：日常的裂隙',
-          purpose: `交代调查员与核心角色在《${title}》开篇的处境，埋下第一处异常感官细节或委托契机，引导玩家自然入局。`,
-          pacingNote: '从具体生活细节切入，迅速建立悬念与互动锚点。'
-        },
-        {
-          sceneTitle: '04-初探：表象与违和感',
-          purpose: '展开核心场景的初步探索与人际互动，提供可通过观察、交谈或图书馆等技能获取的表层线索。',
-          pacingNote: '注重环境五感描写与NPC微表情反应，让线索自然浮现。'
-        },
-        {
-          sceneTitle: '05-深入：暗流与转折',
-          purpose: '事态发生第一次明显推进或异变，原先以为的寻常状况露出破绽，KPC或关键人物展现出反常态度。',
-          pacingNote: '通过突发状况或私密对话拉高戏剧张力，推动调查进入深水区。'
-        },
-        {
-          sceneTitle: '06-核查：秘密的交汇点',
-          purpose: '深入受限区域或直面核心矛盾，串联前期散落的器物与证言，拼凑出事件背后的真正因果。',
-          pacingNote: '设置关键检定与分支线索，给玩家留出推理与情感博弈的空间。'
-        },
-        {
-          sceneTitle: '07-抉择：风暴中心',
-          purpose: '真相彻底揭晓前后的高潮对峙或两难抉择，调查员的行动与态度将直接决定最终结局走向。',
-          pacingNote: '聚焦具体动作、视线交锋与关键抉择，不替玩家做决定。'
-        }
-      ];
-      return fallbackList.slice(0, Math.max(3, Math.min(targetSceneCount, fallbackList.length)));
-    },
-
-    async runAiModulePipeline() {
+    async runAiModulePipeline(isResume = false) {
       if (this.aiWriterState.isRunning) return;
 
       const ruleSystem = (document.getElementById('ai-mod-rule-select')?.value || 'coc').toLowerCase();
@@ -14326,27 +14386,55 @@ ${chaptersDigest}
       }
 
       const genBtn = document.getElementById('ai-mod-generate-btn');
+      const resumeBtn = document.getElementById('ai-mod-resume-btn');
       const saveBtn = document.getElementById('ai-mod-save-btn');
       const previewBox = document.getElementById('ai-mod-preview-box');
+      const previewTitleEl = document.getElementById('ai-mod-preview-title');
+      const previewMetaEl = document.getElementById('ai-mod-preview-meta');
+      const previewPublicEl = document.getElementById('ai-mod-preview-public');
+
+      if (!isResume || !this.aiWriterState.pipelineCheckpoint) {
+        this.aiWriterState.pipelineCheckpoint = {
+          ai1Data: null,
+          ai2Data: null,
+          parsedAi3: null,
+          resolvedScenes: null,
+          finalChapters: [],
+          completedSceneCount: 0,
+          previousSceneTail: '',
+          endingDone: false,
+          isCompleted: false,
+          activeStep: 1,
+          finalModTitle: customTitle || ''
+        };
+        this.aiWriterState.lastGeneratedBundle = null;
+        if (previewBox) previewBox.style.display = 'none';
+      }
+
+      const cp = this.aiWriterState.pipelineCheckpoint;
 
       this.aiWriterState.isRunning = true;
       if (genBtn) {
-        genBtn.textContent = '生成中';
+        genBtn.textContent = isResume ? '生成' : '生成中';
         genBtn.disabled = true;
       }
+      if (resumeBtn) {
+        if (isResume) {
+          resumeBtn.textContent = '继续中';
+          resumeBtn.style.display = 'inline-flex';
+        }
+        resumeBtn.disabled = true;
+      }
       if (saveBtn) saveBtn.disabled = true;
-      if (previewBox) previewBox.style.display = 'none';
 
       try {
         const rawTcPrompt = await this.getSelectedThoughtChainPromptText();
-        // 过滤掉聊天思维链中要求输出 {"thinking": "..."} JSON块或文末待办清单的指令，仅保留审美与文风思考精髓
         const tcPrompt = rawTcPrompt
           ? rawTcPrompt
               .replace(/```json[\s\S]*?```/gi, '')
               .replace(/📝\s*\*\*当前待办清单[\s\S]*$/gi, '')
               .trim()
           : '';
-        const targetSceneCount = lengthMode === 'short' ? 4 : (lengthMode === 'long' ? 8 : 6);
         const drawnSeeds = drawMode === 'on' ? this.drawInspirationSeedsForTags(allTags) : [];
 
         const refGuidanceMap = {
@@ -14372,20 +14460,30 @@ ${chaptersDigest}
         // ==========================================================
         // 第一阶段：AI1 审题破局与底牌立意构思
         // ==========================================================
-        this.setAiWriterStepActive(1);
-        this.updateAiWriterStatus(10, 'AI1 正在构思模组核心诡计、故事转折、角色里设定与完整章节目录...');
+        let ai1Data = cp.ai1Data;
+        if (!ai1Data) {
+          cp.activeStep = 1;
+          this.setAiWriterStepActive(1);
+          this.updateAiWriterStatus(10, 'AI1 正在构思模组核心诡计、故事转折、角色里设定与完整章节目录...');
+          await this.saveAiWriterDraftToIDB();
 
-        const ai1System = `你是一位经验丰富、热爱创作的桌面跑团模组作者。
+          const ai1System = `你是一位经验丰富、热爱创作的桌面跑团模组作者。
 我们希望你创作出一本真正像人类作者精心打磨过的跑团模组，既有扎实的模组结构，又有引人入胜的剧情转折与鲜活人物。
 ${craftPhilosophy}
 ${tcPrompt ? '\n【创作者审美与文风参考】：\n' + tcPrompt : ''}`;
 
-        const ai1User = `请结合以下设定，为我们构思这本跑团模组的整体蓝图、人物档案、完整章节目录、公开信息与守秘人真相：
+          const lengthDesc = lengthMode === 'short'
+            ? '短篇精悍（请根据故事实际地点与事件脉络自由规划正文章节数量，不限定固定章数）'
+            : (lengthMode === 'long'
+              ? '长篇多幕（请根据故事实际探索区域、多线分支与时间推进自由规划充实的正文章节数量，不限定固定章数）'
+              : '中篇饱满（请根据故事实际起承转合与核心调查地点自由规划合理的正文章节数量，严禁套用死板模板）');
+
+          const ai1User = `请结合以下设定，为我们构思这本跑团模组的整体蓝图、人物档案、完整章节目录、公开信息与守秘人真相：
 - 规则体系：${ruleSystem.toUpperCase()}
 - 玩家规模：${scaleType}
 - 结构类型：${modType}
 - 调查难度：${difficulty}
-- 目标篇幅：${lengthMode === 'short' ? '短篇精悍' : (lengthMode === 'long' ? '长篇多幕' : '中篇饱满')}，除导读与人设章外，建议规划 ${targetSceneCount} 个环环相扣的正文章节
+- 目标篇幅：${lengthDesc}
 - 选定标签：${allTags.join('、')}
 - 叙事脉络建议：${refGuidance}
 ${customTitle ? '- 模组标题：' + customTitle : '- 模组标题：请起一个有画面感、耐人寻味的模组名字'}
@@ -14395,7 +14493,7 @@ ${drawnSeeds.length > 0 ? '- 灵感参考（可自由汲取其中有意思的元
 在构思时，不妨先思考：
 1. 这个故事表面上看起来是什么样的日常或委托？背地里真正发生了什么让人意想不到的隐情或转折？
 2. KPC或核心NPC有着怎样的性格魅力、说话习惯与不为人知的小秘密？
-3. 调查员从【导入】开始，会依次经历哪些具体的场景与阶段，最终如何走向【结局】？
+3. 调查员从【导入】开始，会依次经历哪些具体的场景与阶段，最终如何走向【结局】？请根据具体故事舞台和地点自由决定章节数量与章节名，不要使用千篇一律的固定章节名。
 
 请直接输出一个合法的 JSON 对象（不要在 JSON 前后附加其他代码块或思考块）：
 {
@@ -14413,7 +14511,7 @@ ${drawnSeeds.length > 0 ? '- 灵感参考（可自由汲取其中有意思的元
   ],
   "plannedScenes": [
     {
-      "sceneTitle": "带序号的章节标题，如：04-导入：雨夜的敲门声、05-第一幕：旧书店的夹层（请完整列出全部 ${targetSceneCount} 个正文章节，包含导入与各探索/推进阶段，不要跳章）",
+      "sceneTitle": "贴合故事具体场景或事件的章节标题（根据剧情与地点自然决定章数，包含导入与各具体调查/推进阶段，不要跳章）",
       "purpose": "本章节的核心剧情推进、关键场景转折与可获取的线索情报",
       "pacingNote": "本章节的氛围营造重点与守秘人带团提示"
     }
@@ -14423,52 +14521,54 @@ ${drawnSeeds.length > 0 ? '- 灵感参考（可自由汲取其中有意思的元
   "kpTruthAndMechanism": "完整的【01-幕后真相与机制】章节文本：包含事件完整真相、按时间顺序排列的幕后前因后果、神话生物或核心异常设定、以及本模组特有的趣味互动规则或特殊检定机制"
 }`;
 
-        const ai1Raw = await this.callAI(ai1System, ai1User, null, 'writeModule');
-        let ai1Data = this.parseJsonFromAiResponse(ai1Raw);
-        if (ai1Data && !ai1Data.publicInfoChapter) {
-          ai1Data.publicInfoChapter = ai1Data.publicInfo || ai1Data.knownInfo || ai1Data.public_info_chapter || ai1Data.summary || '';
-        }
-        if (!ai1Data || !ai1Data.publicInfoChapter || !Array.isArray(ai1Data.plannedScenes) || ai1Data.plannedScenes.length === 0) {
-          const salvaged = this.salvageAi1BlueprintFromRaw(ai1Raw, customTitle);
-          if (salvaged) {
-            ai1Data = Object.assign({}, salvaged, ai1Data || {});
-            if (!Array.isArray(ai1Data.plannedScenes) || ai1Data.plannedScenes.length === 0) {
-              ai1Data.plannedScenes = salvaged.plannedScenes;
-            }
-            if (!Array.isArray(ai1Data.catAndNpcProfiles) || ai1Data.catAndNpcProfiles.length === 0) {
-              ai1Data.catAndNpcProfiles = salvaged.catAndNpcProfiles;
+          const ai1Raw = await this.callAI(ai1System, ai1User, null, 'writeModule');
+          ai1Data = this.parseJsonFromAiResponse(ai1Raw);
+          if (ai1Data && !ai1Data.publicInfoChapter) {
+            ai1Data.publicInfoChapter = ai1Data.publicInfo || ai1Data.knownInfo || ai1Data.public_info_chapter || ai1Data.summary || '';
+          }
+          if (!ai1Data || !ai1Data.publicInfoChapter || !Array.isArray(ai1Data.plannedScenes) || ai1Data.plannedScenes.length === 0) {
+            const salvaged = this.salvageAi1BlueprintFromRaw(ai1Raw, customTitle);
+            if (salvaged) {
+              ai1Data = Object.assign({}, salvaged, ai1Data || {});
+              if (!Array.isArray(ai1Data.plannedScenes) || ai1Data.plannedScenes.length === 0) {
+                ai1Data.plannedScenes = salvaged.plannedScenes;
+              }
+              if (!Array.isArray(ai1Data.catAndNpcProfiles) || ai1Data.catAndNpcProfiles.length === 0) {
+                ai1Data.catAndNpcProfiles = salvaged.catAndNpcProfiles;
+              }
             }
           }
-        }
-        if (!ai1Data || (!ai1Data.publicInfoChapter && !ai1Data.kpTruthAndMechanism)) {
-          throw new Error('AI1 构思返回格式异常，请重试');
-        }
-        if (!Array.isArray(ai1Data.plannedScenes) || ai1Data.plannedScenes.length < 2) {
-          ai1Data.plannedScenes = this.buildDefaultScenesFromBlueprint(ai1Data, targetSceneCount);
-        }
-        if (!Array.isArray(ai1Data.catAndNpcProfiles) || ai1Data.catAndNpcProfiles.length === 0) {
-          ai1Data.catAndNpcProfiles = [
-            {
-              chapterTitle: '03-核心人物与KPC档案',
-              roleName: 'KPC / 核心同伴',
-              publicDesc: ai1Data.summary || '与调查员关系密切的核心同行者。',
-              secretProfile: ai1Data.kpTruthAndMechanism || '知晓部分幕后隐情，在调查过程中既有协助也有自身难言之隐。'
-            }
-          ];
+          if (!ai1Data || (!ai1Data.publicInfoChapter && !ai1Data.kpTruthAndMechanism)) {
+            throw new Error('AI1 构思返回格式异常，请点击生成或继续重试');
+          }
+          if (!Array.isArray(ai1Data.plannedScenes) || ai1Data.plannedScenes.length === 0) {
+            throw new Error('AI1 未能生成有效的章节规划列表，请点击重新生成');
+          }
+          if (!Array.isArray(ai1Data.catAndNpcProfiles)) {
+            ai1Data.catAndNpcProfiles = [];
+          }
+
+          cp.ai1Data = ai1Data;
+          cp.finalModTitle = customTitle || ai1Data.title || '未命名模组';
+          await this.saveAiWriterDraftToIDB();
         }
 
         // ==========================================================
         // 第二阶段：AI2 深化场景细节、线索链条与地图节点
         // ==========================================================
-        this.setAiWriterStepActive(2);
-        this.updateAiWriterStatus(32, 'AI2 正在丰富每一章的调查地点、线索链条、人物对手戏与检定分支...');
+        let ai2Data = cp.ai2Data;
+        if (!ai2Data) {
+          cp.activeStep = 2;
+          this.setAiWriterStepActive(2);
+          this.updateAiWriterStatus(32, 'AI2 正在丰富每一章的调查地点、线索链条、人物对手戏与检定分支...');
+          await this.saveAiWriterDraftToIDB();
 
-        const ai2System = `你是跑团模组的场景架构师与线索编排师。
+          const ai2System = `你是跑团模组的场景架构师与线索编排师。
 我们将把 AI1 构思的故事蓝图细化为可探索、可互动、逻辑自洽的分章导览、地图节点与线索卡。
 ${craftPhilosophy}
-不妨思考如何让每一个章节都有值得玩家探索的具体场景、有意义的检定反馈，以及让线索像拼图一样散落在环境細節与人物交谈之中。`;
+不妨思考如何让每一个章节都有值得玩家探索的具体场景、有意义的检定反馈，以及让线索像拼图一样散落在环境细节与人物交谈之中。`;
 
-        const ai2User = `以下是本模组的第一阶段蓝图：
+          const ai2User = `以下是本模组的第一阶段蓝图：
 ${JSON.stringify({
   title: customTitle || ai1Data.title,
   summary: ai1Data.summary,
@@ -14510,39 +14610,52 @@ ${JSON.stringify({
   ]
 }`;
 
-        const ai2Raw = await this.callAI(ai2System, ai2User, null, 'writeModule');
-        const parsedAi2 = this.parseJsonFromAiResponse(ai2Raw);
-        const ai2Data = {
-          atmosphereAndMechanicsGuide: parsedAi2?.atmosphereAndMechanicsGuide || '',
-          deepenedScenes: (Array.isArray(parsedAi2?.deepenedScenes) && parsedAi2.deepenedScenes.length >= 2)
-            ? parsedAi2.deepenedScenes
-            : ai1Data.plannedScenes.map(s => ({
-                sceneTitle: s.sceneTitle,
-                atmosphereCues: s.pacingNote || '',
-                kpcInteractionDesign: '',
-                cluesOrEvents: s.purpose || '',
-                pacingRule: ''
-              })),
-          mapNodes: Array.isArray(parsedAi2?.mapNodes) ? parsedAi2.mapNodes : [],
-          clues: Array.isArray(parsedAi2?.clues) ? parsedAi2.clues : []
-        };
+          const ai2Raw = await this.callAI(ai2System, ai2User, null, 'writeModule');
+          const parsedAi2 = this.parseJsonFromAiResponse(ai2Raw);
+          if (!parsedAi2 || (!Array.isArray(parsedAi2.deepenedScenes) && !Array.isArray(parsedAi2.mapNodes))) {
+            throw new Error('AI2 深化场景返回格式异常，已保存 AI1 成果，请点击继续从 AI2 重试');
+          }
+          ai2Data = {
+            atmosphereAndMechanicsGuide: parsedAi2.atmosphereAndMechanicsGuide || '',
+            deepenedScenes: (Array.isArray(parsedAi2.deepenedScenes) && parsedAi2.deepenedScenes.length > 0)
+              ? parsedAi2.deepenedScenes
+              : ai1Data.plannedScenes.map(s => ({
+                  sceneTitle: s.sceneTitle,
+                  atmosphereCues: s.pacingNote || '',
+                  kpcInteractionDesign: '',
+                  cluesOrEvents: s.purpose || '',
+                  pacingRule: ''
+                })),
+            mapNodes: Array.isArray(parsedAi2.mapNodes) ? parsedAi2.mapNodes : [],
+            clues: Array.isArray(parsedAi2.clues) ? parsedAi2.clues : []
+          };
+
+          cp.ai2Data = ai2Data;
+          await this.saveAiWriterDraftToIDB();
+        }
 
         // ==========================================================
         // 第三阶段：AI3 编写模组导读大纲、章节目录与分章执笔细纲
         // ==========================================================
-        this.setAiWriterStepActive(3);
-        this.updateAiWriterStatus(52, 'AI3 正在编撰模组完整目录、主线流程图与分章撰写指南...');
+        let parsedAi3 = cp.parsedAi3;
+        let resolvedScenes = cp.resolvedScenes;
+        if (!parsedAi3 || !Array.isArray(resolvedScenes) || resolvedScenes.length === 0) {
+          cp.activeStep = 3;
+          this.setAiWriterStepActive(3);
+          this.updateAiWriterStatus(52, 'AI3 正在编撰模组完整目录、主线流程图与分章撰写指南...');
+          await this.saveAiWriterDraftToIDB();
 
-        const ai3System = `你是跑团模组的总编审与导读撰写人。
+          const ai3System = `你是跑团模组的总编审与导读撰写人。
 一本好用的跑团模组，在守秘人翻开【02-模组导读与大纲】时，就能一眼看清整本模组的章节目录、剧情起承转合的流程图、核心线索链以及玩家脱轨时的柔性引导方案。
 同时，请你审视每一章的细纲，确保章节之间衔接顺畅、绝不跳章，让对白与描写自然生动。
 ${craftPhilosophy}`;
 
-        const ai3User = `模组名称：${customTitle || ai1Data.title || ''}
+          const ai3User = `模组名称：${customTitle || ai1Data.title || ''}
 选定标签：${allTags.join('、')}
 幕后真相：${ai1Data.kpTruthAndMechanism || ''}
 角色档案：${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
 深化后的分章设计：${JSON.stringify(ai2Data.deepenedScenes || [], null, 2)}
+已整理的地图节点：${JSON.stringify(ai2Data.mapNodes || [], null, 2)}
 线索列表：${JSON.stringify(ai2Data.clues || [], null, 2)}
 
 请完成【02-模组导读与大纲】的撰写，并为全部 ${ai2Data.deepenedScenes.length} 个正文章节生成详实的执笔细纲（finalScenes 数量与顺序请与 deepenedScenes 保持一致，切勿遗漏任何一章）。
@@ -14558,25 +14671,33 @@ ${craftPhilosophy}`;
   ]
 }`;
 
-        const ai3Raw = await this.callAI(ai3System, ai3User, null, 'writeModule');
-        const parsedAi3 = this.parseJsonFromAiResponse(ai3Raw);
+          const ai3Raw = await this.callAI(ai3System, ai3User, null, 'writeModule');
+          parsedAi3 = this.parseJsonFromAiResponse(ai3Raw);
+          if (!parsedAi3 || (!parsedAi3.kpMasterGuideChapter && !Array.isArray(parsedAi3.finalScenes))) {
+            throw new Error('AI3 盲测与细纲返回格式异常，已保存前两阶成果，请点击继续从 AI3 重试');
+          }
 
-        const resolvedScenes = (Array.isArray(parsedAi3?.finalScenes) && parsedAi3.finalScenes.length >= Math.min(2, ai2Data.deepenedScenes.length))
-          ? parsedAi3.finalScenes
-          : ai2Data.deepenedScenes.map(s => ({
-              sceneTitle: s.sceneTitle || '事件章节',
-              writingBlueprint: `【场景重点】：${s.cluesOrEvents || s.purpose || ''}\n【环境与氛围】：${s.atmosphereCues || s.pacingNote || ''}\n【人物互动】：${s.kpcInteractionDesign || ''}\n【转场衔接】：${s.pacingRule || ''}`
-            }));
+          resolvedScenes = (Array.isArray(parsedAi3.finalScenes) && parsedAi3.finalScenes.length > 0)
+            ? parsedAi3.finalScenes
+            : ai2Data.deepenedScenes.map(s => ({
+                sceneTitle: s.sceneTitle || '事件章节',
+                writingBlueprint: `【场景重点】：${s.cluesOrEvents || s.purpose || ''}\n【环境与氛围】：${s.atmosphereCues || s.pacingNote || ''}\n【人物互动】：${s.kpcInteractionDesign || ''}\n【转场衔接】：${s.pacingRule || ''}`
+              }));
+
+          cp.parsedAi3 = parsedAi3;
+          cp.resolvedScenes = resolvedScenes;
+          await this.saveAiWriterDraftToIDB();
+        }
 
         // ==========================================================
         // 第四阶段：AI4 逐章撰写标准跑团模组文本
         // ==========================================================
+        cp.activeStep = 4;
         this.setAiWriterStepActive(4);
-        const finalChapters = [];
         const boundarySuffix = '\n\n至此本小章节结束，请kp务必在聊天内告诉PC本世界书模组到此为止，请PC切换下一个世界书，禁止擅自编造互动外主线剧情走向';
         const finalModTitle = customTitle || ai1Data.title || '未命名模组';
+        cp.finalModTitle = finalModTitle;
 
-        // 预先构建完整章节目录清单，确保 02-模组导读与大纲 永远拥有清晰的目录与大纲，绝不为空
         const profiles = Array.isArray(ai1Data.catAndNpcProfiles) ? ai1Data.catAndNpcProfiles : [];
         const plannedTocLines = [
           '01. 00-模组已知信息（公开导读与背景引子）',
@@ -14593,22 +14714,88 @@ ${craftPhilosophy}`;
         });
         plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${finalModTitle}-结局（多分支结局判定与演出）`);
 
-        // 1. 00-模组已知信息 (公开章节)
         const rawPublicInfo = this.cleanModuleChapterOutput(String(ai1Data.publicInfoChapter || ai1Data.summary || ''));
-        const ch0Header = `▍模组名称：《${finalModTitle}》\n▍规则与规模：${ruleSystem.toUpperCase()} · ${scaleType} · ${modType} · 难度${difficulty}\n▍核心标签：${allTags.join(' / ')}\n\n`;
-        const ch0Body = rawPublicInfo.startsWith('【正文】')
-          ? rawPublicInfo.replace(/^【正文】\s*/, `【正文】\n${ch0Header}`)
-          : `【正文】\n${ch0Header}${rawPublicInfo}`;
-        finalChapters.push({
-          title: '00-模组已知信息',
-          category: '模组导读',
-          content: `${ch0Body.trim()}${boundarySuffix}`
-        });
 
-        // 立即在界面展示零剧透预览（仅展示00-模组已知信息）
-        const previewTitleEl = document.getElementById('ai-mod-preview-title');
-        const previewMetaEl = document.getElementById('ai-mod-preview-meta');
-        const previewPublicEl = document.getElementById('ai-mod-preview-public');
+        // 如果尚未组装前导基础章节，则初始化构建前导章节
+        if (!Array.isArray(cp.finalChapters) || cp.finalChapters.length === 0) {
+          const baseChapters = [];
+          const ch0Header = `▍模组名称：《${finalModTitle}》\n▍规则与规模：${ruleSystem.toUpperCase()} · ${scaleType} · ${modType} · 难度${difficulty}\n▍核心标签：${allTags.join(' / ')}\n\n`;
+          const ch0Body = rawPublicInfo.startsWith('【正文】')
+            ? rawPublicInfo.replace(/^【正文】\s*/, `【正文】\n${ch0Header}`)
+            : `【正文】\n${ch0Header}${rawPublicInfo}`;
+          baseChapters.push({
+            title: '00-模组已知信息',
+            category: '模组导读',
+            content: `${ch0Body.trim()}${boundarySuffix}`
+          });
+
+          const cleanTruth = this.cleanModuleChapterOutput(String(ai1Data.kpTruthAndMechanism || ''));
+          const cleanReflection = this.cleanModuleChapterOutput(String(ai1Data.creativeReflection || ''));
+          const cleanMechGuide = this.cleanModuleChapterOutput(String(ai2Data.atmosphereAndMechanicsGuide || ''));
+          const ch1Content = [
+            '【KP信息】',
+            `▍《${finalModTitle}》守秘人真相与核心机制`,
+            cleanReflection ? `\n【创作立意与转折巧思】\n${cleanReflection}` : '',
+            `\n【幕后真相与完整因果】\n${cleanTruth || ai1Data.summary || ''}`,
+            cleanMechGuide ? `\n【特殊机制与氛围把控】\n${cleanMechGuide}` : ''
+          ].filter(Boolean).join('\n');
+          baseChapters.push({
+            title: '01-幕后真相与机制',
+            category: '模组导读',
+            content: ch1Content
+          });
+
+          const cleanMasterGuide = this.cleanModuleChapterOutput(String(parsedAi3?.kpMasterGuideChapter || ''));
+          const cleanAudit = this.cleanModuleChapterOutput(String(parsedAi3?.auditReport || ''));
+          const sceneFlowSummary = resolvedScenes.map((s, idx) => {
+            const bp = typeof s.writingBlueprint === 'string' ? s.writingBlueprint : JSON.stringify(s);
+            const brief = bp.replace(/\s+/g, ' ').slice(0, 120);
+            return `· 第 ${idx + 1} 阶段【${s.sceneTitle || ('第' + (idx + 1) + '幕')}】：${brief}${bp.length > 120 ? '...' : ''}`;
+          }).join('\n');
+          const clueSummary = (ai2Data.clues || []).map((c, idx) => {
+            return `· 线索${idx + 1}【${c.name || '关键线索'}】（${c.location || '探索获取'} / ${c.Trigger || '调查触发'}）：${c.content || ''}`;
+          }).join('\n');
+
+          const ch2Parts = [
+            '【KP信息】',
+            `▍《${finalModTitle}》模组章节目录`,
+            plannedTocLines.join('\n'),
+            '\n▍主线章节推进脉络',
+            sceneFlowSummary,
+            clueSummary ? `\n▍核心线索与情报总览\n${clueSummary}` : '',
+            cleanMasterGuide ? `\n▍守秘人导读与带团指南\n${cleanMasterGuide.replace(/^【KP信息】\s*/, '')}` : '',
+            cleanAudit ? `\n▍编审打磨要点\n${cleanAudit}` : ''
+          ].filter(Boolean).join('\n');
+          baseChapters.push({
+            title: '02-模组导读与大纲',
+            category: '模组导读',
+            content: ch2Parts
+          });
+
+          profiles.forEach((prof, idx) => {
+            const pTitle = prof.chapterTitle || `猫-${prof.roleName || ('角色' + (idx + 1))}`;
+            const pBody = [
+              '【KP信息】',
+              `▍角色档案：${prof.roleName || ''}`,
+              `\n【公开印象与外在表现】\n${this.cleanModuleChapterOutput(String(prof.publicDesc || ''))}`,
+              `\n【幕后里设定与扮演指南】\n${this.cleanModuleChapterOutput(String(prof.secretProfile || ''))}`
+            ].join('\n');
+            baseChapters.push({
+              title: pTitle,
+              category: '人物设定',
+              content: pBody
+            });
+          });
+
+          cp.finalChapters = baseChapters;
+          cp.completedSceneCount = 0;
+          cp.previousSceneTail = '';
+          cp.endingDone = false;
+          await this.saveAiWriterDraftToIDB();
+        }
+
+        const finalChapters = cp.finalChapters;
+
         if (previewBox && previewTitleEl && previewPublicEl) {
           previewBox.style.display = 'flex';
           previewTitleEl.textContent = finalModTitle;
@@ -14616,68 +14803,6 @@ ${craftPhilosophy}`;
           previewPublicEl.textContent = rawPublicInfo;
         }
 
-        // 2. 01-幕后真相与机制 (KP专属加密章节)
-        const cleanTruth = this.cleanModuleChapterOutput(String(ai1Data.kpTruthAndMechanism || ''));
-        const cleanReflection = this.cleanModuleChapterOutput(String(ai1Data.creativeReflection || ''));
-        const cleanMechGuide = this.cleanModuleChapterOutput(String(ai2Data.atmosphereAndMechanicsGuide || ''));
-        const ch1Content = [
-          '【KP信息】',
-          `▍《${finalModTitle}》守秘人真相与核心机制`,
-          cleanReflection ? `\n【创作立意与转折巧思】\n${cleanReflection}` : '',
-          `\n【幕后真相与完整因果】\n${cleanTruth || ai1Data.summary || ''}`,
-          cleanMechGuide ? `\n【特殊机制与氛围把控】\n${cleanMechGuide}` : ''
-        ].filter(Boolean).join('\n');
-        finalChapters.push({
-          title: '01-幕后真相与机制',
-          category: '模组导读',
-          content: ch1Content
-        });
-
-        // 3. 02-模组导读与大纲 (KP专属加密章节，内置完整目录、章节路线图与线索总览)
-        const cleanMasterGuide = this.cleanModuleChapterOutput(String(parsedAi3?.kpMasterGuideChapter || ''));
-        const cleanAudit = this.cleanModuleChapterOutput(String(parsedAi3?.auditReport || ''));
-        const sceneFlowSummary = resolvedScenes.map((s, idx) => {
-          const bp = typeof s.writingBlueprint === 'string' ? s.writingBlueprint : JSON.stringify(s);
-          const brief = bp.replace(/\s+/g, ' ').slice(0, 120);
-          return `· 第 ${idx + 1} 阶段【${s.sceneTitle || ('第' + (idx + 1) + '幕')}】：${brief}${bp.length > 120 ? '...' : ''}`;
-        }).join('\n');
-        const clueSummary = (ai2Data.clues || []).map((c, idx) => {
-          return `· 线索${idx + 1}【${c.name || '关键线索'}】（${c.location || '探索获取'} / ${c.Trigger || '调查触发'}）：${c.content || ''}`;
-        }).join('\n');
-
-        const ch2Parts = [
-          '【KP信息】',
-          `▍《${finalModTitle}》模组章节目录`,
-          plannedTocLines.join('\n'),
-          '\n▍主线章节推进脉络',
-          sceneFlowSummary,
-          clueSummary ? `\n▍核心线索与情报总览\n${clueSummary}` : '',
-          cleanMasterGuide ? `\n▍守秘人导读与带团指南\n${cleanMasterGuide.replace(/^【KP信息】\s*/, '')}` : '',
-          cleanAudit ? `\n▍编审打磨要点\n${cleanAudit}` : ''
-        ].filter(Boolean).join('\n');
-        finalChapters.push({
-          title: '02-模组导读与大纲',
-          category: '模组导读',
-          content: ch2Parts
-        });
-
-        // 4. 猫与HO秘密及核心NPC人设章 (KP专属加密章节)
-        profiles.forEach((prof, idx) => {
-          const pTitle = prof.chapterTitle || `猫-${prof.roleName || ('角色' + (idx + 1))}`;
-          const pBody = [
-            '【KP信息】',
-            `▍角色档案：${prof.roleName || ''}`,
-            `\n【公开印象与外在表现】\n${this.cleanModuleChapterOutput(String(prof.publicDesc || ''))}`,
-            `\n【幕后里设定与扮演指南】\n${this.cleanModuleChapterOutput(String(prof.secretProfile || ''))}`
-          ].join('\n');
-          finalChapters.push({
-            title: pTitle,
-            category: '人物设定',
-            content: pBody
-          });
-        });
-
-        // 5. 分批次逐章扩写正文事件章节 + 结局章节
         const scenesToWrite = resolvedScenes;
 
         const ai4System = `你是一位文笔细腻、深谙跑团模组编写规范的人类模组作者。
@@ -14694,8 +14819,10 @@ ${craftPhilosophy}`;
    - 让人物说真话、说符合处境与性格的话，通过具体的动作细节、器物触感与环境光影来烘托气氛，把情感与悬念藏在言外之意里，章节收尾停在自然的画面或转折悬念处即可。
 ${tcPrompt ? '\n4. 文风审美与叙事思考参考：\n' + tcPrompt : ''}`;
 
-        let previousSceneTail = '';
-        for (let sIdx = 0; sIdx < scenesToWrite.length; sIdx++) {
+        let previousSceneTail = cp.previousSceneTail || '';
+        const startSceneIdx = typeof cp.completedSceneCount === 'number' ? cp.completedSceneCount : 0;
+
+        for (let sIdx = startSceneIdx; sIdx < scenesToWrite.length; sIdx++) {
           const sceneItem = scenesToWrite[sIdx];
           const sTitle = sceneItem.sceneTitle || `第 ${sIdx + 1} 幕`;
           const nextSceneTitle = (sIdx + 1 < scenesToWrite.length)
@@ -14703,6 +14830,7 @@ ${tcPrompt ? '\n4. 文风审美与叙事思考参考：\n' + tcPrompt : ''}`;
             : `${finalModTitle}-结局`;
           const progressPct = 58 + Math.round(((sIdx + 1) / (scenesToWrite.length + 1)) * 34);
           this.updateAiWriterStatus(progressPct, `AI4 正在撰写模组章节 ${sIdx + 1} / ${scenesToWrite.length} ：${sTitle}...`);
+          await this.saveAiWriterDraftToIDB();
 
           const ai4SceneUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
@@ -14712,6 +14840,9 @@ ${ai1Data.kpTruthAndMechanism || ''}
 
 核心人物设定：
 ${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
+
+已整理的地图节点：
+${JSON.stringify(ai2Data.mapNodes || [], null, 2)}
 
 本模组完整正文脉络（当前为第 ${sIdx + 1} / ${scenesToWrite.length} 章，下一章为【${nextSceneTitle}】）：
 ${scenesToWrite.map((sc, i) => `${i + 1}. ${sc.sceneTitle}`).join('\n')}
@@ -14725,6 +14856,9 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
 
           const sceneTextRaw = await this.callAI(ai4System, ai4SceneUser, null, 'writeModule');
           let cleanSceneText = this.cleanModuleChapterOutput(String(sceneTextRaw || ''));
+          if (!cleanSceneText) {
+            throw new Error(`第 ${sIdx + 1} 章【${sTitle}】返回内容为空，已保存前序章节，请点击继续接着生成`);
+          }
           if (!cleanSceneText.includes('【正文】') && !cleanSceneText.includes('【KP信息】')) {
             cleanSceneText = `【正文】\n${cleanSceneText}`;
           }
@@ -14739,11 +14873,19 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
           });
 
           previousSceneTail = cleanSceneText.replace(boundarySuffix, '');
+          cp.completedSceneCount = sIdx + 1;
+          cp.previousSceneTail = previousSceneTail;
+          if (previewMetaEl) {
+            previewMetaEl.textContent = `已写 ${cp.completedSceneCount}/${scenesToWrite.length} 正文章节`;
+          }
+          await this.saveAiWriterDraftToIDB();
         }
 
         // 6. 撰写结局分歧章节
-        this.updateAiWriterStatus(95, 'AI4 正在撰写多分支结局判定与演出...');
-        const ai4EndingUser = `模组名称：《${finalModTitle}》
+        if (!cp.endingDone) {
+          this.updateAiWriterStatus(95, 'AI4 正在撰写多分支结局判定与演出...');
+          await this.saveAiWriterDraftToIDB();
+          const ai4EndingUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
 模组基调：${ai1Data.themeMode || ''}
 守秘人真相底牌：${ai1Data.kpTruthAndMechanism || ''}
@@ -14755,16 +14897,23 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
 2. 使用【正文】为每一个结局撰写真实动人、画面感鲜明的结局演出与人物对话，并在最后附上守秘人结团奖励与理智结算提示。
 3. 结局画面请落在具体的动作、器物与余韵悠长的日常或重逢/离别瞬间，直接输出章节正文（不要输出任何 JSON 思考块或文末待办清单）：`;
 
-        const endingRaw = await this.callAI(ai4System, ai4EndingUser, null, 'writeModule');
-        let cleanEndingText = this.cleanModuleChapterOutput(String(endingRaw || ''));
-        if (!cleanEndingText.includes('【正文】') && !cleanEndingText.includes('【KP信息】')) {
-          cleanEndingText = `【正文】\n${cleanEndingText}`;
+          const endingRaw = await this.callAI(ai4System, ai4EndingUser, null, 'writeModule');
+          let cleanEndingText = this.cleanModuleChapterOutput(String(endingRaw || ''));
+          if (!cleanEndingText) {
+            throw new Error('结局章节返回为空，已保存前面所有章节，请点击继续重试结局撰写');
+          }
+          if (!cleanEndingText.includes('【正文】') && !cleanEndingText.includes('【KP信息】')) {
+            cleanEndingText = `【正文】\n${cleanEndingText}`;
+          }
+          finalChapters.push({
+            title: `${finalModTitle}-结局`,
+            category: '模组结局',
+            content: cleanEndingText
+          });
+          cp.endingDone = true;
+          cp.isCompleted = true;
+          await this.saveAiWriterDraftToIDB();
         }
-        finalChapters.push({
-          title: `${finalModTitle}-结局`,
-          category: '模组结局',
-          content: cleanEndingText
-        });
 
         // 若 AI2 未返回地图节点，则从本模组自身的章节与线索中提炼专属地点，确保地图与本模组完全匹配
         let finalMapNodes = Array.isArray(ai2Data.mapNodes) ? ai2Data.mapNodes.filter(n => n && n.name) : [];
@@ -14825,19 +14974,40 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
           previewMetaEl.textContent = `${finalChapters.length}章 · ${totalWords}字`;
         }
         if (saveBtn) saveBtn.disabled = false;
+        if (resumeBtn) resumeBtn.style.display = 'none';
 
         this.updateAiWriterStatus(100, `已完成《${finalModTitle}》全部 ${finalChapters.length} 章撰写并封存入本地模组库，真相与后续章节已隐藏，可直接开团游玩或上传工坊`);
+        await this.saveAiWriterDraftToIDB();
       } catch (err) {
         console.error('[AI写模] 流水线异常:', err);
-        this.updateAiWriterStatus(0, `生成中断：${err.message || err}`);
+        const hasProgress = Boolean(this.aiWriterState.pipelineCheckpoint && (
+          this.aiWriterState.pipelineCheckpoint.ai1Data ||
+          this.aiWriterState.pipelineCheckpoint.ai2Data ||
+          (this.aiWriterState.pipelineCheckpoint.finalChapters && this.aiWriterState.pipelineCheckpoint.finalChapters.length > 0)
+        ));
+        if (hasProgress && resumeBtn) {
+          resumeBtn.style.display = 'inline-flex';
+          resumeBtn.disabled = false;
+          resumeBtn.textContent = '继续';
+        }
+        this.updateAiWriterStatus(
+          hasProgress ? 45 : 0,
+          hasProgress
+            ? `生成中断：${err.message || err}。已完成进度已自动保存，点击右上角继续按钮即可从当前断点接着生成`
+            : `生成中断：${err.message || err}`
+        );
+        await this.saveAiWriterDraftToIDB();
         if (typeof global.showCustomAlert === 'function') {
-          global.showCustomAlert('生成失败', String(err.message || err));
+          global.showCustomAlert('生成中断', String(err.message || err));
         }
       } finally {
         this.aiWriterState.isRunning = false;
         if (genBtn) {
           genBtn.textContent = '生成';
           genBtn.disabled = false;
+        }
+        if (resumeBtn && !resumeBtn.disabled) {
+          resumeBtn.textContent = '继续';
         }
       }
     },
