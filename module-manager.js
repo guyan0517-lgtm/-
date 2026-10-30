@@ -857,6 +857,73 @@
       return loaded;
     },
 
+    async restoreMissingImagesFromRawFile(parsedData, onlyRestoreDataUrl = false) {
+      if (!parsedData || parsedData._userDeletedImages) return false;
+      try {
+        const database = this.getDB();
+        if (!database || !database.moduleRawFiles) return false;
+        const allRaws = await database.moduleRawFiles.toArray();
+        const targetFile = (parsedData.fileName || '').trim();
+        const targetMod = (parsedData.moduleName || '').trim();
+        const matchedRaw = allRaws.find(r =>
+          r && r.id !== '__module_cutter_draft__' && r.fileType !== 'draft' && Array.isArray(r.images) && r.images.length > 0 &&
+          ((targetFile && r.fileName === targetFile) || (targetMod && r.moduleName === targetMod))
+        );
+        if (!matchedRaw) return false;
+
+        if (onlyRestoreDataUrl) {
+          if (Array.isArray(parsedData.images) && parsedData.images.length > 0) {
+            let updated = false;
+            parsedData.images.forEach(img => {
+              if (img && !img.dataUrl) {
+                const rawMatch = matchedRaw.images.find(rImg =>
+                  (rImg.imageIndex && img.imageIndex && rImg.imageIndex === img.imageIndex) ||
+                  (rImg.name && img.name && rImg.name === img.name) ||
+                  (rImg.pageNumber && img.pageNumber && rImg.pageNumber === img.pageNumber)
+                );
+                if (rawMatch && rawMatch.dataUrl) {
+                  img.dataUrl = rawMatch.dataUrl;
+                  updated = true;
+                }
+              }
+            });
+            return updated;
+          }
+          return false;
+        }
+
+        if (matchedRaw.images.length > (parsedData.images ? parsedData.images.length : 0)) {
+          const existingList = Array.isArray(parsedData.images) ? parsedData.images : [];
+          const restored = matchedRaw.images.map((rawImg, idx) => {
+            const rawIdx = rawImg.imageIndex || (idx + 1);
+            const found = existingList.find(e =>
+              (e && rawImg.dataUrl && e.dataUrl === rawImg.dataUrl) ||
+              (e && e.imageIndex === rawIdx && e.pageNumber === rawImg.pageNumber)
+            );
+            if (found) {
+              return {
+                ...rawImg,
+                ...found,
+                imageIndex: rawIdx,
+                shouldInclude: true,
+                dataUrl: found.dataUrl || rawImg.dataUrl
+              };
+            }
+            return {
+              ...rawImg,
+              imageIndex: rawIdx,
+              shouldInclude: true
+            };
+          });
+          parsedData.images = restored;
+          return true;
+        }
+      } catch (e) {
+        console.warn('[模组] 恢复原文件插图提示:', e);
+      }
+      return false;
+    },
+
     async loadDraftAsync() {
       try {
         let idbDraft = await this._loadDraftFromIDB();
@@ -867,6 +934,7 @@
           }
         }
         if (idbDraft && idbDraft.currentParsedData) {
+          await this.restoreMissingImagesFromRawFile(idbDraft.currentParsedData, true);
           const currentCount = this.cutChapters ? this.cutChapters.length : 0;
           const idbCount = (idbDraft.cutChapters ? idbDraft.cutChapters.length : 0) ||
             (idbDraft.cutChaptersBySegment ? idbDraft.cutChaptersBySegment.flat().length : 0);
@@ -1287,10 +1355,33 @@
 
               try {
                 let imgObj = null;
-                if (page.objs && typeof page.objs.get === 'function' && page.objs.has(imgObjId)) {
-                  imgObj = page.objs.get(imgObjId);
-                } else if (page.commonObjs && typeof page.commonObjs.get === 'function' && page.commonObjs.has(imgObjId)) {
-                  imgObj = page.commonObjs.get(imgObjId);
+                if (page.objs && typeof page.objs.get === 'function') {
+                  if (page.objs.has(imgObjId)) {
+                    imgObj = page.objs.get(imgObjId);
+                  } else {
+                    imgObj = await new Promise(resolve => {
+                      let settled = false;
+                      const timer = setTimeout(() => {
+                        if (!settled) { settled = true; resolve(null); }
+                      }, 1500);
+                      try {
+                        page.objs.get(imgObjId, data => {
+                          if (!settled) {
+                            settled = true;
+                            clearTimeout(timer);
+                            resolve(data || null);
+                          }
+                        });
+                      } catch (e) {
+                        if (!settled) { settled = true; clearTimeout(timer); resolve(null); }
+                      }
+                    });
+                  }
+                }
+                if (!imgObj && page.commonObjs && typeof page.commonObjs.get === 'function') {
+                  if (page.commonObjs.has(imgObjId)) {
+                    imgObj = page.commonObjs.get(imgObjId);
+                  }
                 }
 
                 if (imgObj) {
@@ -1439,19 +1530,36 @@
 
     async saveRawFileToDB(parsedData) {
       if (!parsedData || !parsedData.text) return;
+      const clonedImages = Array.isArray(parsedData.images)
+        ? parsedData.images.map((img, idx) => ({
+            ...img,
+            imageIndex: img.imageIndex || (idx + 1)
+          }))
+        : [];
       const rawFileRecord = {
         id: 'file_' + Date.now(),
         fileName: parsedData.fileName,
         moduleName: parsedData.moduleName,
         fileType: parsedData.fileType,
         text: parsedData.text,
-        images: parsedData.images || [],
+        images: clonedImages,
         wordCount: parsedData.wordCount,
         uploadedAt: Date.now()
       };
 
       await this.safeDBOperation('保存原文件记录', async (db) => {
         if (db.moduleRawFiles) {
+          try {
+            const existingList = await db.moduleRawFiles.toArray();
+            for (const oldRec of existingList) {
+              if (oldRec && oldRec.id !== '__module_cutter_draft__' && oldRec.fileType !== 'draft') {
+                if ((parsedData.fileName && oldRec.fileName === parsedData.fileName) ||
+                    (parsedData.moduleName && oldRec.moduleName === parsedData.moduleName)) {
+                  await db.moduleRawFiles.delete(oldRec.id);
+                }
+              }
+            }
+          } catch (cleanErr) {}
           await db.moduleRawFiles.put(rawFileRecord);
         }
       });
@@ -1490,7 +1598,10 @@
         moduleName: cleanBaseName,
         fileType: parsedResult.fileType,
         text: fullText,
-        images: parsedResult.images || [],
+        images: (parsedResult.images || []).map((img, idx) => ({
+          ...img,
+          imageIndex: img.imageIndex || (idx + 1)
+        })),
         wordCount: totalWords,
         analysisPrompt: DEFAULT_TRPG_ANALYSIS_PROMPT,
         prompt: DEFAULT_TRPG_ANALYSIS_PROMPT,
@@ -1505,14 +1616,25 @@
 
     loadHistoryRawFile(rawFileRecord) {
       if (!rawFileRecord) return;
+      if (rawFileRecord.draftData && rawFileRecord.draftData.currentParsedData) {
+        rawFileRecord = rawFileRecord.draftData.currentParsedData;
+      }
+
+      const clonedImages = Array.isArray(rawFileRecord.images)
+        ? rawFileRecord.images.map((img, idx) => ({
+            ...img,
+            imageIndex: img.imageIndex || (idx + 1),
+            shouldInclude: true
+          }))
+        : [];
 
       this.currentParsedData = {
-        fileName: rawFileRecord.fileName,
-        moduleName: rawFileRecord.moduleName || rawFileRecord.fileName.replace(/\.[^/.]+$/, ''),
-        fileType: rawFileRecord.fileType,
-        text: rawFileRecord.text,
-        images: rawFileRecord.images || [],
-        wordCount: rawFileRecord.wordCount,
+        fileName: rawFileRecord.fileName || '未命名模组',
+        moduleName: rawFileRecord.moduleName || (rawFileRecord.fileName ? rawFileRecord.fileName.replace(/\.[^/.]+$/, '') : '未命名模组'),
+        fileType: rawFileRecord.fileType || '文档',
+        text: rawFileRecord.text || '',
+        images: clonedImages,
+        wordCount: rawFileRecord.wordCount || this.countWords(rawFileRecord.text || ''),
         analysisPrompt: rawFileRecord.analysisPrompt || rawFileRecord.prompt || DEFAULT_TRPG_ANALYSIS_PROMPT,
         prompt: rawFileRecord.analysisPrompt || rawFileRecord.prompt || DEFAULT_TRPG_ANALYSIS_PROMPT,
         cuttingPrompt: rawFileRecord.cuttingPrompt || DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT,
@@ -2948,6 +3070,7 @@
           const beforeCount = this.currentParsedData.images.length;
           this.currentParsedData.images = this.currentParsedData.images.filter(img => !img.isDiscarded && !img.isJunk && !img.name?.includes('废弃') && !img.name?.includes('封面') && !img.name?.includes('装饰'));
           const removedCount = beforeCount - this.currentParsedData.images.length;
+          if (removedCount > 0) this.currentParsedData._userDeletedImages = true;
           this.saveDraft();
           this.renderStep2GalleryUI();
           if (typeof global.showCustomAlert === 'function') {
@@ -2996,6 +3119,7 @@
           }
           if (confirmed) {
             this.currentParsedData.images = [];
+            this.currentParsedData._userDeletedImages = true;
             this.saveDraft();
             this.renderStep2GalleryUI();
           }
@@ -3095,6 +3219,7 @@
         card.querySelector('.btn-del-step2-img')?.addEventListener('click', (e) => {
           e.stopPropagation();
           images.splice(idx, 1);
+          if (this.currentParsedData) this.currentParsedData._userDeletedImages = true;
           this.saveDraft();
           this.renderStep2GalleryUI();
         });
@@ -3525,22 +3650,25 @@
 
     async inspectImagesWithVision(images) {
       if (!images || !Array.isArray(images) || images.length === 0) return [];
-      try {
-        const batch = images.slice(0, 16);
-        const imageThumbnails = [];
-        for (let i = 0; i < batch.length; i++) {
-          const img = batch[i];
-          if (!img.dataUrl) continue;
-          const thumb = await this.createThumbnailDataUrl(img.dataUrl, 280, 280);
-          imageThumbnails.push({
-            index: i + 1,
-            origName: img.name || `图${i + 1}`,
-            dataUrl: thumb
-          });
-        }
-        if (imageThumbnails.length === 0) return [];
+      const allVisionParsed = [];
+      const batchSize = 16;
+      for (let offset = 0; offset < images.length; offset += batchSize) {
+        try {
+          const batch = images.slice(offset, offset + batchSize);
+          const imageThumbnails = [];
+          for (let i = 0; i < batch.length; i++) {
+            const img = batch[i];
+            if (!img.dataUrl) continue;
+            const thumb = await this.createThumbnailDataUrl(img.dataUrl, 280, 280);
+            imageThumbnails.push({
+              index: offset + i + 1,
+              origName: img.name || `图${offset + i + 1}`,
+              dataUrl: thumb
+            });
+          }
+          if (imageThumbnails.length === 0) continue;
 
-        const visionSysPrompt = `你是一个具备全球顶尖鉴赏力的高精度跑团模组插图视觉识别专家。请逐一仔细观察用户提供的多张模组图片画面视觉内容，对每一张图片进行严格的视觉分类与精准命名。
+          const visionSysPrompt = `你是一个具备全球顶尖鉴赏力的高精度跑团模组插图视觉识别专家。请逐一仔细观察用户提供的多张模组图片画面视觉内容，对每一张图片进行严格的视觉分类与精准命名。
 【核心判别与命名铁律】：
 1. 地图（包含建筑平面图、俯视图、房间布局、迷宫走廊、区域地脉、地名路线网格）：
    - 必定标注 isMap 为 true。
@@ -3558,26 +3686,35 @@
 
 请只输出合法的 JSON 数组，严禁包含任何 Markdown 格式块或多余文字，格式严格如下：
 [
-  { "imageIndex": 1, "isMap": true, "name": "洋馆一层平面图", "description": "洋馆一层的俯视房间走廊建筑平面图", "annotation": "初期探索地图", "isSensitive": false, "isHorror": false, "shouldInclude": true }
+  { "imageIndex": ${imageThumbnails[0].index}, "isMap": true, "name": "洋馆一层平面图", "description": "洋馆一层的俯视房间走廊建筑平面图", "annotation": "初期探索地图", "isSensitive": false, "isHorror": false, "shouldInclude": true }
 ]`;
 
-        const visionUserPrompt = `请对附带的 ${imageThumbnails.length} 张图片按照顺序（图1到图${imageThumbnails.length}）进行高精度视觉识别与甄别，严格区分地图与角色立绘，并输出 JSON 数组：`;
-        const res = await this.callAI(visionSysPrompt, visionUserPrompt, imageThumbnails);
-        if (res) {
-          const cleanJson = res.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
-          const startIdx = cleanJson.indexOf('[');
-          const endIdx = cleanJson.lastIndexOf(']');
-          if (startIdx !== -1 && endIdx !== -1) {
-            const parsed = JSON.parse(cleanJson.substring(startIdx, endIdx + 1));
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              return parsed;
+          const idxRangeStr = imageThumbnails.map(t => `图${t.index}`).join('、');
+          const visionUserPrompt = `请对附带的 ${imageThumbnails.length} 张图片按照顺序（${idxRangeStr}）进行高精度视觉识别与甄别，每一张图片都必须输出对应的 JSON 项（共 ${imageThumbnails.length} 项），严格区分地图与角色立绘：`;
+          const res = await this.callAI(visionSysPrompt, visionUserPrompt, imageThumbnails);
+          if (res) {
+            const cleanJson = res.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+            const startIdx = cleanJson.indexOf('[');
+            const endIdx = cleanJson.lastIndexOf(']');
+            if (startIdx !== -1 && endIdx !== -1) {
+              const parsed = JSON.parse(cleanJson.substring(startIdx, endIdx + 1));
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                parsed.forEach((item, localIdx) => {
+                  if (item && typeof item === 'object') {
+                    if (typeof item.imageIndex !== 'number' || (offset > 0 && item.imageIndex <= batch.length)) {
+                      item.imageIndex = imageThumbnails[localIdx] ? imageThumbnails[localIdx].index : (offset + localIdx + 1);
+                    }
+                    allVisionParsed.push(item);
+                  }
+                });
+              }
             }
           }
+        } catch (err) {
+          console.warn('[模组] 视觉识别预检跳过，使用上下文与结构智能识别:', err);
         }
-      } catch (err) {
-        console.warn('[模组] 视觉识别预检跳过，使用上下文与结构智能识别:', err);
       }
-      return [];
+      return allVisionParsed;
     },
 
     async callAI(systemPrompt, userPrompt, imageParts = null, purpose = 'module') {
@@ -4287,6 +4424,8 @@
         throw new Error('未选择模组文件');
       }
 
+      await this.restoreMissingImagesFromRawFile(this.currentParsedData);
+
       this.currentPlan = null;
       this.cutChapters = [];
       this.cutChaptersBySegment = [];
@@ -4391,7 +4530,7 @@ JSON 格式如下：
 7. endingTag 必须单选，只能是 "危险"、"普通" 或 "安全" 三者之一。
 8. contentTags 必须为多选数组，只能从预设列表 ["校园", "复活", "粉红", "NTR", "血腥暴力", "纯爱", "茶番", "恐怖", "Meta"] 中挑选，符合几个选几个，不符合留空数组 []。
 9. imageAnalysis 必须逐一甄别所有提取插图：
-   - shouldInclude: 布尔值。若为纯文本页面扫描、无意义分隔线条、重复花边、装饰图标则设为 false；若为有意义的立绘、地图、手迹、怪物图、CG则设为 true。
+   - shouldInclude: 布尔值。若为纯文本页面扫描、无意义分隔线条、重复花边、装饰图标则设为 false；若为有意义的立绘、地图、手迹、怪物图、CG则设为 true（注意：即便某张插图对应的剧情在其他分卷，只要该图本身是有意义的立绘、地图、手迹或CG，就必须设为 true，绝不能因为不在当前分卷而误设为 false）。
    - isSensitive: 布尔值。若为后期决战、幕后黑手真相、神话生物真面目、隐藏密室等核心剧透，设为 true；若为公开世界观地图、已知NPC立绘、开局已知信息则设为 false。
    - isHorror: 布尔值。对恐怖元素极度敏感（低判定阈值）：包含半人半骨骼、骷髅、尸体血迹、怪物触手、异形异变、夜晚昏暗阴森场景、诡异压抑画面、心理恐怖氛围等不论真恐怖还是心理恐怖，一律判定为 true；常规明亮普通立绘或正常地图设为 false。
    - name: 精炼插图名称。
@@ -4439,20 +4578,30 @@ JSON 格式如下：
           if (this.globalOpinion) {
             userPrompt += `\n\n用户针对此重构方案的个性化补充意见：\n${this.globalOpinion}`;
           }
-          if (segIdx > 0 && allParsedChunks.length > 0) {
-            const lastChunk = allParsedChunks[allParsedChunks.length - 1];
-            userPrompt += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【前置分卷 AI 已规划完成的全部章节清单与起止边界（极度重要！你必须严格紧密衔接）】\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n前置分卷已规划了以下 ${allParsedChunks.length} 个章节：\n` +
-              allParsedChunks.map((c, cIdx) => `  - 第 ${c.order || (cIdx + 1)} 章: 【${c.name}】(${c.category})\n    从哪开始: 「${c.prefixPreview || '...'}」\n    到哪结束: 「${c.suffixPreview || '...'}」\n    章节内容备注: ${c.remarks || c.reason || '无'}`).join('\n') +
-              `\n\n【接续规划铁律】：\n上一卷最后规划的章节为：【${lastChunk.name}】\n其切分截止位置（末尾100字）为：\n「${lastChunk.suffixPreview || lastChunk.prefixPreview || '...'}」\n你当前规划第 ${segIdx + 1} 卷时，必须从上一卷结尾文字紧接的下一句开始往后切，首尾紧密闭合衔接！严禁遗漏中间剧情，严禁与前面已切内容重叠！\n同时，如果本卷文本中包含散落在各处的额外信息（如KP信息中的NPC人设数值、HO私密线索、背景伏笔等），你必须在对应章节的 remarks 备注中明确标注在此处归纳补充！\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+          if (segIdx > 0 && (combinedMapNodes.length > 0 || allParsedChunks.length > 0)) {
+            let prevMapSection = '';
+            if (combinedMapNodes.length > 0) {
+              prevMapSection = `\n【一、前置分卷已整理完成的全部地图节点（共 ${combinedMapNodes.length} 个地点）】：\n` +
+                combinedMapNodes.map((m, mIdx) => `  - [层级${m.level || 1}] 【${m.name}】${m.parent ? ` (上级区域: ${m.parent})` : ' (顶层主区域)'}：${m.desc || '无'}`).join('\n') +
+                `\n请在此已整理好的地图树基础上，继续提取并往下补充本卷新出现的区域、建筑与房间节点（若本卷的新房间从属于前置分卷已有的主区域或建筑，请直接将 parent 填写为上方已有的父节点名称，严禁重复创建同名节点）！\n`;
+            }
+            let prevChunkSection = '';
+            if (allParsedChunks.length > 0) {
+              const lastChunk = allParsedChunks[allParsedChunks.length - 1];
+              prevChunkSection = `\n【二、前置分卷已整理规划完成的全部章节列表（共 ${allParsedChunks.length} 个章节）】：\n` +
+                allParsedChunks.map((c, cIdx) => `  - 第 ${c.order || (cIdx + 1)} 章: 【${c.name}】(${c.category})\n    从哪开始: 「${c.prefixPreview || '...'}」\n    到哪结束: 「${c.suffixPreview || '...'}」\n    章节内容备注: ${c.remarks || c.reason || '无'}`).join('\n') +
+                `\n\n【接续规划铁律】：\n上一卷最后规划的章节为：【${lastChunk.name}】\n其切分截止位置（末尾100字）为：\n「${lastChunk.suffixPreview || lastChunk.prefixPreview || '...'}」\n你当前规划第 ${segIdx + 1} 卷时，必须在上方已整理好的地图与章节基础上继续往下写！章节必须从上一卷结尾文字紧接的下一句开始往后切，首尾紧密闭合衔接，严禁遗漏中间剧情，严禁与前面已规划章节重叠！\n同时，如果本卷文本中包含散落在各处的额外信息（如KP信息中的NPC人设数值、HO私密线索、背景伏笔等），你必须在对应章节的 remarks 备注中明确标注在此处归纳补充！`;
+            }
+            userPrompt += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【前置分卷 AI 已整理完成的全部地图与章节汇总（极度重要！你必须在此基础上继续往下规划）】\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━${prevMapSection}${prevChunkSection}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
           }
-          if (segIdx === 0 && this.currentParsedData.images && this.currentParsedData.images.length > 0) {
+          if (this.currentParsedData.images && this.currentParsedData.images.length > 0) {
             const imgListDesc = this.currentParsedData.images.map((img, i) => {
               const origName = img.fileName || img.name || `插图_${i + 1}`;
               const nearby = img.nearbyText ? `，所在页面上下文: "${img.nearbyText}"` : '';
               const mapHint = img.isMap ? '【视觉确认为地图】' : (img.name && (img.name.includes('图') || img.name.includes('平面') || img.name.includes('地图')) ? '【判定为地图】' : '');
               return `图${i + 1}: 名称【${origName}】${mapHint}，第${img.pageNumber || '1'}页，尺寸${img.width || 800}x${img.height || 600} (${img.format || 'JPEG'})${nearby}`;
             }).join('\n');
-            userPrompt += `\n\n【提取到的候选插图列表（已结合视觉特征与排版顺序）】：\n${imgListDesc}`;
+            userPrompt += `\n\n【提取到的全部候选插图列表（共 ${this.currentParsedData.images.length} 张，请对全部 ${this.currentParsedData.images.length} 张插图进行完整分析，严禁遗漏或删减任何一张）】：\n${imgListDesc}`;
           }
           userPrompt += `\n\n模组参考全文（当前分卷内容）：\n${segText}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【最终输出格式强制指令】：\n请严格按照系统提示词中的 JSON 结构输出规划方案（必须包含 moduleType、ruleSystem、scaleType、summary、bgTag、endingTag、contentTags、mapNodes、chunks、imageAnalysis 字段）。\n注意：JSON 字符串值内部如需引用原文对话或词汇，请一律使用中文引号「」或“”，严禁在 JSON 字符串值内部使用未转义的英文双引号 "！严禁输出 Markdown 列表或任何 JSON 以外的解释文字！`;
 
@@ -4589,35 +4738,35 @@ JSON 格式如下：
               if (parsedAiPlan.summary) {
                 finalSummary = parsedAiPlan.summary;
               }
-              if (Array.isArray(parsedAiPlan.imageAnalysis) && this.currentParsedData.images) {
-                const assessmentMap = new Map();
-                parsedAiPlan.imageAnalysis.forEach(a => {
-                  if (a && typeof a.imageIndex === 'number') {
-                    assessmentMap.set(a.imageIndex, a);
+            }
+
+            if (Array.isArray(parsedAiPlan.imageAnalysis) && this.currentParsedData.images) {
+              const assessmentMap = new Map();
+              parsedAiPlan.imageAnalysis.forEach(a => {
+                if (a && typeof a.imageIndex === 'number') {
+                  assessmentMap.set(a.imageIndex, a);
+                }
+              });
+              this.currentParsedData.images.forEach((img, idx) => {
+                const assess = assessmentMap.get(idx + 1) || assessmentMap.get(img.imageIndex);
+                if (assess) {
+                  if (assess.shouldInclude === false || assess.isUseful === false) {
+                    img.shouldInclude = false;
                   }
-                });
-                const filteredImages = [];
-                this.currentParsedData.images.forEach((img, idx) => {
-                  const assess = assessmentMap.get(idx + 1) || assessmentMap.get(img.imageIndex);
-                  if (assess) {
-                    if (assess.shouldInclude === false || assess.isUseful === false) return;
-                    if (typeof assess.isSensitive === 'boolean') img.isSensitive = assess.isSensitive;
-                    if (typeof assess.isHorror === 'boolean') img.isHorror = assess.isHorror;
-                    if (assess.name) {
-                      const isClearlyMap = img.isMap || (img.name && (img.name.includes('地图') || img.name.includes('平面图')));
-                      if (isClearlyMap && !assess.name.includes('图') && !assess.name.includes('平面') && !assess.name.includes('地') && !assess.name.includes('所') && !assess.name.includes('室')) {
-                        img.name = (img.name && (img.name.includes('地图') || img.name.includes('平面'))) ? img.name : `${assess.name}地图`;
-                      } else {
-                        img.name = assess.name;
-                      }
+                  if (typeof assess.isSensitive === 'boolean') img.isSensitive = assess.isSensitive;
+                  if (typeof assess.isHorror === 'boolean') img.isHorror = assess.isHorror;
+                  if (assess.name && !/^图\d+$/.test(assess.name.trim())) {
+                    const isClearlyMap = img.isMap || (img.name && (img.name.includes('地图') || img.name.includes('平面图')));
+                    if (isClearlyMap && !assess.name.includes('图') && !assess.name.includes('平面') && !assess.name.includes('地') && !assess.name.includes('所') && !assess.name.includes('室')) {
+                      img.name = (img.name && (img.name.includes('地图') || img.name.includes('平面'))) ? img.name : `${assess.name}地图`;
+                    } else {
+                      img.name = assess.name;
                     }
-                    if (assess.description) img.description = assess.description;
-                    if (assess.annotation) img.annotation = assess.annotation;
                   }
-                  filteredImages.push(img);
-                });
-                this.currentParsedData.images = filteredImages;
-              }
+                  if (assess.description) img.description = assess.description;
+                  if (assess.annotation) img.annotation = assess.annotation;
+                }
+              });
             }
 
             const ALLOWED_CONTENT_TAGS = ['校园', '复活', '粉红', 'NTR', '血腥暴力', '纯爱', '茶番', '恐怖', 'Meta'];
@@ -4704,6 +4853,15 @@ JSON 格式如下：
               this.saveDraft();
             }
           }
+        }
+
+        if (Array.isArray(this.currentParsedData.images) && this.currentParsedData.images.length > 0) {
+          this.currentParsedData.images = this.currentParsedData.images
+            .filter(img => img && img.shouldInclude !== false && img.isUseful !== false)
+            .map((img, i) => ({
+              ...img,
+              imageIndex: i + 1
+            }));
         }
 
         if (combinedMapNodes.length <= 1) {
@@ -5129,33 +5287,37 @@ ${fullText}`;
         }).join('\n');
 
         let prevCutNotice = '';
-        if (segIdx > 0 && this.cutChaptersBySegment) {
+        if (segIdx > 0) {
           const prevChapters = [];
-          for (let s = 0; s < segIdx; s++) {
-            const sChaps = this.cutChaptersBySegment[s];
-            if (Array.isArray(sChaps)) {
-              prevChapters.push(...sChaps);
+          if (this.cutChaptersBySegment) {
+            for (let s = 0; s < segIdx; s++) {
+              const sChaps = this.cutChaptersBySegment[s];
+              if (Array.isArray(sChaps)) {
+                prevChapters.push(...sChaps);
+              }
             }
           }
-          if (prevChapters.length > 0) {
-            const lastChap = prevChapters[prevChapters.length - 1];
-            const lastContent = (lastChap.content || '').trim();
-            const lastEnd = lastContent.slice(-180).replace(/\n+/g, ' ');
-            prevCutNotice = `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【前置分卷 AI 已实际整理完成的章节与截止位置（重要接续参考）】
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-前置分卷已经切割完成了 ${prevChapters.length} 个章节：
-${prevChapters.map((ch, idx) => {
-  const startP = (ch.content || '').trim().slice(0, 60).replace(/\n+/g, ' ');
-  const endP = (ch.content || '').trim().slice(-60).replace(/\n+/g, ' ');
-  return `  - 已完成第 ${idx + 1} 章: 【${ch.title}】(${ch.category}) | 开头: 「${startP}...」 | 结尾: 「...${endP}」`;
-}).join('\n')}
-
-【接续执行指令】：
-上一分卷已整理好的最后一个章节是【${lastChap.title}】，其结尾原文内容为：
-「...${lastEnd}」
-你当前负责编写的章节（全大纲第 ${startChapNum} 章起）必须紧密承接上一卷的结尾位置，继续整理输出！同时，如果大纲备注中说明需要归纳散落各处的信息（例如后卫、KP人设、HO设定等），请将其完整整合进对应章节中！
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+          const mapNodesList = Array.isArray(this.currentPlan?.mapNodes) ? this.currentPlan.mapNodes : [];
+          let mapSummaryBlock = '';
+          if (mapNodesList.length > 0) {
+            mapSummaryBlock = `\n【已整理好的全模组地图层级结构（共 ${mapNodesList.length} 个地点节点）】：\n` +
+              mapNodesList.map(m => `  - [层级${m.level || 1}] 【${m.name}】${m.parent ? ` (上级区域: ${m.parent})` : ' (顶层主区域)'}：${m.desc || '无'}`).join('\n') + '\n';
+          }
+          if (prevChapters.length > 0 || mapSummaryBlock) {
+            let chapsBlock = '';
+            if (prevChapters.length > 0) {
+              const lastChap = prevChapters[prevChapters.length - 1];
+              const lastContent = (lastChap.content || '').trim();
+              const lastEnd = lastContent.slice(-180).replace(/\n+/g, ' ');
+              chapsBlock = `\n【前置分卷已经整理完成的 ${prevChapters.length} 个章节】：\n` +
+                prevChapters.map((ch, idx) => {
+                  const startP = (ch.content || '').trim().slice(0, 60).replace(/\n+/g, ' ');
+                  const endP = (ch.content || '').trim().slice(-60).replace(/\n+/g, ' ');
+                  return `  - 已完成第 ${idx + 1} 章: 【${ch.title}】(${ch.category}) | 开头: 「${startP}...」 | 结尾: 「...${endP}」`;
+                }).join('\n') +
+                `\n\n【接续执行指令】：\n上一分卷已整理好的最后一个章节是【${lastChap.title}】，其结尾原文内容为：\n「...${lastEnd}」\n你当前负责编写的章节（全大纲第 ${startChapNum} 章起）必须在上方已整理好的地图与前置章节基础上紧密承接，继续往下整理输出！同时，如果大纲备注中说明需要归纳散落各处的信息（例如后卫、KP人设、HO设定等），请将其完整整合进对应章节中！`;
+            }
+            prevCutNotice = `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【前置分卷 AI 已整理完成的地图与章节汇总（重要接续基础）】\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━${mapSummaryBlock}${chapsBlock}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
           }
         }
 
@@ -6506,6 +6668,7 @@ ${chap.content}
         } catch (e) {
           rawFiles = await database.moduleRawFiles.toArray();
         }
+        rawFiles = (rawFiles || []).filter(r => r && r.id !== '__module_cutter_draft__' && r.fileType !== 'draft');
       }
 
       if (!rawFiles || rawFiles.length === 0) {
@@ -6514,6 +6677,7 @@ ${chap.content}
         rawFiles.forEach(fileRecord => {
           const item = document.createElement('div');
           item.className = 'module-history-file-card';
+          const imgCount = Array.isArray(fileRecord.images) ? fileRecord.images.length : 0;
           item.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
               <span style="font-weight: 600; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px;" title="${fileRecord.fileName}">${fileRecord.fileName}</span>
@@ -6521,6 +6685,7 @@ ${chap.content}
             </div>
             <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
               <span>${fileRecord.wordCount || 0} 字</span> · 
+              <span>${imgCount} 张图</span> · 
               <span>${new Date(fileRecord.uploadedAt || Date.now()).toLocaleDateString()}</span>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
@@ -8177,6 +8342,53 @@ ${chap.content}
       let images = [];
       if (database && database.moduleImages) {
         images = await database.moduleImages.where('moduleId').equals(moduleId).toArray();
+        const mod = this.activeDetailModule || (database.modules ? await database.modules.get(moduleId) : null);
+        if (mod && !mod._userDeletedImages && database.moduleRawFiles) {
+          try {
+            const allRaws = await database.moduleRawFiles.toArray();
+            const matchedRaw = allRaws.find(r =>
+              r && r.id !== '__module_cutter_draft__' && Array.isArray(r.images) && r.images.length > images.length &&
+              String(r.moduleName || '').trim() === String(mod.name || '').trim()
+            );
+            if (matchedRaw) {
+              const mergedToSave = [];
+              for (let idx = 0; idx < matchedRaw.images.length; idx++) {
+                const rawImg = matchedRaw.images[idx];
+                const rawIdx = rawImg.imageIndex || (idx + 1);
+                const exists = images.find(e =>
+                  (e && rawImg.dataUrl && e.dataUrl === rawImg.dataUrl) ||
+                  (e && e.imageIndex === rawIdx && e.pageNumber === rawImg.pageNumber)
+                );
+                if (!exists) {
+                  mergedToSave.push({
+                    moduleId: moduleId,
+                    imageIndex: rawIdx,
+                    name: rawImg.name || `图${rawIdx}`,
+                    dataUrl: rawImg.dataUrl,
+                    isSensitive: !!rawImg.isSensitive,
+                    isDiscarded: false,
+                    pageNumber: rawImg.pageNumber || 1,
+                    width: rawImg.width || 800,
+                    height: rawImg.height || 600,
+                    format: rawImg.format || 'JPEG',
+                    description: rawImg.description || '',
+                    annotation: rawImg.annotation || '',
+                    placement: rawImg.placement || '文档插图'
+                  });
+                }
+              }
+              if (mergedToSave.length > 0) {
+                try {
+                  await database.moduleImages.bulkAdd(mergedToSave);
+                } catch (_) {
+                  await database.moduleImages.bulkPut(mergedToSave);
+                }
+                images = await database.moduleImages.where('moduleId').equals(moduleId).toArray();
+                images.sort((a, b) => (a.imageIndex || 0) - (b.imageIndex || 0));
+              }
+            }
+          } catch (_) {}
+        }
       }
 
       if (countLabel) {
@@ -8272,6 +8484,10 @@ ${chap.content}
 
         card.querySelector('.btn-del-detail-img')?.addEventListener('click', async (e) => {
           e.stopPropagation();
+          if (this.activeDetailModule) this.activeDetailModule._userDeletedImages = true;
+          if (database && database.modules && moduleId) {
+            try { await database.modules.update(moduleId, { _userDeletedImages: true }); } catch (_) {}
+          }
           if (database && database.moduleImages && img.id) {
             await database.moduleImages.delete(img.id);
           }
@@ -8400,6 +8616,7 @@ ${chap.content}
           if (confirmed) {
             if (moduleId === 'draft') {
               if (this.currentParsedData && this.currentParsedData.images) {
+                this.currentParsedData._userDeletedImages = true;
                 const idx = this.currentParsedData.images.findIndex(i => i.dataUrl === img.dataUrl || i.name === img.name);
                 if (idx !== -1) {
                   this.currentParsedData.images.splice(idx, 1);
@@ -8409,6 +8626,10 @@ ${chap.content}
               this.renderStep2GalleryUI();
             } else {
               const database = this.getDB();
+              if (this.activeDetailModule) this.activeDetailModule._userDeletedImages = true;
+              if (database && database.modules && moduleId) {
+                try { await database.modules.update(moduleId, { _userDeletedImages: true }); } catch (_) {}
+              }
               if (database && database.moduleImages && img.id) {
                 await database.moduleImages.delete(img.id);
               }
