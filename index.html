@@ -491,7 +491,7 @@
                   <img
                     id="icon-img-taobao"
                     src="https://i.postimg.cc/k47tXg1j/taologo.png"
-                    alt="桃宝"
+                    alt="沙盘"
                   />
                 </div>
                 <span
@@ -500,7 +500,7 @@
                     color: white;
                     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
                   "
-                  >桃宝</span
+                  >沙盘</span
                 >
               </div>
             </div>
@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3855,16 +3855,16 @@
             <!-- 四阶AI指示条 -->
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
               <div id="ai-mod-step-1" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI1 立意</div>
-              <div id="ai-mod-step-2" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI2 深化</div>
-              <div id="ai-mod-step-3" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI3 盲测</div>
-              <div id="ai-mod-step-4" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI4 成文</div>
+              <div id="ai-mod-step-2" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI2 细纲</div>
+              <div id="ai-mod-step-3" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI3 初稿</div>
+              <div id="ai-mod-step-4" style="padding: 6px 4px; border-radius: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); text-align: center; font-size: 11px; font-weight: 600; color: var(--text-secondary);">AI4 精修</div>
             </div>
 
             <div id="ai-mod-progress-wrap" style="display: none; height: 6px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color); border-radius: 999px; overflow: hidden;">
               <div id="ai-mod-progress-bar" style="width: 0%; height: 100%; background: var(--accent-color, #4A7A68); transition: width 0.25s ease;"></div>
             </div>
 
-            <div id="ai-mod-status-text" style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">选择上方标签与思维链后点击生成，AI1至AI4将全自动完成立意、深化、玩家盲测挑刺与分章撰写，全程隐藏守秘人底牌与剧透</div>
+            <div id="ai-mod-status-text" style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">选择上方标签与思维链后点击生成，AI1立意、AI2规划调用次数与细纲、AI3撰写小说级初稿、AI4自审精修成文，全程隐藏底牌防剧透</div>
 
             <!-- 零剧透玩家公开信息预览框 -->
             <div id="ai-mod-preview-box" style="display: none; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--secondary-bg, #F0EFEA); border: 1px solid var(--border-color);">
@@ -15210,123 +15210,163 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
     <!-- index.html -->
 
-    <div id="taobao-screen" class="screen">
-      <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
-        <span>桃宝</span>
-        <div class="header-actions">
-          <span
-            class="action-btn"
-            id="clear-taobao-products-btn"
-            style="font-size: 16px; font-weight: 500"
-            >清空</span
-          >
-          <span class="action-btn" id="add-product-btn" title="添加商品"
-            >+</span
-          >
+    <div id="taobao-screen" class="screen" style="background: var(--background-color); display: flex; flex-direction: column;">
+      <div class="header" style="background: var(--card-bg); border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+        <span class="back-btn" onclick="if(window.ModuleAtlas3D){window.ModuleAtlas3D.closeScreen();}else{showScreen('home-screen');}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+        </span>
+        <span style="font-weight: 600; color: var(--text-primary);">沙盘</span>
+        <div class="header-actions" style="display: flex; gap: 6px; align-items: center;">
+          <button type="button" class="mod-capsule-btn primary" id="atlas-generate-btn" style="height: 28px; padding: 0 12px; font-size: 12px;">生成</button>
+          <button type="button" class="mod-capsule-btn" id="atlas-save-local-btn" style="height: 28px; padding: 0 12px; font-size: 12px;">存盘</button>
         </div>
       </div>
 
-      <!-- 1. 顶部页签导航 (已加入“饿了么”) -->
-      <div class="taobao-tabs">
-        <button class="taobao-tab active" data-view="products-view">
-          首页
-        </button>
+      <div id="atlas-main-scroll" style="flex: 1; overflow-y: auto; padding: 10px 12px 24px; display: flex; flex-direction: column; gap: 10px;">
+        <!-- 1. 模组与风格选择栏 -->
+        <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">模组</label>
+            <select id="atlas-module-select" class="moe-input" style="flex: 1; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="">正在读取模组库...</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">画风</label>
+            <select id="atlas-style-select" class="moe-input" style="flex: 1; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="auto" selected>贴合模组氛围自动配色</option>
+              <option value="rose_gothic">黑粉蔷薇哥特学院</option>
+              <option value="ivory_courtyard">纯白琉璃圣殿庭院</option>
+              <option value="clinical_ward">苍白病院与研究设施</option>
+              <option value="classic_manor">古典西洋钟楼洋馆</option>
+              <option value="shrine_mist">暮色神社与旧木町</option>
+              <option value="starlight_observatory">深海星穹秘仪高塔</option>
+            </select>
+          </div>
+          <div id="atlas-status-bar" style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; display: flex; justify-content: space-between; align-items: center;">
+            <span id="atlas-status-text">选择模组后自动加载立体建筑沙盘，点击生成可由AI定制多层精细建筑群</span>
+            <span id="atlas-storage-badge" style="color: var(--accent-color); font-weight: 600; flex-shrink: 0; margin-left: 6px;">就绪</span>
+          </div>
+        </div>
 
-        <button class="taobao-tab" data-view="eleme-view">饿了么</button>
+        <!-- 2. 立体3D建筑沙盘主视窗 -->
+        <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; padding-bottom: 4px; border-bottom: 1px dashed var(--border-color);">
+            <div style="min-width: 0; flex: 1;">
+              <div id="atlas-banner-subtitle" style="font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--accent-color); text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">ARCHITECTURAL 3D ATLAS</div>
+              <div id="atlas-banner-title" style="font-size: 15px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px;">立体建筑沙盘</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9"/></svg>
+              <span>滑动旋转</span>
+            </div>
+          </div>
 
-        <button class="taobao-tab" data-view="cart-view">
-          购物车<span id="cart-item-count-badge" style="display: none">0</span>
-        </button>
-        <button class="taobao-tab" data-view="orders-view">我的订单</button>
-        <button class="taobao-tab" data-view="my-view">我的</button>
+          <div id="atlas-canvas-wrap" style="position: relative; width: 100%; height: 295px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden; touch-action: none; user-select: none;">
+            <canvas id="atlas-3d-canvas" style="width: 100%; height: 100%; display: block; cursor: grab;"></canvas>
+            <!-- 3D建筑头顶悬浮标签层 -->
+            <div id="atlas-labels-layer" style="position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3;"></div>
+            <!-- 右上角巡航与左下角区域数显示 -->
+            <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 5;">
+              <button type="button" class="mod-capsule-btn" id="atlas-orbit-btn" style="height: 26px; padding: 0 10px; font-size: 11px; background: var(--card-bg);">巡航</button>
+            </div>
+            <!-- 右下角罗盘全览按钮 -->
+            <button type="button" class="mod-capsule-btn" id="atlas-allview-btn" style="position: absolute; bottom: 10px; right: 10px; height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 5px; z-index: 5; background: var(--card-bg); font-weight: 600;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+              </svg>
+              <span>全览</span>
+            </button>
+          </div>
+
+          <!-- 3. 底部横向建筑区域导览条 -->
+          <div id="atlas-zone-strip" style="display: flex; align-items: stretch; gap: 6px; overflow-x: auto; padding: 6px 2px 2px; scrollbar-width: none;"></div>
+        </div>
+
+        <!-- 4. 当前选中建筑详情与调查线索卡片 -->
+        <div id="atlas-zone-detail-card" class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 10px; padding: 14px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+            <div style="display: flex; align-items: baseline; gap: 8px; min-width: 0;">
+              <span id="atlas-detail-code" style="font-size: 22px; font-weight: 800; color: var(--accent-color); line-height: 1;">01</span>
+              <span id="atlas-detail-name" style="font-size: 16px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">建筑区域</span>
+            </div>
+            <span id="atlas-detail-sub" style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">ZONE // 01</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 10px; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); font-size: 11.5px;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <span style="color: var(--accent-color); font-weight: 600; flex-shrink: 0;">人物</span>
+              <span id="atlas-detail-holder" style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">调查员与同伴</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <span style="color: var(--accent-color); font-weight: 600; flex-shrink: 0;">形制</span>
+              <span id="atlas-detail-arch" style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">复合立体建筑</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <span style="color: var(--accent-color); font-weight: 600; flex-shrink: 0;">准入</span>
+              <span id="atlas-detail-access" style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">自由探索开放</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <span style="color: var(--accent-color); font-weight: 600; flex-shrink: 0;">探索</span>
+              <span id="atlas-detail-stars" style="color: var(--accent-color); display: inline-flex; align-items: center; gap: 2px;"></span>
+            </div>
+          </div>
+
+          <div id="atlas-detail-desc" style="font-size: 12.5px; color: var(--text-primary); line-height: 1.7; white-space: pre-wrap;"></div>
+
+          <div id="atlas-detail-clues-wrap" style="display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
+            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary);">区域看点与可调查线索</div>
+            <div id="atlas-detail-clues" style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-primary); line-height: 1.55;"></div>
+          </div>
+        </div>
       </div>
 
-      <!-- 2. 页面内容容器 -->
-      <div class="taobao-content">
-        <!-- “首页”视图 (保持不变) -->
-        <div id="products-view" class="taobao-view active">
-          <div class="taobao-search-bar">
-            <input
-              type="search"
-              id="product-search-input"
-              placeholder="搜一搜，让AI为你创造好物！"
-            />
-            <button id="product-search-btn">搜索</button>
-          </div>
-          <div id="product-category-tabs"></div>
-          <div id="product-grid" class="product-grid"></div>
+      <!-- 隐藏旧版DOM节点以保证旧脚本事件绑定零报错 -->
+      <div id="taobao-legacy-hidden" style="display: none !important;">
+        <span id="clear-taobao-products-btn"></span>
+        <span id="add-product-btn"></span>
+        <div class="taobao-tabs">
+          <button class="taobao-tab active" data-view="products-view"></button>
+          <button class="taobao-tab" data-view="eleme-view"></button>
+          <button class="taobao-tab" data-view="cart-view"><span id="cart-item-count-badge">0</span></button>
+          <button class="taobao-tab" data-view="orders-view"></button>
+          <button class="taobao-tab" data-view="my-view"></button>
         </div>
-
-        <div id="eleme-view" class="taobao-view">
-          <div class="taobao-search-bar">
-            <!-- 新增：这是第一行的“搜索”组 -->
-            <div class="eleme-search-group">
-              <input
-                type="search"
-                id="eleme-search-input"
-                placeholder="想吃点什么？让AI帮你找！"
-              />
-              <button id="eleme-search-btn">搜索</button>
-            </div>
-
-            <!-- 新增：这是第二行的“功能”组 -->
-            <div class="eleme-actions-group">
-              <button
-                id="eleme-add-manual-btn"
-                class="header-actions"
-                title="手动添加美食"
-              >
-                +
-              </button>
-              <button
-                id="eleme-generate-ai-btn"
-                class="header-actions"
-                title="AI生成美食"
-              >
-                ✨
-              </button>
-              <button id="eleme-clear-all-btn" class="header-btn">🗑️</button>
+        <div class="taobao-content">
+          <div id="products-view" class="taobao-view active">
+            <input type="search" id="product-search-input" />
+            <button id="product-search-btn"></button>
+            <div id="product-category-tabs"></div>
+            <div id="product-grid" class="product-grid"></div>
+          </div>
+          <div id="eleme-view" class="taobao-view">
+            <input type="search" id="eleme-search-input" />
+            <button id="eleme-search-btn"></button>
+            <button id="eleme-add-manual-btn"></button>
+            <button id="eleme-generate-ai-btn"></button>
+            <button id="eleme-clear-all-btn"></button>
+            <div id="eleme-grid" class="product-grid"></div>
+          </div>
+          <div id="cart-view" class="taobao-view">
+            <div id="cart-item-list"></div>
+            <div id="cart-checkout-bar">
+              <span id="cart-total-price"></span>
+              <button id="share-cart-to-char-btn"></button>
+              <button id="buy-for-char-btn"></button>
+              <button id="checkout-btn"></button>
             </div>
           </div>
-
-          <div id="eleme-grid" class="product-grid">
-            <!-- 美食列表将由JS动态生成在这里 -->
+          <div id="orders-view" class="taobao-view">
+            <div id="order-list" class="order-list"></div>
           </div>
-        </div>
-
-        <!-- “购物车”视图 -->
-        <div id="cart-view" class="taobao-view">
-          <div id="cart-item-list"></div>
-          <div id="cart-checkout-bar" style="display: none">
-            <div class="total-price">
-              合计: <span id="cart-total-price">¥ 0.00</span>
+          <div id="my-view" class="taobao-view">
+            <div id="user-balance-container">
+              <h2 id="user-balance-display"></h2>
+              <button id="top-up-btn"></button>
             </div>
-            <div style="display: flex; gap: 10px">
-              <button id="share-cart-to-char-btn">分享给Ta代付</button>
-              <button id="buy-for-char-btn">为Ta购买</button>
-              <button id="checkout-btn">结算(0)</button>
-            </div>
+            <div id="balance-details-list" class="order-list"></div>
           </div>
-        </div>
-
-        <!-- “我的订单”视图 -->
-        <div id="orders-view" class="taobao-view">
-          <div id="order-list" class="order-list"></div>
-        </div>
-
-        <!-- “我的”视图 -->
-        <div id="my-view" class="taobao-view">
-          <div id="user-balance-container">
-            <p>我的余额</p>
-            <h2 id="user-balance-display">¥ 0.00</h2>
-            <button id="top-up-btn" class="form-button">给钱包充点钱</button>
-          </div>
-          <div
-            id="balance-details-list"
-            class="order-list"
-            style="padding: 0 15px"
-          ></div>
         </div>
       </div>
     </div>
@@ -24483,7 +24523,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           "lovers-space": "情侣空间",
           "game-hall": "游戏大厅",
           "x-social": "X社交",
-          taobao: "桃宝",
+          taobao: "沙盘",
           "persona-creator": "人设",
           "date-a-live": "约会大作战",
           "tukey-accounting": "兔兔记账",
@@ -76362,7 +76402,8 @@ ${stickerContext || "无"}
           for (const appId in DEFAULT_APP_LABELS) {
             if (DEFAULT_APP_LABELS.hasOwnProperty(appId)) {
               const defaultName = DEFAULT_APP_LABELS[appId];
-              const customName = appLabels[appId] || defaultName;
+              const rawSaved = appLabels[appId];
+              const customName = (appId === "taobao" && rawSaved === "桃宝") ? defaultName : (rawSaved || defaultName);
 
               // 这个选择器会同时找到主屏幕和Dock栏上的所有图标
               const icons = document.querySelectorAll(

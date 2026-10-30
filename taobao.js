@@ -1387,8 +1387,9 @@ async function clearTaobaoProducts() {
  */
 async function openTaobaoApp() {
   showScreen("taobao-screen");
-  await renderTaobaoProducts(); // 默认显示所有商品
-  renderBalanceDetails(); // 刷新余额显示
+  if (window.ModuleAtlas3D && typeof window.ModuleAtlas3D.openScreen === "function") {
+    await window.ModuleAtlas3D.openScreen();
+  }
 }
 
 /**

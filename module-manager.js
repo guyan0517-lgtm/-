@@ -14177,6 +14177,82 @@ ${chaptersDigest}
         .replace(/```/g, '')
         .trim();
 
+      const unwrapParsedObject = (obj, depthLevel = 0) => {
+        if (!obj || typeof obj !== 'object' || depthLevel > 3) return null;
+        if (Array.isArray(obj)) {
+          for (let i = 0; i < obj.length; i++) {
+            const item = obj[i];
+            if (item && typeof item === 'object' && (item.plannedScenes || item.deepenedScenes || item.finalScenes || item.chunks || item.publicInfoChapter || item.kpMasterGuideChapter)) {
+              return item;
+            }
+          }
+          const joined = obj
+            .map(it => (typeof it === 'string' ? it : (it && typeof it === 'object' ? (it.content || it.message || it.text || '') : '')))
+            .filter(Boolean)
+            .join('\n')
+            .trim();
+          if (joined && joined !== rawText.trim()) {
+            return this.parseJsonFromAiResponse(joined);
+          }
+          return null;
+        }
+        if (this.isThoughtOnlyJsonObject(obj)) return null;
+        const cloned = Object.assign({}, obj);
+        ['thinking', 'thought', 'thoughts', 'reasoning', 'analysis'].forEach(k => {
+          if (k in cloned && Object.keys(cloned).length > 1) {
+            delete cloned[k];
+          }
+        });
+        const hasModuleKeys = Boolean(
+          cloned.plannedScenes ||
+          cloned.deepenedScenes ||
+          cloned.finalScenes ||
+          cloned.chunks ||
+          cloned.chapters ||
+          cloned.sections ||
+          cloned.mapNodes ||
+          cloned.publicInfoChapter ||
+          cloned.kpTruthAndMechanism ||
+          cloned.kpMasterGuideChapter ||
+          cloned.title ||
+          cloned.summary
+        );
+        if (hasModuleKeys) return cloned;
+
+        const chatArr = Array.isArray(cloned.chatResponse)
+          ? cloned.chatResponse
+          : (Array.isArray(cloned.messages) ? cloned.messages : null);
+        if (chatArr && chatArr.length > 0) {
+          for (let i = 0; i < chatArr.length; i++) {
+            const sub = chatArr[i];
+            if (sub && typeof sub === 'object') {
+              const directUnwrapped = unwrapParsedObject(sub, depthLevel + 1);
+              if (directUnwrapped) return directUnwrapped;
+            }
+          }
+          const combinedText = chatArr
+            .map(sub => (typeof sub === 'string' ? sub : (sub && typeof sub === 'object' ? (sub.content || sub.message || sub.text || sub.reply || '') : '')))
+            .filter(Boolean)
+            .join('\n')
+            .trim();
+          if (combinedText && combinedText !== rawText.trim()) {
+            const innerParsed = this.parseJsonFromAiResponse(combinedText);
+            if (innerParsed) return innerParsed;
+          }
+        }
+
+        const singleTextField = cloned.content || cloned.text || cloned.message || cloned.reply || cloned.data || cloned.result;
+        if (typeof singleTextField === 'string' && singleTextField.trim() && singleTextField.trim() !== rawText.trim()) {
+          const innerParsed = this.parseJsonFromAiResponse(singleTextField.trim());
+          if (innerParsed) return innerParsed;
+        } else if (singleTextField && typeof singleTextField === 'object') {
+          const innerObj = unwrapParsedObject(singleTextField, depthLevel + 1);
+          if (innerObj) return innerObj;
+        }
+
+        return cloned;
+      };
+
       const tryParseCandidate = (candidate) => {
         if (!candidate) return null;
         let parsed = null;
@@ -14190,12 +14266,8 @@ ${chaptersDigest}
             parsed = null;
           }
         }
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          if (this.isThoughtOnlyJsonObject(parsed)) return null;
-          if ('thinking' in parsed && Object.keys(parsed).length > 1) {
-            delete parsed.thinking;
-          }
-          return parsed;
+        if (parsed && typeof parsed === 'object') {
+          return unwrapParsedObject(parsed, 0);
         }
         return null;
       };
@@ -14333,7 +14405,8 @@ ${chaptersDigest}
 
       text = text.replace(/^```(?:markdown|text|txt)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
-      // 剥离聊天RP模式专用的文末待办清单与可选行动面板
+      // 剥离多余的 mermaid 流程图代码块与聊天RP模式专用的文末待办清单
+      text = text.replace(/```mermaid[\s\S]*?```/gi, '').trim();
       text = text.replace(/\n*(?:---\s*\n+)?(?:📝\s*\*\*当前待办清单|🌟\s*\*\*玩家当前可选行动方向)[\s\S]*$/i, '').trim();
 
       // 替换残留的酒馆聊天宏，确保模组文本符合人类模组书阅读习惯
@@ -14645,6 +14718,10 @@ ${chaptersDigest}
           ai2Data: null,
           parsedAi3: null,
           resolvedScenes: null,
+          roughChapters: [],
+          completedRoughCount: 0,
+          roughEndingText: '',
+          roughEndingDone: false,
           finalChapters: [],
           completedSceneCount: 0,
           previousSceneTail: '',
@@ -14658,6 +14735,8 @@ ${chaptersDigest}
       }
 
       const cp = this.aiWriterState.pipelineCheckpoint;
+      if (!Array.isArray(cp.roughChapters)) cp.roughChapters = [];
+      if (typeof cp.completedRoughCount !== 'number') cp.completedRoughCount = cp.roughChapters.length;
 
       this.aiWriterState.isRunning = true;
       if (genBtn) {
@@ -14684,47 +14763,57 @@ ${chaptersDigest}
         const drawnSeeds = drawMode === 'on' ? this.drawInspirationSeedsForTags(allTags) : [];
 
         const refGuidanceMap = {
-          free: '顺应故事本身的气质去决定章节脉络：既可以是层层剥茧的箱庭探索，也可以是随时间推移不断升温的双人对手戏。',
-          confession: '参考日常独白与心理拉扯模组：从寻常场景切入，引出两人之间暗流涌动的试探与真心剖白。',
-          date_loop: '参考约会箱庭与微异常模组：以轻松的同行或出游开场，让日常互动与抽丝剥茧的调查彼此交融。',
-          jealous_sweet: '参考奇妙变故与情感反差模组：构思一个不得不拉近距离的巧妙契机，把KPC藏着的在意自然烘托出来。',
-          multi_legend: '参考多HO秘密与群像怪谈模组：每位调查员怀揣各自的私密过往或立场，个人暗线与主线谜团彼此咬合。'
+          free: '顺应故事本身的气质去决定整体结构：既可以是按早中晚时间推进的连续叙事，也可以是调查员自由决定去哪里探索的沙盒箱庭，还可以是白天自由结伴调查与夜晚主线剧情交织的复合结构。',
+          confession: '参考日常独白与心理拉扯的小说化写法：从寻常生活切入，先写足两人平时的相处温度与细微异样，再在层层试探与坦诚对话中推向情感高潮。',
+          date_loop: '参考约会箱庭与微异常的小说化写法：以有明确日常动机的同行出游或赴约开场，把清晨到夜晚的行程安排与沿途风景互动写得饱满动人，让异常感在日常甜度中悄然浮现。',
+          jealous_sweet: '参考奇妙变故与情感反差的小说化写法：构思一个兼具趣味性与宿命感的设定，让两人在共同应对变故的过程中自然流露藏在心底的偏爱与占有欲。',
+          multi_legend: '参考多线秘密与群像怪谈的小说化写法：每位角色都怀揣合情合理的个人来意与过往，白天可自由选择与不同同伴组队前往不同地点调查，个人暗线与主线谜团在具体事件中自然交汇。'
         };
         const refGuidance = refGuidanceMap[refMode] || refGuidanceMap.free;
 
         const craftPhilosophy = `
-【人类跑团模组编写规范与核心铁律】：
-1. 标题与事先信息规范（最高优先级）：
-   - 模组总标题与各章节标题必须朴实无华、自然简练，贴合人类真实跑团模组的命名习惯，严禁起类似「逃离绝望的孤岛风云」这种浮夸奇怪的标题。
-   - 格式必须干净规范，严禁在模组文本中自行添加多余的星号 * 以及括号注解，不要对模组里存在的事物做多余的场外解释，人类作者怎么写模组你就怎么写模组。
-   - 严禁在事先信息（00-模组已知信息）中复读用户的幕后指令或要求：如果用户在创作引子里强调了某个幕后设定（例如要求犯人必须是真人而不是古神），你只需要在幕后真相与剧情设定里照做即可，绝对禁止在「00-模组已知信息」或公开注意事项里特意写一句“本模组犯人一定是人类凶手而不是古神”之类的说明，这既不属于模组公开信息，更会导致严重剧透。
-2. 流程巧思、特殊互动环节与计数器配合：
-   - 场景描写与人物对话的语言完全自由发挥，不做任何限制。
-   - 但在模组的【流程】说明（【KP信息】与大纲导读）中，你可以详细解释流程应该怎么推进，设计一些流程上的巧思，防止带团AI在实践时写不懂；也可以在流程里设计有趣的特殊互动环节（例如跑团中常见的醉酒游戏、真心话大冒险、抽签问答或箱庭小游戏等）。
-   - 严禁在模组里设计“暗中检定一个数值”这种带团AI根本做不到的机制。如果流程或结局分支需要累计某个隐藏次数或数值（例如叫了多少次某人名字、小游戏累计得分、触发了多少次异常等），请在【KP信息】中明确指导带团AI使用聊天中的「计数」功能（在回复末尾附带 [计数:名称+1] 或 [计数:名称=数值]，事件结算或模组结束时附带 [计数:名称 清除]）来记录和判断。`;
+【小说化沉浸式跑团模组创作思考与指引】：
+1. 把写模组当成写一部可交互的长篇或中篇小说，先立住一条真正吸引人的主线故事：
+   - 请放下写说明书或写流程表的机械心态，把自己当成一位正在创作互动小说的人类作家。无论题材是日常纯爱、暴风雪山庄、怪谈调查还是多线群像，故事都必须有一条浑然天成的主线脉络：这件事最初因何而起，人物怀着怎样的心情走进这个故事，中途经历了怎样的悬念转折与情感升温，最终又将在怎样的冲突或坦诚中迎来高潮。
+   - 每一个登场人物都应当是活生生的人，有自己的生活惯性、喜怒哀乐与合情合理的行事动机，绝不为了强行推进剧情而做出违背常理与人性的荒唐举动。
+2. 思考一个真实的人走进场景后的第一反应，用合理的「动静」与切身利益给足调查动机：
+   - 写任何一个章节或地点时，请先在脑海中推演：一个活生生的正常人此时此刻站在门前，他心里最在意的是什么？
+   - 如果调查员刚刚遭遇变故或身处陌生的封闭环境，正常人的第一反应往往是确认自身处境、尝试离开或寻找外界联络。请先正面回应并安抚这种本能反应，再用自然具体的环境「动静」把他的注意力吸引到眼前的探索上——比如某个房间传来的异响、半掩门缝里透出的微光、空气中不寻常的气味、同伴欲言又止的反常神态、或是解决眼下困境迫切需要的一把钥匙与一份记录。让玩家产生「我正需要弄清楚这件事，所以我主动想去那里看看」的顺畅直觉。
+3. 灵活运用最契合故事的叙事结构，兼顾时间流动与沙盒探索的自由度：
+   - 模组的结构不必拘泥于单一模板：
+     · 可以是昼夜时间轴推进：细致安排从清晨、午后、傍晚到深夜每个时段的氛围变化、生活细节与主线事件；
+     · 可以是自由沙盒探索：明确列出当前开放的各个调查区域，调查员主动选择去哪里调查、与谁结伴同行、在不同地点分别能发现什么线索、触发怎样的专属对话与支线事件；
+     · 也可以是「白天自由沙盒调查 + 夜晚主线剧情推进」的复合结构。
+4. 懂得小说叙事的详略呼吸感，切勿平均用力或跨章复读：
+   - 真正优秀的人类模组懂得留白与爆发：平淡的过渡区域或没有核心剧情的空房间只需简明交代环境特征即可；而在关键的情感转折、真相揭晓或戏剧冲突高潮处，则要毫不吝惜笔墨，把光影气味、人物微表情、呼吸停顿与层层递进的台词对手戏写得淋漓尽致。
+   - 每一章各司其职：「01-幕后真相与机制」集中讲透一次全局真相；「02-模组导读与大纲」写给带团守秘人看整体节奏与防卡关引导；正文章节里的【KP信息】只写本章眼前的推进逻辑与分支应对，不再重复抄写全局背景。
+5. 格式干净自然，善用计数器配合趣味互动：
+   - 模组总标题与各章节标题请保持朴实自然、有文学余韵。
+   - 文本保持纯净的人类模组排版，有机使用【正文】、【KP信息】、【检定】，用「▼具体地点或物品」标示可探索区域，用「・当调查员……时 → 角色反应与台词」呈现自然互动分支；不要自行添加多余的星号 * 或场外括号注解，不要在「00-模组已知信息」中复读用户场外要求或剧透底牌，不要把角色拆成两套割裂性格模板，也不要画流程图代码。
+   - 不要设计带团AI无法执行的“暗中检定”。如果流程中设计了真心话大冒险、猜谜问答、饮酒互动、搜集印章等需要累计次数的趣味环节，请在【KP信息】中说明使用 [计数:名称+1] 记录，并在结算后使用 [计数:名称 清除]。`;
 
         // ==========================================================
-        // 第一阶段：AI1 审题破局与底牌立意构思
+        // 第一阶段：AI1 立意（小说化主线立意、人物弧光与底牌构思）
         // ==========================================================
         let ai1Data = cp.ai1Data;
         if (!ai1Data) {
           cp.activeStep = 1;
           this.setAiWriterStepActive(1);
-          this.updateAiWriterStatus(10, 'AI1 正在构思模组核心诡计、故事转折、角色里设定与完整章节目录...');
+          this.updateAiWriterStatus(10, 'AI1 立意：正在像构思长篇小说一样打磨故事主线、人物动机与核心底牌...');
           await this.saveAiWriterDraftToIDB();
 
-          const ai1System = `你是一位经验丰富的人类桌面跑团模组作者。
-请创作出一本结构扎实、流程清晰、严格遵守人类模组编写规范的跑团模组。
+          const ai1System = `你是一位极具创造力、文笔细腻、擅长像写长篇小说一样构思跑团模组的人类创作者。
+请先深入思考这个故事为什么动人、人物为什么会自然地走到一起、整个事件的来龙去脉与核心巧思是什么，再完成模组立意与基础档案。
 ${craftPhilosophy}
 ${tcPrompt ? '\n【创作者审美与文风参考】：\n' + tcPrompt : ''}`;
 
           const lengthDesc = lengthMode === 'short'
-            ? '短篇精悍（根据故事实际地点与事件脉络自由规划正文章节数量）'
+            ? '短篇精悍（建议规划 3 至 4 个核心正文章节，聚焦一气呵成的冲突与情感高潮）'
             : (lengthMode === 'long'
-              ? '长篇多幕（根据故事实际探索区域、多线分支与时间推进自由规划充实的正文章节数量）'
-              : '中篇饱满（根据故事实际起承转合与核心调查地点自由规划合理的正文章节数量）');
+              ? '长篇饱满（建议规划 6 至 9 个正文章节，充实展开多时段推进或沙盒多区域深度调查）'
+              : '中篇扎实（建议规划 4 至 6 个正文章节，兼顾日常铺垫、多点调查与高潮爆发）');
 
-          const ai1User = `请结合以下设定，构思这本跑团模组的整体蓝图、人物档案、完整章节目录、公开信息与守秘人真相：
+          const ai1User = `请结合以下设定，以创作一部互动小说的深度去构思这本跑团模组的主线立意、人物内心设定、完整章节脉络、公开已知信息与守秘人幕后真相：
 - 规则体系：${ruleSystem.toUpperCase()}
 - 玩家规模：${scaleType}
 - 结构类型：${modType}
@@ -14732,39 +14821,39 @@ ${tcPrompt ? '\n【创作者审美与文风参考】：\n' + tcPrompt : ''}`;
 - 目标篇幅：${lengthDesc}
 - 选定标签：${allTags.join('、')}
 - 叙事脉络建议：${refGuidance}
-${customTitle ? '- 模组标题：' + customTitle : '- 模组标题：请起一个朴实无华、简练自然的模组名字，切忌浮夸'}
-${userHook ? '- 用户创作要求与引子（注意：若包含幕后底牌要求，只可在幕后真相与剧情中落实，严禁在 00-模组已知信息 中复读或剧透）：' + userHook : ''}
+${customTitle ? '- 模组标题：' + customTitle : '- 模组标题：请起一个朴实自然、有文学气息与余韵的名字'}
+${userHook ? '- 用户创作要求与引子（请在幕后真相与主线故事中自然融会贯通，切勿在 00-模组已知信息 中生硬复读或提前剧透）：' + userHook : ''}
 ${drawnSeeds.length > 0 ? '- 灵感参考：\n  ' + drawnSeeds.map((s, idx) => (idx + 1) + '. ' + s).join('\n  ') : ''}
 
-请严格注意：
-1. 标题朴实自然，正文中不要添加多余的星号 * 或括号注解。
-2. 00-模组已知信息 只写给玩家看的正常背景、导入钩子与公开信息，绝不把用户的幕后要求重复写出来，绝不剧透。
-3. 流程与机制中可设计巧妙的跑团互动环节（如真心话大冒险、醉酒游戏等），严禁设计“暗中检定”，如需隐藏数值或次数累计，请写明让带团AI使用 [计数:名称+1] 与 [计数:名称 清除]。
+在动笔前请先深入思考并在 creativeReflection 中阐述：
+1. 这部模组作为一篇完整的小说，它的主线故事核是什么？是什么切身利益或情感牵绊让调查员从开场就愿意主动投入其中？
+2. 当异常或困境出现时，正常人的第一反应是什么？故事如何顺应这种人之常情，并用具体的环境动静与悬念引导调查员一步步深入探索？
+3. 本模组最适合采用哪种叙事推进方式（如早中晚时间线推进、自由沙盒探索、或昼夜交替调查）？哪些章节应当轻快略写，哪些章节应当浓墨重彩地推向情感与戏剧高潮？
 
-请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
+请直接输出一个以 { 开头、以 }结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明，所有字符串值内部的换行请写为 \\n，字符串内部引用请使用中文引号「」或“”：
 {
   "title": "朴实自然的模组名称",
-  "summary": "模组简介（介绍故事舞台与开场引子，不剧透幕后底牌，不复读用户场外指令）",
-  "themeMode": "本模组的气质基调概述",
-  "creativeReflection": "流程巧思与核心设计说明",
+  "summary": "模组简介（用富有小说画面感与悬念吸引力的自然语言描绘故事开端，不剧透底牌，不复读场外指令）",
+  "themeMode": "本模组的小说叙事结构（时间线/沙盒/昼夜复合）与情感基调概述",
+  "creativeReflection": "主线构思深度阐述：包含故事主线脉络、正常人反应与各阶段调查动机设计、以及详略高潮的节奏规划",
   "catAndNpcProfiles": [
     {
       "chapterTitle": "人物或HO章节标题，如：猫-角色名 或 03-HO1秘密与设定 或 NPC-主要人物",
       "roleName": "角色称呼与身份",
-      "publicDesc": "玩家可见的公开外貌、性格印象与日常相处模式",
-      "secretProfile": "守秘人掌握的里设定：包含真实动机、隐瞒的往事、面对调查员不同态度时的具体反应"
+      "publicDesc": "玩家可见的公开外貌、性格特点、生活习惯与平时相处细节",
+      "secretProfile": "守秘人掌握的里设定：包含角色内心真实的愿望或隐痛、合情合理的行动逻辑、在故事各阶段的情感变化与鲜活台词示例"
     }
   ],
   "plannedScenes": [
     {
-      "sceneTitle": "朴实简练的章节标题（包含导入与各具体调查或互动阶段）",
-      "purpose": "本章节的核心流程推进、特殊互动环节设计与可获取的线索情报",
-      "pacingNote": "本章节的流程把控说明与带团指引"
+      "sceneTitle": "朴实简练的章节标题",
+      "purpose": "本章节在整部小说主线中的位置、核心发生的事件或开放探索的沙盒区域、以及详略笔墨比重",
+      "pacingNote": "驱使调查员进入本章或探索该区域的自然动机与环境动静、本章向下一章过渡的契机"
     }
   ],
-  "endingsPlan": "多分支结局设计：清晰列出各结局的进入条件（若涉及隐藏累计条件，说明根据计数器的数值判定）、核心演出画面与收束",
-  "publicInfoChapter": "完整的【00-模组已知信息】章节文本：包含模组简介、时代与舞台背景、人数与耗时、推荐技能、导入引子与公开预设信息（严禁包含星号、多余括号注解，严禁复读用户场外要求或剧透真相）",
-  "kpTruthAndMechanism": "完整的【01-幕后真相与机制】章节文本：包含事件完整真相、幕后前因后果、特殊互动环节规则以及带团AI流程执行说明（如需隐藏计数，在此写明计数名称与加减清除规则，严禁出现暗中检定）"
+  "endingsPlan": "多分支结局设计：清晰列出各结局的自然达成条件、完整的小说化情感收束画面与台词余韵",
+  "publicInfoChapter": "完整的【00-模组已知信息】章节文本：包含模组简介、舞台背景、人数与耗时、推荐技能、极具代入感的公开导入引子（保持干净排版，无多余星号或场外注解，不剧透真相）",
+  "kpTruthAndMechanism": "完整的【01-幕后真相与机制】章节文本：包含事件完整真相、人物动机与前因后果时间线、沙盒或特殊互动环节规则（如需隐藏计数才写明 [计数:名称+1] 与 [计数:名称 清除]，不需要则不写）"
 }`;
 
           const ai1Raw = await this.callAI(ai1System, ai1User, null, 'writeModule');
@@ -14785,7 +14874,7 @@ ${drawnSeeds.length > 0 ? '- 灵感参考：\n  ' + drawnSeeds.map((s, idx) => (
             }
           }
           if (!ai1Data || (!ai1Data.publicInfoChapter && !ai1Data.kpTruthAndMechanism)) {
-            throw new Error('AI1 构思返回格式异常，请点击生成或继续重试');
+            throw new Error('AI1 立意返回格式异常，请点击生成或继续重试');
           }
           if (!Array.isArray(ai1Data.plannedScenes) || ai1Data.plannedScenes.length === 0) {
             throw new Error('AI1 未能生成有效的章节规划列表，请点击重新生成');
@@ -14800,20 +14889,21 @@ ${drawnSeeds.length > 0 ? '- 灵感参考：\n  ' + drawnSeeds.map((s, idx) => (
         }
 
         // ==========================================================
-        // 第二阶段：AI2 深化场景细节、线索链条与地图节点
+        // 第二阶段：AI2 细纲（确定调用次数、分章叙事比重、调查动静、地图与线索）
         // ==========================================================
         let ai2Data = cp.ai2Data;
-        if (!ai2Data) {
+        let resolvedScenes = cp.resolvedScenes;
+        if (!ai2Data || !Array.isArray(resolvedScenes) || resolvedScenes.length === 0) {
           cp.activeStep = 2;
           this.setAiWriterStepActive(2);
-          this.updateAiWriterStatus(32, 'AI2 正在丰富每一章的调查地点、流程巧思、互动环节与检定分支...');
+          this.updateAiWriterStatus(25, 'AI2 细纲：正在规划分章调用次数、场景动静与调查动机、沙盒地图节点与线索链...');
           await this.saveAiWriterDraftToIDB();
 
-          const ai2System = `你是跑团模组的场景架构师与流程编排师。
-我们将把 AI1 构思的故事蓝图细化为可探索、可互动、流程清晰的分章导览、地图节点与线索卡。
+          const ai2System = `你是跑团模组的总架构师与小说细纲编导。
+你的任务是将 AI1 的故事立意转化为可直接供 AI3 逐章撰写初稿、AI4 逐章精修的【分章执笔细纲】、【02-模组导读与大纲】、专属【地图节点】与【核心线索】。
 ${craftPhilosophy}`;
 
-          const ai2User = `以下是本模组的第一阶段蓝图：
+          const ai2User = `以下是本模组的第一阶段立意蓝图：
 ${JSON.stringify({
   title: customTitle || ai1Data.title,
   summary: ai1Data.summary,
@@ -14824,25 +14914,31 @@ ${JSON.stringify({
   plannedScenes: ai1Data.plannedScenes
 }, null, 2)}
 
-请保持与 plannedScenes 相同的章节顺序与数量（共 ${ai1Data.plannedScenes.length} 个正文章节，绝不可漏章或合并成一章），为每一章补充具体的场景细节、流程执行逻辑、特殊互动小游戏或检定分支，并提取本模组专属的地图地点与关键线索卡。注意不要添加多余星号或括号注解，不要设计暗中检定。
-请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
+请统筹规划本模组的分章细纲，并明确决定后续 AI3 初稿与 AI4 精修需要分多少个正文章节进行生成（deepenedScenes 数组的长度即代表正文章节总数与调用次数，请与 plannedScenes 保持完整对应，共 ${ai1Data.plannedScenes.length} 章）：
+1. 为每一章设计自然流畅的前文衔接、促使调查员主动探索该场景的具体「动静」与现实动机（例如听见什么声音、看到什么异常、为了什么切身目的而进入调查）。
+2. 明确每一章的「叙事比重与详略要求」：哪些过渡部分应简明利落，哪些重头戏与情感爆发点应浓墨重彩地写透。
+3. 如果包含自由沙盒探索或多时段推进，请清晰规划每个可探索区域（▼位置）的线索分布、与同伴互动的对话分支以及触发事件。
+4. 编写完整的【02-模组导读与大纲】（kpMasterGuideChapter），指导带团AI如何把握整体小说节奏与防卡关引导。
+5. 提炼本模组专属的立体地图地点节点（mapNodes）与线索卡（clues）。
+
+请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，所有字符串值内部的换行请写为 \\n：
 {
-  "atmosphereAndMechanicsGuide": "守秘人流程把控指南：详细说明流程推进巧思、特殊互动环节规则以及何时使用 [计数:名称+1] 与 [计数:名称 清除]",
+  "atmosphereAndMechanicsGuide": "完整的【02-模组导读与大纲】正文（以【KP信息】开头）：包含整体小说脉络导览、时间线或沙盒自由探索的带团调度方法、调查员卡关时的自然引导技巧与特殊互动环节说明",
   "deepenedScenes": [
     {
-      "sceneTitle": "与 plannedScenes 对应的朴实章节标题",
-      "atmosphereCues": "本章核心场景的环境与器物细节",
-      "kpcInteractionDesign": "本章中KPC或NPC的互动方式、特殊环节或小游戏流程设计以及面对调查员不同举动时的具体反应",
-      "cluesOrEvents": "本章包含的具体调查点、公开技能【检定】条件与成功/失败结果、可获得的线索或触发的转折事件",
-      "pacingRule": "本章转入下一章节的触发条件与衔接方式"
+      "sceneTitle": "朴实简练的章节标题",
+      "atmosphereCues": "本章承接上文的切入画面、吸引调查员主动探索的具体环境动静与现实动机、光影气味氛围与详略比重说明",
+      "kpcInteractionDesign": "本章中同伴/KPC/NPC的鲜活神态动作、情感升温细节、主动搭话与针对调查员不同举动的自然回应分支",
+      "cluesOrEvents": "本章包含的具体可探索位置（▼区域/物品）、公开【检定】条件与成败结果、获得的具象线索与推动主线的关键事件",
+      "pacingRule": "本章结束并自然迈向下一章或下一时段的剧情契机"
     }
   ],
   "mapNodes": [
     {
-      "name": "本模组内的具体地点名称",
-      "parent": "所属上级区域名称（顶级区域填 空字符串）",
+      "name": "本模组内的具体建筑或地点名称",
+      "parent": "所属上级区域名称（顶级区域填空字符串）",
       "level": 1,
-      "desc": "该地点的环境特征与可调查内容简述"
+      "desc": "该地点的建筑外观特征、室内氛围与可调查内容简述"
     }
   ],
   "clues": [
@@ -14850,7 +14946,7 @@ ${JSON.stringify({
       "name": "线索或关键物品名称",
       "location": "获取地点或所属章节",
       "Trigger": "获取方式或技能检定要求",
-      "content": "线索的具体内容与背后指向的秘密"
+      "content": "线索的具体表象描述与背后指向的剧情信息"
     }
   ]
 }`;
@@ -14861,10 +14957,10 @@ ${JSON.stringify({
             parsedAi2 = this.salvageAi2FromRaw(ai2Raw, ai1Data.plannedScenes);
           }
           if (!parsedAi2 || (!Array.isArray(parsedAi2.deepenedScenes) && !Array.isArray(parsedAi2.mapNodes))) {
-            throw new Error('AI2 深化场景返回格式异常，已保存 AI1 成果，请点击继续从 AI2 重试');
+            throw new Error('AI2 细纲返回格式异常，已保存 AI1 成果，请点击继续从 AI2 重试');
           }
           ai2Data = {
-            atmosphereAndMechanicsGuide: parsedAi2.atmosphereAndMechanicsGuide || '',
+            atmosphereAndMechanicsGuide: parsedAi2.atmosphereAndMechanicsGuide || parsedAi2.kpMasterGuideChapter || '',
             deepenedScenes: (Array.isArray(parsedAi2.deepenedScenes) && parsedAi2.deepenedScenes.length > 0)
               ? parsedAi2.deepenedScenes
               : ai1Data.plannedScenes.map(s => ({
@@ -14878,75 +14974,129 @@ ${JSON.stringify({
             clues: Array.isArray(parsedAi2.clues) ? parsedAi2.clues : []
           };
 
+          resolvedScenes = ai2Data.deepenedScenes.map(s => ({
+            sceneTitle: s.sceneTitle || '事件章节',
+            writingBlueprint: [
+              `【前文衔接与调查动静/动机】：${s.atmosphereCues || s.pacingNote || ''}`,
+              `【核心调查区域与事件推进】：${s.cluesOrEvents || s.purpose || ''}`,
+              `【人物互动与对话分支】：${s.kpcInteractionDesign || ''}`,
+              `【转场契机】：${s.pacingRule || ''}`
+            ].join('\n')
+          }));
+
           cp.ai2Data = ai2Data;
-          await this.saveAiWriterDraftToIDB();
-        }
-
-        // ==========================================================
-        // 第三阶段：AI3 编写模组导读大纲、章节目录与分章执笔细纲
-        // ==========================================================
-        let parsedAi3 = cp.parsedAi3;
-        let resolvedScenes = cp.resolvedScenes;
-        if (!parsedAi3 || !Array.isArray(resolvedScenes) || resolvedScenes.length === 0) {
-          cp.activeStep = 3;
-          this.setAiWriterStepActive(3);
-          this.updateAiWriterStatus(52, 'AI3 正在编撰模组完整目录、主线流程图与分章撰写指南...');
-          await this.saveAiWriterDraftToIDB();
-
-          const ai3System = `你是跑团模组的总编审与导读撰写人。
-请完成【02-模组导读与大纲】的编撰，并审视每一章的细纲，把流程怎么走、特殊互动环节怎么带写清楚，防止带团AI在实践时写不懂。
-${craftPhilosophy}`;
-
-          const ai3User = `模组名称：${customTitle || ai1Data.title || ''}
-选定标签：${allTags.join('、')}
-幕后真相：${ai1Data.kpTruthAndMechanism || ''}
-角色档案：${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
-深化后的分章设计：${JSON.stringify(ai2Data.deepenedScenes || [], null, 2)}
-已整理的地图节点：${JSON.stringify(ai2Data.mapNodes || [], null, 2)}
-线索列表：${JSON.stringify(ai2Data.clues || [], null, 2)}
-
-请完成【02-模组导读与大纲】的撰写，并为全部 ${ai2Data.deepenedScenes.length} 个正文章节生成详实的执笔细纲（finalScenes 数量与顺序请与 deepenedScenes 保持一致，切勿遗漏任何一章）。
-请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
-{
-  "auditReport": "总编审打磨手记：简述流程衔接与互动设计要点",
-  "kpMasterGuideChapter": "完整的【02-模组导读与大纲】正文（以【KP信息】开头）：包含 1. 模组整体脉络与起承转合流程说明；2. 核心线索链与真相揭露节奏；3. 特殊互动环节或计数规则的带团执行指南（不要添加多余星号或括号注解）",
-  "finalScenes": [
-    {
-      "sceneTitle": "朴实简练的章节标题（共 ${ai2Data.deepenedScenes.length} 章，顺序完整）",
-      "writingBlueprint": "本章完整写作导引：包含开场画面与环境、具体可调查对象与公开【检定】分支、KPC或NPC的对话与特殊互动游戏流程、【KP信息】流程指引以及通往下一章的过渡方式"
-    }
-  ]
-}`;
-
-          const ai3Raw = await this.callAI(ai3System, ai3User, null, 'writeModule');
-          parsedAi3 = this.parseJsonFromAiResponse(ai3Raw);
-          if (!parsedAi3 || (!parsedAi3.kpMasterGuideChapter && !Array.isArray(parsedAi3.finalScenes))) {
-            parsedAi3 = this.salvageAi3FromRaw(ai3Raw, ai2Data.deepenedScenes);
-          }
-          if (!parsedAi3 || (!parsedAi3.kpMasterGuideChapter && !Array.isArray(parsedAi3.finalScenes))) {
-            throw new Error('AI3 盲测与细纲返回格式异常，已保存前两阶成果，请点击继续从 AI3 重试');
-          }
-
-          resolvedScenes = (Array.isArray(parsedAi3.finalScenes) && parsedAi3.finalScenes.length > 0)
-            ? parsedAi3.finalScenes
-            : ai2Data.deepenedScenes.map(s => ({
-                sceneTitle: s.sceneTitle || '事件章节',
-                writingBlueprint: `【场景重点】：${s.cluesOrEvents || s.purpose || ''}\n【环境与氛围】：${s.atmosphereCues || s.pacingNote || ''}\n【人物互动】：${s.kpcInteractionDesign || ''}\n【转场衔接】：${s.pacingRule || ''}`
-              }));
-
-          cp.parsedAi3 = parsedAi3;
+          cp.parsedAi3 = { kpMasterGuideChapter: ai2Data.atmosphereAndMechanicsGuide, finalScenes: resolvedScenes };
           cp.resolvedScenes = resolvedScenes;
           await this.saveAiWriterDraftToIDB();
         }
 
-        // ==========================================================
-        // 第四阶段：AI4 逐章撰写标准跑团模组文本
-        // ==========================================================
-        cp.activeStep = 4;
-        this.setAiWriterStepActive(4);
         const boundarySuffix = '\n\n至此本小章节结束，请kp务必在聊天内告诉PC本世界书模组到此为止，请PC切换下一个世界书，禁止擅自编造互动外主线剧情走向';
         const finalModTitle = customTitle || ai1Data.title || '未命名模组';
         cp.finalModTitle = finalModTitle;
+        const scenesToWrite = resolvedScenes;
+        const rawPublicInfo = this.cleanModuleChapterOutput(String(ai1Data.publicInfoChapter || ai1Data.summary || ''));
+
+        if (previewBox && previewTitleEl && previewPublicEl) {
+          previewBox.style.display = 'flex';
+          previewTitleEl.textContent = finalModTitle;
+          if (previewMetaEl) previewMetaEl.textContent = '正在撰写小说化初稿...';
+          previewPublicEl.textContent = rawPublicInfo;
+        }
+
+        // ==========================================================
+        // 第三阶段：AI3 初稿（按 AI2 确定的章节数，逐章调用 API 撰写完整小说化初稿）
+        // ==========================================================
+        cp.activeStep = 3;
+        this.setAiWriterStepActive(3);
+
+        const ai3DraftSystem = `你是一位文笔扎实、擅长把跑团模组写得像互动小说一样引人入胜的人类模组作者。
+现在进入【AI3 初稿执笔阶段】：请根据 AI2 规划的分章细纲，逐章写出完整的章节初稿。
+${craftPhilosophy}
+写作要求：
+1. 像写小说一样先把人物进入本章的处境、心境、环境里的「动静」与氛围连续地写出来，让调查员探究的动机顺理成章。
+2. 随后清晰展开本章的互动对话分支（「・当调查员……时 → 角色神态与台词」）与具体可调查位置（「▼地点或物品名称」及公开【检定】结果）。
+3. 本章的【KP信息】只写本章实用的推进逻辑与引导，不重复抄写全局幕后真相，不添加多余星号 * 或场外括号注解。`;
+
+        const startRoughIdx = typeof cp.completedRoughCount === 'number' ? cp.completedRoughCount : 0;
+        let prevRoughTail = startRoughIdx > 0 && cp.roughChapters[startRoughIdx - 1]
+          ? String(cp.roughChapters[startRoughIdx - 1].content || '').slice(-800)
+          : '';
+
+        for (let rIdx = startRoughIdx; rIdx < scenesToWrite.length; rIdx++) {
+          const sceneItem = scenesToWrite[rIdx];
+          const sTitle = sceneItem.sceneTitle || `第 ${rIdx + 1} 幕`;
+          const nextSceneTitle = (rIdx + 1 < scenesToWrite.length)
+            ? (scenesToWrite[rIdx + 1].sceneTitle || `第 ${rIdx + 2} 幕`)
+            : `${finalModTitle}-结局`;
+          const progressPct = 36 + Math.round(((rIdx + 1) / (scenesToWrite.length + 1)) * 26);
+          this.updateAiWriterStatus(progressPct, `AI3 初稿：正在撰写第 ${rIdx + 1} / ${scenesToWrite.length} 章初稿《${sTitle}》...`);
+          await this.saveAiWriterDraftToIDB();
+
+          const ai3SceneUser = `模组名称：《${finalModTitle}》
+选定标签：${allTags.join('、')}
+整体叙事基调：${ai1Data.themeMode || ''}
+主线构思与详略要求：${ai1Data.creativeReflection || ''}
+核心人物档案：
+${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
+
+正文章节总目录（当前为第 ${rIdx + 1} / ${scenesToWrite.length} 章，下一章为【${nextSceneTitle}】）：
+${scenesToWrite.map((sc, i) => `${i + 1}. ${sc.sceneTitle}`).join('\n')}
+
+${prevRoughTail ? '上一章初稿结尾回顾（请自然承接此处的情境与人物情绪）：\n' + prevRoughTail + '\n' : '这是模组的开篇第一章，请从真实自然的生活情境或合情合理的来意切入，把人物关系与开场氛围铺垫扎实。\n'}
+当前初稿章节：【${sTitle}】
+本章细纲指引：
+${sceneItem.writingBlueprint}
+
+请直接输出【${sTitle}】的完整初稿正文（包含连续饱满的【正文】叙事、人物互动台词、▼可探索位置与【检定】、以及简洁实用的本章【KP信息】）：`;
+
+          const roughRaw = await this.callAI(ai3DraftSystem, ai3SceneUser, null, 'writeModule');
+          let cleanRough = this.cleanModuleChapterOutput(String(roughRaw || ''));
+          if (!cleanRough) {
+            throw new Error(`AI3 初稿第 ${rIdx + 1} 章【${sTitle}】返回为空，已保存前序进度，请点击继续重试`);
+          }
+          if (!cleanRough.includes('【正文】') && !cleanRough.includes('【KP信息】')) {
+            cleanRough = `【正文】\n${cleanRough}`;
+          }
+          cp.roughChapters[rIdx] = {
+            title: sTitle,
+            category: rIdx === 0 ? '模组导入' : '主线事件',
+            content: cleanRough
+          };
+          prevRoughTail = cleanRough.slice(-800);
+          cp.completedRoughCount = rIdx + 1;
+          if (previewMetaEl) {
+            previewMetaEl.textContent = `AI3初稿 ${cp.completedRoughCount}/${scenesToWrite.length} 章`;
+          }
+          await this.saveAiWriterDraftToIDB();
+        }
+
+        if (!cp.roughEndingDone) {
+          this.updateAiWriterStatus(64, 'AI3 初稿：正在撰写多分支结局初稿...');
+          await this.saveAiWriterDraftToIDB();
+          const ai3EndingUser = `模组名称：《${finalModTitle}》
+选定标签：${allTags.join('、')}
+上一章初稿结尾回顾：
+${prevRoughTail}
+结局分支规划：
+${ai1Data.endingsPlan || ''}
+
+请撰写【${finalModTitle}-结局】的完整初稿，包含清晰的【KP信息】结局判定条件与每个结局饱满动人的【正文】小说化收束描写及台词：`;
+
+          const roughEndRaw = await this.callAI(ai3DraftSystem, ai3EndingUser, null, 'writeModule');
+          let cleanRoughEnd = this.cleanModuleChapterOutput(String(roughEndRaw || ''));
+          if (!cleanRoughEnd) {
+            throw new Error('AI3 结局初稿返回为空，请点击继续重试');
+          }
+          cp.roughEndingText = cleanRoughEnd;
+          cp.roughEndingDone = true;
+          await this.saveAiWriterDraftToIDB();
+        }
+
+        // ==========================================================
+        // 第四阶段：AI4 精修（逐章审视 AI3 初稿不足之处，精修润色并扩写情感与细节）
+        // ==========================================================
+        cp.activeStep = 4;
+        this.setAiWriterStepActive(4);
 
         const profiles = Array.isArray(ai1Data.catAndNpcProfiles) ? ai1Data.catAndNpcProfiles : [];
         const plannedTocLines = [
@@ -14958,15 +15108,12 @@ ${craftPhilosophy}`;
           const pTitle = prof.chapterTitle || `猫-${prof.roleName || ('角色' + (idx + 1))}`;
           plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${pTitle}`);
         });
-        resolvedScenes.forEach((sc, idx) => {
+        scenesToWrite.forEach((sc, idx) => {
           const sTitle = sc.sceneTitle || `第${idx + 1}幕`;
           plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${sTitle}`);
         });
         plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${finalModTitle}-结局`);
 
-        const rawPublicInfo = this.cleanModuleChapterOutput(String(ai1Data.publicInfoChapter || ai1Data.summary || ''));
-
-        // 如果尚未组装前导基础章节，则初始化构建前导章节
         if (!Array.isArray(cp.finalChapters) || cp.finalChapters.length === 0) {
           const baseChapters = [];
           const ch0Header = `▍模组名称：《${finalModTitle}》\n▍规则与规模：${ruleSystem.toUpperCase()} · ${scaleType} · ${modType} · 难度${difficulty}\n▍核心标签：${allTags.join(' / ')}\n\n`;
@@ -14980,14 +15127,10 @@ ${craftPhilosophy}`;
           });
 
           const cleanTruth = this.cleanModuleChapterOutput(String(ai1Data.kpTruthAndMechanism || ''));
-          const cleanReflection = this.cleanModuleChapterOutput(String(ai1Data.creativeReflection || ''));
-          const cleanMechGuide = this.cleanModuleChapterOutput(String(ai2Data.atmosphereAndMechanicsGuide || ''));
           const ch1Content = [
             '【KP信息】',
             `▍《${finalModTitle}》守秘人真相与核心机制`,
-            cleanReflection ? `\n【流程巧思与设计说明】\n${cleanReflection}` : '',
-            `\n【幕后真相与完整因果】\n${cleanTruth || ai1Data.summary || ''}`,
-            cleanMechGuide ? `\n【特殊机制与流程把控】\n${cleanMechGuide}` : ''
+            `\n${cleanTruth.replace(/^【KP信息】\s*/, '') || ai1Data.summary || ''}`
           ].filter(Boolean).join('\n');
           baseChapters.push({
             title: '01-幕后真相与机制',
@@ -14995,26 +15138,17 @@ ${craftPhilosophy}`;
             content: ch1Content
           });
 
-          const cleanMasterGuide = this.cleanModuleChapterOutput(String(parsedAi3?.kpMasterGuideChapter || ''));
-          const cleanAudit = this.cleanModuleChapterOutput(String(parsedAi3?.auditReport || ''));
-          const sceneFlowSummary = resolvedScenes.map((s, idx) => {
-            const bp = typeof s.writingBlueprint === 'string' ? s.writingBlueprint : JSON.stringify(s);
-            const brief = bp.replace(/\s+/g, ' ').slice(0, 120);
-            return `· 第 ${idx + 1} 阶段【${s.sceneTitle || ('第' + (idx + 1) + '幕')}】：${brief}${bp.length > 120 ? '...' : ''}`;
-          }).join('\n');
+          const cleanMasterGuide = this.cleanModuleChapterOutput(String(ai2Data.atmosphereAndMechanicsGuide || ''));
           const clueSummary = (ai2Data.clues || []).map((c, idx) => {
-            return `· 线索${idx + 1}【${c.name || '关键线索'}】获取位置：${c.location || '探索获取'} / 触发条件：${c.Trigger || '调查触发'} / 内容：${c.content || ''}`;
+            return `· 线索${idx + 1}【${c.name || '关键线索'}】位置：${c.location || '探索获取'} / 获取方式：${c.Trigger || '调查获取'}\n  内容：${c.content || ''}`;
           }).join('\n');
 
           const ch2Parts = [
             '【KP信息】',
             `▍《${finalModTitle}》模组章节目录`,
             plannedTocLines.join('\n'),
-            '\n▍主线章节推进脉络',
-            sceneFlowSummary,
-            clueSummary ? `\n▍核心线索与情报总览\n${clueSummary}` : '',
-            cleanMasterGuide ? `\n▍守秘人导读与带团指南\n${cleanMasterGuide.replace(/^【KP信息】\s*/, '')}` : '',
-            cleanAudit ? `\n▍编审打磨要点\n${cleanAudit}` : ''
+            cleanMasterGuide ? `\n▍守秘人导读与流程指引\n${cleanMasterGuide.replace(/^【KP信息】\s*/, '')}` : '',
+            clueSummary ? `\n▍核心线索总览\n${clueSummary}` : ''
           ].filter(Boolean).join('\n');
           baseChapters.push({
             title: '02-模组导读与大纲',
@@ -15027,7 +15161,7 @@ ${craftPhilosophy}`;
             const pBody = [
               '【KP信息】',
               `▍角色档案：${prof.roleName || ''}`,
-              `\n【公开印象与外在表现】\n${this.cleanModuleChapterOutput(String(prof.publicDesc || ''))}`,
+              `\n【公开印象与相处日常】\n${this.cleanModuleChapterOutput(String(prof.publicDesc || ''))}`,
               `\n【幕后里设定与扮演指南】\n${this.cleanModuleChapterOutput(String(prof.secretProfile || ''))}`
             ].join('\n');
             baseChapters.push({
@@ -15046,25 +15180,17 @@ ${craftPhilosophy}`;
 
         const finalChapters = cp.finalChapters;
 
-        if (previewBox && previewTitleEl && previewPublicEl) {
-          previewBox.style.display = 'flex';
-          previewTitleEl.textContent = finalModTitle;
-          if (previewMetaEl) previewMetaEl.textContent = '正在撰写正文...';
-          previewPublicEl.textContent = rawPublicInfo;
-        }
-
-        const scenesToWrite = resolvedScenes;
-
-        const ai4System = `你是一位经验丰富的人类跑团模组作者。
-现在请你执笔撰写模组的具体章节正文。请遵守以下模组编写规范：
-1. 标准清晰的跑团模组排版：
-   - 使用【正文】撰写守秘人可以直接向玩家描述或朗读的场景、事件与NPC台词（场景描写与对话语言完全自由，不做任何限制）。
-   - 使用【KP信息】向守秘人说明该场景背后的流程逻辑、特殊互动环节或小游戏（如醉酒游戏、真心话大冒险等）的具体带团步骤、以及当玩家采取不同行动时的分支回应，确保带团AI一看就懂怎么走流程。
-   - 当遇到需要调查员公开掷骰的地方，使用【检定】标明技能名称以及成功与失败分别获得的线索或后果。严禁设计“暗中检定一个值”，若本环节需要暗中累计某个条件次数，请在【KP信息】中指导带团AI使用 [计数:名称+1] 记录。
-2. 格式干净纯粹：
-   - 人类怎么写模组你就怎么写模组，严禁自己添加多余的星号 * 以及括号注解，不要对模组中存在的东西做多余的场外解释。
-   - 直接输出纯正的模组章节文本，不要输出任何 JSON 思考块（如 {"thinking": "..."}），不要使用 {{char}}、{{user}} 等聊天宏，也不要在文末附加待办清单。
-${tcPrompt ? '\n3. 叙事参考：\n' + tcPrompt : ''}`;
+        const ai4PolishSystem = `你是一位对小说质感、人物动机与跑团带团体验有着极高要求的人类跑团模组主编。
+现在进入【AI4 逐章审视与精修定稿阶段】。你将收到 AI3 撰写的章节初稿，请先在内心审视初稿是否存在以下问题，并直接动手将其精修、润色、扩写为真正媲美人类名作的定稿正文：
+1. 审视调查动机与前文接续：
+   - 初稿的转场是否生硬？一个正常人处在这个场景里，为什么没有直接离开而是选择留下来调查？请补足自然的环境「动静」（声响、光线、气味、反常细节或切身需求），把人物的心境过渡写得丝滑可信。
+2. 审视小说化情感渲染与详略张力：
+   - 初稿是否在应该浓墨重彩渲染情感对手戏或恐怖悬念的地方一笔带过？请把关键场景的环境氛围、光影触感、人物眼神交汇与欲言又止的台词细节充分扩写出来，让带团AI拿到手就能直接演出极具感染力的戏份。
+   - 同时检查详略节奏：删去重复啰嗦的跨章背景复读或空洞套话，让过渡利落、高潮饱满。
+3. 审视可玩性与排版纯净度：
+   - 确保「・当调查员……时 → 角色反应与台词」生动自然，「▼可探索位置」与【检定】结果清晰具体。
+   - 严禁出现多余的星号 * 或场外括号注解，严禁出现双性格差分模板或流程图代码，直接输出精修后的完整模组章节正文。
+${tcPrompt ? '\n4. 叙事与文风参考：\n' + tcPrompt : ''}`;
 
         let previousSceneTail = cp.previousSceneTail || '';
         const startSceneIdx = typeof cp.completedSceneCount === 'number' ? cp.completedSceneCount : 0;
@@ -15072,39 +15198,37 @@ ${tcPrompt ? '\n3. 叙事参考：\n' + tcPrompt : ''}`;
         for (let sIdx = startSceneIdx; sIdx < scenesToWrite.length; sIdx++) {
           const sceneItem = scenesToWrite[sIdx];
           const sTitle = sceneItem.sceneTitle || `第 ${sIdx + 1} 幕`;
-          const nextSceneTitle = (sIdx + 1 < scenesToWrite.length)
-            ? (scenesToWrite[sIdx + 1].sceneTitle || `第 ${sIdx + 2} 幕`)
-            : `${finalModTitle}-结局`;
-          const progressPct = 58 + Math.round(((sIdx + 1) / (scenesToWrite.length + 1)) * 34);
-          this.updateAiWriterStatus(progressPct, `AI4 正在撰写模组章节 ${sIdx + 1} / ${scenesToWrite.length} ：${sTitle}...`);
+          const roughChap = cp.roughChapters[sIdx] || { content: sceneItem.writingBlueprint || '' };
+          const progressPct = 66 + Math.round(((sIdx + 1) / (scenesToWrite.length + 1)) * 28);
+          this.updateAiWriterStatus(progressPct, `AI4 精修：正在审视并润色扩写第 ${sIdx + 1} / ${scenesToWrite.length} 章《${sTitle}》...`);
           await this.saveAiWriterDraftToIDB();
 
           const ai4SceneUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
-模组基调：${ai1Data.themeMode || ''}
-守秘人真相底牌：
-${ai1Data.kpTruthAndMechanism || ''}
-
-核心人物设定：
+整体叙事基调：${ai1Data.themeMode || ''}
+核心人物档案：
 ${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
 
-已整理的地图节点：
-${JSON.stringify(ai2Data.mapNodes || [], null, 2)}
+${previousSceneTail ? '上一章精修定稿的结尾回顾（请确保本章开头与之无缝衔接，不重复已发生的事）：\n' + previousSceneTail.slice(-900) + '\n' : '这是开篇第一章，请确保从极具生活气息与正常人合理动机的情境自然切入。\n'}
+当前精修章节：【${sTitle}】（第 ${sIdx + 1} / ${scenesToWrite.length} 章）
+本章设计细纲：
+${sceneItem.writingBlueprint}
 
-本模组完整正文脉络（当前为第 ${sIdx + 1} / ${scenesToWrite.length} 章，下一章为【${nextSceneTitle}】）：
-${scenesToWrite.map((sc, i) => `${i + 1}. ${sc.sceneTitle}`).join('\n')}
+以下是 AI3 撰写的本章初稿：
+${roughChap.content}
 
-${previousSceneTail ? '上一章结尾衔接回顾：\n' + previousSceneTail + '\n' : ''}
-当前执笔章节：【${sTitle}】
-本章写作导引与要素：
-${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : JSON.stringify(sceneItem)}
+请针对以上 AI3 初稿进行深度审视与精修重写：
+- 修复任何生硬的转场或动机不足之处，补足吸引调查员主动探究的具体环境动静与心理铺垫；
+- 将略写或干瘪的互动与高潮段落充分扩写为细腻动人的小说化【正文】描写与鲜活台词分支；
+- 保留清晰的「▼可探索位置」与公开【检定】，精简【KP信息】使其纯粹实用，直接输出精修后的【${sTitle}】完整定稿正文：`;
 
-请直接输出【${sTitle}】的完整模组章节文本（有机穿插【正文】、【KP信息】、【检定】与【KP批注】，不要添加多余的星号 * 或括号注解，不要输出任何 JSON 对象或文末待办列表）：`;
-
-          const sceneTextRaw = await this.callAI(ai4System, ai4SceneUser, null, 'writeModule');
+          const sceneTextRaw = await this.callAI(ai4PolishSystem, ai4SceneUser, null, 'writeModule');
           let cleanSceneText = this.cleanModuleChapterOutput(String(sceneTextRaw || ''));
           if (!cleanSceneText) {
-            throw new Error(`第 ${sIdx + 1} 章【${sTitle}】返回内容为空，已保存前序章节，请点击继续接着生成`);
+            cleanSceneText = this.cleanModuleChapterOutput(String(roughChap.content || ''));
+          }
+          if (!cleanSceneText) {
+            throw new Error(`AI4 精修第 ${sIdx + 1} 章【${sTitle}】返回内容为空，已保存前序章节，请点击继续接着生成`);
           }
           if (!cleanSceneText.includes('【正文】') && !cleanSceneText.includes('【KP信息】')) {
             cleanSceneText = `【正文】\n${cleanSceneText}`;
@@ -15123,31 +15247,38 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
           cp.completedSceneCount = sIdx + 1;
           cp.previousSceneTail = previousSceneTail;
           if (previewMetaEl) {
-            previewMetaEl.textContent = `已写 ${cp.completedSceneCount}/${scenesToWrite.length} 正文章节`;
+            previewMetaEl.textContent = `已精修 ${cp.completedSceneCount}/${scenesToWrite.length} 正文章节`;
           }
           await this.saveAiWriterDraftToIDB();
         }
 
-        // 6. 撰写结局分歧章节
+        // 精修结局章节
         if (!cp.endingDone) {
-          this.updateAiWriterStatus(95, 'AI4 正在撰写多分支结局判定与演出...');
+          this.updateAiWriterStatus(96, 'AI4 精修：正在润色扩写多分支结局的情感收束与余韵...');
           await this.saveAiWriterDraftToIDB();
           const ai4EndingUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
 模组基调：${ai1Data.themeMode || ''}
-守秘人真相底牌：${ai1Data.kpTruthAndMechanism || ''}
-上一章结尾回顾：${previousSceneTail}
-结局分支规划：${ai1Data.endingsPlan || ''}
+上一章精修定稿结尾回顾：
+${previousSceneTail.slice(-900)}
+结局分支规划：
+${ai1Data.endingsPlan || ''}
 
-请撰写本模组的【${finalModTitle}-结局】章节完整文本：
-1. 使用【KP信息】清晰列出各个结局分支的触发条件与判定逻辑（若本模组使用了隐藏计数，请说明在结局结算后附带 [计数:名称 清除] 停止追踪）。
-2. 使用【正文】为每一个结局撰写完整的结局演出与人物对话，并在最后附上守秘人结团奖励与理智结算提示。
-3. 不要添加多余的星号 * 或括号注解，直接输出章节正文（不要输出任何 JSON 思考块或文末待办清单）：`;
+以下是 AI3 撰写的结局初稿：
+${cp.roughEndingText || ''}
 
-          const endingRaw = await this.callAI(ai4System, ai4EndingUser, null, 'writeModule');
+请对结局初稿进行深度精修与情感扩写：
+1. 使用【KP信息】清晰列出各结局分支的达成条件（若前面章节使用了隐藏计数，请说明结算后附带 [计数:名称 清除]）。
+2. 使用【正文】将每一个结局分支扩写得像小说终章一样画面感十足、情感真挚动人，写出具体的动作细节、环境光影与角色台词互动，最后附上结团奖励。
+3. 严禁添加多余星号 * 或括号注解，直接输出精修后的【${finalModTitle}-结局】完整定稿：`;
+
+          const endingRaw = await this.callAI(ai4PolishSystem, ai4EndingUser, null, 'writeModule');
           let cleanEndingText = this.cleanModuleChapterOutput(String(endingRaw || ''));
           if (!cleanEndingText) {
-            throw new Error('结局章节返回为空，已保存前面所有章节，请点击继续重试结局撰写');
+            cleanEndingText = this.cleanModuleChapterOutput(String(cp.roughEndingText || ''));
+          }
+          if (!cleanEndingText) {
+            throw new Error('结局章节精修返回为空，已保存前面所有章节，请点击继续重试结局撰写');
           }
           if (!cleanEndingText.includes('【正文】') && !cleanEndingText.includes('【KP信息】')) {
             cleanEndingText = `【正文】\n${cleanEndingText}`;
@@ -15162,7 +15293,6 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
           await this.saveAiWriterDraftToIDB();
         }
 
-        // 若 AI2 未返回地图节点，则从本模组自身的章节与线索中提炼专属地点，确保地图与本模组完全匹配
         let finalMapNodes = Array.isArray(ai2Data.mapNodes) ? ai2Data.mapNodes.filter(n => n && n.name) : [];
         if (finalMapNodes.length === 0) {
           const seenLocs = new Set();
@@ -15194,7 +15324,6 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
           }
         }
 
-        // 组装完整模组数据包并自动入库
         const generatedBundle = {
           title: finalModTitle,
           author,
@@ -15223,13 +15352,14 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
         if (saveBtn) saveBtn.disabled = false;
         if (resumeBtn) resumeBtn.style.display = 'none';
 
-        this.updateAiWriterStatus(100, `已完成《${finalModTitle}》全部 ${finalChapters.length} 章撰写并封存入本地模组库，真相与后续章节已隐藏，可直接开团游玩或上传工坊`);
+        this.updateAiWriterStatus(100, `已完成《${finalModTitle}》全部 ${finalChapters.length} 章初稿与精修并存入本地模组库，也可前往手机沙盘查看或生成立体建筑地图`);
         await this.saveAiWriterDraftToIDB();
       } catch (err) {
         console.error('[AI写模] 流水线异常:', err);
         const hasProgress = Boolean(this.aiWriterState.pipelineCheckpoint && (
           this.aiWriterState.pipelineCheckpoint.ai1Data ||
           this.aiWriterState.pipelineCheckpoint.ai2Data ||
+          (this.aiWriterState.pipelineCheckpoint.roughChapters && this.aiWriterState.pipelineCheckpoint.roughChapters.length > 0) ||
           (this.aiWriterState.pipelineCheckpoint.finalChapters && this.aiWriterState.pipelineCheckpoint.finalChapters.length > 0)
         ));
         if (hasProgress && resumeBtn) {
@@ -15240,7 +15370,7 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
         this.updateAiWriterStatus(
           hasProgress ? 45 : 0,
           hasProgress
-            ? `生成中断：${err.message || err}。已完成进度已自动保存，点击右上角继续按钮即可从当前断点接着生成`
+            ? `生成中断：${err.message || err}。已完成进度已自动保存，点击继续按钮即可从当前断点接着生成`
             : `生成中断：${err.message || err}`
         );
         await this.saveAiWriterDraftToIDB();
@@ -15429,14 +15559,1739 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
   global.renderModulesScreen = renderModulesScreen;
   global.ModuleManager = ModuleManager;
 
+  // =========================================================================
+  // 立体沙盘（3D 建筑地图引擎 & Termux 本地卸载系统）
+  // =========================================================================
+  const ModuleAtlas3D = {
+    isInitialized: false,
+    isActive: false,
+    currentModId: '',
+    currentAtlasData: null,
+    selectedZoneIndex: -1, // -1 表示全览
+    autoRotate: false,
+    isGenerating: false,
+    rafId: null,
+    needsRender: false,
+    tweenState: null,
+    meshes: [],
+    plazaFaces: [],
+    labelAnchors: [],
+    camera: {
+      yaw: -0.62,
+      pitch: 0.56,
+      zoom: 1.0,
+      panX: 0,
+      panZ: 0,
+      targetYaw: -0.62,
+      targetPitch: 0.56,
+      targetZoom: 1.0,
+      targetPanX: 0,
+      targetPanZ: 0
+    },
+    pointer: {
+      isDown: false,
+      startX: 0,
+      startY: 0,
+      lastX: 0,
+      lastY: 0,
+      moved: false,
+      pinchDist: 0
+    },
+
+    init() {
+      if (this.isInitialized) return;
+      this.isInitialized = true;
+
+      const selectEl = document.getElementById('atlas-module-select');
+      const genBtn = document.getElementById('atlas-ai-gen-btn');
+      const saveLocalBtn = document.getElementById('atlas-save-local-btn');
+      const spinBtn = document.getElementById('atlas-auto-rotate-btn');
+      const allViewBtn = document.getElementById('atlas-all-view-btn');
+      const canvas = document.getElementById('atlas-3d-canvas');
+
+      if (selectEl) {
+        selectEl.addEventListener('change', () => {
+          const val = selectEl.value;
+          this.selectModule(val);
+        });
+      }
+
+      if (genBtn) {
+        genBtn.addEventListener('click', () => {
+          this.generateAi3DAtlas();
+        });
+      }
+
+      if (saveLocalBtn) {
+        saveLocalBtn.addEventListener('click', () => {
+          this.saveCurrentAtlasToTermux(true);
+        });
+      }
+
+      if (spinBtn) {
+        spinBtn.addEventListener('click', () => {
+          this.autoRotate = !this.autoRotate;
+          spinBtn.style.background = this.autoRotate ? 'var(--accent-color)' : 'var(--secondary-bg)';
+          spinBtn.style.color = this.autoRotate ? '#fff' : 'var(--text-primary)';
+          if (this.autoRotate) this.requestRender();
+        });
+      }
+
+      if (allViewBtn) {
+        allViewBtn.addEventListener('click', () => {
+          this.focusZone(-1);
+        });
+      }
+
+      if (canvas) {
+        this.bindCanvasEvents(canvas);
+      }
+
+      // 监听离开 #taobao-screen 时立即释放 3D 顶点与显存，保持浏览器极速低内存
+      const screenEl = document.getElementById('taobao-screen');
+      if (screenEl && typeof MutationObserver !== 'undefined') {
+        const obs = new MutationObserver(() => {
+          const visible = screenEl.classList.contains('active') && screenEl.style.display !== 'none';
+          if (!visible && this.isActive) {
+            this.disposeEngine();
+          }
+        });
+        obs.observe(screenEl, { attributes: true, attributeFilter: ['class', 'style'] });
+      }
+
+      window.addEventListener('resize', () => {
+        if (this.isActive) {
+          this.resizeCanvas();
+          this.requestRender();
+        }
+      });
+    },
+
+    async openScreen() {
+      this.init();
+      this.isActive = true;
+      if (typeof global.showScreen === 'function') {
+        global.showScreen('taobao-screen');
+      } else {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        const t = document.getElementById('taobao-screen');
+        if (t) t.classList.add('active');
+      }
+
+      await this.populateModuleSelect();
+      requestAnimationFrame(() => {
+        this.resizeCanvas();
+        this.requestRender();
+      });
+    },
+
+    disposeEngine() {
+      this.isActive = false;
+      this.autoRotate = false;
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+      this.meshes = [];
+      this.plazaFaces = [];
+      this.labelAnchors = [];
+      const canvas = document.getElementById('atlas-3d-canvas');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.width = 1;
+        canvas.height = 1;
+      }
+      const spinBtn = document.getElementById('atlas-auto-rotate-btn');
+      if (spinBtn) {
+        spinBtn.style.background = 'var(--secondary-bg)';
+        spinBtn.style.color = 'var(--text-primary)';
+      }
+    },
+
+    setStatus(msg) {
+      const bar = document.getElementById('atlas-status-bar');
+      const txt = document.getElementById('atlas-status-text');
+      if (!bar || !txt) return;
+      if (!msg) {
+        bar.style.display = 'none';
+        txt.textContent = '';
+      } else {
+        bar.style.display = 'block';
+        txt.textContent = msg;
+      }
+    },
+
+    async populateModuleSelect() {
+      const selectEl = document.getElementById('atlas-module-select');
+      if (!selectEl) return;
+
+      let mods = [];
+      try {
+        await ModuleManager.safeDBOperation('读取模组列表供沙盘选择', async (db) => {
+          mods = await db.modules.toArray();
+        });
+      } catch (e) {
+        console.warn('[沙盘] 读取模组列表异常:', e);
+      }
+
+      mods.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+
+      const prevVal = this.currentModId || selectEl.value;
+      selectEl.innerHTML = '<option value="">请选择要加载沙盘的模组</option>';
+      mods.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = String(m.id);
+        opt.textContent = `${m.name || '未命名模组'} · ${m.type || '模组'}`;
+        selectEl.appendChild(opt);
+      });
+
+      const targetId = (prevVal && mods.some(m => String(m.id) === String(prevVal)))
+        ? String(prevVal)
+        : (mods[0] ? String(mods[0].id) : '');
+
+      if (targetId) {
+        selectEl.value = targetId;
+        await this.selectModule(targetId);
+      } else {
+        this.renderDefaultDemoAtlas();
+      }
+    },
+
+    async selectModule(modId) {
+      this.currentModId = String(modId || '');
+      if (!this.currentModId) {
+        this.renderDefaultDemoAtlas();
+        return;
+      }
+
+      this.setStatus('正在读取立体建筑沙盘数据...');
+
+      // 1. 优先从 Termux 本地磁盘读取（不占浏览器内存）
+      const termuxData = await this.loadAtlasFromTermux(this.currentModId);
+      if (termuxData && Array.isArray(termuxData.zones) && termuxData.zones.length > 0) {
+        this.currentAtlasData = termuxData;
+        this.setStatus('已从本地磁盘加载立体沙盘模型');
+        setTimeout(() => this.setStatus(''), 2200);
+        this.applyAtlasData(termuxData);
+        return;
+      }
+
+      // 2. 尝试读取轻量缓存
+      try {
+        const rawLocal = localStorage.getItem('ephone_atlas3d_data_' + this.currentModId);
+        if (rawLocal) {
+          const parsedLocal = JSON.parse(rawLocal);
+          if (parsedLocal && Array.isArray(parsedLocal.zones) && parsedLocal.zones.length > 0) {
+            this.currentAtlasData = parsedLocal;
+            this.setStatus('');
+            this.applyAtlasData(parsedLocal);
+            return;
+          }
+        }
+      } catch (_) {}
+
+      // 3. 根据该模组数据库里的地点、线索与章节自动构建精细初始 3D 沙盘
+      const builtData = await this.buildAtlasFromModuleDB(this.currentModId);
+      this.currentAtlasData = builtData;
+      this.setStatus('');
+      this.applyAtlasData(builtData);
+    },
+
+    getTermuxBaseUrl() {
+      const input = document.getElementById('termux-url-input');
+      const saved = localStorage.getItem('ephone_termux_url');
+      return (input && input.value ? input.value.trim() : (saved || 'http://127.0.0.1:8765')).replace(/\/+$/, '');
+    },
+
+    async loadAtlasFromTermux(modId) {
+      if (!modId) return null;
+      const baseUrl = this.getTermuxBaseUrl();
+      const safeName = `atlas3d_${String(modId).replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 1800);
+        const res = await fetch(`${baseUrl}/media/${safeName}`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data;
+      } catch (_) {
+        return null;
+      }
+    },
+
+    async saveCurrentAtlasToTermux(showAlert = true) {
+      if (!this.currentAtlasData || !this.currentModId) {
+        if (showAlert && typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '请先选择并加载一个模组沙盘');
+        }
+        return false;
+      }
+
+      const baseUrl = this.getTermuxBaseUrl();
+      const safeName = `atlas3d_${String(this.currentModId).replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
+      const jsonStr = JSON.stringify(this.currentAtlasData);
+
+      try {
+        this.setStatus('正在将立体沙盘模型转存至本地磁盘并释放网页内存...');
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4500);
+        const res = await fetch(`${baseUrl}/media/${safeName}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: jsonStr,
+          signal: ctrl.signal
+        });
+        clearTimeout(tid);
+
+        if (res.ok) {
+          // 关键：存入 Termux 后立即清除浏览器端副本，彻底释放网页存储与内存
+          try {
+            localStorage.removeItem('ephone_atlas3d_data_' + this.currentModId);
+          } catch (_) {}
+          this.setStatus('已存入 Termux 本地磁盘并清除网页缓存副本');
+          if (showAlert && typeof global.showCustomAlert === 'function') {
+            global.showCustomAlert('存盘完成', '立体沙盘数据已存入本地 Termux 磁盘，并已彻底清除浏览器内的副本以释放网页内存');
+          }
+          setTimeout(() => this.setStatus(''), 2600);
+          return true;
+        }
+        throw new Error('HTTP ' + res.status);
+      } catch (err) {
+        // 若用户未开启 Termux 服务，则导出为本地文件下载或轻量化保存，并明确告知
+        this.setStatus('本地 Termux 未响应，已为您准备本地沙盘文件');
+        if (showAlert) {
+          try {
+            const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = safeName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            localStorage.removeItem('ephone_atlas3d_data_' + this.currentModId);
+          } catch (_) {}
+          if (typeof global.showCustomAlert === 'function') {
+            global.showCustomAlert('本地存盘', '未检测到后台 Termux 端口响应，已直接将 3D 沙盘数据下载到本地文件并清理了浏览器端缓存副本');
+          }
+        }
+        return false;
+      }
+    },
+
+    async buildAtlasFromModuleDB(modId) {
+      let mod = null;
+      let locations = [];
+      let clues = [];
+      let chapters = [];
+      let roles = [];
+
+      await ModuleManager.safeDBOperation('加载模组沙盘要素', async (db) => {
+        mod = await db.modules.get(modId) || await db.modules.get(Number(modId));
+        if (db.moduleLocationNav) {
+          locations = await db.moduleLocationNav.where('moduleId').equals(modId).toArray();
+          if (locations.length === 0 && !isNaN(Number(modId))) {
+            locations = await db.moduleLocationNav.where('moduleId').equals(Number(modId)).toArray();
+          }
+        }
+        if (db.moduleCluePointers) {
+          clues = await db.moduleCluePointers.where('moduleId').equals(modId).toArray();
+          if (clues.length === 0 && !isNaN(Number(modId))) {
+            clues = await db.moduleCluePointers.where('moduleId').equals(Number(modId)).toArray();
+          }
+        }
+        if (db.moduleChapters) {
+          chapters = await db.moduleChapters.where('moduleId').equals(modId).toArray();
+          if (chapters.length === 0 && !isNaN(Number(modId))) {
+            chapters = await db.moduleChapters.where('moduleId').equals(Number(modId)).toArray();
+          }
+        }
+        if (db.moduleHoRoles) {
+          roles = await db.moduleHoRoles.where('moduleId').equals(modId).toArray();
+        }
+      });
+
+      if (!mod) return this.getDefaultDemoData();
+
+      chapters.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      const rawNodes = (locations && locations.length > 0)
+        ? locations
+        : (Array.isArray(mod.mapNodes) && mod.mapNodes.length > 0 ? mod.mapNodes : []);
+
+      const archCatalog = ['spire', 'dome', 'hall', 'pagoda', 'greenhouse', 'ward', 'mansion', 'observatory', 'clocktower', 'courtyard'];
+      const archNameMap = {
+        spire: '八棱哥特尖塔',
+        dome: '琉璃穹顶温室',
+        hall: '双翼丝绒礼堂',
+        pagoda: '重檐飞阁楼台',
+        greenhouse: '晶格阳光花房',
+        ward: '回廊钟楼馆舍',
+        mansion: '巴洛克主宅邸',
+        observatory: '星象观测圆台',
+        clocktower: '四面飞扶壁钟塔',
+        courtyard: '十字拱廊中庭'
+      };
+
+      const layoutCoords = [
+        { x: 0, z: -18 },
+        { x: -38, z: -10 },
+        { x: 38, z: -8 },
+        { x: -24, z: 26 },
+        { x: 28, z: 26 },
+        { x: 0, z: 36 },
+        { x: -46, z: 18 },
+        { x: 46, z: 18 }
+      ];
+
+      let zoneItems = [];
+      if (rawNodes.length > 0) {
+        const topNodes = rawNodes.filter(n => !n.parent || Number(n.level) === 1);
+        const baseList = topNodes.length >= 3 ? topNodes.slice(0, 7) : rawNodes.slice(0, 7);
+        zoneItems = baseList.map((n, idx) => {
+          const name = String(n.name || `区域0${idx + 1}`).trim();
+          const children = rawNodes.filter(c => c.parent === n.name && c.name !== n.name);
+          const matchedClues = clues.filter(cl => String(cl.location || '').includes(name));
+          const arch = this.inferArchTypeFromName(name, archCatalog[idx % archCatalog.length]);
+          const pos = layoutCoords[idx % layoutCoords.length];
+          const roleObj = roles[idx % Math.max(1, roles.length)];
+          return {
+            code: String(idx + 1).padStart(2, '0'),
+            name: name.slice(0, 10),
+            fullTitle: name,
+            enTitle: `ZONE ARCHIVE // ${String(idx + 1).padStart(2, '0')}`,
+            archType: arch,
+            archLabel: archNameMap[arch] || '复合立体建筑',
+            x: pos.x,
+            z: pos.z,
+            width: 18 + (idx % 3) * 3,
+            depth: 16 + ((idx + 1) % 3) * 3,
+            height: 22 + (idx === 0 ? 14 : (idx % 3) * 6),
+            accentTone: idx % 2 === 0 ? 'accent' : 'dark',
+            exclusiveRole: roleObj ? roleObj.name : (mod.scaleType === '1v1' ? '核心搭档与调查员' : '调查员小队'),
+            accessCond: matchedClues[0]?.trigger || '自由探索或剧情推进准入',
+            rating: 5 - (idx % 2),
+            desc: n.desc || matchedClues[0]?.content || mod.summary || '矗立于模组核心舞台的关键调查建筑，内部藏有推动真相的重要痕迹。',
+            subSpots: [
+              ...children.map(ch => ({ name: ch.name, info: ch.desc || '子区域调查点' })),
+              ...matchedClues.map(mc => ({ name: mc.name, info: `${mc.trigger ? mc.trigger + '：' : ''}${mc.content || ''}` }))
+            ].slice(0, 6)
+          };
+        });
+      } else {
+        const storyChaps = chapters.filter(c => !/^(00|01|02|猫-|NPC)/i.test(c.title || '')).slice(0, 6);
+        const sourceList = storyChaps.length > 0 ? storyChaps : chapters.slice(0, 5);
+        zoneItems = sourceList.map((ch, idx) => {
+          const cleanName = String(ch.title || `第${idx + 1}区域`).replace(/^\d+[-_·\s]*/, '').trim();
+          const arch = this.inferArchTypeFromName(cleanName, archCatalog[idx % archCatalog.length]);
+          const pos = layoutCoords[idx % layoutCoords.length];
+          const snippet = String(ch.content || '')
+            .replace(/【KP信息】[\s\S]*?(?=【正文】|$)/g, '')
+            .replace(/【正文】/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 140);
+          const subSpots = [];
+          const spotReg = /▼\s*([^\n：:]{2,18})/g;
+          let m;
+          while ((m = spotReg.exec(String(ch.content || ''))) !== null && subSpots.length < 5) {
+            subSpots.push({ name: m[1].trim(), info: '章节内可探索位置' });
+          }
+          return {
+            code: String(idx + 1).padStart(2, '0'),
+            name: cleanName.slice(0, 8) || `区域0${idx + 1}`,
+            fullTitle: cleanName || `核心建筑 0${idx + 1}`,
+            enTitle: `STAGE ZONE // ${String(idx + 1).padStart(2, '0')}`,
+            archType: arch,
+            archLabel: archNameMap[arch] || '复合立体建筑',
+            x: pos.x,
+            z: pos.z,
+            width: 18 + (idx % 3) * 3,
+            depth: 16 + ((idx + 1) % 3) * 3,
+            height: 24 + (idx === 0 ? 12 : (idx % 3) * 5),
+            accentTone: idx % 2 === 0 ? 'accent' : 'dark',
+            exclusiveRole: mod.author || '守秘人档案',
+            accessCond: idx === 0 ? '开场初始准入' : '随主线调查解锁',
+            rating: 5 - (idx % 2),
+            desc: snippet || mod.summary || '模组核心场景建筑。',
+            subSpots
+          };
+        });
+      }
+
+      if (zoneItems.length === 0) {
+        return this.getDefaultDemoData();
+      }
+
+      return {
+        moduleId: String(mod.id),
+        title: mod.name || '未命名模组',
+        enSubtitle: `${String(mod.ruleSystem || 'COC').toUpperCase()} // 3D ARCHITECTURAL SANDBOX`,
+        tags: (mod.tags && mod.tags.length > 0 ? mod.tags : [mod.bgTag || '模组', mod.type || '沙盘', mod.scaleType || '探索']).slice(0, 4),
+        zones: zoneItems
+      };
+    },
+
+    inferArchTypeFromName(name, fallback) {
+      const s = String(name || '');
+      if (/钟楼|钟塔|高塔|尖塔|灯塔/.test(s)) return 'clocktower';
+      if (/温室|花房|花园|庭院|琉璃/.test(s)) return 'dome';
+      if (/礼堂|大厅|宴会|教堂|剧场/.test(s)) return 'hall';
+      if (/医院|病房|诊室|疗养|实验/.test(s)) return 'ward';
+      if (/神社|阁|楼|庙|祠|亭/.test(s)) return 'pagoda';
+      if (/天文|观测|天台|露台/.test(s)) return 'observatory';
+      if (/寝宫|卧室|别墅|馆|宅|公爵|庄园/.test(s)) return 'mansion';
+      if (/走廊|中庭|广场|回廊/.test(s)) return 'courtyard';
+      return fallback || 'spire';
+    },
+
+    getDefaultDemoData() {
+      return {
+        moduleId: 'demo_lovelle',
+        title: '圣洛薇尔学院',
+        enSubtitle: 'ST. LOVELLE // ROYAL CAMPUS 3D ATLAS',
+        tags: ['王立学院', '秘密建筑图鉴', '立体沙盘'],
+        zones: [
+          {
+            code: '01',
+            name: '蔷薇钟塔',
+            fullTitle: '蔷薇王冠钟塔',
+            enTitle: 'ROSE CROWN // 01',
+            archType: 'clocktower',
+            archLabel: '八棱粉钻哥特塔',
+            x: 0,
+            z: -20,
+            width: 20,
+            depth: 20,
+            height: 40,
+            accentTone: 'accent',
+            exclusiveRole: '绯焰少爷·烬礼',
+            accessCond: '三叶草密钥持有',
+            rating: 5,
+            desc: '耸立在圣洛薇尔学院中心的纯白白瓷与柔粉琉璃钟塔，四面飞扶壁缠绕着盛放的黑蔷薇，塔顶悬浮着星芒王冠。午夜钟响时，只有拥有三叶草钥匙的人才能推开顶层钟室的门。',
+            subSpots: [
+              { name: '顶层星芒钟室', info: '午夜十二点齿轮咬合声最清晰的位置，藏有机械暗格' },
+              { name: '黑蔷薇螺旋阶梯', info: '拾级而上可听见风穿过彩窗的回响' },
+              { name: '三叶草锁孔雕花门', info: '需要对应密钥或巧手检定方可开启' }
+            ]
+          },
+          {
+            code: '02',
+            name: '琉璃温室',
+            fullTitle: '琉璃穹顶温室',
+            enTitle: 'CRYSTAL DOME // 02',
+            archType: 'dome',
+            archLabel: '弧形肋架玻璃花房',
+            x: -36,
+            z: -4,
+            width: 22,
+            depth: 22,
+            height: 26,
+            accentTone: 'accent',
+            exclusiveRole: '温室守夜人',
+            accessCond: '白昼自由探索',
+            rating: 5,
+            desc: '由十八根纯白铸铁肋架托起的柔粉琉璃穹顶温室，常年弥漫着湿润的冷杉与白茶花香气。中央喷泉池底压着一张泛黄的旧乐谱。',
+            subSpots: [
+              { name: '中央白瓷喷泉', info: '池水清澈见底，可调查水下压着的防水匣' },
+              { name: '夜光兰花培育架', info: '入夜后会散发微弱荧光的稀有植株' }
+            ]
+          },
+          {
+            code: '03',
+            name: '丝绒礼堂',
+            fullTitle: '丝绒歌剧礼堂',
+            enTitle: 'VELVET HALL // 03',
+            archType: 'hall',
+            archLabel: '双坡斜顶歌剧院',
+            x: 2,
+            z: 20,
+            width: 24,
+            depth: 18,
+            height: 28,
+            accentTone: 'dark',
+            exclusiveRole: '学生会首席',
+            accessCond: '晚宴邀请函准入',
+            rating: 5,
+            desc: '挑高十二米的哥特式双翼礼堂，垂落着深色丝绒帷幕与水晶枝形吊灯。舞台后方的管风琴内部似乎有被人为改动过的音管。',
+            subSpots: [
+              { name: '巨型管风琴台', info: '按下特定低音键会传来空洞的回响' },
+              { name: '二层丝绒包厢', info: '可俯瞰整个礼堂动静的绝佳观察点' }
+            ]
+          },
+          {
+            code: '04',
+            name: '菲林画廊',
+            fullTitle: '菲林长廊美术馆',
+            enTitle: 'FILM GALLERY // 04',
+            archType: 'ward',
+            archLabel: '天窗回廊展馆',
+            x: -26,
+            z: 28,
+            width: 18,
+            depth: 16,
+            height: 22,
+            accentTone: 'dark',
+            exclusiveRole: '美术社顾问',
+            accessCond: '全天开放调查',
+            rating: 4,
+            desc: '沿着学院西侧拱廊延伸的静谧画廊，墙面悬挂着历任院长与杰出学生的肖像油画，尽头暗房里还留着未显影的胶卷。',
+            subSpots: [
+              { name: '尽头红光暗房', info: '显影液托盘旁放着半张被剪碎的照片' },
+              { name: '无名少女肖像画', info: '画框背面写有一行模糊的日期' }
+            ]
+          },
+          {
+            code: '05',
+            name: '公爵寝宫',
+            fullTitle: '旧公爵塔楼寝宫',
+            enTitle: 'DUKE PAVILION // 05',
+            archType: 'spire',
+            archLabel: '双尖顶贵族寝殿',
+            x: 36,
+            z: 10,
+            width: 20,
+            depth: 20,
+            height: 32,
+            accentTone: 'accent',
+            exclusiveRole: '学院理事长',
+            accessCond: '夜间潜入或许可',
+            rating: 5,
+            desc: '位于学院东侧高台上的独立多尖顶建筑，四角的黑曜石尖顶与粉白墙体相映成趣。书房壁炉上方挂着一把古老的纹章佩剑。',
+            subSpots: [
+              { name: '旋转暗门书架', info: '抽动烫金馆藏日志即可打开通往阁楼的窄梯' },
+              { name: '观星露台', info: '可远眺整座学院沙盘的全景视野' }
+            ]
+          }
+        ]
+      };
+    },
+
+    renderDefaultDemoAtlas() {
+      const demo = this.getDefaultDemoData();
+      this.currentAtlasData = demo;
+      this.applyAtlasData(demo);
+    },
+
+    async generateAi3DAtlas() {
+      if (this.isGenerating) return;
+      if (!this.currentModId) {
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '请先在下拉框中选择一个模组，再点击生成');
+        }
+        return;
+      }
+
+      let mod = null;
+      let locations = [];
+      let clues = [];
+      let chapters = [];
+      let roles = [];
+
+      await ModuleManager.safeDBOperation('读取模组内容生成3D沙盘', async (db) => {
+        mod = await db.modules.get(this.currentModId) || await db.modules.get(Number(this.currentModId));
+        if (db.moduleLocationNav) {
+          locations = await db.moduleLocationNav.where('moduleId').equals(this.currentModId).toArray();
+          if (locations.length === 0 && !isNaN(Number(this.currentModId))) {
+            locations = await db.moduleLocationNav.where('moduleId').equals(Number(this.currentModId)).toArray();
+          }
+        }
+        if (db.moduleCluePointers) {
+          clues = await db.moduleCluePointers.where('moduleId').equals(this.currentModId).toArray();
+          if (clues.length === 0 && !isNaN(Number(this.currentModId))) {
+            clues = await db.moduleCluePointers.where('moduleId').equals(Number(this.currentModId)).toArray();
+          }
+        }
+        if (db.moduleChapters) {
+          chapters = await db.moduleChapters.where('moduleId').equals(this.currentModId).toArray();
+          if (chapters.length === 0 && !isNaN(Number(this.currentModId))) {
+            chapters = await db.moduleChapters.where('moduleId').equals(Number(this.currentModId)).toArray();
+          }
+        }
+        if (db.moduleHoRoles) {
+          roles = await db.moduleHoRoles.where('moduleId').equals(this.currentModId).toArray();
+        }
+      });
+
+      if (!mod) {
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('提示', '未找到所选模组数据');
+        }
+        return;
+      }
+
+      this.isGenerating = true;
+      const genBtn = document.getElementById('atlas-ai-gen-btn');
+      if (genBtn) {
+        genBtn.disabled = true;
+        genBtn.textContent = '生成';
+      }
+      this.setStatus(`正在为《${mod.name}》精细构建立体建筑群与调查沙盘...`);
+
+      try {
+        chapters.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+        const chapDigest = chapters.slice(0, 10).map(c => {
+          const clean = String(c.content || '').replace(/\s+/g, ' ').slice(0, 260);
+          return `【${c.title}】：${clean}`;
+        }).join('\n');
+
+        const locDigest = locations.slice(0, 16).map(l => `${l.name}：${l.desc || ''}`).join('；');
+        const clueDigest = clues.slice(0, 16).map(c => `${c.name}@${c.location}：${c.content || ''}`).join('；');
+        const roleDigest = roles.map(r => `${r.name}：${r.publicInfo || ''}`).join('；');
+
+        const sysPrompt = `你是一位顶尖的 3D 建筑沙盘设计师与跑团场景美术指导。
+请根据用户所选模组的剧情、地点与线索，为该模组量身定制一套精细、美观、富有层次感的立体建筑群沙盘数据（共 5 到 7 个核心建筑区域 Zone）。
+每个区域都可以从以下 10 种立体建筑构件原型中选择最契合的一种（archType）：
+- clocktower（四面飞扶壁高耸钟塔 + 星芒尖顶）
+- dome（弧形肋架琉璃穹顶温室 + 柱廊）
+- hall（双坡斜顶歌剧礼堂 + 侧翼耳堂）
+- spire（多尖顶哥特城堡塔楼群）
+- pagoda（重檐飞阁东方楼台/神社殿宇）
+- ward（天窗回廊式复合馆舍/医院/画廊）
+- mansion（巴洛克三段式庄园主宅邸 + 双翼）
+- observatory（星象观测旋转圆顶台 + 露台）
+- greenhouse（晶格玻璃阳光花房）
+- courtyard（十字拱廊中庭喷泉广场）
+
+坐标布局要求：
+- 沙盘中心为 (0, 0)，x 范围在 -46 到 46 之间，z 范围在 -36 到 36 之间。
+- 请合理错落排布 5 到 7 座建筑的 (x, z) 坐标与尺寸（width: 16~26, depth: 16~24, height: 22~42），确保建筑之间互不重叠且错落有致（主建筑可更高大，置于中心偏后方如 z=-18）。`;
+
+        const userPrompt = `模组名称：《${mod.name}》
+规则与类型：${mod.ruleSystem || 'coc'} / ${mod.type || ''} / ${mod.scaleType || ''}
+模组简介：${mod.summary || ''}
+角色信息：${roleDigest || '核心调查员与搭档'}
+已有地点列表：${locDigest || '请从章节摘要中提炼'}
+已有线索列表：${clueDigest || '请从章节摘要中提炼'}
+章节摘要：
+${chapDigest}
+
+请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁附加任何场外解释：
+{
+  "title": "${mod.name}",
+  "enSubtitle": "英文副标题，如 ST. LOVELLE // 3D ARCHITECTURAL ATLAS",
+  "tags": ["模组核心建筑群标签1", "标签2", "标签3"],
+  "zones": [
+    {
+      "code": "01",
+      "name": "4到6字建筑简称（用于3D屋顶悬浮铭牌与底部图标，如：蔷薇钟塔）",
+      "fullTitle": "完整建筑名称（如：蔷薇王冠钟塔）",
+      "enTitle": "英文编号副标（如：ROSE CROWN // 01）",
+      "archType": "从 clocktower/dome/hall/spire/pagoda/ward/mansion/observatory/greenhouse/courtyard 中选一",
+      "archLabel": "极具美感的建筑形制描述（如：八棱白瓷哥特钟塔）",
+      "x": 0,
+      "z": -18,
+      "width": 20,
+      "depth": 20,
+      "height": 38,
+      "accentTone": "accent 或 dark",
+      "exclusiveRole": "驻留此处的角色或关联人物称呼",
+      "accessCond": "进入或解锁该建筑的条件简述",
+      "rating": 5,
+      "desc": "100字左右富有画面感的建筑外观、内部陈设与剧情氛围详述",
+      "subSpots": [
+        {
+          "name": "建筑内的具体可探索角落或关键物品名称",
+          "info": "调查此处可发现的细节、线索或触发的互动"
+        }
+      ]
+    }
+  ]
+}`;
+
+        const rawResp = await ModuleManager.callAI(sysPrompt, userPrompt, null, 'writeModule');
+        const parsed = ModuleManager.parseJsonFromAiResponse(rawResp);
+        if (!parsed || !Array.isArray(parsed.zones) || parsed.zones.length === 0) {
+          throw new Error('AI 未返回有效的 3D 沙盘节点列表');
+        }
+
+        const normalized = {
+          moduleId: String(this.currentModId),
+          title: parsed.title || mod.name || '未命名模组',
+          enSubtitle: parsed.enSubtitle || `${String(mod.ruleSystem || 'COC').toUpperCase()} // 3D ARCHITECTURAL ATLAS`,
+          tags: Array.isArray(parsed.tags) && parsed.tags.length > 0 ? parsed.tags.slice(0, 4) : ['立体沙盘', '核心建筑群'],
+          zones: parsed.zones.map((z, idx) => ({
+            code: String(idx + 1).padStart(2, '0'),
+            name: String(z.name || `建筑0${idx + 1}`).slice(0, 8),
+            fullTitle: String(z.fullTitle || z.name || `建筑区域 0${idx + 1}`),
+            enTitle: String(z.enTitle || `ARCHIVE ZONE // ${String(idx + 1).padStart(2, '0')}`),
+            archType: this.inferArchTypeFromName(z.name, z.archType || 'spire'),
+            archLabel: String(z.archLabel || '复合立体建筑'),
+            x: Math.max(-48, Math.min(48, Number(z.x) || 0)),
+            z: Math.max(-38, Math.min(38, Number(z.z) || 0)),
+            width: Math.max(15, Math.min(26, Number(z.width) || 19)),
+            depth: Math.max(15, Math.min(26, Number(z.depth) || 18)),
+            height: Math.max(20, Math.min(44, Number(z.height) || 28)),
+            accentTone: z.accentTone === 'dark' ? 'dark' : 'accent',
+            exclusiveRole: String(z.exclusiveRole || '核心人物'),
+            accessCond: String(z.accessCond || '自由调查'),
+            rating: Math.max(3, Math.min(5, Number(z.rating) || 5)),
+            desc: String(z.desc || ''),
+            subSpots: Array.isArray(z.subSpots) ? z.subSpots.slice(0, 6) : []
+          }))
+        };
+
+        this.currentAtlasData = normalized;
+        this.applyAtlasData(normalized);
+
+        // 优先自动存入本地 Termux 磁盘，避免堆积在浏览器内存里
+        const savedTermux = await this.saveCurrentAtlasToTermux(false);
+        if (!savedTermux) {
+          try {
+            localStorage.setItem('ephone_atlas3d_data_' + this.currentModId, JSON.stringify(normalized));
+          } catch (_) {}
+          this.setStatus('立体沙盘生成完成，点击上方存盘可卸载至本地磁盘释放网页内存');
+        }
+      } catch (err) {
+        console.error('[沙盘] AI生成失败:', err);
+        this.setStatus('生成遇到问题：' + (err.message || err));
+        if (typeof global.showCustomAlert === 'function') {
+          global.showCustomAlert('沙盘生成提示', String(err.message || err));
+        }
+      } finally {
+        this.isGenerating = false;
+        if (genBtn) {
+          genBtn.disabled = false;
+          genBtn.textContent = '生成';
+        }
+      }
+    },
+
+    applyAtlasData(data) {
+      if (!data) return;
+      const enEl = document.getElementById('atlas-en-subtitle');
+      const titleEl = document.getElementById('atlas-main-title');
+      const tagRow = document.getElementById('atlas-tag-row');
+
+      if (enEl) enEl.textContent = data.enSubtitle || 'ARCHITECTURAL 3D SANDBOX';
+      if (titleEl) titleEl.textContent = data.title || '未命名沙盘';
+      if (tagRow) {
+        const tags = Array.isArray(data.tags) ? data.tags : [];
+        tagRow.innerHTML = tags.map(t => `<span style="font-size:10px; font-weight:700; color:var(--text-secondary); background:var(--secondary-bg); padding:2px 8px; border-radius:999px; border:1px solid var(--border-color);">#${this.escapeHtml(t)}</span>`).join('');
+      }
+
+      this.build3DSceneGeometry(data);
+      this.renderZoneStrip(data);
+      this.createFloatingLabels(data);
+      this.focusZone(0, false);
+    },
+
+    escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    },
+
+    resolveThemePalette() {
+      const style = getComputedStyle(document.documentElement);
+      const accent = (style.getPropertyValue('--accent-color') || '#e87a90').trim() || '#e87a90';
+      return {
+        accent,
+        accentSoft: this.mixHex(accent, '#ffffff', 0.42),
+        accentLight: this.mixHex(accent, '#ffffff', 0.76),
+        accentDeep: this.mixHex(accent, '#241b22', 0.35),
+        wallPure: '#fcfaf9',
+        wallSide: '#f1eaee',
+        wallShadow: '#dfd5dc',
+        obsidian: '#2b252c',
+        obsidianSoft: '#433b45',
+        plazaA: '#f7f2f5',
+        plazaB: '#ece4ea',
+        plazaBorder: '#d8ccd5'
+      };
+    },
+
+    parseHex(hex) {
+      const clean = String(hex || '#e87a90').replace('#', '').trim();
+      if (clean.length === 3) {
+        return [
+          parseInt(clean[0] + clean[0], 16) || 232,
+          parseInt(clean[1] + clean[1], 16) || 122,
+          parseInt(clean[2] + clean[2], 16) || 144
+        ];
+      }
+      return [
+        parseInt(clean.slice(0, 2), 16) || 232,
+        parseInt(clean.slice(2, 4), 16) || 122,
+        parseInt(clean.slice(4, 6), 16) || 144
+      ];
+    },
+
+    mixHex(hex1, hex2, ratio = 0.5) {
+      const c1 = this.parseHex(hex1);
+      const c2 = this.parseHex(hex2);
+      const r = Math.round(c1[0] * (1 - ratio) + c2[0] * ratio);
+      const g = Math.round(c1[1] * (1 - ratio) + c2[1] * ratio);
+      const b = Math.round(c1[2] * (1 - ratio) + c2[2] * ratio);
+      return `rgb(${r}, ${g}, ${b})`;
+    },
+
+    shadeColor(colorStr, factor) {
+      let r = 240, g = 235, b = 238;
+      if (String(colorStr).startsWith('rgb')) {
+        const m = String(colorStr).match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (m) {
+          r = Number(m[1]);
+          g = Number(m[2]);
+          b = Number(m[3]);
+        }
+      } else {
+        [r, g, b] = this.parseHex(colorStr);
+      }
+      r = Math.max(0, Math.min(255, Math.round(r * factor)));
+      g = Math.max(0, Math.min(255, Math.round(g * factor)));
+      b = Math.max(0, Math.min(255, Math.round(b * factor)));
+      return `rgb(${r}, ${g}, ${b})`;
+    },
+
+    build3DSceneGeometry(data) {
+      this.meshes = [];
+      this.plazaFaces = [];
+      this.labelAnchors = [];
+
+      const pal = this.resolveThemePalette();
+      const zones = Array.isArray(data.zones) ? data.zones : [];
+
+      // 1. 构建双层立体棋盘基座与学院外围雕花矮墙
+      this.addBoxFaces(this.plazaFaces, 0, -3.5, 0, 128, 7, 108, pal.wallSide, pal.plazaBorder, -1);
+      this.addBoxFaces(this.plazaFaces, 0, -0.6, 0, 120, 1.2, 100, pal.plazaA, pal.plazaBorder, -1);
+
+      const cols = 10;
+      const rows = 8;
+      const tileW = 112 / cols;
+      const tileD = 92 / rows;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const tx = -56 + (c + 0.5) * tileW;
+          const tz = -46 + (r + 0.5) * tileD;
+          const isEven = (r + c) % 2 === 0;
+          const hw = tileW * 0.48;
+          const hd = tileD * 0.48;
+          this.plazaFaces.push({
+            verts: [
+              { x: tx - hw, y: 0.05, z: tz - hd },
+              { x: tx + hw, y: 0.05, z: tz - hd },
+              { x: tx + hw, y: 0.05, z: tz + hd },
+              { x: tx - hw, y: 0.05, z: tz + hd }
+            ],
+            color: isEven ? pal.wallPure : pal.plazaB,
+            stroke: pal.plazaBorder,
+            zoneIdx: -1,
+            isGround: true
+          });
+        }
+      }
+
+      // 四角装饰黑曜石与柔粉小方碑
+      const cornerCoords = [
+        { x: -52, z: -42 },
+        { x: 52, z: -42 },
+        { x: -52, z: 42 },
+        { x: 52, z: 42 },
+        { x: -32, z: 40 },
+        { x: 32, z: -38 }
+      ];
+      cornerCoords.forEach((cc, i) => {
+        this.addBoxFaces(this.meshes, cc.x, 1.6, cc.z, 7.5, 3.2, 7.5, i % 2 === 0 ? pal.obsidian : pal.accentSoft, pal.wallPure, -1);
+        this.addBoxFaces(this.meshes, cc.x, 3.5, cc.z, 5.4, 0.7, 5.4, i % 2 === 0 ? pal.accentSoft : pal.obsidian, pal.wallPure, -1);
+      });
+
+      // 2. 避免建筑重叠的自动微调坐标
+      const placed = zones.map((z, idx) => {
+        let px = Number(z.x) || 0;
+        let pz = Number(z.z) || 0;
+        for (let iter = 0; iter < 12; iter++) {
+          for (let j = 0; j < idx; j++) {
+            const other = zones[j];
+            const dx = px - (other._px ?? other.x ?? 0);
+            const dz = pz - (other._pz ?? other.z ?? 0);
+            const dist = Math.hypot(dx, dz);
+            const minDist = 26;
+            if (dist < minDist) {
+              const ang = dist > 0.1 ? Math.atan2(dz, dx) : (idx * 1.25);
+              px += Math.cos(ang) * (minDist - dist);
+              pz += Math.sin(ang) * (minDist - dist);
+            }
+          }
+        }
+        px = Math.max(-44, Math.min(44, px));
+        pz = Math.max(-34, Math.min(34, pz));
+        z._px = px;
+        z._pz = pz;
+        return { zone: z, idx, x: px, z: pz };
+      });
+
+      // 3. 在相邻建筑之间生成精致的立体连廊步道
+      for (let i = 0; i < placed.length - 1; i++) {
+        const a = placed[i];
+        const b = placed[i + 1];
+        const midX = (a.x + b.x) * 0.5;
+        const midZ = (a.z + b.z) * 0.5;
+        this.addBoxFaces(this.meshes, midX, 0.6, midZ, 5.5, 1.2, 5.5, pal.accentLight, pal.plazaBorder, -1);
+      }
+
+      // 4. 为每个 Zone 生成复合多层立体建筑群
+      placed.forEach(({ zone, idx, x, z }) => {
+        const w = Number(zone.width) || 19;
+        const d = Number(zone.depth) || 18;
+        const h = Number(zone.height) || 28;
+        const roofMain = zone.accentTone === 'dark' ? pal.obsidian : pal.accent;
+        const roofSub = zone.accentTone === 'dark' ? pal.accentSoft : pal.obsidian;
+
+        // 建筑三层阶梯白瓷基座
+        this.addBoxFaces(this.meshes, x, 1.2, z, w + 4, 2.4, d + 4, pal.wallSide, pal.plazaBorder, idx);
+        this.addBoxFaces(this.meshes, x, 3.0, z, w + 1.5, 1.4, d + 1.5, pal.wallPure, pal.plazaBorder, idx);
+
+        let topY = h;
+        const arch = zone.archType || 'spire';
+
+        if (arch === 'clocktower') {
+          // 八棱哥特钟塔：主塔身 + 四面飞扶壁 + 钟盘层 + 高耸八棱尖顶 + 悬浮星冠
+          const towerW = w * 0.66;
+          const towerH = h * 0.62;
+          this.addBoxFaces(this.meshes, x, 3.7 + towerH * 0.5, z, towerW, towerH, towerW, pal.wallPure, pal.plazaBorder, idx);
+          // 四角飞扶壁翼柱
+          const off = towerW * 0.56;
+          [[-off, -off], [off, -off], [-off, off], [off, off]].forEach(([bx, bz]) => {
+            this.addBoxFaces(this.meshes, x + bx, 3.7 + towerH * 0.34, z + bz, 3.4, towerH * 0.68, 3.4, pal.accentLight, pal.plazaBorder, idx);
+            this.addPyramidFaces(this.meshes, x + bx, 3.7 + towerH * 0.68, z + bz, 3.8, 5.2, 4, roofSub, pal.wallPure, idx);
+          });
+          // 柔粉琉璃钟室环带
+          const belfryY = 3.7 + towerH;
+          this.addBoxFaces(this.meshes, x, belfryY + 3.2, z, towerW * 0.88, 6.4, towerW * 0.88, pal.accentSoft, pal.wallPure, idx);
+          // 哥特八棱高尖顶
+          const spireBaseY = belfryY + 6.4;
+          const spireH = h * 0.42;
+          this.addPyramidFaces(this.meshes, x, spireBaseY, z, towerW * 0.56, spireH, 8, roofMain, pal.wallPure, idx);
+          // 塔顶悬浮星钻
+          topY = spireBaseY + spireH + 4.5;
+          this.addDiamondFaces(this.meshes, x, topY - 1.5, z, 2.2, 3.6, pal.obsidian, pal.accentSoft, idx);
+        } else if (arch === 'dome' || arch === 'greenhouse') {
+          // 琉璃穹顶温室：八角白瓷基厅 + 侧翼花廊 + 多层肋架粉钻圆穹顶 + 顶部晶石
+          const baseH = h * 0.44;
+          this.addCylinderFaces(this.meshes, x, 3.7, z, w * 0.52, baseH, 8, pal.wallPure, pal.plazaBorder, idx);
+          this.addBoxFaces(this.meshes, x - w * 0.46, 3.7 + baseH * 0.38, z, w * 0.36, baseH * 0.76, d * 0.52, pal.wallSide, pal.plazaBorder, idx);
+          this.addBoxFaces(this.meshes, x + w * 0.46, 3.7 + baseH * 0.38, z, w * 0.36, baseH * 0.76, d * 0.52, pal.wallSide, pal.plazaBorder, idx);
+          const domeY = 3.7 + baseH;
+          const domeR = w * 0.48;
+          const domeH = h * 0.42;
+          this.addDomeFaces(this.meshes, x, domeY, z, domeR, domeH, 10, pal.accentSoft, pal.wallPure, idx);
+          this.addDiamondFaces(this.meshes, x, domeY + domeH + 2.4, z, 2.0, 3.2, pal.obsidian, pal.wallPure, idx);
+          topY = domeY + domeH + 5.5;
+        } else if (arch === 'hall' || arch === 'mansion') {
+          // 丝绒礼堂 / 主宅邸：宽阔主殿 + 左右对称耳堂 + 双坡斜顶 + 中心尖塔门廊
+          const bodyH = h * 0.48;
+          this.addBoxFaces(this.meshes, x, 3.7 + bodyH * 0.5, z, w * 0.92, bodyH, d * 0.78, pal.wallPure, pal.plazaBorder, idx);
+          // 前出入口门廊
+          this.addBoxFaces(this.meshes, x, 3.7 + bodyH * 0.42, z + d * 0.45, w * 0.42, bodyH * 0.84, d * 0.28, pal.accentLight, pal.plazaBorder, idx);
+          // 经典斜坡大屋顶
+          const roofY = 3.7 + bodyH;
+          const roofH = h * 0.34;
+          this.addGableRoofFaces(this.meshes, x, roofY, z, w * 0.98, roofH, d * 0.84, roofMain, pal.wallPure, idx);
+          // 左右双尖顶小塔
+          this.addPyramidFaces(this.meshes, x - w * 0.34, roofY, z + d * 0.25, 3.4, roofH * 1.25, 4, roofSub, pal.wallPure, idx);
+          this.addPyramidFaces(this.meshes, x + w * 0.34, roofY, z + d * 0.25, 3.4, roofH * 1.25, 4, roofSub, pal.wallPure, idx);
+          topY = roofY + roofH * 1.25 + 3.5;
+        } else if (arch === 'pagoda') {
+          // 重檐楼阁：三层递减楼身 + 三重挑檐屋顶 + 宝顶
+          let curY = 3.7;
+          const tiers = 3;
+          for (let t = 0; t < tiers; t++) {
+            const scale = 1 - t * 0.22;
+            const th = (h * 0.22) * (1 - t * 0.1);
+            this.addBoxFaces(this.meshes, x, curY + th * 0.5, z, w * 0.78 * scale, th, d * 0.78 * scale, pal.wallPure, pal.plazaBorder, idx);
+            curY += th;
+            const rh = h * 0.12;
+            this.addPyramidFaces(this.meshes, x, curY, z, w * 0.62 * scale, rh, 4, t % 2 === 0 ? roofMain : roofSub, pal.wallPure, idx);
+            curY += rh * 0.82;
+          }
+          this.addPyramidFaces(this.meshes, x, curY, z, 2.2, 5.0, 6, pal.accent, pal.wallPure, idx);
+          topY = curY + 6.5;
+        } else if (arch === 'ward' || arch === 'courtyard') {
+          // 菲林画廊 / 复合馆舍：L型与回廊错层建筑 + 采光天窗顶 + 装饰阁楼
+          const h1 = h * 0.45;
+          const h2 = h * 0.62;
+          this.addBoxFaces(this.meshes, x - w * 0.18, 3.7 + h1 * 0.5, z + d * 0.12, w * 0.72, h1, d * 0.68, pal.wallPure, pal.plazaBorder, idx);
+          this.addBoxFaces(this.meshes, x + w * 0.22, 3.7 + h2 * 0.5, z - d * 0.14, w * 0.56, h2, d * 0.66, pal.wallSide, pal.plazaBorder, idx);
+          // 屋顶天窗与平顶压边
+          this.addBoxFaces(this.meshes, x - w * 0.18, 3.7 + h1 + 1.1, z + d * 0.12, w * 0.54, 2.2, d * 0.48, roofMain, pal.wallPure, idx);
+          this.addBoxFaces(this.meshes, x + w * 0.22, 3.7 + h2 + 1.2, z - d * 0.14, w * 0.42, 2.4, d * 0.44, pal.accentSoft, pal.wallPure, idx);
+          this.addDiamondFaces(this.meshes, x + w * 0.22, 3.7 + h2 + 4.8, z - d * 0.14, 1.8, 3.0, pal.obsidian, pal.wallPure, idx);
+          topY = 3.7 + h2 + 7.5;
+        } else if (arch === 'observatory') {
+          // 星象观测台：高台圆柱 + 旋转半球穹顶 + 观星副翼
+          const cylH = h * 0.52;
+          this.addCylinderFaces(this.meshes, x, 3.7, z, w * 0.46, cylH, 10, pal.wallPure, pal.plazaBorder, idx);
+          this.addBoxFaces(this.meshes, x + w * 0.38, 3.7 + cylH * 0.35, z, w * 0.42, cylH * 0.7, d * 0.48, pal.accentLight, pal.plazaBorder, idx);
+          this.addDomeFaces(this.meshes, x, 3.7 + cylH, z, w * 0.44, h * 0.38, 10, roofMain, pal.wallPure, idx);
+          topY = 3.7 + cylH + h * 0.38 + 4.5;
+        } else {
+          // 默认：公爵寝宫 / 簇拥多尖顶城堡群（主尖塔 + 3座高低错落子尖塔）
+          const castleH = h * 0.52;
+          this.addBoxFaces(this.meshes, x, 3.7 + castleH * 0.5, z, w * 0.78, castleH, d * 0.78, pal.wallPure, pal.plazaBorder, idx);
+          const baseTop = 3.7 + castleH;
+          const mainSpireH = h * 0.42;
+          this.addPyramidFaces(this.meshes, x, baseTop, z, w * 0.34, mainSpireH, 6, pal.accent, pal.wallPure, idx);
+          const subOffsets = [
+            { dx: -w * 0.28, dz: -d * 0.24, sh: mainSpireH * 0.78, col: pal.obsidian },
+            { dx: w * 0.28, dz: -d * 0.22, sh: mainSpireH * 0.72, col: pal.obsidian },
+            { dx: -w * 0.24, dz: d * 0.26, sh: mainSpireH * 0.68, col: pal.obsidianSoft },
+            { dx: w * 0.26, dz: d * 0.26, sh: mainSpireH * 0.82, col: pal.accentSoft }
+          ];
+          subOffsets.forEach(so => {
+            this.addBoxFaces(this.meshes, x + so.dx, 3.7 + castleH * 0.58, z + so.dz, 5.2, castleH * 1.16, 5.2, pal.wallPure, pal.plazaBorder, idx);
+            this.addPyramidFaces(this.meshes, x + so.dx, 3.7 + castleH * 1.16, z + so.dz, 3.6, so.sh, 6, so.col, pal.wallPure, idx);
+          });
+          topY = baseTop + mainSpireH + 4.5;
+        }
+
+        this.labelAnchors.push({
+          zoneIdx: idx,
+          code: zone.code || String(idx + 1).padStart(2, '0'),
+          name: zone.name || `区域0${idx + 1}`,
+          x,
+          y: topY,
+          z
+        });
+      });
+    },
+
+    addBoxFaces(targetArr, cx, cy, cz, w, h, d, color, stroke, zoneIdx) {
+      const hw = w * 0.5;
+      const hh = h * 0.5;
+      const hd = d * 0.5;
+      const v = [
+        { x: cx - hw, y: cy - hh, z: cz - hd },
+        { x: cx + hw, y: cy - hh, z: cz - hd },
+        { x: cx + hw, y: cy + hh, z: cz - hd },
+        { x: cx - hw, y: cy + hh, z: cz - hd },
+        { x: cx - hw, y: cy - hh, z: cz + hd },
+        { x: cx + hw, y: cy - hh, z: cz + hd },
+        { x: cx + hw, y: cy + hh, z: cz + hd },
+        { x: cx - hw, y: cy + hh, z: cz + hd }
+      ];
+      // 顶面、前面、后面、左面、右面
+      targetArr.push(
+        { verts: [v[3], v[2], v[6], v[7]], color: this.shadeColor(color, 1.06), stroke, zoneIdx },
+        { verts: [v[4], v[5], v[6], v[7]], color: this.shadeColor(color, 0.98), stroke, zoneIdx },
+        { verts: [v[1], v[0], v[3], v[2]], color: this.shadeColor(color, 0.84), stroke, zoneIdx },
+        { verts: [v[0], v[4], v[7], v[3]], color: this.shadeColor(color, 0.90), stroke, zoneIdx },
+        { verts: [v[5], v[1], v[2], v[6]], color: this.shadeColor(color, 0.93), stroke, zoneIdx }
+      );
+    },
+
+    addPyramidFaces(targetArr, cx, baseY, cz, radius, height, sides, color, stroke, zoneIdx) {
+      const apex = { x: cx, y: baseY + height, z: cz };
+      const ring = [];
+      for (let i = 0; i < sides; i++) {
+        const ang = (i / sides) * Math.PI * 2 + Math.PI / sides;
+        ring.push({
+          x: cx + Math.cos(ang) * radius,
+          y: baseY,
+          z: cz + Math.sin(ang) * radius
+        });
+      }
+      for (let i = 0; i < sides; i++) {
+        const p1 = ring[i];
+        const p2 = ring[(i + 1) % sides];
+        const shade = 0.86 + 0.20 * Math.sin((i / sides) * Math.PI * 2 + 0.6);
+        targetArr.push({
+          verts: [p1, p2, apex],
+          color: this.shadeColor(color, shade),
+          stroke,
+          zoneIdx
+        });
+      }
+    },
+
+    addCylinderFaces(targetArr, cx, baseY, cz, radius, height, sides, color, stroke, zoneIdx) {
+      const bot = [];
+      const top = [];
+      for (let i = 0; i < sides; i++) {
+        const ang = (i / sides) * Math.PI * 2;
+        const px = cx + Math.cos(ang) * radius;
+        const pz = cz + Math.sin(ang) * radius;
+        bot.push({ x: px, y: baseY, z: pz });
+        top.push({ x: px, y: baseY + height, z: pz });
+      }
+      for (let i = 0; i < sides; i++) {
+        const ni = (i + 1) % sides;
+        const shade = 0.88 + 0.16 * Math.cos((i / sides) * Math.PI * 2);
+        targetArr.push({
+          verts: [bot[i], bot[ni], top[ni], top[i]],
+          color: this.shadeColor(color, shade),
+          stroke,
+          zoneIdx
+        });
+      }
+      targetArr.push({
+        verts: top,
+        color: this.shadeColor(color, 1.05),
+        stroke,
+        zoneIdx
+      });
+    },
+
+    addDomeFaces(targetArr, cx, baseY, cz, radius, height, sides, color, stroke, zoneIdx) {
+      const rings = 3;
+      let prevRing = [];
+      for (let i = 0; i < sides; i++) {
+        const ang = (i / sides) * Math.PI * 2;
+        prevRing.push({
+          x: cx + Math.cos(ang) * radius,
+          y: baseY,
+          z: cz + Math.sin(ang) * radius
+        });
+      }
+      for (let r = 1; r <= rings; r++) {
+        const t = r / rings;
+        const elev = (t * Math.PI) * 0.5;
+        const curR = Math.cos(elev) * radius;
+        const curY = baseY + Math.sin(elev) * height;
+        const nextRing = [];
+        for (let i = 0; i < sides; i++) {
+          const ang = (i / sides) * Math.PI * 2;
+          nextRing.push({
+            x: cx + Math.cos(ang) * curR,
+            y: curY,
+            z: cz + Math.sin(ang) * curR
+          });
+        }
+        for (let i = 0; i < sides; i++) {
+          const ni = (i + 1) % sides;
+          const shade = 0.90 + 0.16 * Math.sin((i / sides) * Math.PI * 2 + r * 0.3);
+          targetArr.push({
+            verts: [prevRing[i], prevRing[ni], nextRing[ni], nextRing[i]],
+            color: this.shadeColor(color, shade),
+            stroke,
+            zoneIdx
+          });
+        }
+        prevRing = nextRing;
+      }
+    },
+
+    addGableRoofFaces(targetArr, cx, baseY, cz, w, h, d, color, stroke, zoneIdx) {
+      const hw = w * 0.5;
+      const hd = d * 0.5;
+      const fl = { x: cx - hw, y: baseY, z: cz + hd };
+      const fr = { x: cx + hw, y: baseY, z: cz + hd };
+      const bl = { x: cx - hw, y: baseY, z: cz - hd };
+      const br = { x: cx + hw, y: baseY, z: cz - hd };
+      const rl = { x: cx - hw, y: baseY + h, z: cz };
+      const rr = { x: cx + hw, y: baseY + h, z: cz };
+
+      targetArr.push(
+        { verts: [fl, fr, rr, rl], color: this.shadeColor(color, 1.04), stroke, zoneIdx },
+        { verts: [br, bl, rl, rr], color: this.shadeColor(color, 0.88), stroke, zoneIdx },
+        { verts: [bl, fl, rl], color: this.shadeColor(color, 0.94), stroke, zoneIdx },
+        { verts: [fr, br, rr], color: this.shadeColor(color, 0.96), stroke, zoneIdx }
+      );
+    },
+
+    addDiamondFaces(targetArr, cx, cy, cz, radius, height, color, stroke, zoneIdx) {
+      const top = { x: cx, y: cy + height * 0.5, z: cz };
+      const bot = { x: cx, y: cy - height * 0.5, z: cz };
+      const ring = [
+        { x: cx - radius, y: cy, z: cz },
+        { x: cx, y: cy, z: cz + radius },
+        { x: cx + radius, y: cy, z: cz },
+        { x: cx, y: cy, z: cz - radius }
+      ];
+      for (let i = 0; i < 4; i++) {
+        const p1 = ring[i];
+        const p2 = ring[(i + 1) % 4];
+        targetArr.push(
+          { verts: [p1, p2, top], color: this.shadeColor(color, 1.05), stroke, zoneIdx },
+          { verts: [p2, p1, bot], color: this.shadeColor(color, 0.85), stroke, zoneIdx }
+        );
+      }
+    },
+
+    createFloatingLabels(data) {
+      const layer = document.getElementById('atlas-3d-labels-layer');
+      if (!layer) return;
+      layer.innerHTML = '';
+
+      const zones = Array.isArray(data.zones) ? data.zones : [];
+      this.labelAnchors.forEach((anchor, i) => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'atlas-floating-pill';
+        pill.dataset.zoneIdx = String(i);
+        pill.style.cssText = [
+          'position:absolute',
+          'left:0px',
+          'top:0px',
+          'transform:translate(-50%, -100%)',
+          'pointer-events:auto',
+          'cursor:pointer',
+          'display:inline-flex',
+          'align-items:center',
+          'gap:4px',
+          'padding:3px 9px',
+          'border-radius:999px',
+          'background:rgba(255,255,255,0.94)',
+          'border:1.5px solid var(--border-color)',
+          'box-shadow:0 4px 12px rgba(0,0,0,0.10)',
+          'font-size:11px',
+          'font-weight:800',
+          'color:var(--text-primary)',
+          'white-space:nowrap',
+          'transition:border-color 0.2s, background 0.2s'
+        ].join(';');
+
+        pill.innerHTML = `<span style="color:var(--accent-color); font-weight:900;">${this.escapeHtml(anchor.code)}</span><span>${this.escapeHtml(anchor.name)}</span>`;
+        pill.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.focusZone(i, true);
+        });
+        layer.appendChild(pill);
+        anchor.el = pill;
+      });
+    },
+
+    getZoneSvgIcon(archType, isSelected) {
+      const stroke = isSelected ? '#ffffff' : 'currentColor';
+      if (archType === 'dome' || archType === 'greenhouse' || archType === 'observatory') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M6 19v-4a6 6 0 0 1 12 0v4"/><path d="M12 5v4"/></svg>`;
+      }
+      if (archType === 'hall' || archType === 'mansion') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 20V9l7-5 7 5v11"/><path d="M9 20v-5h6v5"/></svg>`;
+      }
+      if (archType === 'ward' || archType === 'courtyard') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M9 10h6"/><path d="M9 14h6"/></svg>`;
+      }
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V9l6-6 6 6v11"/><path d="M3 20h18"/><circle cx="12" cy="11" r="2"/></svg>`;
+    },
+
+    renderZoneStrip(data) {
+      const strip = document.getElementById('atlas-zone-strip');
+      if (!strip) return;
+      strip.innerHTML = '';
+
+      const zones = Array.isArray(data.zones) ? data.zones : [];
+      zones.forEach((z, idx) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.dataset.zoneIdx = String(idx);
+        item.style.cssText = [
+          'flex:0 0 auto',
+          'display:flex',
+          'flex-direction:column',
+          'align-items:center',
+          'gap:4px',
+          'min-width:68px',
+          'padding:6px 8px',
+          'border-radius:14px',
+          'border:1.5px solid var(--border-color)',
+          'background:var(--card-bg)',
+          'color:var(--text-primary)',
+          'cursor:pointer',
+          'transition:all 0.2s ease'
+        ].join(';');
+
+        item.innerHTML = `
+          <div class="atlas-zone-icon-box" style="width:32px; height:32px; border-radius:10px; display:flex; align-items:center; justify-content:center; background:var(--secondary-bg); color:var(--text-primary);">
+            ${this.getZoneSvgIcon(z.archType, false)}
+          </div>
+          <div style="font-size:11px; font-weight:800; line-height:1.2; max-width:72px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.escapeHtml(z.name)}</div>
+          <div style="font-size:9px; font-weight:700; letter-spacing:0.6px; opacity:0.75;">ZONE · ${this.escapeHtml(z.code)}</div>
+        `;
+        item.addEventListener('click', () => {
+          this.focusZone(idx, true);
+        });
+        strip.appendChild(item);
+      });
+    },
+
+    focusZone(zoneIdx, animate = true) {
+      if (!this.currentAtlasData || !Array.isArray(this.currentAtlasData.zones)) return;
+      const zones = this.currentAtlasData.zones;
+      this.selectedZoneIndex = zoneIdx;
+
+      if (zoneIdx >= 0 && zoneIdx < zones.length) {
+        const target = zones[zoneIdx];
+        this.camera.targetPanX = -(target._px ?? target.x ?? 0) * 0.55;
+        this.camera.targetPanZ = -(target._pz ?? target.z ?? 0) * 0.55;
+        this.camera.targetZoom = 1.24;
+      } else {
+        this.camera.targetPanX = 0;
+        this.camera.targetPanZ = 0;
+        this.camera.targetZoom = 1.0;
+      }
+
+      if (!animate) {
+        this.camera.panX = this.camera.targetPanX;
+        this.camera.panZ = this.camera.targetPanZ;
+        this.camera.zoom = this.camera.targetZoom;
+      }
+
+      this.updateActiveZoneUI();
+      this.requestRender();
+    },
+
+    updateActiveZoneUI() {
+      if (!this.currentAtlasData || !Array.isArray(this.currentAtlasData.zones)) return;
+      const zones = this.currentAtlasData.zones;
+      const activeIdx = this.selectedZoneIndex >= 0 && this.selectedZoneIndex < zones.length ? this.selectedZoneIndex : 0;
+      const z = zones[activeIdx];
+      if (!z) return;
+
+      // 更新底部路线图标高亮
+      const strip = document.getElementById('atlas-zone-strip');
+      if (strip) {
+        Array.from(strip.children).forEach((btn, idx) => {
+          const isSel = idx === this.selectedZoneIndex;
+          btn.style.borderColor = isSel ? 'var(--accent-color)' : 'var(--border-color)';
+          btn.style.background = isSel ? 'var(--secondary-bg)' : 'var(--card-bg)';
+          const iconBox = btn.querySelector('.atlas-zone-icon-box');
+          if (iconBox) {
+            iconBox.style.background = isSel ? 'var(--accent-color)' : 'var(--secondary-bg)';
+            iconBox.style.color = isSel ? '#ffffff' : 'var(--text-primary)';
+            iconBox.innerHTML = this.getZoneSvgIcon(zones[idx]?.archType, isSel);
+          }
+        });
+      }
+
+      // 更新悬浮铭牌高亮
+      this.labelAnchors.forEach((anchor, idx) => {
+        if (!anchor.el) return;
+        const isSel = idx === this.selectedZoneIndex;
+        anchor.el.style.borderColor = isSel ? 'var(--accent-color)' : 'var(--border-color)';
+        anchor.el.style.background = isSel ? 'var(--accent-color)' : 'rgba(255,255,255,0.94)';
+        anchor.el.style.color = isSel ? '#ffffff' : 'var(--text-primary)';
+        const codeSpan = anchor.el.querySelector('span');
+        if (codeSpan) codeSpan.style.color = isSel ? '#ffffff' : 'var(--accent-color)';
+      });
+
+      // 更新下方建筑档案卡片
+      const numEl = document.getElementById('atlas-detail-num');
+      const badgeEl = document.getElementById('atlas-detail-badge');
+      const titleEl = document.getElementById('atlas-detail-title');
+      const enEl = document.getElementById('atlas-detail-en');
+      const roleEl = document.getElementById('atlas-detail-role');
+      const archEl = document.getElementById('atlas-detail-arch');
+      const accessEl = document.getElementById('atlas-detail-access');
+      const starsEl = document.getElementById('atlas-detail-stars');
+      const descEl = document.getElementById('atlas-detail-desc');
+      const spotsBox = document.getElementById('atlas-detail-clues-box');
+      const spotsList = document.getElementById('atlas-detail-clues-list');
+
+      if (numEl) numEl.textContent = z.code || '01';
+      if (badgeEl) badgeEl.textContent = `ZONE ${z.code || '01'}`;
+      if (titleEl) titleEl.textContent = z.fullTitle || z.name || '核心建筑';
+      if (enEl) enEl.textContent = z.enTitle || 'ARCHITECTURAL ARCHIVE';
+      if (roleEl) roleEl.textContent = z.exclusiveRole || '调查员与搭档';
+      if (archEl) archEl.textContent = z.archLabel || '复合立体建筑';
+      if (accessEl) accessEl.textContent = z.accessCond || '自由探索';
+      if (starsEl) {
+        const count = Math.max(1, Math.min(5, Number(z.rating) || 5));
+        starsEl.innerHTML = Array.from({ length: count }).map(() =>
+          `<svg width="12" height="12" viewBox="0 0 24 24" fill="var(--accent-color)" stroke="var(--accent-color)" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
+        ).join('');
+      }
+      if (descEl) descEl.textContent = z.desc || '';
+
+      if (spotsBox && spotsList) {
+        const spots = Array.isArray(z.subSpots) ? z.subSpots : [];
+        if (spots.length === 0) {
+          spotsBox.style.display = 'none';
+          spotsList.innerHTML = '';
+        } else {
+          spotsBox.style.display = 'block';
+          spotsList.innerHTML = spots.map(sp => `
+            <div style="display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border-radius:10px; background:var(--secondary-bg); border:1px solid var(--border-color);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>
+              <div style="flex:1; min-width:0; font-size:11px; line-height:1.5; color:var(--text-primary);">
+                <span style="font-weight:800; color:var(--accent-color);">${this.escapeHtml(sp.name)}</span>
+                <span style="color:var(--text-secondary);"> · ${this.escapeHtml(sp.info)}</span>
+              </div>
+            </div>
+          `).join('');
+        }
+      }
+    },
+
+    bindCanvasEvents(canvas) {
+      canvas.addEventListener('pointerdown', (e) => {
+        this.pointer.isDown = true;
+        this.pointer.startX = e.clientX;
+        this.pointer.startY = e.clientY;
+        this.pointer.lastX = e.clientX;
+        this.pointer.lastY = e.clientY;
+        this.pointer.moved = false;
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        if (!this.pointer.isDown) return;
+        const dx = e.clientX - this.pointer.lastX;
+        const dy = e.clientY - this.pointer.lastY;
+        if (Math.hypot(e.clientX - this.pointer.startX, e.clientY - this.pointer.startY) > 5) {
+          this.pointer.moved = true;
+        }
+        this.pointer.lastX = e.clientX;
+        this.pointer.lastY = e.clientY;
+
+        this.camera.targetYaw += dx * 0.0095;
+        this.camera.yaw = this.camera.targetYaw;
+        this.camera.targetPitch = Math.max(0.28, Math.min(1.05, this.camera.targetPitch + dy * 0.0065));
+        this.camera.pitch = this.camera.targetPitch;
+        this.requestRender();
+      });
+
+      const endPointer = (e) => {
+        if (!this.pointer.isDown) return;
+        this.pointer.isDown = false;
+        if (!this.pointer.moved) {
+          this.handleCanvasTap(e, canvas);
+        }
+      };
+
+      canvas.addEventListener('pointerup', endPointer);
+      canvas.addEventListener('pointercancel', endPointer);
+
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.08 : 0.08;
+        this.camera.targetZoom = Math.max(0.68, Math.min(1.75, this.camera.targetZoom + delta));
+        this.requestRender();
+      }, { passive: false });
+    },
+
+    handleCanvasTap(e, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+
+      let bestIdx = -1;
+      let bestDist = 42;
+      this.labelAnchors.forEach((a, idx) => {
+        if (typeof a.screenX === 'number' && typeof a.screenY === 'number') {
+          const d = Math.hypot(cx - a.screenX, (cy + 18) - a.screenY);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = idx;
+          }
+        }
+      });
+
+      if (bestIdx >= 0) {
+        this.focusZone(bestIdx, true);
+      }
+    },
+
+    resizeCanvas() {
+      const canvas = document.getElementById('atlas-3d-canvas');
+      const wrap = document.getElementById('atlas-3d-viewport-wrap');
+      if (!canvas || !wrap) return;
+      const rect = wrap.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.max(260, Math.floor(rect.width));
+      const h = Math.max(220, Math.floor(rect.height));
+      if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+      }
+    },
+
+    requestRender() {
+      if (!this.isActive) return;
+      this.needsRender = true;
+      if (!this.rafId) {
+        this.rafId = requestAnimationFrame(() => this.renderLoop());
+      }
+    },
+
+    projectPoint(pt, cosY, sinY, cosP, sinP, scale, centerX, centerY) {
+      const wx = pt.x + this.camera.panX;
+      const wy = pt.y;
+      const wz = pt.z + this.camera.panZ;
+
+      const rx = wx * cosY - wz * sinY;
+      const rz = wx * sinY + wz * cosY;
+
+      const ry = wy * cosP - rz * sinP;
+      const depth = wy * sinP + rz * cosP;
+
+      const fov = 320;
+      const persp = fov / Math.max(120, fov + depth * 0.85);
+      return {
+        x: centerX + rx * scale * persp,
+        y: centerY - ry * scale * persp,
+        depth
+      };
+    },
+
+    renderLoop() {
+      this.rafId = null;
+      if (!this.isActive) return;
+
+      let stillAnimating = false;
+      if (this.autoRotate && !this.pointer.isDown) {
+        this.camera.targetYaw += 0.0045;
+        this.camera.yaw = this.camera.targetYaw;
+        stillAnimating = true;
+      }
+
+      const lerp = (a, b) => a + (b - a) * 0.16;
+      if (
+        Math.abs(this.camera.panX - this.camera.targetPanX) > 0.08 ||
+        Math.abs(this.camera.panZ - this.camera.targetPanZ) > 0.08 ||
+        Math.abs(this.camera.zoom - this.camera.targetZoom) > 0.004
+      ) {
+        this.camera.panX = lerp(this.camera.panX, this.camera.targetPanX);
+        this.camera.panZ = lerp(this.camera.panZ, this.camera.targetPanZ);
+        this.camera.zoom = lerp(this.camera.zoom, this.camera.targetZoom);
+        stillAnimating = true;
+      } else {
+        this.camera.panX = this.camera.targetPanX;
+        this.camera.panZ = this.camera.targetPanZ;
+        this.camera.zoom = this.camera.targetZoom;
+      }
+
+      this.drawFrame();
+
+      if (stillAnimating) {
+        this.rafId = requestAnimationFrame(() => this.renderLoop());
+      } else {
+        this.needsRender = false;
+      }
+    },
+
+    drawFrame() {
+      const canvas = document.getElementById('atlas-3d-canvas');
+      if (!canvas) return;
+      if (canvas.width <= 2 || canvas.height <= 2) {
+        this.resizeCanvas();
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const cssW = canvas.width / dpr;
+      const cssH = canvas.height / dpr;
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cssW, cssH);
+
+      // 柔和的学院风雾光背景渐变
+      const pal = this.resolveThemePalette();
+      const grad = ctx.createRadialGradient(cssW * 0.5, cssH * 0.48, 12, cssW * 0.5, cssH * 0.5, cssW * 0.72);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.65, pal.accentLight);
+      grad.addColorStop(1, pal.plazaA);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, cssW, cssH);
+
+      const cosY = Math.cos(this.camera.yaw);
+      const sinY = Math.sin(this.camera.yaw);
+      const cosP = Math.cos(this.camera.pitch);
+      const sinP = Math.sin(this.camera.pitch);
+      const baseScale = Math.min(cssW, cssH) / 128 * this.camera.zoom;
+      const centerX = cssW * 0.5;
+      const centerY = cssH * 0.60;
+
+      // 1. 先绘制底座与棋盘广场
+      const projectedPlaza = this.plazaFaces.map(f => {
+        const pts = f.verts.map(v => this.projectPoint(v, cosY, sinY, cosP, sinP, baseScale, centerX, centerY));
+        const avgD = pts.reduce((s, p) => s + p.depth, 0) / pts.length;
+        return { f, pts, avgD };
+      });
+      projectedPlaza.sort((a, b) => b.avgD - a.avgD);
+
+      projectedPlaza.forEach(({ f, pts }) => {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        ctx.fillStyle = f.color;
+        ctx.fill();
+        if (f.stroke) {
+          ctx.strokeStyle = f.stroke;
+          ctx.lineWidth = f.isGround ? 0.55 : 0.8;
+          ctx.stroke();
+        }
+      });
+
+      // 2. 深度排序并绘制所有立体建筑构件
+      const projectedMeshes = this.meshes.map(f => {
+        const pts = f.verts.map(v => this.projectPoint(v, cosY, sinY, cosP, sinP, baseScale, centerX, centerY));
+        const avgD = pts.reduce((s, p) => s + p.depth, 0) / pts.length;
+        return { f, pts, avgD };
+      });
+      projectedMeshes.sort((a, b) => b.avgD - a.avgD);
+
+      projectedMeshes.forEach(({ f, pts }) => {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+
+        const isFocused = this.selectedZoneIndex >= 0 && f.zoneIdx === this.selectedZoneIndex;
+        ctx.fillStyle = isFocused ? this.shadeColor(f.color, 1.05) : f.color;
+        ctx.fill();
+
+        ctx.strokeStyle = isFocused ? pal.accent : (f.stroke || 'rgba(255,255,255,0.65)');
+        ctx.lineWidth = isFocused ? 1.15 : 0.65;
+        ctx.stroke();
+      });
+
+      // 3. 更新屋顶悬浮铭牌与小十字星锚点
+      this.labelAnchors.forEach((anchor, idx) => {
+        const proj = this.projectPoint(anchor, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
+        anchor.screenX = proj.x;
+        anchor.screenY = proj.y;
+
+        // 屋顶下方的精致四角星锚点
+        ctx.save();
+        ctx.translate(proj.x, proj.y + 4);
+        ctx.fillStyle = idx === this.selectedZoneIndex ? pal.accent : pal.obsidian;
+        ctx.beginPath();
+        ctx.moveTo(0, -4);
+        ctx.lineTo(1.2, -1.2);
+        ctx.lineTo(4, 0);
+        ctx.lineTo(1.2, 1.2);
+        ctx.lineTo(0, 4);
+        ctx.lineTo(-1.2, 1.2);
+        ctx.lineTo(-4, 0);
+        ctx.lineTo(-1.2, -1.2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        if (anchor.el) {
+          const clampedX = Math.max(38, Math.min(cssW - 38, proj.x));
+          const clampedY = Math.max(24, Math.min(cssH - 18, proj.y - 4));
+          anchor.el.style.left = `${clampedX.toFixed(1)}px`;
+          anchor.el.style.top = `${clampedY.toFixed(1)}px`;
+          anchor.el.style.zIndex = String(Math.round(500 - proj.depth));
+        }
+      });
+
+      ctx.restore();
+    }
+  };
+
+  global.ModuleAtlas3D = ModuleAtlas3D;
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       ModuleManager.initEventListeners();
+      ModuleAtlas3D.init();
     });
   } else {
     ModuleManager.initEventListeners();
+    ModuleAtlas3D.init();
   }
 
-  console.log('[模组] 模组深度重构与带团调度引擎已就绪');
+  console.log('[模组] 模组深度重构、小说化四阶流水线与 3D 沙盘引擎已就绪');
 })(window);
+
 
