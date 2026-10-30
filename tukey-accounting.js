@@ -181,16 +181,15 @@ async function loadAndRenderTukeyUserSettings() {
   if (settings) {
     tukeyUserSettings = settings;
   }
-
-  // 填充UI
-  document.getElementById("tukey-user-avatar-preview").src =
-    tukeyUserSettings.avatar;
-  document.getElementById("tukey-user-name-input").value =
-    tukeyUserSettings.username;
-  document.getElementById("tukey-user-profession-input").value =
-    tukeyUserSettings.profession || "";
-  document.getElementById("sync-to-taobao-toggle").checked =
-    tukeyUserSettings.syncWithTaobao || false;
+  const av = document.getElementById("tukey-user-avatar-preview");
+  if (!av) return;
+  av.src = tukeyUserSettings.avatar;
+  const nm = document.getElementById("tukey-user-name-input");
+  if (nm) nm.value = tukeyUserSettings.username;
+  const pf = document.getElementById("tukey-user-profession-input");
+  if (pf) pf.value = tukeyUserSettings.profession || "";
+  const tg = document.getElementById("sync-to-taobao-toggle");
+  if (tg) tg.checked = tukeyUserSettings.syncWithTaobao || false;
 }
 
 /**
@@ -783,216 +782,9 @@ let activeTukeyGroup = null; // 用于存储当前激活的记账群聊数据
  * 【总入口】初始化兔k记账App的所有功能和事件监听
  */
 async function initTukeyAccounting() {
-  await loadAndRenderTukeyUserSettings();
-  await loadTukeyCustomConfig();
-  // 1. 绑定主屏幕图标点击事件
-  document
-    .getElementById("tukey-accounting-app-icon")
-    .addEventListener("click", async () => {
-      // 打开App时，总是先尝试加载群聊数据
-      await loadTukeyGroupData();
-      showScreen("tukey-accounting-screen");
-    });
-
-  // 2. 绑定底部导航栏事件
-  document.getElementById("tukey-bottom-nav").addEventListener("click", (e) => {
-    const navItem = e.target.closest(".tukey-nav-item");
-    if (navItem && navItem.dataset.view) {
-      const viewId = navItem.dataset.view;
-      switchTukeyView(viewId); // 切换视图
-      // 如果切换到钱包或群聊视图，则刷新其内容
-      if (viewId === "tukey-wallet-view") renderTukeyWalletView();
-      if (viewId === "tukey-group-chat-view") loadTukeyGroupData();
-    }
-  });
-
-  // 3. 绑定“创建群聊”按钮
-  document
-    .getElementById("tukey-create-group-btn")
-    .addEventListener("click", () => {
-      openGroupManagerModal();
-    });
-
-  // 4. 绑定群聊管理弹窗的“保存”和“取消”按钮
-  document
-    .getElementById("tukey-cancel-group-manager-btn")
-    .addEventListener("click", () => {
-      document
-        .getElementById("tukey-group-manager-modal")
-        .classList.remove("visible");
-    });
-  document
-    .getElementById("tukey-save-group-btn")
-    .addEventListener("click", saveTukeyGroup);
-
-  // 5. 绑定群聊内部的“设置”按钮    // 5. 【核心修改】绑定群聊内部的“设置”按钮 -> 改为弹出选项菜单
-  document
-    .getElementById("tukey-group-settings-btn")
-    .addEventListener("click", async () => {
-      // 使用现有的 showChoiceModal 弹出一个菜单
-      const choice = await showChoiceModal("记账群聊设置", [
-        { text: "👥 管理成员 (拉人/踢人)", value: "manage_members" },
-        { text: "🤖 AI回复设置", value: "ai_settings" },
-        { text: "⚠️ 解散群聊", value: "dissolve_group" },
-      ]);
-
-      if (choice === "manage_members") {
-        openGroupManagerModal(); // 打开成员选择弹窗（支持勾选添加/取消勾选踢人）
-      } else if (choice === "ai_settings") {
-        openReplySettingsModal(); // 打开AI设置
-      } else if (choice === "dissolve_group") {
-        dissolveTukeyGroup(); // 执行解散逻辑
-      }
-    });
-
-  // 6. 绑定回复设置弹窗的按钮
-  document
-    .getElementById("tukey-cancel-reply-settings-btn")
-    .addEventListener("click", () => {
-      document
-        .getElementById("tukey-reply-settings-modal")
-        .classList.remove("visible");
-    });
-  document
-    .getElementById("tukey-save-reply-settings-btn")
-    .addEventListener("click", saveReplySettings);
-
-  // 7. 绑定回复设置弹窗内的模式切换逻辑
-  document
-    .querySelectorAll('input[name="tukey-reply-mode"]')
-    .forEach((radio) => {
-      radio.addEventListener("change", (e) => {
-        const mode = e.target.value;
-        document.getElementById("tukey-specific-reply-options").style.display =
-          mode === "random" || mode === "specific" ? "block" : "none";
-      });
-    });
-
-  // 这是正确的代码
-  // 9. 记一笔相关按钮
-  document
-    .getElementById("tukey-add-record-btn")
-    .addEventListener("click", openRecordEditor);
-
-  // 9. 记一笔弹窗内的“支出/收入”切换
-  document
-    .querySelector(".tukey-type-selector")
-    .addEventListener("click", (e) => {
-      if (e.target.tagName === "BUTTON") {
-        document
-          .querySelectorAll(".tukey-type-selector .type-btn")
-          .forEach((btn) => btn.classList.remove("active"));
-        e.target.classList.add("active");
-        renderRecordCategories(e.target.dataset.type);
-      }
-    });
-
-  // 10.【不要动！】你原有的钱包账户功能事件监听，保持不变
-  document
-    .getElementById("add-new-account-fab")
-    .addEventListener("click", openAccountTypeSelector);
-  document
-    .getElementById("account-type-selection-view")
-    .addEventListener("click", (e) => {
-      // 检查是否点击了“自定义”按钮
-      const customBtn = e.target.closest(".add-custom-type-btn");
-      if (customBtn) {
-        const category = customBtn.dataset.category;
-        handleAddCustomAccountType(category);
-        return;
-      }
-
-      // 检查是否点击了普通类型
-      const typeItem = e.target.closest(".type-item");
-      if (typeItem && !typeItem.classList.contains("add-custom-type-btn")) {
-        const category = typeItem.dataset.category;
-        const type = typeItem.dataset.type;
-        openAccountEditor(null, category, type);
-      }
-    });
-  const accountListEl = document.getElementById("wallet-accounts-list");
-  accountListEl.addEventListener("click", (e) => {
-    const item = e.target.closest(".tukey-account-item");
-    if (item && item.dataset.accountId) {
-      openAccountEditor(parseInt(item.dataset.accountId));
-    }
-  });
-  accountListEl.addEventListener("contextmenu", (e) => {
-    const item = e.target.closest(".tukey-account-item");
-    if (item && item.dataset.accountId) {
-      e.preventDefault();
-      deleteTukeyAccount(parseInt(item.dataset.accountId));
-    }
-  });
-  document
-    .getElementById("cancel-account-editor-btn")
-    .addEventListener("click", () => {
-      document
-        .getElementById("account-editor-modal")
-        .classList.remove("visible");
-    });
-  document
-    .getElementById("save-account-btn")
-    .addEventListener("click", saveTukeyAccount);
-  // ▼▼▼ 11. 【全新】绑定设置页面的保存和头像上传 ▼▼▼
-  document
-    .getElementById("save-tukey-settings-btn")
-    .addEventListener("click", saveTukeyUserSettings);
-
-  document
-    .getElementById("tukey-user-avatar-input")
-    .addEventListener("change", async (event) => {
-      const file = event.target.files[0];
-      if (file) {
-        const dataUrl = await handleImageUploadAndCompress(file); // 复用图片压缩函数
-        document.getElementById("tukey-user-avatar-preview").src = dataUrl;
-      }
-      event.target.value = null;
-    });
-  // ▼▼▼ 12. 【全新】绑定Excel导出功能相关按钮 ▼▼▼
-  document
-    .getElementById("export-tukey-report-btn")
-    .addEventListener("click", openTukeyExportModal);
-
-  document
-    .getElementById("cancel-tukey-export-btn")
-    .addEventListener("click", () => {
-      document.getElementById("tukey-export-modal").classList.remove("visible");
-    });
-
-  document
-    .getElementById("confirm-tukey-export-btn")
-    .addEventListener("click", exportTukeyReportToExcel);
-  // ▲▲▲ 添加结束 ▲▲▲
-  // 在 initTukeyAccounting 函数的末尾添加：
-
-  // ▼▼▼ 修复重Roll按钮点击无效的问题 ▼▼▼
-  const recordsListEl = document.getElementById("tukey-records-list");
-
-  // 使用事件委托，监听列表内的点击
-  recordsListEl.addEventListener("click", async (e) => {
-    // 1. 查找是否点击了重Roll按钮（或其子元素）
-    const rerollBtn = e.target.closest(".tukey-reroll-btn");
-
-    if (rerollBtn) {
-      e.stopPropagation(); // 阻止冒泡
-      e.preventDefault(); // 阻止默认行为
-
-      const recordId = parseInt(rerollBtn.dataset.recordId);
-      console.log("点击了重Roll，账单ID:", recordId);
-
-      if (!isNaN(recordId)) {
-        // 调用全局重生成函数
-        if (typeof window.handleTukeyReroll === "function") {
-          await window.handleTukeyReroll(recordId);
-        } else {
-          console.error("找不到 window.handleTukeyReroll 函数");
-          alert("功能未就绪，请刷新页面重试。");
-        }
-      }
-    }
-  });
-  // ▲▲▲ 修复结束 ▲▲▲
+  if (window.QQBotConsole) {
+    await window.QQBotConsole.init();
+  }
 }
 
 /**
@@ -2398,8 +2190,8 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (modal) modal.style.display = "none";
     },
 
-    async copyTermuxCmd() {
-      const input = document.getElementById("qqbot-termux-cmd-input");
+    async copyCmdById(inputId, tipText) {
+      const input = document.getElementById(inputId);
       const val = input ? input.value : "";
       if (!val) return;
       try {
@@ -2409,26 +2201,18 @@ function createExpenditureLineChart(data, daysInMonth) {
           input.select();
           document.execCommand("copy");
         }
-        this.notify("已复制Termux命令");
+        this.notify(tipText || "已复制命令");
       } catch (e) {
-        this.notify("已选中命令请长按复制");
+        this.notify("已选中请长按复制");
       }
     },
 
+    async copyTermuxCmd() {
+      await this.copyCmdById("qqbot-termux-cmd-input", "已复制Termux磁盘命令");
+    },
+
     async copyReverseWsUrl() {
-      const input = document.getElementById("qqbot-rev-ws-copy-input");
-      const val = input ? input.value : "ws://127.0.0.1:3000/api/qqbot/ws";
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(val);
-        } else if (input) {
-          input.select();
-          document.execCommand("copy");
-        }
-        this.notify("已复制反向WS地址");
-      } catch (e) {
-        this.notify("已复制地址");
-      }
+      await this.copyCmdById("qqbot-rev-ws-copy-input", "已复制反向WS地址");
     },
 
     notify(msg) {

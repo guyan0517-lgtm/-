@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v3.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v4.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -17951,453 +17951,66 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         </div>
       </div>
 
-      <!-- 手机 Termux 零基础保姆级连接教程弹窗 · 兼顾静态网站与本地磁盘减负 -->
+      <!-- 手机 Termux 零基础保姆级连接教程弹窗 · 从零安装 NapCat 到扫码登录与本地磁盘减负 -->
       <div id="qqbot-tutorial-modal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 372px; width: 94%; max-height: 85vh; display: flex; flex-direction: column; border-radius: 16px; background: var(--card-bg); border: 1px solid var(--border-color); overflow: hidden;">
+        <div class="modal-content" style="max-width: 376px; width: 95%; max-height: 86vh; display: flex; flex-direction: column; border-radius: 16px; background: var(--card-bg); border: 1px solid var(--border-color); overflow: hidden;">
           <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color);">
-            <span style="font-size: 14px; font-weight: 700; color: var(--text-primary);">安卓手机Termux零基础连接教程</span>
+            <span style="font-size: 14px; font-weight: 700; color: var(--text-primary);">安卓手机Termux从零安装与连接教程</span>
             <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.closeTutorialModal();}" style="height: 26px; padding: 0 10px; font-size: 11px;">关闭</button>
           </div>
           <div class="modal-body" style="padding: 12px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; font-size: 12px; line-height: 1.6; color: var(--text-primary);">
             <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">为什么这套方案同时支持GitHub静态网站与Termux磁盘减负</div>
-              <div>就算你现在打开的网页是部署在GitHub等静态网站上的，只要这台安卓手机后台运行着Termux，手机浏览器就能通过手机内部回环通道 127.0.0.1 直接连上手机里的Termux。所有QQ群历史记录和总结记忆都会直接写进Termux的手机本地硬盘里，浏览器内存里一丁点都不会堆积，彻底告别三百兆卡死问题。</div>
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第一步：安装Termux并开启防杀后台</div>
+              <div>1. 在手机浏览器搜索并下载安装 ZeroTermux 或 Termux 安装包。</div>
+              <div>2. 打开手机系统设置里的应用管理，找到 Termux，把省电策略设为无限制，允许后台运行，并在 Termux 顶部下拉通知栏点一下 Acquire wakelock 防止锁屏断连。</div>
             </div>
 
             <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第一步：在手机上打开Termux并执行一键部署命令</div>
-              <div>你完全不需要懂复杂的Linux命令。先点击下方复制按钮，然后打开手机上的Termux软件，在黑框里长按选择粘贴并按回车。这行命令会自动在Termux里装好Node环境并启动本地磁盘减负服务：</div>
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第二步：修复Termux签名报错并一键安装NapCat</div>
+              <div>打开手机上的 Termux 黑框，直接点下方第一条复制按钮，去 Termux 里长按粘贴并按回车。它会自动修复旧版 Termux 缺少公钥 NO_PUBKEY 与连接超时报错，换成国内清华源并自动安装 Linux 容器与 NapCat：</div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">全自动修复环境报错并安装命令：</div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                <input type="text" id="qqbot-napcat-install-cn-input" class="moe-input" readonly value="cp -f $PREFIX/bin/true $PREFIX/bin/py3compile &amp;&amp; cp -f $PREFIX/bin/true $PREFIX/bin/py3clean &amp;&amp; dpkg --configure -a &amp;&amp; rm -rf $PREFIX/etc/apt/sources.list.d/* &amp;&amp; echo &quot;deb [trusted=yes] https://packages.termux.dev/apt/termux-main stable main&quot; &gt; $PREFIX/etc/apt/sources.list &amp;&amp; apt-get update -o Acquire::AllowInsecureRepositories=true -y &amp;&amp; apt-get install -y --allow-unauthenticated -o Dpkg::Options::=&quot;--force-confdef&quot; -o Dpkg::Options::=&quot;--force-confold&quot; libngtcp2 openssl libcurl curl python proot-distro screen &amp;&amp; cp -f $PREFIX/bin/true $PREFIX/bin/py3compile &amp;&amp; cp -f $PREFIX/bin/true $PREFIX/bin/py3clean &amp;&amp; dpkg --configure -a &amp;&amp; curl -fL -o napcat.termux.sh https://raw.githubusercontent.com/NapNeko/NapCat-Installer/main/script/install.termux.sh &amp;&amp; bash napcat.termux.sh" style="flex: 1; height: 32px; font-size: 11px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);" />
+                <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyCmdById('qqbot-napcat-install-cn-input','已复制修复并安装命令');}" style="height: 32px; padding: 0 10px; font-size: 11px; flex-shrink: 0;">复制</button>
+              </div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 6px;">单独重新运行安装脚本命令：</div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                <input type="text" id="qqbot-napcat-install-raw-input" class="moe-input" readonly value="curl -fL -o napcat.termux.sh https://raw.githubusercontent.com/NapNeko/NapCat-Installer/main/script/install.termux.sh &amp;&amp; bash napcat.termux.sh" style="flex: 1; height: 32px; font-size: 11px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);" />
+                <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyCmdById('qqbot-napcat-install-raw-input','已复制安装脚本命令');}" style="height: 32px; padding: 0 10px; font-size: 11px; flex-shrink: 0;">复制</button>
+              </div>
+            </div>
+
+            <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第三步：启动NapCat容器并在网页后台扫码登录QQ</div>
+              <div>1. 当看到屏幕提示 NapCat 安装完成 后，复制下方启动命令粘贴到 Termux 回车即可启动容器内的 QQ 与 NapCat：</div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                <input type="text" id="qqbot-napcat-start-input" class="moe-input" readonly value="proot-distro login napcat -- bash -c &quot;xvfb-run -a /root/Napcat/opt/QQ/qq --no-sandbox&quot;" style="flex: 1; height: 32px; font-size: 11px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);" />
+                <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyCmdById('qqbot-napcat-start-input','已复制启动命令');}" style="height: 32px; padding: 0 10px; font-size: 11px; flex-shrink: 0;">复制</button>
+              </div>
+              <div style="margin-top: 6px;">2. 启动后 Termux 屏幕会显示一行 WebUi 地址，里面带有 token。打开手机浏览器访问下方地址，填入显示的 token 即可进入 NapCat 后台并扫码登录你的 AI 专用 QQ 号：</div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                <input type="text" id="qqbot-napcat-webui-input" class="moe-input" readonly value="http://127.0.0.1:6099/webui/" style="flex: 1; height: 32px; font-size: 11px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);" />
+                <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyCmdById('qqbot-napcat-webui-input','已复制WebUI地址');}" style="height: 32px; padding: 0 10px; font-size: 11px; flex-shrink: 0;">复制</button>
+              </div>
+              <div style="margin-top: 6px;">3. 扫码登录成功后，在 6099 网页后台左侧点「网络配置」再点「新建」，选择「WebSocket服务端」，把 Host 填为 127.0.0.1，Port 端口填为 3001，打开「启用」开关并点保存。</div>
+            </div>
+
+            <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第四步：开启Termux本地硬盘存储释放浏览器内存</div>
+              <div>在 Termux 顶部从左往右滑，点击 New session 新建第二个会话窗口，复制下方命令粘贴回车。它会把所有群聊记录和五千字长记忆直接存进手机本地硬盘，让你的浏览器永远保持零内存负担：</div>
               <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                <input type="text" id="qqbot-termux-cmd-input" class="moe-input" readonly value="pkg update -y && pkg install -y nodejs-lts curl && mkdir -p ~/qqbot_disk && cd ~/qqbot_disk && node -e &quot;const http=require('http'),fs=require('fs'),path=require('path');const dir=process.cwd();http.createServer((req,res)=>{res.setHeader('Access-Control-Allow-Origin','*');res.setHeader('Access-Control-Allow-Headers','*');if(req.method==='OPTIONS')return res.end();let b='';req.on('data',c=>b+=c);req.on('end',()=>{if(req.url.startsWith('/save')){fs.writeFileSync(path.join(dir,'store.json'),b);res.end('ok');}else{res.end(fs.existsSync(path.join(dir,'store.json'))?fs.readFileSync(path.join(dir,'store.json')):'{}');}});}).listen(8765,'127.0.0.1',()=>console.log('Termux本地磁盘减负桥接已启动在8765端口'));&quot;" style="flex: 1; height: 32px; font-size: 11px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);" />
+                <input type="text" id="qqbot-termux-cmd-input" class="moe-input" readonly value="pkg update -y &amp;&amp; pkg install -y nodejs-lts curl &amp;&amp; mkdir -p ~/qqbot_disk &amp;&amp; cd ~/qqbot_disk &amp;&amp; node -e &quot;const http=require('http'),fs=require('fs'),path=require('path');const dir=process.cwd();http.createServer((req,res)=&gt;{res.setHeader('Access-Control-Allow-Origin','*');res.setHeader('Access-Control-Allow-Headers','*');if(req.method==='OPTIONS')return res.end();let b='';req.on('data',c=&gt;b+=c);req.on('end',()=&gt;{if(req.url.startsWith('/save')){fs.writeFileSync(path.join(dir,'store.json'),b);res.end('ok');}else{res.end(fs.existsSync(path.join(dir,'store.json'))?fs.readFileSync(path.join(dir,'store.json')):'{}');}});}).listen(8765,'127.0.0.1',()=&gt;console.log('Termux本地磁盘减负桥接已启动在8765端口'));&quot;" style="flex: 1; height: 32px; font-size: 11px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);" />
                 <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyTermuxCmd();}" style="height: 32px; padding: 0 10px; font-size: 11px; flex-shrink: 0;">复制</button>
               </div>
             </div>
 
             <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第二步：在手机上登录QQ小号</div>
-              <div>安卓手机最简单省心的方法有两种，任选其一即可：</div>
-              <div style="margin-top: 4px;">方法一：在手机上安装 Shamrock 或 NapCat 安卓端，用你的AI专用QQ小号登录，打开里面的 WebSocket 服务端开关，端口设为 3001。</div>
-              <div style="margin-top: 4px;">方法二：如果你已经在Termux里装好了 NapCat 或 Lagrange，在它的网络设置里开启正向 WebSocket 端口 3001，或者填入下方反向连接地址：</div>
-              <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                <input type="text" id="qqbot-rev-ws-copy-input" class="moe-input" readonly value="ws://127.0.0.1:3000/api/qqbot/ws" style="flex: 1; height: 32px; font-size: 11px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);" />
-                <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyReverseWsUrl();}" style="height: 32px; padding: 0 10px; font-size: 11px; flex-shrink: 0;">复制</button>
-              </div>
-            </div>
-
-            <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第三步：点击连接与同步群备注</div>
-              <div>1. 回到本页面「手机Termux与QQ号接口连接」卡片，如果网页是挂在GitHub静态网站上的，接口选 ws://127.0.0.1:3001 并点「连接」，浏览器就会直接连上手机里的QQ协议端。</div>
-              <div>2. 点一下「刷新」拉取你的QQ小号加入的所有群聊，再点「同步」，你在AI那个QQ小号上给群友改的好友备注或群名片就会全部自动识别进来，接着就可以在下方给每个人写专属人设了。</div>
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">第五步：回到群控点连接与同步群备注</div>
+              <div>1. 关闭本弹窗回到群控主页，在「手机Termux与QQ号接口连接」卡片里，接口保持默认的 ws://127.0.0.1:3001，直接点「连接」，就算网页挂在GitHub静态网站上也会直接连通你手机里的Termux。</div>
+              <div>2. 点「刷新」拉取你的QQ号加入的所有群，再点下方群成员卡片里的「同步」，你在AI那个QQ号上给群友改的好友备注和群名片就会全部自动识别进来。</div>
             </div>
           </div>
         </div>
-      </div>
-        <span id="tukey-header-title">记账群聊</span>
-        <div class="tukey-content">
-        <!-- 视图1: 钱包 (这是我们要修改的核心) -->
-        <div id="tukey-wallet-view" class="tukey-view">
-          <div id="wallet-summary-card">
-            <div class="summary-item net-assets">
-              <span class="label">净资产</span>
-              <span class="value" id="net-assets-value">¥ 0.00</span>
-            </div>
-            <div class="summary-details">
-              <div class="summary-item">
-                <span class="label">总资产</span>
-                <span class="value" id="total-assets-value">¥ 0.00</span>
-              </div>
-              <div class="summary-item">
-                <span class="label">总负债</span>
-                <span class="value" id="total-liabilities-value">¥ 0.00</span>
-              </div>
-            </div>
-          </div>
-          <div id="wallet-accounts-list">
-            <!-- 账户列表将由JS动态生成在这里 -->
-          </div>
-          <button
-            id="add-new-account-fab"
-            class="ls-fab-btn"
-            title="添加新账户"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <line
-                x1="12"
-                y1="5"
-                x2="12"
-                y2="19"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-              />
-              <line
-                x1="5"
-                y1="12"
-                x2="19"
-                y2="12"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div id="tukey-reports-view" class="tukey-view">
-          <!-- 1. 报表控制/筛选区域 -->
-          <div class="report-controls">
-            <select id="report-account-filter">
-              <!-- 账户选项将由JS动态生成 -->
-            </select>
-            <select id="report-month-filter">
-              <!-- 月份选项将由JS动态生成 -->
-            </select>
-            <select id="report-type-filter">
-              <option value="daily_details">每日明细</option>
-              <option value="monthly_summary">月度统计</option>
-            </select>
-          </div>
-
-          <!-- 2. 报表内容显示区域 -->
-          <div id="report-display-area">
-            <!-- 视图切换容器 -->
-            <div id="daily-report-view" class="report-view active">
-              <!-- 每日明细将由JS动态生成在这里 -->
-              <p class="report-placeholder">正在加载报表...</p>
-            </div>
-            <div id="monthly-report-view" class="report-view">
-              <!-- 月度统计将由JS动态生成在这里 -->
-              <div id="monthly-summary-card">
-                <!-- 月度总收支 -->
-              </div>
-              <div class="chart-container">
-                <h3>支出分类占比</h3>
-                <canvas id="category-pie-chart"></canvas>
-              </div>
-              <div class="chart-container">
-                <h3>月度支出趋势</h3>
-                <canvas id="expenditure-line-chart"></canvas>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="tukey-group-chat-view" class="tukey-view active">
-          <!-- 这个容器会在没有群聊时显示 -->
-          <div id="tukey-no-group-placeholder">
-            <p>你还没有创建记账群聊哦</p>
-            <button id="tukey-create-group-btn" class="form-button">
-              立即创建
-            </button>
-          </div>
-
-          <div id="tukey-group-chat-container" style="display: none">
-            <div id="tukey-group-chat-header">
-              <span id="tukey-group-name">群聊名称</span>
-              <button id="tukey-group-settings-btn" title="群聊设置">⚙️</button>
-            </div>
-
-            <!-- 记账和回复历史记录 -->
-            <div id="tukey-records-list">
-              <!-- JS会在这里渲染内容 -->
-            </div>
-
-            <!-- 记账输入区域 -->
-            <div id="tukey-record-input-area">
-              <button id="tukey-add-record-btn">+</button>
-            </div>
-
-            <div id="tukey-record-input-card">
-              <div class="card-header">
-                <button class="close-card-btn">×</button>
-                <div class="type-selector">
-                  <button class="type-btn active" data-type="expense">
-                    支出
-                  </button>
-                  <button class="type-btn" data-type="income">收入</button>
-                </div>
-              </div>
-              <div class="card-body">
-                <!-- 金额和备注输入区域 -->
-                <div class="input-fields">
-                  <div class="amount-input-wrapper">
-                    <span class="currency-symbol">¥</span>
-                    <input
-                      type="number"
-                      id="tukey-card-amount-input"
-                      placeholder="0.00"
-                    />
-                    <!-- 已选分类显示区 -->
-                    <div id="tukey-card-selected-category">
-                      <img src="" alt="" />
-                      <span>请选择分类</span>
-                    </div>
-                  </div>
-                  <input
-                    type="text"
-                    id="tukey-card-remarks-input"
-                    placeholder="点击输入备注..."
-                  />
-                </div>
-                <!-- 分类网格 -->
-                <div class="category-grid">
-                  <!-- 分类将由JS动态生成 -->
-                </div>
-              </div>
-              <div class="card-footer">
-                <!-- 账户和时间选择器 -->
-                <div class="additional-options">
-                  <div class="option-item">
-                    <label for="tukey-card-account-select">账户</label>
-                    <select id="tukey-card-account-select">
-                      <!-- 账户将由JS动态生成 -->
-                    </select>
-                  </div>
-                  <div class="option-item">
-                    <label for="tukey-card-time-input">时间</label>
-                    <input type="datetime-local" id="tukey-card-time-input" />
-                  </div>
-                </div>
-                <button id="tukey-save-from-card-btn">保 存</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="tukey-settings-view" class="tukey-view">
-          <div class="form-container" style="padding-top: 20px">
-            <!-- 1. 个人资料设置 -->
-            <div class="form-group">
-              <label>我的个人资料</label>
-              <div class="avatar-upload">
-                <img
-                  id="tukey-user-avatar-preview"
-                  src="https://i.postimg.cc/PxZrFFFL/o-o-1.jpg"
-                />
-                <button
-                  onclick="
-                    document.getElementById('tukey-user-avatar-input').click()
-                  "
-                >
-                  上传我的头像
-                </button>
-                <input
-                  type="file"
-                  id="tukey-user-avatar-input"
-                  accept="image/*"
-                  hidden
-                />
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="tukey-user-name-input">用户名</label>
-              <input
-                type="text"
-                id="tukey-user-name-input"
-                placeholder="输入你在群聊中显示的昵称"
-              />
-            </div>
-            <div class="form-group">
-              <label for="tukey-user-profession-input">职业 (选填)</label>
-              <input
-                type="text"
-                id="tukey-user-profession-input"
-                placeholder="你的职业，会展示给群友"
-              />
-            </div>
-
-            <hr style="opacity: 0.2; margin: 20px 0" />
-
-            <!-- 2. 同步设置 -->
-            <div class="form-group">
-              <label for="sync-to-taobao-toggle" class="toggle-switch-label">
-                <span class="toggle-switch-text">
-                  同步至桃宝余额
-                  <p
-                    style="
-                      font-size: 12px;
-                      font-weight: normal;
-                      color: #999;
-                      margin-top: 5px;
-                    "
-                  >
-                    开启后，所有记账记录将同步影响桃宝的余额和收支明细。
-                  </p>
-                </span>
-                <input type="checkbox" id="sync-to-taobao-toggle" />
-                <span class="toggle-switch-slider"></span>
-              </label>
-            </div>
-
-            <hr style="opacity: 0.2; margin: 20px 0" />
-
-            <!-- 3. 导出设置 (新增) -->
-            <div class="form-group">
-              <label>数据导出</label>
-              <button
-                id="export-tukey-report-btn"
-                class="form-button form-button-secondary"
-              >
-                导出账单为 Excel
-              </button>
-            </div>
-
-            <button class="form-button" id="save-tukey-settings-btn">
-              保存所有设置
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 3. 底部导航栏 (保持不变) -->
-      <div id="tukey-bottom-nav">
-        <div class="tukey-nav-item" data-view="tukey-wallet-view">
-          <svg width="24" height="24" viewBox="0 0 1024 1024">
-            <path
-              d="M517.7 660c-4 26.6-19.2 46.3-37.3 46.3H290.1c-21.2 0-38.4-27-38.4-60.3V435.3c0-33.3 17.2-60.3 38.4-60.3h190.3c17.6 0 32.5 18.7 37 44.1"
-              fill="#BAF4EA"
-            ></path>
-            <path
-              d="M668.7 761.8H321.6c-54 0-97.9-43.9-97.9-97.9V419.6c0-54 43.9-97.9 97.9-97.9h347.1c43.8 0 82.6 29.5 94.4 71.6 4.1 14.9-4.6 30.3-19.5 34.5-14.9 4.1-30.3-4.6-34.5-19.5-5-18-21.6-30.6-40.4-30.6H321.6c-23.1 0-41.9 18.8-41.9 41.9v244.3c0 23.1 18.8 41.9 41.9 41.9h347.1c19.5 0 36.3-13.2 40.8-32.2 3.6-15 18.7-24.3 33.7-20.8 15 3.6 24.3 18.7 20.8 33.7-5 21.1-17.1 40.2-34.1 53.8-17.3 13.9-39 21.5-61.2 21.5z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M719.9 614.4H641c-39.9 0-72.6-32.7-72.6-72.6 0-39.9 32.7-72.6 72.6-72.6h78.9c39.9 0 72.6 32.7 72.6 72.6 0 39.9-32.7 72.6-72.6 72.6z"
-              fill="#BAF4EA"
-            ></path>
-            <path
-              d="M719.9 642.4H641c-55.5 0-100.6-45.1-100.6-100.6 0-55.5 45.1-100.6 100.6-100.6h78.9c55.5 0 100.6 45.1 100.6 100.6 0 55.4-45.2 100.6-100.6 100.6zM641 497.1c-24.6 0-44.6 20-44.6 44.6s20 44.6 44.6 44.6h78.9c24.6 0 44.6-20 44.6-44.6s-20-44.6-44.6-44.6H641z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M650.1 542.4m-0.4 0a0.4 0.4 0 1 0 0.8 0 0.4 0.4 0 1 0-0.8 0Z"
-              fill="#FFFFFF"
-            ></path>
-            <path
-              d="M650.1 570.8c-15.7 0-28.4-12.7-28.4-28.4s12.7-28.4 28.4-28.4 28.4 12.7 28.4 28.4-12.7 28.4-28.4 28.4z m0-56c-15.2 0-27.6 12.4-27.6 27.6s12.4 27.6 27.6 27.6 27.6-12.4 27.6-27.6-12.4-27.6-27.6-27.6z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M155.2 152.2c12 0 21.7 9.7 21.7 21.7s-9.7 21.7-21.7-21.7-21.7-9.7-21.7-21.7 9.7-21.7 21.7-21.7m0-40c-34 0-61.7 27.7-61.7 61.7s27.7 61.7 61.7 61.7 61.7-27.7 61.7-61.7-27.7-61.7-61.7-61.7zM162.7 956.8h-0.2c-8.3-0.1-14.9-6.9-14.8-15.2l1-69.5c0.1-8.2 6.8-14.8 15-14.8h0.2c8.3 0.1 14.9 6.9 14.8 15.2l-1 69.5c-0.1 8.2-6.8 14.8-15 14.8z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M212.9 907.5v0.2c-0.1 8.3-6.9 14.9-15.2 14.8l-69.5-1c-8.2-0.1-14.8-6.8-14.8-15v-0.2c0.1-8.3 6.9-14.9 15.2-14.8l69.5 1c8.3 0.2 14.8 6.9 14.8 15z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M895.4 905.5m-30.9 0a30.9 30.9 0 1 0 61.8 0 30.9 30.9 0 1 0-61.8 0Z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M121.4 613.5m-20.7 0a20.7 20.7 0 1 0 41.4 0 20.7 20.7 0 1 0-41.4 0Z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M861.5 115.5v30.8M861.5 156.3c-5.5 0-10-4.5-10-10v-30.8c0-5.5 4.5-10 10-10s10 4.5 10 10v30.8c0 5.5-4.5 10-10 10zM804.8 172.2h30.8M835.6 182.2h-30.8c-5.5 0-10-4.5-10-10s4.5-10 10-10h30.8c5.5 0 10 4.5 10 10s-4.5 10-10 10zM887.4 172.2h30.8M918.2 182.2h-30.8c-5.5 0-10-4.5-10-10s4.5-10 10-10h30.8c5.5 0 10 4.5 10 10s-4.5 10-10 10z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M821.4 212.3l21.8-21.8M821.4 222.3c-2.6 0-5.1-1-7.1-2.9-3.9-3.9-3.9-10.2 0-14.1l21.8-21.8c3.9-3.9 10.2-3.9 14.1 0 3.9 3.9 3.9 10.2 0 14.1l-21.8 21.8c-1.8 1.9-4.4 2.9-7 2.9z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M879.8 153.9l21.8-21.8M879.8 163.9c-2.6 0-5.1-1-7.1-2.9-3.9-3.9-3.9-10.2 0-14.1l21.8-21.8c3.9-3.9 10.2-3.9 14.1 0 3.9 3.9 3.9 10.2 0 14.1L886.9 161c-2 1.9-4.5 2.9-7.1 2.9z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M901.6 212.3l-21.8-21.8M901.6 222.3c-2.6 0-5.1-1-7.1-2.9l-21.8-21.8c-3.9-3.9-3.9-10.2 0-14.1 3.9-3.9 10.2-3.9 14.1 0l21.8 21.8c3.9 3.9 3.9 10.2 0 14.1-1.9 1.9-4.5 2.9-7 2.9z"
-              fill="#2D5B56"
-            ></path>
-            <path
-              d="M843.2 153.9l-21.8-21.8M843.2 163.9c-2.6 0-5.1-1-7.1-2.9l-21.8-21.8c-3.9-3.9-3.9-10.2 0-14.1 3.9-3.9 10.2-3.9 14.1 0l21.8 21.8c3.9 3.9 3.9 10.2 0 14.1-1.9 1.9-4.4 2.9-7 2.9z"
-              fill="#2D5B56"
-            ></path>
-          </svg>
-          <span>钱包</span>
-        </div>
-        <div class="tukey-nav-item" data-view="tukey-reports-view">
-          <svg width="24" height="24" viewBox="0 0 1024 1024">
-            <path
-              d="M692.24 787.29h-175.3a24.65 24.65 0 0 1 0-49.3h175.3a24.65 24.65 0 0 1 0 49.3z"
-              fill="#303030"
-              p-id="13093"
-            ></path>
-            <path
-              d="M692.24 186.92v89.18H336.29v463.27h-89.34V186.92h445.29z"
-              fill="#279ACC"
-              p-id="13094"
-            ></path>
-            <path
-              d="M810.83 869.58H322.21V660.12a24.65 24.65 0 0 1 49.3 0v160.16h390V318.74h-390v148.19a24.65 24.65 0 1 1-49.3 0V269.44h488.62z"
-              fill="#303030"
-              p-id="13095"
-            ></path>
-            <path
-              d="M346.86 767H225.28V166.87H713.9v127.22a24.65 24.65 0 1 1-49.29 0v-77.93h-390v501.55h72.28a24.65 24.65 0 1 1 0 49.29z"
-              fill="#303030"
-              p-id="13096"
-            ></path>
-            <path
-              d="M751.63 395.07m-78.65 0a78.65 78.65 0 1 0 157.3 0 78.65 78.65 0 1 0-157.3 0Z"
-              fill="#279ACC"
-              p-id="13097"
-            ></path>
-            <path
-              d="M317.28 626.59a24.65 24.65 0 0 1-17.42-42.07l89.58-89.59c10.84-10.85 25-16.36 40.58-16.34a55.34 55.34 0 0 1 39.89 18l64.43 69.85 150.17-148a24.65 24.65 0 0 1 34.63 35.08l-150 148.05a49.43 49.43 0 0 1-71-1.66L433.68 530a6.42 6.42 0 0 0-4.65-2.1 5.84 5.84 0 0 0-4.73 1.91l-89.59 89.59a24.58 24.58 0 0 1-17.43 7.19z"
-              fill="#303030"
-              p-id="13098"
-            ></path>
-            <path
-              d="M751.63 481.75a86.67 86.67 0 1 1 86.67-86.67 86.77 86.77 0 0 1-86.67 86.67z m0-124A37.38 37.38 0 1 0 789 395.08a37.42 37.42 0 0 0-37.37-37.38z"
-              fill="#303030"
-              p-id="13099"
-            ></path>
-          </svg>
-          <span>报表</span>
-        </div>
-        <div class="tukey-nav-item active" data-view="tukey-group-chat-view">
-          <svg width="24" height="24" viewBox="0 0 1024 1024">
-            <path
-              d="M134.588 151C118.247 151 105 164.247 105 180.584v557.964c0 16.339 13.255 29.584 29.599 29.584h155.746l31.872 99.6c2.489 7.777 8.981 9.197 14.504 3.169l94.146-102.769h457.72c16.341 0 29.59-13.247 29.59-29.584V180.584c0-16.339-13.248-29.584-29.588-29.584H134.588z"
-              fill="#0FC8B2"
-              p-id="32320"
-            ></path>
-            <path
-              d="M511.213 422c19.045 0 34.484 15.44 34.484 34.486s-15.44 34.483-34.484 34.483c-19.046 0-34.485-15.438-34.485-34.483 0-19.046 15.439-34.486 34.485-34.486z m-199.727 0c19.046 0 34.483 15.44 34.483 34.486s-15.437 34.483-34.483 34.483S277 475.531 277 456.486C277 437.44 292.44 422 311.486 422z m399.454 0c19.045 0 34.485 15.439 34.485 34.484 0 19.046-15.439 34.483-34.485 34.483-19.045 0-34.485-15.438-34.485-34.483 0-19.045 15.44-34.484 34.485-34.484z"
-              fill="#FFFFFF"
-              p-id="32321"
-            ></path>
-          </svg>
-          <span>记账群聊</span>
-        </div>
-        <div class="tukey-nav-item" data-view="tukey-settings-view">
-          <svg width="24" height="24" viewBox="0 0 1024 1024">
-            <path
-              d="M785.749333 564.770133a231.150933 231.150933 0 0 0 47.035734-258.730666l-145.476267 145.442133a41.5744 41.5744 0 0 1-58.811733 0l-55.876267-55.876267a41.5744 41.5744 0 0 1 0-58.811733l145.476267-145.476267a230.843733 230.843733 0 0 0-305.834667 305.664l-263.509333 263.406934a41.5744 41.5744 0 0 0 0 58.811733l55.842133 55.842133a41.5744 41.5744 0 0 0 58.811733 0l263.406934-263.3728a230.638933 230.638933 0 0 0 258.730666-47.069866l0.170667 0.170666z"
-              fill="#FFFFFF"
-              p-id="33627"
-            ></path>
-            <path
-              d="M435.2 214.084267a264.977067 264.977067 0 0 1 297.028267-53.828267 34.133333 34.133333 0 0 1 10.001066 55.227733l-145.476266 145.442134a7.441067 7.441067 0 0 0 0 10.581333l55.876266 55.842133a7.441067 7.441067 0 0 0 10.5472 0l145.476267-145.476266a34.133333 34.133333 0 0 1 55.227733 10.069333 265.216 265.216 0 0 1-54.033066 296.96 34.474667 34.474667 0 0 1-3.208534 2.833067l-0.238933 0.170666-3.925333 3.822934a264.704 264.704 0 0 1-262.144 57.7536l-5.290667-1.8432-247.5008 247.534933a75.707733 75.707733 0 0 1-102.741333 4.027733l-4.334934-4.027733-55.876266-55.842133a75.707733 75.707733 0 0 1 0-107.1104l247.7056-247.569067-1.809067-5.2224a265.216 265.216 0 0 1 57.719467-262.075733l6.997333-7.2704z m211.285333-7.850667a196.539733 196.539733 0 0 0-163.0208 56.1152 196.983467 196.983467 0 0 0-40.072533 220.535467 34.133333 34.133333 0 0 1-6.9632 38.229333l-263.5776 263.406933a7.441067 7.441067 0 0 0 0 10.513067l55.876267 55.876267a7.441067 7.441067 0 0 0 10.5472 0l263.406933-263.406934a34.133333 34.133333 0 0 1 38.229333-6.929066 196.5056 196.5056 0 0 0 220.501334-40.072534l1.9456-1.7408 4.334933-4.5056a196.8128 196.8128 0 0 0 50.107733-156.672l-1.058133-7.304533-105.301333 105.335467a75.707733 75.707733 0 0 1-102.741334 4.027733l-4.334933-4.027733-55.876267-55.876267a75.707733 75.707733 0 0 1 0-107.076267l105.3696-105.3696-7.3728-1.058133z"
-              fill="#222222"
-              p-id="33628"
-            ></path>
-            <path
-              d="M284.8768 690.858667a34.133333 34.133333 0 0 1 48.298667 48.264533l-61.781334 61.7472a34.133333 34.133333 0 1 1-48.264533-48.264533l61.781333-61.781334z"
-              fill="#009898"
-              p-id="33629"
-            ></path>
-          </svg>
-          <span>设置</span>
-        </div>
-      </div>
       </div>
     </div>
 
@@ -99808,7 +99421,7 @@ ${stickerContext || "无"}
           // 1. 绑定主屏幕上的“群控”图标点击事件
           document
             .getElementById("tukey-accounting-app-icon")
-            .addEventListener("click", () => {
+            ?.addEventListener("click", () => {
               if (window.QQBotConsole && typeof window.QQBotConsole.openScreen === "function") {
                 window.QQBotConsole.openScreen();
               } else {
@@ -99819,7 +99432,7 @@ ${stickerContext || "无"}
           // 2. 为“兔k记账”的底部导航栏绑定事件委托
           document
             .getElementById("tukey-bottom-nav")
-            .addEventListener("click", (e) => {
+            ?.addEventListener("click", (e) => {
               const navItem = e.target.closest(".tukey-nav-item");
               if (navItem && navItem.dataset.view) {
                 switchTukeyView(navItem.dataset.view);
@@ -99829,7 +99442,7 @@ ${stickerContext || "无"}
           // 报表页面的点击事件（处理删除）
           document
             .getElementById("tukey-reports-view")
-            .addEventListener("click", (e) => {
+            ?.addEventListener("click", (e) => {
               // 检查是否点击了删除按钮
               const deleteBtn = e.target.closest(".delete-record-btn");
               if (deleteBtn) {
