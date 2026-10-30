@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v3.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v3.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -15231,16 +15231,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               <option value="">正在读取模组库...</option>
             </select>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">来源</label>
-            <select id="atlas-source-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.setSourceMode(this.value);}" class="moe-input" style="flex: 1; height: 36px; line-height: 22px; font-size: 12px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
-              <option value="minimap" selected>参照小地图与模组布局</option>
-              <option value="free">AI自由构思立体沙盘</option>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 28px;">来源</label>
+            <select id="atlas-source-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.setSourceMode(this.value);}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="minimap" selected>按小地图</option>
+              <option value="free">自由构思</option>
             </select>
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">配色</label>
-            <select id="atlas-style-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.setStyleTheme(this.value);}" class="moe-input" style="width: 126px; flex-shrink: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
-              <option value="auto" selected>系统默认配色</option>
-              <option value="module">模组专属配色</option>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 28px; margin-left: 2px;">配色</label>
+            <select id="atlas-style-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.setStyleTheme(this.value);}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="auto" selected>系统默认</option>
+              <option value="module">模组配色</option>
             </select>
           </div>
           <div id="atlas-status-bar" style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; display: flex; justify-content: space-between; align-items: center;">

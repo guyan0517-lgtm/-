@@ -13619,7 +13619,9 @@ ${chaptersDigest}
             previewBox.style.display = 'flex';
             previewTitleEl.textContent = cp.finalModTitle || cp.ai1Data.title || '未命名模组';
             const doneScenes = typeof cp.completedSceneCount === 'number' ? cp.completedSceneCount : 0;
-            const totalScenes = Array.isArray(cp.resolvedScenes) ? cp.resolvedScenes.length : (Array.isArray(cp.ai1Data.plannedScenes) ? cp.ai1Data.plannedScenes.length : 0);
+            const totalScenes = (Array.isArray(cp.ai4Tasks) && cp.ai4Tasks.length > 0)
+              ? cp.ai4Tasks.length
+              : (Array.isArray(cp.ai2Data?.deepenedScenes) ? cp.ai2Data.deepenedScenes.length : (Array.isArray(cp.ai1Data.plannedScenes) ? cp.ai1Data.plannedScenes.length : 0));
             if (previewMetaEl) previewMetaEl.textContent = `已保存进度 · 正文 ${doneScenes}/${totalScenes} 章`;
             previewPublicEl.textContent = this.cleanModuleChapterOutput(String(cp.ai1Data.publicInfoChapter || cp.ai1Data.summary || ''));
           }
@@ -14417,6 +14419,19 @@ ${chaptersDigest}
       // 清理多余的星号标记
       text = text.replace(/\*{2,}/g, '');
 
+      // 自动剥离任何教AI怎么写作或怎么演戏的场外说教句
+      text = text
+        .split('\n')
+        .filter(line => {
+          const trimmed = line.trim();
+          if (!trimmed) return true;
+          if (/(?:这里是剧情高潮|此处为?剧情高潮|必须要?把.{0,20}(?:偏执|绝望|破碎|疯批|病态|张力|崩溃).{0,15}写出来|请\s*KP\s*务必(?:渲染|刻画|表现出|展现出)|注意渲染.{0,12}(?:氛围|情绪|绝望)|写作指导[:：]|扮演要求[:：]|演出提示[:：])/i.test(trimmed)) {
+            return false;
+          }
+          return true;
+        })
+        .join('\n');
+
       return text.trim();
     },
 
@@ -14441,7 +14456,6 @@ ${chaptersDigest}
           if (m && m[1]) {
             return m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
           }
-          // 兼容位于末尾被截断的字段
           const openReg = new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]+)$`, 'i');
           const om = clean.match(openReg);
           if (om && om[1]) {
@@ -14627,49 +14641,142 @@ ${chaptersDigest}
       };
     },
 
-    salvageAi3FromRaw(rawText, deepenedScenes = []) {
-      if (!rawText || typeof rawText !== 'string') return null;
-      let clean = rawText
-        .replace(/<think>[\s\S]*?<\/think>/gi, '')
-        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
-        .replace(/```json/gi, '')
-        .replace(/```/g, '')
-        .trim();
-      const guideMatch = clean.match(/"kpMasterGuideChapter"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"(?:auditReport|finalScenes)"|\s*\})/i);
-      const auditMatch = clean.match(/"auditReport"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"(?:kpMasterGuideChapter|finalScenes)"|\s*\})/i);
-      const kpMasterGuideChapter = guideMatch ? guideMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
-      const auditReport = auditMatch ? auditMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+    // 根据 AI2 的细纲与篇幅模式，构建 AI3 的分批调用队列（AI2 决定 AI3 调用几次）
+    buildAi3BatchesFromAi2(ai2Data, lengthMode = 'medium') {
+      const scenes = Array.isArray(ai2Data.deepenedScenes) ? ai2Data.deepenedScenes : [];
+      const rawBatches = Array.isArray(ai2Data.ai3Batches) ? ai2Data.ai3Batches : [];
 
-      const finalScenes = [];
-      const scenesBlock = clean.match(/"finalScenes"\s*:\s*\[([\s\S]*?)(?:\](?=\s*,\s*"|\s*\})|$)/i);
-      if (scenesBlock && scenesBlock[1]) {
-        const itemReg = /\{([\s\S]*?)\}/g;
-        let m;
-        while ((m = itemReg.exec(scenesBlock[1])) !== null) {
-          const b = m[1];
-          const getSub = (k) => {
-            const sm = b.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"|\\s*$)`, 'i'));
-            return sm ? sm[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
-          };
-          const sceneTitle = getSub('sceneTitle') || getSub('title');
-          const writingBlueprint = getSub('writingBlueprint') || getSub('blueprint') || '';
-          if (sceneTitle || writingBlueprint) {
-            finalScenes.push({
-              sceneTitle: sceneTitle || `第${finalScenes.length + 1}章`,
-              writingBlueprint
+      // 若 AI2 显式给出了合法的 ai3Batches 分批方案，优先采用
+      if (rawBatches.length >= 2) {
+        const validBatches = [];
+        rawBatches.forEach((b, idx) => {
+          const list = Array.isArray(b.scenes) ? b.scenes : (Array.isArray(b.chapters) ? b.chapters : []);
+          const normalized = list
+            .map(item => {
+              if (typeof item === 'string') {
+                const found = scenes.find(s => s.sceneTitle === item);
+                return found || { sceneTitle: item, cluesOrEvents: item, atmosphereCues: '', kpcInteractionDesign: '', pacingRule: '' };
+              }
+              return item && item.sceneTitle ? item : null;
+            })
+            .filter(Boolean);
+          if (normalized.length > 0) {
+            validBatches.push({
+              batchIndex: idx + 1,
+              batchTitle: b.batchTitle || `第 ${idx + 1} 阶段初稿`,
+              batchGoal: b.batchGoal || '推进实质剧情事件与场景探索',
+              targetAi4CallsForBatch: Math.max(normalized.length, Number(b.targetAi4Calls) || normalized.length),
+              scenes: normalized
+            });
+          }
+        });
+        if (validBatches.length >= 2) return validBatches;
+      }
+
+      // 否则按篇幅档位将 deepenedScenes 切分为多次 AI3 调用批次
+      const desiredAi3CallCount = lengthMode === 'short'
+        ? 2
+        : (lengthMode === 'long' ? Math.min(5, Math.max(3, Math.ceil(scenes.length / 2))) : Math.min(4, Math.max(2, Math.ceil(scenes.length / 2))));
+
+      const totalScenes = scenes.length;
+      const actualBatchesCount = Math.max(1, Math.min(desiredAi3CallCount, totalScenes));
+      const batches = [];
+      const chunkSize = Math.ceil(totalScenes / actualBatchesCount);
+
+      for (let i = 0; i < totalScenes; i += chunkSize) {
+        const slice = scenes.slice(i, i + chunkSize);
+        if (slice.length === 0) continue;
+        const bNum = batches.length + 1;
+        batches.push({
+          batchIndex: bNum,
+          batchTitle: `第 ${bNum} 批初稿：${slice[0].sceneTitle} 至 ${slice[slice.length - 1].sceneTitle}`,
+          batchGoal: slice.map(s => s.cluesOrEvents || s.purpose || s.sceneTitle).join('；').slice(0, 160),
+          targetAi4CallsForBatch: lengthMode === 'short' ? slice.length : Math.max(slice.length, Math.round(slice.length * 1.5)),
+          scenes: slice
+        });
+      }
+      return batches;
+    },
+
+    // 解析单次 AI3 初稿输出，提取其撰写的详细初稿以及它为 AI4 决定的拓写拆章调用方案
+    parseAi3BatchDraftAndExpansion(rawText, batchObj, lengthMode = 'medium') {
+      const cleaned = this.cleanModuleChapterOutput(String(rawText || ''));
+      const fallbackScenes = Array.isArray(batchObj?.scenes) ? batchObj.scenes : [];
+
+      let draftBody = cleaned;
+      let planLines = [];
+
+      const planMatch = cleaned.match(/===\s*AI4拓写拆章规划\s*===([\s\S]*?)(?:===\s*本批初稿正文\s*===|$)/i);
+      const bodyMatch = cleaned.match(/===\s*本批初稿正文\s*===([\s\S]*)$/i);
+
+      if (planMatch && planMatch[1]) {
+        const rawPlanText = planMatch[1].trim();
+        planLines = rawPlanText
+          .split('\n')
+          .map(l => l.replace(/^[-*·\d.、\s]+/, '').trim())
+          .filter(l => l.length >= 4 && !/^===/.test(l));
+      }
+      if (bodyMatch && bodyMatch[1] && bodyMatch[1].trim().length > 100) {
+        draftBody = bodyMatch[1].trim();
+      } else if (planMatch) {
+        draftBody = cleaned.replace(planMatch[0], '').replace(/===\s*本批初稿正文\s*===/i, '').trim();
+      }
+
+      const ai4TasksFromBatch = [];
+      planLines.forEach((line) => {
+        const parts = line.split(/[｜|：:——-]+/).map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          const chTitle = parts[0].replace(/^[\[【(（]|[\]】)）]$/g, '').trim();
+          const chEvents = parts.slice(1).join('：').trim();
+          if (chTitle) {
+            ai4TasksFromBatch.push({
+              chapterTitle: chTitle,
+              expandBlueprint: chEvents,
+              sourceBatchIndex: batchObj.batchIndex,
+              sourceBatchDraft: draftBody
             });
           }
         }
+      });
+
+      // 若 AI3 未按标记行输出足够的拆章项，则根据本批细纲自动构建逐级拓写任务（中长篇自动将大章拆细为更多子章）
+      if (ai4TasksFromBatch.length === 0) {
+        fallbackScenes.forEach((sc, idx) => {
+          const baseTitle = sc.sceneTitle || `第${idx + 1}章`;
+          const baseBlueprint = [
+            `【前文衔接与起因】：${sc.atmosphereCues || sc.pacingNote || ''}`,
+            `【核心事件与调查地点】：${sc.cluesOrEvents || sc.purpose || ''}`,
+            `【人物行动与对话分支】：${sc.kpcInteractionDesign || ''}`,
+            `【推进至下一章的事件】：${sc.pacingRule || ''}`
+          ].join('\n');
+
+          if (lengthMode === 'long' || (lengthMode === 'medium' && fallbackScenes.length <= 5 && idx % 2 === 1)) {
+            ai4TasksFromBatch.push({
+              chapterTitle: `${baseTitle}·上`,
+              expandBlueprint: `${baseBlueprint}\n【本卷拓写重点】：重点展开进入该场景的起因、前半段空间探索、前两处▼调查点与物证发现、以及与人物的初步事件交锋。`,
+              sourceBatchIndex: batchObj.batchIndex,
+              sourceBatchDraft: draftBody
+            });
+            ai4TasksFromBatch.push({
+              chapterTitle: `${baseTitle}·下`,
+              expandBlueprint: `${baseBlueprint}\n【本卷拓写重点】：紧接上卷，深入展开后半段突发事件、深层线索揭露、核心行动冲突与迈向下一阶段的转折。`,
+              sourceBatchIndex: batchObj.batchIndex,
+              sourceBatchDraft: draftBody
+            });
+          } else {
+            ai4TasksFromBatch.push({
+              chapterTitle: baseTitle,
+              expandBlueprint: baseBlueprint,
+              sourceBatchIndex: batchObj.batchIndex,
+              sourceBatchDraft: draftBody
+            });
+          }
+        });
       }
 
-      if (!kpMasterGuideChapter && finalScenes.length === 0) return null;
       return {
-        auditReport,
-        kpMasterGuideChapter,
-        finalScenes: finalScenes.length > 0 ? finalScenes : deepenedScenes.map(s => ({
-          sceneTitle: s.sceneTitle || '事件章节',
-          writingBlueprint: `【场景重点】：${s.cluesOrEvents || s.purpose || ''}\n【环境与氛围】：${s.atmosphereCues || s.pacingNote || ''}\n【人物互动】：${s.kpcInteractionDesign || ''}\n【转场衔接】：${s.pacingRule || ''}`
-        }))
+        draftText: draftBody,
+        ai4Tasks: ai4TasksFromBatch
       };
     },
 
@@ -14716,8 +14823,10 @@ ${chaptersDigest}
         this.aiWriterState.pipelineCheckpoint = {
           ai1Data: null,
           ai2Data: null,
-          parsedAi3: null,
-          resolvedScenes: null,
+          ai3Batches: null,
+          roughBatchDrafts: [],
+          completedAi3BatchCount: 0,
+          ai4Tasks: [],
           roughChapters: [],
           completedRoughCount: 0,
           roughEndingText: '',
@@ -14735,8 +14844,9 @@ ${chaptersDigest}
       }
 
       const cp = this.aiWriterState.pipelineCheckpoint;
-      if (!Array.isArray(cp.roughChapters)) cp.roughChapters = [];
-      if (typeof cp.completedRoughCount !== 'number') cp.completedRoughCount = cp.roughChapters.length;
+      if (!Array.isArray(cp.roughBatchDrafts)) cp.roughBatchDrafts = [];
+      if (!Array.isArray(cp.ai4Tasks)) cp.ai4Tasks = [];
+      if (typeof cp.completedAi3BatchCount !== 'number') cp.completedAi3BatchCount = cp.roughBatchDrafts.length;
 
       this.aiWriterState.isRunning = true;
       if (genBtn) {
@@ -14753,107 +14863,88 @@ ${chaptersDigest}
       if (saveBtn) saveBtn.disabled = true;
 
       try {
-        const rawTcPrompt = await this.getSelectedThoughtChainPromptText();
-        const tcPrompt = rawTcPrompt
-          ? rawTcPrompt
-              .replace(/```json[\s\S]*?```/gi, '')
-              .replace(/📝\s*\*\*当前待办清单[\s\S]*$/gi, '')
-              .trim()
-          : '';
         const drawnSeeds = drawMode === 'on' ? this.drawInspirationSeedsForTags(allTags) : [];
 
         const refGuidanceMap = {
-          free: '顺应故事本身的气质去决定整体结构：既可以是按早中晚时间推进的连续叙事，也可以是调查员自由决定去哪里探索的沙盒箱庭，还可以是白天自由结伴调查与夜晚主线剧情交织的复合结构。',
-          confession: '参考日常独白与心理拉扯的小说化写法：从寻常生活切入，先写足两人平时的相处温度与细微异样，再在层层试探与坦诚对话中推向情感高潮。',
-          date_loop: '参考约会箱庭与微异常的小说化写法：以有明确日常动机的同行出游或赴约开场，把清晨到夜晚的行程安排与沿途风景互动写得饱满动人，让异常感在日常甜度中悄然浮现。',
-          jealous_sweet: '参考奇妙变故与情感反差的小说化写法：构思一个兼具趣味性与宿命感的设定，让两人在共同应对变故的过程中自然流露藏在心底的偏爱与占有欲。',
-          multi_legend: '参考多线秘密与群像怪谈的小说化写法：每位角色都怀揣合情合理的个人来意与过往，白天可自由选择与不同同伴组队前往不同地点调查，个人暗线与主线谜团在具体事件中自然交汇。'
+          free: '顺应故事本身发展：按时间线或地点推进具体的案件调查、场景转换与突发事件。',
+          confession: '从真实的生活事件与共同经历的异常状况切入，通过一起调查具体地点、解开误会或难题来推进关系，绝不原地干聊。',
+          date_loop: '以有明确行程的出游或约会为主线，每个时段都有具体的地点游览、小意外、可调查物品与事件发生。',
+          jealous_sweet: '围绕一件具体发生的奇妙变故或委托展开，两人在解决具体麻烦、查明原因的行动中产生自然互动。',
+          multi_legend: '多位角色各自带有具体秘密与调查目标，白天前往不同建筑地点搜集物证，夜晚事件交汇揭开真相。'
         };
         const refGuidance = refGuidanceMap[refMode] || refGuidanceMap.free;
 
         const craftPhilosophy = `
-【小说化沉浸式跑团模组创作思考与指引】：
-1. 把写模组当成写一部可交互的长篇或中篇小说，先立住一条真正吸引人的主线故事：
-   - 请放下写说明书或写流程表的机械心态，把自己当成一位正在创作互动小说的人类作家。无论题材是日常纯爱、暴风雪山庄、怪谈调查还是多线群像，故事都必须有一条浑然天成的主线脉络：这件事最初因何而起，人物怀着怎样的心情走进这个故事，中途经历了怎样的悬念转折与情感升温，最终又将在怎样的冲突或坦诚中迎来高潮。
-   - 每一个登场人物都应当是活生生的人，有自己的生活惯性、喜怒哀乐与合情合理的行事动机，绝不为了强行推进剧情而做出违背常理与人性的荒唐举动。
-2. 思考一个真实的人走进场景后的第一反应，用合理的「动静」与切身利益给足调查动机：
-   - 写任何一个章节或地点时，请先在脑海中推演：一个活生生的正常人此时此刻站在门前，他心里最在意的是什么？
-   - 如果调查员刚刚遭遇变故或身处陌生的封闭环境，正常人的第一反应往往是确认自身处境、尝试离开或寻找外界联络。请先正面回应并安抚这种本能反应，再用自然具体的环境「动静」把他的注意力吸引到眼前的探索上——比如某个房间传来的异响、半掩门缝里透出的微光、空气中不寻常的气味、同伴欲言又止的反常神态、或是解决眼下困境迫切需要的一把钥匙与一份记录。让玩家产生「我正需要弄清楚这件事，所以我主动想去那里看看」的顺畅直觉。
-3. 灵活运用最契合故事的叙事结构，兼顾时间流动与沙盒探索的自由度：
-   - 模组的结构不必拘泥于单一模板：
-     · 可以是昼夜时间轴推进：细致安排从清晨、午后、傍晚到深夜每个时段的氛围变化、生活细节与主线事件；
-     · 可以是自由沙盒探索：明确列出当前开放的各个调查区域，调查员主动选择去哪里调查、与谁结伴同行、在不同地点分别能发现什么线索、触发怎样的专属对话与支线事件；
-     · 也可以是「白天自由沙盒调查 + 夜晚主线剧情推进」的复合结构。
-4. 懂得小说叙事的详略呼吸感，切勿平均用力或跨章复读：
-   - 真正优秀的人类模组懂得留白与爆发：平淡的过渡区域或没有核心剧情的空房间只需简明交代环境特征即可；而在关键的情感转折、真相揭晓或戏剧冲突高潮处，则要毫不吝惜笔墨，把光影气味、人物微表情、呼吸停顿与层层递进的台词对手戏写得淋漓尽致。
-   - 每一章各司其职：「01-幕后真相与机制」集中讲透一次全局真相；「02-模组导读与大纲」写给带团守秘人看整体节奏与防卡关引导；正文章节里的【KP信息】只写本章眼前的推进逻辑与分支应对，不再重复抄写全局背景。
-5. 格式干净自然，善用计数器配合趣味互动：
-   - 模组总标题与各章节标题请保持朴实自然、有文学余韵。
-   - 文本保持纯净的人类模组排版，有机使用【正文】、【KP信息】、【检定】，用「▼具体地点或物品」标示可探索区域，用「・当调查员……时 → 角色反应与台词」呈现自然互动分支；不要自行添加多余的星号 * 或场外括号注解，不要在「00-模组已知信息」中复读用户场外要求或剧透底牌，不要把角色拆成两套割裂性格模板，也不要画流程图代码。
-   - 不要设计带团AI无法执行的“暗中检定”。如果流程中设计了真心话大冒险、猜谜问答、饮酒互动、搜集印章等需要累计次数的趣味环节，请在【KP信息】中说明使用 [计数:名称+1] 记录，并在结算后使用 [计数:名称 清除]。`;
+【真人模组作者创作铁律（严禁说教、严禁原地拉扯、剧情事件至上）】：
+1. 像真正的真人模组作者一样直接写故事与客观事实，绝对禁止「教AI怎么写作或怎么演戏」：
+   - 严禁在【KP信息】或【正文】中出现任何诸如「这里是剧情高潮，必须要把他的偏执绝望写出来」「KP请注意渲染压抑绝望的氛围」「此处要表现出角色的破碎感与张力」「请KP用力刻画」之类的写作指导、演技说教或情绪指令！
+   - 真人写的模组里，【KP信息】只平实客观地写事实与规则：这间屋子藏着什么真相、几点钟会发生什么事、哪个物品需要什么检定、触发了什么机关会有什么后果。人物的性格与情绪直接通过【正文】里他具体做了什么事、说了什么正常自然的话表现出来，绝不靠场外说教去强行拔高情绪。
+2. 每一章必须有实打实的剧情事件与空间推进，绝对禁止玩家和KPC原地空洞拉扯：
+   - 严禁让两个人待在同一个地方没完没了地对视、叹气、试探、心理拉扯几千字却没有任何实质剧情发生！
+   - 每一章都必须往前推演具体的故事：去了哪个新地点、发现了什么异常现象或尸体/物证、遇到了哪位NPC、打开了哪扇锁住的门、触发了什么突发危机、解开了哪一条核心线索。人物之间的感情升温或冲突，必须建立在共同行动、共同破局的具体事件之上。
+3. 思考正常人走进场景的真实反应，用具体的事件动静推动探索：
+   - 调查员到达一个场景时，要有实实在在的动静或切身原因吸引他去调查，比如走廊尽头传来的声响、桌上未写完的信件、停摆的钟表、必须找到的钥匙或出路。
+4. 排版干净纯粹：
+   - 使用【正文】写公开场景描写、具体发生的事件与自然台词；使用【KP信息】写客观事实、机关真相与事件触发条件；使用【检定】写技能检定与成败结果；使用「▼具体地点或物品」列出可调查区域；使用「・当调查员……时 → 角色具体行动与台词」写互动分支。
+   - 不要添加星号 * 或场外括号注解，不要画流程图代码，不要设计带团AI无法执行的暗中检定。若有累计次数的互动环节，在【KP信息】中客观注明使用 [计数:名称+1] 与结算后 [计数:名称 清除]。`;
 
         // ==========================================================
-        // 第一阶段：AI1 立意（小说化主线立意、人物弧光与底牌构思）
+        // 第一阶段：AI1 立意（构思完整事件链、案件真相、人物档案与大章框架）
         // ==========================================================
         let ai1Data = cp.ai1Data;
         if (!ai1Data) {
           cp.activeStep = 1;
           this.setAiWriterStepActive(1);
-          this.updateAiWriterStatus(10, 'AI1 立意：正在像构思长篇小说一样打磨故事主线、人物动机与核心底牌...');
+          this.updateAiWriterStatus(8, 'AI1 立意：正在构思完整故事事件链、案件底牌、人物设定与主线大章...');
           await this.saveAiWriterDraftToIDB();
 
-          const ai1System = `你是一位极具创造力、文笔细腻、擅长像写长篇小说一样构思跑团模组的人类创作者。
-请先深入思考这个故事为什么动人、人物为什么会自然地走到一起、整个事件的来龙去脉与核心巧思是什么，再完成模组立意与基础档案。
-${craftPhilosophy}
-${tcPrompt ? '\n【创作者审美与文风参考】：\n' + tcPrompt : ''}`;
+          const ai1System = `你是一位经验丰富、文风自然平实的人类跑团模组作者。
+请把重心放在构思一条扎实、有头有尾、事件环环相扣的故事主线上，设计清楚整个事件的前因后果、每个阶段具体发生的事情与核心调查地点。
+${craftPhilosophy}`;
 
           const lengthDesc = lengthMode === 'short'
-            ? '短篇精悍（建议规划 3 至 4 个核心正文章节，聚焦一气呵成的冲突与情感高潮）'
+            ? '短篇模组（建议在 plannedScenes 中规划 4 至 6 个主线大章，后续由 AI2、AI3、AI4 逐级细化拓写为 6 至 8 章）'
             : (lengthMode === 'long'
-              ? '长篇饱满（建议规划 6 至 9 个正文章节，充实展开多时段推进或沙盒多区域深度调查）'
-              : '中篇扎实（建议规划 4 至 6 个正文章节，兼顾日常铺垫、多点调查与高潮爆发）');
+              ? '长篇模组（建议在 plannedScenes 中规划 10 至 14 个主线大章，后续由 AI2、AI3、AI4 逐级拆章拓写为 18 至 25 章以上的宏大篇幅）'
+              : '中篇模组（建议在 plannedScenes 中规划 7 至 10 个主线大章，后续由 AI2、AI3、AI4 逐级拆章拓写为 12 至 16 章、三万字以上的充实剧情）');
 
-          const ai1User = `请结合以下设定，以创作一部互动小说的深度去构思这本跑团模组的主线立意、人物内心设定、完整章节脉络、公开已知信息与守秘人幕后真相：
+          const ai1User = `请结合以下设定，构思这本跑团模组的完整主线事件链、角色设定、公开已知信息与客观幕后真相：
 - 规则体系：${ruleSystem.toUpperCase()}
 - 玩家规模：${scaleType}
 - 结构类型：${modType}
 - 调查难度：${difficulty}
 - 目标篇幅：${lengthDesc}
 - 选定标签：${allTags.join('、')}
-- 叙事脉络建议：${refGuidance}
-${customTitle ? '- 模组标题：' + customTitle : '- 模组标题：请起一个朴实自然、有文学气息与余韵的名字'}
-${userHook ? '- 用户创作要求与引子（请在幕后真相与主线故事中自然融会贯通，切勿在 00-模组已知信息 中生硬复读或提前剧透）：' + userHook : ''}
+- 叙事结构方向：${refGuidance}
+${customTitle ? '- 模组标题：' + customTitle : '- 模组标题：请起一个贴合故事、自然好听的名字'}
+${userHook ? '- 核心故事引子（请自然融入主线事件与真相中，不要在 00-模组已知信息 中生硬照抄指令或剧透底牌）：' + userHook : ''}
 ${drawnSeeds.length > 0 ? '- 灵感参考：\n  ' + drawnSeeds.map((s, idx) => (idx + 1) + '. ' + s).join('\n  ') : ''}
 
-在动笔前请先深入思考并在 creativeReflection 中阐述：
-1. 这部模组作为一篇完整的小说，它的主线故事核是什么？是什么切身利益或情感牵绊让调查员从开场就愿意主动投入其中？
-2. 当异常或困境出现时，正常人的第一反应是什么？故事如何顺应这种人之常情，并用具体的环境动静与悬念引导调查员一步步深入探索？
-3. 本模组最适合采用哪种叙事推进方式（如早中晚时间线推进、自由沙盒探索、或昼夜交替调查）？哪些章节应当轻快略写，哪些章节应当浓墨重彩地推向情感与戏剧高潮？
-
-请直接输出一个以 { 开头、以 }结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明，所有字符串值内部的换行请写为 \\n，字符串内部引用请使用中文引号「」或“”：
+请确保每一章都有具体发生的新事件、新地点与新发现，绝不要只写两个人原地拉扯聊天。
+请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，所有字符串值内部的换行请写为 \\n，字符串内部引用请使用中文引号「」：
 {
-  "title": "朴实自然的模组名称",
-  "summary": "模组简介（用富有小说画面感与悬念吸引力的自然语言描绘故事开端，不剧透底牌，不复读场外指令）",
-  "themeMode": "本模组的小说叙事结构（时间线/沙盒/昼夜复合）与情感基调概述",
-  "creativeReflection": "主线构思深度阐述：包含故事主线脉络、正常人反应与各阶段调查动机设计、以及详略高潮的节奏规划",
+  "title": "模组名称",
+  "summary": "模组简介（客观自然地描绘故事开端背景与悬念，不剧透底牌）",
+  "themeMode": "本模组的推进结构（时间线/沙盒/昼夜复合）与核心主线概述",
+  "creativeReflection": "完整事件链梳理：从起因、第一阶段异变、中段深入调查、突发转折事件到最终解决的完整前因后果",
   "catAndNpcProfiles": [
     {
       "chapterTitle": "人物或HO章节标题，如：猫-角色名 或 03-HO1秘密与设定 或 NPC-主要人物",
-      "roleName": "角色称呼与身份",
-      "publicDesc": "玩家可见的公开外貌、性格特点、生活习惯与平时相处细节",
-      "secretProfile": "守秘人掌握的里设定：包含角色内心真实的愿望或隐痛、合情合理的行动逻辑、在故事各阶段的情感变化与鲜活台词示例"
+      "roleName": "角色姓名与身份",
+      "publicDesc": "玩家可见的公开外貌、身份职业、日常习惯与同调查员的过往交集",
+      "secretProfile": "守秘人掌握的客观里设定：该角色在本次事件中的真实处境、掌握的秘密、各阶段的具体行动目标与自然台词示例（只写客观事实与台词，严禁写教AI怎么演戏的说教语）"
     }
   ],
   "plannedScenes": [
     {
-      "sceneTitle": "朴实简练的章节标题",
-      "purpose": "本章节在整部小说主线中的位置、核心发生的事件或开放探索的沙盒区域、以及详略笔墨比重",
-      "pacingNote": "驱使调查员进入本章或探索该区域的自然动机与环境动静、本章向下一章过渡的契机"
+      "sceneTitle": "章节标题",
+      "purpose": "本章具体发生的剧情事件、开放调查的具体建筑或房间、发现的核心物证或遭遇的突发状况",
+      "pacingNote": "触发本章事件的具体起因，以及本章结束时推动故事进入下一章的具体事件"
     }
   ],
-  "endingsPlan": "多分支结局设计：清晰列出各结局的自然达成条件、完整的小说化情感收束画面与台词余韵",
-  "publicInfoChapter": "完整的【00-模组已知信息】章节文本：包含模组简介、舞台背景、人数与耗时、推荐技能、极具代入感的公开导入引子（保持干净排版，无多余星号或场外注解，不剧透真相）",
-  "kpTruthAndMechanism": "完整的【01-幕后真相与机制】章节文本：包含事件完整真相、人物动机与前因后果时间线、沙盒或特殊互动环节规则（如需隐藏计数才写明 [计数:名称+1] 与 [计数:名称 清除]，不需要则不写）"
+  "endingsPlan": "多分支结局规划：客观写明各结局的达成条件、结局发生的具体事件走向与收束画面",
+  "publicInfoChapter": "完整的【00-模组已知信息】章节文本：包含模组简介、舞台背景、人数与推荐技能、以及自然具体的开场背景交代",
+  "kpTruthAndMechanism": "完整的【01-幕后真相与机制】章节文本：平实客观地写清整个事件的来龙去脉、幕后真相、时间线与特殊机制规则（严禁写任何教KP怎么渲染情绪的说教词）"
 }`;
 
           const ai1Raw = await this.callAI(ai1System, ai1User, null, 'writeModule');
@@ -14889,21 +14980,27 @@ ${drawnSeeds.length > 0 ? '- 灵感参考：\n  ' + drawnSeeds.map((s, idx) => (
         }
 
         // ==========================================================
-        // 第二阶段：AI2 细纲（确定调用次数、分章叙事比重、调查动静、地图与线索）
+        // 第二阶段：AI2 细纲（将大章扩充细化，并由 AI2 决定 AI3 分几个批次调用）
         // ==========================================================
         let ai2Data = cp.ai2Data;
-        let resolvedScenes = cp.resolvedScenes;
-        if (!ai2Data || !Array.isArray(resolvedScenes) || resolvedScenes.length === 0) {
+        let ai3Batches = cp.ai3Batches;
+        if (!ai2Data || !Array.isArray(ai3Batches) || ai3Batches.length === 0) {
           cp.activeStep = 2;
           this.setAiWriterStepActive(2);
-          this.updateAiWriterStatus(25, 'AI2 细纲：正在规划分章调用次数、场景动静与调查动机、沙盒地图节点与线索链...');
+          this.updateAiWriterStatus(20, 'AI2 细纲：正在细化各章具体事件、地点线索，并决定 AI3 初稿的调用批次...');
           await this.saveAiWriterDraftToIDB();
 
-          const ai2System = `你是跑团模组的总架构师与小说细纲编导。
-你的任务是将 AI1 的故事立意转化为可直接供 AI3 逐章撰写初稿、AI4 逐章精修的【分章执笔细纲】、【02-模组导读与大纲】、专属【地图节点】与【核心线索】。
+          const targetSceneRange = lengthMode === 'short'
+            ? '5 至 7 个具体剧情章节，并划分为 2 次 AI3 初稿调用批次'
+            : (lengthMode === 'long'
+              ? '12 至 16 个具体剧情章节，并划分为 4 至 5 次 AI3 初稿调用批次'
+              : '8 至 12 个具体剧情章节，并划分为 3 次 AI3 初稿调用批次');
+
+          const ai2System = `你是跑团模组的总编剧与结构统筹师。
+你的任务是将 AI1 的主线框架进一步细化扩充为剧情饱满的分章细纲，设计好每一个地点的具体物证线索，并明确决定接下来的 AI3 初稿阶段需要分几次调用来完成。
 ${craftPhilosophy}`;
 
-          const ai2User = `以下是本模组的第一阶段立意蓝图：
+          const ai2User = `以下是本模组的第一阶段立意方案：
 ${JSON.stringify({
   title: customTitle || ai1Data.title,
   summary: ai1Data.summary,
@@ -14914,39 +15011,46 @@ ${JSON.stringify({
   plannedScenes: ai1Data.plannedScenes
 }, null, 2)}
 
-请统筹规划本模组的分章细纲，并明确决定后续 AI3 初稿与 AI4 精修需要分多少个正文章节进行生成（deepenedScenes 数组的长度即代表正文章节总数与调用次数，请与 plannedScenes 保持完整对应，共 ${ai1Data.plannedScenes.length} 章）：
-1. 为每一章设计自然流畅的前文衔接、促使调查员主动探索该场景的具体「动静」与现实动机（例如听见什么声音、看到什么异常、为了什么切身目的而进入调查）。
-2. 明确每一章的「叙事比重与详略要求」：哪些过渡部分应简明利落，哪些重头戏与情感爆发点应浓墨重彩地写透。
-3. 如果包含自由沙盒探索或多时段推进，请清晰规划每个可探索区域（▼位置）的线索分布、与同伴互动的对话分支以及触发事件。
-4. 编写完整的【02-模组导读与大纲】（kpMasterGuideChapter），指导带团AI如何把握整体小说节奏与防卡关引导。
-5. 提炼本模组专属的立体地图地点节点（mapNodes）与线索卡（clues）。
+请执行第二阶段细纲统筹与递进分批规划：
+1. 根据当前篇幅要求（${targetSceneRange}），将主线事件细化扩充为更充实的 deepenedScenes 章节列表。如果原本某一大章包含多个地点或多个阶段的事件，请将其拆分为独立的章节，确保每一章都有实打实的新事件、新地点调查与新线索发现，绝不靠空洞对话水字数。
+2. 在 ai3Batches 中明确决定 AI3 初稿阶段要分几次调用（每次 AI3 调用负责撰写 2 至 4 章具有连贯剧情的详细初稿）。
+3. 编写客观清晰的【02-模组导读与大纲】（atmosphereAndMechanicsGuide），只写故事流程顺序、地点解锁条件与防卡关客观线索指向，严禁出现任何教KP怎么演戏或怎么写情绪的话。
+4. 列出本模组全部真实具体的探索地点（mapNodes，严禁把抽象概念词当成地点）与核心线索（clues）。
 
 请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，所有字符串值内部的换行请写为 \\n：
 {
-  "atmosphereAndMechanicsGuide": "完整的【02-模组导读与大纲】正文（以【KP信息】开头）：包含整体小说脉络导览、时间线或沙盒自由探索的带团调度方法、调查员卡关时的自然引导技巧与特殊互动环节说明",
+  "atmosphereAndMechanicsGuide": "完整的【02-模组导读与大纲】正文（以【KP信息】开头）：客观说明模组流程走向、各阶段关键事件触发条件与线索指向",
   "deepenedScenes": [
     {
-      "sceneTitle": "朴实简练的章节标题",
-      "atmosphereCues": "本章承接上文的切入画面、吸引调查员主动探索的具体环境动静与现实动机、光影气味氛围与详略比重说明",
-      "kpcInteractionDesign": "本章中同伴/KPC/NPC的鲜活神态动作、情感升温细节、主动搭话与针对调查员不同举动的自然回应分支",
-      "cluesOrEvents": "本章包含的具体可探索位置（▼区域/物品）、公开【检定】条件与成败结果、获得的具象线索与推动主线的关键事件",
-      "pacingRule": "本章结束并自然迈向下一章或下一时段的剧情契机"
+      "sceneTitle": "章节标题",
+      "atmosphereCues": "本章开场的具体情境、发生的时间地点、吸引调查员展开行动的具体事件或异常动静",
+      "kpcInteractionDesign": "本章中同伴或NPC的具体行动、提供的实质帮助或发生的分歧、针对调查员不同选择的自然对话",
+      "cluesOrEvents": "本章包含的具体可调查位置（▼房间/物品名称）、【检定】要求、发现的具体物证与本章发生的核心转折事件",
+      "pacingRule": "本章结束并进入下一章的具体触发事件"
+    }
+  ],
+  "ai3Batches": [
+    {
+      "batchTitle": "AI3第1次调用批次名称",
+      "batchGoal": "本批次负责写透的核心剧情阶段",
+      "targetAi4Calls": 2,
+      "chapters": ["章节标题1", "章节标题2", "章节标题3"]
     }
   ],
   "mapNodes": [
     {
-      "name": "本模组内的具体建筑或地点名称",
-      "parent": "所属上级区域名称（顶级区域填空字符串）",
+      "name": "具体的建筑或房间名称",
+      "parent": "所属上级区域名称（顶级填写真实大区域或空字符串）",
       "level": 1,
-      "desc": "该地点的建筑外观特征、室内氛围与可调查内容简述"
+      "desc": "该地点的空间特征与可调查内容简述"
     }
   ],
   "clues": [
     {
-      "name": "线索或关键物品名称",
-      "location": "获取地点或所属章节",
-      "Trigger": "获取方式或技能检定要求",
-      "content": "线索的具体表象描述与背后指向的剧情信息"
+      "name": "线索或物品名称",
+      "location": "获取的具体地点或章节",
+      "Trigger": "获取方式或检定要求",
+      "content": "线索的具体内容与指向的事实"
     }
   ]
 }`;
@@ -14970,117 +15074,132 @@ ${JSON.stringify({
                   cluesOrEvents: s.purpose || '',
                   pacingRule: ''
                 })),
+            ai3Batches: Array.isArray(parsedAi2.ai3Batches) ? parsedAi2.ai3Batches : [],
             mapNodes: Array.isArray(parsedAi2.mapNodes) ? parsedAi2.mapNodes : [],
             clues: Array.isArray(parsedAi2.clues) ? parsedAi2.clues : []
           };
 
-          resolvedScenes = ai2Data.deepenedScenes.map(s => ({
-            sceneTitle: s.sceneTitle || '事件章节',
-            writingBlueprint: [
-              `【前文衔接与调查动静/动机】：${s.atmosphereCues || s.pacingNote || ''}`,
-              `【核心调查区域与事件推进】：${s.cluesOrEvents || s.purpose || ''}`,
-              `【人物互动与对话分支】：${s.kpcInteractionDesign || ''}`,
-              `【转场契机】：${s.pacingRule || ''}`
-            ].join('\n')
-          }));
-
+          ai3Batches = this.buildAi3BatchesFromAi2(ai2Data, lengthMode);
           cp.ai2Data = ai2Data;
-          cp.parsedAi3 = { kpMasterGuideChapter: ai2Data.atmosphereAndMechanicsGuide, finalScenes: resolvedScenes };
-          cp.resolvedScenes = resolvedScenes;
+          cp.ai3Batches = ai3Batches;
           await this.saveAiWriterDraftToIDB();
         }
 
         const boundarySuffix = '\n\n至此本小章节结束，请kp务必在聊天内告诉PC本世界书模组到此为止，请PC切换下一个世界书，禁止擅自编造互动外主线剧情走向';
         const finalModTitle = customTitle || ai1Data.title || '未命名模组';
         cp.finalModTitle = finalModTitle;
-        const scenesToWrite = resolvedScenes;
         const rawPublicInfo = this.cleanModuleChapterOutput(String(ai1Data.publicInfoChapter || ai1Data.summary || ''));
 
         if (previewBox && previewTitleEl && previewPublicEl) {
           previewBox.style.display = 'flex';
           previewTitleEl.textContent = finalModTitle;
-          if (previewMetaEl) previewMetaEl.textContent = '正在撰写小说化初稿...';
+          if (previewMetaEl) previewMetaEl.textContent = `AI2已决定分 ${ai3Batches.length} 批调用AI3撰写初稿...`;
           previewPublicEl.textContent = rawPublicInfo;
         }
 
         // ==========================================================
-        // 第三阶段：AI3 初稿（按 AI2 确定的章节数，逐章调用 API 撰写完整小说化初稿）
+        // 第三阶段：AI3 初稿（按 AI2 决定的批次调用，写出详细剧情初稿，并由 AI3 决定 AI4 要拆分成几章、调用几次进行拓写）
         // ==========================================================
         cp.activeStep = 3;
         this.setAiWriterStepActive(3);
 
-        const ai3DraftSystem = `你是一位文笔扎实、擅长把跑团模组写得像互动小说一样引人入胜的人类模组作者。
-现在进入【AI3 初稿执笔阶段】：请根据 AI2 规划的分章细纲，逐章写出完整的章节初稿。
+        const ai3DraftSystem = `你是一位文笔扎实、擅长写丰富具体剧情事件的人类跑团模组作者。
+现在是【AI3 分批撰写详细初稿 + 规划 AI4 拓写拆章】阶段。
 ${craftPhilosophy}
-写作要求：
-1. 像写小说一样先把人物进入本章的处境、心境、环境里的「动静」与氛围连续地写出来，让调查员探究的动机顺理成章。
-2. 随后清晰展开本章的互动对话分支（「・当调查员……时 → 角色神态与台词」）与具体可调查位置（「▼地点或物品名称」及公开【检定】结果）。
-3. 本章的【KP信息】只写本章实用的推进逻辑与引导，不重复抄写全局幕后真相，不添加多余星号 * 或场外括号注解。`;
+你在每次调用中必须完成两件事：
+第一件事：在【===AI4拓写拆章规划===】区块中，根据本批次剧情的丰富程度，决定接下来的 AI4 定稿阶段要把本批次初稿进一步拆解、拓写成哪几个独立章节（每一行代表 AI4 的一次独立拓写调用，格式为「章节标题｜本章具体展开的剧情事件、探索地点与线索细节」）。如果本批有 3 章初稿，你可以根据剧情容量将其拆解拓写为 4 至 6 个更细致的章节交由 AI4 逐一扩写！
+第二件事：在【===本批初稿正文===】区块中，详实写出本批次所有章节的完整初稿，把每一章的具体事件起因、空间环境、▼可调查位置、【检定】与线索、NPC与同伴的具体行动和自然对话全部写出来。严禁在初稿中写任何教AI怎么演戏或怎么渲染绝望偏执的说教词，也严禁写原地干聊拉扯。`;
 
-        const startRoughIdx = typeof cp.completedRoughCount === 'number' ? cp.completedRoughCount : 0;
-        let prevRoughTail = startRoughIdx > 0 && cp.roughChapters[startRoughIdx - 1]
-          ? String(cp.roughChapters[startRoughIdx - 1].content || '').slice(-800)
+        const startBatchIdx = typeof cp.completedAi3BatchCount === 'number' ? cp.completedAi3BatchCount : 0;
+        let prevBatchTail = startBatchIdx > 0 && cp.roughBatchDrafts[startBatchIdx - 1]
+          ? String(cp.roughBatchDrafts[startBatchIdx - 1].draftText || '').slice(-900)
           : '';
 
-        for (let rIdx = startRoughIdx; rIdx < scenesToWrite.length; rIdx++) {
-          const sceneItem = scenesToWrite[rIdx];
-          const sTitle = sceneItem.sceneTitle || `第 ${rIdx + 1} 幕`;
-          const nextSceneTitle = (rIdx + 1 < scenesToWrite.length)
-            ? (scenesToWrite[rIdx + 1].sceneTitle || `第 ${rIdx + 2} 幕`)
-            : `${finalModTitle}-结局`;
-          const progressPct = 36 + Math.round(((rIdx + 1) / (scenesToWrite.length + 1)) * 26);
-          this.updateAiWriterStatus(progressPct, `AI3 初稿：正在撰写第 ${rIdx + 1} / ${scenesToWrite.length} 章初稿《${sTitle}》...`);
+        for (let bIdx = startBatchIdx; bIdx < ai3Batches.length; bIdx++) {
+          const batchObj = ai3Batches[bIdx];
+          const batchScenes = Array.isArray(batchObj.scenes) ? batchObj.scenes : [];
+          const progressPct = 30 + Math.round(((bIdx + 1) / (ai3Batches.length + 1)) * 28);
+          this.updateAiWriterStatus(
+            progressPct,
+            `AI3 初稿（第 ${bIdx + 1} / ${ai3Batches.length} 批）：正在撰写《${batchObj.batchTitle}》详细初稿并规划 AI4 拓写章节...`
+          );
           await this.saveAiWriterDraftToIDB();
 
-          const ai3SceneUser = `模组名称：《${finalModTitle}》
+          const expandTargetHint = lengthMode === 'short'
+            ? `建议将本批次的 ${batchScenes.length} 章初稿规划为 ${Math.max(batchScenes.length, batchScenes.length + 1)} 个 AI4 拓写章节`
+            : (lengthMode === 'long'
+              ? `建议将本批次的 ${batchScenes.length} 章初稿进一步拆细拓写为 ${Math.max(batchScenes.length + 1, batchScenes.length * 2)} 个饱含具体剧情事件的 AI4 拓写章节`
+              : `建议将本批次的 ${batchScenes.length} 章初稿进一步拆细拓写为 ${Math.max(batchScenes.length + 1, Math.round(batchScenes.length * 1.6))} 个饱含具体剧情事件的 AI4 拓写章节`);
+
+          const ai3BatchUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
-整体叙事基调：${ai1Data.themeMode || ''}
-主线构思与详略要求：${ai1Data.creativeReflection || ''}
+整体叙事推进方式：${ai1Data.themeMode || ''}
+完整事件链背景：${ai1Data.creativeReflection || ''}
 核心人物档案：
 ${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
 
-正文章节总目录（当前为第 ${rIdx + 1} / ${scenesToWrite.length} 章，下一章为【${nextSceneTitle}】）：
-${scenesToWrite.map((sc, i) => `${i + 1}. ${sc.sceneTitle}`).join('\n')}
+当前为 AI3 初稿阶段的第 ${bIdx + 1} / ${ai3Batches.length} 次调用：【${batchObj.batchTitle}】
+${prevBatchTail ? '上一批初稿结尾回顾（请自然承接此处的剧情事件）：\n' + prevBatchTail + '\n' : '这是模组的第一批初稿，请从具体的事件起因与真实场景切入。\n'}
 
-${prevRoughTail ? '上一章初稿结尾回顾（请自然承接此处的情境与人物情绪）：\n' + prevRoughTail + '\n' : '这是模组的开篇第一章，请从真实自然的生活情境或合情合理的来意切入，把人物关系与开场氛围铺垫扎实。\n'}
-当前初稿章节：【${sTitle}】
-本章细纲指引：
-${sceneItem.writingBlueprint}
+本批次需要撰写的章节细纲列表：
+${batchScenes.map((sc, idx) => [
+  `【本批第 ${idx + 1} 章：${sc.sceneTitle}】`,
+  `- 开场情境与动静：${sc.atmosphereCues || sc.pacingNote || ''}`,
+  `- 具体调查地点与核心事件：${sc.cluesOrEvents || sc.purpose || ''}`,
+  `- 人物行动与互动分支：${sc.kpcInteractionDesign || ''}`,
+  `- 迈向下一章的触发事件：${sc.pacingRule || ''}`
+].join('\n')).join('\n\n')}
 
-请直接输出【${sTitle}】的完整初稿正文（包含连续饱满的【正文】叙事、人物互动台词、▼可探索位置与【检定】、以及简洁实用的本章【KP信息】）：`;
+请严格按以下两个区块的格式输出（${expandTargetHint}，每一行将对应一次 AI4 深度拓写调用）：
 
-          const roughRaw = await this.callAI(ai3DraftSystem, ai3SceneUser, null, 'writeModule');
-          let cleanRough = this.cleanModuleChapterOutput(String(roughRaw || ''));
-          if (!cleanRough) {
-            throw new Error(`AI3 初稿第 ${rIdx + 1} 章【${sTitle}】返回为空，已保存前序进度，请点击继续重试`);
+===AI4拓写拆章规划===
+章节标题1｜该章要详写的具体事件、具体调查地点▼、物证线索与人物行动推进
+章节标题2｜该章要详写的具体事件、具体调查地点▼、物证线索与人物行动推进
+...
+
+===本批初稿正文===
+（在此处详实写出本批次每一章的完整初稿，包含【正文】场景与具体事件推进、▼可调查位置、【检定】、人物自然台词互动、以及客观说明事实与规则的【KP信息】）`;
+
+          const roughBatchRaw = await this.callAI(ai3DraftSystem, ai3BatchUser, null, 'writeModule');
+          const parsedBatch = this.parseAi3BatchDraftAndExpansion(roughBatchRaw, batchObj, lengthMode);
+          if (!parsedBatch || !parsedBatch.draftText || parsedBatch.draftText.length < 30) {
+            throw new Error(`AI3 第 ${bIdx + 1} 批初稿返回为空，已保存前序进度，请点击继续重试`);
           }
-          if (!cleanRough.includes('【正文】') && !cleanRough.includes('【KP信息】')) {
-            cleanRough = `【正文】\n${cleanRough}`;
-          }
-          cp.roughChapters[rIdx] = {
-            title: sTitle,
-            category: rIdx === 0 ? '模组导入' : '主线事件',
-            content: cleanRough
+
+          cp.roughBatchDrafts[bIdx] = {
+            batchIndex: bIdx + 1,
+            batchTitle: batchObj.batchTitle,
+            draftText: parsedBatch.draftText,
+            ai4Tasks: parsedBatch.ai4Tasks
           };
-          prevRoughTail = cleanRough.slice(-800);
-          cp.completedRoughCount = rIdx + 1;
+          cp.completedAi3BatchCount = bIdx + 1;
+
+          // 重新汇总所有批次产出的 AI4 拓写任务队列
+          cp.ai4Tasks = [];
+          cp.roughBatchDrafts.forEach(rb => {
+            if (rb && Array.isArray(rb.ai4Tasks)) {
+              rb.ai4Tasks.forEach(t => cp.ai4Tasks.push(t));
+            }
+          });
+
+          prevBatchTail = parsedBatch.draftText.slice(-900);
           if (previewMetaEl) {
-            previewMetaEl.textContent = `AI3初稿 ${cp.completedRoughCount}/${scenesToWrite.length} 章`;
+            previewMetaEl.textContent = `AI3初稿批次 ${cp.completedAi3BatchCount}/${ai3Batches.length} · 已规划 ${cp.ai4Tasks.length} 个AI4拓写章节`;
           }
           await this.saveAiWriterDraftToIDB();
         }
 
         if (!cp.roughEndingDone) {
-          this.updateAiWriterStatus(64, 'AI3 初稿：正在撰写多分支结局初稿...');
+          this.updateAiWriterStatus(60, 'AI3 初稿：正在撰写多分支结局初稿...');
           await this.saveAiWriterDraftToIDB();
           const ai3EndingUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
-上一章初稿结尾回顾：
-${prevRoughTail}
+前文初稿结尾回顾：
+${prevBatchTail}
 结局分支规划：
 ${ai1Data.endingsPlan || ''}
 
-请撰写【${finalModTitle}-结局】的完整初稿，包含清晰的【KP信息】结局判定条件与每个结局饱满动人的【正文】小说化收束描写及台词：`;
+请撰写【${finalModTitle}-结局】的完整初稿，包含客观清晰的【KP信息】结局达成条件，以及每个结局分支具体发生的事情、画面与角色自然对话的【正文】（严禁写教AI怎么演戏的说教语）：`;
 
           const roughEndRaw = await this.callAI(ai3DraftSystem, ai3EndingUser, null, 'writeModule');
           let cleanRoughEnd = this.cleanModuleChapterOutput(String(roughEndRaw || ''));
@@ -15092,12 +15211,23 @@ ${ai1Data.endingsPlan || ''}
           await this.saveAiWriterDraftToIDB();
         }
 
+        // 确保 cp.ai4Tasks 完整就绪
+        if (!Array.isArray(cp.ai4Tasks) || cp.ai4Tasks.length === 0) {
+          cp.ai4Tasks = [];
+          (cp.roughBatchDrafts || []).forEach(rb => {
+            if (rb && Array.isArray(rb.ai4Tasks)) {
+              rb.ai4Tasks.forEach(t => cp.ai4Tasks.push(t));
+            }
+          });
+        }
+
         // ==========================================================
-        // 第四阶段：AI4 精修（逐章审视 AI3 初稿不足之处，精修润色并扩写情感与细节）
+        // 第四阶段：AI4 拓写定稿（按 AI3 决定的调用次数与拆章方案，逐章深度扩写具体剧情与探索细节）
         // ==========================================================
         cp.activeStep = 4;
         this.setAiWriterStepActive(4);
 
+        const ai4Tasks = cp.ai4Tasks;
         const profiles = Array.isArray(ai1Data.catAndNpcProfiles) ? ai1Data.catAndNpcProfiles : [];
         const plannedTocLines = [
           '01. 00-模组已知信息',
@@ -15108,8 +15238,8 @@ ${ai1Data.endingsPlan || ''}
           const pTitle = prof.chapterTitle || `猫-${prof.roleName || ('角色' + (idx + 1))}`;
           plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${pTitle}`);
         });
-        scenesToWrite.forEach((sc, idx) => {
-          const sTitle = sc.sceneTitle || `第${idx + 1}幕`;
+        ai4Tasks.forEach((task, idx) => {
+          const sTitle = task.chapterTitle || `第${idx + 1}章`;
           plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${sTitle}`);
         });
         plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${finalModTitle}-结局`);
@@ -15162,7 +15292,7 @@ ${ai1Data.endingsPlan || ''}
               '【KP信息】',
               `▍角色档案：${prof.roleName || ''}`,
               `\n【公开印象与相处日常】\n${this.cleanModuleChapterOutput(String(prof.publicDesc || ''))}`,
-              `\n【幕后里设定与扮演指南】\n${this.cleanModuleChapterOutput(String(prof.secretProfile || ''))}`
+              `\n【客观里设定与行动逻辑】\n${this.cleanModuleChapterOutput(String(prof.secretProfile || ''))}`
             ].join('\n');
             baseChapters.push({
               title: pTitle,
@@ -15180,55 +15310,59 @@ ${ai1Data.endingsPlan || ''}
 
         const finalChapters = cp.finalChapters;
 
-        const ai4PolishSystem = `你是一位对小说质感、人物动机与跑团带团体验有着极高要求的人类跑团模组主编。
-现在进入【AI4 逐章审视与精修定稿阶段】。你将收到 AI3 撰写的章节初稿，请先在内心审视初稿是否存在以下问题，并直接动手将其精修、润色、扩写为真正媲美人类名作的定稿正文：
-1. 审视调查动机与前文接续：
-   - 初稿的转场是否生硬？一个正常人处在这个场景里，为什么没有直接离开而是选择留下来调查？请补足自然的环境「动静」（声响、光线、气味、反常细节或切身需求），把人物的心境过渡写得丝滑可信。
-2. 审视小说化情感渲染与详略张力：
-   - 初稿是否在应该浓墨重彩渲染情感对手戏或恐怖悬念的地方一笔带过？请把关键场景的环境氛围、光影触感、人物眼神交汇与欲言又止的台词细节充分扩写出来，让带团AI拿到手就能直接演出极具感染力的戏份。
-   - 同时检查详略节奏：删去重复啰嗦的跨章背景复读或空洞套话，让过渡利落、高潮饱满。
-3. 审视可玩性与排版纯净度：
-   - 确保「・当调查员……时 → 角色反应与台词」生动自然，「▼可探索位置」与【检定】结果清晰具体。
-   - 严禁出现多余的星号 * 或场外括号注解，严禁出现双性格差分模板或流程图代码，直接输出精修后的完整模组章节正文。
-${tcPrompt ? '\n4. 叙事与文风参考：\n' + tcPrompt : ''}`;
+        const ai4PolishSystem = `你是一位文风自然扎实、注重实质剧情与可玩性的人类跑团模组作者。
+现在进入【AI4 按拆章方案逐章深度拓写定稿阶段】。
+你将收到 AI3 撰写的批次初稿，以及 AI3 为本章专门分配的拓写任务。请将本章扩写为一篇剧情事件充实、空间探索细节丰富、人物互动自然的完整模组正文章节（单章字数建议充实饱满，达到 2500 至 4500 字以上）：
+1. 必须把实质剧情事件写透：写清楚人物进入本章的具体起因、在场景里看到了什么具体陈设、发生了什么具体变故或事件，绝不要让角色停在原地空洞拉扯聊天。
+2. 把本章所有的可调查点（「▼具体地点或物品名称」）、公开【检定】条件与成功失败所得的具体线索物证全部展开写细。
+3. 把「・当调查员……时 → 角色具体举动与台词」写得像真实人类一样自然生动。
+4. 【KP信息】只平实客观地写本章的事件真相、触发条件与后续指向，绝对禁止在模组任何地方写「这里是剧情高潮，必须把他的偏执绝望写出来」「KP请注意渲染情绪」之类的写作指导或演技说教！`;
 
         let previousSceneTail = cp.previousSceneTail || '';
         const startSceneIdx = typeof cp.completedSceneCount === 'number' ? cp.completedSceneCount : 0;
 
-        for (let sIdx = startSceneIdx; sIdx < scenesToWrite.length; sIdx++) {
-          const sceneItem = scenesToWrite[sIdx];
-          const sTitle = sceneItem.sceneTitle || `第 ${sIdx + 1} 幕`;
-          const roughChap = cp.roughChapters[sIdx] || { content: sceneItem.writingBlueprint || '' };
-          const progressPct = 66 + Math.round(((sIdx + 1) / (scenesToWrite.length + 1)) * 28);
-          this.updateAiWriterStatus(progressPct, `AI4 精修：正在审视并润色扩写第 ${sIdx + 1} / ${scenesToWrite.length} 章《${sTitle}》...`);
+        for (let sIdx = startSceneIdx; sIdx < ai4Tasks.length; sIdx++) {
+          const taskItem = ai4Tasks[sIdx];
+          const sTitle = taskItem.chapterTitle || `第 ${sIdx + 1} 章`;
+          const nextTitle = (sIdx + 1 < ai4Tasks.length)
+            ? (ai4Tasks[sIdx + 1].chapterTitle || `第 ${sIdx + 2} 章`)
+            : `${finalModTitle}-结局`;
+          const progressPct = 62 + Math.round(((sIdx + 1) / (ai4Tasks.length + 1)) * 32);
+          this.updateAiWriterStatus(
+            progressPct,
+            `AI4 拓写（第 ${sIdx + 1} / ${ai4Tasks.length} 次调用）：正在深度扩写《${sTitle}》...`
+          );
           await this.saveAiWriterDraftToIDB();
 
           const ai4SceneUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
-整体叙事基调：${ai1Data.themeMode || ''}
+整体叙事结构：${ai1Data.themeMode || ''}
 核心人物档案：
 ${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
 
-${previousSceneTail ? '上一章精修定稿的结尾回顾（请确保本章开头与之无缝衔接，不重复已发生的事）：\n' + previousSceneTail.slice(-900) + '\n' : '这是开篇第一章，请确保从极具生活气息与正常人合理动机的情境自然切入。\n'}
-当前精修章节：【${sTitle}】（第 ${sIdx + 1} / ${scenesToWrite.length} 章）
-本章设计细纲：
-${sceneItem.writingBlueprint}
+全模组正文章节总目录（共 ${ai4Tasks.length} 章，当前为第 ${sIdx + 1} 章【${sTitle}】，下一章为【${nextTitle}】）：
+${ai4Tasks.map((t, i) => `${i + 1}. ${t.chapterTitle}`).join('\n')}
 
-以下是 AI3 撰写的本章初稿：
-${roughChap.content}
+${previousSceneTail ? '上一章定稿结尾回顾（请紧接此处已经发生的事件往下推进，切勿重复上一章已经探索过的事件）：\n' + previousSceneTail.slice(-900) + '\n' : '这是模组的开篇第一章，请从真实具体的事件起因与场景切入。\n'}
 
-请针对以上 AI3 初稿进行深度审视与精修重写：
-- 修复任何生硬的转场或动机不足之处，补足吸引调查员主动探究的具体环境动静与心理铺垫；
-- 将略写或干瘪的互动与高潮段落充分扩写为细腻动人的小说化【正文】描写与鲜活台词分支；
-- 保留清晰的「▼可探索位置」与公开【检定】，精简【KP信息】使其纯粹实用，直接输出精修后的【${sTitle}】完整定稿正文：`;
+当前 AI4 拓写目标章节：【${sTitle}】
+AI3 分配给本章的专属拓写任务与核心事件：
+${taskItem.expandBlueprint || ''}
+
+参考的本批次 AI3 初稿底本：
+${String(taskItem.sourceBatchDraft || '').slice(0, 6000)}
+
+请将【${sTitle}】深度拓写为完整的定稿章节正文：
+- 充实展开本章的具体事件经过、环境细节、每一个「▼可探索位置」与【检定】物证、以及自然的人物行动与台词分支；
+- 【KP信息】只写客观事实与触发规则，严禁写任何教AI怎么写作或怎么演戏的说教句，直接输出【${sTitle}】完整正文：`;
 
           const sceneTextRaw = await this.callAI(ai4PolishSystem, ai4SceneUser, null, 'writeModule');
           let cleanSceneText = this.cleanModuleChapterOutput(String(sceneTextRaw || ''));
           if (!cleanSceneText) {
-            cleanSceneText = this.cleanModuleChapterOutput(String(roughChap.content || ''));
+            cleanSceneText = this.cleanModuleChapterOutput(String(taskItem.expandBlueprint || ''));
           }
           if (!cleanSceneText) {
-            throw new Error(`AI4 精修第 ${sIdx + 1} 章【${sTitle}】返回内容为空，已保存前序章节，请点击继续接着生成`);
+            throw new Error(`AI4 拓写第 ${sIdx + 1} 章【${sTitle}】返回内容为空，已保存前序章节，请点击继续接着生成`);
           }
           if (!cleanSceneText.includes('【正文】') && !cleanSceneText.includes('【KP信息】')) {
             cleanSceneText = `【正文】\n${cleanSceneText}`;
@@ -15247,19 +15381,19 @@ ${roughChap.content}
           cp.completedSceneCount = sIdx + 1;
           cp.previousSceneTail = previousSceneTail;
           if (previewMetaEl) {
-            previewMetaEl.textContent = `已精修 ${cp.completedSceneCount}/${scenesToWrite.length} 正文章节`;
+            previewMetaEl.textContent = `AI4已拓写 ${cp.completedSceneCount}/${ai4Tasks.length} 正文章节`;
           }
           await this.saveAiWriterDraftToIDB();
         }
 
-        // 精修结局章节
+        // 拓写定稿结局章节
         if (!cp.endingDone) {
-          this.updateAiWriterStatus(96, 'AI4 精修：正在润色扩写多分支结局的情感收束与余韵...');
+          this.updateAiWriterStatus(96, 'AI4 拓写：正在深度扩写多分支结局的具体事件收束...');
           await this.saveAiWriterDraftToIDB();
           const ai4EndingUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
 模组基调：${ai1Data.themeMode || ''}
-上一章精修定稿结尾回顾：
+上一章定稿结尾回顾：
 ${previousSceneTail.slice(-900)}
 结局分支规划：
 ${ai1Data.endingsPlan || ''}
@@ -15267,10 +15401,10 @@ ${ai1Data.endingsPlan || ''}
 以下是 AI3 撰写的结局初稿：
 ${cp.roughEndingText || ''}
 
-请对结局初稿进行深度精修与情感扩写：
-1. 使用【KP信息】清晰列出各结局分支的达成条件（若前面章节使用了隐藏计数，请说明结算后附带 [计数:名称 清除]）。
-2. 使用【正文】将每一个结局分支扩写得像小说终章一样画面感十足、情感真挚动人，写出具体的动作细节、环境光影与角色台词互动，最后附上结团奖励。
-3. 严禁添加多余星号 * 或括号注解，直接输出精修后的【${finalModTitle}-结局】完整定稿：`;
+请对结局初稿进行深度扩写定稿：
+1. 使用【KP信息】客观清晰地列出各结局分支的达成条件（若前面章节使用了隐藏计数，请说明结算后附带 [计数:名称 清除]）。
+2. 使用【正文】把每一个结局分支的具体事件结果、生活画面、动作细节与自然台词完整写出来，最后附上结团奖励。
+3. 严禁写任何教AI怎么演戏的说教词，严禁添加星号 * 或场外括号注解，直接输出【${finalModTitle}-结局】完整定稿：`;
 
           const endingRaw = await this.callAI(ai4PolishSystem, ai4EndingUser, null, 'writeModule');
           let cleanEndingText = this.cleanModuleChapterOutput(String(endingRaw || ''));
@@ -15278,7 +15412,7 @@ ${cp.roughEndingText || ''}
             cleanEndingText = this.cleanModuleChapterOutput(String(cp.roughEndingText || ''));
           }
           if (!cleanEndingText) {
-            throw new Error('结局章节精修返回为空，已保存前面所有章节，请点击继续重试结局撰写');
+            throw new Error('结局章节拓写返回为空，已保存前面所有章节，请点击继续重试结局撰写');
           }
           if (!cleanEndingText.includes('【正文】') && !cleanEndingText.includes('【KP信息】')) {
             cleanEndingText = `【正文】\n${cleanEndingText}`;
@@ -15309,15 +15443,15 @@ ${cp.roughEndingText || ''}
             }
           });
           if (finalMapNodes.length === 0) {
-            scenesToWrite.forEach(sc => {
-              const rawName = String(sc.sceneTitle || '').replace(/^\d+[-_·\s]*/, '').trim();
+            ai4Tasks.forEach(t => {
+              const rawName = String(t.chapterTitle || '').replace(/^\d+[-_·\s]*/, '').trim();
               if (rawName && !seenLocs.has(rawName)) {
                 seenLocs.add(rawName);
                 finalMapNodes.push({
                   name: rawName,
                   parent: '',
                   level: 1,
-                  desc: String(sc.writingBlueprint || '').replace(/\s+/g, ' ').slice(0, 90) || '模组核心事件场景'
+                  desc: String(t.expandBlueprint || '').replace(/\s+/g, ' ').slice(0, 90) || '模组核心事件场景'
                 });
               }
             });
@@ -15352,7 +15486,7 @@ ${cp.roughEndingText || ''}
         if (saveBtn) saveBtn.disabled = false;
         if (resumeBtn) resumeBtn.style.display = 'none';
 
-        this.updateAiWriterStatus(100, `已完成《${finalModTitle}》全部 ${finalChapters.length} 章初稿与精修并存入本地模组库，也可前往手机沙盘查看或生成立体建筑地图`);
+        this.updateAiWriterStatus(100, `已完成《${finalModTitle}》全部 ${finalChapters.length} 章逐级拓写（共 ${totalWords} 字）并存入本地模组库`);
         await this.saveAiWriterDraftToIDB();
       } catch (err) {
         console.error('[AI写模] 流水线异常:', err);
@@ -15785,7 +15919,7 @@ ${cp.roughEndingText || ''}
       this.setStatus('正在读取立体建筑沙盘数据...', '加载中');
 
       const termuxData = await this.loadAtlasFromTermux(this.currentModId);
-      if (termuxData && Array.isArray(termuxData.zones) && termuxData.zones.length > 0) {
+      if (termuxData && Array.isArray(termuxData.zones) && termuxData.zones.length > 0 && Number(termuxData.schemaVer) >= 2) {
         this.currentAtlasData = termuxData;
         this.setStatus('已从本地 Termux 磁盘加载立体建筑沙盘', '本地磁盘');
         this.applyAtlasData(termuxData);
@@ -15796,7 +15930,7 @@ ${cp.roughEndingText || ''}
         const rawLocal = localStorage.getItem('ephone_atlas3d_data_' + this.currentModId);
         if (rawLocal) {
           const parsedLocal = JSON.parse(rawLocal);
-          if (parsedLocal && Array.isArray(parsedLocal.zones) && parsedLocal.zones.length > 0) {
+          if (parsedLocal && Array.isArray(parsedLocal.zones) && parsedLocal.zones.length > 0 && Number(parsedLocal.schemaVer) >= 2) {
             this.currentAtlasData = parsedLocal;
             this.setStatus('已加载定制立体建筑沙盘，点击存盘可卸载至本地磁盘', '已定制');
             this.applyAtlasData(parsedLocal);
@@ -15807,7 +15941,7 @@ ${cp.roughEndingText || ''}
 
       const builtData = await this.buildAtlasFromModuleDB(this.currentModId);
       this.currentAtlasData = builtData;
-      this.setStatus('已参照小地图与模组内容生成初始立体沙盘，点击生成可由AI深度定制', '就绪');
+      this.setStatus('已按小地图与模组内容构建全区互联立体沙盘，点击生成可由AI深度捏模', '就绪');
       this.applyAtlasData(builtData);
     },
 
@@ -15841,6 +15975,7 @@ ${cp.roughEndingText || ''}
         return false;
       }
 
+      this.currentAtlasData.schemaVer = 2;
       const baseUrl = this.getTermuxBaseUrl();
       const safeName = `atlas3d_${String(this.currentModId).replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
       const jsonStr = JSON.stringify(this.currentAtlasData);
@@ -15901,13 +16036,17 @@ ${cp.roughEndingText || ''}
         ...chapters.slice(0, 6).map(c => c.title || '')
       ].join(' ');
 
-      if (/便利店|超市|商店|街角|街道|十字路口|贩卖机|现代都市|马路|车站/.test(corpus)) return 'modern_street';
-      if (/医院|病院|诊所|病房|手术|疗养院|急诊|药房|护士|解剖/.test(corpus)) return 'hospital';
+      if (/游乐园|摩天轮|电车站|街区|便利店|超市|商店|街角|街道|十字路口|现代都市|马路|车站|医院|病院|棋牌|警察/.test(corpus)) {
+        if (/医院|病院|诊所|病房|手术|疗养院|急诊/.test(mod?.name || '')) return 'hospital';
+        return 'modern_street';
+      }
+      if (/水族馆|海洋馆|深海|海底|珊瑚|海豚/.test(corpus)) return 'aquarium_coast';
+      if (/医院|病院|诊所|病房|手术|疗养院|急诊|药房|护士/.test(corpus)) return 'hospital';
       if (/暖炉|猫咪|公寓|单间|卧室|客厅|厨房|被炉|出租屋|居家|室友/.test(corpus)) return 'apartment_cutaway';
       if (/树屋|森林|林间|木屋|精灵|秘境|草地|自然|营地|山林/.test(corpus)) return 'treehouse_forest';
       if (/学校|学院|学园|教室|校舍|操场|教学楼|社团|图书馆/.test(corpus)) return 'school';
       if (/神社|鸟居|温泉|和风|寺院|祠堂|汤屋|古町|祭典/.test(corpus)) return 'shrine';
-      if (/梦境|幻境|童话|星海|泡沫|糖果|云端|深眠/.test(corpus)) return 'dreamland';
+      if (/异世界|浮空|空岛|魔王|勇者|魔法阵|星海|梦境|幻境|童话/.test(corpus)) return 'dreamland';
       return 'campus_manor';
     },
 
@@ -15915,6 +16054,44 @@ ${cp.roughEndingText || ''}
       const s = String(name || '').trim();
       if (!s) return true;
       return /^(现实世界|线上|网络|聊天室|电话|手机|短信|梦醒|结局|尾声|序幕|导入|背景|真相|KP|守密人|玩家|调查员|容器|放置戒指|道具|线索|附录|规则|状态|心理)/.test(s);
+    },
+
+    extractModuleAnimals(corpus) {
+      const text = String(corpus || '');
+      const animals = [];
+      if (/猫|喵|橘猫|黑猫|白猫|小猫/.test(text)) {
+        animals.push({ type: 'cat', x: -12, z: 14 });
+      }
+      if (/兔|白兔|小兔|雪兔/.test(text)) {
+        animals.push({ type: 'bunny', x: 14, z: 16 });
+      }
+      if (/狗|犬|小狗|柴犬/.test(text)) {
+        animals.push({ type: 'puppy', x: -18, z: 18 });
+      }
+      if (/鹿|小鹿|梅花鹿/.test(text)) {
+        animals.push({ type: 'deer', x: 20, z: 12 });
+      }
+      return animals.slice(0, 3);
+    },
+
+    resolveWideZonePosition(name, desc, idx, total) {
+      const text = `${name || ''} ${desc || ''}`;
+      if (/左下|西南|游乐园|主题乐园|摩天轮/.test(text)) return { x: -38, z: 24 };
+      if (/左上|西北|电车站|车站|月台|铁道/.test(text)) return { x: -36, z: -20 };
+      if (/右上|东北|警察|警署|学校|钟楼|高塔/.test(text)) return { x: 36, z: -20 };
+      if (/右下|东南|棋牌|商铺|便利店|海滨|码头|寝宫/.test(text)) return { x: 36, z: 22 };
+      if (/中央|中心|医院|病院|广场|主楼|钟塔/.test(text) && idx === 0) return { x: 0, z: -18 };
+
+      const wideRing = [
+        { x: 0, z: -22 },
+        { x: -38, z: -14 },
+        { x: 38, z: -12 },
+        { x: -36, z: 22 },
+        { x: 36, z: 22 },
+        { x: 0, z: 24 },
+        { x: -18, z: 4 }
+      ];
+      return wideRing[idx % wideRing.length];
     },
 
     async buildAtlasFromModuleDB(modId) {
@@ -15958,22 +16135,29 @@ ${cp.roughEndingText || ''}
         ? locations
         : (Array.isArray(mod.mapNodes) && mod.mapNodes.length > 0 ? mod.mapNodes : []);
 
-      // 过滤掉诸如 现实世界、线上、放置戒指的容器 等非实体空间节点
       const validNodes = rawNodes.filter(n => !this.isMetaNonLocationName(n.name));
 
       const archByWorld = {
-        hospital: ['hospital', 'ward', 'modern_store', 'dome', 'courtyard', 'hall'],
-        modern_street: ['convenience_store', 'modern_store', 'apartment_cutaway', 'ward', 'courtyard', 'hall'],
-        apartment_cutaway: ['apartment_cutaway', 'modern_store', 'courtyard', 'dome', 'pagoda', 'ward'],
-        treehouse_forest: ['treehouse', 'pagoda', 'dome', 'courtyard', 'shrine', 'observatory'],
-        school: ['school', 'clocktower', 'hall', 'dome', 'courtyard', 'ward'],
-        shrine: ['shrine', 'pagoda', 'courtyard', 'treehouse', 'dome', 'hall'],
-        dreamland: ['dome', 'clocktower', 'observatory', 'apartment_cutaway', 'treehouse', 'spire'],
+        hospital: ['hospital', 'ward', 'convenience_store', 'station', 'amusement_park', 'apartment_cutaway'],
+        modern_street: ['convenience_store', 'station', 'amusement_park', 'restaurant', 'chess_parlor', 'police_station', 'apartment_cutaway'],
+        aquarium_coast: ['aquarium', 'restaurant', 'amusement_park', 'dome', 'station', 'observatory'],
+        apartment_cutaway: ['apartment_cutaway', 'convenience_store', 'restaurant', 'station', 'dome', 'ward'],
+        treehouse_forest: ['treehouse', 'shrine', 'floating_island', 'dome', 'pagoda', 'observatory'],
+        school: ['school', 'clocktower', 'hall', 'dome', 'station', 'ward'],
+        shrine: ['shrine', 'pagoda', 'restaurant', 'treehouse', 'dome', 'hall'],
+        dreamland: ['floating_island', 'amusement_park', 'aquarium', 'clocktower', 'observatory', 'spire'],
         campus_manor: ['clocktower', 'dome', 'hall', 'ward', 'mansion', 'spire']
       };
 
       const archCatalog = archByWorld[worldType] || archByWorld.campus_manor;
       const archNameMap = {
+        amusement_park: '全景摩天轮与过山车主题游乐园',
+        aquarium: '弧形海底玻璃隧道与巨型水体海洋馆',
+        restaurant: '暖光招牌露台餐厅与遮阳伞座',
+        station: '城市有轨电车站台与列车轨道',
+        chess_parlor: '街角霓虹招牌棋牌茶室与露台',
+        police_station: '现代警署大楼与警徽门廊',
+        floating_island: '异世界浮空岩岛与魔法晶塔',
         convenience_store: '街角招牌便利店与遮阳雨棚',
         modern_store: '现代街区凹凸立面商铺',
         hospital: '多层综合医疗大楼与急救雨棚',
@@ -15992,25 +16176,16 @@ ${cp.roughEndingText || ''}
         courtyard: '中庭喷泉合院广场'
       };
 
-      const layoutCoords = [
-        { x: -2, z: -20 },
-        { x: -34, z: -6 },
-        { x: 34, z: -6 },
-        { x: -26, z: 22 },
-        { x: 26, z: 22 },
-        { x: 0, z: 26 }
-      ];
-
       let zoneItems = [];
       if (validNodes.length > 0) {
         const topNodes = validNodes.filter(n => !n.parent || Number(n.level) === 1 || this.isMetaNonLocationName(n.parent));
-        const baseList = topNodes.length >= 3 ? topNodes.slice(0, 6) : validNodes.slice(0, 6);
+        const baseList = topNodes.length >= 3 ? topNodes.slice(0, 7) : validNodes.slice(0, 7);
         zoneItems = baseList.map((n, idx) => {
           const name = String(n.name || `区域0${idx + 1}`).trim();
           const children = validNodes.filter(c => c.parent === n.name && c.name !== n.name);
           const matchedClues = clues.filter(cl => String(cl.location || '').includes(name));
           const arch = this.inferArchTypeFromName(name, archCatalog[idx % archCatalog.length], worldType);
-          const pos = layoutCoords[idx % layoutCoords.length];
+          const pos = this.resolveWideZonePosition(name, n.desc, idx, baseList.length);
           const roleObj = roles[idx % Math.max(1, roles.length)];
           return {
             code: String(idx + 1).padStart(2, '0'),
@@ -16018,12 +16193,12 @@ ${cp.roughEndingText || ''}
             fullTitle: name,
             enTitle: `ZONE // ${String(idx + 1).padStart(2, '0')}`,
             archType: arch,
-            archLabel: archNameMap[arch] || '凹凸细节立体建筑',
+            archLabel: archNameMap[arch] || '复合立体地标建筑',
             x: pos.x,
             z: pos.z,
-            width: 19 + (idx % 3) * 2,
-            depth: 17 + ((idx + 1) % 3) * 2,
-            height: 24 + (idx === 0 ? 8 : (idx % 3) * 4),
+            width: 20 + (idx % 3) * 2,
+            depth: 18 + ((idx + 1) % 3) * 2,
+            height: 25 + (idx === 0 ? 7 : (idx % 3) * 4),
             accentTone: idx % 2 === 0 ? 'accent' : 'dark',
             exclusiveRole: roleObj ? roleObj.name : (mod.scaleType === '1v1' ? '调查员与同伴' : '调查员小队'),
             accessCond: matchedClues[0]?.trigger || '自由探索或剧情推进准入',
@@ -16036,12 +16211,12 @@ ${cp.roughEndingText || ''}
           };
         });
       } else {
-        const storyChaps = chapters.filter(c => !/^(00|01|02|猫-|NPC|真相|背景|导入|结局)/i.test(c.title || '') && !this.isMetaNonLocationName(c.title)).slice(0, 6);
-        const sourceList = storyChaps.length > 0 ? storyChaps : chapters.slice(0, 5);
+        const storyChaps = chapters.filter(c => !/^(00|01|02|猫-|NPC|真相|背景|导入|结局)/i.test(c.title || '') && !this.isMetaNonLocationName(c.title)).slice(0, 7);
+        const sourceList = storyChaps.length > 0 ? storyChaps : chapters.slice(0, 6);
         zoneItems = sourceList.map((ch, idx) => {
           const cleanName = String(ch.title || `第${idx + 1}区域`).replace(/^\d+[-_·\s]*/, '').trim();
           const arch = this.inferArchTypeFromName(cleanName, archCatalog[idx % archCatalog.length], worldType);
-          const pos = layoutCoords[idx % layoutCoords.length];
+          const pos = this.resolveWideZonePosition(cleanName, ch.content, idx, sourceList.length);
           const snippet = String(ch.content || '')
             .replace(/【KP信息】[\s\S]*?(?=【正文】|$)/g, '')
             .replace(/【正文】/g, '')
@@ -16060,12 +16235,12 @@ ${cp.roughEndingText || ''}
             fullTitle: cleanName || `核心场景 0${idx + 1}`,
             enTitle: `ZONE // ${String(idx + 1).padStart(2, '0')}`,
             archType: arch,
-            archLabel: archNameMap[arch] || '凹凸细节立体建筑',
+            archLabel: archNameMap[arch] || '复合立体地标建筑',
             x: pos.x,
             z: pos.z,
-            width: 19 + (idx % 3) * 2,
-            depth: 17 + ((idx + 1) % 3) * 2,
-            height: 24 + (idx === 0 ? 8 : (idx % 3) * 4),
+            width: 20 + (idx % 3) * 2,
+            depth: 18 + ((idx + 1) % 3) * 2,
+            height: 25 + (idx === 0 ? 7 : (idx % 3) * 4),
             accentTone: idx % 2 === 0 ? 'accent' : 'dark',
             exclusiveRole: mod.author || '调查员与同伴',
             accessCond: idx === 0 ? '开场初始准入' : '随主线调查解锁',
@@ -16080,11 +16255,19 @@ ${cp.roughEndingText || ''}
         return this.getDefaultDemoData();
       }
 
+      const fullCorpus = [
+        mod.name || '',
+        mod.summary || '',
+        ...zoneItems.map(z => `${z.fullTitle} ${z.desc}`)
+      ].join(' ');
+
       return {
+        schemaVer: 2,
         moduleId: String(mod.id),
         title: mod.name || '未命名模组',
         enSubtitle: `${String(mod.ruleSystem || 'COC').toUpperCase()} // ARCHITECTURAL 3D ATLAS`,
         worldType,
+        animals: this.extractModuleAnimals(fullCorpus),
         tags: (mod.tags && mod.tags.length > 0 ? mod.tags : [mod.bgTag || '模组', mod.type || '沙盘']).slice(0, 4),
         zones: zoneItems
       };
@@ -16092,9 +16275,16 @@ ${cp.roughEndingText || ''}
 
     inferArchTypeFromName(name, fallback, worldType = '') {
       const s = String(name || '');
-      if (/便利店|超市|商店|小卖部|711|全家|罗森|咖啡|面包|书店|街角/.test(s)) return 'convenience_store';
-      if (/医院|病院|急诊|门诊|住院|药房|手术|诊室|护士站|解剖|停尸/.test(s)) return 'hospital';
-      if (/暖炉|被炉|公寓|单间|卧室|客厅|厨房|玄关|阳台|浴室|居所|房间|猫/.test(s)) return 'apartment_cutaway';
+      if (/游乐园|乐园|摩天轮|过山车|旋转木马|游乐场|嘉年华|马戏团/.test(s)) return 'amusement_park';
+      if (/水族馆|海洋馆|海底|海豚|鲸|珊瑚馆|深海馆/.test(s)) return 'aquarium';
+      if (/电车站|车站|火车站|地铁站|站台|月台|铁道|列车|公交站|港口|码头/.test(s)) return 'station';
+      if (/饭店|餐厅|餐馆|酒馆|居酒屋|食堂|料理|咖啡|甜品|茶餐厅|烘焙|酒吧|西餐厅/.test(s)) return 'restaurant';
+      if (/棋牌|麻将|茶室|桌游|活动室|俱乐部|游戏厅|电玩/.test(s)) return 'chess_parlor';
+      if (/警察|警署|派出所|警局|侦探|事务所|治安|保安室|看守所/.test(s)) return 'police_station';
+      if (/异世界|浮空|空岛|魔法阵|魔塔|祭坛|水晶|深渊|星界|浮岛/.test(s)) return 'floating_island';
+      if (/便利店|超市|商店|小卖部|711|全家|罗森|书店|街角|杂货|商场|百货/.test(s)) return 'convenience_store';
+      if (/医院|病院|急诊|门诊|住院|药房|手术|诊室|护士站|解剖|停尸|疗养院|诊所/.test(s)) return 'hospital';
+      if (/暖炉|被炉|公寓|单间|卧室|客厅|厨房|玄关|阳台|浴室|居所|房间|宿舍|家|住宅|民居/.test(s)) return 'apartment_cutaway';
       if (/树屋|树冠|林间|森林|木屋|草坪|花园|温室|花房|林地/.test(s)) {
         return /温室|花房/.test(s) ? 'dome' : 'treehouse';
       }
@@ -16105,21 +16295,28 @@ ${cp.roughEndingText || ''}
       if (/天文|观测|星象/.test(s)) return 'observatory';
       if (/寝宫|别墅|馆|宅|公爵|庄园/.test(s)) return 'mansion';
       if (/中庭|广场|回廊|庭院|喷泉|街道|路口/.test(s)) return 'courtyard';
-      if (worldType === 'hospital') return fallback || 'hospital';
-      if (worldType === 'apartment_cutaway') return fallback || 'apartment_cutaway';
-      if (worldType === 'modern_street') return fallback || 'convenience_store';
-      if (worldType === 'treehouse_forest') return fallback || 'treehouse';
-      if (worldType === 'school') return fallback || 'school';
-      if (worldType === 'shrine') return fallback || 'shrine';
+      if (fallback && fallback !== 'freeform') return fallback;
+      if (worldType === 'hospital') return 'hospital';
+      if (worldType === 'apartment_cutaway') return 'apartment_cutaway';
+      if (worldType === 'modern_street') return 'convenience_store';
+      if (worldType === 'aquarium_coast') return 'aquarium';
+      if (worldType === 'treehouse_forest') return 'treehouse';
+      if (worldType === 'school') return 'school';
+      if (worldType === 'shrine') return 'shrine';
       return fallback || 'spire';
     },
 
     getDefaultDemoData() {
       return {
+        schemaVer: 2,
         moduleId: 'demo_lovelle',
         title: '圣洛薇尔学院',
         enSubtitle: 'ST. LOVELLE // ROYAL CAMPUS 3D ATLAS',
         worldType: 'campus_manor',
+        animals: [
+          { type: 'bunny', x: -16, z: 16 },
+          { type: 'cat', x: 18, z: 14 }
+        ],
         tags: ['王立学院', '秘密建筑图鉴', '立体沙盘'],
         zones: [
           {
@@ -16130,7 +16327,7 @@ ${cp.roughEndingText || ''}
             archType: 'clocktower',
             archLabel: '八棱白瓷哥特钟塔',
             x: 0,
-            z: -20,
+            z: -22,
             width: 19,
             depth: 19,
             height: 36,
@@ -16152,8 +16349,8 @@ ${cp.roughEndingText || ''}
             enTitle: 'ZONE // 02',
             archType: 'dome',
             archLabel: '弧形肋架玻璃花房',
-            x: -34,
-            z: -4,
+            x: -36,
+            z: -8,
             width: 20,
             depth: 20,
             height: 25,
@@ -16175,7 +16372,7 @@ ${cp.roughEndingText || ''}
             archType: 'hall',
             archLabel: '双坡斜顶歌剧院',
             x: 2,
-            z: 18,
+            z: 20,
             width: 22,
             depth: 18,
             height: 26,
@@ -16196,7 +16393,7 @@ ${cp.roughEndingText || ''}
             enTitle: 'ZONE // 04',
             archType: 'ward',
             archLabel: '天窗回廊展馆',
-            x: -26,
+            x: -32,
             z: 24,
             width: 18,
             depth: 16,
@@ -16218,8 +16415,8 @@ ${cp.roughEndingText || ''}
             enTitle: 'ZONE // 05',
             archType: 'spire',
             archLabel: '多尖顶贵族寝殿',
-            x: 34,
-            z: 10,
+            x: 36,
+            z: 14,
             width: 19,
             depth: 19,
             height: 30,
@@ -16310,7 +16507,7 @@ ${cp.roughEndingText || ''}
         genBtn.disabled = true;
         genBtn.style.opacity = '0.65';
       }
-      this.setStatus(`正在由 AI 深度考据《${mod.name}》的世界观、小地图拓扑与建筑凹凸细节...`, '生成中');
+      this.setStatus(`正在由 AI 深度考据《${mod.name}》的小地图方位与万物立体构件...`, '生成中');
 
       try {
         chapters.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
@@ -16323,64 +16520,58 @@ ${cp.roughEndingText || ''}
           ? locations
           : (Array.isArray(mod.mapNodes) ? mod.mapNodes : []);
 
-        const minimapTopology = mapNodes.slice(0, 24).map(l => {
+        const minimapTopology = mapNodes.slice(0, 26).map(l => {
           const parentInfo = l.parent ? `归属上级区域：${l.parent}` : '一级核心主区域';
           return `节点「${l.name}」｜${parentInfo}｜空间描述：${l.desc || '无'}`;
         }).join('\n');
 
-        const clueDigest = clues.slice(0, 20).map(c => `${c.name}@${c.location}：${c.content || ''}`).join('；');
+        const clueDigest = clues.slice(0, 22).map(c => `${c.name}@${c.location}：${c.content || ''}`).join('；');
         const roleDigest = roles.map(r => `${r.name}：${r.publicInfo || ''}`).join('；');
         const inferredWorld = this.inferWorldSetting(mod, mapNodes, chapters);
 
-        const sysPrompt = `你是一位享誉国际的 3D 微缩建筑沙盘艺术总监、半厚涂光影插画师与跑团关卡建筑师。
-你的任务是为当前跑团模组打造一座令人一眼惊艳、幸福感爆棚、完全贴合模组真实世界观与小地图布局的 3D 立体建筑沙盘。
+        const sysPrompt = `你是一位享誉国际的 3D 微缩建筑沙盘主美、半厚涂光影插画师与万能立体建模师。
+你的任务是为当前跑团模组打造一座一眼惊艳、细节丰满、完全贴合模组世界观与小地图方位关系的 3D 立体建筑大沙盘。
 
-【核心设计铁律——严禁敷衍与张冠李戴】
-1. 深度考据世界观，绝不乱套欧式古堡：
-   - 先仔细阅读模组简介、小地图节点与章节正文，准确判断故事发生在什么舞台：
-   - 若是现代医院/疗养院模组，必须构建医院主门诊楼、住院病房翼楼、急救车雨棚通道、药房检验科、中庭花园等医疗建筑，绝对禁止生成毫无关联的欧式古堡或尖塔！
-   - 若是日常公寓/暖炉猫咪/居家模组，必须构建带有室内剖面感的温暖公寓单间、暖炉桌客厅、料理厨房、阳台花房与街角便利店，绝不能把「现实世界」「线上」「放置戒指的容器」这种抽象词当成建筑名字！
-   - 若是现代都市街区模组，必须构建街角便利店、斑马线十字街口、自动贩卖机、路灯、红绿灯、长椅与街边商铺！
-   - 若是森林树屋/秘境模组，必须构建千年巨木树干托起的多层树冠木屋、悬空木栈桥、阳光明媚的草地、花丛与溪流！
-   - 若是学园/神社/庄园/梦境模组，则分别对应学院教学楼与钟塔、朱木神社鸟居与温泉汤屋、古典洋馆庭院或粉蓝梦幻浮岛。
+【核心建模铁律——既要无限创造万物，又要保证每栋建筑完整精致】
+1. 万物皆可捏模 + 复合建筑骨架双保险：
+   - 你不仅可以从 22 种高精复合地标原型中选择最贴合的 archType 作为主建筑底座，还可以为每一座建筑编写 parts 数组，利用通用 3D 几何原语自由拼装世间万物！
+   - 无论模组里出现什么场景，你都能精准还原其标志性立体构造：
+     * 游乐园：使用 archType="amusement_park"，并在 parts 中组合 wheel 摩天轮巨轮与吊舱、arch 过山车起伏拱形轨道、cone 旋转木马彩色尖顶帐篷与 gate 乐园检票拱门！
+     * 水族馆/海洋馆：使用 archType="aquarium"，并在 parts 中组合 glass_tunnel 弧形海底玻璃隧道、cylinder 巨型深海圆柱展缸与流线型波浪屋顶！
+     * 饭店/餐厅/咖啡馆/酒馆：使用 archType="restaurant"，组合凹凸主楼、canopy 条纹遮阳雨棚、window_grid 暖光落地橱窗、招牌灯箱与露天遮阳伞餐桌！
+     * 电车站/列车站：使用 archType="station"，组合候车月台长廊雨棚、train 有轨电车车厢、信号灯与铁轨！
+     * 棋牌室/茶室/俱乐部：使用 archType="chess_parlor"，组合带露台的双层街角楼、发光招牌、外廊栏杆与室内茶桌！
+     * 警察局/侦探所：使用 archType="police_station"，组合主办公楼、警徽门廊、凸出窗框阵列与停车棚！
+     * 异世界/浮空岛/魔法遗迹：使用 archType="floating_island"，组合 inverted_cone 倒锥形浮空岩岛、wheel 悬浮能量光环与 crystal 魔法晶塔！
+     * 现代医院/街角便利店/温暖室内剖面公寓/森林巨木树屋/学院教学楼/重檐神社/哥特钟塔/琉璃温室/歌剧礼堂：分别使用 hospital / convenience_store / apartment_cutaway / treehouse / school / shrine / clocktower / dome / hall，并叠加 parts 专属细节构件！
+     * 如果遇到任何前所未见的新奇建筑，你可以将 archType 设为最接近的基底或 "freeform"，并在 parts 数组中用 6 到 12 个立体构件完整搭出它的主楼体、侧翼楼、屋顶、窗格阵列、门廊雨棚与标志性奇观，绝不允许只放一个光秃秃的方盒子！
 
-2. 严密对齐小地图布局模式：
-   - 当前生成模式为：${sourceMode === 'minimap' ? '【严格参照小地图与模组布局】——你必须以提供的小地图节点拓扑为骨架，过滤掉非实体空间的抽象词，将真正的核心建筑与房间按小地图的方位关系排布在沙盘上，让玩家一眼看出沙盘与小地图一脉相承！' : '【AI自由构思立体沙盘】——请从模组剧情中提炼最具标志性的 5 到 6 个实体空间，设计出最富有戏剧张力与探索动线的立体沙盘布局！'}
+2. 通用 3D 构件原语库说明，供你在每个 zone 的 parts 数组中自由组合：
+   - shape 可选值：
+     * "box"：长方体，可用于主楼、侧翼、招牌、阳台、空调机箱、矮墙、桌台
+     * "gable_house"：自带双坡斜屋顶与立面窗格的完整小楼体
+     * "window_grid"：立面凹凸玻璃排窗阵列，自动在墙面生成多行多列窗框与窗台
+     * "canopy"：带支撑立柱的挑出式入口条纹雨棚或门廊
+     * "cylinder"：圆柱体或水箱、塔身、立柱、烟囱
+     * "dome"：半球穹顶、天文圆顶、温室玻璃顶、树冠球
+     * "cone"：尖顶、帐篷顶、塔尖
+     * "inverted_cone"：倒置浮空岛岩体底座
+     * "wheel"：立式摩天轮巨轮、水车、大钟表盘或悬浮魔法环，自带支架与吊舱
+     * "arch"：拱门、过山车弧形轨道、彩虹拱桥
+     * "glass_tunnel"：半透明弧形海底玻璃长廊隧道
+     * "torii"：迎宾鸟居或乐园大门牌坊
+     * "train"：有轨电车或列车车厢
+   - tone 材质色调可选值："wall"、"roof"、"accent"、"glass"、"emissive"、"wood"、"water"、"foliage"
 
-3. 建筑必须有棱有角、有凹有凸，拒绝单调几何柱体：
-   - 每栋建筑可从以下精细复合建筑原型中选择最契合的 archType：
-     * convenience_store：街角便利店，带挑出式条纹招牌雨棚、内凹落地玻璃门窗、店内货架与门口自动贩卖机
-     * hospital：现代医院大楼，带凸出急救入口雨棚、多层内凹采光排窗、屋顶设备间与医疗十字标识
-     * apartment_cutaway：温暖室内剖面居所，带L型半剖墙体、内部暖炉桌/沙发/厨房吧台、木地板与阳台护栏
-     * treehouse：森林巨木多层树屋，带粗壮分叉树干、高低错落的树冠木平台、斜顶小木屋、悬空围栏与蓬松树冠
-     * school：明窗长廊教学楼，带凸出主门厅、阵列式凹窗、屋顶天台围栏与坡顶钟亭
-     * shrine：重檐飞阁神社与汤屋，带挑檐屋顶、朱木廊柱、门前鸟居与石灯笼
-     * modern_store：现代街区多层商铺与咖啡馆，带凹凸退台、遮阳棚与街边橱窗
-     * clocktower：四面飞扶壁高耸钟塔与星芒尖顶
-     * dome：弧形肋架琉璃穹顶温室花房与侧翼花廊
-     * hall：双坡斜顶歌剧礼堂与柱廊门厅
-     * ward：天窗回廊式复合展馆或病房翼楼
-     * mansion：三段式对称庄园主宅与露台
-     * pagoda：三层重檐楼阁与游廊
-     * observatory：星象观测旋转圆顶台与露台
-     * courtyard：中庭喷泉合院广场
-     * spire：多尖顶城堡塔楼群
-   - 除此之外，你还可以在每个 zone 的 customParts 数组中额外拼装最多 4 个自定义凹凸构件，用来表现该建筑独一无二的标志物！
+3. 广阔分区大地图与真实方位连接：
+   - 当前生成模式为：${sourceMode === 'minimap' ? '【严格按小地图方位布局】——仔细阅读小地图节点与方位描述，例如左下角的游乐园必须放在左下角 x 负方向与 z 正方向，电车站、医院、公寓、棋牌室、警察局各自坐落在对应方位，绝不挤成一团！' : '【AI自由构思全景沙盘】——提炼模组最具代表性的 5 到 7 个实体地点，在广阔大地图上错落有致地分布，并通过街道、石板路或栈桥全部连接起来！'}
+   - 坐标范围：x 取值范围为 -46 到 46，z 取值范围为 -32 到 32。左下角对应 x 约 -38、z 约 24；左上角对应 x 约 -38、z 约 -22；右上角对应 x 约 38、z 约 -22；右下角对应 x 约 38、z 约 24；中心偏北对应 x 约 0、z 约 -18。
 
-4. 打破单一棋盘格限制——多地块高低差底座：
-   - 请在 terraces 数组中设计 2 到 4 块不同功能与材质的地面地块，例如：
-     * lawn：阳光明媚的半厚涂青翠草地
-     * street：带浅灰人行道与纯白斑马线的现代柏油街道
-     * wood_deck：温暖的室内木地板或森林木栈道平台
-     * water_pool：清澈的温泉池、景观水池或溪流
-     * marble_plaza：优雅的浅色石材庭院广场
+4. 动物生成准则——按需生成，绝不强塞：
+   - 只有当模组剧情或场景中确实适合出现小动物时，才在 animals 数组中放入 1 到 3 只动物，可选 type 为 "cat"、"bunny"、"puppy"、"deer"。如果模组是严肃悬疑或室内密室且没有动物，animals 请输出空数组 []！
 
-5. 鲜活的世界景观道具与不穿模的可爱小动物：
-   - 在 props 数组中布置 6 到 12 个贴合场景的立体小景物：tree、pine_tree、flower_bed、street_lamp、traffic_light、vending_machine、signboard、bench、fountain、hot_spring、sculpture、torii、zebra_crossing。
-   - 在 animals 数组中布置 2 到 4 只可爱圆润的立体小动物：bunny、cat、bird、koi，它们会在草地或人行道上散步跳跃，绝不穿进建筑内部。
-
-6. 半厚涂明媚配色方案：
-   - 请在 palette 对象中为模组定制一套如半厚涂插画师般明媚通透、遵循 60-30-10 色彩比例的低饱和高级配色，严禁使用纯黑或刺眼高饱和荧光色。`;
+5. 阳光明媚的半厚涂真实世界配色：
+   - 请在 palette 中设计一套明媚通透、金阳暖光与冷紫蓝背光对比鲜明的半厚涂插画配色，草地要青翠明媚，建筑受光面温暖柔和，严禁纯黑与刺眼荧光色。`;
 
         const userPrompt = `模组名称：《${mod.name}》
 规则与类型：${mod.ruleSystem || 'coc'} / ${mod.type || ''} / ${mod.scaleType || ''}
@@ -16397,42 +16588,42 @@ ${chapDigest}
 {
   "title": "${mod.name}",
   "enSubtitle": "贴合模组主题的英文副标题",
-  "worldType": "从 hospital/modern_street/apartment_cutaway/treehouse_forest/school/shrine/dreamland/campus_manor 中选最贴合的一项",
+  "worldType": "从 modern_street/hospital/aquarium_coast/apartment_cutaway/treehouse_forest/school/shrine/dreamland/campus_manor 中选最贴合的一项",
   "tags": ["核心场景标签1", "标签2", "标签3"],
   "palette": {
-    "skyTop": "#eef6ff",
-    "skyBottom": "#fff9f5",
-    "groundMain": "#8fd18a",
-    "groundSub": "#e8eef2",
+    "skyTop": "#dff0ff",
+    "skyBottom": "#fff7e8",
+    "groundMain": "#7ec876",
+    "groundSub": "#ebeef2",
     "wallMain": "#fdfbf7",
-    "roofMain": "#4a5568",
-    "accent": "#f28b82",
-    "glass": "#63b3ed",
-    "foliage": "#68b678"
+    "roofMain": "#3e4c5e",
+    "accent": "#f08264",
+    "glass": "#5da9e9",
+    "foliage": "#5bb56a"
   },
   "terraces": [
-    { "type": "lawn 或 street 或 wood_deck 或 water_pool 或 marble_plaza", "x": 0, "z": 0, "w": 96, "d": 76, "h": 2.4 }
+    { "type": "lawn 或 street 或 wood_deck 或 water_pool 或 marble_plaza", "x": 0, "z": 0, "w": 116, "d": 88, "h": 1.2 }
   ],
   "zones": [
     {
       "code": "01",
-      "name": "4到6字真实地点名称",
+      "name": "2到6字真实地点名称",
       "fullTitle": "完整建筑或空间名称",
       "enTitle": "ZONE // 01",
-      "archType": "从 convenience_store/hospital/apartment_cutaway/treehouse/school/shrine/modern_store/clocktower/dome/hall/ward/mansion/pagoda/observatory/courtyard/spire 中选一",
-      "archLabel": "富有画面感的建筑凹凸结构描述",
-      "x": 0,
-      "z": -18,
+      "archType": "从 amusement_park/aquarium/restaurant/station/chess_parlor/police_station/floating_island/convenience_store/hospital/apartment_cutaway/treehouse/school/shrine/modern_store/clocktower/dome/hall/ward/mansion/pagoda/observatory/courtyard/spire/freeform 中选最契合的一项",
+      "archLabel": "富有画面感的建筑凹凸结构与地标特征描述",
+      "x": -38,
+      "z": 24,
       "width": 20,
       "depth": 18,
-      "height": 26,
+      "height": 28,
       "accentTone": "accent 或 dark",
       "exclusiveRole": "驻留此处的角色或关联人物",
       "accessCond": "进入或解锁该区域的条件",
       "rating": 5,
       "desc": "100字左右细腻描绘该建筑的外观凹凸细节、内部陈设与模组剧情氛围",
-      "customParts": [
-        { "shape": "box 或 awning 或 sign 或 roof_box", "dx": 0, "dy": 6, "dz": 9, "w": 8, "h": 2, "d": 3, "tone": "accent 或 roof 或 glass 或 wall" }
+      "parts": [
+        { "shape": "wheel 或 arch 或 glass_tunnel 或 canopy 或 gable_house 或 window_grid 或 cylinder 或 dome 或 cone 或 box 或 train 或 torii", "dx": 0, "dy": 8, "dz": 4, "w": 10, "h": 10, "d": 4, "tone": "accent 或 roof 或 glass 或 wall 或 emissive 或 wood 或 water 或 foliage" }
       ],
       "subSpots": [
         { "name": "建筑内具体可调查位置或关键道具", "info": "调查此处可发现的细节或线索" }
@@ -16440,10 +16631,10 @@ ${chapDigest}
     }
   ],
   "props": [
-    { "type": "tree 或 flower_bed 或 street_lamp 或 traffic_light 或 vending_machine 或 signboard 或 bench 或 fountain 或 hot_spring 或 sculpture 或 torii 或 zebra_crossing", "x": -22, "z": 12 }
+    { "type": "tree 或 pine_tree 或 flower_bed 或 street_lamp 或 traffic_light 或 vending_machine 或 signboard 或 bench 或 fountain 或 hot_spring 或 sculpture 或 torii", "x": -22, "z": 12 }
   ],
   "animals": [
-    { "type": "bunny 或 cat 或 bird 或 koi", "x": -12, "z": 16 }
+    { "type": "cat 或 bunny 或 puppy 或 deer", "x": -12, "z": 16 }
   ]
 }`;
 
@@ -16455,35 +16646,40 @@ ${chapDigest}
 
         const worldType = parsed.worldType || inferredWorld;
         const normalized = {
+          schemaVer: 2,
           moduleId: String(this.currentModId),
           title: parsed.title || mod.name || '未命名模组',
           enSubtitle: parsed.enSubtitle || `${String(mod.ruleSystem || 'COC').toUpperCase()} // ARCHITECTURAL 3D ATLAS`,
           worldType,
           palette: parsed.palette && typeof parsed.palette === 'object' ? parsed.palette : null,
-          terraces: Array.isArray(parsed.terraces) ? parsed.terraces.slice(0, 5) : null,
-          props: Array.isArray(parsed.props) ? parsed.props.slice(0, 14) : null,
-          animals: Array.isArray(parsed.animals) ? parsed.animals.slice(0, 5) : null,
+          terraces: Array.isArray(parsed.terraces) ? parsed.terraces.slice(0, 6) : null,
+          props: Array.isArray(parsed.props) ? parsed.props.slice(0, 16) : null,
+          animals: Array.isArray(parsed.animals) ? parsed.animals.slice(0, 4) : [],
           tags: Array.isArray(parsed.tags) && parsed.tags.length > 0 ? parsed.tags.slice(0, 4) : ['立体沙盘', '核心建筑群'],
-          zones: parsed.zones.slice(0, 7).map((z, idx) => ({
-            code: String(idx + 1).padStart(2, '0'),
-            name: String(z.name || `区域0${idx + 1}`).slice(0, 8),
-            fullTitle: String(z.fullTitle || z.name || `建筑区域 0${idx + 1}`),
-            enTitle: String(z.enTitle || `ZONE // ${String(idx + 1).padStart(2, '0')}`),
-            archType: this.inferArchTypeFromName(z.name, z.archType || 'modern_store', worldType),
-            archLabel: String(z.archLabel || '凹凸细节立体建筑'),
-            x: Math.max(-40, Math.min(40, Number(z.x) || 0)),
-            z: Math.max(-28, Math.min(28, Number(z.z) || 0)),
-            width: Math.max(16, Math.min(24, Number(z.width) || 19)),
-            depth: Math.max(16, Math.min(24, Number(z.depth) || 18)),
-            height: Math.max(20, Math.min(36, Number(z.height) || 26)),
-            accentTone: z.accentTone === 'dark' ? 'dark' : 'accent',
-            exclusiveRole: String(z.exclusiveRole || '调查员与同伴'),
-            accessCond: String(z.accessCond || '自由调查'),
-            rating: Math.max(3, Math.min(5, Number(z.rating) || 5)),
-            desc: String(z.desc || ''),
-            customParts: Array.isArray(z.customParts) ? z.customParts.slice(0, 5) : [],
-            subSpots: Array.isArray(z.subSpots) ? z.subSpots.slice(0, 6) : []
-          }))
+          zones: parsed.zones.slice(0, 8).map((z, idx) => {
+            const rawParts = Array.isArray(z.parts) ? z.parts : (Array.isArray(z.customParts) ? z.customParts : []);
+            const fallbackPos = this.resolveWideZonePosition(z.name, z.desc, idx, parsed.zones.length);
+            return {
+              code: String(idx + 1).padStart(2, '0'),
+              name: String(z.name || `区域0${idx + 1}`).slice(0, 8),
+              fullTitle: String(z.fullTitle || z.name || `建筑区域 0${idx + 1}`),
+              enTitle: String(z.enTitle || `ZONE // ${String(idx + 1).padStart(2, '0')}`),
+              archType: this.inferArchTypeFromName(z.name, z.archType || 'modern_store', worldType),
+              archLabel: String(z.archLabel || '复合立体地标建筑'),
+              x: Math.max(-46, Math.min(46, Number(z.x) || fallbackPos.x)),
+              z: Math.max(-32, Math.min(32, Number(z.z) || fallbackPos.z)),
+              width: Math.max(16, Math.min(25, Number(z.width) || 20)),
+              depth: Math.max(16, Math.min(25, Number(z.depth) || 18)),
+              height: Math.max(20, Math.min(38, Number(z.height) || 27)),
+              accentTone: z.accentTone === 'dark' ? 'dark' : 'accent',
+              exclusiveRole: String(z.exclusiveRole || '调查员与同伴'),
+              accessCond: String(z.accessCond || '自由调查'),
+              rating: Math.max(3, Math.min(5, Number(z.rating) || 5)),
+              desc: String(z.desc || ''),
+              parts: rawParts.slice(0, 12),
+              subSpots: Array.isArray(z.subSpots) ? z.subSpots.slice(0, 6) : []
+            };
+          })
         };
 
         this.currentAtlasData = normalized;
@@ -16494,7 +16690,7 @@ ${chapDigest}
           try {
             localStorage.setItem('ephone_atlas3d_data_' + this.currentModId, JSON.stringify(normalized));
           } catch (_) {}
-          this.setStatus('AI 立体沙盘定制完成，可随时切换系统默认配色或模组专属配色', '已定制');
+          this.setStatus('AI 立体沙盘定制完成，可随时切换系统默认或模组配色', '已定制');
         }
       } catch (err) {
         console.error('[沙盘] AI生成失败:', err);
@@ -16541,7 +16737,6 @@ ${chapDigest}
       const worldType = data.worldType || 'campus_manor';
 
       if (mode !== 'module') {
-        // 系统默认配色：直接读取用户当前 CSS 美化的 --accent-color，搭配纯净白瓷与柔和炭黑，保持与系统完全一致
         let sysAccent = '#f08cae';
         try {
           const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim();
@@ -16568,11 +16763,14 @@ ${chapDigest}
           roofMain: dark,
           glass: this.mixHex(sysAccent, '#3a4a5e', 0.55),
           glassDeep: '#262e38',
+          emissive: '#fff3b0',
           foliage: this.mixHex(sysAccent, '#7ec89b', 0.42),
           foliageLight: this.mixHex(sysAccent, '#a8e0b8', 0.35),
           wood: this.mixHex(sysAccent, '#8c6d58', 0.65),
           lawnA: '#fbf9fa',
           lawnB: this.mixHex(plaza, dark, 0.06),
+          horizonLand: this.mixHex(plaza, '#ffffff', 0.35),
+          horizonFar: this.mixHex(sysAccent, '#ffffff', 0.82),
           streetAsphalt: this.mixHex(dark, '#ffffff', 0.22),
           sidewalk: '#f2eff4',
           water: this.mixHex(sysAccent, '#bfe8f5', 0.45),
@@ -16584,55 +16782,60 @@ ${chapDigest}
         };
       }
 
-      // 模组专属配色：半厚涂插画师明媚光影色彩体系
       const worldPresets = {
         hospital: {
-          skyTop: '#e8f4fc', skyBottom: '#fdfbf7',
-          groundMain: '#8ed08b', groundSub: '#e6eef4',
-          wallMain: '#fbfcfe', roofMain: '#425669',
-          accent: '#56b4c2', glass: '#5c9ec9', foliage: '#6dc27c', wood: '#b89472'
+          skyTop: '#d8eeff', skyBottom: '#fff8eb',
+          groundMain: '#78c874', groundSub: '#e8eef5',
+          wallMain: '#fffdf9', roofMain: '#3d5266',
+          accent: '#4db6ac', glass: '#5299d3', foliage: '#5ebd6c', wood: '#b58d67'
         },
         modern_street: {
-          skyTop: '#e6f2ff', skyBottom: '#fff8ef',
-          groundMain: '#89ce84', groundSub: '#dce3ea',
-          wallMain: '#fcfaf5', roofMain: '#384252',
-          accent: '#f08a4b', glass: '#4c7ea8', foliage: '#5fb86f', wood: '#9c7350'
+          skyTop: '#d6ecff', skyBottom: '#fff5e4',
+          groundMain: '#76c672', groundSub: '#e2e8f0',
+          wallMain: '#fffdf8', roofMain: '#374354',
+          accent: '#f2785c', glass: '#4b89c2', foliage: '#55b867', wood: '#9e7350'
+        },
+        aquarium_coast: {
+          skyTop: '#ccf0ff', skyBottom: '#fff9eb',
+          groundMain: '#7ad184', groundSub: '#e3f4fc',
+          wallMain: '#ffffff', roofMain: '#2b5876',
+          accent: '#38b6ff', glass: '#4fc3f7', foliage: '#5cc47d', wood: '#a88365'
         },
         apartment_cutaway: {
-          skyTop: '#fff3e6', skyBottom: '#fefaf4',
-          groundMain: '#95d48c', groundSub: '#ebd9c5',
-          wallMain: '#fff9f0', roofMain: '#634b41',
-          accent: '#e87a64', glass: '#7ab3d6', foliage: '#72c278', wood: '#c48f65'
+          skyTop: '#ffeede', skyBottom: '#fffdf7',
+          groundMain: '#84cc7a', groundSub: '#efe0cf',
+          wallMain: '#fffaf2', roofMain: '#5e473e',
+          accent: '#ea735d', glass: '#6baed6', foliage: '#65be70', wood: '#c48b5c'
         },
         treehouse_forest: {
-          skyTop: '#e4f7f2', skyBottom: '#f9fbe7',
-          groundMain: '#7ecb78', groundSub: '#dcedc8',
-          wallMain: '#f9f3e8', roofMain: '#527853',
-          accent: '#f29f67', glass: '#76c7c0', foliage: '#5cb868', wood: '#8d6346'
+          skyTop: '#d9f7ee', skyBottom: '#fffae8'.replace('', '#'),
+          groundMain: '#6ec468', groundSub: '#e2f0cb',
+          wallMain: '#fbf5ea', roofMain: '#466d48',
+          accent: '#f2945c', glass: '#68c4bc', foliage: '#4eb35e', wood: '#8c5e3c'
         },
         school: {
-          skyTop: '#e8f1ff', skyBottom: '#fff7f2',
-          groundMain: '#88cf85', groundSub: '#ebeff5',
-          wallMain: '#fdfbf7', roofMain: '#414c66',
-          accent: '#e87a90', glass: '#68a2d4', foliage: '#68be76', wood: '#a67b5b'
+          skyTop: '#dcebff', skyBottom: '#fff5ee',
+          groundMain: '#79c876', groundSub: '#ebeef5',
+          wallMain: '#fffdf9', roofMain: '#3e4a63',
+          accent: '#ec748b', glass: '#5c9bd6', foliage: '#5cbc6d', wood: '#a67958'
         },
         shrine: {
-          skyTop: '#fcefe8', skyBottom: '#fff9f2',
-          groundMain: '#85c77e', groundSub: '#efe6dc',
-          wallMain: '#fcf7f0', roofMain: '#363945',
-          accent: '#d95b4f', glass: '#72b5c4', foliage: '#66b572', wood: '#9e5444'
+          skyTop: '#fde9df', skyBottom: '#fff9f0',
+          groundMain: '#78bf72', groundSub: '#f0e6dc',
+          wallMain: '#fdf8f2', roofMain: '#343846',
+          accent: '#dc5648', glass: '#6ab0c2', foliage: '#5ab068', wood: '#9c5140'
         },
         dreamland: {
-          skyTop: '#e8f0ff', skyBottom: '#ffeef6',
-          groundMain: '#9fe0b8', groundSub: '#f2e8ff',
-          wallMain: '#ffffff', roofMain: '#5b5680',
-          accent: '#f28eb8', glass: '#82c4f8', foliage: '#7cd9b0', wood: '#b898c8'
+          skyTop: '#dfeaff', skyBottom: '#ffedf5'.replace('', '#'),
+          groundMain: '#88d8a4', groundSub: '#f2e8ff',
+          wallMain: '#ffffff', roofMain: '#544e7a',
+          accent: '#f282b4', glass: '#76bef8', foliage: '#68d1a2', wood: '#b491c4'
         },
         campus_manor: {
-          skyTop: '#edf3ff', skyBottom: '#fff4f7',
-          groundMain: '#8bd18a', groundSub: '#f3edf2',
-          wallMain: '#fdfbfc', roofMain: '#353140',
-          accent: '#eb82a4', glass: '#6fa8dc', foliage: '#68c27a', wood: '#9c7864'
+          skyTop: '#e3eeff', skyBottom: '#fff3f6',
+          groundMain: '#7ac878', groundSub: '#f2ecf2',
+          wallMain: '#fffdfd', roofMain: '#363242',
+          accent: '#eb7ba0', glass: '#64a2dc', foliage: '#5cbc70', wood: '#9e7762'
         }
       };
 
@@ -16650,30 +16853,33 @@ ${chapDigest}
       return {
         mode: 'module',
         accent,
-        accentSoft: this.mixHex(accent, '#ffffff', 0.22),
+        accentSoft: this.mixHex(accent, '#fff8eb', 0.24),
         accentLight: this.mixHex(accent, '#ffffff', 0.72),
         accentGlow: aiP.skyBottom || baseP.skyBottom,
         accentDeep: this.mixHex(accent, roofMain, 0.32),
         wallPure: wallMain,
         wallMain,
-        wallSide: this.mixHex(wallMain, groundSub, 0.38),
-        wallShadow: this.mixHex(groundSub, roofMain, 0.14),
+        wallSide: this.mixHex(wallMain, groundSub, 0.36),
+        wallShadow: this.mixHex(groundSub, roofMain, 0.16),
         obsidian: roofMain,
         obsidianSoft: this.mixHex(roofMain, '#ffffff', 0.18),
         roofMain,
         glass,
-        glassDeep: this.mixHex(glass, '#1e293b', 0.52),
+        glassDeep: this.mixHex(glass, '#1e293b', 0.48),
+        emissive: '#ffefa8',
         foliage,
-        foliageLight: this.mixHex(foliage, '#fff9c4', 0.32),
+        foliageLight: this.mixHex(foliage, '#fff59d', 0.36),
         wood: baseP.wood,
         lawnA: groundMain,
-        lawnB: this.mixHex(groundMain, '#fff9c4', 0.20),
-        streetAsphalt: '#424954',
-        sidewalk: '#e9edf2',
-        water: '#78d1e8',
-        plazaA: this.mixHex(groundSub, '#ffffff', 0.45),
+        lawnB: this.mixHex(groundMain, '#fff59d', 0.26),
+        horizonLand: this.mixHex(groundMain, '#e8f5e9', 0.42),
+        horizonFar: this.mixHex(groundMain, aiP.skyBottom || baseP.skyBottom, 0.68),
+        streetAsphalt: '#454d59',
+        sidewalk: '#edf0f5',
+        water: '#64d2ed',
+        plazaA: this.mixHex(groundSub, '#fffdf9', 0.48),
         plazaB: groundSub,
-        plazaSide: this.mixHex(groundSub, roofMain, 0.18),
+        plazaSide: this.mixHex(groundSub, roofMain, 0.20),
         skyTop: aiP.skyTop || baseP.skyTop,
         skyBottom: aiP.skyBottom || baseP.skyBottom
       };
@@ -16712,25 +16918,28 @@ ${chapDigest}
       return this.parseHex(colorStr);
     },
 
-    // 半厚涂明媚光影着色：受光面向暖阳奶油白提亮，背光面向通透冷灰紫过渡，绝不死黑
     shadeColor(colorStr, factor) {
       let [r, g, b] = this.toRgbTuple(colorStr);
       if (factor > 1) {
-        const t = Math.min(0.48, factor - 1);
+        const t = Math.min(0.52, factor - 1);
         r = Math.round(r + (255 - r) * t);
-        g = Math.round(g + (252 - g) * t);
-        b = Math.round(b + (244 - b) * t);
+        g = Math.round(g + (248 - g) * t);
+        b = Math.round(b + (226 - b) * t);
       } else {
-        const shadowT = Math.max(0, Math.min(0.45, 1 - factor));
-        r = Math.max(24, Math.min(255, Math.round(r * (1 - shadowT * 0.85) + 42 * shadowT * 0.15)));
-        g = Math.max(26, Math.min(255, Math.round(g * (1 - shadowT * 0.82) + 48 * shadowT * 0.18)));
-        b = Math.max(32, Math.min(255, Math.round(b * (1 - shadowT * 0.72) + 72 * shadowT * 0.28)));
+        const shadowT = Math.max(0, Math.min(0.48, 1 - factor));
+        r = Math.max(24, Math.min(255, Math.round(r * (1 - shadowT * 0.86) + 46 * shadowT * 0.14)));
+        g = Math.max(28, Math.min(255, Math.round(g * (1 - shadowT * 0.82) + 56 * shadowT * 0.18)));
+        b = Math.max(36, Math.min(255, Math.round(b * (1 - shadowT * 0.70) + 88 * shadowT * 0.30)));
       }
       return `rgb(${r}, ${g}, ${b})`;
     },
 
-    createConvexSolid(rawFaces, solidCenter, isBaseLayer = false, zoneIdx = -1) {
+    createConvexSolid(rawFaces, solidCenter, isBaseLayer = false, zoneIdx = -1, forceNoCull = false, pushToSolids = true) {
+      const center = (solidCenter && typeof solidCenter === 'object')
+        ? solidCenter
+        : { x: 0, y: 0, z: 0 };
       const preparedFaces = [];
+      const disableCull = Boolean(isBaseLayer || forceNoCull);
       for (let i = 0; i < rawFaces.length; i++) {
         const rf = rawFaces[i];
         const verts = rf.verts;
@@ -16761,9 +16970,9 @@ ${chapDigest}
         ny /= len;
         nz /= len;
 
-        const outX = fcx - solidCenter.x;
-        const outY = fcy - solidCenter.y;
-        const outZ = fcz - solidCenter.z;
+        const outX = fcx - center.x;
+        const outY = fcy - center.y;
+        const outZ = fcz - center.z;
         if (nx * outX + ny * outY + nz * outZ < 0) {
           nx = -nx;
           ny = -ny;
@@ -16778,26 +16987,32 @@ ${chapDigest}
           nx,
           ny,
           nz,
-          baseColor: rf.color,
+          baseColor: rf.color || rf.baseColor || '#ffffff',
           trimStroke: rf.trimStroke || null,
-          cullBack: rf.cullBack !== false
+          cullBack: disableCull ? false : (rf.cullBack !== false)
         });
       }
 
-      this.solids.push({
-        cx: solidCenter.x,
-        cy: solidCenter.y,
-        cz: solidCenter.z,
+      const solidObj = {
+        cx: center.x,
+        cy: center.y,
+        cz: center.z,
         isBaseLayer,
         zoneIdx,
         faces: preparedFaces
-      });
+      };
+      if (pushToSolids) {
+        this.solids.push(solidObj);
+      }
+      return solidObj;
     },
 
-    addBoxSolid(cx, cy, cz, w, h, d, color, trimStroke = null, zoneIdx = -1, isBaseLayer = false) {
+    addBoxSolid(cx, cy, cz, w, h, d, color, trimStroke = null, zoneIdx = -1, isBaseLayer = false, noCull = false) {
       const hw = w * 0.5;
       const hh = h * 0.5;
       const hd = d * 0.5;
+      const isThin = Math.min(w, h, d) <= 1.25;
+      const forceNoCull = Boolean(isBaseLayer || noCull || isThin);
       const v = [
         { x: cx - hw, y: cy - hh, z: cz - hd },
         { x: cx + hw, y: cy - hh, z: cz - hd },
@@ -16809,13 +17024,13 @@ ${chapDigest}
         { x: cx - hw, y: cy + hh, z: cz + hd }
       ];
       const rawFaces = [
-        { verts: [v[3], v[2], v[6], v[7]], color, trimStroke },
-        { verts: [v[4], v[5], v[6], v[7]], color },
-        { verts: [v[1], v[0], v[3], v[2]], color },
-        { verts: [v[0], v[4], v[7], v[3]], color },
-        { verts: [v[5], v[1], v[2], v[6]], color }
+        { verts: [v[3], v[2], v[6], v[7]], color, trimStroke, cullBack: !forceNoCull },
+        { verts: [v[4], v[5], v[6], v[7]], color, cullBack: !forceNoCull },
+        { verts: [v[1], v[0], v[3], v[2]], color, cullBack: !forceNoCull },
+        { verts: [v[0], v[4], v[7], v[3]], color, cullBack: !forceNoCull },
+        { verts: [v[5], v[1], v[2], v[6]], color, cullBack: !forceNoCull }
       ];
-      this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, isBaseLayer, zoneIdx);
+      this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, isBaseLayer, zoneIdx, forceNoCull);
     },
 
     addBevelCapSolid(cx, baseY, cz, w, h, d, capColor, trimColor, zoneIdx = -1) {
@@ -16850,7 +17065,7 @@ ${chapDigest}
     },
 
     addPyramidSolid(cx, baseY, cz, radius, height, sides, color, trimStroke = null, zoneIdx = -1) {
-      const smoothSides = Math.max(sides, 14);
+      const smoothSides = Math.max(sides, 12);
       const apex = { x: cx, y: baseY + height, z: cz };
       const ring = [];
       for (let i = 0; i < smoothSides; i++) {
@@ -16871,6 +17086,38 @@ ${chapDigest}
         });
       }
       this.createConvexSolid(rawFaces, { x: cx, y: baseY + height * 0.32, z: cz }, false, zoneIdx);
+    },
+
+    addInvertedConeSolid(cx, baseY, cz, topRadius, height, sides, color, trimStroke = null, zoneIdx = -1) {
+      const smoothSides = Math.max(sides, 10);
+      const apex = { x: cx, y: baseY, z: cz };
+      const topY = baseY + height;
+      const ring = [];
+      for (let i = 0; i < smoothSides; i++) {
+        const ang = (i / smoothSides) * Math.PI * 2;
+        ring.push({
+          x: cx + Math.cos(ang) * topRadius,
+          y: topY,
+          z: cz + Math.sin(ang) * topRadius
+        });
+      }
+      const rawFaces = [];
+      for (let i = 0; i < smoothSides; i++) {
+        const p1 = ring[i];
+        const p2 = ring[(i + 1) % smoothSides];
+        rawFaces.push({
+          verts: [p2, p1, apex],
+          color: this.shadeColor(color, 0.88 + (i % 2) * 0.06),
+          cullBack: false
+        });
+      }
+      rawFaces.push({
+        verts: ring,
+        color: this.shadeColor(color, 1.06),
+        trimStroke,
+        cullBack: false
+      });
+      this.createConvexSolid(rawFaces, { x: cx, y: baseY + height * 0.65, z: cz }, false, zoneIdx, true);
     },
 
     addDomeSolid(cx, baseY, cz, radius, height, sides, color, ribColor = null, zoneIdx = -1) {
@@ -16931,12 +17178,12 @@ ${chapDigest}
       const rr = { x: cx + hw, y: baseY + h, z: cz };
 
       const rawFaces = [
-        { verts: [fl, fr, rr, rl], color },
-        { verts: [br, bl, rl, rr], color },
-        { verts: [bl, fl, rl], color },
-        { verts: [fr, br, rr], color }
+        { verts: [fl, fr, rr, rl], color, cullBack: false },
+        { verts: [br, bl, rl, rr], color, cullBack: false },
+        { verts: [bl, fl, rl], color, cullBack: false },
+        { verts: [fr, br, rr], color, cullBack: false }
       ];
-      this.createConvexSolid(rawFaces, { x: cx, y: baseY + h * 0.35, z: cz }, false, zoneIdx);
+      this.createConvexSolid(rawFaces, { x: cx, y: baseY + h * 0.35, z: cz }, false, zoneIdx, true);
     },
 
     addDiamondSolid(cx, cy, cz, radius, height, color, trimStroke = null, zoneIdx = -1) {
@@ -16960,12 +17207,157 @@ ${chapDigest}
       this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, false, zoneIdx);
     },
 
-    // 定向阳光地面斜投影生成：让每座建筑与树木在地面投下真实的明媚斜影
+    // 立式摩天轮/大转轮/悬浮光环原语构建器：含A字支撑塔架、中心轴、外圈轮缘与彩色悬挂座舱
+    addWheelSolid(cx, centerY, cz, radius, rimColor, cabinColor, supportColor, zoneIdx = -1, baseY = 2.0) {
+      const segments = 12;
+      if (supportColor) {
+        const legH = Math.max(4, centerY - baseY);
+        this.addBoxSolid(cx - radius * 0.28, baseY + legH * 0.5, cz - 0.8, 0.9, legH, 0.9, supportColor, null, zoneIdx, false, true);
+        this.addBoxSolid(cx + radius * 0.28, baseY + legH * 0.5, cz - 0.8, 0.9, legH, 0.9, supportColor, null, zoneIdx, false, true);
+        this.addBoxSolid(cx, centerY, cz, 2.2, 2.2, 2.4, cabinColor, '#ffffff', zoneIdx, false, true);
+      }
+      for (let i = 0; i < segments; i++) {
+        const a1 = (i / segments) * Math.PI * 2;
+        const a2 = ((i + 1) / segments) * Math.PI * 2;
+        const mx = cx + Math.cos((a1 + a2) * 0.5) * radius;
+        const my = centerY + Math.sin((a1 + a2) * 0.5) * radius;
+        const chord = 2 * radius * Math.sin(Math.PI / segments) + 0.45;
+        this.addBoxSolid(mx, my, cz, chord, 0.85, 0.85, rimColor, null, zoneIdx, false, true);
+
+        if (i % 2 === 0) {
+          const sx = cx + Math.cos(a1) * (radius * 0.52);
+          const sy = centerY + Math.sin(a1) * (radius * 0.52);
+          this.addBoxSolid(sx, sy, cz, 0.55, 0.55, 0.55, supportColor || rimColor, null, zoneIdx, false, true);
+        }
+        if (cabinColor && i % 2 === 1) {
+          const gx = cx + Math.cos(a1) * (radius + 0.5);
+          const gy = centerY + Math.sin(a1) * (radius + 0.5) - 0.8;
+          const col = (i % 4 === 1) ? cabinColor : rimColor;
+          this.addBoxSolid(gx, gy, cz + 0.4, 2.0, 1.9, 1.8, col, '#ffffff', zoneIdx, false, true);
+        }
+      }
+    },
+
+    // 3D 拱形轨道/过山车弯轨/海底玻璃隧道原语构建器
+    addArchTrackSolid(cx, baseY, cz, spanW, archH, depth, color, supportColor, isTunnel = false, zoneIdx = -1) {
+      const steps = 8;
+      const halfW = spanW * 0.5;
+      for (let i = 0; i < steps; i++) {
+        const t1 = i / steps;
+        const t2 = (i + 1) / steps;
+        const tm = (t1 + t2) * 0.5;
+        const px = cx - halfW + tm * spanW;
+        const py = baseY + Math.sin(tm * Math.PI) * archH;
+        const segW = (spanW / steps) + 0.6;
+        const segH = isTunnel ? 2.6 : 1.05;
+        this.addBoxSolid(px, py, cz, segW, segH, depth, color, isTunnel ? 'rgba(255,255,255,0.85)' : null, zoneIdx, false, true);
+        if (!isTunnel && supportColor && (i === 1 || i === 3 || i === 4 || i === 6)) {
+          this.addBoxSolid(px, baseY + (py - baseY) * 0.5, cz, 0.6, Math.max(1, py - baseY), 0.6, supportColor, null, zoneIdx, false, true);
+        }
+      }
+    },
+
+    // 万能 3D 构件解析执行器：把 AI 输出的 parts 数组渲染为真实立体的凹凸建筑与奇观构件
+    buildUniversalPart(x, base0, z, cp, pal, idx) {
+      const shape = String(cp.shape || cp.type || 'box').toLowerCase();
+      const dx = Math.max(-14, Math.min(14, Number(cp.dx) || 0));
+      const dy = Math.max(0, Math.min(26, Number(cp.dy) || 3));
+      const dz = Math.max(-14, Math.min(14, Number(cp.dz) || 0));
+      const pw = Math.max(1.5, Math.min(18, Number(cp.w) || 6));
+      const ph = Math.max(1.0, Math.min(18, Number(cp.h) || 4));
+      const pd = Math.max(1.2, Math.min(16, Number(cp.d) || 4));
+      const tone = String(cp.tone || 'accent').toLowerCase();
+
+      let col = pal.wallPure;
+      if (tone === 'accent') col = pal.accent;
+      else if (tone === 'roof' || tone === 'dark') col = pal.obsidian;
+      else if (tone === 'glass') col = pal.glassDeep;
+      else if (tone === 'emissive' || tone === 'light') col = pal.emissive || '#fff3b0';
+      else if (tone === 'wood') col = pal.wood;
+      else if (tone === 'water') col = pal.water;
+      else if (tone === 'foliage') col = pal.foliage;
+
+      const px = x + dx;
+      const py = base0 + dy;
+      const pz = z + dz;
+
+      if (shape === 'wheel' || shape === 'ferris_wheel' || shape === 'ring') {
+        const r = Math.max(4.5, Math.min(11, Math.max(pw, ph) * 0.55));
+        const cy = Math.max(base0 + r + 2, py + r * 0.5);
+        this.addWheelSolid(px, cy, pz, r, 0.85, col, pal.accentSoft, pal.wallPure, idx, base0);
+        return cy + r + 2.5;
+      }
+      if (shape === 'arch' || shape === 'coaster_track' || shape === 'curve_track') {
+        this.addArchTrackSolid(px, base0, pz, Math.max(10, pw * 1.3), Math.max(7, ph * 1.3), Math.max(1.8, pd * 0.4), col, pal.wallSide, false, idx);
+        return base0 + Math.max(7, ph * 1.3) + 2.5;
+      }
+      if (shape === 'glass_tunnel' || shape === 'tunnel') {
+        this.addArchTrackSolid(px, base0 + 1.2, pz, Math.max(9, pw * 1.2), Math.max(4.5, ph * 0.8), Math.max(5.5, pd), pal.glass, null, true, idx);
+        return base0 + Math.max(4.5, ph * 0.8) + 3.5;
+      }
+      if (shape === 'gable_house') {
+        this.addBoxSolid(px, py + ph * 0.5, pz, pw, ph, pd, col, null, idx, false, true);
+        this.addGableRoofSolid(px, py + ph, pz, pw + 1.2, Math.max(2.5, ph * 0.42), pd + 1.0, pal.obsidian, null, idx);
+        if (pw >= 5 && ph >= 4) {
+          this.addFacadeWindows(px, py, pz, pw, ph, pd, Math.min(2, Math.floor(ph / 3)), Math.min(3, Math.floor(pw / 3)), pal, idx, true);
+        }
+        return py + ph * 1.45 + 2.0;
+      }
+      if (shape === 'window_grid') {
+        this.addFacadeWindows(px, py, pz, Math.max(6, pw), Math.max(5, ph), Math.max(4, pd), 2, 3, pal, idx, false);
+        return py + ph;
+      }
+      if (shape === 'canopy' || shape === 'awning') {
+        this.addBoxSolid(px, py, pz, pw, 0.9, pd, col, '#ffffff', idx, false, true);
+        this.addBoxSolid(px - pw * 0.4, base0 + (py - base0) * 0.5, pz + pd * 0.35, 0.5, Math.max(1.5, py - base0), 0.5, pal.wallPure, null, idx, false, true);
+        this.addBoxSolid(px + pw * 0.4, base0 + (py - base0) * 0.5, pz + pd * 0.35, 0.5, Math.max(1.5, py - base0), 0.5, pal.wallPure, null, idx, false, true);
+        return py + 2.0;
+      }
+      if (shape === 'cylinder' || shape === 'prism') {
+        this.addPrismSolid(px, py, pz, Math.max(2.0, pw * 0.45), ph, 14, col, null, idx);
+        return py + ph + 2.0;
+      }
+      if (shape === 'dome' || shape === 'sphere') {
+        this.addDomeSolid(px, py, pz, Math.max(2.2, pw * 0.48), ph, 16, col, 'rgba(255,255,255,0.85)', idx);
+        return py + ph + 2.0;
+      }
+      if (shape === 'cone' || shape === 'spire') {
+        this.addPyramidSolid(px, py, pz, Math.max(1.8, pw * 0.45), ph, 14, col, null, idx);
+        return py + ph + 2.0;
+      }
+      if (shape === 'inverted_cone') {
+        this.addInvertedConeSolid(px, Math.max(0.5, py - ph), pz, Math.max(5, pw * 0.65), ph, 12, col, null, idx);
+        return py + 2.0;
+      }
+      if (shape === 'train' || shape === 'tram') {
+        const tw = Math.max(9, pw);
+        const th = Math.max(3.6, ph);
+        const td = Math.max(3.4, pd);
+        this.addBoxSolid(px, base0 + th * 0.5 + 0.5, pz, tw, th, td, col, '#ffffff', idx, false, true);
+        this.addBoxSolid(px, base0 + th * 0.62 + 0.5, pz + td * 0.52, tw * 0.78, th * 0.38, 0.25, pal.glassDeep, null, idx, false, true);
+        return base0 + th + 2.5;
+      }
+      if (shape === 'torii' || shape === 'gate') {
+        const gw = Math.max(5.5, pw);
+        const gh = Math.max(5.5, ph);
+        this.addBoxSolid(px - gw * 0.4, base0 + gh * 0.5, pz, 0.65, gh, 0.65, col, null, idx, false, true);
+        this.addBoxSolid(px + gw * 0.4, base0 + gh * 0.5, pz, 0.65, gh, 0.65, col, null, idx, false, true);
+        this.addBoxSolid(px, base0 + gh, pz, gw + 1.6, 0.85, 1.1, pal.obsidian, null, idx, false, true);
+        return base0 + gh + 2.0;
+      }
+
+      this.addBoxSolid(px, py + ph * 0.5, pz, pw, ph, pd, col, null, idx, false, true);
+      if (pw >= 6 && ph >= 5 && tone === 'wall') {
+        this.addFacadeWindows(px, py, pz, pw, ph, pd, 2, 2, pal, idx, true);
+      }
+      return py + ph + 1.5;
+    },
+
     addCastShadowFootprint(cx, cz, w, d, h, yLevel = 0.08) {
       const hw = w * 0.5;
       const hd = d * 0.5;
-      const sx = Math.min(14, h * 0.34);
-      const sz = Math.min(11, h * 0.24);
+      const sx = Math.min(15, h * 0.36);
+      const sz = Math.min(11.5, h * 0.25);
       this.shadowPolys.push({
         verts: [
           { x: cx - hw, y: yLevel, z: cz - hd },
@@ -16978,10 +17370,9 @@ ${chapDigest}
       });
     },
 
-    // 凸出窗框与内凹深色玻璃窗阵列：打破平直墙面，塑造丰富的立面凹凸层次
     addFacadeWindows(cx, baseY, cz, w, h, d, rows, cols, pal, idx, frontOnly = false) {
-      const startY = baseY + 3.2;
-      const usableH = Math.max(4, h - 5.2);
+      const startY = baseY + 3.0;
+      const usableH = Math.max(4, h - 4.8);
       const rowStep = usableH / Math.max(1, rows);
       const colSpan = w * 0.72;
       const colStep = cols > 1 ? colSpan / (cols - 1) : 0;
@@ -16992,52 +17383,50 @@ ${chapDigest}
         const wy = startY + r * rowStep + winH * 0.5;
         for (let c = 0; c < cols; c++) {
           const wx = cx + (cols > 1 ? -colSpan * 0.5 + c * colStep : 0);
-          // 正面窗框凸台 + 深色玻璃芯 + 窗台小挑板
-          this.addBoxSolid(wx, wy, cz + d * 0.5 + 0.18, winW + 0.45, winH + 0.4, 0.32, pal.wallSide, null, idx);
-          this.addBoxSolid(wx, wy, cz + d * 0.5 + 0.32, winW, winH, 0.24, pal.glassDeep, null, idx);
-          this.addBoxSolid(wx, wy - winH * 0.5 - 0.18, cz + d * 0.5 + 0.38, winW + 0.65, 0.28, 0.55, pal.wallPure, null, idx);
-          if (!frontOnly && c % 2 === 0) {
-            this.addBoxSolid(wx, wy, cz - d * 0.5 - 0.22, winW, winH, 0.28, pal.glassDeep, null, idx);
+          this.addBoxSolid(wx, wy, cz + d * 0.5 + 0.18, winW + 0.45, winH + 0.4, 0.32, pal.wallSide, null, idx, false, true);
+          this.addBoxSolid(wx, wy, cz + d * 0.5 + 0.32, winW, winH, 0.24, pal.glassDeep, null, idx, false, true);
+          this.addBoxSolid(wx, wy - winH * 0.5 - 0.18, cz + d * 0.5 + 0.38, winW + 0.65, 0.28, 0.55, pal.wallPure, null, idx, false, true);
+          if (!frontOnly) {
+            this.addBoxSolid(wx, wy, cz - d * 0.5 - 0.18, winW + 0.4, winH + 0.35, 0.30, pal.wallSide, null, idx, false, true);
+            this.addBoxSolid(wx, wy, cz - d * 0.5 - 0.30, winW, winH, 0.24, pal.glassDeep, null, idx, false, true);
           }
         }
       }
     },
 
-    // 多地块、街道、草坪与庭院底座构建器：告别刻板的单一整块棋盘格
     buildMultiTerraceGround(data, pal) {
       const worldType = data.worldType || 'campus_manor';
       const isModColor = pal.mode === 'module';
 
-      // 主底层托盘
       const trayColor = isModColor
-        ? (worldType === 'treehouse_forest' ? this.shadeColor(pal.lawnA, 0.85) : pal.wallSide)
+        ? (worldType === 'treehouse_forest' ? this.shadeColor(pal.lawnA, 0.82) : pal.wallSide)
         : pal.wallSide;
       const topSurfaceColor = isModColor
-        ? (worldType === 'modern_street' ? pal.sidewalk : pal.lawnA)
+        ? (worldType === 'modern_street' ? pal.lawnA : pal.lawnA)
         : pal.wallPure;
 
-      this.addBoxSolid(0, -2.2, 0, 114, 4.0, 94, trayColor, null, -1, true);
-      this.addBoxSolid(0, -0.15, 0, 106, 0.3, 86, topSurfaceColor, null, -1, true);
+      // 扩大广阔大地图基座至 136 x 106，开启双面渲染确保正反视角下草坪与地面绝不漏面
+      this.addBoxSolid(0, -2.4, 0, 136, 4.2, 106, trayColor, null, -1, true, true);
+      this.addBoxSolid(0, -0.15, 0, 128, 0.35, 98, topSurfaceColor, null, -1, true, true);
 
-      // 若是系统默认配色且为传统学院/庄园，保留经典的柔光大理石分块并加入错落高台与林木点缀
       if (!isModColor && (worldType === 'campus_manor' || data.moduleId === 'demo_lovelle')) {
         const cols = 10;
         const rows = 8;
-        const tileW = 94 / cols;
-        const tileD = 74 / rows;
+        const tileW = 114 / cols;
+        const tileD = 88 / rows;
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
-            const tx = -47 + (c + 0.5) * tileW;
-            const tz = -37 + (r + 0.5) * tileD;
+            const tx = -57 + (c + 0.5) * tileW;
+            const tz = -44 + (r + 0.5) * tileD;
             const isEven = (r + c) % 2 === 0;
             const hw = tileW * 0.43;
             const hd = tileD * 0.43;
             this.plazaFaces.push({
               verts: [
-                { x: tx - hw, y: 0.04, z: tz - hd },
-                { x: tx + hw, y: 0.04, z: tz - hd },
-                { x: tx + hw, y: 0.04, z: tz + hd },
-                { x: tx - hw, y: 0.04, z: tz + hd }
+                { x: tx - hw, y: 0.08, z: tz - hd },
+                { x: tx + hw, y: 0.08, z: tz - hd },
+                { x: tx + hw, y: 0.08, z: tz + hd },
+                { x: tx - hw, y: 0.08, z: tz + hd }
               ],
               cx: tx,
               cz: tz,
@@ -17048,60 +17437,83 @@ ${chapDigest}
         return;
       }
 
-      // 根据世界观构建多层次街道、阳光草坪、木甲板与庭院水池
       if (worldType === 'modern_street' || worldType === 'hospital') {
-        // 阳光明媚的后方绿化草坪区
-        this.addBoxSolid(0, 0.15, -18, 98, 0.3, 44, isModColor ? pal.lawnA : pal.plazaB, null, -1, true);
-        // 前方现代柏油马路与两侧凸起人行道台阶
-        this.addBoxSolid(0, 0.12, 18, 102, 0.24, 24, pal.streetAsphalt, null, -1, true);
-        this.addBoxSolid(0, 0.35, 3, 102, 0.45, 7, pal.sidewalk, null, -1, true);
-        this.addBoxSolid(0, 0.35, 33, 102, 0.45, 7, pal.sidewalk, null, -1, true);
-        // 纵向支路与街角斑马线
-        this.addBoxSolid(-8, 0.14, -4, 16, 0.25, 38, pal.streetAsphalt, null, -1, true);
-        for (let i = -3; i <= 3; i++) {
-          this.addBoxSolid(16 + i * 2.4, 0.27, 18, 1.3, 0.06, 14, '#ffffff', null, -1, true);
-        }
+        // 半厚涂阳光明媚的草甸分区 + 纵横交错的现代城市街道网與人行道
+        this.addBoxSolid(-34, 0.16, -20, 52, 0.32, 38, isModColor ? pal.lawnB : pal.plazaB, null, -1, true, true);
+        this.addBoxSolid(34, 0.16, -20, 52, 0.32, 38, isModColor ? pal.lawnA : pal.plazaB, null, -1, true, true);
+        this.addBoxSolid(-34, 0.18, 22, 52, 0.34, 38, isModColor ? pal.lawnB : pal.plazaA, null, -1, true, true);
+        this.addBoxSolid(34, 0.18, 22, 52, 0.34, 38, isModColor ? pal.lawnA : pal.plazaA, null, -1, true, true);
+
+        // 中央横向主干大道与纵向连接大道，将左下角游乐园、左上角车站、中心与右侧区域全部连通
+        this.addBoxSolid(0, 0.22, 2, 124, 0.30, 14, pal.streetAsphalt, null, -1, true, true);
+        this.addBoxSolid(0, 0.36, -6.2, 124, 0.42, 3.2, pal.sidewalk, null, -1, true, true);
+        this.addBoxSolid(0, 0.36, 10.2, 124, 0.42, 3.2, pal.sidewalk, null, -1, true, true);
+
+        this.addBoxSolid(-16, 0.24, 0, 12, 0.30, 92, pal.streetAsphalt, null, -1, true, true);
+        this.addBoxSolid(18, 0.24, 0, 12, 0.30, 92, pal.streetAsphalt, null, -1, true, true);
+
+        // 十字路口纯白斑马线
         for (let i = -2; i <= 2; i++) {
-          this.addBoxSolid(-8, 0.27, 4 + i * 2.2, 11, 0.06, 1.2, '#ffffff', null, -1, true);
+          this.addBoxSolid(-16 + i * 2.0, 0.42, 12.5, 1.1, 0.08, 4.8, '#ffffff', null, -1, true, true);
+          this.addBoxSolid(18 + i * 2.0, 0.42, 12.5, 1.1, 0.08, 4.8, '#ffffff', null, -1, true, true);
+          this.addBoxSolid(-24.5, 0.42, 2 + i * 2.0, 4.8, 0.08, 1.1, '#ffffff', null, -1, true, true);
         }
+      } else if (worldType === 'aquarium_coast') {
+        this.addBoxSolid(0, 0.16, -16, 118, 0.32, 48, isModColor ? pal.lawnB : pal.plazaB, null, -1, true, true);
+        this.addBoxSolid(0, 0.18, 22, 122, 0.34, 38, pal.water, 'rgba(255,255,255,0.8)', -1, true, true);
+        this.addBoxSolid(0, 0.38, 2, 120, 0.48, 14, pal.plazaA, null, -1, true, true);
       } else if (worldType === 'apartment_cutaway') {
-        // 室外阳光草坪庭院 + 室内温暖木地板高低平台 + 门前石板小径
-        this.addBoxSolid(0, 0.15, 0, 98, 0.3, 78, isModColor ? pal.lawnA : pal.plazaB, null, -1, true);
-        this.addBoxSolid(-12, 0.55, -8, 56, 0.8, 42, isModColor ? this.mixHex(pal.wood, '#fff8f0', 0.45) : pal.wallPure, null, -1, true);
-        this.addBoxSolid(24, 0.35, 16, 36, 0.5, 28, pal.plazaA, null, -1, true);
+        this.addBoxSolid(0, 0.16, 0, 120, 0.32, 90, isModColor ? pal.lawnA : pal.plazaB, null, -1, true, true);
+        this.addBoxSolid(-14, 0.45, -8, 62, 0.65, 46, isModColor ? this.mixHex(pal.wood, '#fff8f0', 0.42) : pal.wallPure, null, -1, true, true);
+        this.addBoxSolid(26, 0.35, 18, 44, 0.48, 34, pal.plazaA, null, -1, true, true);
       } else if (worldType === 'treehouse_forest') {
-        // 高低错落的半厚涂阳光草坡地块 + 清澈林间溪流池
-        this.addBoxSolid(0, 0.15, 0, 100, 0.3, 80, isModColor ? pal.lawnA : pal.plazaB, null, -1, true);
-        this.addBoxSolid(-20, 0.65, -12, 48, 1.0, 38, isModColor ? pal.lawnB : pal.wallPure, null, -1, true);
-        this.addBoxSolid(22, 0.50, 10, 42, 0.7, 36, isModColor ? pal.lawnB : pal.wallPure, null, -1, true);
-        this.addBoxSolid(4, 0.22, 22, 28, 0.32, 16, pal.water, 'rgba(255,255,255,0.75)', -1, true);
+        this.addBoxSolid(0, 0.16, 0, 122, 0.32, 92, isModColor ? pal.lawnA : pal.plazaB, null, -1, true, true);
+        this.addBoxSolid(-26, 0.55, -14, 54, 0.85, 42, isModColor ? pal.lawnB : pal.wallPure, null, -1, true, true);
+        this.addBoxSolid(26, 0.48, 12, 50, 0.72, 40, isModColor ? pal.lawnB : pal.wallPure, null, -1, true, true);
+        this.addBoxSolid(0, 0.24, 22, 38, 0.36, 20, pal.water, 'rgba(255,255,255,0.75)', -1, true, true);
       } else {
-        // 学园/神社/梦境：阳光草坪包围中央十字石材广场与高台庭院
-        this.addBoxSolid(0, 0.15, 0, 100, 0.3, 80, isModColor ? pal.lawnA : pal.plazaB, null, -1, true);
-        this.addBoxSolid(0, 0.38, -16, 68, 0.5, 32, pal.plazaA, null, -1, true);
-        this.addBoxSolid(0, 0.32, 8, 26, 0.4, 48, pal.plazaA, null, -1, true);
-        this.addBoxSolid(-28, 0.28, 18, 28, 0.35, 24, isModColor ? pal.lawnB : pal.wallPure, null, -1, true);
-        this.addBoxSolid(28, 0.28, 18, 28, 0.35, 24, isModColor ? pal.lawnB : pal.wallPure, null, -1, true);
+        this.addBoxSolid(0, 0.16, 0, 122, 0.32, 92, isModColor ? pal.lawnA : pal.plazaB, null, -1, true, true);
+        this.addBoxSolid(0, 0.36, -16, 82, 0.45, 34, pal.plazaA, null, -1, true, true);
+        this.addBoxSolid(0, 0.32, 10, 32, 0.40, 56, pal.plazaA, null, -1, true, true);
+        this.addBoxSolid(-34, 0.28, 20, 38, 0.36, 30, isModColor ? pal.lawnB : pal.wallPure, null, -1, true, true);
+        this.addBoxSolid(34, 0.28, 20, 38, 0.36, 30, isModColor ? pal.lawnB : pal.wallPure, null, -1, true, true);
       }
 
-      // 额外渲染 AI 自定义的 terraces 地块
       if (Array.isArray(data.terraces)) {
-        data.terraces.slice(0, 4).forEach(t => {
-          const tx = Math.max(-36, Math.min(36, Number(t.x) || 0));
-          const tz = Math.max(-24, Math.min(24, Number(t.z) || 0));
-          const tw = Math.max(16, Math.min(54, Number(t.w) || 28));
-          const td = Math.max(14, Math.min(44, Number(t.d) || 24));
+        data.terraces.slice(0, 5).forEach(t => {
+          const tx = Math.max(-42, Math.min(42, Number(t.x) || 0));
+          const tz = Math.max(-28, Math.min(28, Number(t.z) || 0));
+          const tw = Math.max(16, Math.min(64, Number(t.w) || 28));
+          const td = Math.max(14, Math.min(52, Number(t.d) || 24));
           let tCol = pal.plazaA;
           if (t.type === 'lawn') tCol = isModColor ? pal.lawnB : pal.plazaB;
           else if (t.type === 'street') tCol = pal.streetAsphalt;
           else if (t.type === 'wood_deck') tCol = this.mixHex(pal.wood, '#ffffff', 0.35);
           else if (t.type === 'water_pool') tCol = pal.water;
-          this.addBoxSolid(tx, 0.42, tz, tw, 0.45, td, tCol, null, -1, true);
+          this.addBoxSolid(tx, 0.38, tz, tw, 0.42, td, tCol, null, -1, true, true);
         });
       }
     },
 
-    // 鲜活的世界环境小景物：多层圆润树冠、路灯、红绿灯、自动贩卖机、招牌、长椅、中心喷泉、温泉池、鸟居
+    // 自动构建连接各区域的道路、石板步道与栈桥，让左下角游乐园与所有建筑紧密相连
+    buildRoadNetworkBetweenZones(placed, pal, worldType) {
+      if (!Array.isArray(placed) || placed.length < 2) return;
+      const roadColor = (worldType === 'modern_street' || worldType === 'hospital')
+        ? pal.sidewalk
+        : (worldType === 'treehouse_forest' ? this.mixHex(pal.wood, '#fff8f0', 0.25) : pal.plazaA);
+
+      placed.forEach((node) => {
+        const x1 = node.x;
+        const z1 = node.z;
+        // 连接到中央主干轴线 (z = 2 或 x = 0)
+        const midZ = (worldType === 'modern_street' || worldType === 'hospital') ? 2 : 0;
+        const spanZ = Math.abs(z1 - midZ);
+        if (spanZ > 4) {
+          this.addBoxSolid(x1, 0.39, (z1 + midZ) * 0.5, 5.2, 0.22, spanZ, roadColor, null, -1, true, true);
+        }
+      });
+    },
+
     buildEnvironmentalProp(prop, pal) {
       const type = String(prop.type || 'tree');
       const x = Number(prop.x) || 0;
@@ -17114,43 +17526,42 @@ ${chapDigest}
           this.addPyramidSolid(x, 3.0, z, 3.2, 4.2, 12, pal.foliage, null, -1);
           this.addPyramidSolid(x, 5.4, z, 2.5, 3.6, 12, pal.foliageLight, null, -1);
         } else {
-          // 街角参考图同款：三团圆润饱满的盆景式半厚涂树冠球
           this.addDomeSolid(x, 3.2, z, 2.8, 2.8, 12, pal.foliage, null, -1);
           this.addDomeSolid(x - 1.4, 3.8, z + 0.8, 2.0, 2.1, 12, pal.foliageLight, null, -1);
           this.addDomeSolid(x + 1.3, 4.2, z - 0.6, 2.1, 2.2, 12, pal.foliageLight, null, -1);
         }
       } else if (type === 'flower_bed') {
-        this.addBoxSolid(x, 0.6, z, 5.2, 0.9, 2.8, pal.wallPure, null, -1);
-        this.addBoxSolid(x, 1.15, z, 4.4, 0.4, 2.1, pal.foliage, null, -1);
-        this.addBoxSolid(x - 1.1, 1.45, z, 0.9, 0.4, 0.9, pal.accent, null, -1);
-        this.addBoxSolid(x + 1.1, 1.45, z, 0.9, 0.4, 0.9, pal.accentSoft, null, -1);
+        this.addBoxSolid(x, 0.6, z, 5.2, 0.9, 2.8, pal.wallPure, null, -1, false, true);
+        this.addBoxSolid(x, 1.15, z, 4.4, 0.4, 2.1, pal.foliage, null, -1, false, true);
+        this.addBoxSolid(x - 1.1, 1.45, z, 0.9, 0.4, 0.9, pal.accent, null, -1, false, true);
+        this.addBoxSolid(x + 1.1, 1.45, z, 0.9, 0.4, 0.9, pal.accentSoft, null, -1, false, true);
       } else if (type === 'street_lamp') {
         this.addCastShadowFootprint(x, z, 1.4, 1.4, 11);
-        this.addBoxSolid(x, 4.8, z, 0.45, 9.2, 0.45, pal.obsidian, null, -1);
-        this.addBoxSolid(x + 1.1, 9.2, z, 2.6, 0.4, 0.65, pal.obsidian, null, -1);
-        this.addBoxSolid(x + 1.9, 8.9, z, 0.9, 0.35, 0.6, '#fff8c4', null, -1);
+        this.addBoxSolid(x, 4.8, z, 0.45, 9.2, 0.45, pal.obsidian, null, -1, false, true);
+        this.addBoxSolid(x + 1.1, 9.2, z, 2.6, 0.4, 0.65, pal.obsidian, null, -1, false, true);
+        this.addBoxSolid(x + 1.9, 8.9, z, 0.9, 0.35, 0.6, '#fff8c4', null, -1, false, true);
       } else if (type === 'traffic_light') {
         this.addCastShadowFootprint(x, z, 1.5, 1.5, 10);
-        this.addBoxSolid(x, 4.5, z, 0.5, 8.6, 0.5, pal.obsidian, null, -1);
-        this.addBoxSolid(x, 7.6, z + 0.45, 1.2, 2.8, 0.7, pal.obsidianSoft, null, -1);
-        this.addBoxSolid(x, 8.3, z + 0.82, 0.55, 0.55, 0.2, '#ff6b6b', null, -1);
-        this.addBoxSolid(x, 7.6, z + 0.82, 0.55, 0.55, 0.2, '#ffd93d', null, -1);
-        this.addBoxSolid(x, 6.9, z + 0.82, 0.55, 0.55, 0.2, '#6bcb77', null, -1);
+        this.addBoxSolid(x, 4.5, z, 0.5, 8.6, 0.5, pal.obsidian, null, -1, false, true);
+        this.addBoxSolid(x, 7.6, z + 0.45, 1.2, 2.8, 0.7, pal.obsidianSoft, null, -1, false, true);
+        this.addBoxSolid(x, 8.3, z + 0.82, 0.55, 0.55, 0.2, '#ff6b6b', null, -1, false, true);
+        this.addBoxSolid(x, 7.6, z + 0.82, 0.55, 0.55, 0.2, '#ffd93d', null, -1, false, true);
+        this.addBoxSolid(x, 6.9, z + 0.82, 0.55, 0.55, 0.2, '#6bcb77', null, -1, false, true);
       } else if (type === 'vending_machine') {
         this.addCastShadowFootprint(x, z, 2.8, 2.2, 5.5);
-        this.addBoxSolid(x, 2.6, z, 2.6, 4.8, 1.8, pal.accent, null, -1);
-        this.addBoxSolid(x, 3.1, z + 0.95, 2.0, 2.4, 0.18, '#ffffff', null, -1);
-        this.addBoxSolid(x, 1.3, z + 0.95, 1.6, 0.7, 0.18, pal.obsidian, null, -1);
+        this.addBoxSolid(x, 2.6, z, 2.6, 4.8, 1.8, pal.accent, null, -1, false, true);
+        this.addBoxSolid(x, 3.1, z + 0.95, 2.0, 2.4, 0.18, '#ffffff', null, -1, false, true);
+        this.addBoxSolid(x, 1.3, z + 0.95, 1.6, 0.7, 0.18, pal.obsidian, null, -1, false, true);
       } else if (type === 'signboard') {
         this.addCastShadowFootprint(x, z, 2.2, 1.5, 9);
-        this.addBoxSolid(x, 4.2, z, 0.5, 8.0, 0.5, pal.obsidian, null, -1);
-        this.addBoxSolid(x, 6.8, z, 3.2, 2.4, 0.8, '#ffffff', pal.accent, -1);
-        this.addBoxSolid(x, 7.5, z, 3.25, 0.65, 0.85, pal.accent, null, -1);
+        this.addBoxSolid(x, 4.2, z, 0.5, 8.0, 0.5, pal.obsidian, null, -1, false, true);
+        this.addBoxSolid(x, 6.8, z, 3.2, 2.4, 0.8, '#ffffff', pal.accent, -1, false, true);
+        this.addBoxSolid(x, 7.5, z, 3.25, 0.65, 0.85, pal.accent, null, -1, false, true);
       } else if (type === 'bench') {
-        this.addBoxSolid(x, 0.9, z, 4.2, 0.45, 1.5, pal.wood, null, -1);
-        this.addBoxSolid(x, 1.6, z - 0.6, 4.2, 1.1, 0.35, pal.wood, null, -1);
-        this.addBoxSolid(x - 1.6, 0.5, z, 0.4, 0.9, 1.4, pal.obsidian, null, -1);
-        this.addBoxSolid(x + 1.6, 0.5, z, 0.4, 0.9, 1.4, pal.obsidian, null, -1);
+        this.addBoxSolid(x, 0.9, z, 4.2, 0.45, 1.5, pal.wood, null, -1, false, true);
+        this.addBoxSolid(x, 1.6, z - 0.6, 4.2, 1.1, 0.35, pal.wood, null, -1, false, true);
+        this.addBoxSolid(x - 1.6, 0.5, z, 0.4, 0.9, 1.4, pal.obsidian, null, -1, false, true);
+        this.addBoxSolid(x + 1.6, 0.5, z, 0.4, 0.9, 1.4, pal.obsidian, null, -1, false, true);
       } else if (type === 'fountain' || type === 'hot_spring') {
         this.addPrismSolid(x, 0.2, z, 5.2, 1.2, 14, pal.wallPure, null, -1);
         this.addPrismSolid(x, 0.5, z, 4.3, 1.05, 14, pal.water, null, -1);
@@ -17160,12 +17571,12 @@ ${chapDigest}
         }
       } else if (type === 'torii') {
         this.addCastShadowFootprint(x, z, 6.0, 2.0, 8.5);
-        this.addBoxSolid(x - 2.4, 3.8, z, 0.65, 7.2, 0.65, pal.accent, null, -1);
-        this.addBoxSolid(x + 2.4, 3.8, z, 0.65, 7.2, 0.65, pal.accent, null, -1);
-        this.addBoxSolid(x, 7.2, z, 7.2, 0.7, 0.9, pal.obsidian, null, -1);
-        this.addBoxSolid(x, 5.8, z, 5.8, 0.45, 0.6, pal.accent, null, -1);
+        this.addBoxSolid(x - 2.4, 3.8, z, 0.65, 7.2, 0.65, pal.accent, null, -1, false, true);
+        this.addBoxSolid(x + 2.4, 3.8, z, 0.65, 7.2, 0.65, pal.accent, null, -1, false, true);
+        this.addBoxSolid(x, 7.2, z, 7.2, 0.7, 0.9, pal.obsidian, null, -1, false, true);
+        this.addBoxSolid(x, 5.8, z, 5.8, 0.45, 0.6, pal.accent, null, -1, false, true);
       } else if (type === 'sculpture') {
-        this.addBoxSolid(x, 1.1, z, 3.0, 1.8, 3.0, pal.wallPure, null, -1);
+        this.addBoxSolid(x, 1.1, z, 3.0, 1.8, 3.0, pal.wallPure, null, -1, false, true);
         this.addDiamondSolid(x, 3.6, z, 1.5, 2.8, pal.accent, null, -1);
       }
     },
@@ -17181,20 +17592,24 @@ ${chapDigest}
       const zones = Array.isArray(data.zones) ? data.zones : [];
       const worldType = data.worldType || 'campus_manor';
 
-      // 1. 构建多地块、街道、阳光草坪或庭院地面
       this.buildMultiTerraceGround(data, pal);
 
-      // 2. 自动防重叠建筑坐标布局
+      // 广阔大沙盘防重叠布局：允许建筑分布在 -46 到 46 的大地图各分区
       const placed = zones.map((z, idx) => {
-        let px = Number(z.x) || 0;
-        let pz = Number(z.z) || 0;
-        for (let iter = 0; iter < 14; iter++) {
+        const fallbackPos = this.resolveWideZonePosition(z.name, z.desc, idx, zones.length);
+        let px = Number.isFinite(Number(z.x)) ? Number(z.x) : fallbackPos.x;
+        let pz = Number.isFinite(Number(z.z)) ? Number(z.z) : fallbackPos.z;
+        if (/游乐园|摩天轮|主题乐园/.test(z.name || '') && px > -12 && pz < 8) {
+          px = -38;
+          pz = 24;
+        }
+        for (let iter = 0; iter < 16; iter++) {
           for (let j = 0; j < idx; j++) {
             const other = zones[j];
             const dx = px - (other._px ?? other.x ?? 0);
             const dz = pz - (other._pz ?? other.z ?? 0);
             const dist = Math.hypot(dx, dz);
-            const minDist = 25;
+            const minDist = 27;
             if (dist < minDist) {
               const ang = dist > 0.1 ? Math.atan2(dz, dx) : (idx * 1.15);
               px += Math.cos(ang) * (minDist - dist);
@@ -17202,21 +17617,21 @@ ${chapDigest}
             }
           }
         }
-        px = Math.max(-38, Math.min(38, px));
-        pz = Math.max(-26, Math.min(24, pz));
+        px = Math.max(-46, Math.min(46, px));
+        pz = Math.max(-31, Math.min(29, pz));
         z._px = px;
         z._pz = pz;
         return { zone: z, idx, x: px, z: pz };
       });
 
-      // 3. 构建每座有棱有角、有凹有凸的立体建筑
-      placed.forEach(({ zone, idx, x, z }) => {
-        const w = Math.max(16, Math.min(23, Number(zone.width) || 19));
-        const d = Math.max(15, Math.min(21, Number(zone.depth) || 18));
-        const h = Math.max(20, Math.min(34, Number(zone.height) || 26));
-        const arch = zone.archType || 'spire';
+      this.buildRoadNetworkBetweenZones(placed, pal, worldType);
 
-        // 记录建筑碰撞包围盒，供小动物防穿模寻路使用
+      placed.forEach(({ zone, idx, x, z }) => {
+        const w = Math.max(16, Math.min(24, Number(zone.width) || 19));
+        const d = Math.max(15, Math.min(22, Number(zone.depth) || 18));
+        const h = Math.max(20, Math.min(36, Number(zone.height) || 26));
+        const arch = this.inferArchTypeFromName(zone.name, zone.archType || 'spire', worldType);
+
         this.buildingBounds.push({
           x,
           z,
@@ -17224,154 +17639,227 @@ ${chapDigest}
           hd: d * 0.5 + 3.2
         });
 
-        // 投射定向地面阳光阴影
-        this.addCastShadowFootprint(x, z, w + 1.5, d + 1.5, h);
+        this.addCastShadowFootprint(x, z, w + 1.8, d + 1.8, h);
 
-        // 阶梯台基与散水垫层
-        this.addBoxSolid(x, 0.85, z, w + 2.4, 1.7, d + 2.4, pal.wallSide, null, idx, false);
-        this.addBoxSolid(x, 1.85, z, w + 1.0, 0.5, d + 1.0, pal.wallPure, null, idx, false);
+        // 双层立体台基与地面接触环境光遮蔽垫层
+        this.addBoxSolid(x, 0.85, z, w + 2.8, 1.7, d + 2.8, pal.wallSide, null, idx, false, true);
+        this.addBoxSolid(x, 1.85, z, w + 1.2, 0.5, d + 1.2, pal.wallPure, null, idx, false, true);
 
         const base0 = 2.0;
         let topY = h;
 
-        if (arch === 'convenience_store' || arch === 'modern_store') {
-          // 街角参考图同款：有棱有角、有凹有凸的现代便利店/商铺
+        if (arch === 'amusement_park') {
+          // 主题游乐园：立式巨型摩天轮与彩色座舱 + 旋转木马条纹尖顶亭 + 过山车起伏拱形轨道 + 乐园迎宾拱门
+          const wheelR = Math.max(8.5, h * 0.34);
+          const wheelCY = base0 + wheelR + 3.2;
+          this.addWheelSolid(x - w * 0.16, wheelCY, z - 2.0, wheelR, 0.9, pal.accent, pal.emissive || '#ffe082', pal.wallPure, idx, base0);
+          // 旋转木马圆亭
+          const carX = x + w * 0.28;
+          const carZ = z + 2.2;
+          this.addPrismSolid(carX, base0, carZ, 4.6, 1.2, 14, pal.accentSoft, null, idx);
+          this.addPrismSolid(carX, base0 + 1.2, carZ, 3.8, 3.8, 12, '#fff9db', null, idx);
+          this.addPyramidSolid(carX, base0 + 5.0, carZ, 5.2, 4.5, 14, pal.accent, '#ffffff', idx);
+          // 过山车弧形轨道与支架
+          this.addArchTrackSolid(x + 1.0, base0, z - d * 0.35, w * 0.95, h * 0.46, 1.8, pal.obsidian, pal.wallSide, false, idx);
+          // 游乐园正门检票欢庆拱门
+          const gz = z + d * 0.46;
+          this.addBoxSolid(x - 3.6, base0 + 2.8, gz, 1.2, 5.6, 1.2, pal.accent, null, idx, false, true);
+          this.addBoxSolid(x + 3.6, base0 + 2.8, gz, 1.2, 5.6, 1.2, pal.accent, null, idx, false, true);
+          this.addBoxSolid(x, base0 + 5.8, gz, 9.2, 1.5, 1.6, pal.obsidian, '#ffffff', idx, false, true);
+          topY = wheelCY + wheelR + 3.0;
+        } else if (arch === 'aquarium') {
+          // 海洋水族馆：流线型主馆 + 巨型圆柱深海展示水体缸 + 凸出弧形海底玻璃隧道
+          const mainH = h * 0.46;
+          this.addBoxSolid(x - 1.8, base0 + mainH * 0.5, z - 1.5, w * 0.68, mainH, d * 0.62, pal.wallPure, null, idx, false, true);
+          this.addDomeSolid(x - 1.8, base0 + mainH, z - 1.5, w * 0.38, h * 0.26, 16, pal.glass, 'rgba(255,255,255,0.9)', idx);
+          // 巨型深海透明圆柱水缸
+          this.addPrismSolid(x + w * 0.26, base0, z - 0.5, w * 0.26, mainH * 1.08, 16, pal.water, '#ffffff', idx);
+          this.addPrismSolid(x + w * 0.26, base0 + mainH * 1.08, z - 0.5, w * 0.28, 0.9, 16, pal.obsidian, null, idx);
+          // 弧形海底玻璃观光隧道
+          this.addArchTrackSolid(x, base0 + 0.5, z + d * 0.32, w * 0.72, 5.6, 4.6, pal.glass, null, true, idx);
+          this.addFacadeWindows(x - 1.8, base0, z - 1.5, w * 0.62, mainH, d * 0.62, 2, 3, pal, idx, false);
+          topY = base0 + mainH + h * 0.26 + 3.2;
+        } else if (arch === 'restaurant') {
+          // 暖光露台饭店餐厅：双层凹凸主楼 + 条纹悬挑遮阳雨棚 + 暖光落地橱窗 + 屋顶立式招牌 + 门前露天遮阳伞座
+          const bodyH = h * 0.48;
+          this.addBoxSolid(x - 1.2, base0 + bodyH * 0.5, z - 1.2, w * 0.76, bodyH, d * 0.68, pal.wallPure, null, idx, false, true);
+          this.addGableRoofSolid(x - 1.2, base0 + bodyH, z - 1.2, w * 0.82, h * 0.22, d * 0.72, pal.obsidian, null, idx);
+          // 一层暖光大玻璃窗与挑出式雨棚
+          this.addBoxSolid(x - 1.2, base0 + 3.8, z + d * 0.34 + 1.4, w * 0.78, 1.1, 3.0, pal.accent, '#ffffff', idx, false, true);
+          this.addBoxSolid(x - 1.2, base0 + 2.2, z + d * 0.34 + 0.2, w * 0.68, 3.6, 0.3, pal.emissive || '#fff3b0', null, idx, false, true);
+          this.addFacadeWindows(x - 1.2, base0 + 3.2, z - 1.2, w * 0.70, bodyH - 3.0, d * 0.68, 1, 3, pal, idx, false);
+          // 门前露天遮阳伞与圆餐桌
+          this.addPrismSolid(x + w * 0.32, base0, z + 3.2, 1.8, 1.1, 10, pal.wallPure, null, idx);
+          this.addPyramidSolid(x + w * 0.32, base0 + 2.6, z + 3.2, 2.8, 1.8, 10, pal.accent, '#ffffff', idx);
+          topY = base0 + bodyH + h * 0.22 + 2.8;
+        } else if (arch === 'station') {
+          // 城市电车站与铁道月台：长廊候车亭 + 悬挑月台雨棚 + 车站时钟塔牌 + 铁轨枕木 + 有轨电车车厢
+          const platW = w * 0.96;
+          this.addBoxSolid(x, base0 + 0.6, z - 2.0, platW, 1.2, d * 0.48, pal.wallSide, null, idx, false, true);
+          const hallH = h * 0.38;
+          this.addBoxSolid(x - 2.0, base0 + 1.2 + hallH * 0.5, z - 3.2, platW * 0.62, hallH, d * 0.36, pal.wallPure, null, idx, false, true);
+          this.addGableRoofSolid(x - 2.0, base0 + 1.2 + hallH, z - 3.2, platW * 0.68, h * 0.18, d * 0.42, pal.obsidian, null, idx);
+          // 候车月台大雨棚
+          this.addBoxSolid(x + 2.5, base0 + 5.8, z - 1.2, platW * 0.78, 0.85, d * 0.46, pal.accent, '#ffffff', idx, false, true);
+          // 前方铺设铁轨与停靠的有轨电车
+          const trackZ = z + d * 0.30;
+          this.addBoxSolid(x, base0 + 0.2, trackZ, platW + 4.0, 0.35, 3.6, pal.obsidianSoft, null, idx, false, true);
+          this.addBoxSolid(x + 1.0, base0 + 2.5, trackZ, 12.5, 4.0, 3.6, pal.accent, '#ffffff', idx, false, true);
+          this.addBoxSolid(x + 1.0, base0 + 2.9, trackZ + 1.85, 10.2, 1.5, 0.25, pal.glassDeep, null, idx, false, true);
+          this.addBoxSolid(x + 1.0, base0 + 2.9, trackZ - 1.85, 10.2, 1.5, 0.25, pal.glassDeep, null, idx, false, true);
+          topY = base0 + hallH + h * 0.22 + 3.5;
+        } else if (arch === 'chess_parlor') {
+          // 街角棋牌茶室：双层凹凸退台楼 + 外部木质游廊露台 + 侧翼竖向霓虹招牌 + 暖光格栅窗
+          const h1 = h * 0.32;
+          const h2 = h * 0.28;
+          this.addBoxSolid(x, base0 + h1 * 0.5, z, w * 0.86, h1, d * 0.78, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x - 1.2, base0 + h1 + h2 * 0.5, z - 1.0, w * 0.68, h2, d * 0.62, pal.wallPure, null, idx, false, true);
+          this.addGableRoofSolid(x - 1.2, base0 + h1 + h2, z - 1.0, w * 0.74, h * 0.20, d * 0.68, pal.obsidian, null, idx);
+          // 二层露台木栏杆与茶座
+          this.addBoxSolid(x + w * 0.24, base0 + h1 + 0.8, z + d * 0.24, w * 0.34, 1.2, d * 0.28, pal.wood, null, idx, false, true);
+          // 竖向醒目霓虹招牌灯箱
+          this.addBoxSolid(x + w * 0.45, base0 + h1 * 0.85, z + d * 0.25, 1.4, 7.2, 1.8, pal.accent, '#ffffff', idx, false, true);
+          this.addFacadeWindows(x, base0, z, w * 0.80, h1 + h2, d * 0.78, 2, 3, pal, idx, false);
+          topY = base0 + h1 + h2 + h * 0.20 + 2.8;
+        } else if (arch === 'police_station') {
+          // 现代警署大楼：威严阶梯式主楼 + 侧翼值班车库 + 门前警徽门廊 + 屋顶通讯天线塔
+          const mainH = h * 0.54;
+          this.addBoxSolid(x - 1.2, base0 + mainH * 0.5, z, w * 0.72, mainH, d * 0.70, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x - 1.2, base0 + mainH + 0.6, z, w * 0.76, 1.2, d * 0.74, pal.obsidian, null, idx, false, true);
+          // 侧翼巡逻车位楼
+          this.addBoxSolid(x + w * 0.34, base0 + mainH * 0.32, z + 0.8, w * 0.34, mainH * 0.64, d * 0.58, pal.wallSide, null, idx, false, true);
+          // 正门凸出警徽门廊
+          this.addBoxSolid(x - 1.2, base0 + 3.4, z + d * 0.35 + 1.8, w * 0.38, 0.9, 3.2, pal.obsidian, null, idx, false, true);
+          this.addDiamondSolid(x - 1.2, base0 + mainH - 1.8, z + d * 0.35 + 0.6, 1.6, 2.2, pal.accent, '#ffffff', idx);
+          this.addFacadeWindows(x - 1.2, base0, z, w * 0.68, mainH, d * 0.70, 2, 3, pal, idx, false);
+          // 屋顶通讯信号塔
+          this.addBoxSolid(x - 3.2, base0 + mainH + 3.8, z - 1.5, 0.7, 5.5, 0.7, pal.obsidianSoft, null, idx, false, true);
+          topY = base0 + mainH + 6.8;
+        } else if (arch === 'floating_island') {
+          // 异世界浮空秘境岛：倒锥形悬浮岩体 + 垂落瀑布水幕 + 岛顶魔法圣殿 + 悬浮能量光环与水晶尖塔
+          const floatBaseY = base0 + 2.5;
+          const rockH = h * 0.36;
+          this.addInvertedConeSolid(x, floatBaseY, z, w * 0.52, rockH, 12, pal.wood, pal.lawnA, idx);
+          const islandTopY = floatBaseY + rockH;
+          this.addBoxSolid(x, islandTopY + 0.4, z, w * 0.88, 0.8, d * 0.84, pal.lawnA, null, idx, false, true);
+          // 飞流直下的空岛瀑布
+          this.addBoxSolid(x + w * 0.22, floatBaseY + rockH * 0.45, z + d * 0.36, 2.6, rockH + 2.2, 0.8, pal.water, null, idx, false, true);
+          // 岛顶水晶圣殿与悬浮光环
+          const spireH = h * 0.42;
+          this.addPrismSolid(x, islandTopY + 0.8, z, w * 0.24, spireH * 0.55, 12, pal.wallPure, null, idx);
+          this.addPyramidSolid(x, islandTopY + 0.8 + spireH * 0.55, z, w * 0.28, spireH * 0.55, 12, pal.accent, '#ffffff', idx);
+          this.addWheelSolid(x, islandTopY + spireH * 0.65, z, w * 0.38, 0.65, pal.accentSoft, null, null, idx, islandTopY);
+          topY = islandTopY + spireH + 3.5;
+        } else if (arch === 'convenience_store' || arch === 'modern_store') {
           const bodyH = h * 0.44;
           const mainW = w * 0.88;
           const mainD = d * 0.78;
-          // 主体奶白建筑 + 左侧微凸储物配楼
-          this.addBoxSolid(x + 0.8, base0 + bodyH * 0.5, z, mainW, bodyH, mainD, pal.wallPure, null, idx);
-          this.addBoxSolid(x - mainW * 0.52, base0 + bodyH * 0.42, z - 0.8, w * 0.24, bodyH * 0.84, mainD * 0.82, pal.wallSide, null, idx);
-          // 屋顶四周凸起女儿墙边框 + 凹陷平屋顶 + 空调外机设备盒
+          this.addBoxSolid(x + 0.8, base0 + bodyH * 0.5, z, mainW, bodyH, mainD, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x - mainW * 0.52, base0 + bodyH * 0.42, z - 0.8, w * 0.24, bodyH * 0.84, mainD * 0.82, pal.wallSide, null, idx, false, true);
           const roofY = base0 + bodyH;
-          this.addBoxSolid(x + 0.8, roofY + 0.55, z, mainW + 0.8, 1.1, mainD + 0.8, pal.obsidian, null, idx);
-          this.addBoxSolid(x + 0.8, roofY + 1.15, z, mainW - 1.2, 0.3, mainD - 1.2, pal.wallSide, null, idx);
-          this.addBoxSolid(x - 2.5, roofY + 1.9, z - 1.8, 3.2, 1.5, 2.4, pal.wallPure, null, idx);
-          // 标志性向前悬挑的条纹招牌雨棚
+          this.addBoxSolid(x + 0.8, roofY + 0.55, z, mainW + 0.8, 1.1, mainD + 0.8, pal.obsidian, null, idx, false, true);
+          this.addBoxSolid(x + 0.8, roofY + 1.15, z, mainW - 1.2, 0.3, mainD - 1.2, pal.wallSide, null, idx, false, true);
+          this.addBoxSolid(x - 2.5, roofY + 1.9, z - 1.8, 3.2, 1.5, 2.4, pal.wallPure, null, idx, false, true);
           const canopyY = base0 + bodyH * 0.68;
-          this.addBoxSolid(x + 0.8, canopyY, z + mainD * 0.5 + 1.2, mainW + 1.4, 1.5, 2.8, '#ffffff', null, idx);
-          this.addBoxSolid(x + 0.8, canopyY + 0.35, z + mainD * 0.5 + 1.28, mainW + 1.5, 0.55, 2.85, pal.accent, null, idx);
-          this.addBoxSolid(x + 0.8, canopyY - 0.35, z + mainD * 0.5 + 1.28, mainW + 1.5, 0.45, 2.85, pal.foliage, null, idx);
-          // 正面大面积深色落地玻璃橱窗与双开门 + 内部暖光收银台与货架
+          this.addBoxSolid(x + 0.8, canopyY, z + mainD * 0.5 + 1.2, mainW + 1.4, 1.5, 2.8, '#ffffff', null, idx, false, true);
+          this.addBoxSolid(x + 0.8, canopyY + 0.35, z + mainD * 0.5 + 1.28, mainW + 1.5, 0.55, 2.85, pal.accent, null, idx, false, true);
+          this.addBoxSolid(x + 0.8, canopyY - 0.35, z + mainD * 0.5 + 1.28, mainW + 1.5, 0.45, 2.85, pal.foliage, null, idx, false, true);
           const glassH = bodyH * 0.56;
-          this.addBoxSolid(x + 0.8, base0 + glassH * 0.5, z + mainD * 0.5 + 0.15, mainW * 0.84, glassH, 0.3, pal.glassDeep, null, idx);
-          this.addBoxSolid(x - 1.8, base0 + glassH * 0.42, z + mainD * 0.5 + 0.25, 3.8, glassH * 0.68, 0.22, pal.accentSoft, null, idx);
-          this.addBoxSolid(x + 2.8, base0 + glassH * 0.42, z + mainD * 0.5 + 0.25, 3.8, glassH * 0.68, 0.22, pal.glass, null, idx);
-          // 门口右侧街角立柱招牌与左侧红色自动贩卖机
-          this.addBoxSolid(x - mainW * 0.44, base0 + 2.1, z + mainD * 0.5 + 1.3, 2.2, 4.2, 1.5, pal.accent, null, idx);
+          this.addBoxSolid(x + 0.8, base0 + glassH * 0.5, z + mainD * 0.5 + 0.15, mainW * 0.84, glassH, 0.3, pal.glassDeep, null, idx, false, true);
+          this.addBoxSolid(x - 1.8, base0 + glassH * 0.42, z + mainD * 0.5 + 0.25, 3.8, glassH * 0.68, 0.22, pal.accentSoft, null, idx, false, true);
+          this.addBoxSolid(x + 2.8, base0 + glassH * 0.42, z + mainD * 0.5 + 0.25, 3.8, glassH * 0.68, 0.22, pal.glass, null, idx, false, true);
+          this.addBoxSolid(x - mainW * 0.44, base0 + 2.1, z + mainD * 0.5 + 1.3, 2.2, 4.2, 1.5, pal.accent, null, idx, false, true);
           topY = roofY + 4.2;
         } else if (arch === 'hospital') {
-          // 现代多层综合医院大楼：主病房楼 + 侧翼门诊楼 + 凸出急救车雨棚 + 屋顶医疗十字
           const mainH = h * 0.62;
           const wingH = h * 0.44;
-          this.addBoxSolid(x - 1.5, base0 + mainH * 0.5, z - 1.0, w * 0.64, mainH, d * 0.66, pal.wallPure, null, idx);
-          this.addBoxSolid(x + w * 0.32, base0 + wingH * 0.5, z + 1.2, w * 0.44, wingH, d * 0.58, pal.wallSide, null, idx);
-          // 屋顶挑檐女儿墙
-          this.addBoxSolid(x - 1.5, base0 + mainH + 0.5, z - 1.0, w * 0.68, 1.0, d * 0.70, pal.obsidian, null, idx);
-          this.addBoxSolid(x + w * 0.32, base0 + wingH + 0.4, z + 1.2, w * 0.48, 0.8, d * 0.62, pal.accent, null, idx);
-          // 凸出急救入口大雨棚与立柱
+          this.addBoxSolid(x - 1.5, base0 + mainH * 0.5, z - 1.0, w * 0.64, mainH, d * 0.66, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x + w * 0.32, base0 + wingH * 0.5, z + 1.2, w * 0.44, wingH, d * 0.58, pal.wallSide, null, idx, false, true);
+          this.addBoxSolid(x - 1.5, base0 + mainH + 0.5, z - 1.0, w * 0.68, 1.0, d * 0.70, pal.obsidian, null, idx, false, true);
+          this.addBoxSolid(x + w * 0.32, base0 + wingH + 0.4, z + 1.2, w * 0.48, 0.8, d * 0.62, pal.accent, null, idx, false, true);
           const porchW = w * 0.42;
           const porchZ = z + d * 0.33 + 2.4;
-          this.addBoxSolid(x - 1.5, base0 + 3.6, porchZ, porchW, 0.85, 3.8, pal.accent, null, idx);
-          this.addBoxSolid(x - 1.5 - porchW * 0.38, base0 + 1.8, porchZ + 1.4, 0.55, 3.6, 0.55, pal.wallPure, null, idx);
-          this.addBoxSolid(x - 1.5 + porchW * 0.38, base0 + 1.8, porchZ + 1.4, 0.55, 3.6, 0.55, pal.wallPure, null, idx);
-          // 多层内凹医疗采光窗阵列
-          this.addFacadeWindows(x - 1.5, base0 + 2.2, z - 1.0, w * 0.60, mainH - 2, d * 0.66, 3, 3, pal, idx);
-          // 屋顶醒目立体十字标识
+          this.addBoxSolid(x - 1.5, base0 + 3.6, porchZ, porchW, 0.85, 3.8, pal.accent, null, idx, false, true);
+          this.addBoxSolid(x - 1.5 - porchW * 0.38, base0 + 1.8, porchZ + 1.4, 0.55, 3.6, 0.55, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x - 1.5 + porchW * 0.38, base0 + 1.8, porchZ + 1.4, 0.55, 3.6, 0.55, pal.wallPure, null, idx, false, true);
+          this.addFacadeWindows(x - 1.5, base0 + 2.2, z - 1.0, w * 0.60, mainH - 2, d * 0.66, 3, 3, pal, idx, false);
           const crossY = base0 + mainH + 2.4;
-          this.addBoxSolid(x - 1.5, crossY, z - 1.0 + d * 0.25, 3.6, 1.1, 0.9, pal.accent, null, idx);
-          this.addBoxSolid(x - 1.5, crossY, z - 1.0 + d * 0.25, 1.1, 3.6, 0.9, pal.accent, null, idx);
+          this.addBoxSolid(x - 1.5, crossY, z - 1.0 + d * 0.25, 3.6, 1.1, 0.9, pal.accent, null, idx, false, true);
+          this.addBoxSolid(x - 1.5, crossY, z - 1.0 + d * 0.25, 1.1, 3.6, 0.9, pal.accent, null, idx, false, true);
           topY = crossY + 3.2;
         } else if (arch === 'apartment_cutaway') {
-          // 温暖室内剖面居所：L型半剖外墙 + 木地板 + 暖炉桌/被炉 + 沙发 + 阳台绿植
           const wallH = h * 0.46;
           const floorW = w * 0.88;
           const floorD = d * 0.84;
-          // 温暖木地板底座
-          this.addBoxSolid(x, base0 + 0.4, z, floorW, 0.8, floorD, pal.wood, null, idx);
-          // 后侧与左侧厚实L型剖面墙体，带采光窗洞
-          this.addBoxSolid(x, base0 + wallH * 0.5, z - floorD * 0.46, floorW, wallH, 1.4, pal.wallPure, null, idx);
-          this.addBoxSolid(x - floorW * 0.46, base0 + wallH * 0.5, z, 1.4, wallH, floorD, pal.wallPure, null, idx);
-          this.addBoxSolid(x + 1.5, base0 + wallH * 0.58, z - floorD * 0.46 + 0.8, floorW * 0.42, wallH * 0.42, 0.3, pal.glass, null, idx);
-          // 半覆式斜坡屋顶檐口
+          this.addBoxSolid(x, base0 + 0.4, z, floorW, 0.8, floorD, pal.wood, null, idx, false, true);
+          this.addBoxSolid(x, base0 + wallH * 0.5, z - floorD * 0.46, floorW, wallH, 1.4, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x - floorW * 0.46, base0 + wallH * 0.5, z, 1.4, wallH, floorD, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x + 1.5, base0 + wallH * 0.58, z - floorD * 0.46 + 0.8, floorW * 0.42, wallH * 0.42, 0.3, pal.glass, null, idx, false, true);
           this.addGableRoofSolid(x - floorW * 0.18, base0 + wallH, z - floorD * 0.18, floorW * 0.68, h * 0.24, floorD * 0.64, pal.obsidian, null, idx);
-          // 室内中心：温暖的被炉/暖炉桌 + 桌面柑橘茶具 + 坐垫
-          this.addBoxSolid(x + 1.2, base0 + 1.5, z + 1.0, 5.6, 1.4, 5.2, pal.accent, null, idx);
-          this.addBoxSolid(x + 1.2, base0 + 2.3, z + 1.0, 4.4, 0.35, 4.0, pal.wallPure, null, idx);
-          // 室内后侧：料理吧台/书架与柔软沙发
-          this.addBoxSolid(x - floorW * 0.22, base0 + 2.2, z - floorD * 0.26, 4.8, 2.8, 2.4, pal.obsidianSoft, null, idx);
-          this.addBoxSolid(x + floorW * 0.24, base0 + 1.6, z - floorD * 0.22, 4.6, 1.8, 2.6, pal.accentSoft, null, idx);
-          // 前侧开放式阳台矮栏杆
-          this.addBoxSolid(x + floorW * 0.15, base0 + 1.4, z + floorD * 0.46, floorW * 0.65, 1.2, 0.45, pal.wallSide, null, idx);
+          this.addBoxSolid(x + 1.2, base0 + 1.5, z + 1.0, 5.6, 1.4, 5.2, pal.accent, null, idx, false, true);
+          this.addBoxSolid(x + 1.2, base0 + 2.3, z + 1.0, 4.4, 0.35, 4.0, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x - floorW * 0.22, base0 + 2.2, z - floorD * 0.26, 4.8, 2.8, 2.4, pal.obsidianSoft, null, idx, false, true);
+          this.addBoxSolid(x + floorW * 0.24, base0 + 1.6, z - floorD * 0.22, 4.6, 1.8, 2.6, pal.accentSoft, null, idx, false, true);
+          this.addBoxSolid(x + floorW * 0.15, base0 + 1.4, z + floorD * 0.46, floorW * 0.65, 1.2, 0.45, pal.wallSide, null, idx, false, true);
           topY = base0 + wallH + h * 0.24 + 2.8;
         } else if (arch === 'treehouse') {
-          // 森林巨木多层树屋：粗壮树干 + 双层木栈道平台 + 斜顶林间木屋 + 茂密半厚涂树冠球
           const trunkH = h * 0.68;
           this.addPrismSolid(x, base0, z, w * 0.22, trunkH, 10, pal.wood, null, idx);
-          // 第一层悬空木甲板与斜顶木屋
           const deck1Y = base0 + trunkH * 0.45;
-          this.addBoxSolid(x, deck1Y, z, w * 0.86, 0.9, d * 0.82, pal.wood, null, idx);
+          this.addBoxSolid(x, deck1Y, z, w * 0.86, 0.9, d * 0.82, pal.wood, null, idx, false, true);
           const cabinH = h * 0.28;
-          this.addBoxSolid(x - 1.8, deck1Y + cabinH * 0.5, z - 0.8, w * 0.52, cabinH, d * 0.52, pal.wallPure, null, idx);
+          this.addBoxSolid(x - 1.8, deck1Y + cabinH * 0.5, z - 0.8, w * 0.52, cabinH, d * 0.52, pal.wallPure, null, idx, false, true);
           this.addGableRoofSolid(x - 1.8, deck1Y + cabinH, z - 0.8, w * 0.60, h * 0.18, d * 0.60, pal.accent, null, idx);
-          // 屋门与暖光小窗
-          this.addBoxSolid(x - 1.8, deck1Y + cabinH * 0.45, z - 0.8 + d * 0.27, 2.2, 2.4, 0.3, '#fff5ba', null, idx);
-          // 环绕树屋的多团丰盈树冠
+          this.addBoxSolid(x - 1.8, deck1Y + cabinH * 0.45, z - 0.8 + d * 0.27, 2.2, 2.4, 0.3, '#fff5ba', null, idx, false, true);
           const crownY = base0 + trunkH * 0.72;
           this.addDomeSolid(x + 2.2, crownY, z - 1.5, w * 0.42, h * 0.28, 14, pal.foliage, null, idx);
           this.addDomeSolid(x - 2.8, crownY + 2.2, z + 1.2, w * 0.34, h * 0.24, 14, pal.foliageLight, null, idx);
           this.addDomeSolid(x + 0.5, crownY + 3.4, z, w * 0.30, h * 0.22, 14, pal.foliageLight, null, idx);
           topY = crownY + h * 0.28 + 3.2;
         } else if (arch === 'school') {
-          // 明窗长廊教学楼：宽阔主楼 + 凸出中央门厅与时钟山墙 + 阵列式凹窗 + 天台围栏
           const bodyH = h * 0.52;
-          this.addBoxSolid(x, base0 + bodyH * 0.5, z, w * 0.90, bodyH, d * 0.66, pal.wallPure, null, idx);
-          // 凸出中央门厅与双坡小尖顶
+          this.addBoxSolid(x, base0 + bodyH * 0.5, z, w * 0.90, bodyH, d * 0.66, pal.wallPure, null, idx, false, true);
           const bayW = w * 0.34;
           const bayH = bodyH * 1.12;
-          this.addBoxSolid(x, base0 + bayH * 0.5, z + d * 0.16, bayW, bayH, d * 0.48, pal.wallPure, null, idx);
+          this.addBoxSolid(x, base0 + bayH * 0.5, z + d * 0.16, bayW, bayH, d * 0.48, pal.wallPure, null, idx, false, true);
           this.addGableRoofSolid(x, base0 + bayH, z + d * 0.16, bayW + 1.2, h * 0.22, d * 0.52, pal.obsidian, null, idx);
-          // 主楼双坡屋顶与一层的入口雨棚
           this.addGableRoofSolid(x, base0 + bodyH, z, w * 0.94, h * 0.20, d * 0.70, pal.obsidianSoft, null, idx);
-          this.addBoxSolid(x, base0 + 3.2, z + d * 0.42 + 1.2, bayW + 1.6, 0.7, 2.6, pal.accent, null, idx);
-          this.addFacadeWindows(x, base0 + 1.0, z, w * 0.84, bodyH, d * 0.66, 2, 4, pal, idx, true);
+          this.addBoxSolid(x, base0 + 3.2, z + d * 0.42 + 1.2, bayW + 1.6, 0.7, 2.6, pal.accent, null, idx, false, true);
+          this.addFacadeWindows(x, base0 + 1.0, z, w * 0.84, bodyH, d * 0.66, 2, 4, pal, idx, false);
           topY = base0 + bayH + h * 0.22 + 2.8;
         } else if (arch === 'shrine' || arch === 'pagoda') {
-          // 朱木重檐神社与飞阁楼台：挑檐屋顶 + 廊柱 + 门前朱红小鸟居
           let curY = base0;
           const tiers = arch === 'shrine' ? 2 : 3;
           for (let t = 0; t < tiers; t++) {
             const scale = 1 - t * 0.20;
             const th = (h * (arch === 'shrine' ? 0.26 : 0.20)) * (1 - t * 0.08);
-            this.addBoxSolid(x, curY + th * 0.5, z, w * 0.72 * scale, th, d * 0.68 * scale, pal.wallPure, null, idx);
-            // 朱红腰线与檐下斗拱带
-            this.addBoxSolid(x, curY + th - 0.3, z, w * 0.76 * scale, 0.6, d * 0.72 * scale, pal.accent, null, idx);
+            this.addBoxSolid(x, curY + th * 0.5, z, w * 0.72 * scale, th, d * 0.68 * scale, pal.wallPure, null, idx, false, true);
+            this.addBoxSolid(x, curY + th - 0.3, z, w * 0.76 * scale, 0.6, d * 0.72 * scale, pal.accent, null, idx, false, true);
             curY += th;
             const rh = h * 0.13;
             this.addPyramidSolid(x, curY, z, w * 0.60 * scale, rh, 4, t % 2 === 0 ? pal.obsidian : pal.accentSoft, null, idx);
             curY += rh * 0.82;
           }
-          // 门前迎宾小鸟居
           const tz = z + d * 0.48 + 2.2;
-          this.addBoxSolid(x - 2.0, base0 + 2.2, tz, 0.5, 4.4, 0.5, pal.accent, null, idx);
-          this.addBoxSolid(x + 2.0, base0 + 2.2, tz, 0.5, 4.4, 0.5, pal.accent, null, idx);
-          this.addBoxSolid(x, base0 + 4.3, tz, 5.4, 0.55, 0.7, pal.obsidian, null, idx);
+          this.addBoxSolid(x - 2.0, base0 + 2.2, tz, 0.5, 4.4, 0.5, pal.accent, null, idx, false, true);
+          this.addBoxSolid(x + 2.0, base0 + 2.2, tz, 0.5, 4.4, 0.5, pal.accent, null, idx, false, true);
+          this.addBoxSolid(x, base0 + 4.3, tz, 5.4, 0.55, 0.7, pal.obsidian, null, idx, false, true);
           topY = curY + 3.2;
         } else if (arch === 'clocktower') {
           const towerW = w * 0.58;
           const lowerH = h * 0.34;
           const belfryH = h * 0.22;
 
-          this.addBoxSolid(x, base0 + lowerH * 0.5, z, towerW, lowerH, towerW, pal.wallPure, null, idx);
-          this.addFacadeWindows(x, base0, z, towerW, lowerH, towerW, 2, 2, pal, idx, true);
+          this.addBoxSolid(x, base0 + lowerH * 0.5, z, towerW, lowerH, towerW, pal.wallPure, null, idx, false, true);
+          this.addFacadeWindows(x, base0, z, towerW, lowerH, towerW, 2, 2, pal, idx, false);
           const belfryY = base0 + lowerH;
-          this.addBoxSolid(x, belfryY + 0.5, z, towerW + 1.4, 1.0, towerW + 1.4, pal.accentSoft, null, idx);
-          this.addBoxSolid(x, belfryY + 1.0 + belfryH * 0.5, z, towerW * 0.92, belfryH, towerW * 0.92, pal.wallPure, null, idx);
+          this.addBoxSolid(x, belfryY + 0.5, z, towerW + 1.4, 1.0, towerW + 1.4, pal.accentSoft, null, idx, false, true);
+          this.addBoxSolid(x, belfryY + 1.0 + belfryH * 0.5, z, towerW * 0.92, belfryH, towerW * 0.92, pal.wallPure, null, idx, false, true);
           const cOff = towerW * 0.47;
           const cMidY = belfryY + 1.0 + belfryH * 0.52;
-          this.addBoxSolid(x, cMidY, z + cOff, towerW * 0.38, belfryH * 0.48, 0.6, pal.accentSoft, null, idx);
-          this.addBoxSolid(x + cOff, cMidY, z, 0.6, belfryH * 0.48, towerW * 0.38, pal.accentSoft, null, idx);
-          this.addBoxSolid(x - cOff, cMidY, z, 0.6, belfryH * 0.48, towerW * 0.38, pal.accentSoft, null, idx);
+          this.addBoxSolid(x, cMidY, z + cOff, towerW * 0.38, belfryH * 0.48, 0.6, pal.accentSoft, null, idx, false, true);
+          this.addBoxSolid(x + cOff, cMidY, z, 0.6, belfryH * 0.48, towerW * 0.38, pal.accentSoft, null, idx, false, true);
+          this.addBoxSolid(x - cOff, cMidY, z, 0.6, belfryH * 0.48, towerW * 0.38, pal.accentSoft, null, idx, false, true);
 
           const spireY = belfryY + 1.0 + belfryH;
           const spireH = h * 0.38;
@@ -17385,11 +17873,10 @@ ${chapDigest}
           const baseH = h * 0.44;
           this.addPrismSolid(x, base0, z, w * 0.44, baseH, 16, pal.wallPure, null, idx);
           const wingH = baseH * 0.85;
-          this.addBoxSolid(x - w * 0.48, base0 + wingH * 0.5, z - 2, w * 0.38, wingH, d * 0.42, pal.wallPure, null, idx);
+          this.addBoxSolid(x - w * 0.48, base0 + wingH * 0.5, z - 2, w * 0.38, wingH, d * 0.42, pal.wallPure, null, idx, false, true);
           this.addBevelCapSolid(x - w * 0.48, base0 + wingH, z - 2, w * 0.32, 1.3, d * 0.34, pal.obsidian, 'rgba(255,255,255,0.85)', idx);
-          // 凸出阳光花房入口门廊
-          this.addBoxSolid(x, base0 + 2.6, z + w * 0.44 + 1.0, 5.2, 5.2, 2.2, pal.wallPure, null, idx);
-          this.addBoxSolid(x, base0 + 2.2, z + w * 0.44 + 2.15, 3.4, 3.8, 0.25, pal.glassDeep, null, idx);
+          this.addBoxSolid(x, base0 + 2.6, z + w * 0.44 + 1.0, 5.2, 5.2, 2.2, pal.wallPure, null, idx, false, true);
+          this.addBoxSolid(x, base0 + 2.2, z + w * 0.44 + 2.15, 3.4, 3.8, 0.25, pal.glassDeep, null, idx, false, true);
 
           const domeY = base0 + baseH;
           const domeR = w * 0.43;
@@ -17399,36 +17886,43 @@ ${chapDigest}
           topY = domeY + domeH + 4.2;
         } else if (arch === 'hall' || arch === 'mansion') {
           const bodyH = h * 0.46;
-          this.addBoxSolid(x + 2, base0 + bodyH * 0.5, z, w * 0.72, bodyH, d * 0.68, pal.wallPure, null, idx);
-          this.addFacadeWindows(x + 2, base0, z, w * 0.68, bodyH, d * 0.68, 2, 3, pal, idx, true);
+          this.addBoxSolid(x + 2, base0 + bodyH * 0.5, z, w * 0.72, bodyH, d * 0.68, pal.wallPure, null, idx, false, true);
+          this.addFacadeWindows(x + 2, base0, z, w * 0.68, bodyH, d * 0.68, 2, 3, pal, idx, false);
           const roofY = base0 + bodyH;
           const roofH = h * 0.30;
           this.addGableRoofSolid(x + 2, roofY, z, w * 0.78, roofH, d * 0.74, pal.obsidian, null, idx);
 
           const sideTowerH = bodyH * 1.05;
-          this.addBoxSolid(x - w * 0.34, base0 + sideTowerH * 0.5, z - 1, w * 0.32, sideTowerH, d * 0.32, pal.wallPure, null, idx);
+          this.addBoxSolid(x - w * 0.34, base0 + sideTowerH * 0.5, z - 1, w * 0.32, sideTowerH, d * 0.32, pal.wallPure, null, idx, false, true);
           this.addPyramidSolid(x - w * 0.34, base0 + sideTowerH, z - 1, w * 0.24, roofH * 1.45, 16, pal.obsidianSoft, null, idx);
           topY = base0 + sideTowerH + roofH * 1.45 + 2.5;
         } else if (arch === 'ward' || arch === 'courtyard') {
           const h1 = h * 0.52;
           const h2 = h * 0.38;
-          this.addBoxSolid(x - w * 0.16, base0 + h1 * 0.5, z - 1, w * 0.56, h1, d * 0.56, pal.wallPure, null, idx);
+          this.addBoxSolid(x - w * 0.16, base0 + h1 * 0.5, z - 1, w * 0.56, h1, d * 0.56, pal.wallPure, null, idx, false, true);
           this.addBevelCapSolid(x - w * 0.16, base0 + h1, z - 1, w * 0.42, 1.5, d * 0.42, pal.obsidian, 'rgba(255,255,255,0.85)', idx);
-          this.addFacadeWindows(x - w * 0.16, base0, z - 1, w * 0.52, h1, d * 0.56, 2, 2, pal, idx, true);
+          this.addFacadeWindows(x - w * 0.16, base0, z - 1, w * 0.52, h1, d * 0.56, 2, 2, pal, idx, false);
 
-          this.addBoxSolid(x + w * 0.24, base0 + h2 * 0.5, z + 3, w * 0.48, h2, d * 0.48, pal.wallPure, null, idx);
+          this.addBoxSolid(x + w * 0.24, base0 + h2 * 0.5, z + 3, w * 0.48, h2, d * 0.48, pal.wallPure, null, idx, false, true);
           this.addBevelCapSolid(x + w * 0.24, base0 + h2, z + 3, w * 0.36, 1.3, d * 0.36, pal.accentSoft, 'rgba(255,255,255,0.85)', idx);
           topY = base0 + h1 + 4.0;
         } else if (arch === 'observatory') {
           const cylH = h * 0.48;
           this.addPrismSolid(x, base0, z, w * 0.42, cylH, 16, pal.wallPure, null, idx);
-          this.addBoxSolid(x, base0 + cylH * 0.65, z, w * 0.92, 1.1, d * 0.46, pal.accentSoft, null, idx);
+          this.addBoxSolid(x, base0 + cylH * 0.65, z, w * 0.92, 1.1, d * 0.46, pal.accentSoft, null, idx, false, true);
           this.addDomeSolid(x, base0 + cylH, z, w * 0.40, h * 0.36, 18, pal.obsidian, 'rgba(255,255,255,0.85)', idx);
           topY = base0 + cylH + h * 0.36 + 3.0;
+        } else if (arch === 'freeform') {
+          // 自由原语拼装模式：若 AI 使用了 freeform，不仅渲染全部 parts，还保底生成精致主楼与立面窗格，确保绝不简陋
+          const bodyH = h * 0.45;
+          this.addBoxSolid(x, base0 + bodyH * 0.5, z, w * 0.72, bodyH, d * 0.68, pal.wallPure, null, idx, false, true);
+          this.addFacadeWindows(x, base0, z, w * 0.68, bodyH, d * 0.68, 2, 3, pal, idx, false);
+          this.addBevelCapSolid(x, base0 + bodyH, z, w * 0.76, 1.2, d * 0.72, pal.obsidian, null, idx);
+          topY = base0 + bodyH + 4.5;
         } else {
           const castleH = h * 0.46;
-          this.addBoxSolid(x - 2, base0 + castleH * 0.5, z, w * 0.68, castleH, d * 0.68, pal.wallPure, null, idx);
-          this.addFacadeWindows(x - 2, base0, z, w * 0.64, castleH, d * 0.68, 2, 2, pal, idx, true);
+          this.addBoxSolid(x - 2, base0 + castleH * 0.5, z, w * 0.68, castleH, d * 0.68, pal.wallPure, null, idx, false, true);
+          this.addFacadeWindows(x - 2, base0, z, w * 0.64, castleH, d * 0.68, 2, 2, pal, idx, false);
           const baseTop = base0 + castleH;
           const mainSpireH = h * 0.36;
           this.addPyramidSolid(x - 2, baseTop, z, w * 0.26, mainSpireH, 16, pal.accentSoft, null, idx);
@@ -17441,27 +17935,17 @@ ${chapDigest}
             this.addPyramidSolid(x - 2 + c.dx, baseTop, z + c.dz, c.r, c.sh, 16, c.col, null, idx);
           });
           const sideH = castleH * 0.92;
-          this.addBoxSolid(x + w * 0.42, base0 + sideH * 0.5, z - 2, w * 0.38, sideH, d * 0.38, pal.wallPure, null, idx);
+          this.addBoxSolid(x + w * 0.42, base0 + sideH * 0.5, z - 2, w * 0.38, sideH, d * 0.38, pal.wallPure, null, idx, false, true);
           this.addBevelCapSolid(x + w * 0.42, base0 + sideH, z - 2, w * 0.30, 1.3, d * 0.30, pal.accentSoft, 'rgba(255,255,255,0.85)', idx);
           topY = baseTop + mainSpireH + 3.2;
         }
 
-        // 叠加 AI 针对该建筑定制的额外凹凸特征构件
-        if (Array.isArray(zone.customParts)) {
-          zone.customParts.slice(0, 4).forEach(cp => {
-            const dx = Math.max(-10, Math.min(10, Number(cp.dx) || 0));
-            const dy = Math.max(2, Math.min(20, Number(cp.dy) || 5));
-            const dz = Math.max(-10, Math.min(10, Number(cp.dz) || 0));
-            const pw = Math.max(2, Math.min(12, Number(cp.w) || 5));
-            const ph = Math.max(1, Math.min(8, Number(cp.h) || 2.5));
-            const pd = Math.max(1, Math.min(10, Number(cp.d) || 3));
-            let pCol = pal.wallPure;
-            if (cp.tone === 'accent') pCol = pal.accent;
-            else if (cp.tone === 'roof') pCol = pal.obsidian;
-            else if (cp.tone === 'glass') pCol = pal.glassDeep;
-            this.addBoxSolid(x + dx, base0 + dy, z + dz, pw, ph, pd, pCol, null, idx);
-          });
-        }
+        // 叠加 AI 针对该建筑编写的万能 3D 构件原语列表 (parts 或 customParts)
+        const extraParts = Array.isArray(zone.parts) ? zone.parts : (Array.isArray(zone.customParts) ? zone.customParts : []);
+        extraParts.slice(0, 12).forEach(cp => {
+          const partTop = this.buildUniversalPart(x, base0, z, cp, pal, idx);
+          if (partTop > topY) topY = partTop;
+        });
 
         this.labelAnchors.push({
           zoneIdx: idx,
@@ -17544,52 +18028,38 @@ ${chapDigest}
 
     initCloudsAndAnimals(data, worldType) {
       this.clouds = [
-        { x: -34, y: 42, z: -26, scale: 1.15, speed: 0.028 },
-        { x: 24, y: 46, z: -20, scale: 0.95, speed: 0.022 },
-        { x: -12, y: 44, z: 18, scale: 0.85, speed: 0.032 },
-        { x: 36, y: 40, z: 14, scale: 1.05, speed: 0.025 }
+        { x: -42, y: 45, z: -28, scale: 1.22, speed: 0.024 },
+        { x: 28, y: 49, z: -22, scale: 1.02, speed: 0.019 },
+        { x: -16, y: 47, z: 20, scale: 0.92, speed: 0.028 },
+        { x: 40, y: 43, z: 16, scale: 1.12, speed: 0.022 }
       ];
 
-      let rawAnimals = Array.isArray(data.animals) && data.animals.length > 0 ? data.animals : null;
-      if (!rawAnimals) {
-        if (worldType === 'apartment_cutaway' || worldType === 'modern_street') {
-          rawAnimals = [
-            { type: 'cat', x: -10, z: 10 },
-            { type: 'cat', x: 16, z: 14 },
-            { type: 'bird', x: -20, z: -4 }
-          ];
-        } else if (worldType === 'treehouse_forest' || worldType === 'shrine') {
-          rawAnimals = [
-            { type: 'bunny', x: -14, z: 10 },
-            { type: 'bunny', x: 14, z: 12 },
-            { type: 'bird', x: 0, z: -6 }
-          ];
-        } else {
-          rawAnimals = [
-            { type: 'bunny', x: -14, z: 12 },
-            { type: 'cat', x: 16, z: 10 },
-            { type: 'bird', x: -6, z: -6 }
-          ];
-        }
-      }
+      // 仅当 AI 或模组文本明确生成了小动物时才放置，绝不每张地图强行塞入固定动物，且剔除怪异飞鸟
+      const rawAnimals = Array.isArray(data.animals) && data.animals.length > 0 ? data.animals : [];
+      this.animals = rawAnimals
+        .filter(a => a && a.type && a.type !== 'none')
+        .slice(0, 6)
+        .map((a, idx) => {
+          let cleanType = String(a.type || 'cat').toLowerCase();
+          if (cleanType === 'bird') cleanType = 'bunny';
+          if (!['cat', 'bunny', 'puppy', 'deer'].includes(cleanType)) cleanType = 'cat';
 
-      this.animals = rawAnimals.map((a, idx) => {
-        const pos = this.findSafeOpenSpot(Number(a.x) || 0, Number(a.z) || 10, idx);
-        const target = this.findSafeOpenSpot(pos.x + (idx % 2 === 0 ? 14 : -14), pos.z + 8, idx + 3);
-        return {
-          type: String(a.type || 'bunny'),
-          x: pos.x,
-          z: pos.z,
-          tx: target.x,
-          tz: target.z,
-          heading: 0,
-          phase: idx * 1.7,
-          speed: a.type === 'bird' ? 0.09 : 0.055
-        };
-      });
+          const pos = this.findSafeOpenSpot(Number(a.x) || 0, Number(a.z) || 12, idx);
+          const target = this.findSafeOpenSpot(pos.x + (idx % 2 === 0 ? 16 : -16), pos.z + 8, idx + 3);
+          return {
+            type: cleanType,
+            x: pos.x,
+            z: pos.z,
+            tx: target.x,
+            tz: target.z,
+            heading: 0,
+            phase: idx * 1.7,
+            speed: cleanType === 'deer' ? 0.045 : 0.052
+          };
+        });
     },
 
-    isSpotInsideBuilding(x, z, margin = 2.0) {
+    isSpotInsideBuilding(x, z, margin = 2.6) {
       for (let i = 0; i < this.buildingBounds.length; i++) {
         const b = this.buildingBounds[i];
         if (Math.abs(x - b.x) < b.hw + margin && Math.abs(z - b.z) < b.hd + margin) {
@@ -17600,27 +18070,29 @@ ${chapDigest}
     },
 
     findSafeOpenSpot(prefX, prefZ, seed = 0) {
-      let x = Math.max(-40, Math.min(40, prefX));
-      let z = Math.max(-28, Math.min(30, prefZ));
-      if (!this.isSpotInsideBuilding(x, z, 2.2)) return { x, z };
+      let x = Math.max(-52, Math.min(52, prefX));
+      let z = Math.max(-34, Math.min(36, prefZ));
+      if (!this.isSpotInsideBuilding(x, z, 2.6)) return { x, z };
 
       const candidates = [
         { x: 0, z: 8 },
-        { x: -16, z: 8 },
-        { x: 16, z: 8 },
-        { x: 0, z: 28 },
-        { x: -20, z: -2 },
-        { x: 20, z: -2 },
-        { x: -12, z: 18 },
-        { x: 12, z: 18 }
+        { x: -18, z: 8 },
+        { x: 18, z: 8 },
+        { x: -34, z: 8 },
+        { x: 34, z: 8 },
+        { x: 0, z: 26 },
+        { x: -22, z: -4 },
+        { x: 22, z: -4 },
+        { x: -14, z: 20 },
+        { x: 14, z: 20 }
       ];
       for (let i = 0; i < candidates.length; i++) {
         const c = candidates[(i + seed) % candidates.length];
-        if (!this.isSpotInsideBuilding(c.x, c.z, 1.8)) {
+        if (!this.isSpotInsideBuilding(c.x, c.z, 2.4)) {
           return { x: c.x, z: c.z };
         }
       }
-      return { x: 0, z: 30 };
+      return { x: 0, z: 34 };
     },
 
     createFloatingLabels(data) {
@@ -17668,6 +18140,27 @@ ${chapDigest}
 
     getZoneSvgIcon(archType, isSelected) {
       const stroke = isSelected ? '#ffffff' : 'currentColor';
+      if (archType === 'amusement_park') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="7"/><circle cx="12" cy="10" r="2"/><path d="M12 12L7 21"/><path d="M12 12l5 9"/><path d="M5 21h14"/></svg>`;
+      }
+      if (archType === 'aquarium') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16s3-6 10-6 10 6 10 6-3 6-10 6-10-6-10-6Z"/><circle cx="16" cy="15" r="1"/><path d="M4 8c2-2 5-2 7 0s5 2 7 0"/></svg>`;
+      }
+      if (archType === 'restaurant') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18"/><path d="M4 10l2-6h12l2 6"/><path d="M5 10v10h14V10"/><path d="M10 14h4v6h-4z"/></svg>`;
+      }
+      if (archType === 'station') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16"/><circle cx="8.5" cy="14.5" r="1"/><circle cx="15.5" cy="14.5" r="1"/><path d="M7 21l2-3"/><path d="M17 21l-2-3"/></svg>`;
+      }
+      if (archType === 'chess_parlor') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14"/><path d="M15 5v14"/><path d="M3 12h18"/></svg>`;
+      }
+      if (archType === 'police_station') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4z"/><path d="M12 8v5"/><circle cx="12" cy="16" r="0.8"/></svg>`;
+      }
+      if (archType === 'floating_island') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16l-6 10h-4L4 11z"/><path d="M8 11V6l4-3 4 3v5"/></svg>`;
+      }
       if (archType === 'convenience_store' || archType === 'modern_store') {
         return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l2-5h14l2 5"/><path d="M3 9h18v11H3z"/><path d="M9 20v-6h6v6"/></svg>`;
       }
@@ -17742,13 +18235,13 @@ ${chapDigest}
 
       if (zoneIdx >= 0 && zoneIdx < zones.length) {
         const target = zones[zoneIdx];
-        this.camera.targetPanX = -(target._px ?? target.x ?? 0) * 0.35;
-        this.camera.targetPanZ = -(target._pz ?? target.z ?? 0) * 0.35;
-        this.camera.targetZoom = 1.12;
+        this.camera.targetPanX = -(target._px ?? target.x ?? 0) * 0.42;
+        this.camera.targetPanZ = -(target._pz ?? target.z ?? 0) * 0.42;
+        this.camera.targetZoom = 1.18;
       } else {
         this.camera.targetPanX = 0;
         this.camera.targetPanZ = 0;
-        this.camera.targetZoom = 1.0;
+        this.camera.targetZoom = 0.94;
       }
 
       if (!animate) {
@@ -17847,7 +18340,45 @@ ${chapDigest}
     },
 
     bindCanvasEvents(canvas) {
+      let pinchStartDist = 0;
+      let pinchStartZoom = 1.0;
+      let isPinching = false;
+
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches.length === 2) {
+          isPinching = true;
+          this.pointer.isDown = false;
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          pinchStartDist = Math.max(10, Math.hypot(dx, dy));
+          pinchStartZoom = this.camera.targetZoom || this.camera.zoom || 1.0;
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (isPinching && e.touches && e.touches.length === 2) {
+          e.preventDefault();
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const dist = Math.max(10, Math.hypot(dx, dy));
+          const ratio = dist / pinchStartDist;
+          this.camera.targetZoom = Math.max(0.62, Math.min(1.85, pinchStartZoom * ratio));
+          this.camera.zoom = this.camera.targetZoom;
+          this.requestRender();
+        }
+      }, { passive: false });
+
+      const endTouchPinch = (e) => {
+        if (!e.touches || e.touches.length < 2) {
+          isPinching = false;
+        }
+      };
+      canvas.addEventListener('touchend', endTouchPinch);
+      canvas.addEventListener('touchcancel', endTouchPinch);
+
       canvas.addEventListener('pointerdown', (e) => {
+        if (isPinching) return;
         this.pointer.isDown = true;
         this.pointer.startX = e.clientX;
         this.pointer.startY = e.clientY;
@@ -17858,7 +18389,7 @@ ${chapDigest}
       });
 
       canvas.addEventListener('pointermove', (e) => {
-        if (!this.pointer.isDown) return;
+        if (isPinching || !this.pointer.isDown) return;
         const dx = e.clientX - this.pointer.lastX;
         const dy = e.clientY - this.pointer.lastY;
         if (Math.hypot(e.clientX - this.pointer.startX, e.clientY - this.pointer.startY) > 5) {
@@ -17869,7 +18400,7 @@ ${chapDigest}
 
         this.camera.targetYaw -= dx * 0.0095;
         this.camera.yaw = this.camera.targetYaw;
-        this.camera.targetPitch = Math.max(0.30, Math.min(1.18, this.camera.targetPitch + dy * 0.0065));
+        this.camera.targetPitch = Math.max(0.28, Math.min(1.18, this.camera.targetPitch + dy * 0.0065));
         this.camera.pitch = this.camera.targetPitch;
         this.requestRender();
       });
@@ -17877,7 +18408,7 @@ ${chapDigest}
       const endPointer = (e) => {
         if (!this.pointer.isDown) return;
         this.pointer.isDown = false;
-        if (!this.pointer.moved) {
+        if (!this.pointer.moved && !isPinching) {
           this.handleCanvasTap(e, canvas);
         }
       };
@@ -17888,7 +18419,7 @@ ${chapDigest}
       canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? -0.08 : 0.08;
-        this.camera.targetZoom = Math.max(0.75, Math.min(1.65, this.camera.targetZoom + delta));
+        this.camera.targetZoom = Math.max(0.62, Math.min(1.85, this.camera.targetZoom + delta));
         this.requestRender();
       }, { passive: false });
     },
@@ -17964,36 +18495,35 @@ ${chapDigest}
       // 1. 高空半透明云朵缓慢飘动
       if (Array.isArray(this.clouds)) {
         this.clouds.forEach(c => {
-          c.x += c.speed || 0.025;
-          if (c.x > 54) c.x = -54;
+          c.x += c.speed || 0.024;
+          if (c.x > 64) c.x = -64;
         });
       }
 
-      // 2. 可爱小动物沿着草坪与街道巡游，自动避开所有建筑防穿模
-      if (Array.isArray(this.animals)) {
+      // 2. 3D 实体小动物沿着草坪与街道巡游，自动避开所有建筑并且参与真实 3D 遮挡
+      if (Array.isArray(this.animals) && this.animals.length > 0) {
         this.animals.forEach((a, idx) => {
           const dx = a.tx - a.x;
           const dz = a.tz - a.z;
           const dist = Math.hypot(dx, dz);
-          if (dist < 1.2) {
+          if (dist < 1.3) {
             const nextSpot = this.findSafeOpenSpot(
-              (Math.sin(this.animClock + idx * 2.1) * 28),
-              (Math.cos(this.animClock * 0.7 + idx * 1.7) * 20) + 6,
+              (Math.sin(this.animClock + idx * 2.1) * 34),
+              (Math.cos(this.animClock * 0.7 + idx * 1.7) * 22) + 6,
               idx + Math.floor(this.animClock)
             );
             a.tx = nextSpot.x;
             a.tz = nextSpot.z;
           } else {
-            const step = a.speed || 0.055;
+            const step = a.speed || 0.05;
             const nx = a.x + (dx / dist) * step;
             const nz = a.z + (dz / dist) * step;
-            if (!this.isSpotInsideBuilding(nx, nz, 1.8)) {
+            if (!this.isSpotInsideBuilding(nx, nz, 2.4)) {
               a.x = nx;
               a.z = nz;
               a.heading = Math.atan2(dx, dz);
             } else {
-              // 遇到建筑边缘时立刻换向到安全空地
-              const safe = this.findSafeOpenSpot(-a.x * 0.6, a.z + 8, idx + 2);
+              const safe = this.findSafeOpenSpot(-a.x * 0.65, a.z + 9, idx + 2);
               a.tx = safe.x;
               a.tz = safe.z;
             }
@@ -18043,112 +18573,79 @@ ${chapDigest}
       }
     },
 
-    drawCuteAnimals(ctx, cosY, sinY, cosP, sinP, baseScale, centerX, centerY, pal) {
-      if (!Array.isArray(this.animals) || this.animals.length === 0) return;
+    createAnimalPartBox(cx, y0, cz, w, h, d, color, trimStroke) {
+      const hw = w / 2;
+      const hd = d / 2;
+      const y1 = y0 + h;
+      const v = [
+        { x: cx - hw, y: y0, z: cz + hd },
+        { x: cx + hw, y: y0, z: cz + hd },
+        { x: cx + hw, y: y0, z: cz - hd },
+        { x: cx - hw, y: y0, z: cz - hd },
+        { x: cx - hw, y: y1, z: cz + hd },
+        { x: cx + hw, y: y1, z: cz + hd },
+        { x: cx + hw, y: y1, z: cz - hd },
+        { x: cx - hw, y: y1, z: cz - hd }
+      ];
+      return this.createConvexSolid([
+        { verts: [v[0], v[1], v[5], v[4]], color, trimStroke, cullBack: true },
+        { verts: [v[1], v[2], v[6], v[5]], color, trimStroke, cullBack: true },
+        { verts: [v[2], v[3], v[7], v[6]], color, trimStroke, cullBack: true },
+        { verts: [v[3], v[0], v[4], v[7]], color, trimStroke, cullBack: true },
+        { verts: [v[4], v[5], v[6], v[7]], color, trimStroke, cullBack: true }
+      ], { x: cx, y: y0 + h * 0.5, z: cz }, false, -1, false, false);
+    },
+
+    buildDynamicAnimalSolids(pal) {
+      if (!Array.isArray(this.animals) || this.animals.length === 0) return [];
+      const list = [];
 
       this.animals.forEach((a, idx) => {
         const bounce = a.type === 'bunny'
-          ? Math.abs(Math.sin(this.animClock * 3.2 + a.phase)) * 0.85
-          : a.type === 'bird'
-            ? 2.2 + Math.sin(this.animClock * 4.0 + a.phase) * 0.65
-            : Math.abs(Math.sin(this.animClock * 2.6 + a.phase)) * 0.35;
+          ? Math.abs(Math.sin(this.animClock * 3.1 + a.phase)) * 0.55
+          : Math.abs(Math.sin(this.animClock * 2.5 + a.phase)) * 0.25;
 
-        const groundProj = this.projectPoint({ x: a.x, y: 0.15, z: a.z }, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
-        const bodyProj = this.projectPoint({ x: a.x, y: 0.9 + bounce, z: a.z }, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
-        const s = Math.max(0.7, this.camera.zoom * (bodyProj.persp || 1));
+        const dirX = Math.sin(a.heading || 0);
+        const dirZ = Math.cos(a.heading || 0);
+        const sideX = dirZ;
+        const sideZ = -dirX;
+        const baseY = 0.22 + bounce;
 
-        ctx.save();
-        // 地面小圆影子
-        ctx.fillStyle = 'rgba(36, 44, 62, 0.18)';
-        ctx.beginPath();
-        ctx.ellipse(groundProj.x, groundProj.y, 4.2 * s, 2.2 * s, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.translate(bodyProj.x, bodyProj.y);
-
+        let bodyCol = '#ffffff';
+        let earCol = '#fbb6ce';
         if (a.type === 'cat') {
-          // 软萌小猫咪：圆润身体 + 小尖耳 + 摇摆尾巴
-          const catColor = idx % 2 === 0 ? '#f6ad55' : '#ffffff';
-          const earColor = idx % 2 === 0 ? '#dd6b20' : '#f687b3';
-          const tailWag = Math.sin(this.animClock * 3.5 + a.phase) * 2.5;
-          ctx.strokeStyle = catColor;
-          ctx.lineWidth = 2.0 * s;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(-3.5 * s, 0);
-          ctx.quadraticCurveTo(-7.2 * s, (-3.5 + tailWag) * s, -5.8 * s, (-6.2 + tailWag) * s);
-          ctx.stroke();
-
-          ctx.fillStyle = catColor;
-          ctx.beginPath();
-          ctx.ellipse(0, 0.5 * s, 4.2 * s, 3.1 * s, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.beginPath();
-          ctx.arc(2.6 * s, -2.0 * s, 2.7 * s, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = earColor;
-          ctx.beginPath();
-          ctx.moveTo(1.2 * s, -4.0 * s);
-          ctx.lineTo(2.0 * s, -6.5 * s);
-          ctx.lineTo(3.0 * s, -4.2 * s);
-          ctx.closePath();
-          ctx.fill();
-
-          ctx.beginPath();
-          ctx.moveTo(3.0 * s, -4.2 * s);
-          ctx.lineTo(4.3 * s, -6.4 * s);
-          ctx.lineTo(4.8 * s, -3.6 * s);
-          ctx.closePath();
-          ctx.fill();
-        } else if (a.type === 'bird') {
-          // 灵动小飞鸟：圆润蓝白羽毛与拍动翅膀
-          const wingY = Math.sin(this.animClock * 7.5 + a.phase) * 3.0;
-          ctx.fillStyle = '#63b3ed';
-          ctx.beginPath();
-          ctx.ellipse(0, 0, 3.4 * s, 2.3 * s, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.6 * s;
-          ctx.beginPath();
-          ctx.moveTo(-1 * s, 0);
-          ctx.lineTo(-3.8 * s, (-2.2 + wingY) * s);
-          ctx.moveTo(1 * s, 0);
-          ctx.lineTo(3.8 * s, (-2.2 + wingY) * s);
-          ctx.stroke();
-        } else {
-          // 软萌长耳小雪兔：雪白绒球身体 + 粉色内耳 + 小圆尾
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(-3.5 * s, 0.8 * s, 1.6 * s, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.beginPath();
-          ctx.ellipse(0, 0.5 * s, 4.0 * s, 3.0 * s, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.beginPath();
-          ctx.arc(2.4 * s, -1.8 * s, 2.5 * s, 0, Math.PI * 2);
-          ctx.fill();
-
-          // 两只长兔耳
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.ellipse(1.7 * s, -5.2 * s, 0.95 * s, 2.6 * s, -0.15, 0, Math.PI * 2);
-          ctx.ellipse(3.2 * s, -5.1 * s, 0.95 * s, 2.6 * s, 0.15, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = '#fbb6ce';
-          ctx.beginPath();
-          ctx.ellipse(1.7 * s, -5.1 * s, 0.45 * s, 1.6 * s, -0.15, 0, Math.PI * 2);
-          ctx.ellipse(3.2 * s, -5.0 * s, 0.45 * s, 1.6 * s, 0.15, 0, Math.PI * 2);
-          ctx.fill();
+          bodyCol = idx % 2 === 0 ? '#f6ad55' : '#ffffff';
+          earCol = idx % 2 === 0 ? '#dd6b20' : '#f687b3';
+        } else if (a.type === 'puppy') {
+          bodyCol = '#e6b88a';
+          earCol = '#8c583a';
+        } else if (a.type === 'deer') {
+          bodyCol = '#d69e5c';
+          earCol = '#fefcbf';
         }
 
-        ctx.restore();
+        // 身体 3D 块
+        const bodyH = a.type === 'deer' ? 1.15 : 0.85;
+        list.push(this.createAnimalPartBox(a.x, baseY, a.z, 1.15, bodyH, 1.35, bodyCol, pal.trim));
+
+        // 头部 3D 块
+        const headX = a.x + dirX * 0.68;
+        const headZ = a.z + dirZ * 0.68;
+        const headY = baseY + bodyH * 0.55;
+        list.push(this.createAnimalPartBox(headX, headY, headZ, 0.92, 0.82, 0.92, bodyCol, pal.trim));
+
+        // 双耳或鹿角 3D 块
+        const earH = a.type === 'bunny' ? 0.78 : a.type === 'deer' ? 0.72 : 0.42;
+        list.push(this.createAnimalPartBox(headX + sideX * 0.26, headY + 0.76, headZ + sideZ * 0.26, 0.26, earH, 0.26, earCol, null));
+        list.push(this.createAnimalPartBox(headX - sideX * 0.26, headY + 0.76, headZ - sideZ * 0.26, 0.26, earH, 0.26, earCol, null));
+
+        // 尾巴 3D 块
+        const tailX = a.x - dirX * 0.72;
+        const tailZ = a.z - dirZ * 0.72;
+        list.push(this.createAnimalPartBox(tailX, baseY + bodyH * 0.45, tailZ, 0.36, 0.45, 0.36, earCol, null));
       });
+
+      return list;
     },
 
     drawDriftingClouds(ctx, cosY, sinY, cosP, sinP, baseScale, centerX, centerY) {
@@ -18158,24 +18655,31 @@ ${chapDigest}
         const proj = this.projectPoint({ x: c.x, y: c.y, z: c.z }, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
         const s = (c.scale || 1) * this.camera.zoom * 0.95;
 
-        // 云朵投在地面上的淡淡云影
+        // 云朵投在地面上的柔和云影
         const groundShadow = this.projectPoint({ x: c.x + 8, y: 0.1, z: c.z + 6 }, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
         ctx.save();
         ctx.fillStyle = 'rgba(45, 58, 82, 0.045)';
         ctx.beginPath();
-        ctx.ellipse(groundShadow.x, groundShadow.y, 24 * s, 11 * s, 0, 0, Math.PI * 2);
+        ctx.ellipse(groundShadow.x, groundShadow.y, 26 * s, 11 * s, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // 高空半透明片状云团
+        // 一体闭合的柔美积云轮廓，彻底消除多圆拼接产生的内部小三角伪影
         ctx.save();
         ctx.translate(proj.x, proj.y);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.56)';
+        const cloudGrad = ctx.createLinearGradient(0, -18 * s, 0, 9 * s);
+        cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.84)');
+        cloudGrad.addColorStop(0.68, 'rgba(255, 255, 255, 0.64)');
+        cloudGrad.addColorStop(1, 'rgba(236, 244, 255, 0.42)');
+        ctx.fillStyle = cloudGrad;
+
         ctx.beginPath();
-        ctx.arc(0, 0, 14 * s, 0, Math.PI * 2);
-        ctx.arc(-12 * s, 3 * s, 10 * s, 0, Math.PI * 2);
-        ctx.arc(13 * s, 2 * s, 11 * s, 0, Math.PI * 2);
-        ctx.arc(5 * s, -5 * s, 9.5 * s, 0, Math.PI * 2);
+        ctx.moveTo(-20 * s, 6 * s);
+        ctx.bezierCurveTo(-27 * s, 6 * s, -28 * s, -4 * s, -19 * s, -6 * s);
+        ctx.bezierCurveTo(-18 * s, -15 * s, -6 * s, -17 * s, -1 * s, -11 * s);
+        ctx.bezierCurveTo(4 * s, -19 * s, 17 * s, -17 * s, 19 * s, -6 * s);
+        ctx.bezierCurveTo(28 * s, -5 * s, 28 * s, 6 * s, 19 * s, 6 * s);
+        ctx.closePath();
         ctx.fill();
         ctx.restore();
       });
@@ -18196,15 +18700,7 @@ ${chapDigest}
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, cssW, cssH);
 
-      // 1. 阳光明媚的半厚涂插画天空背景渐变
       const pal = this.resolveThemePalette();
-      const skyGrad = ctx.createLinearGradient(0, 0, 0, cssH);
-      skyGrad.addColorStop(0, pal.skyTop || '#ffffff');
-      skyGrad.addColorStop(0.55, pal.skyBottom || pal.accentGlow);
-      skyGrad.addColorStop(1, pal.accentLight || '#f5f8fc');
-      ctx.fillStyle = skyGrad;
-      ctx.fillRect(0, 0, cssW, cssH);
-
       const cosY = Math.cos(this.camera.yaw);
       const sinY = Math.sin(this.camera.yaw);
       const cosP = Math.cos(this.camera.pitch);
@@ -18215,15 +18711,44 @@ ${chapDigest}
       const Vy = sinP;
       const Vz = cosY * cosP;
 
-      // 明媚暖阳光方向向量 L（从左上方斜射而下，形成鲜明受光面与背光面对比）
+      // 明媚暖阳光方向向量 L
       const Lx = -0.48;
       const Ly = 0.76;
       const Lz = 0.43;
 
-      const baseScale = (Math.min(cssW, cssH) / 112) * this.camera.zoom;
+      const baseScale = (Math.min(cssW, cssH) / 118) * this.camera.zoom;
       const centerX = cssW * 0.5;
-      const pitchRatio = (this.camera.pitch - 0.30) / (1.18 - 0.30);
-      const centerY = cssH * (0.61 - pitchRatio * 0.09);
+      const pitchRatio = (this.camera.pitch - 0.28) / (1.18 - 0.28);
+      const centerY = cssH * (0.59 - pitchRatio * 0.08);
+
+      // 1. 远景天际线与无尽大地地平线层：拉到水平或俯视时下方永远是温暖的大地与远山，绝不露出下方的天空
+      const horizonY = Math.max(cssH * 0.24, Math.min(cssH * 0.62, centerY - 22 * this.camera.zoom));
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY + 28);
+      skyGrad.addColorStop(0, pal.skyTop || '#ffffff');
+      skyGrad.addColorStop(1, pal.skyBottom || pal.accentGlow);
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, cssW, horizonY + 28);
+
+      const earthGrad = ctx.createLinearGradient(0, horizonY - 8, 0, cssH);
+      earthGrad.addColorStop(0, this.mixHex(pal.grass || '#8fd182', pal.skyBottom || '#fff6e3', 0.48));
+      earthGrad.addColorStop(0.32, this.mixHex(pal.grass || '#8fd182', pal.terraceTop || '#f5efe6', 0.32));
+      earthGrad.addColorStop(1, this.shadeColor(pal.terraceSide || '#d9cfc3', 0.92));
+      ctx.fillStyle = earthGrad;
+      ctx.beginPath();
+      ctx.moveTo(0, horizonY);
+      ctx.quadraticCurveTo(cssW * 0.28, horizonY - 8, cssW * 0.55, horizonY - 2);
+      ctx.quadraticCurveTo(cssW * 0.80, horizonY + 4, cssW, horizonY - 4);
+      ctx.lineTo(cssW, cssH);
+      ctx.lineTo(0, cssH);
+      ctx.closePath();
+      ctx.fill();
+
+      // 左上角暖金晨光光晕，营造半厚涂插画光感
+      const sunGrad = ctx.createRadialGradient(cssW * 0.14, cssH * 0.08, 4, cssW * 0.14, cssH * 0.08, cssW * 0.55);
+      sunGrad.addColorStop(0, 'rgba(255, 250, 230, 0.52)');
+      sunGrad.addColorStop(1, 'rgba(255, 250, 230, 0)');
+      ctx.fillStyle = sunGrad;
+      ctx.fillRect(0, 0, cssW, cssH * 0.65);
 
       // 2. 绘制底层多分区地形基座
       const baseSolids = this.solids.filter(s => s.isBaseLayer);
@@ -18246,10 +18771,10 @@ ${chapDigest}
         ctx.fill();
       });
 
-      // 4. 绘制建筑在阳光下的真实地面斜向投射阴影（半透明冷紫灰，让建筑稳稳立在地面上）
+      // 4. 绘制建筑与小动物在阳光下的真实地面投射阴影
       if (Array.isArray(this.shadowPolys) && this.shadowPolys.length > 0) {
         ctx.save();
-        ctx.fillStyle = pal.shadowTint || 'rgba(38, 46, 68, 0.16)';
+        ctx.fillStyle = pal.shadowTint || 'rgba(38, 46, 68, 0.18)';
         this.shadowPolys.forEach(sp => {
           const pts = sp.verts.map(v => this.projectPoint(v, cosY, sinY, cosP, sinP, baseScale, centerX, centerY));
           ctx.beginPath();
@@ -18280,17 +18805,16 @@ ${chapDigest}
         ctx.restore();
       });
 
-      // 6. 绘制所有地上有棱有角、有凹有凸的立体建筑与环境小品
+      // 6. 将地上立体建筑与 3D 实体小动物合并做统一深度遮挡排序渲染，动物在建筑后方时会被建筑自然遮挡，绝不穿模透视
       const upperSolids = this.solids.filter(s => !s.isBaseLayer);
-      this.renderSolidList(ctx, upperSolids, cosY, sinY, cosP, sinP, Vx, Vy, Vz, Lx, Ly, Lz, baseScale, centerX, centerY, pal);
+      const animalSolids = this.buildDynamicAnimalSolids(pal);
+      const combinedSolids = animalSolids.length > 0 ? upperSolids.concat(animalSolids) : upperSolids;
+      this.renderSolidList(ctx, combinedSolids, cosY, sinY, cosP, sinP, Vx, Vy, Vz, Lx, Ly, Lz, baseScale, centerX, centerY, pal);
 
-      // 7. 绘制在街道与草坪上漫步的可爱防穿模小动物
-      this.drawCuteAnimals(ctx, cosY, sinY, cosP, sinP, baseScale, centerX, centerY, pal);
-
-      // 8. 绘制高空半透明片状浮云
+      // 7. 绘制高空半透明一体式积云
       this.drawDriftingClouds(ctx, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
 
-      // 9. 计算屋顶悬浮铭牌位置并自动防重叠排布
+      // 8. 计算屋顶悬浮铭牌位置并自动防重叠排布
       const labelItems = this.labelAnchors.map((anchor, idx) => {
         const proj = this.projectPoint(anchor, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
         anchor.screenX = proj.x;
@@ -18349,7 +18873,8 @@ ${chapDigest}
     },
 
     renderSolidList(ctx, solidList, cosY, sinY, cosP, sinP, Vx, Vy, Vz, Lx, Ly, Lz, baseScale, centerX, centerY, pal) {
-      const sortedSolids = solidList.map(s => {
+      const validSolids = Array.isArray(solidList) ? solidList.filter(s => s && typeof s.cx === 'number') : [];
+      const sortedSolids = validSolids.map(s => {
         const wx = s.cx + this.camera.panX;
         const wy = s.cy;
         const wz = s.cz + this.camera.panZ;
@@ -18374,9 +18899,9 @@ ${chapDigest}
           for (let k = 0; k < pts.length; k++) avgZ += pts[k].camZ;
           avgZ /= pts.length;
 
-          // 基于面法线的半厚涂阳光明暗计算：受光面温暖明亮，背光面冷调深邃，立体棱角分明
-          const dotLight = Math.max(-0.65, Math.min(1, f.nx * Lx + f.ny * Ly + f.nz * Lz));
-          const lightFactor = 0.90 + dotLight * 0.22 + (isFocused ? 0.04 : 0);
+          // 基于面法线的半厚涂阳光明暗计算：受光面暖金明亮，背光面冷紫灰深邃，立体棱角鲜明
+          const dotLight = Math.max(-0.75, Math.min(1, f.nx * Lx + f.ny * Ly + f.nz * Lz));
+          const lightFactor = 0.88 + dotLight * 0.26 + (isFocused ? 0.05 : 0);
           visibleFaces.push({ f, pts, avgZ, lightFactor });
         }
 
