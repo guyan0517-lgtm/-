@@ -2215,10 +2215,33 @@ function createExpenditureLineChart(data, daysInMonth) {
       await this.copyCmdById("qqbot-rev-ws-copy-input", "已复制反向WS地址");
     },
 
+    toastTimer: null,
+    worldBookCollapsedMap: {},
+    moduleCategoryCollapsedMap: {},
+
     notify(msg) {
       const badge = document.getElementById("qqbot-conn-badge");
       if (badge) {
         badge.textContent = msg;
+      }
+      const banner = document.getElementById("qqbot-toast-banner");
+      if (banner) {
+        banner.textContent = msg;
+        banner.style.display = "block";
+        if (this.toastTimer) clearTimeout(this.toastTimer);
+        this.toastTimer = setTimeout(() => {
+          banner.style.display = "none";
+        }, 3600);
+      }
+    },
+
+    updateConnDetail(text, isHighlight = false) {
+      const box = document.getElementById("qqbot-conn-detail-box");
+      if (box) {
+        box.textContent = text;
+        box.style.color = isHighlight
+          ? "var(--accent-color)"
+          : "var(--text-primary)";
       }
     },
 
@@ -2269,11 +2292,13 @@ function createExpenditureLineChart(data, daysInMonth) {
           personaPresets,
           thoughtPresets,
           worldBooks,
+          worldBookCategories,
           stickerCats,
           stickers,
           modules,
           moduleChapters,
           moduleImages,
+          globalApiCfg,
         ] = await Promise.all([
           dbRef.chats ? dbRef.chats.toArray().catch(() => []) : [],
           dbRef.personaPresets ? dbRef.personaPresets.toArray().catch(() => []) : [],
@@ -2281,6 +2306,9 @@ function createExpenditureLineChart(data, daysInMonth) {
             ? dbRef.thoughtChainPresets.toArray().catch(() => [])
             : [],
           dbRef.worldBooks ? dbRef.worldBooks.toArray().catch(() => []) : [],
+          dbRef.worldBookCategories
+            ? dbRef.worldBookCategories.toArray().catch(() => [])
+            : [],
           dbRef.userStickerCategories
             ? dbRef.userStickerCategories.toArray().catch(() => [])
             : [],
@@ -2288,6 +2316,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           dbRef.modules ? dbRef.modules.toArray().catch(() => []) : [],
           dbRef.moduleChapters ? dbRef.moduleChapters.toArray().catch(() => []) : [],
           dbRef.moduleImages ? dbRef.moduleImages.toArray().catch(() => []) : [],
+          dbRef.apiConfig ? dbRef.apiConfig.get("main").catch(() => null) : null,
         ]);
 
         const personas = [];
@@ -2332,12 +2361,14 @@ function createExpenditureLineChart(data, daysInMonth) {
           personas,
           thoughts: thoughtPresets || [],
           worldbooks: worldBooks || [],
+          worldbookCats: worldBookCategories || [],
           stickerCats: stickerCats || [],
           stickers: stickers || [],
           modules: modules || [],
           moduleChapters: moduleChapters || [],
           moduleImages: moduleImages || [],
           charCards,
+          globalApiConfig: globalApiCfg || null,
         };
 
         this.renderResourceSelects();
@@ -2380,9 +2411,16 @@ function createExpenditureLineChart(data, daysInMonth) {
       const wbEl = document.getElementById("qqbot-worldbook-select");
       if (wbEl) {
         const cur = g ? g.worldBookId : wbEl.value;
+        const cats = this.cachedResources.worldbookCats || [];
         wbEl.innerHTML =
-          '<option value="">不额外挂载世界书</option>' +
-          '<option value="ALL">挂载全部启用世界书</option>' +
+          '<option value="">选择世界书或下方逐条开关</option>' +
+          '<option value="ALL">全部世界书条目</option>' +
+          cats
+            .map(
+              (c) =>
+                `<option value="CAT:${this.escapeAttr(String(c.id))}">分类 · ${this.escapeHtml(c.name || "未命名分类")}</option>`,
+            )
+            .join("") +
           this.cachedResources.worldbooks
             .map(
               (w) =>
@@ -2425,6 +2463,8 @@ function createExpenditureLineChart(data, daysInMonth) {
         g ? g.moduleId : modEl ? modEl.value : "",
         g ? g.chapterId : "",
       );
+      this.renderWorldBookItemsList();
+      this.renderModuleChaptersList();
 
       const cardEl = document.getElementById("qqbot-bind-card-select");
       if (cardEl) {
@@ -2462,11 +2502,556 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (selectedChapterId) chapEl.value = selectedChapterId;
     },
 
+    /* ============================================================================
+     * 跑团模组分类与章节条目逐条开关 - 与群聊载入模组完全一致
+     * ============================================================================ */
+    classifyModuleChapter(chap) {
+      const c = String(chap.category || "").toLowerCase();
+      const t = String(chap.title || "").toLowerCase();
+      if (
+        c.includes("公开") ||
+        t.includes("公开") ||
+        c.includes("事前") ||
+        t.includes("事前") ||
+        c.includes("须知") ||
+        t.includes("须知") ||
+        c.includes("背景") ||
+        t.includes("背景")
+      )
+        return "事前公开";
+      if (
+        c.includes("真相") ||
+        c.includes("kp信息") ||
+        c.includes("大纲") ||
+        c.includes("带团") ||
+        c.includes("导读") ||
+        t.includes("真相") ||
+        t.includes("大纲") ||
+        t.includes("机制") ||
+        t.includes("导读") ||
+        t.includes("kp信息")
+      )
+        return "大纲与真相";
+      if (
+        c.includes("npc与猫") ||
+        c.includes("猫") ||
+        t.includes("猫") ||
+        (c.includes("npc") && c.includes("猫"))
+      )
+        return "NPC与猫";
+      if (
+        c.includes("npc") ||
+        t.includes("npc") ||
+        c.includes("人设") ||
+        t.includes("人设") ||
+        t.includes("人物设定")
+      )
+        return "人设";
+      if (
+        c.includes("导入") ||
+        t.includes("导入") ||
+        t.includes("开局") ||
+        t.includes("序幕")
+      )
+        return "导入";
+      if (
+        c.includes("ho") ||
+        c.includes("秘密") ||
+        t.includes("ho") ||
+        t.includes("秘密")
+      )
+        return "HO秘密与设定";
+      if (c.includes("单人") || t.includes("单人")) return "单人线";
+      if (
+        c.includes("结局") ||
+        t.includes("结局") ||
+        t.includes("结末") ||
+        t.includes("尾声")
+      )
+        return "结局";
+      if (
+        c.includes("道具") ||
+        t.includes("道具") ||
+        c.includes("线索") ||
+        t.includes("线索") ||
+        c.includes("物品") ||
+        t.includes("物品")
+      )
+        return "道具与线索";
+      if (c.includes("附录") || c.includes("数值") || c.includes("规则"))
+        return "附录与规则";
+      if (
+        c.includes("正文") ||
+        c.includes("主线") ||
+        c.includes("地点") ||
+        c.includes("时间") ||
+        t.includes("第") ||
+        t.includes("章")
+      )
+        return "正文";
+      return "其他分类";
+    },
+
     onModuleSelectChange() {
       const modEl = document.getElementById("qqbot-module-select");
+      const g = this.getCurrentGroupConfig();
       const moduleId = modEl ? modEl.value : "";
+      if (g) {
+        const prevModId = g.moduleId;
+        g.moduleId = moduleId;
+        if (moduleId && String(prevModId) !== String(moduleId)) {
+          const chaps = this.cachedResources.moduleChapters.filter(
+            (c) => String(c.moduleId) === String(moduleId),
+          );
+          g.selectedModuleChapterIds = chaps.map((c) => String(c.id));
+          if (g.loadModuleToc === undefined) g.loadModuleToc = true;
+          if (g.loadModuleImages === undefined) g.loadModuleImages = true;
+        }
+      }
       this.renderModuleChaptersSelect(moduleId, "ALL");
+      this.renderModuleChaptersList();
       this.onCurrentGroupFieldChange();
+      if (moduleId) {
+        this.notify("已载入模组分类与条目");
+      }
+    },
+
+    loadSelectedModuleEntries() {
+      const modEl = document.getElementById("qqbot-module-select");
+      const g = this.getCurrentGroupConfig();
+      if (!g || !modEl || !modEl.value) {
+        this.notify("请先在下拉框中选择模组");
+        return;
+      }
+      const moduleId = String(modEl.value);
+      g.moduleId = moduleId;
+      const chaps = this.cachedResources.moduleChapters.filter(
+        (c) => String(c.moduleId) === moduleId,
+      );
+      if (
+        !Array.isArray(g.selectedModuleChapterIds) ||
+        g.selectedModuleChapterIds.length === 0
+      ) {
+        g.selectedModuleChapterIds = chaps.map((c) => String(c.id));
+      }
+      Object.keys(this.moduleCategoryCollapsedMap).forEach((k) => {
+        this.moduleCategoryCollapsedMap[k] = false;
+      });
+      this.renderModuleChaptersList();
+      this.saveAllSettings(false);
+      this.notify(`已载入模组共${chaps.length}个条目`);
+    },
+
+    onModuleMetaToggle() {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      const tocCb = document.getElementById("qqbot-module-toc-cb");
+      const imgCb = document.getElementById("qqbot-module-img-cb");
+      if (tocCb) g.loadModuleToc = Boolean(tocCb.checked);
+      if (imgCb) g.loadModuleImages = Boolean(imgCb.checked);
+      this.saveAllSettings(false);
+    },
+
+    toggleAllModuleChapters(enable) {
+      const g = this.getCurrentGroupConfig();
+      if (!g || !g.moduleId) {
+        this.notify("请先选择跑团模组");
+        return;
+      }
+      const chaps = this.cachedResources.moduleChapters.filter(
+        (c) => String(c.moduleId) === String(g.moduleId),
+      );
+      g.selectedModuleChapterIds = enable
+        ? chaps.map((c) => String(c.id))
+        : [];
+      this.renderModuleChaptersList();
+      this.saveAllSettings(false);
+      this.notify(enable ? "已全开模组条目" : "已全关模组条目");
+    },
+
+    toggleModuleCategory(categoryName) {
+      const g = this.getCurrentGroupConfig();
+      if (!g || !g.moduleId) return;
+      const chaps = this.cachedResources.moduleChapters.filter(
+        (c) =>
+          String(c.moduleId) === String(g.moduleId) &&
+          this.classifyModuleChapter(c) === categoryName,
+      );
+      if (!Array.isArray(g.selectedModuleChapterIds)) {
+        g.selectedModuleChapterIds = [];
+      }
+      const selectedSet = new Set(g.selectedModuleChapterIds.map(String));
+      const allActive =
+        chaps.length > 0 && chaps.every((c) => selectedSet.has(String(c.id)));
+      if (allActive) {
+        chaps.forEach((c) => selectedSet.delete(String(c.id)));
+      } else {
+        chaps.forEach((c) => selectedSet.add(String(c.id)));
+      }
+      g.selectedModuleChapterIds = Array.from(selectedSet);
+      this.renderModuleChaptersList();
+      this.saveAllSettings(false);
+    },
+
+    toggleModuleCategoryFold(categoryName) {
+      const key = String(this.currentGroupId || "") + "_" + categoryName;
+      this.moduleCategoryCollapsedMap[key] =
+        !this.moduleCategoryCollapsedMap[key];
+      this.renderModuleChaptersList();
+    },
+
+    toggleModuleChapter(chapId) {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      if (!Array.isArray(g.selectedModuleChapterIds)) {
+        g.selectedModuleChapterIds = [];
+      }
+      const idStr = String(chapId);
+      const idx = g.selectedModuleChapterIds.findIndex(
+        (x) => String(x) === idStr,
+      );
+      if (idx >= 0) {
+        g.selectedModuleChapterIds.splice(idx, 1);
+      } else {
+        g.selectedModuleChapterIds.push(idStr);
+      }
+      this.renderModuleChaptersList();
+      this.saveAllSettings(false);
+    },
+
+    renderModuleChaptersList() {
+      const listEl = document.getElementById("qqbot-module-chapters-list");
+      const countEl = document.getElementById("qqbot-module-active-count");
+      const tocCb = document.getElementById("qqbot-module-toc-cb");
+      const imgCb = document.getElementById("qqbot-module-img-cb");
+      const g = this.getCurrentGroupConfig();
+      if (!listEl) return;
+
+      if (!g || !g.moduleId) {
+        if (countEl) countEl.textContent = "未选择跑团模组";
+        listEl.innerHTML =
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px 2px;">在上方下拉框选择模组并点载入后，即可像群聊一样按分类展开并单独打开或关闭每个模组条目与章节</div>';
+        return;
+      }
+
+      if (tocCb) tocCb.checked = g.loadModuleToc !== false;
+      if (imgCb) imgCb.checked = g.loadModuleImages !== false;
+
+      const allChaps = this.cachedResources.moduleChapters
+        .filter((c) => String(c.moduleId) === String(g.moduleId))
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+      if (!Array.isArray(g.selectedModuleChapterIds)) {
+        g.selectedModuleChapterIds = allChaps.map((c) => String(c.id));
+      }
+      const selectedSet = new Set(g.selectedModuleChapterIds.map(String));
+      const activeCount = allChaps.filter((c) =>
+        selectedSet.has(String(c.id)),
+      ).length;
+      if (countEl) {
+        countEl.textContent = `已加载 ${activeCount} / ${allChaps.length} 个章节条目`;
+      }
+
+      if (allChaps.length === 0) {
+        listEl.innerHTML =
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 6px 2px;">该模组暂无章节条目数据</div>';
+        return;
+      }
+
+      const GROUP_ORDER = [
+        "事前公开",
+        "大纲与真相",
+        "NPC与猫",
+        "人设",
+        "导入",
+        "正文",
+        "HO秘密与设定",
+        "单人线",
+        "结局",
+        "道具与线索",
+        "附录与规则",
+        "其他分类",
+      ];
+
+      const groupedMap = new Map();
+      GROUP_ORDER.forEach((name) => groupedMap.set(name, []));
+      allChaps.forEach((chap) => {
+        const gName = this.classifyModuleChapter(chap);
+        if (!groupedMap.has(gName)) groupedMap.set(gName, []);
+        groupedMap.get(gName).push(chap);
+      });
+
+      const htmlParts = [];
+      GROUP_ORDER.forEach((categoryName) => {
+        const chaps = groupedMap.get(categoryName) || [];
+        if (chaps.length === 0) return;
+
+        const foldKey = String(this.currentGroupId || "") + "_" + categoryName;
+        const isCollapsed = Boolean(this.moduleCategoryCollapsedMap[foldKey]);
+        const enabledInCat = chaps.filter((c) =>
+          selectedSet.has(String(c.id)),
+        ).length;
+        const isAllCatOn = enabledInCat === chaps.length;
+        const catBadgeBg = isAllCatOn
+          ? "var(--accent-color)"
+          : enabledInCat > 0
+            ? "var(--secondary-bg)"
+            : "var(--card-bg)";
+        const catBadgeColor = isAllCatOn ? "#ffffff" : "var(--text-primary)";
+
+        const rowsHtml = chaps
+          .map((chap) => {
+            const isOn = selectedSet.has(String(chap.id));
+            const bBg = isOn ? "var(--accent-color)" : "var(--card-bg)";
+            const bColor = isOn ? "#ffffff" : "var(--text-secondary)";
+            const wc =
+              chap.wordCount || (chap.content ? chap.content.length : 0);
+            return `
+              <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color);">
+                <span style="width: 38px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${bBg}; color: ${bColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "已开" : "已关"}</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary);">
+                  <span style="font-weight: 600;">${this.escapeHtml(chap.title || "未命名章节")}</span>
+                  <span style="font-size: 10.5px; color: var(--text-secondary); margin-left: 4px;">${wc}字</span>
+                </div>
+                <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleChapter('${this.escapeAttr(String(chap.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
+              </div>
+            `;
+          })
+          .join("");
+
+        htmlParts.push(`
+          <div style="border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
+            <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategoryFold('${this.escapeAttr(categoryName)}');}">
+              <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBadgeBg}; color: ${catBadgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${enabledInCat}/${chaps.length}</span>
+              <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(categoryName)}</span>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategory('${this.escapeAttr(categoryName)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isAllCatOn ? "停用" : "启用"}</button>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategoryFold('${this.escapeAttr(categoryName)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isCollapsed ? "展开" : "折叠"}</button>
+            </div>
+            <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 4px; padding: 0 8px 8px;">
+              ${rowsHtml}
+            </div>
+          </div>
+        `);
+      });
+
+      listEl.innerHTML = htmlParts.join("");
+    },
+
+    /* ============================================================================
+     * 世界书分类与条目逐条开关 - 与群聊世界书完全一致
+     * ============================================================================ */
+    onWorldBookSelectChange() {
+      const wbEl = document.getElementById("qqbot-worldbook-select");
+      const g = this.getCurrentGroupConfig();
+      if (!g || !wbEl) return;
+      g.worldBookId = wbEl.value;
+      if (wbEl.value) {
+        this.loadWorldBookEntries();
+      } else {
+        this.renderWorldBookItemsList();
+        this.saveAllSettings(false);
+      }
+    },
+
+    loadWorldBookEntries() {
+      const wbEl = document.getElementById("qqbot-worldbook-select");
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      const val = wbEl ? wbEl.value : "";
+      const allBooks = this.cachedResources.worldbooks || [];
+      if (!Array.isArray(g.enabledWorldBookIds)) {
+        g.enabledWorldBookIds = [];
+      }
+      const set = new Set(g.enabledWorldBookIds.map(String));
+
+      if (!val || val === "ALL") {
+        allBooks.forEach((b) => set.add(String(b.id)));
+        Object.keys(this.worldBookCollapsedMap).forEach((k) => {
+          this.worldBookCollapsedMap[k] = false;
+        });
+        this.notify(`已载入全部${allBooks.length}个世界书条目`);
+      } else if (val.startsWith("CAT:")) {
+        const catId = val.slice(4);
+        const matched = allBooks.filter(
+          (b) => String(b.categoryId || "uncategorized") === String(catId),
+        );
+        matched.forEach((b) => set.add(String(b.id)));
+        this.worldBookCollapsedMap[catId] = false;
+        this.notify(`已载入分类下${matched.length}个世界书条目`);
+      } else {
+        set.add(String(val));
+        const found = allBooks.find((b) => String(b.id) === String(val));
+        if (found) {
+          this.worldBookCollapsedMap[String(found.categoryId || "uncategorized")] =
+            false;
+        }
+        this.notify("已载入选中世界书条目");
+      }
+
+      g.enabledWorldBookIds = Array.from(set);
+      this.renderWorldBookItemsList();
+      this.saveAllSettings(false);
+    },
+
+    toggleAllWorldBookEntries(enable) {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      const allBooks = this.cachedResources.worldbooks || [];
+      g.enabledWorldBookIds = enable
+        ? allBooks.map((b) => String(b.id))
+        : [];
+      if (!enable) g.worldBookId = "";
+      this.renderWorldBookItemsList();
+      this.saveAllSettings(false);
+      this.notify(enable ? "已全开世界书条目" : "已全关世界书条目");
+    },
+
+    toggleWorldBookCategory(catId) {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      const allBooks = this.cachedResources.worldbooks || [];
+      const catIds = new Set(
+        (this.cachedResources.worldbookCats || []).map((c) => String(c.id)),
+      );
+      const booksInCat = allBooks.filter((b) => {
+        const cid =
+          b.categoryId && catIds.has(String(b.categoryId))
+            ? String(b.categoryId)
+            : "uncategorized";
+        return cid === String(catId);
+      });
+      if (!Array.isArray(g.enabledWorldBookIds)) g.enabledWorldBookIds = [];
+      const set = new Set(g.enabledWorldBookIds.map(String));
+      const allOn =
+        booksInCat.length > 0 &&
+        booksInCat.every((b) => set.has(String(b.id)));
+      if (allOn) {
+        booksInCat.forEach((b) => set.delete(String(b.id)));
+      } else {
+        booksInCat.forEach((b) => set.add(String(b.id)));
+      }
+      g.enabledWorldBookIds = Array.from(set);
+      this.renderWorldBookItemsList();
+      this.saveAllSettings(false);
+    },
+
+    toggleWorldBookCategoryFold(catId) {
+      const key = String(catId);
+      this.worldBookCollapsedMap[key] = !this.worldBookCollapsedMap[key];
+      this.renderWorldBookItemsList();
+    },
+
+    toggleWorldBookEntry(bookId) {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      if (!Array.isArray(g.enabledWorldBookIds)) g.enabledWorldBookIds = [];
+      const idStr = String(bookId);
+      const idx = g.enabledWorldBookIds.findIndex((x) => String(x) === idStr);
+      if (idx >= 0) {
+        g.enabledWorldBookIds.splice(idx, 1);
+      } else {
+        g.enabledWorldBookIds.push(idStr);
+      }
+      this.renderWorldBookItemsList();
+      this.saveAllSettings(false);
+    },
+
+    renderWorldBookItemsList() {
+      const container = document.getElementById("qqbot-worldbook-items-list");
+      const g = this.getCurrentGroupConfig();
+      if (!container || !g) return;
+
+      const allBooks = this.cachedResources.worldbooks || [];
+      if (allBooks.length === 0) {
+        container.innerHTML =
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 2px;">当前尚无世界书条目</div>';
+        return;
+      }
+
+      if (!Array.isArray(g.enabledWorldBookIds)) {
+        if (g.worldBookId === "ALL") {
+          g.enabledWorldBookIds = allBooks.map((b) => String(b.id));
+        } else if (g.worldBookId && !g.worldBookId.startsWith("CAT:")) {
+          g.enabledWorldBookIds = [String(g.worldBookId)];
+        } else {
+          g.enabledWorldBookIds = [];
+        }
+      }
+      const enabledSet = new Set(g.enabledWorldBookIds.map(String));
+      const rawCats = this.cachedResources.worldbookCats || [];
+      const catIds = new Set(rawCats.map((c) => String(c.id)));
+      const categories = rawCats.map((c) => ({
+        id: String(c.id),
+        name: c.name || "未命名分类",
+      }));
+      if (
+        allBooks.some(
+          (b) => !b.categoryId || !catIds.has(String(b.categoryId)),
+        )
+      ) {
+        categories.push({ id: "uncategorized", name: "未分类世界书" });
+      }
+
+      const htmlParts = [];
+      categories.forEach((cat) => {
+        const books = allBooks.filter((b) => {
+          const cid =
+            b.categoryId && catIds.has(String(b.categoryId))
+              ? String(b.categoryId)
+              : "uncategorized";
+          return cid === cat.id;
+        });
+        if (books.length === 0) return;
+
+        const isCollapsed = Boolean(this.worldBookCollapsedMap[cat.id]);
+        const onCount = books.filter((b) =>
+          enabledSet.has(String(b.id)),
+        ).length;
+        const isAllOn = onCount === books.length;
+        const catBg = isAllOn
+          ? "var(--accent-color)"
+          : onCount > 0
+            ? "var(--secondary-bg)"
+            : "var(--card-bg)";
+        const catColor = isAllOn ? "#ffffff" : "var(--text-primary)";
+
+        const rows = books
+          .map((b) => {
+            const isOn = enabledSet.has(String(b.id));
+            const bBg = isOn ? "var(--accent-color)" : "var(--card-bg)";
+            const bColor = isOn ? "#ffffff" : "var(--text-secondary)";
+            const preview = String(b.content || "")
+              .replace(/\s+/g, " ")
+              .slice(0, 36);
+            return `
+              <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color);">
+                <span style="width: 38px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${bBg}; color: ${bColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "已开" : "已关"}</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary);">
+                  <span style="font-weight: 700;">${this.escapeHtml(b.name || "世界书条目")}</span>
+                  <span style="color: var(--text-secondary); margin-left: 4px;">${this.escapeHtml(preview)}</span>
+                </div>
+                <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookEntry('${this.escapeAttr(String(b.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
+              </div>
+            `;
+          })
+          .join("");
+
+        htmlParts.push(`
+          <div style="border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
+            <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}">
+              <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBg}; color: ${catColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${onCount}/${books.length}</span>
+              <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(cat.name)}</span>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategory('${this.escapeAttr(cat.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isAllOn ? "停用" : "启用"}</button>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isCollapsed ? "展开" : "折叠"}</button>
+            </div>
+            <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 4px; padding: 0 8px 8px;">
+              ${rows}
+            </div>
+          </div>
+        `);
+      });
+
+      container.innerHTML = htmlParts.join("");
     },
 
     onPersonaPresetSelect() {
@@ -2526,7 +3111,10 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     copyFromGlobalApi(targetType) {
-      const stCfg = (window.state && window.state.apiConfig) || {};
+      const stCfg =
+        this.cachedResources.globalApiConfig ||
+        (window.state && window.state.apiConfig) ||
+        {};
       const getGlobalVal = (id, fallback) => {
         const el = document.getElementById(id);
         return (el && el.value && el.value.trim()) || fallback || "";
@@ -2578,12 +3166,17 @@ function createExpenditureLineChart(data, daysInMonth) {
         isMain ? "qqbot-main-model-datalist" : "qqbot-sub-model-datalist",
       );
 
-      const stCfg = (window.state && window.state.apiConfig) || {};
+      const stCfg =
+        this.cachedResources.globalApiConfig ||
+        (window.state && window.state.apiConfig) ||
+        {};
       let rawUrl = urlEl ? urlEl.value.trim() : "";
       let rawKey = keyEl ? keyEl.value.trim() : "";
 
       if (!rawUrl) {
-        const gUrlEl = document.getElementById(isMain ? "proxy-url" : "sub-proxy-url");
+        const gUrlEl = document.getElementById(
+          isMain ? "proxy-url" : "sub-proxy-url",
+        );
         rawUrl =
           (gUrlEl && gUrlEl.value.trim()) ||
           (isMain ? stCfg.proxyUrl : stCfg.subProxyUrl) ||
@@ -2591,7 +3184,9 @@ function createExpenditureLineChart(data, daysInMonth) {
           "";
       }
       if (!rawKey) {
-        const gKeyEl = document.getElementById(isMain ? "api-key" : "sub-api-key");
+        const gKeyEl = document.getElementById(
+          isMain ? "api-key" : "sub-api-key",
+        );
         rawKey =
           (gKeyEl && gKeyEl.value.trim()) ||
           (isMain ? stCfg.apiKey : stCfg.subApiKey) ||
@@ -2645,7 +3240,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
-     * 思维链预设加载与条目逐条开关
+     * 思维链预设加载与分类条目逐条开关 - 支持天空之城等完整分组条目结构
      * ============================================================================ */
     renderThoughtItemsList() {
       const container = document.getElementById("qqbot-thought-items-list");
@@ -2654,24 +3249,139 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (!Array.isArray(g.thoughtItems) || g.thoughtItems.length === 0) {
         g.thoughtItems = getDefaultThoughtChainItems();
       }
-      container.innerHTML = g.thoughtItems
-        .map((item) => {
-          const isOn = item.enabled !== false;
-          const badgeBg = isOn ? "var(--accent-color)" : "var(--card-bg)";
-          const badgeColor = isOn ? "#ffffff" : "var(--text-secondary)";
-          return `
-          <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+
+      const groups = Array.isArray(g.thoughtGroups) ? g.thoughtGroups : [];
+      const renderEntryRow = (item) => {
+        const isOn = item.enabled !== false;
+        const badgeBg = isOn ? "var(--accent-color)" : "var(--card-bg)";
+        const badgeColor = isOn ? "#ffffff" : "var(--text-secondary)";
+        const titleStr = item.title || item.key || "规则条目";
+        const contentPreview = String(item.content || "")
+          .replace(/\s+/g, " ")
+          .slice(0, 42);
+        return `
+          <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color);">
             <span style="width: 38px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "已开" : "已关"}</span>
             <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary);">
-              <span style="font-weight: 700;">${this.escapeHtml(item.title || "规则")}</span>
-              <span style="color: var(--text-secondary); margin-left: 4px;">${this.escapeHtml(item.content || "")}</span>
+              <span style="font-weight: 700;">${this.escapeHtml(titleStr)}</span>
+              <span style="color: var(--text-secondary); margin-left: 4px;">${this.escapeHtml(contentPreview)}</span>
             </div>
-            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleThoughtItem('${this.escapeAttr(item.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
-            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.deleteThoughtItem('${this.escapeAttr(item.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">移除</button>
+            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleThoughtItem('${this.escapeAttr(String(item.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
+            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.deleteThoughtItem('${this.escapeAttr(String(item.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">移除</button>
           </div>
         `;
-        })
-        .join("");
+      };
+
+      if (groups.length > 0) {
+        const validGroupIds = new Set(
+          groups.map((grp) => grp && String(grp.id)).filter(Boolean),
+        );
+        const htmlParts = [];
+
+        groups.forEach((grp) => {
+          if (!grp) return;
+          const gid = String(grp.id);
+          const grpEntries = g.thoughtItems.filter(
+            (ent) => ent && String(ent.groupId || "") === gid,
+          );
+          const isCollapsed = Boolean(grp.collapsed);
+          const onCount = grpEntries.filter(
+            (ent) => ent.enabled !== false,
+          ).length;
+          const isAllOn =
+            grp.enabled !== false &&
+            (grpEntries.length === 0 || onCount === grpEntries.length);
+          const grpBadgeBg = isAllOn
+            ? "var(--accent-color)"
+            : onCount > 0
+              ? "var(--secondary-bg)"
+              : "var(--card-bg)";
+          const grpBadgeColor = isAllOn ? "#ffffff" : "var(--text-primary)";
+
+          htmlParts.push(`
+            <div style="border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
+              <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleThoughtGroupFold('${this.escapeAttr(gid)}');}">
+                <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${grpBadgeBg}; color: ${grpBadgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${onCount}/${grpEntries.length}</span>
+                <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(grp.name || "思维链分类")}</span>
+                <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleThoughtGroup('${this.escapeAttr(gid)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isAllOn ? "停用" : "启用"}</button>
+                <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleThoughtGroupFold('${this.escapeAttr(gid)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isCollapsed ? "展开" : "折叠"}</button>
+              </div>
+              <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 4px; padding: 0 8px 8px;">
+                ${
+                  grpEntries.length > 0
+                    ? grpEntries.map(renderEntryRow).join("")
+                    : '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px 2px;">该分类下暂无条目</div>'
+                }
+              </div>
+            </div>
+          `);
+        });
+
+        const ungrouped = g.thoughtItems.filter(
+          (ent) =>
+            ent && (!ent.groupId || !validGroupIds.has(String(ent.groupId))),
+        );
+        ungrouped.forEach((item) => {
+          htmlParts.push(renderEntryRow(item));
+        });
+
+        container.innerHTML = htmlParts.join("");
+        return;
+      }
+
+      container.innerHTML = g.thoughtItems.map(renderEntryRow).join("");
+    },
+
+    toggleThoughtGroup(groupId) {
+      const g = this.getCurrentGroupConfig();
+      if (!g || !Array.isArray(g.thoughtGroups)) return;
+      const grp = g.thoughtGroups.find(
+        (x) => x && String(x.id) === String(groupId),
+      );
+      if (!grp) return;
+      const grpEntries = (g.thoughtItems || []).filter(
+        (ent) => ent && String(ent.groupId || "") === String(groupId),
+      );
+      const allOn =
+        grp.enabled !== false &&
+        grpEntries.every((ent) => ent.enabled !== false);
+      const nextState = !allOn;
+      grp.enabled = nextState;
+      grpEntries.forEach((ent) => {
+        ent.enabled = nextState;
+      });
+      this.renderThoughtItemsList();
+      this.saveAllSettings(false);
+    },
+
+    toggleThoughtGroupFold(groupId) {
+      const g = this.getCurrentGroupConfig();
+      if (!g || !Array.isArray(g.thoughtGroups)) return;
+      const grp = g.thoughtGroups.find(
+        (x) => x && String(x.id) === String(groupId),
+      );
+      if (!grp) return;
+      grp.collapsed = !grp.collapsed;
+      this.renderThoughtItemsList();
+      this.saveAllSettings(false);
+    },
+
+    toggleAllThoughtItems(enable) {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      if (Array.isArray(g.thoughtGroups)) {
+        g.thoughtGroups.forEach((grp) => {
+          if (grp) grp.enabled = Boolean(enable);
+        });
+      }
+      if (Array.isArray(g.thoughtItems)) {
+        g.thoughtItems.forEach((item) => {
+          if (item) item.enabled = Boolean(enable);
+        });
+      }
+      this.renderThoughtItemsList();
+      this.saveAllSettings(false);
+      this.notify(enable ? "已全开思维链条目" : "已全关思维链条目");
     },
 
     toggleThoughtItem(itemId) {
@@ -2680,6 +3390,16 @@ function createExpenditureLineChart(data, daysInMonth) {
       const target = g.thoughtItems.find((i) => String(i.id) === String(itemId));
       if (target) {
         target.enabled = target.enabled === false;
+        if (
+          target.enabled &&
+          target.groupId &&
+          Array.isArray(g.thoughtGroups)
+        ) {
+          const parentGrp = g.thoughtGroups.find(
+            (grp) => grp && String(grp.id) === String(target.groupId),
+          );
+          if (parentGrp) parentGrp.enabled = true;
+        }
         this.renderThoughtItemsList();
         this.saveAllSettings(false);
       }
@@ -2710,6 +3430,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       g.thoughtItems.push({
         id: "tc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
         title,
+        key: title,
         content,
         enabled: true,
       });
@@ -2717,47 +3438,114 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (contentEl) contentEl.value = "";
       this.renderThoughtItemsList();
       this.saveAllSettings(false);
+      this.notify("已新增思维链条目");
     },
 
-    importThoughtChainPreset() {
+    async importThoughtChainPreset() {
       const g = this.getCurrentGroupConfig();
       const sel = document.getElementById("qqbot-thought-select");
       if (!g || !sel || !sel.value) {
         this.notify("请先选择思维链预设");
         return;
       }
-      const preset = this.cachedResources.thoughts.find(
+      if (
+        !this.cachedResources.thoughts ||
+        this.cachedResources.thoughts.length === 0
+      ) {
+        await this.refreshLocalResources();
+      }
+      let preset = this.cachedResources.thoughts.find(
         (t) => String(t.id) === String(sel.value),
       );
-      if (!preset) return;
-      const rawContent = String(preset.content || preset.prompt || "").trim();
-      if (!rawContent) return;
+      if (!preset && window.db && window.db.thoughtChainPresets) {
+        try {
+          const allPresets = await window.db.thoughtChainPresets.toArray();
+          this.cachedResources.thoughts = allPresets || [];
+          preset = (allPresets || []).find(
+            (t) => String(t.id) === String(sel.value),
+          );
+        } catch (_) {}
+      }
+      if (!preset) {
+        this.notify("未找到该思维链预设");
+        return;
+      }
+
+      g.thoughtChainId = String(sel.value);
+      g.thoughtHeaderContent = String(preset.headerContent || "");
+      g.thoughtGeneralContent = String(preset.generalContent || "");
+      g.thoughtCocContent = String(preset.cocContent || "");
+
+      const pGroups = Array.isArray(preset.groups) ? preset.groups : [];
+      const pEntries = Array.isArray(preset.entries) ? preset.entries : [];
+
+      if (pGroups.length > 0 || pEntries.length > 0) {
+        g.thoughtGroups = pGroups.map((grp) => ({
+          id: String(grp.id),
+          name: grp.name || "未命名分类",
+          color: grp.color || "",
+          enabled: grp.enabled !== false,
+          collapsed: false,
+        }));
+        g.thoughtItems = pEntries.map((ent, idx) => ({
+          id: String(ent.id || "tc_ent_" + idx),
+          key: ent.key || ent.title || "条目" + (idx + 1),
+          title: ent.key || ent.title || "条目" + (idx + 1),
+          groupId: ent.groupId ? String(ent.groupId) : "",
+          content: String(ent.content || ""),
+          enabled: ent.enabled !== false,
+        }));
+        this.renderThoughtItemsList();
+        this.saveAllSettings(false);
+        this.notify(
+          `已载入「${preset.name || "思维链"}」共${g.thoughtItems.length}个条目`,
+        );
+        return;
+      }
+
+      const rawContent = String(
+        preset.content ||
+          preset.prompt ||
+          preset.generalContent ||
+          preset.headerContent ||
+          "",
+      ).trim();
+      if (!rawContent) {
+        this.notify("该预设暂无条目内容");
+        return;
+      }
 
       const lines = rawContent
         .split(/\r?\n+/)
         .map((l) => l.trim())
         .filter((l) => l.length > 2);
 
-      if (!Array.isArray(g.thoughtItems)) g.thoughtItems = [];
-      lines.slice(0, 12).forEach((line, idx) => {
+      g.thoughtGroups = [];
+      g.thoughtItems = lines.slice(0, 30).map((line, idx) => {
         const cleanLine = line.replace(/^\d+[\.\、\s]*/, "");
-        g.thoughtItems.push({
+        return {
           id: "preset_" + Date.now() + "_" + idx,
-          title: (preset.name || "预设") + (idx + 1),
+          title: (preset.name || "条目") + " " + (idx + 1),
+          key: (preset.name || "条目") + " " + (idx + 1),
           content: cleanLine,
           enabled: true,
-        });
+        };
       });
-      g.thoughtChainId = String(sel.value);
       this.renderThoughtItemsList();
       this.saveAllSettings(false);
-      this.notify("已导入思维链条目");
+      this.notify(`已载入思维链共${g.thoughtItems.length}个条目`);
     },
 
     resetDefaultThoughtItems() {
       const g = this.getCurrentGroupConfig();
       if (!g) return;
+      g.thoughtChainId = "";
+      g.thoughtGroups = [];
+      g.thoughtHeaderContent = "";
+      g.thoughtGeneralContent = "";
       g.thoughtItems = getDefaultThoughtChainItems();
+      const sel = document.getElementById("qqbot-thought-select");
+      if (sel) sel.value = "";
       this.renderThoughtItemsList();
       this.saveAllSettings(false);
       this.notify("已重置默认思维链");
@@ -2997,7 +3785,9 @@ function createExpenditureLineChart(data, daysInMonth) {
       setVal("qqbot-modimg-mode", g.modImgMode || "auto");
 
       this.renderResourceSelects();
+      this.renderWorldBookItemsList();
       this.renderThoughtItemsList();
+      this.renderModuleChaptersList();
       this.renderPlayerBindingsList();
       this.renderSimSenderSelect();
     },
@@ -3257,86 +4047,120 @@ function createExpenditureLineChart(data, daysInMonth) {
 
     async syncGroupMembersFromQQ() {
       if (!this.currentGroupId) return;
-      this.notify("正在同步群备注...");
+      const syncBtn = document.getElementById("qqbot-sync-btn");
+      if (syncBtn) syncBtn.textContent = "同步中";
+      this.notify("正在同步QQ群成员与备注名...");
+      this.updateConnDetail(
+        "正在向手机Termux请求当前群的成员名册与你在QQ上修改的好友备注...",
+        true,
+      );
       const g = this.getCurrentGroupConfig();
 
-      // 1. 如果浏览器直连了手机本机 Termux OneBot WS，直接拉取好友备注与群名片
-      if (this.directWsConnected && this.directWs) {
+      try {
+        // 1. 如果浏览器直连了手机本机 Termux OneBot WS，直接拉取好友备注与群名片
+        if (this.directWsConnected && this.directWs) {
+          try {
+            const [friends, members] = await Promise.all([
+              this.callDirectOneBotWs("get_friend_list", {}).catch(() => []),
+              this.callDirectOneBotWs("get_group_member_list", {
+                group_id:
+                  Number(this.currentGroupId) || String(this.currentGroupId),
+              }).catch(() => []),
+            ]);
+            const friendMap = {};
+            if (Array.isArray(friends)) {
+              friends.forEach((f) => {
+                if (f && f.user_id && f.remark) {
+                  friendMap[String(f.user_id)] = String(f.remark).trim();
+                }
+              });
+            }
+            if (g && Array.isArray(members) && members.length > 0) {
+              if (!g.memberRemarks) g.memberRemarks = {};
+              if (!Array.isArray(g.playerBindings)) g.playerBindings = [];
+              members.forEach((m) => {
+                const uid = String(m.user_id || "");
+                if (!uid) return;
+                const best = String(
+                  friendMap[uid] || m.remark || m.card || m.nickname || uid,
+                ).trim();
+                g.memberRemarks[uid] = best;
+                const ex = g.playerBindings.find((b) => String(b.qq) === uid);
+                if (ex) {
+                  ex.qqRemark = best;
+                } else {
+                  g.playerBindings.push({
+                    qq: uid,
+                    alias: "",
+                    qqRemark: best,
+                    slot: "群友",
+                    cardId: "",
+                    cardName: "未绑角色卡",
+                    persona: "",
+                  });
+                }
+              });
+              this.renderPlayerBindingsList();
+              this.renderSimSenderSelect();
+              await this.saveAllSettings(false);
+              this.notify(`已同步${members.length}位群成员备注`);
+              this.updateConnDetail(
+                `已成功从QQ拉取本群 ${members.length} 位成员的实时好友备注与群名片`,
+                true,
+              );
+              return;
+            }
+          } catch (_) {}
+        }
+
+        // 2. 通过后端接口同步群成员与QQ备注
         try {
-          const [friends, members] = await Promise.all([
-            this.callDirectOneBotWs("get_friend_list", {}).catch(() => []),
-            this.callDirectOneBotWs("get_group_member_list", {
-              group_id: Number(this.currentGroupId) || String(this.currentGroupId),
-            }).catch(() => []),
-          ]);
-          const friendMap = {};
-          if (Array.isArray(friends)) {
-            friends.forEach((f) => {
-              if (f && f.user_id && f.remark) {
-                friendMap[String(f.user_id)] = String(f.remark).trim();
-              }
-            });
-          }
-          if (g && Array.isArray(members) && members.length > 0) {
-            if (!g.memberRemarks) g.memberRemarks = {};
-            if (!Array.isArray(g.playerBindings)) g.playerBindings = [];
-            members.forEach((m) => {
-              const uid = String(m.user_id || "");
-              if (!uid) return;
-              const best = String(
-                friendMap[uid] || m.remark || m.card || m.nickname || uid,
-              ).trim();
-              g.memberRemarks[uid] = best;
-              const ex = g.playerBindings.find((b) => String(b.qq) === uid);
-              if (ex) {
-                ex.qqRemark = best;
+          const res = await fetch(
+            `/api/qqbot/group/${encodeURIComponent(this.currentGroupId)}/sync-members`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (
+              data &&
+              data.group &&
+              this.serverState &&
+              this.serverState.config
+            ) {
+              this.serverState.config.groups[this.currentGroupId] = data.group;
+              this.renderPlayerBindingsList();
+              this.renderSimSenderSelect();
+              if (data.syncedFromOneBot) {
+                this.notify("已同步QQ群备注名");
+                this.updateConnDetail(
+                  "已从OneBot成功同步本群成员与QQ好友备注名",
+                  true,
+                );
               } else {
-                g.playerBindings.push({
-                  qq: uid,
-                  alias: "",
-                  qqRemark: best,
-                  slot: "群友",
-                  cardId: "",
-                  cardName: "未绑角色卡",
-                  persona: "",
-                });
+                this.notify("当前未连接QQ，已刷新本地成员名册");
+                this.updateConnDetail(
+                  "当前尚未连上Termux 3001端口，已刷新本地预设群友名册；请先填好6099后台的Token密钥并点连接",
+                  false,
+                );
               }
-            });
-            this.renderPlayerBindingsList();
-            this.renderSimSenderSelect();
-            await this.saveAllSettings(false);
-            this.notify(`已同步${members.length}位成员备注`);
-            return;
+              return;
+            }
           }
         } catch (_) {}
-      }
 
-      // 2. 通过后端接口同步群成员与QQ备注
-      try {
-        const res = await fetch(
-          `/api/qqbot/group/${encodeURIComponent(this.currentGroupId)}/sync-members`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-          },
+        this.renderPlayerBindingsList();
+        this.renderSimSenderSelect();
+        this.notify("已刷新当前群成员名册");
+        this.updateConnDetail(
+          "已刷新本地群友名册；如需从真实QQ拉取群名片，请先确认上方连接状态为已连接",
+          false,
         );
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.group && this.serverState && this.serverState.config) {
-            this.serverState.config.groups[this.currentGroupId] = data.group;
-            this.renderPlayerBindingsList();
-            this.renderSimSenderSelect();
-            this.notify(
-              data.syncedFromOneBot
-                ? "已同步QQ群备注名"
-                : "已刷新本地群友备注",
-            );
-            return;
-          }
-        }
-      } catch (_) {}
-
-      this.notify("已刷新当前群名册");
+      } finally {
+        if (syncBtn) syncBtn.textContent = "同步";
+      }
     },
 
     async saveAllSettings(showToast = false) {
@@ -3416,76 +4240,47 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
 
       if (showToast) {
-        this.notify(savedBackend ? "设置已存本地磁盘" : "设置已生效");
+        this.notify(savedBackend ? "设置已存本地磁盘" : "设置已保存生效");
       }
     },
 
     /* ============================================================================
      * 浏览器直连本机 Termux OneBot WebSocket 引擎 · 兼容 GitHub 静态网站
      * ============================================================================ */
-    connectBrowserDirectWs(wsUrl, token) {
+    trySingleBrowserWs(wsUrl, token) {
       return new Promise((resolve) => {
         try {
-          if (this.directWs) {
-            try {
-              this.directWs.close();
-            } catch (_) {}
-            this.directWs = null;
+          let finalUrl = wsUrl;
+          if (token) {
+            const sep = wsUrl.includes("?") ? "&" : "?";
+            finalUrl = `${wsUrl}${sep}access_token=${encodeURIComponent(token)}&token=${encodeURIComponent(token)}`;
           }
-          const finalUrl = token
-            ? `${wsUrl}${wsUrl.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`
-            : wsUrl;
           const ws = new WebSocket(finalUrl);
-          this.directWs = ws;
           let settled = false;
 
           const timer = setTimeout(() => {
             if (!settled) {
               settled = true;
-              resolve(false);
+              try {
+                ws.close();
+              } catch (_) {}
+              resolve(null);
             }
-          }, 2500);
+          }, 2200);
 
-          ws.onopen = async () => {
-            this.directWsConnected = true;
+          ws.onopen = () => {
             if (!settled) {
               settled = true;
               clearTimeout(timer);
-              resolve(true);
+              resolve(ws);
             }
-            this.notify("手机Termux直连成功");
-            try {
-              const info = await this.callDirectOneBotWs("get_login_info", {});
-              if (info && info.user_id) {
-                const selfInput = document.getElementById("qqbot-selfid-input");
-                if (selfInput) selfInput.value = String(info.user_id);
-                const selfBadge = document.getElementById("qqbot-self-badge");
-                if (selfBadge) {
-                  selfBadge.textContent = `${info.nickname || "在线"} ${info.user_id}`;
-                }
-                if (this.serverState && this.serverState.config) {
-                  this.serverState.config.selfId = String(info.user_id);
-                }
-              }
-            } catch (_) {}
-          };
-
-          ws.onmessage = (evt) => {
-            try {
-              const data = JSON.parse(String(evt.data || ""));
-              this.handleDirectWsEvent(data);
-            } catch (_) {}
           };
 
           ws.onclose = () => {
-            if (this.directWs === ws) {
-              this.directWsConnected = false;
-              this.directWs = null;
-            }
             if (!settled) {
               settled = true;
               clearTimeout(timer);
-              resolve(false);
+              resolve(null);
             }
           };
 
@@ -3493,13 +4288,91 @@ function createExpenditureLineChart(data, daysInMonth) {
             if (!settled) {
               settled = true;
               clearTimeout(timer);
-              resolve(false);
+              resolve(null);
             }
           };
         } catch (err) {
-          resolve(false);
+          resolve(null);
         }
       });
+    },
+
+    async connectBrowserDirectWs(wsUrl, token) {
+      if (this.directWs) {
+        try {
+          this.directWs.close();
+        } catch (_) {}
+        this.directWs = null;
+        this.directWsConnected = false;
+      }
+
+      const candidates = [wsUrl];
+      if (wsUrl.includes("127.0.0.1")) {
+        candidates.push(wsUrl.replace("127.0.0.1", "localhost"));
+      } else if (wsUrl.includes("localhost")) {
+        candidates.push(wsUrl.replace("localhost", "127.0.0.1"));
+      }
+
+      let connectedWs = null;
+      for (const candidateUrl of candidates) {
+        connectedWs = await this.trySingleBrowserWs(candidateUrl, token);
+        if (connectedWs) break;
+      }
+
+      if (!connectedWs) {
+        return false;
+      }
+
+      this.directWs = connectedWs;
+      this.directWsConnected = true;
+
+      connectedWs.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(String(evt.data || ""));
+          this.handleDirectWsEvent(data);
+        } catch (_) {}
+      };
+
+      connectedWs.onclose = () => {
+        if (this.directWs === connectedWs) {
+          this.directWsConnected = false;
+          this.directWs = null;
+          const selfBadge = document.getElementById("qqbot-self-badge");
+          if (selfBadge) selfBadge.textContent = "连接已断开";
+          this.updateConnDetail(
+            "与Termux 3001的连接已断开，请确认Termux与6099后台里的Token是否一致",
+            false,
+          );
+        }
+      };
+
+      this.notify("手机Termux直连成功");
+      const selfBadge = document.getElementById("qqbot-self-badge");
+      if (selfBadge) selfBadge.textContent = "Termux已连接";
+      this.updateConnDetail(
+        "已成功连通手机Termux NapCat 3001端口，正在读取登录QQ信息与群列表...",
+        true,
+      );
+
+      try {
+        const info = await this.callDirectOneBotWs("get_login_info", {});
+        if (info && info.user_id) {
+          const selfInput = document.getElementById("qqbot-selfid-input");
+          if (selfInput) selfInput.value = String(info.user_id);
+          if (selfBadge) {
+            selfBadge.textContent = `${info.nickname || "在线"} ${info.user_id}`;
+          }
+          if (this.serverState && this.serverState.config) {
+            this.serverState.config.selfId = String(info.user_id);
+          }
+          this.updateConnDetail(
+            `已成功连接 Termux NapCat · 登录QQ：${info.nickname || ""} ${info.user_id} · 实时监听已启动`,
+            true,
+          );
+        }
+      } catch (_) {}
+
+      return true;
     },
 
     callDirectOneBotWs(action, params = {}) {
@@ -3531,7 +4404,9 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (data.post_type === "message" && data.message_type === "group") {
         const gid = String(data.group_id || "");
         if (!gid) return;
-        const senderId = String(data.user_id || (data.sender && data.sender.user_id) || "");
+        const senderId = String(
+          data.user_id || (data.sender && data.sender.user_id) || "",
+        );
         const selfId =
           (this.serverState &&
             this.serverState.config &&
@@ -3565,7 +4440,11 @@ function createExpenditureLineChart(data, daysInMonth) {
           );
         }
         const gCfg = this.serverState.config.groups[gid];
-        const dispName = this.resolveMemberDisplayName(gCfg, senderId, rawRemark);
+        const dispName = this.resolveMemberDisplayName(
+          gCfg,
+          senderId,
+          rawRemark,
+        );
         this.appendStaticMessage(gid, {
           messageId: String(data.message_id || Date.now()),
           groupId: gid,
@@ -3607,88 +4486,133 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     async connectOneBot() {
+      const connBtn = document.getElementById("qqbot-connect-btn");
+      if (connBtn) connBtn.textContent = "连接中";
       await this.saveAllSettings(false);
-      this.notify("正在连接...");
       const epInput = document.getElementById("qqbot-endpoint-input");
       const tkInput = document.getElementById("qqbot-token-input");
       const rawUrl = epInput ? epInput.value.trim() : "ws://127.0.0.1:3001";
       const token = tkInput ? tkInput.value.trim() : "";
 
-      // 若是正向 ws:// 地址，优先尝试浏览器直接连接本机 Termux OneBot
-      if (
-        (rawUrl.startsWith("ws://") || rawUrl.startsWith("wss://")) &&
-        !rawUrl.includes("/api/qqbot/ws")
-      ) {
-        const directOk = await this.connectBrowserDirectWs(rawUrl, token);
-        if (directOk) {
-          await this.refreshOneBotGroups(true);
-          return;
-        }
-      }
+      this.notify(`正在连接 ${rawUrl} ...`);
+      this.updateConnDetail(`正在尝试连接 ${rawUrl} ...`, true);
 
       try {
-        let mode = "reverse_ws";
-        if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-          mode = "http";
-        } else if (
+        // 1. 若是正向 ws:// 地址，优先尝试浏览器直接连接本机 Termux OneBot
+        if (
           (rawUrl.startsWith("ws://") || rawUrl.startsWith("wss://")) &&
           !rawUrl.includes("/api/qqbot/ws")
         ) {
-          mode = "forward_ws";
+          const directOk = await this.connectBrowserDirectWs(rawUrl, token);
+          if (directOk) {
+            await this.refreshOneBotGroups(true);
+            await this.syncGroupMembersFromQQ();
+            return;
+          }
         }
 
-        const res = await fetch("/api/qqbot/connect", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            connectionMode: mode,
-            onebotUrl: rawUrl,
-            accessToken: token,
-          }),
-        });
-        const data = await res.json();
-        if (data && data.runtime) {
-          this.notify(data.runtime.statusText || "已就绪");
-          const selfInput = document.getElementById("qqbot-selfid-input");
-          if (selfInput && data.runtime.selfId) {
-            selfInput.value = data.runtime.selfId;
+        // 2. 尝试通过本地后端连接
+        let backendConnected = false;
+        try {
+          let mode = "reverse_ws";
+          if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+            mode = "http";
+          } else if (
+            (rawUrl.startsWith("ws://") || rawUrl.startsWith("wss://")) &&
+            !rawUrl.includes("/api/qqbot/ws")
+          ) {
+            mode = "forward_ws";
           }
+
+          const res = await fetch("/api/qqbot/connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              connectionMode: mode,
+              onebotUrl: rawUrl,
+              accessToken: token,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.runtime && data.runtime.connected) {
+              backendConnected = true;
+              this.notify(data.runtime.statusText || "已连接OneBot");
+              const selfInput = document.getElementById("qqbot-selfid-input");
+              if (selfInput && data.runtime.selfId) {
+                selfInput.value = data.runtime.selfId;
+              }
+              const selfBadge = document.getElementById("qqbot-self-badge");
+              if (selfBadge) {
+                selfBadge.textContent = data.runtime.selfId
+                  ? `在线QQ ${data.runtime.selfId}`
+                  : "已连接";
+              }
+              this.updateConnDetail(
+                `已通过服务端连通 ${rawUrl} · 状态：${data.runtime.statusText || "在线"}`,
+                true,
+              );
+              await this.refreshOneBotGroups(true);
+              return;
+            }
+          }
+        } catch (_) {}
+
+        if (!backendConnected) {
           const selfBadge = document.getElementById("qqbot-self-badge");
-          if (selfBadge && data.runtime.selfId) {
-            selfBadge.textContent = `在线QQ ${data.runtime.selfId}`;
-          }
+          if (selfBadge) selfBadge.textContent = "未连上3001";
+          const isHttps = window.location.protocol === "https:";
+          const tokenHint = !token
+            ? "你在 6099 网页后台新建 3001 端口时，系统默认自动生成了一串 Token 密钥，请把 6099 后台里的 Token 复制填进上方「密钥」框，或者去 6099 后台把 Token 删空并点保存！"
+            : "请核对上方「密钥」框里的 Token 是否与 6099 网页后台里的一模一样。";
+          const httpsHint = isHttps
+            ? "另外当前网页为 https 加密网址，若手机浏览器拦截了本地 ws 连接，请点浏览器地址栏左侧图标打开「网站设置」，将「不安全内容」设为允许。"
+            : "";
+          const fullMsg = `未能连上 ${rawUrl}：1. ${tokenHint} 2. 确认 6099 后台新建的是「WebSocket服务端」且已打开启用开关。${httpsHint}`;
+          this.notify("未能连上3001请看下方提示");
+          this.updateConnDetail(fullMsg, false);
         }
-        await this.refreshOneBotGroups(true);
-      } catch (e) {
-        this.notify("待命或请检查Termux");
+      } finally {
+        if (connBtn) connBtn.textContent = "连接";
       }
     },
 
     async refreshOneBotGroups(silent = false) {
-      if (!silent) this.notify("正在拉取群列表...");
-      if (this.directWsConnected && this.directWs) {
-        try {
-          const list = await this.callDirectOneBotWs("get_group_list", {});
-          if (Array.isArray(list) && list.length > 0) {
-            list.forEach((g) => {
-              const gid = String(g.group_id || "");
-              if (!gid) return;
-              if (!this.serverState.config.groups[gid]) {
-                this.serverState.config.groups[gid] =
-                  this.createDefaultGroupConfig(gid, g.group_name);
-              } else if (g.group_name) {
-                this.serverState.config.groups[gid].groupName = g.group_name;
-              }
-            });
-            this.renderGroupSelectDropdown();
-            await this.saveAllSettings(false);
-            if (!silent) this.notify(`已同步${list.length}个群`);
-            return;
-          }
-        } catch (_) {}
+      const refBtn = document.getElementById("qqbot-refresh-btn");
+      if (!silent && refBtn) refBtn.textContent = "刷新中";
+      if (!silent) {
+        this.notify("正在拉取QQ群列表...");
+        this.updateConnDetail("正在从已连接的QQ号拉取群聊列表...", true);
       }
-
       try {
+        if (this.directWsConnected && this.directWs) {
+          try {
+            const list = await this.callDirectOneBotWs("get_group_list", {});
+            if (Array.isArray(list) && list.length > 0) {
+              list.forEach((g) => {
+                const gid = String(g.group_id || "");
+                if (!gid) return;
+                if (!this.serverState.config.groups[gid]) {
+                  this.serverState.config.groups[gid] =
+                    this.createDefaultGroupConfig(gid, g.group_name);
+                } else if (g.group_name) {
+                  this.serverState.config.groups[gid].groupName = g.group_name;
+                }
+              });
+              this.renderGroupSelectDropdown();
+              await this.saveAllSettings(false);
+              if (!silent) {
+                this.notify(`已同步${list.length}个QQ群`);
+                this.updateConnDetail(
+                  `已成功拉取到 ${list.length} 个QQ群，可在下方分群管理下拉框中切换`,
+                  true,
+                );
+              }
+              return;
+            }
+          } catch (_) {}
+        }
+
         const res = await fetch("/api/qqbot/refresh-groups", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3716,12 +4640,33 @@ function createExpenditureLineChart(data, daysInMonth) {
           });
           this.renderGroupSelectDropdown();
           await this.saveAllSettings(false);
-          if (!silent) this.notify(`已同步${groupList.length}个群`);
+          if (!silent) {
+            const count = Object.keys(this.serverState.config.groups).length;
+            this.notify(
+              data.refreshedFromOneBot
+                ? `已从QQ拉取${count}个群`
+                : `已刷新本地${count}个群`,
+            );
+            this.updateConnDetail(
+              data.refreshedFromOneBot
+                ? `已从OneBot同步 ${count} 个QQ群`
+                : `当前尚未连上3001端口，已刷新本地 ${count} 个配置群；也可在分群管理里手动输入QQ群号点添加`,
+              Boolean(data.refreshedFromOneBot),
+            );
+          }
         } else if (!silent) {
-          this.notify("待命或手动加群");
+          this.notify("请先连上3001或手动添加群号");
+          this.updateConnDetail(
+            "未检测到在线OneBot连接，请先核对密钥并点连接，或在下方分群管理直接输入QQ群号点添加",
+            false,
+          );
         }
       } catch (e) {
-        if (!silent) this.notify("拉取完成");
+        if (!silent) {
+          this.notify("已刷新本地群列表");
+        }
+      } finally {
+        if (!silent && refBtn) refBtn.textContent = "刷新";
       }
     },
 
@@ -4162,11 +5107,8 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
     async runMainApiResponder(gCfg, messages, memory, judgeResult) {
       const personaText = this.resolvePersonaPrompt(gCfg);
       const thoughtText = this.resolveThoughtPrompt(gCfg);
-      const worldbookText = this.resolveWorldbookPrompt(gCfg.worldBookId);
-      const moduleContext = this.resolveModulePrompt(
-        gCfg.moduleId,
-        gCfg.chapterId,
-      );
+      const worldbookText = this.resolveWorldbookPrompt(gCfg);
+      const moduleContext = this.resolveModulePrompt(gCfg);
       const playerCardsContext = this.resolvePlayerCardsPrompt(gCfg);
       const stickerNames = this.resolveAvailableStickerNames(
         gCfg.stickerCategoryId,
@@ -4207,7 +5149,7 @@ ${gCfg.customPrompt ? `【带团与聊天要求规范】\n${gCfg.customPrompt}\n
 【当前启用的思维链条目】
 ${thoughtText}
 
-${ playerCardsContext ? `【本群成员实时名字与专属人设名册】\n${playerCardsContext}\n` : "" }
+${playerCardsContext ? `【本群成员实时名字与专属人设名册】\n${playerCardsContext}\n` : ""}
 ${worldbookText ? `【世界书设定】\n${worldbookText}\n` : ""}
 ${moduleContext.text ? `【当前挂载跑团模组与KP真相】\n${moduleContext.text}\n` : ""}
 ${moduleContext.imageTitles.length > 0 ? `【可用模组插图列表】\n${moduleContext.imageTitles.join("、")}\n若本轮剧情恰好揭示其中某张模组插图或地图，可在 moduleImageTitle 中填入对应标题。\n` : ""}
@@ -4763,47 +5705,132 @@ ${transcript}
     },
 
     resolveThoughtPrompt(gCfg) {
-      if (gCfg && Array.isArray(gCfg.thoughtItems) && gCfg.thoughtItems.length > 0) {
+      if (
+        gCfg &&
+        Array.isArray(gCfg.thoughtItems) &&
+        gCfg.thoughtItems.length > 0
+      ) {
         const enabledItems = gCfg.thoughtItems.filter(
           (i) => i && i.enabled !== false,
         );
         if (enabledItems.length > 0) {
-          return enabledItems
-            .map((item, idx) => `${idx + 1}. 【${item.title}】：${item.content}`)
-            .join("\n");
+          const usedTitles = new Set();
+          const replacePlaceholders = (tmpl) => {
+            if (!tmpl) return "";
+            let result = String(tmpl);
+            enabledItems.forEach((item) => {
+              const name = String(item.title || item.name || "").trim();
+              if (!name) return;
+              const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const regex = new RegExp(`\\[${escaped}\\]`, "g");
+              if (regex.test(result)) {
+                usedTitles.add(name);
+                result = result.replace(regex, String(item.content || ""));
+              }
+            });
+            return result.replace(/\[[^\[\]\n]{1,30}\]/g, "");
+          };
+
+          const headerResolved = replacePlaceholders(
+            gCfg.thoughtHeaderContent || "",
+          );
+          const generalResolved = replacePlaceholders(
+            gCfg.thoughtGeneralContent || "",
+          );
+          const remaining = enabledItems.filter(
+            (i) => !usedTitles.has(String(i.title || i.name || "").trim()),
+          );
+
+          const parts = [];
+          if (headerResolved.trim()) parts.push(headerResolved.trim());
+          if (generalResolved.trim()) parts.push(generalResolved.trim());
+          if (remaining.length > 0) {
+            parts.push(
+              remaining
+                .map(
+                  (item, idx) =>
+                    `${idx + 1}. 【${item.title || item.name}】：${item.content}`,
+                )
+                .join("\n"),
+            );
+          }
+          if (parts.length > 0) return parts.join("\n\n");
         }
       }
       return "1. 先梳理现场每位群成员所处位置与行动因果；2. 区分公开可见环境与个人私密情报；3. 用具体感官细节展现氛围，绝不替群友做决定。";
     },
 
-    resolveWorldbookPrompt(wbId) {
-      if (!wbId) return "";
+    resolveWorldbookPrompt(gCfgOrId) {
+      if (!gCfgOrId) return "";
+      if (typeof gCfgOrId === "object") {
+        const gCfg = gCfgOrId;
+        const enabledIds = Array.isArray(gCfg.enabledWorldBookIds)
+          ? gCfg.enabledWorldBookIds.map(String)
+          : [];
+        if (enabledIds.length > 0) {
+          const matched = (this.cachedResources.worldbooks || []).filter((w) =>
+            enabledIds.includes(String(w.id)),
+          );
+          if (matched.length > 0) {
+            return matched
+              .map((w) => `【${w.name}】\n${w.content}`)
+              .join("\n\n");
+          }
+        }
+        if (!gCfg.worldBookId) return "";
+        return this.resolveWorldbookPrompt(gCfg.worldBookId);
+      }
+
+      const wbId = String(gCfgOrId);
       if (wbId === "ALL") {
-        return this.cachedResources.worldbooks
-          .slice(0, 12)
+        return (this.cachedResources.worldbooks || [])
+          .slice(0, 15)
           .map((w) => `【${w.name}】${w.content}`)
           .join("\n");
       }
-      const found = this.cachedResources.worldbooks.find(
-        (w) => String(w.id) === String(wbId),
+      const found = (this.cachedResources.worldbooks || []).find(
+        (w) => String(w.id) === wbId,
       );
       return found ? `【${found.name}】\n${found.content}` : "";
     },
 
-    resolveModulePrompt(moduleId, chapterId) {
+    resolveModulePrompt(gCfgOrModuleId, chapterId) {
+      let moduleId = gCfgOrModuleId;
+      let selectedChapterIds = null;
+      let loadToc = false;
+      let loadImages = true;
+
+      if (gCfgOrModuleId && typeof gCfgOrModuleId === "object") {
+        const gCfg = gCfgOrModuleId;
+        moduleId = gCfg.moduleId;
+        chapterId = gCfg.chapterId;
+        if (Array.isArray(gCfg.selectedModuleChapterIds)) {
+          selectedChapterIds = gCfg.selectedModuleChapterIds.map(String);
+        }
+        loadToc = Boolean(gCfg.loadModuleToc);
+        loadImages = gCfg.loadModuleImages !== false;
+      }
+
       if (!moduleId) return { text: "", imageTitles: [] };
-      const mod = this.cachedResources.modules.find(
+      const mod = (this.cachedResources.modules || []).find(
         (m) => String(m.id) === String(moduleId),
       );
-      const chaps = this.cachedResources.moduleChapters
+      const chaps = (this.cachedResources.moduleChapters || [])
         .filter((c) => String(c.moduleId) === String(moduleId))
         .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
 
       let selectedChaps = chaps;
-      if (chapterId && chapterId !== "ALL") {
+      if (Array.isArray(selectedChapterIds)) {
+        selectedChaps = chaps.filter((c) =>
+          selectedChapterIds.includes(String(c.id)),
+        );
+      } else if (chapterId && chapterId !== "ALL") {
         const target = chaps.find((c) => String(c.id) === String(chapterId));
         if (target) selectedChaps = [target];
       }
+
+      const tocPart =
+        loadToc && mod && mod.toc ? `【模组目录】\n${mod.toc}\n\n` : "";
 
       const chapText = selectedChaps
         .map(
@@ -4812,13 +5839,15 @@ ${transcript}
         )
         .join("\n\n");
 
-      const imgs = this.cachedResources.moduleImages
-        .filter((img) => String(img.moduleId) === String(moduleId))
-        .map((img) => img.title || "模组插图")
-        .filter(Boolean);
+      const imgs = loadImages
+        ? (this.cachedResources.moduleImages || [])
+            .filter((img) => String(img.moduleId) === String(moduleId))
+            .map((img) => img.title || "模组插图")
+            .filter(Boolean)
+        : [];
 
       return {
-        text: `模组名称：${(mod && (mod.title || mod.name)) || ""}\n简介与真相：${(mod && (mod.description || mod.summary || mod.truth)) || ""}\n\n${chapText}`,
+        text: `模组名称：${(mod && (mod.title || mod.name)) || ""}\n简介与真相：${(mod && (mod.description || mod.summary || mod.truth)) || ""}\n\n${tocPart}${chapText}`,
         imageTitles: imgs,
       };
     },
@@ -4899,7 +5928,10 @@ ${transcript}
       const cfg = (this.serverState && this.serverState.config) || {};
       const botMain = cfg.mainApi || {};
       const botSub = cfg.subApi || {};
-      const stCfg = (window.state && window.state.apiConfig) || {};
+      const stCfg =
+        (window.state && window.state.apiConfig) ||
+        this.cachedResources.globalApiConfig ||
+        {};
 
       let proxyUrl = "";
       let apiKey = "";
@@ -4959,17 +5991,28 @@ ${transcript}
           botSub.model;
       }
 
-      if (
-        (!proxyUrl || !apiKey) &&
-        typeof window.ModuleManager !== "undefined" &&
-        typeof window.ModuleManager.callAI === "function"
-      ) {
-        return await window.ModuleManager.callAI(
-          sysPrompt,
-          userPrompt,
-          [],
-          useSubApi ? "sub" : "main",
-        );
+      if (!proxyUrl || !apiKey) {
+        if (useSubApi) {
+          return JSON.stringify({
+            shouldReply: true,
+            sceneType: "SINGLE_INTERACTION",
+            reason: "本地演练模式自动放行，配置群控API后将启用真实副API判断",
+            targetSpeakerName: "",
+            replyToMessageId: "",
+            needPrivateHint: false,
+            privateTargetName: "",
+          });
+        }
+        return JSON.stringify({
+          groupMessages: [
+            "本地沙盘演练已收到消息。当前尚未填入群控主API密钥，请在下方群控专属主API与副API独立接口卡片中填入地址与密钥，或点击同主按钮复用全局API后即可生成真实AI回复。",
+          ],
+          quoteMessageId: "",
+          privateMessages: [],
+          stickerName: "",
+          moduleImageTitle: "",
+          naiPrompt: "",
+        });
       }
 
       let endpoint = String(proxyUrl || "").replace(/\/+$/, "");
