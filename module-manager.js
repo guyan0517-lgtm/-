@@ -15919,7 +15919,7 @@ ${cp.roughEndingText || ''}
       this.setStatus('正在读取立体建筑沙盘数据...', '加载中');
 
       const termuxData = await this.loadAtlasFromTermux(this.currentModId);
-      if (termuxData && Array.isArray(termuxData.zones) && termuxData.zones.length > 0 && Number(termuxData.schemaVer) >= 2) {
+      if (termuxData && Array.isArray(termuxData.zones) && termuxData.zones.length > 0 && Number(termuxData.schemaVer) >= 3) {
         this.currentAtlasData = termuxData;
         this.setStatus('已从本地 Termux 磁盘加载立体建筑沙盘', '本地磁盘');
         this.applyAtlasData(termuxData);
@@ -15930,7 +15930,7 @@ ${cp.roughEndingText || ''}
         const rawLocal = localStorage.getItem('ephone_atlas3d_data_' + this.currentModId);
         if (rawLocal) {
           const parsedLocal = JSON.parse(rawLocal);
-          if (parsedLocal && Array.isArray(parsedLocal.zones) && parsedLocal.zones.length > 0 && Number(parsedLocal.schemaVer) >= 2) {
+          if (parsedLocal && Array.isArray(parsedLocal.zones) && parsedLocal.zones.length > 0 && Number(parsedLocal.schemaVer) >= 3) {
             this.currentAtlasData = parsedLocal;
             this.setStatus('已加载定制立体建筑沙盘，点击存盘可卸载至本地磁盘', '已定制');
             this.applyAtlasData(parsedLocal);
@@ -15975,7 +15975,7 @@ ${cp.roughEndingText || ''}
         return false;
       }
 
-      this.currentAtlasData.schemaVer = 2;
+      this.currentAtlasData.schemaVer = 3;
       const baseUrl = this.getTermuxBaseUrl();
       const safeName = `atlas3d_${String(this.currentModId).replace(/[^a-zA-Z0-9_-]/g, '_')}.json`;
       const jsonStr = JSON.stringify(this.currentAtlasData);
@@ -16054,6 +16054,11 @@ ${cp.roughEndingText || ''}
       const s = String(name || '').trim();
       if (!s) return true;
       return /^(现实世界|线上|网络|聊天室|电话|手机|短信|梦醒|结局|尾声|序幕|导入|背景|真相|KP|守密人|玩家|调查员|容器|放置戒指|道具|线索|附录|规则|状态|心理)/.test(s);
+    },
+
+    isIndoorSubRoomName(name) {
+      const s = String(name || '').trim();
+      return /^(卧室|客厅|厨房|卫生间|浴室|洗手间|玄关|阳台|走廊|储物间|衣帽间|主卧|次卧|书房|二楼走廊|一楼走廊)$/.test(s);
     },
 
     extractModuleAnimals(corpus) {
@@ -16178,8 +16183,20 @@ ${cp.roughEndingText || ''}
 
       let zoneItems = [];
       if (validNodes.length > 0) {
-        const topNodes = validNodes.filter(n => !n.parent || Number(n.level) === 1 || this.isMetaNonLocationName(n.parent));
-        const baseList = topNodes.length >= 3 ? topNodes.slice(0, 7) : validNodes.slice(0, 7);
+        // 智能剥离“千叶市”等城市级总容器节点，直接提取底下的真实地标建筑，并将“卧室/客厅”等室内小房间归入所属建筑的子调查点
+        const nonRoomNodes = validNodes.filter(n => !this.isIndoorSubRoomName(n.name));
+        let candidateNodes = nonRoomNodes.length >= 2 ? nonRoomNodes : validNodes;
+        if (candidateNodes.length > 3) {
+          const withoutCityRoot = candidateNodes.filter(n => {
+            const childCount = candidateNodes.filter(c => c.parent === n.name && c.name !== n.name).length;
+            const isCityWrapper = /市$|区$|县$|省$|町$|村$|全图|总图|大地图/.test(String(n.name || '')) && childCount >= 2;
+            return !isCityWrapper;
+          });
+          if (withoutCityRoot.length >= 2) {
+            candidateNodes = withoutCityRoot;
+          }
+        }
+        const baseList = candidateNodes.slice(0, 7);
         zoneItems = baseList.map((n, idx) => {
           const name = String(n.name || `区域0${idx + 1}`).trim();
           const children = validNodes.filter(c => c.parent === n.name && c.name !== n.name);
@@ -16262,7 +16279,7 @@ ${cp.roughEndingText || ''}
       ].join(' ');
 
       return {
-        schemaVer: 2,
+        schemaVer: 3,
         moduleId: String(mod.id),
         title: mod.name || '未命名模组',
         enSubtitle: `${String(mod.ruleSystem || 'COC').toUpperCase()} // ARCHITECTURAL 3D ATLAS`,
@@ -16308,7 +16325,7 @@ ${cp.roughEndingText || ''}
 
     getDefaultDemoData() {
       return {
-        schemaVer: 2,
+        schemaVer: 3,
         moduleId: 'demo_lovelle',
         title: '圣洛薇尔学院',
         enSubtitle: 'ST. LOVELLE // ROYAL CAMPUS 3D ATLAS',
@@ -16507,7 +16524,7 @@ ${cp.roughEndingText || ''}
         genBtn.disabled = true;
         genBtn.style.opacity = '0.65';
       }
-      this.setStatus(`正在由 AI 深度考据《${mod.name}》的小地图方位与万物立体构件...`, '生成中');
+      this.setStatus(`正在由 AI 深度考据《${mod.name}》的小地图方位与立体建筑...`, '生成中');
 
       try {
         chapters.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
@@ -16529,49 +16546,31 @@ ${cp.roughEndingText || ''}
         const roleDigest = roles.map(r => `${r.name}：${r.publicInfo || ''}`).join('；');
         const inferredWorld = this.inferWorldSetting(mod, mapNodes, chapters);
 
-        const sysPrompt = `你是一位享誉国际的 3D 微缩建筑沙盘主美、半厚涂光影插画师与万能立体建模师。
-你的任务是为当前跑团模组打造一座一眼惊艳、细节丰满、完全贴合模组世界观与小地图方位关系的 3D 立体建筑大沙盘。
+        const sysPrompt = `你是一位享誉国际的 3D 微缩建筑沙盘主美、半厚涂光影插画师与立体建模师。
+你的任务是为当前跑团模组打造一座一眼惊艳、建筑造型干净洗练、完全贴合模组世界观与小地图方位关系的 3D 立体建筑大沙盘。
 
-【核心建模铁律——既要无限创造万物，又要保证每栋建筑完整精致】
-1. 万物皆可捏模 + 复合建筑骨架双保险：
-   - 你不仅可以从 22 种高精复合地标原型中选择最贴合的 archType 作为主建筑底座，还可以为每一座建筑编写 parts 数组，利用通用 3D 几何原语自由拼装世间万物！
-   - 无论模组里出现什么场景，你都能精准还原其标志性立体构造：
-     * 游乐园：使用 archType="amusement_park"，并在 parts 中组合 wheel 摩天轮巨轮与吊舱、arch 过山车起伏拱形轨道、cone 旋转木马彩色尖顶帐篷与 gate 乐园检票拱门！
-     * 水族馆/海洋馆：使用 archType="aquarium"，并在 parts 中组合 glass_tunnel 弧形海底玻璃隧道、cylinder 巨型深海圆柱展缸与流线型波浪屋顶！
-     * 饭店/餐厅/咖啡馆/酒馆：使用 archType="restaurant"，组合凹凸主楼、canopy 条纹遮阳雨棚、window_grid 暖光落地橱窗、招牌灯箱与露天遮阳伞餐桌！
-     * 电车站/列车站：使用 archType="station"，组合候车月台长廊雨棚、train 有轨电车车厢、信号灯与铁轨！
-     * 棋牌室/茶室/俱乐部：使用 archType="chess_parlor"，组合带露台的双层街角楼、发光招牌、外廊栏杆与室内茶桌！
-     * 警察局/侦探所：使用 archType="police_station"，组合主办公楼、警徽门廊、凸出窗框阵列与停车棚！
-     * 异世界/浮空岛/魔法遗迹：使用 archType="floating_island"，组合 inverted_cone 倒锥形浮空岩岛、wheel 悬浮能量光环与 crystal 魔法晶塔！
-     * 现代医院/街角便利店/温暖室内剖面公寓/森林巨木树屋/学院教学楼/重檐神社/哥特钟塔/琉璃温室/歌剧礼堂：分别使用 hospital / convenience_store / apartment_cutaway / treehouse / school / shrine / clocktower / dome / hall，并叠加 parts 专属细节构件！
-     * 如果遇到任何前所未见的新奇建筑，你可以将 archType 设为最接近的基底或 "freeform"，并在 parts 数组中用 6 到 12 个立体构件完整搭出它的主楼体、侧翼楼、屋顶、窗格阵列、门廊雨棚与标志性奇观，绝不允许只放一个光秃秃的方盒子！
+【核心建模铁律——干净洗练的立体几何与无限创造】
+1. 选准建筑原型 archType + 按需编写专属地标构件 parts：
+   - 系统内置了 22 种精雕细琢的复合建筑原型：
+     * 游乐园：archType="amusement_park"，自带巨型立式摩天轮、旋转木马圆亭、过山车弯轨与检票大门。
+     * 水族馆/海洋馆：archType="aquarium"，自带弧形海底玻璃隧道、巨型深海圆柱展缸与玻璃穹顶。
+     * 饭店/餐厅/咖啡馆/酒馆：archType="restaurant"，自带双层凹凸主楼、挑出式条纹遮阳雨棚、暖光落地橱窗与门前遮阳伞圆桌。
+     * 电车站/列车站：archType="station"，自带候车月台雨棚、铁轨与停靠的有轨电车。
+     * 棋牌室/茶室/俱乐部：archType="chess_parlor"，自带二层木质游廊露台、竖向招牌灯箱与贴面玻璃窗。
+     * 警察局/侦探所：archType="police_station"，自带阶梯主楼、巡逻车库、警徽门廊与屋顶通讯塔。
+     * 异世界/浮空岛/魔法遗迹：archType="floating_island"，自带倒锥形浮空岩岛、飞流瀑布、悬浮光环与魔法晶塔。
+     * 街角便利店/综合医院/温暖室内剖面公寓/森林巨木树屋/学院教学楼/重檐神社/哥特钟塔/琉璃温室/歌剧礼堂：分别使用 convenience_store / hospital / apartment_cutaway / treehouse / school / shrine / clocktower / dome / hall。
+     * 如果遇到上述原型之外的全新特色建筑，请将 archType 设为 "freeform"，并在 parts 中用 4 到 6 个不互相穿模重叠的几何构件搭出主楼、侧翼、屋顶与门廊，系统会自动在主楼墙面上绘制整齐的贴面窗户，严禁在 parts 里堆砌大量零碎小方块或重复叠加 window_grid！
 
-2. 通用 3D 构件原语库说明，供你在每个 zone 的 parts 数组中自由组合：
-   - shape 可选值：
-     * "box"：长方体，可用于主楼、侧翼、招牌、阳台、空调机箱、矮墙、桌台
-     * "gable_house"：自带双坡斜屋顶与立面窗格的完整小楼体
-     * "window_grid"：立面凹凸玻璃排窗阵列，自动在墙面生成多行多列窗框与窗台
-     * "canopy"：带支撑立柱的挑出式入口条纹雨棚或门廊
-     * "cylinder"：圆柱体或水箱、塔身、立柱、烟囱
-     * "dome"：半球穹顶、天文圆顶、温室玻璃顶、树冠球
-     * "cone"：尖顶、帐篷顶、塔尖
-     * "inverted_cone"：倒置浮空岛岩体底座
-     * "wheel"：立式摩天轮巨轮、水车、大钟表盘或悬浮魔法环，自带支架与吊舱
-     * "arch"：拱门、过山车弧形轨道、彩虹拱桥
-     * "glass_tunnel"：半透明弧形海底玻璃长廊隧道
-     * "torii"：迎宾鸟居或乐园大门牌坊
-     * "train"：有轨电车或列车车厢
-   - tone 材质色调可选值："wall"、"roof"、"accent"、"glass"、"emissive"、"wood"、"water"、"foliage"
+2. 广阔分区大地图与真实方位连接：
+   - 当前生成模式为：${sourceMode === 'minimap' ? '【严格按小地图方位布局】——仔细阅读小地图节点与方位描述，不要把“千叶市”等城市总称当成单栋建筑，而是提取城市下的具体地点如公寓、电车站、游乐园、棋牌室、医院、警察局；左下角的游乐园必须放在左下角 x 约 -38、z 约 24，各个建筑分布在广阔大地图的不同方位！' : '【AI自由构思全景沙盘】——提炼模组最具代表性的 5 到 7 个实体建筑地点，在广阔大地图上错落分布，并通过道路连接！'}
+   - 坐标范围：x 取值范围为 -46 到 46，z 取值范围为 -32 到 32。
 
-3. 广阔分区大地图与真实方位连接：
-   - 当前生成模式为：${sourceMode === 'minimap' ? '【严格按小地图方位布局】——仔细阅读小地图节点与方位描述，例如左下角的游乐园必须放在左下角 x 负方向与 z 正方向，电车站、医院、公寓、棋牌室、警察局各自坐落在对应方位，绝不挤成一团！' : '【AI自由构思全景沙盘】——提炼模组最具代表性的 5 到 7 个实体地点，在广阔大地图上错落有致地分布，并通过街道、石板路或栈桥全部连接起来！'}
-   - 坐标范围：x 取值范围为 -46 到 46，z 取值范围为 -32 到 32。左下角对应 x 约 -38、z 约 24；左上角对应 x 约 -38、z 约 -22；右上角对应 x 约 38、z 约 -22；右下角对应 x 约 38、z 约 24；中心偏北对应 x 约 0、z 约 -18。
+3. 动物生成准则——按需生成，绝不强塞：
+   - 只有当模组剧情或场景中确实有小动物时，才在 animals 数组中放入 1 到 3 只动物，可选 type 为 "cat"、"bunny"、"puppy"、"deer"。如果没有动物，animals 必须输出空数组 []！
 
-4. 动物生成准则——按需生成，绝不强塞：
-   - 只有当模组剧情或场景中确实适合出现小动物时，才在 animals 数组中放入 1 到 3 只动物，可选 type 为 "cat"、"bunny"、"puppy"、"deer"。如果模组是严肃悬疑或室内密室且没有动物，animals 请输出空数组 []！
-
-5. 阳光明媚的半厚涂真实世界配色：
-   - 请在 palette 中设计一套明媚通透、金阳暖光与冷紫蓝背光对比鲜明的半厚涂插画配色，草地要青翠明媚，建筑受光面温暖柔和，严禁纯黑与刺眼荧光色。`;
+4. 阳光明媚的半厚涂真实世界配色：
+   - groundMain 草地颜色必须是充满阳光生机的明媚暖草绿，如 #7fd476 或 #86d97c，严禁把草地配成灰暗水泥色！建筑受光面采用温暖奶油白，屋顶采用低饱和深蓝灰或暖棕，点缀色明快高雅。`;
 
         const userPrompt = `模组名称：《${mod.name}》
 规则与类型：${mod.ruleSystem || 'coc'} / ${mod.type || ''} / ${mod.scaleType || ''}
@@ -16591,15 +16590,15 @@ ${chapDigest}
   "worldType": "从 modern_street/hospital/aquarium_coast/apartment_cutaway/treehouse_forest/school/shrine/dreamland/campus_manor 中选最贴合的一项",
   "tags": ["核心场景标签1", "标签2", "标签3"],
   "palette": {
-    "skyTop": "#dff0ff",
-    "skyBottom": "#fff7e8",
-    "groundMain": "#7ec876",
-    "groundSub": "#ebeef2",
-    "wallMain": "#fdfbf7",
-    "roofMain": "#3e4c5e",
-    "accent": "#f08264",
-    "glass": "#5da9e9",
-    "foliage": "#5bb56a"
+    "skyTop": "#d8eeff",
+    "skyBottom": "#fff7e5",
+    "groundMain": "#82d478",
+    "groundSub": "#f0ece4",
+    "wallMain": "#fffdf8",
+    "roofMain": "#384659",
+    "accent": "#f07b62",
+    "glass": "#5ba4e5",
+    "foliage": "#58bf6b"
   },
   "terraces": [
     { "type": "lawn 或 street 或 wood_deck 或 water_pool 或 marble_plaza", "x": 0, "z": 0, "w": 116, "d": 88, "h": 1.2 }
@@ -16607,11 +16606,11 @@ ${chapDigest}
   "zones": [
     {
       "code": "01",
-      "name": "2到6字真实地点名称",
-      "fullTitle": "完整建筑或空间名称",
+      "name": "2到6字具体建筑名称",
+      "fullTitle": "完整建筑名称",
       "enTitle": "ZONE // 01",
-      "archType": "从 amusement_park/aquarium/restaurant/station/chess_parlor/police_station/floating_island/convenience_store/hospital/apartment_cutaway/treehouse/school/shrine/modern_store/clocktower/dome/hall/ward/mansion/pagoda/observatory/courtyard/spire/freeform 中选最契合的一项",
-      "archLabel": "富有画面感的建筑凹凸结构与地标特征描述",
+      "archType": "从 amusement_park/aquarium/restaurant/station/chess_parlor/police_station/floating_island/convenience_store/hospital/apartment_cutaway/treehouse/school/shrine/clocktower/dome/hall/ward/mansion/pagoda/observatory/courtyard/spire/freeform 中选最契合的一项",
+      "archLabel": "富有画面感的建筑结构与地标特征描述",
       "x": -38,
       "z": 24,
       "width": 20,
@@ -16621,9 +16620,9 @@ ${chapDigest}
       "exclusiveRole": "驻留此处的角色或关联人物",
       "accessCond": "进入或解锁该区域的条件",
       "rating": 5,
-      "desc": "100字左右细腻描绘该建筑的外观凹凸细节、内部陈设与模组剧情氛围",
+      "desc": "100字左右细腻描绘该建筑的外观细节、内部陈设与模组剧情氛围",
       "parts": [
-        { "shape": "wheel 或 arch 或 glass_tunnel 或 canopy 或 gable_house 或 window_grid 或 cylinder 或 dome 或 cone 或 box 或 train 或 torii", "dx": 0, "dy": 8, "dz": 4, "w": 10, "h": 10, "d": 4, "tone": "accent 或 roof 或 glass 或 wall 或 emissive 或 wood 或 water 或 foliage" }
+        { "shape": "gable_house 或 canopy 或 cylinder 或 dome 或 cone 或 wheel 或 arch 或 glass_tunnel 或 box", "dx": 0, "dy": 0, "dz": 0, "w": 12, "h": 10, "d": 10, "tone": "wall 或 accent 或 roof 或 glass 或 wood" }
       ],
       "subSpots": [
         { "name": "建筑内具体可调查位置或关键道具", "info": "调查此处可发现的细节或线索" }
@@ -16646,14 +16645,14 @@ ${chapDigest}
 
         const worldType = parsed.worldType || inferredWorld;
         const normalized = {
-          schemaVer: 2,
+          schemaVer: 3,
           moduleId: String(this.currentModId),
           title: parsed.title || mod.name || '未命名模组',
           enSubtitle: parsed.enSubtitle || `${String(mod.ruleSystem || 'COC').toUpperCase()} // ARCHITECTURAL 3D ATLAS`,
           worldType,
           palette: parsed.palette && typeof parsed.palette === 'object' ? parsed.palette : null,
-          terraces: Array.isArray(parsed.terraces) ? parsed.terraces.slice(0, 6) : null,
-          props: Array.isArray(parsed.props) ? parsed.props.slice(0, 16) : null,
+          terraces: Array.isArray(parsed.terraces) ? parsed.terraces.slice(0, 5) : null,
+          props: Array.isArray(parsed.props) ? parsed.props.slice(0, 14) : null,
           animals: Array.isArray(parsed.animals) ? parsed.animals.slice(0, 4) : [],
           tags: Array.isArray(parsed.tags) && parsed.tags.length > 0 ? parsed.tags.slice(0, 4) : ['立体沙盘', '核心建筑群'],
           zones: parsed.zones.slice(0, 8).map((z, idx) => {
@@ -16676,7 +16675,7 @@ ${chapDigest}
               accessCond: String(z.accessCond || '自由调查'),
               rating: Math.max(3, Math.min(5, Number(z.rating) || 5)),
               desc: String(z.desc || ''),
-              parts: rawParts.slice(0, 12),
+              parts: rawParts.slice(0, 6),
               subSpots: Array.isArray(z.subSpots) ? z.subSpots.slice(0, 6) : []
             };
           })
@@ -16769,6 +16768,11 @@ ${chapDigest}
           wood: this.mixHex(sysAccent, '#8c6d58', 0.65),
           lawnA: '#fbf9fa',
           lawnB: this.mixHex(plaza, dark, 0.06),
+          grass: this.mixHex(sysAccent, '#a3d9a5', 0.65),
+          terraceTop: '#ffffff',
+          terraceSide: this.mixHex(plaza, dark, 0.14),
+          trim: this.mixHex(dark, '#ffffff', 0.78),
+          shadowTint: 'rgba(36, 32, 46, 0.19)',
           horizonLand: this.mixHex(plaza, '#ffffff', 0.35),
           horizonFar: this.mixHex(sysAccent, '#ffffff', 0.82),
           streetAsphalt: this.mixHex(dark, '#ffffff', 0.22),
@@ -16784,58 +16788,58 @@ ${chapDigest}
 
       const worldPresets = {
         hospital: {
-          skyTop: '#d8eeff', skyBottom: '#fff8eb',
-          groundMain: '#78c874', groundSub: '#e8eef5',
-          wallMain: '#fffdf9', roofMain: '#3d5266',
-          accent: '#4db6ac', glass: '#5299d3', foliage: '#5ebd6c', wood: '#b58d67'
+          skyTop: '#d4ecff', skyBottom: '#fff8e8',
+          groundMain: '#7ed476', groundSub: '#ebeef5',
+          wallMain: '#fffdf9', roofMain: '#384c61',
+          accent: '#4db6ac', glass: '#5299d3', foliage: '#55be68', wood: '#b58d67'
         },
         modern_street: {
-          skyTop: '#d6ecff', skyBottom: '#fff5e4',
-          groundMain: '#76c672', groundSub: '#e2e8f0',
-          wallMain: '#fffdf8', roofMain: '#374354',
-          accent: '#f2785c', glass: '#4b89c2', foliage: '#55b867', wood: '#9e7350'
+          skyTop: '#d2ebff', skyBottom: '#fff5e0',
+          groundMain: '#80d476', groundSub: '#f0ece4',
+          wallMain: '#fffdf8', roofMain: '#364354',
+          accent: '#f2785c', glass: '#4b89c2', foliage: '#52bc66', wood: '#9e7350'
         },
         aquarium_coast: {
-          skyTop: '#ccf0ff', skyBottom: '#fff9eb',
-          groundMain: '#7ad184', groundSub: '#e3f4fc',
+          skyTop: '#c8eeff', skyBottom: '#fff8e8',
+          groundMain: '#7ad484', groundSub: '#e3f4fc',
           wallMain: '#ffffff', roofMain: '#2b5876',
-          accent: '#38b6ff', glass: '#4fc3f7', foliage: '#5cc47d', wood: '#a88365'
+          accent: '#38b6ff', glass: '#4fc3f7', foliage: '#56c478', wood: '#a88365'
         },
         apartment_cutaway: {
-          skyTop: '#ffeede', skyBottom: '#fffdf7',
-          groundMain: '#84cc7a', groundSub: '#efe0cf',
+          skyTop: '#ffeede', skyBottom: '#fffdf5',
+          groundMain: '#84d47a', groundSub: '#efe0cf',
           wallMain: '#fffaf2', roofMain: '#5e473e',
-          accent: '#ea735d', glass: '#6baed6', foliage: '#65be70', wood: '#c48b5c'
+          accent: '#ea735d', glass: '#6baed6', foliage: '#62c26e', wood: '#c48b5c'
         },
         treehouse_forest: {
-          skyTop: '#d9f7ee', skyBottom: '#fffae8'.replace('', '#'),
-          groundMain: '#6ec468', groundSub: '#e2f0cb',
+          skyTop: '#d6f7ed', skyBottom: '#fffae6',
+          groundMain: '#72cc6a', groundSub: '#e2f0cb',
           wallMain: '#fbf5ea', roofMain: '#466d48',
-          accent: '#f2945c', glass: '#68c4bc', foliage: '#4eb35e', wood: '#8c5e3c'
+          accent: '#f2945c', glass: '#68c4bc', foliage: '#4cb85c', wood: '#8c5e3c'
         },
         school: {
-          skyTop: '#dcebff', skyBottom: '#fff5ee',
-          groundMain: '#79c876', groundSub: '#ebeef5',
+          skyTop: '#d8ebff', skyBottom: '#fff5ec',
+          groundMain: '#7ed078', groundSub: '#ebeef5',
           wallMain: '#fffdf9', roofMain: '#3e4a63',
-          accent: '#ec748b', glass: '#5c9bd6', foliage: '#5cbc6d', wood: '#a67958'
+          accent: '#ec748b', glass: '#5c9bd6', foliage: '#58c06b', wood: '#a67958'
         },
         shrine: {
-          skyTop: '#fde9df', skyBottom: '#fff9f0',
-          groundMain: '#78bf72', groundSub: '#f0e6dc',
+          skyTop: '#fde9df', skyBottom: '#fff9ef',
+          groundMain: '#7cc674', groundSub: '#f0e6dc',
           wallMain: '#fdf8f2', roofMain: '#343846',
-          accent: '#dc5648', glass: '#6ab0c2', foliage: '#5ab068', wood: '#9c5140'
+          accent: '#dc5648', glass: '#6ab0c2', foliage: '#56b466', wood: '#9c5140'
         },
         dreamland: {
-          skyTop: '#dfeaff', skyBottom: '#ffedf5'.replace('', '#'),
-          groundMain: '#88d8a4', groundSub: '#f2e8ff',
+          skyTop: '#dce8ff', skyBottom: '#ffedf5',
+          groundMain: '#86d8a2', groundSub: '#f2e8ff',
           wallMain: '#ffffff', roofMain: '#544e7a',
-          accent: '#f282b4', glass: '#76bef8', foliage: '#68d1a2', wood: '#b491c4'
+          accent: '#f282b4', glass: '#76bef8', foliage: '#64d1a0', wood: '#b491c4'
         },
         campus_manor: {
-          skyTop: '#e3eeff', skyBottom: '#fff3f6',
-          groundMain: '#7ac878', groundSub: '#f2ecf2',
+          skyTop: '#dfedff', skyBottom: '#fff4f6',
+          groundMain: '#7ed07a', groundSub: '#f2ecf2',
           wallMain: '#fffdfd', roofMain: '#363242',
-          accent: '#eb7ba0', glass: '#64a2dc', foliage: '#5cbc70', wood: '#9e7762'
+          accent: '#eb7ba0', glass: '#64a2dc', foliage: '#58c06e', wood: '#9e7762'
         }
       };
 
@@ -16843,41 +16847,47 @@ ${chapDigest}
       const aiP = data.palette && typeof data.palette === 'object' ? data.palette : {};
 
       const accent = aiP.accent || baseP.accent;
-      const wallMain = aiP.wallMain || baseP.wallMain;
+      const wallMain = this.mixHex(aiP.wallMain || baseP.wallMain, '#fffdf9', 0.45);
       const roofMain = aiP.roofMain || baseP.roofMain;
-      const groundMain = aiP.groundMain || baseP.groundMain;
-      const groundSub = aiP.groundSub || baseP.groundSub;
-      const foliage = aiP.foliage || baseP.foliage;
+      // 强制把 AI 可能给出的灰暗地面调和为阳光明媚的半厚涂嫩绿草地
+      const groundMain = this.mixHex(aiP.groundMain || baseP.groundMain, baseP.groundMain, 0.68);
+      const groundSub = this.mixHex(aiP.groundSub || baseP.groundSub, '#f6f1e9', 0.45);
+      const foliage = this.mixHex(aiP.foliage || baseP.foliage, baseP.foliage, 0.55);
       const glass = aiP.glass || baseP.glass;
 
       return {
         mode: 'module',
         accent,
-        accentSoft: this.mixHex(accent, '#fff8eb', 0.24),
-        accentLight: this.mixHex(accent, '#ffffff', 0.72),
+        accentSoft: this.mixHex(accent, '#fff8eb', 0.26),
+        accentLight: this.mixHex(accent, '#ffffff', 0.70),
         accentGlow: aiP.skyBottom || baseP.skyBottom,
-        accentDeep: this.mixHex(accent, roofMain, 0.32),
+        accentDeep: this.mixHex(accent, roofMain, 0.34),
         wallPure: wallMain,
         wallMain,
-        wallSide: this.mixHex(wallMain, groundSub, 0.36),
-        wallShadow: this.mixHex(groundSub, roofMain, 0.16),
+        wallSide: this.mixHex(wallMain, groundSub, 0.42),
+        wallShadow: this.mixHex(groundSub, roofMain, 0.22),
         obsidian: roofMain,
         obsidianSoft: this.mixHex(roofMain, '#ffffff', 0.18),
         roofMain,
         glass,
-        glassDeep: this.mixHex(glass, '#1e293b', 0.48),
+        glassDeep: this.mixHex(glass, '#1e293b', 0.42),
         emissive: '#ffefa8',
         foliage,
-        foliageLight: this.mixHex(foliage, '#fff59d', 0.36),
+        foliageLight: this.mixHex(foliage, '#fff59d', 0.42),
         wood: baseP.wood,
         lawnA: groundMain,
-        lawnB: this.mixHex(groundMain, '#fff59d', 0.26),
-        horizonLand: this.mixHex(groundMain, '#e8f5e9', 0.42),
-        horizonFar: this.mixHex(groundMain, aiP.skyBottom || baseP.skyBottom, 0.68),
-        streetAsphalt: '#454d59',
-        sidewalk: '#edf0f5',
-        water: '#64d2ed',
-        plazaA: this.mixHex(groundSub, '#fffdf9', 0.48),
+        lawnB: this.mixHex(groundMain, '#fff59d', 0.32),
+        grass: groundMain,
+        terraceTop: groundSub,
+        terraceSide: this.mixHex(groundSub, roofMain, 0.22),
+        trim: this.mixHex(roofMain, '#ffffff', 0.72),
+        shadowTint: 'rgba(32, 44, 68, 0.22)',
+        horizonLand: this.mixHex(groundMain, '#e8f5e9', 0.38),
+        horizonFar: this.mixHex(groundMain, aiP.skyBottom || baseP.skyBottom, 0.62),
+        streetAsphalt: '#4a5568',
+        sidewalk: '#f7f5f0',
+        water: '#5cc8eb',
+        plazaA: this.mixHex(groundSub, '#fffdf9', 0.52),
         plazaB: groundSub,
         plazaSide: this.mixHex(groundSub, roofMain, 0.20),
         skyTop: aiP.skyTop || baseP.skyTop,
@@ -16921,15 +16931,17 @@ ${chapDigest}
     shadeColor(colorStr, factor) {
       let [r, g, b] = this.toRgbTuple(colorStr);
       if (factor > 1) {
-        const t = Math.min(0.52, factor - 1);
+        // 受光面注入暖金阳光高光，形成通透的半厚涂明媚感
+        const t = Math.min(0.62, (factor - 1) * 1.25);
         r = Math.round(r + (255 - r) * t);
-        g = Math.round(g + (248 - g) * t);
-        b = Math.round(b + (226 - b) * t);
+        g = Math.round(g + (249 - g) * t);
+        b = Math.round(b + (222 - b) * t * 0.85);
       } else {
-        const shadowT = Math.max(0, Math.min(0.48, 1 - factor));
-        r = Math.max(24, Math.min(255, Math.round(r * (1 - shadowT * 0.86) + 46 * shadowT * 0.14)));
-        g = Math.max(28, Math.min(255, Math.round(g * (1 - shadowT * 0.82) + 56 * shadowT * 0.18)));
-        b = Math.max(36, Math.min(255, Math.round(b * (1 - shadowT * 0.70) + 88 * shadowT * 0.30)));
+        // 背光面压暗并注入冷紫蓝环境色，让建筑棱角与明暗交界线极其分明
+        const shadowT = Math.max(0, Math.min(0.56, (1 - factor) * 1.28));
+        r = Math.max(20, Math.min(255, Math.round(r * (1 - shadowT * 0.90) + 38 * shadowT * 0.18)));
+        g = Math.max(24, Math.min(255, Math.round(g * (1 - shadowT * 0.84) + 52 * shadowT * 0.22)));
+        b = Math.max(34, Math.min(255, Math.round(b * (1 - shadowT * 0.68) + 96 * shadowT * 0.34)));
       }
       return `rgb(${r}, ${g}, ${b})`;
     },
@@ -16989,6 +17001,7 @@ ${chapDigest}
           nz,
           baseColor: rf.color || rf.baseColor || '#ffffff',
           trimStroke: rf.trimStroke || null,
+          windowGrid: rf.windowGrid || null,
           cullBack: disableCull ? false : (rf.cullBack !== false)
         });
       }
@@ -17011,8 +17024,7 @@ ${chapDigest}
       const hw = w * 0.5;
       const hh = h * 0.5;
       const hd = d * 0.5;
-      const isThin = Math.min(w, h, d) <= 1.25;
-      const forceNoCull = Boolean(isBaseLayer || noCull || isThin);
+      const forceNoCull = Boolean(isBaseLayer);
       const v = [
         { x: cx - hw, y: cy - hh, z: cz - hd },
         { x: cx + hw, y: cy - hh, z: cz - hd },
@@ -17030,7 +17042,7 @@ ${chapDigest}
         { verts: [v[0], v[4], v[7], v[3]], color, cullBack: !forceNoCull },
         { verts: [v[5], v[1], v[2], v[6]], color, cullBack: !forceNoCull }
       ];
-      this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, isBaseLayer, zoneIdx, forceNoCull);
+      return this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, isBaseLayer, zoneIdx, forceNoCull);
     },
 
     addBevelCapSolid(cx, baseY, cz, w, h, d, capColor, trimColor, zoneIdx = -1) {
@@ -17284,7 +17296,7 @@ ${chapDigest}
       if (shape === 'wheel' || shape === 'ferris_wheel' || shape === 'ring') {
         const r = Math.max(4.5, Math.min(11, Math.max(pw, ph) * 0.55));
         const cy = Math.max(base0 + r + 2, py + r * 0.5);
-        this.addWheelSolid(px, cy, pz, r, 0.85, col, pal.accentSoft, pal.wallPure, idx, base0);
+        this.addWheelSolid(px, cy, pz, r, col, pal.accentSoft, pal.wallPure, idx, base0);
         return cy + r + 2.5;
       }
       if (shape === 'arch' || shape === 'coaster_track' || shape === 'curve_track') {
@@ -17371,26 +17383,26 @@ ${chapDigest}
     },
 
     addFacadeWindows(cx, baseY, cz, w, h, d, rows, cols, pal, idx, frontOnly = false) {
-      const startY = baseY + 3.0;
-      const usableH = Math.max(4, h - 4.8);
-      const rowStep = usableH / Math.max(1, rows);
-      const colSpan = w * 0.72;
-      const colStep = cols > 1 ? colSpan / (cols - 1) : 0;
-      const winW = Math.min(2.6, (w * 0.55) / Math.max(1, cols));
-      const winH = Math.min(2.5, rowStep * 0.58);
-
-      for (let r = 0; r < rows; r++) {
-        const wy = startY + r * rowStep + winH * 0.5;
-        for (let c = 0; c < cols; c++) {
-          const wx = cx + (cols > 1 ? -colSpan * 0.5 + c * colStep : 0);
-          this.addBoxSolid(wx, wy, cz + d * 0.5 + 0.18, winW + 0.45, winH + 0.4, 0.32, pal.wallSide, null, idx, false, true);
-          this.addBoxSolid(wx, wy, cz + d * 0.5 + 0.32, winW, winH, 0.24, pal.glassDeep, null, idx, false, true);
-          this.addBoxSolid(wx, wy - winH * 0.5 - 0.18, cz + d * 0.5 + 0.38, winW + 0.65, 0.28, 0.55, pal.wallPure, null, idx, false, true);
-          if (!frontOnly) {
-            this.addBoxSolid(wx, wy, cz - d * 0.5 - 0.18, winW + 0.4, winH + 0.35, 0.30, pal.wallSide, null, idx, false, true);
-            this.addBoxSolid(wx, wy, cz - d * 0.5 - 0.30, winW, winH, 0.24, pal.glassDeep, null, idx, false, true);
+      const cleanRows = Math.max(1, Math.min(2, Number(rows) || 2));
+      const cleanCols = Math.max(1, Math.min(3, Number(cols) || 2));
+      for (let i = this.solids.length - 1; i >= 0; i--) {
+        const s = this.solids[i];
+        if (!s || s.isBaseLayer || s.zoneIdx !== idx || !Array.isArray(s.faces) || s.faces.length < 5) continue;
+        if (Math.hypot(s.cx - cx, s.cz - cz) > 8) continue;
+        const gridSpec = {
+          rows: cleanRows,
+          cols: cleanCols,
+          glassColor: pal.glassDeep || '#4a6b82',
+          highlightColor: pal.glass || '#cde8f6',
+          frameColor: pal.wallPure || '#ffffff',
+          sillColor: pal.wallSide || '#d8d0c5'
+        };
+        s.faces.forEach(f => {
+          if (f.nz > 0.5 || (!frontOnly && f.nz < -0.5)) {
+            f.windowGrid = gridSpec;
           }
-        }
+        });
+        break;
       }
     },
 
@@ -17652,7 +17664,7 @@ ${chapDigest}
           // 主题游乐园：立式巨型摩天轮与彩色座舱 + 旋转木马条纹尖顶亭 + 过山车起伏拱形轨道 + 乐园迎宾拱门
           const wheelR = Math.max(8.5, h * 0.34);
           const wheelCY = base0 + wheelR + 3.2;
-          this.addWheelSolid(x - w * 0.16, wheelCY, z - 2.0, wheelR, 0.9, pal.accent, pal.emissive || '#ffe082', pal.wallPure, idx, base0);
+          this.addWheelSolid(x - w * 0.16, wheelCY, z - 2.0, wheelR, pal.accent, pal.emissive || '#ffe082', pal.wallPure, idx, base0);
           // 旋转木马圆亭
           const carX = x + w * 0.28;
           const carZ = z + 2.2;
@@ -17748,7 +17760,7 @@ ${chapDigest}
           const spireH = h * 0.42;
           this.addPrismSolid(x, islandTopY + 0.8, z, w * 0.24, spireH * 0.55, 12, pal.wallPure, null, idx);
           this.addPyramidSolid(x, islandTopY + 0.8 + spireH * 0.55, z, w * 0.28, spireH * 0.55, 12, pal.accent, '#ffffff', idx);
-          this.addWheelSolid(x, islandTopY + spireH * 0.65, z, w * 0.38, 0.65, pal.accentSoft, null, null, idx, islandTopY);
+          this.addWheelSolid(x, islandTopY + spireH * 0.65, z, w * 0.38, pal.accentSoft, null, null, idx, islandTopY);
           topY = islandTopY + spireH + 3.5;
         } else if (arch === 'convenience_store' || arch === 'modern_store') {
           const bodyH = h * 0.44;
@@ -17940,12 +17952,14 @@ ${chapDigest}
           topY = baseTop + mainSpireH + 3.2;
         }
 
-        // 叠加 AI 针对该建筑编写的万能 3D 构件原语列表 (parts 或 customParts)
-        const extraParts = Array.isArray(zone.parts) ? zone.parts : (Array.isArray(zone.customParts) ? zone.customParts : []);
-        extraParts.slice(0, 12).forEach(cp => {
-          const partTop = this.buildUniversalPart(x, base0, z, cp, pal, idx);
-          if (partTop > topY) topY = partTop;
-        });
+        // 仅当建筑为自由拼装模式时叠加 parts，防止在完整精修地标建筑上重复堆叠方块与窗户
+        if (arch === 'freeform') {
+          const extraParts = Array.isArray(zone.parts) ? zone.parts : (Array.isArray(zone.customParts) ? zone.customParts : []);
+          extraParts.slice(0, 8).forEach(cp => {
+            const partTop = this.buildUniversalPart(x, base0, z, cp, pal, idx);
+            if (partTop > topY) topY = partTop;
+          });
+        }
 
         this.labelAnchors.push({
           zoneIdx: idx,
@@ -18880,7 +18894,8 @@ ${chapDigest}
         const wz = s.cz + this.camera.panZ;
         const rz = wx * sinY + wz * cosY;
         const fullCamZ = wy * sinP + rz * cosP;
-        return { s, sortKey: fullCamZ };
+        const sortKey = s.isBaseLayer ? (s.cy * 1000 + fullCamZ * 0.001) : fullCamZ;
+        return { s, sortKey };
       });
 
       sortedSolids.sort((a, b) => a.sortKey - b.sortKey);
@@ -18899,9 +18914,11 @@ ${chapDigest}
           for (let k = 0; k < pts.length; k++) avgZ += pts[k].camZ;
           avgZ /= pts.length;
 
-          // 基于面法线的半厚涂阳光明暗计算：受光面暖金明亮，背光面冷紫灰深邃，立体棱角鲜明
-          const dotLight = Math.max(-0.75, Math.min(1, f.nx * Lx + f.ny * Ly + f.nz * Lz));
-          const lightFactor = 0.88 + dotLight * 0.26 + (isFocused ? 0.05 : 0);
+          // 强化阳光受光面与背光面冷暖光影对比：受光面明快通透，侧背光面深邃立体
+          const dotLight = Math.max(-0.85, Math.min(1, f.nx * Lx + f.ny * Ly + f.nz * Lz));
+          const lightFactor = s.isBaseLayer
+            ? (0.96 + dotLight * 0.08)
+            : (0.82 + dotLight * 0.36 + (isFocused ? 0.06 : 0));
           visibleFaces.push({ f, pts, avgZ, lightFactor });
         }
 
@@ -18923,6 +18940,60 @@ ${chapDigest}
           ctx.lineWidth = f.trimStroke ? 0.85 : 0.45;
           ctx.lineJoin = 'round';
           ctx.stroke();
+
+          if (f.windowGrid && pts.length === 4) {
+            const wg = f.windowGrid;
+            const rows = wg.rows || 2;
+            const cols = wg.cols || 2;
+            const bilerp = (u, v) => {
+              const bx = pts[0].x + (pts[1].x - pts[0].x) * u;
+              const by = pts[0].y + (pts[1].y - pts[0].y) * u;
+              const tx = pts[3].x + (pts[2].x - pts[3].x) * u;
+              const ty = pts[3].y + (pts[2].y - pts[3].y) * u;
+              return { x: bx + (tx - bx) * v, y: by + (ty - by) * v };
+            };
+            const winHalfU = Math.min(0.11, 0.28 / cols);
+            const winHalfV = Math.min(0.12, 0.24 / rows);
+            for (let r = 0; r < rows; r++) {
+              const vc = 0.34 + ((r + 0.5) / rows) * 0.52;
+              const v0 = vc - winHalfV;
+              const v1 = vc + winHalfV;
+              for (let c = 0; c < cols; c++) {
+                const uc = 0.18 + ((c + 0.5) / cols) * 0.64;
+                const u0 = uc - winHalfU;
+                const u1 = uc + winHalfU;
+                const p00 = bilerp(u0, v0);
+                const p10 = bilerp(u1, v0);
+                const p11 = bilerp(u1, v1);
+                const p01 = bilerp(u0, v1);
+
+                ctx.beginPath();
+                ctx.moveTo(p00.x, p00.y);
+                ctx.lineTo(p10.x, p10.y);
+                ctx.lineTo(p11.x, p11.y);
+                ctx.lineTo(p01.x, p01.y);
+                ctx.closePath();
+                ctx.fillStyle = wg.glassColor;
+                ctx.fill();
+                ctx.strokeStyle = wg.frameColor;
+                ctx.lineWidth = 1.0;
+                ctx.stroke();
+
+                const h00 = bilerp(u0 + winHalfU * 0.18, v0 + winHalfV * 0.55);
+                const h10 = bilerp(u0 + winHalfU * 0.95, v0 + winHalfV * 0.55);
+                const h11 = bilerp(u0 + winHalfU * 0.95, v1 - winHalfV * 0.18);
+                const h01 = bilerp(u0 + winHalfU * 0.18, v1 - winHalfV * 0.18);
+                ctx.beginPath();
+                ctx.moveTo(h00.x, h00.y);
+                ctx.lineTo(h10.x, h10.y);
+                ctx.lineTo(h11.x, h11.y);
+                ctx.lineTo(h01.x, h01.y);
+                ctx.closePath();
+                ctx.fillStyle = wg.highlightColor;
+                ctx.fill();
+              }
+            }
+          }
         }
       });
     }
