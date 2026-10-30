@@ -3855,6 +3855,8 @@
       try {
         response = await fetch(requestUrl, {
           method: 'POST',
+          _isSubApiCall: Boolean(apiCfg && apiCfg.isSub),
+          _noAutoRetry: true,
           headers: requestHeaders,
           body: JSON.stringify(requestBody)
         });
@@ -3894,12 +3896,22 @@
           if (isGemini) {
             resText = joinedPartsText || resData.choices?.[0]?.message?.content || '';
           } else {
-            const msgContent =
-              resData.choices?.[0]?.message?.content ||
-              resData.choices?.[0]?.delta?.content ||
-              resData.content?.[0]?.text ||
-              joinedPartsText ||
+            const rawMsgContent =
+              resData.choices?.[0]?.message?.content ??
+              resData.choices?.[0]?.delta?.content ??
+              resData.content ??
               '';
+            let msgContent = '';
+            if (typeof rawMsgContent === 'string') {
+              msgContent = rawMsgContent;
+            } else if (Array.isArray(rawMsgContent)) {
+              msgContent = rawMsgContent
+                .map(b => (typeof b === 'string' ? b : (b && b.type !== 'thinking' && typeof b.text === 'string' ? b.text : '')))
+                .join('');
+            }
+            if (!msgContent && joinedPartsText) {
+              msgContent = joinedPartsText;
+            }
             const msgReasoning =
               resData.choices?.[0]?.message?.reasoning_content ||
               resData.choices?.[0]?.message?.reasoning ||
@@ -4286,7 +4298,7 @@
         if (bgMatch) bgTag = bgMatch[1].trim();
         const endMatch = cleanRaw.match(/"endingTag"\s*:\s*"([^"\n\r]+)"/);
         if (endMatch) endingTag = endMatch[1].trim();
-        const sumMatch = cleanRaw.match(/"summary"\s*:\s*"([\s\\S]*?)"(?=\s*,\s*"(?:bgTag|endingTag|contentTags|mapNodes|chunks|imageAnalysis|moduleType|ruleSystem|scaleType)"\s*:|\s*\})/);
+        const sumMatch = cleanRaw.match(/"summary"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"(?:bgTag|endingTag|contentTags|mapNodes|chunks|imageAnalysis|moduleType|ruleSystem|scaleType)"\s*:|\s*\})/);
         if (sumMatch && sumMatch[1].trim()) {
           summary = sumMatch[1].trim();
         } else {
@@ -4498,7 +4510,7 @@ ${activePrompt}
 ━━━━━━━━━━━━━━━━━━
 【输出格式规范】
 ━━━━━━━━━━━━━━━━━━
-输出严格的 JSON 对象，不得包含任何 markdown 语法块（如 \`\`\`json）或任何多余解释文字。
+直接输出以 { 开头、以 } 结尾的纯 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明，所有字符串内部的换行请写为 \\n，字符串内部引用请一律使用中文引号「」或“”。
 JSON 格式如下：
 {
   "moduleType": "线性",
@@ -13478,7 +13490,23 @@ ${chaptersDigest}
           statusPct: pctVal
         };
 
-        const idb = await _openDraftDB();
+        try {
+          const lightFormBackup = {
+            updatedAt: payload.updatedAt,
+            bgTags: payload.bgTags,
+            relTags: payload.relTags,
+            toneTags: payload.toneTags,
+            tropeTags: payload.tropeTags,
+            customTags: payload.customTags,
+            selectedTcIds: payload.selectedTcIds,
+            formValues: payload.formValues,
+            statusText: payload.statusText,
+            statusPct: payload.statusPct
+          };
+          localStorage.setItem('ephone_ai_writer_form_draft_v1', JSON.stringify(lightFormBackup));
+        } catch (_) {}
+
+        const idb = await this._openDraftDB();
         if (idb) {
           await new Promise((resolve) => {
             const tx = idb.transaction('drafts', 'readwrite');
@@ -13494,14 +13522,37 @@ ${chaptersDigest}
 
     async loadAiWriterDraftFromIDB() {
       try {
-        const idb = await _openDraftDB();
-        if (!idb) return false;
-        const draft = await new Promise((resolve) => {
-          const tx = idb.transaction('drafts', 'readonly');
-          const req = tx.objectStore('drafts').get('active_ai_writer_draft');
-          req.onsuccess = () => resolve(req.result || null);
-          req.onerror = () => resolve(null);
-        });
+        let draft = null;
+        try {
+          const idb = await this._openDraftDB();
+          if (idb) {
+            draft = await new Promise((resolve) => {
+              const tx = idb.transaction('drafts', 'readonly');
+              const req = tx.objectStore('drafts').get('active_ai_writer_draft');
+              req.onsuccess = () => resolve(req.result || null);
+              req.onerror = () => resolve(null);
+            });
+          }
+        } catch (_) {}
+
+        let lsDraft = null;
+        try {
+          const rawLs = localStorage.getItem('ephone_ai_writer_form_draft_v1');
+          if (rawLs) lsDraft = JSON.parse(rawLs);
+        } catch (_) {}
+
+        if (!draft && lsDraft) {
+          draft = lsDraft;
+        } else if (draft && lsDraft && (lsDraft.updatedAt || 0) >= (draft.updatedAt || 0)) {
+          draft.formValues = Object.assign({}, draft.formValues || {}, lsDraft.formValues || {});
+          if (Array.isArray(lsDraft.bgTags)) draft.bgTags = lsDraft.bgTags;
+          if (Array.isArray(lsDraft.relTags)) draft.relTags = lsDraft.relTags;
+          if (Array.isArray(lsDraft.toneTags)) draft.toneTags = lsDraft.toneTags;
+          if (Array.isArray(lsDraft.tropeTags)) draft.tropeTags = lsDraft.tropeTags;
+          if (Array.isArray(lsDraft.customTags)) draft.customTags = lsDraft.customTags;
+          if (Array.isArray(lsDraft.selectedTcIds)) draft.selectedTcIds = lsDraft.selectedTcIds;
+        }
+
         if (!draft) return false;
 
         if (Array.isArray(draft.bgTags)) this.aiWriterState.bgTags = draft.bgTags;
@@ -13585,7 +13636,10 @@ ${chaptersDigest}
 
     async clearAiWriterDraftFromIDB() {
       try {
-        const idb = await _openDraftDB();
+        localStorage.removeItem('ephone_ai_writer_form_draft_v1');
+      } catch (_) {}
+      try {
+        const idb = await this._openDraftDB();
         if (idb) {
           await new Promise((resolve) => {
             const tx = idb.transaction('drafts', 'readwrite');
@@ -13752,11 +13806,23 @@ ${chaptersDigest}
         const el = document.getElementById(fid);
         if (el) {
           el.addEventListener('change', () => { this.saveAiWriterDraftToIDB(); });
-          if (el.tagName === 'INPUT') {
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
             el.addEventListener('input', () => { this.saveAiWriterDraftToIDB(); });
           }
         }
       });
+
+      const hookPresetSelect = document.getElementById('ai-mod-hook-preset-select');
+      if (hookPresetSelect) {
+        hookPresetSelect.addEventListener('change', () => {
+          const val = hookPresetSelect.value;
+          const hookInputEl = document.getElementById('ai-mod-hook-input');
+          if (val && hookInputEl) {
+            hookInputEl.value = val;
+            this.saveAiWriterDraftToIDB();
+          }
+        });
+      }
 
       const addTagBtn = document.getElementById('ai-mod-add-tag-btn');
       const customTagInput = document.getElementById('ai-mod-custom-tag-input');
@@ -14495,7 +14561,7 @@ ${drawnSeeds.length > 0 ? '- 灵感参考（可自由汲取其中有意思的元
 2. KPC或核心NPC有着怎样的性格魅力、说话习惯与不为人知的小秘密？
 3. 调查员从【导入】开始，会依次经历哪些具体的场景与阶段，最终如何走向【结局】？请根据具体故事舞台和地点自由决定章节数量与章节名，不要使用千篇一律的固定章节名。
 
-请直接输出一个合法的 JSON 对象（不要在 JSON 前后附加其他代码块或思考块）：
+请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
 {
   "title": "模组名称",
   "summary": "模组简介（120至220字，介绍故事舞台、开场悬念与核心看点，不剧透幕后底牌）",
@@ -14580,7 +14646,7 @@ ${JSON.stringify({
 }, null, 2)}
 
 请保持与 plannedScenes 相同的章节顺序与数量（共 ${ai1Data.plannedScenes.length} 个正文章节，绝不可漏章或合并成一章），为每一章补充丰富的场景细节、互动检定与线索关联，并提取本模组专属的地图地点与关键线索卡。
-请直接输出合法的 JSON 对象（不要输出额外思考块）：
+请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
 {
   "atmosphereAndMechanicsGuide": "守秘人带团节奏与氛围指南：说明全篇的叙事基调、关键伏笔回收方式以及特殊机制的运作细节",
   "deepenedScenes": [
@@ -14659,7 +14725,7 @@ ${craftPhilosophy}`;
 线索列表：${JSON.stringify(ai2Data.clues || [], null, 2)}
 
 请完成【02-模组导读与大纲】的撰写，并为全部 ${ai2Data.deepenedScenes.length} 个正文章节生成详实的执笔细纲（finalScenes 数量与顺序请与 deepenedScenes 保持一致，切勿遗漏任何一章）。
-请直接输出合法的 JSON 对象（不要输出额外思考块）：
+请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
 {
   "auditReport": "总编审打磨手记：简述如何优化了本模组的剧情转折、线索咬合与对白自然度",
   "kpMasterGuideChapter": "完整的【02-模组导读与大纲】正文（以【KP信息】开头）：包含 1. 模组整体脉络与起承转合流程图；2. 核心线索链与真相揭露节奏；3. 守秘人带团备团建议与柔性控场技巧",

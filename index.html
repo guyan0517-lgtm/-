@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3815,17 +3815,20 @@
             </div>
 
             <div class="form-group" style="margin-bottom: 0;">
-              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">引子</label>
-              <input type="text" id="ai-mod-hook-input" list="ai-mod-hook-datalist" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" placeholder="留空由AI构思或输入开场脑洞与关系要求" />
-              <datalist id="ai-mod-hook-datalist">
-                <option value="由AI结合所选标签自主破题构思"></option>
-                <option value="平淡午后KPC突然说出了一句打破日常的坦白"></option>
-                <option value="暴雪封山的温泉旅馆里只有你们两人共处一室"></option>
-                <option value="一觉醒来发现KPC分裂成了成年与幼年两个个体"></option>
-                <option value="在开往终点的夜行列车上与宿敌或恋人共度最后一夜"></option>
-                <option value="意外触发感官共感后对方拼命掩饰失控的心跳与体温"></option>
-                <option value="旧教学楼的黄昏茶室里流传着能实现愿望的怪谈"></option>
-              </datalist>
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin: 0; display: block;">引子</label>
+                <select id="ai-mod-hook-preset-select" style="height: 28px; line-height: 18px; font-size: 11.5px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg, #FFFFFF); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle; max-width: 210px;">
+                  <option value="">下拉快选脑洞</option>
+                  <option value="由AI结合所选标签自主破题构思">由AI结合所选标签自主破题构思</option>
+                  <option value="平淡午后KPC突然说出了一句打破日常的坦白">平淡午后KPC突然说出了一句打破日常的坦白</option>
+                  <option value="暴雪封山的温泉旅馆里只有你们两人共处一室">暴雪封山的温泉旅馆里只有你们两人共处一室</option>
+                  <option value="一觉醒来发现KPC分裂成了成年与幼年两个个体">一觉醒来发现KPC分裂成了成年与幼年两个个体</option>
+                  <option value="在开往终点的夜行列车上与宿敌或恋人共度最后一夜">在开往终点的夜行列车上与宿敌或恋人共度最后一夜</option>
+                  <option value="意外触发感官共感后对方拼命掩饰失控的心跳与体温">意外触发感官共感后对方拼命掩饰失控的心跳与体温</option>
+                  <option value="旧教学楼的黄昏茶室里流传着能实现愿望的怪谈">旧教学楼的黄昏茶室里流传着能实现愿望的怪谈</option>
+                </select>
+              </div>
+              <textarea id="ai-mod-hook-input" rows="3" class="moe-input" style="min-height: 68px; font-size: 12px; line-height: 1.5; padding: 6px 8px; border-radius: 6px; width: 100%; box-sizing: border-box; resize: vertical;" placeholder="留空由AI构思或输入开场脑洞、简介与关系要求，支持右下角拖拽拉长"></textarea>
             </div>
           </div>
 
@@ -22582,7 +22585,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const subKey = String(apiCfg.subApiKey || document.getElementById("sub-api-key")?.value || "").trim();
             const mainModel = String(apiCfg.model || document.getElementById("model-select")?.value || "").trim();
             const subModel = String(apiCfg.subModel || document.getElementById("sub-model-select")?.value || "").trim();
-            if (window.__subApiCallWindowUntil && Date.now() <= window.__subApiCallWindowUntil) {
+            if (init && typeof init._isSubApiCall === "boolean") {
+              isSubCall = init._isSubApiCall;
+              window.__subApiCallWindowUntil = 0;
+            } else if (window.__subApiCallWindowUntil && Date.now() <= window.__subApiCallWindowUntil) {
               isSubCall = true;
               window.__subApiCallWindowUntil = 0;
             } else if (subProxy && subProxy !== mainProxy && urlStr.startsWith(subProxy)) {
@@ -31361,10 +31367,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           const groupsFragment = document.createDocumentFragment();
+          const validContactGroupIds = new Set(groups.map(g => String(g.id)));
           groups.forEach((group) => {
-            const isDef = group.id === defaultGroupId;
+            const isDef = String(group.id) === String(defaultGroupId);
             const groupMembers = filteredChars.filter(c => {
-              if (c.groupId) return c.groupId === group.id;
+              if (c.groupId !== undefined && c.groupId !== null && validContactGroupIds.has(String(c.groupId))) {
+                return String(c.groupId) === String(group.id);
+              }
               return isDef;
             });
 
@@ -58673,11 +58682,14 @@ ${stickerContext || "无"}
           // 2. 好友分组
           const normalContacts = contacts.filter(c => !c.isNpc);
           if (groups.length > 0) {
+            const validGroupIds = new Set(groups.map(g => String(g.id)));
             groups.forEach(group => {
-              const isDef = group.id === defaultGroupId;
+              const isDef = String(group.id) === String(defaultGroupId);
               const gMembers = normalContacts.filter(c => {
-                const cGroupId = c.chat?.groupId || (state.chats[c.id]?.groupId);
-                if (cGroupId) return cGroupId === group.id;
+                const cGroupId = c.chat?.groupId ?? state.chats[c.id]?.groupId;
+                if (cGroupId !== undefined && cGroupId !== null && validGroupIds.has(String(cGroupId))) {
+                  return String(cGroupId) === String(group.id);
+                }
                 return isDef;
               });
               if (gMembers.length > 0) {
@@ -59348,18 +59360,19 @@ ${stickerContext || "无"}
               const isPeerContact = contactChat.roleType === "peer" && Boolean(contactChat.peerCode);
               if (isPeerContact) chat.isPeerGroup = true;
               const myPeerCodeNow = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
+              const cSettings = contactChat.settings || {};
               const memObj = {
                 id: contactId,
                 originalName: contactChat.name,
                 groupNickname: contactChat.name,
-                avatar: contactChat.settings.aiAvatar || defaultAvatar,
-                persona: isPeerContact ? "" : contactChat.settings.aiPersona,
-                age: contactChat.settings.age || "",
-                birthday: contactChat.settings.birthday || "",
-                gender: contactChat.settings.gender || "",
-                genderNote: contactChat.settings.genderNote || "",
-                avatarFrame: contactChat.settings.aiAvatarFrame || "",
-                cocPanel: contactChat.settings.aiCocPanel ? JSON.parse(JSON.stringify(contactChat.settings.aiCocPanel)) : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
+                avatar: cSettings.aiAvatar || defaultAvatar,
+                persona: isPeerContact ? "" : (cSettings.aiPersona || ""),
+                age: cSettings.age || "",
+                birthday: cSettings.birthday || "",
+                gender: cSettings.gender || "",
+                genderNote: cSettings.genderNote || "",
+                avatarFrame: cSettings.aiAvatarFrame || "",
+                cocPanel: cSettings.aiCocPanel ? JSON.parse(JSON.stringify(cSettings.aiCocPanel)) : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
                 isAdmin: false,
                 groupTitle: "",
                 addedByPeerCode: myPeerCodeNow,
@@ -59371,10 +59384,11 @@ ${stickerContext || "无"}
                 memObj.peerCode = contactChat.peerCode;
                 memObj.isInvestigatorLocked = true;
               }
-              if (contactChat.roleType === "system_status") {
-                memObj.settings = JSON.parse(JSON.stringify(contactChat.settings || {}));
+              if (contactChat.roleType === "system_status" || contactChat.roleType === "dice") {
+                memObj.settings = JSON.parse(JSON.stringify(cSettings));
                 memObj.triggerMode = memObj.settings.triggerMode || "always";
               }
+              if (!Array.isArray(chat.members)) chat.members = [];
               chat.members.push(memObj);
               newlyAddedMembers.push(memObj);
               addedNames.push(`“${contactChat.name}”`);
@@ -59391,16 +59405,20 @@ ${stickerContext || "无"}
                 }
               }
               if (foundNpc) {
+                const myPeerCodeNow = (window.PeerManager && typeof window.PeerManager.getOrCreateMyPeerCode === "function") ? window.PeerManager.getOrCreateMyPeerCode() : "user";
                 const npcMem = {
                   id: foundNpc.id,
                   originalName: foundNpc.name,
                   groupNickname: foundNpc.name,
                   avatar: foundNpc.avatar || defaultGroupMemberAvatar,
-                  persona: foundNpc.persona,
+                  persona: foundNpc.persona || "",
                   avatarFrame: "",
                   isAdmin: false,
                   groupTitle: "",
+                  addedByPeerCode: myPeerCodeNow,
+                  isPrivate: false,
                 };
+                if (!Array.isArray(chat.members)) chat.members = [];
                 chat.members.push(npcMem);
                 newlyAddedMembers.push(npcMem);
                 addedNames.push(`“${foundNpc.name}”`);
@@ -59411,13 +59429,19 @@ ${stickerContext || "无"}
           await db.chats.put(chat);
 
           // 发送一条系统消息通知
-          const myNickname = chat.settings.myNickname || "我";
+          const myNickname = chat.settings?.myNickname || "我";
           await logSystemMessage(
             chat.id,
             `“${myNickname}”邀请 ${addedNames.join("、")} 加入了群聊。`,
           );
 
-          if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.onMembersAddedToPeerGroup === "function") {
+          const isPeerGrp = Boolean(
+            chat.isPeerGroup ||
+            chat.peerGroupId ||
+            (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))
+          );
+          if (isPeerGrp && window.PeerManager && typeof window.PeerManager.onMembersAddedToPeerGroup === "function") {
+            chat.isPeerGroup = true;
             await window.PeerManager.onMembersAddedToPeerGroup(chat, newlyAddedMembers);
           }
 
@@ -59542,6 +59566,7 @@ ${stickerContext || "无"}
 
         async function openContactPickerForAddMember() {
           isContactPickerForAddMember = true;
+          window.__isCreatingPeerGroup = false;
           selectedContacts.clear();
 
           // 绑定正确的“添加成员”函数
@@ -59567,13 +59592,18 @@ ${stickerContext || "无"}
           }
 
           const chat = state.chats[state.activeChatId];
+          const isPeerGroupContext = Boolean(
+            chat &&
+            (chat.isPeerGroup ||
+              chat.peerGroupId ||
+              (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat)))
+          );
           const existingMemberIds = new Set();
+          const existingPeerCodes = new Set();
           if (chat && Array.isArray(chat.members)) {
             chat.members.forEach((m) => {
               if (m.id) existingMemberIds.add(String(m.id));
-              if (m.originalName) existingMemberIds.add(String(m.originalName));
-              if (m.groupNickname) existingMemberIds.add(String(m.groupNickname));
-              if (m.name) existingMemberIds.add(String(m.name));
+              if (m.peerCode) existingPeerCodes.add(String(m.peerCode));
             });
           }
           existingMemberIds.add("user"); // 把用户自己也算作已存在成员
@@ -59583,6 +59613,9 @@ ${stickerContext || "无"}
           Object.values(state.chats)
             .filter((c) => !c.isGroup)
             .forEach((c) => {
+              const isPeer = c.roleType === "peer" || Boolean(c.peerCode);
+              if (isPeer && !isPeerGroupContext) return;
+              if (c.peerCode && existingPeerCodes.has(String(c.peerCode))) return;
               allAvailablePeople.push({
                 id: c.id,
                 name: c.settings?.remarkName || c.name || "未命名角色",
@@ -59613,7 +59646,7 @@ ${stickerContext || "无"}
 
           // 过滤掉已经是群成员的人
           const contacts = allAvailablePeople.filter(
-            (p) => !existingMemberIds.has(String(p.id)) && !existingMemberIds.has(String(p.name)),
+            (p) => !existingMemberIds.has(String(p.id)),
           );
 
           await renderContactPickerGroups(contacts, listEl);
@@ -86980,12 +87013,15 @@ ${stickerContext || "无"}
           async function createDiceChat(name, avatar) {
             const finalAvatar = (avatar && avatar.trim()) ? avatar.trim() : DEFAULT_DICE_AVATAR;
             const newChatId = "chat_" + Date.now();
+            const defaultGrpId = typeof ensureDefaultContactGroup === "function" ? await ensureDefaultContactGroup() : 1;
             const diceChat = {
               id: newChatId,
               name: name.trim(),
               roleType: "dice",
               isGroup: false,
               isPinned: false,
+              inMessageList: true,
+              groupId: defaultGrpId,
               npcLibrary: [],
               relationship: {
                 status: "friend",
@@ -87046,6 +87082,7 @@ ${stickerContext || "无"}
             state.chats[newChatId] = diceChat;
             await db.chats.put(diceChat);
             renderChatList();
+            if (typeof renderContactsScreen === "function") await renderContactsScreen();
           }
 
           if (confirmAddDiceBtn) {
@@ -87190,12 +87227,15 @@ ${stickerContext || "无"}
 
           async function createStatusChat(name) {
             const newChatId = "chat_" + Date.now();
+            const defaultGrpId = typeof ensureDefaultContactGroup === "function" ? await ensureDefaultContactGroup() : 1;
             const statusChat = {
               id: newChatId,
               name: (name && name.trim()) ? name.trim() : "系统状态",
               roleType: "system_status",
               isGroup: false,
               isPinned: false,
+              inMessageList: true,
+              groupId: defaultGrpId,
               npcLibrary: [],
               relationship: {
                 status: "friend",
@@ -87249,6 +87289,7 @@ ${stickerContext || "无"}
             state.chats[newChatId] = statusChat;
             await db.chats.put(statusChat);
             renderChatList();
+            if (typeof renderContactsScreen === "function") await renderContactsScreen();
           }
 
           if (confirmAddStatusBtn) {
@@ -94786,16 +94827,6 @@ ${stickerContext || "无"}
           document
             .getElementById("add-existing-contact-btn")
             .addEventListener("click", async () => {
-              // 从好友列表添加的事件
-              // 为“完成”按钮绑定“拉人入群”的逻辑
-              const confirmBtn = document.getElementById(
-                "confirm-contact-picker-btn",
-              );
-              // 使用克隆节点方法清除旧的事件监听器，防止重复绑定
-              const newConfirmBtn = confirmBtn.cloneNode(true);
-              confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-              newConfirmBtn.addEventListener("click", handleAddMembersToGroup);
-
               await openContactPickerForAddMember();
             });
 

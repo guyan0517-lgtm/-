@@ -4027,6 +4027,8 @@
           if (am.avatar) existingAi.avatar = am.avatar;
           if (am.avatarFrame !== undefined) existingAi.avatarFrame = am.avatarFrame;
           if (am.persona !== undefined) existingAi.persona = am.persona;
+          if (am.roleType) existingAi.roleType = am.roleType;
+          if (am.triggerMode) existingAi.triggerMode = am.triggerMode;
           if (am.addedByPeerCode !== undefined) existingAi.addedByPeerCode = am.addedByPeerCode;
           if (am.isPrivate !== undefined) existingAi.isPrivate = Boolean(am.isPrivate);
           if (am.cocPanel) existingAi.cocPanel = am.cocPanel;
