@@ -1557,6 +1557,10 @@ function getDefaultQqBotConfig() {
       apiKey: '',
       model: ''
     },
+    accountPresets: [],
+    privateChats: {},
+    naiPresets: [],
+    visionCache: {},
     groups: {
       '88482026': {
         groupId: '88482026',
@@ -1568,6 +1572,7 @@ function getDefaultQqBotConfig() {
         idleAskMin: 15,
         cooldownSec: 5,
         autoNaiImage: true,
+        naiMode: 'trpg_every_round',
         modImgMode: 'auto',
         personaId: '',
         aiPersona: '你是一位经验丰富、沉稳自然的真人跑团守秘人KP兼群友。说话自然流畅，绝不说教，遇到单人向NPC搭话或独立行动时直接回应对应玩家，遇到全员关键节点时引导大家自然互动。',
@@ -1575,9 +1580,11 @@ function getDefaultQqBotConfig() {
         thoughtChainId: '',
         thoughtItems: getDefaultThoughtItems(),
         worldBookId: '',
+        enabledWorldBookIds: [],
         stickerCategoryId: 'ALL',
         moduleId: '',
         chapterId: 'ALL',
+        selectedModuleChapterIds: [],
         memberRemarks: {
           '10001': '早川秋',
           '10002': '佐藤葵'
@@ -1658,6 +1665,10 @@ function loadQqBotConfig() {
           endpoint: parsed.onebotUrl || parsed.endpoint || def.endpoint,
           mainApi: { ...def.mainApi, ...(parsed.mainApi || {}) },
           subApi: { ...def.subApi, ...(parsed.subApi || {}) },
+          accountPresets: Array.isArray(parsed.accountPresets) ? parsed.accountPresets : [],
+          privateChats: (parsed.privateChats && typeof parsed.privateChats === 'object') ? parsed.privateChats : {},
+          naiPresets: Array.isArray(parsed.naiPresets) ? parsed.naiPresets : [],
+          visionCache: (parsed.visionCache && typeof parsed.visionCache === 'object') ? parsed.visionCache : {},
           groups: normGroups
         };
       }
@@ -1880,7 +1891,7 @@ function extractOneBotMessageText(rawEvt) {
         if (imgUrl && !imageUrls.includes(imgUrl)) imageUrls.push(imgUrl);
         if (imgFile && !imageFiles.includes(imgFile)) imageFiles.push(imgFile);
         const summary = String(seg.data?.summary || '').trim();
-        const cleanSummary = (summary && summary !== '[图片]' && summary !== '[动画表情]') ? summary : '群聊图片';
+        const cleanSummary = (summary && summary !== '[图片]' && summary !== '[动画表情]') ? summary : '聊天图片';
         stickerHint = cleanSummary;
         textParts.push(`[发送了图片：${cleanSummary}]`);
       } else if (seg.type === 'face') {
@@ -1914,7 +1925,7 @@ function extractOneBotMessageText(rawEvt) {
     if (repMatch) replyId = repMatch[1];
     if (/\[CQ:image/.test(rawStr)) {
       hasSticker = true;
-      stickerHint = '群聊图片';
+      stickerHint = '聊天图片';
     }
     const cleaned = rawStr
       .replace(/\[CQ:reply,id=[^\]]+\]/g, '')
@@ -1987,6 +1998,59 @@ function handleIncomingOneBotEvent(data) {
     return;
   }
 
+  if (data.post_type === 'message' && data.message_type === 'private') {
+    const senderId = String(data.user_id || data.sender?.user_id || '');
+    if (!senderId) return;
+    const rawQqRemark = String(
+      data.sender?.remark ||
+      data.sender?.card ||
+      data.sender?.nickname ||
+      senderId
+    ).trim();
+    const parsed = extractOneBotMessageText(data);
+    if (!parsed.text && !parsed.hasSticker && (!parsed.imageUrls || parsed.imageUrls.length === 0)) return;
+
+    const cfg = loadQqBotConfig();
+    if (!cfg.privateChats) cfg.privateChats = {};
+    if (!cfg.privateChats[senderId]) {
+      cfg.privateChats[senderId] = {
+        userId: senderId,
+        nickname: rawQqRemark || senderId,
+        remark: rawQqRemark || senderId,
+        enabled: true,
+        waitSec: 30,
+        persona: ''
+      };
+      saveQqBotConfig(cfg);
+    }
+    const pCfg = cfg.privateChats[senderId];
+    const dispName = pCfg.remark || pCfg.nickname || rawQqRemark || senderId;
+    const isSelf = Boolean(qqBotRuntime.selfId && senderId === qqBotRuntime.selfId);
+    const privKey = 'priv_' + senderId;
+    const msgEntry = {
+      messageId: String(data.message_id || ('pmsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
+      groupId: privKey,
+      userId: senderId,
+      senderId,
+      senderName: dispName,
+      qqRemark: dispName,
+      content: parsed.text,
+      rawMessage: parsed.text,
+      replyId: parsed.replyId || '',
+      hasSticker: parsed.hasSticker,
+      stickerHint: parsed.stickerHint || '',
+      imageUrls: parsed.imageUrls || [],
+      imageFiles: parsed.imageFiles || [],
+      visionDescription: data.visionDescription || '',
+      visionRecognized: Boolean(data.visionRecognized),
+      isBot: isSelf,
+      isSelf,
+      timestamp: (data.time ? Number(data.time) * 1000 : Date.now())
+    };
+    appendGroupMessageToDisk(privKey, msgEntry);
+    return;
+  }
+
   if (data.post_type === 'message' && data.message_type === 'group') {
     const groupId = String(data.group_id || '');
     if (!groupId) return;
@@ -2028,6 +2092,7 @@ function handleIncomingOneBotEvent(data) {
       imageUrls: parsed.imageUrls || [],
       imageFiles: parsed.imageFiles || [],
       visionDescription: data.visionDescription || '',
+      visionRecognized: Boolean(data.visionRecognized),
       isBot: isSelf,
       isSelf,
       timestamp: (data.time ? Number(data.time) * 1000 : Date.now())
@@ -2231,7 +2296,7 @@ app.post('/api/qqbot/config', (req, res) => {
     const incoming = req.body || {};
     const current = loadQqBotConfig();
     const nextUrl = incoming.onebotUrl || incoming.endpoint || current.onebotUrl;
-    const mergedGroups = { ...current.groups };
+    const mergedGroups = incoming.replaceGroups ? {} : { ...current.groups };
     if (incoming.groups && typeof incoming.groups === 'object') {
       for (const gid of Object.keys(incoming.groups)) {
         mergedGroups[gid] = normalizeGroupConfig(gid, {
@@ -2240,6 +2305,9 @@ app.post('/api/qqbot/config', (req, res) => {
         });
       }
     }
+    const mergedPrivateChats = incoming.replacePrivateChats
+      ? (incoming.privateChats || {})
+      : { ...(current.privateChats || {}), ...(incoming.privateChats || {}) };
     const merged = {
       ...current,
       ...incoming,
@@ -2247,12 +2315,67 @@ app.post('/api/qqbot/config', (req, res) => {
       endpoint: nextUrl,
       mainApi: { ...current.mainApi, ...(incoming.mainApi || {}) },
       subApi: { ...current.subApi, ...(incoming.subApi || {}) },
+      accountPresets: Array.isArray(incoming.accountPresets) ? incoming.accountPresets : (current.accountPresets || []),
+      privateChats: mergedPrivateChats,
+      naiPresets: Array.isArray(incoming.naiPresets) ? incoming.naiPresets : (current.naiPresets || []),
+      visionCache: { ...(current.visionCache || {}), ...(incoming.visionCache || {}) },
       groups: mergedGroups
     };
     saveQqBotConfig(merged);
     if (merged.selfId) qqBotRuntime.selfId = String(merged.selfId);
     if (merged.nickname) qqBotRuntime.nickname = String(merged.nickname);
     return res.json({ ok: true, config: merged });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/refresh-friends', async (req, res) => {
+  try {
+    const cfg = loadQqBotConfig();
+    if (!cfg.privateChats || typeof cfg.privateChats !== 'object') {
+      cfg.privateChats = {};
+    }
+    let remoteFriends = [];
+    let fetchedFromOneBot = false;
+    try {
+      const list = await callOneBotApi('get_friend_list', {});
+      if (Array.isArray(list)) {
+        remoteFriends = list;
+        fetchedFromOneBot = true;
+      }
+    } catch (_) {}
+
+    remoteFriends.forEach(f => {
+      const uid = String(f.user_id || '');
+      if (!uid || (qqBotRuntime.selfId && uid === qqBotRuntime.selfId)) return;
+      const nick = String(f.nickname || uid).trim();
+      const rem = String(f.remark || nick || uid).trim();
+      if (!cfg.privateChats[uid]) {
+        cfg.privateChats[uid] = {
+          userId: uid,
+          nickname: nick,
+          remark: rem,
+          enabled: true,
+          waitSec: 30,
+          persona: ''
+        };
+      } else {
+        cfg.privateChats[uid].nickname = nick;
+        if (!cfg.privateChats[uid].remark || cfg.privateChats[uid].remark === uid) {
+          cfg.privateChats[uid].remark = rem;
+        }
+      }
+    });
+
+    saveQqBotConfig(cfg);
+    return res.json({
+      ok: true,
+      fetchedFromOneBot,
+      privateChats: cfg.privateChats,
+      friends: Object.values(cfg.privateChats),
+      count: Object.keys(cfg.privateChats).length
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

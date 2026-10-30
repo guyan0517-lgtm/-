@@ -2115,12 +2115,25 @@ function createExpenditureLineChart(data, daysInMonth) {
     ];
   }
 
+  function getDefaultNaiPromptConfig() {
+    return {
+      prefix:
+        "masterpiece, best quality, ultra-detailed, cinematic lighting, anime illustration, delicate details",
+      ocPrompt:
+        "当目前处于日常陪聊OC模式且已开启OC生图时：如果群友或好友明确请求看照片、自拍、看看你现在的样子或周围环境，或者当前日常互动出现了非常适合配图的画面感瞬间，请在返回的 naiPrompt 字段中填写描述当前人物外貌、穿搭、动作神态与环境光影的英文NovelAI生图Tag词串；普通日常文字闲聊时 naiPrompt 留空即可。",
+      kpPrompt:
+        "当目前处于跑团带团守秘人KP模式或已开启每回合末尾强制生图时：本轮回复的末尾必须强制生成一张展现当前跑团现场画面、调查员行动、NPC神态或环境氛围的插图！你必须在返回的JSON对象中的 naiPrompt 字段里填写完整、高质量的英文NovelAI生图Tag词串，严禁留空！英文Tag需包含场景构图、光影氛围、关键人物外貌动作与环境细节，系统会在发送完本轮文字后立即调用NovelAI生图并发送到群里。",
+    };
+  }
+
   const QQBotConsole = {
     initialized: false,
     serverState: null,
     currentGroupId: "",
+    currentPrivateUserId: "",
     pollTimer: null,
     busyGroups: {},
+    busyPrivates: {},
     localWaitNormalized: {},
     directWs: null,
     directWsConnected: false,
@@ -2130,18 +2143,155 @@ function createExpenditureLineChart(data, daysInMonth) {
     staticFallbackMemory: {},
     debugTraces: [],
     groupDebounceTimers: {},
+    privateDebounceTimers: {},
     pendingRerunGroups: {},
+    pendingRerunPrivates: {},
     isConnectingDirectWs: false,
+    PERSISTENT_STORAGE_KEY: "ephone_qqbot_persistent_v2",
     cachedResources: {
       personas: [],
       thoughts: [],
       worldbooks: [],
+      worldbookCats: [],
       stickerCats: [],
       stickers: [],
       modules: [],
       moduleChapters: [],
       moduleImages: [],
       charCards: [],
+    },
+
+    loadLocalPersistentConfig() {
+      try {
+        const raw = localStorage.getItem(this.PERSISTENT_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
+      } catch (_) {}
+      return null;
+    },
+
+    saveLocalPersistentConfig(cfg) {
+      try {
+        if (!cfg || typeof cfg !== "object") return;
+        const snapshot = {
+          onebotUrl: cfg.onebotUrl || "ws://127.0.0.1:3001",
+          selfId: cfg.selfId || "",
+          accessToken: cfg.accessToken || "",
+          currentGroupId: this.currentGroupId || cfg.currentGroupId || "",
+          currentPrivateUserId:
+            this.currentPrivateUserId || cfg.currentPrivateUserId || "",
+          mainApi: cfg.mainApi || { url: "", apiKey: "", model: "" },
+          subApi: cfg.subApi || { url: "", apiKey: "", model: "" },
+          accountPresets: Array.isArray(cfg.accountPresets)
+            ? cfg.accountPresets
+            : [],
+          privateChats:
+            cfg.privateChats && typeof cfg.privateChats === "object"
+              ? cfg.privateChats
+              : {},
+          naiPresets: Array.isArray(cfg.naiPresets) ? cfg.naiPresets : [],
+          visionCache:
+            cfg.visionCache && typeof cfg.visionCache === "object"
+              ? cfg.visionCache
+              : {},
+          groups: cfg.groups || {},
+          savedAt: Date.now(),
+        };
+        localStorage.setItem(
+          this.PERSISTENT_STORAGE_KEY,
+          JSON.stringify(snapshot),
+        );
+      } catch (e) {
+        console.warn("写入群控本地持久化配置异常:", e);
+      }
+    },
+
+    mergeLocalPersistentIntoState() {
+      const localCfg = this.loadLocalPersistentConfig();
+      if (!localCfg || !this.serverState || !this.serverState.config) return;
+      const sCfg = this.serverState.config;
+
+      if (localCfg.onebotUrl) sCfg.onebotUrl = localCfg.onebotUrl;
+      if (localCfg.selfId) sCfg.selfId = localCfg.selfId;
+      if (localCfg.accessToken !== undefined && localCfg.accessToken !== "") {
+        sCfg.accessToken = localCfg.accessToken;
+      }
+      if (localCfg.mainApi && (localCfg.mainApi.url || localCfg.mainApi.apiKey)) {
+        sCfg.mainApi = { ...sCfg.mainApi, ...localCfg.mainApi };
+      }
+      if (localCfg.subApi && (localCfg.subApi.url || localCfg.subApi.apiKey)) {
+        sCfg.subApi = { ...sCfg.subApi, ...localCfg.subApi };
+      }
+      if (
+        Array.isArray(localCfg.accountPresets) &&
+        localCfg.accountPresets.length > 0
+      ) {
+        sCfg.accountPresets = localCfg.accountPresets;
+      }
+      if (
+        localCfg.privateChats &&
+        typeof localCfg.privateChats === "object" &&
+        Object.keys(localCfg.privateChats).length > 0
+      ) {
+        sCfg.privateChats = {
+          ...(sCfg.privateChats || {}),
+          ...localCfg.privateChats,
+        };
+      }
+      if (
+        Array.isArray(localCfg.naiPresets) &&
+        localCfg.naiPresets.length > 0
+      ) {
+        sCfg.naiPresets = localCfg.naiPresets;
+      }
+      if (localCfg.visionCache && typeof localCfg.visionCache === "object") {
+        sCfg.visionCache = {
+          ...(sCfg.visionCache || {}),
+          ...localCfg.visionCache,
+        };
+      }
+      if (localCfg.groups && typeof localCfg.groups === "object") {
+        if (!sCfg.groups) sCfg.groups = {};
+        const localGids = Object.keys(localCfg.groups);
+        if (localGids.length > 0) {
+          // 如果本地已经保存了真实群聊，且服务端只有默认演示群 88482026，则以本地保存的群为准
+          if (
+            !localCfg.groups["88482026"] &&
+            localGids.some((id) => id !== "88482026") &&
+            Object.keys(sCfg.groups).length === 1 &&
+            sCfg.groups["88482026"]
+          ) {
+            delete sCfg.groups["88482026"];
+          }
+          for (const gid of localGids) {
+            sCfg.groups[gid] = {
+              ...this.createDefaultGroupConfig(
+                gid,
+                localCfg.groups[gid]?.groupName || "QQ群 " + gid,
+              ),
+              ...(sCfg.groups[gid] || {}),
+              ...localCfg.groups[gid],
+            };
+          }
+        }
+      }
+      if (
+        localCfg.currentGroupId &&
+        sCfg.groups &&
+        sCfg.groups[localCfg.currentGroupId]
+      ) {
+        this.currentGroupId = localCfg.currentGroupId;
+      }
+      if (
+        localCfg.currentPrivateUserId &&
+        sCfg.privateChats &&
+        sCfg.privateChats[localCfg.currentPrivateUserId]
+      ) {
+        this.currentPrivateUserId = localCfg.currentPrivateUserId;
+      }
     },
 
     appendDebugLog(tag, detail, isError = false) {
@@ -2154,10 +2304,16 @@ function createExpenditureLineChart(data, daysInMonth) {
         detail: String(detail || ""),
         isError: Boolean(isError),
       });
-      if (this.debugTraces.length > 45) {
-        this.debugTraces = this.debugTraces.slice(-45);
+      if (this.debugTraces.length > 50) {
+        this.debugTraces = this.debugTraces.slice(-50);
       }
       this.renderDebugTraceLog();
+    },
+
+    clearDebugTraceLog() {
+      this.debugTraces = [];
+      this.renderDebugTraceLog();
+      this.notify("已清空调试日志");
     },
 
     renderDebugTraceLog() {
@@ -2165,7 +2321,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (!box) return;
       if (!Array.isArray(this.debugTraces) || this.debugTraces.length === 0) {
         box.innerHTML =
-          '<div style="color: var(--text-secondary);">调试台已启动，正在监听 127.0.0.1:3001 实时群聊数据包与AI识图状态...</div>';
+          '<div style="color: var(--text-secondary);">调试台已启动，正在监听 127.0.0.1:3001 实时群聊与小窗数据包及副AI识图状态...</div>';
         return;
       }
       box.innerHTML = this.debugTraces
@@ -2196,6 +2352,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     closeScreen() {
+      this.saveAllSettings(false).catch(() => {});
       if (typeof window.showScreen === "function") {
         window.showScreen("home-screen");
       }
@@ -2234,8 +2391,9 @@ function createExpenditureLineChart(data, daysInMonth) {
     currentTab: "monitor",
 
     switchTab(tabKey) {
-      const tabs = ["monitor", "group", "member", "persona", "module", "api"];
-      const target = tabs.includes(tabKey) ? tabKey : "monitor";
+      const normalizedKey = tabKey === "member" ? "group" : tabKey;
+      const tabs = ["monitor", "group", "private", "persona", "module", "api"];
+      const target = tabs.includes(normalizedKey) ? normalizedKey : "monitor";
       this.currentTab = target;
       tabs.forEach((k) => {
         const pane = document.getElementById(`qqbot-tab-${k}`);
@@ -2270,9 +2428,9 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (typeof window.copyVaultStartupCmd === "function") {
         await window.copyVaultStartupCmd("android");
       }
-      this.notify("已复制Termux 1/2/3面板命令");
+      this.notify("已复制Termux后台启动面板命令");
       this.updateConnDetail(
-        "已复制Termux 1/2/3启动面板命令：去Termux粘贴回车一次，即可输入 1 重启存储、输入 2 启动NapCat、输入 3 直接查看 6099 与 3001 密钥",
+        "已复制新版Termux命令：去Termux粘贴回车后，输入 2 直接在后台启动已有NapCat且不卡死终端，随后可直接输入 3 查看 6099 与 3001 密钥",
         true,
       );
     },
@@ -2333,6 +2491,146 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
+     * QQ账号与Token预设：支持存号、删号、下拉一键切换并永久保存
+     * ============================================================================ */
+    onConnectionInputEdited() {
+      if (!this.serverState || !this.serverState.config) return;
+      const epInput = document.getElementById("qqbot-endpoint-input");
+      const selfInput = document.getElementById("qqbot-selfid-input");
+      const tkInput = document.getElementById("qqbot-token-input");
+      if (epInput) this.serverState.config.onebotUrl = epInput.value.trim();
+      if (selfInput) this.serverState.config.selfId = selfInput.value.trim();
+      if (tkInput) this.serverState.config.accessToken = tkInput.value.trim();
+      this.saveLocalPersistentConfig(this.serverState.config);
+      this.saveAllSettings(false);
+    },
+
+    renderAccountPresetsSelect() {
+      const sel = document.getElementById("qqbot-account-preset-select");
+      if (!sel || !this.serverState || !this.serverState.config) return;
+      const presets = Array.isArray(this.serverState.config.accountPresets)
+        ? this.serverState.config.accountPresets
+        : [];
+      const curSelfId = String(this.serverState.config.selfId || "").trim();
+      const curToken = String(this.serverState.config.accessToken || "").trim();
+
+      sel.innerHTML =
+        '<option value="">选择已保存的QQ号与Token预设</option>' +
+        presets
+          .map((p) => {
+            const label = `${p.name || "QQ预设"} · ${p.selfId || "未填QQ号"} · ${p.accessToken ? "含密钥" : "免密钥"}`;
+            return `<option value="${this.escapeAttr(String(p.id))}">${this.escapeHtml(label)}</option>`;
+          })
+          .join("");
+
+      const matched = presets.find(
+        (p) =>
+          (curSelfId && String(p.selfId) === curSelfId) ||
+          (curToken && String(p.accessToken) === curToken),
+      );
+      if (matched) {
+        sel.value = String(matched.id);
+      }
+    },
+
+    onAccountPresetChange() {
+      const sel = document.getElementById("qqbot-account-preset-select");
+      if (!sel || !sel.value || !this.serverState || !this.serverState.config) {
+        return;
+      }
+      const presets = Array.isArray(this.serverState.config.accountPresets)
+        ? this.serverState.config.accountPresets
+        : [];
+      const found = presets.find((p) => String(p.id) === String(sel.value));
+      if (!found) return;
+
+      const epInput = document.getElementById("qqbot-endpoint-input");
+      const selfInput = document.getElementById("qqbot-selfid-input");
+      const tkInput = document.getElementById("qqbot-token-input");
+
+      if (epInput && found.onebotUrl) epInput.value = found.onebotUrl;
+      if (selfInput) selfInput.value = found.selfId || "";
+      if (tkInput) tkInput.value = found.accessToken || "";
+
+      this.serverState.config.onebotUrl =
+        found.onebotUrl || "ws://127.0.0.1:3001";
+      this.serverState.config.selfId = found.selfId || "";
+      this.serverState.config.accessToken = found.accessToken || "";
+
+      this.saveAllSettings(false);
+      this.notify(`已切换预设 ${found.selfId || found.name}`);
+    },
+
+    async saveAccountPreset() {
+      if (!this.serverState || !this.serverState.config) return;
+      const epInput = document.getElementById("qqbot-endpoint-input");
+      const selfInput = document.getElementById("qqbot-selfid-input");
+      const tkInput = document.getElementById("qqbot-token-input");
+
+      const onebotUrl =
+        (epInput && epInput.value.trim()) || "ws://127.0.0.1:3001";
+      const selfId = (selfInput && selfInput.value.trim()) || "";
+      const accessToken = (tkInput && tkInput.value.trim()) || "";
+
+      if (!selfId && !accessToken) {
+        this.notify("请先填写QQ号或密钥再点存号");
+        return;
+      }
+
+      if (!Array.isArray(this.serverState.config.accountPresets)) {
+        this.serverState.config.accountPresets = [];
+      }
+      const presets = this.serverState.config.accountPresets;
+      const existingIdx = presets.findIndex(
+        (p) =>
+          (selfId && String(p.selfId) === selfId) ||
+          (!selfId && accessToken && String(p.accessToken) === accessToken),
+      );
+
+      const presetObj = {
+        id:
+          existingIdx >= 0
+            ? presets[existingIdx].id
+            : "acc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 5),
+        name: selfId ? `QQ ${selfId}` : "常用连接预设",
+        selfId,
+        accessToken,
+        onebotUrl,
+      };
+
+      if (existingIdx >= 0) {
+        presets[existingIdx] = presetObj;
+      } else {
+        presets.push(presetObj);
+      }
+
+      this.renderAccountPresetsSelect();
+      const sel = document.getElementById("qqbot-account-preset-select");
+      if (sel) sel.value = String(presetObj.id);
+      await this.saveAllSettings(true);
+      this.notify("已保存QQ号与Token预设");
+    },
+
+    async deleteAccountPreset() {
+      if (!this.serverState || !this.serverState.config) return;
+      const sel = document.getElementById("qqbot-account-preset-select");
+      const targetId = sel ? sel.value : "";
+      if (!targetId) {
+        this.notify("请先在预设下拉框选择要删除的账号");
+        return;
+      }
+      const presets = Array.isArray(this.serverState.config.accountPresets)
+        ? this.serverState.config.accountPresets
+        : [];
+      this.serverState.config.accountPresets = presets.filter(
+        (p) => String(p.id) !== String(targetId),
+      );
+      this.renderAccountPresetsSelect();
+      await this.saveAllSettings(false);
+      this.notify("已删除该账号预设");
+    },
+
+    /* ============================================================================
      * 群成员实时备注名解析：优先自定义备注 -> AI在QQ上改的好友备注或群名片 -> 角色卡名 -> QQ号
      * ============================================================================ */
     resolveMemberDisplayName(gCfg, senderId, fallbackName) {
@@ -2341,14 +2639,23 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (!gCfg) return cleanFallback || sid || "群友";
 
       if (!gCfg.memberRemarks) gCfg.memberRemarks = {};
-      if (cleanFallback && cleanFallback !== sid && cleanFallback !== "群成员" && cleanFallback !== "群友") {
+      if (
+        cleanFallback &&
+        cleanFallback !== sid &&
+        cleanFallback !== "群成员" &&
+        cleanFallback !== "群友"
+      ) {
         gCfg.memberRemarks[sid] = cleanFallback;
       }
 
       if (Array.isArray(gCfg.playerBindings)) {
         const bound = gCfg.playerBindings.find((b) => String(b.qq) === sid);
         if (bound) {
-          if (cleanFallback && cleanFallback !== sid && cleanFallback !== "群成员") {
+          if (
+            cleanFallback &&
+            cleanFallback !== sid &&
+            cleanFallback !== "群成员"
+          ) {
             bound.qqRemark = cleanFallback;
           }
           if (bound.alias && String(bound.alias).trim()) {
@@ -2388,7 +2695,9 @@ function createExpenditureLineChart(data, daysInMonth) {
           globalApiCfg,
         ] = await Promise.all([
           dbRef.chats ? dbRef.chats.toArray().catch(() => []) : [],
-          dbRef.personaPresets ? dbRef.personaPresets.toArray().catch(() => []) : [],
+          dbRef.personaPresets
+            ? dbRef.personaPresets.toArray().catch(() => [])
+            : [],
           dbRef.thoughtChainPresets
             ? dbRef.thoughtChainPresets.toArray().catch(() => [])
             : [],
@@ -2399,11 +2708,19 @@ function createExpenditureLineChart(data, daysInMonth) {
           dbRef.userStickerCategories
             ? dbRef.userStickerCategories.toArray().catch(() => [])
             : [],
-          dbRef.userStickers ? dbRef.userStickers.toArray().catch(() => []) : [],
+          dbRef.userStickers
+            ? dbRef.userStickers.toArray().catch(() => [])
+            : [],
           dbRef.modules ? dbRef.modules.toArray().catch(() => []) : [],
-          dbRef.moduleChapters ? dbRef.moduleChapters.toArray().catch(() => []) : [],
-          dbRef.moduleImages ? dbRef.moduleImages.toArray().catch(() => []) : [],
-          dbRef.apiConfig ? dbRef.apiConfig.get("main").catch(() => null) : null,
+          dbRef.moduleChapters
+            ? dbRef.moduleChapters.toArray().catch(() => [])
+            : [],
+          dbRef.moduleImages
+            ? dbRef.moduleImages.toArray().catch(() => [])
+            : [],
+          dbRef.apiConfig
+            ? dbRef.apiConfig.get("main").catch(() => null)
+            : null,
         ]);
 
         const personas = [];
@@ -2500,7 +2817,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         const cur = g ? g.worldBookId : wbEl.value;
         const cats = this.cachedResources.worldbookCats || [];
         wbEl.innerHTML =
-          '<option value="">选择世界书或下方逐条开关</option>' +
+          '<option value="">选择世界书或直接在下方卡片点开关</option>' +
           '<option value="ALL">全部世界书条目</option>' +
           cats
             .map(
@@ -2552,6 +2869,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       );
       this.renderWorldBookItemsList();
       this.renderModuleChaptersList();
+      this.renderNaiPresetSelect();
 
       const cardEl = document.getElementById("qqbot-bind-card-select");
       if (cardEl) {
@@ -2590,7 +2908,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
-     * 跑团模组分类与章节条目逐条开关 - 与群聊载入模组完全一致
+     * 跑团模组分类与章节条目逐条开关 - 直观点击整行即可切换并自动保存
      * ============================================================================ */
     classifyModuleChapter(chap) {
       const c = String(chap.category || "").toLowerCase();
@@ -2699,7 +3017,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       this.renderModuleChaptersList();
       this.onCurrentGroupFieldChange();
       if (moduleId) {
-        this.notify("已载入模组分类与条目");
+        this.notify("已切换跑团模组并保存");
       }
     },
 
@@ -2753,7 +3071,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         : [];
       this.renderModuleChaptersList();
       this.saveAllSettings(false);
-      this.notify(enable ? "已全开模组条目" : "已全关模组条目");
+      this.notify(enable ? "已全开模组章节并保存" : "已全关模组章节并保存");
     },
 
     toggleModuleCategory(categoryName) {
@@ -2817,7 +3135,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (!g || !g.moduleId) {
         if (countEl) countEl.textContent = "未选择跑团模组";
         listEl.innerHTML =
-          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px 2px;">在上方下拉框选择模组并点载入后，即可像群聊一样按分类展开并单独打开或关闭每个模组条目与章节</div>';
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px 2px;">在上方下拉框选择模组后，下方会自动列出所有章节卡片，点击任意一行即可开启或关闭该章节</div>';
         return;
       }
 
@@ -2836,7 +3154,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         selectedSet.has(String(c.id)),
       ).length;
       if (countEl) {
-        countEl.textContent = `已加载 ${activeCount} / ${allChaps.length} 个章节条目`;
+        countEl.textContent = `已启用 ${activeCount} / ${allChaps.length} 章`;
       }
 
       if (allChaps.length === 0) {
@@ -2894,27 +3212,27 @@ function createExpenditureLineChart(data, daysInMonth) {
             const wc =
               chap.wordCount || (chap.content ? chap.content.length : 0);
             return `
-              <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color);">
-                <span style="width: 38px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${bBg}; color: ${bColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "已开" : "已关"}</span>
-                <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary);">
-                  <span style="font-weight: 600;">${this.escapeHtml(chap.title || "未命名章节")}</span>
-                  <span style="font-size: 10.5px; color: var(--text-secondary); margin-left: 4px;">${wc}字</span>
+              <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleChapter('${this.escapeAttr(String(chap.id))}');}" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer;">
+                <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${bBg}; color: ${bColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "启用" : "停用"}</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-primary);">
+                  <span style="font-weight: 700;">${this.escapeHtml(chap.title || "未命名章节")}</span>
+                  <span style="font-size: 10.5px; color: var(--text-secondary); margin-left: 6px;">${wc}字</span>
                 </div>
-                <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleChapter('${this.escapeAttr(String(chap.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
+                <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleModuleChapter('${this.escapeAttr(String(chap.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "关闭" : "开启"}</button>
               </div>
             `;
           })
           .join("");
 
         htmlParts.push(`
-          <div style="border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
-            <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategoryFold('${this.escapeAttr(categoryName)}');}">
-              <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBadgeBg}; color: ${catBadgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${enabledInCat}/${chaps.length}</span>
+          <div style="border-radius: 10px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
+            <div style="display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategoryFold('${this.escapeAttr(categoryName)}');}">
+              <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBadgeBg}; color: ${catBadgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${enabledInCat}/${chaps.length}</span>
               <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(categoryName)}</span>
-              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategory('${this.escapeAttr(categoryName)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isAllCatOn ? "停用" : "启用"}</button>
-              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategoryFold('${this.escapeAttr(categoryName)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isCollapsed ? "展开" : "折叠"}</button>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategory('${this.escapeAttr(categoryName)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isAllCatOn ? "全关" : "全开"}</button>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategoryFold('${this.escapeAttr(categoryName)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isCollapsed ? "展开" : "收起"}</button>
             </div>
-            <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 4px; padding: 0 8px 8px;">
+            <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 5px; padding: 0 8px 8px;">
               ${rowsHtml}
             </div>
           </div>
@@ -2925,7 +3243,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
-     * 世界书分类与条目逐条开关 - 与群聊世界书完全一致
+     * 世界书分类与条目直观卡片开关 - 点击整行即可开关并自动保存
      * ============================================================================ */
     onWorldBookSelectChange() {
       const wbEl = document.getElementById("qqbot-worldbook-select");
@@ -2956,7 +3274,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         Object.keys(this.worldBookCollapsedMap).forEach((k) => {
           this.worldBookCollapsedMap[k] = false;
         });
-        this.notify(`已载入全部${allBooks.length}个世界书条目`);
+        this.notify(`已开启全部${allBooks.length}个世界书条目`);
       } else if (val.startsWith("CAT:")) {
         const catId = val.slice(4);
         const matched = allBooks.filter(
@@ -2964,15 +3282,16 @@ function createExpenditureLineChart(data, daysInMonth) {
         );
         matched.forEach((b) => set.add(String(b.id)));
         this.worldBookCollapsedMap[catId] = false;
-        this.notify(`已载入分类下${matched.length}个世界书条目`);
+        this.notify(`已开启该分类${matched.length}个世界书条目`);
       } else {
         set.add(String(val));
         const found = allBooks.find((b) => String(b.id) === String(val));
         if (found) {
-          this.worldBookCollapsedMap[String(found.categoryId || "uncategorized")] =
-            false;
+          this.worldBookCollapsedMap[
+            String(found.categoryId || "uncategorized")
+          ] = false;
         }
-        this.notify("已载入选中世界书条目");
+        this.notify("已开启选中世界书条目");
       }
 
       g.enabledWorldBookIds = Array.from(set);
@@ -2990,7 +3309,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (!enable) g.worldBookId = "";
       this.renderWorldBookItemsList();
       this.saveAllSettings(false);
-      this.notify(enable ? "已全开世界书条目" : "已全关世界书条目");
+      this.notify(enable ? "已全开世界书并保存" : "已全关世界书并保存");
     },
 
     toggleWorldBookCategory(catId) {
@@ -3045,13 +3364,15 @@ function createExpenditureLineChart(data, daysInMonth) {
 
     renderWorldBookItemsList() {
       const container = document.getElementById("qqbot-worldbook-items-list");
+      const countBadge = document.getElementById("qqbot-wb-active-count");
       const g = this.getCurrentGroupConfig();
       if (!container || !g) return;
 
       const allBooks = this.cachedResources.worldbooks || [];
       if (allBooks.length === 0) {
+        if (countBadge) countBadge.textContent = "暂无世界书";
         container.innerHTML =
-          '<div style="font-size: 11px; color: var(--text-secondary); padding: 2px;">当前尚无世界书条目</div>';
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px;">当前尚无世界书条目，可在世界书App中创建</div>';
         return;
       }
 
@@ -3065,6 +3386,13 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
       }
       const enabledSet = new Set(g.enabledWorldBookIds.map(String));
+      const totalEnabled = allBooks.filter((b) =>
+        enabledSet.has(String(b.id)),
+      ).length;
+      if (countBadge) {
+        countBadge.textContent = `已启用 ${totalEnabled} / ${allBooks.length} 条`;
+      }
+
       const rawCats = this.cachedResources.worldbookCats || [];
       const catIds = new Set(rawCats.map((c) => String(c.id)));
       const categories = rawCats.map((c) => ({
@@ -3076,7 +3404,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           (b) => !b.categoryId || !catIds.has(String(b.categoryId)),
         )
       ) {
-        categories.push({ id: "uncategorized", name: "未分类世界书" });
+        categories.push({ id: "uncategorized", name: "默认世界书分类" });
       }
 
       const htmlParts = [];
@@ -3109,29 +3437,29 @@ function createExpenditureLineChart(data, daysInMonth) {
             const bColor = isOn ? "#ffffff" : "var(--text-secondary)";
             const preview = String(b.content || "")
               .replace(/\s+/g, " ")
-              .slice(0, 36);
+              .slice(0, 38);
             return `
-              <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color);">
-                <span style="width: 38px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${bBg}; color: ${bColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "已开" : "已关"}</span>
-                <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary);">
+              <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookEntry('${this.escapeAttr(String(b.id))}');}" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer;">
+                <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${bBg}; color: ${bColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "启用" : "停用"}</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-primary);">
                   <span style="font-weight: 700;">${this.escapeHtml(b.name || "世界书条目")}</span>
-                  <span style="color: var(--text-secondary); margin-left: 4px;">${this.escapeHtml(preview)}</span>
+                  <span style="color: var(--text-secondary); margin-left: 6px; font-size: 11px;">${this.escapeHtml(preview)}</span>
                 </div>
-                <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookEntry('${this.escapeAttr(String(b.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
+                <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookEntry('${this.escapeAttr(String(b.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "关闭" : "开启"}</button>
               </div>
             `;
           })
           .join("");
 
         htmlParts.push(`
-          <div style="border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
-            <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}">
-              <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBg}; color: ${catColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${onCount}/${books.length}</span>
+          <div style="border-radius: 10px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
+            <div style="display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}">
+              <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBg}; color: ${catColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${onCount}/${books.length}</span>
               <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(cat.name)}</span>
-              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategory('${this.escapeAttr(cat.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isAllOn ? "停用" : "启用"}</button>
-              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isCollapsed ? "展开" : "折叠"}</button>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategory('${this.escapeAttr(cat.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isAllOn ? "全关" : "全开"}</button>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isCollapsed ? "展开" : "收起"}</button>
             </div>
-            <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 4px; padding: 0 8px 8px;">
+            <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 5px; padding: 0 8px 8px;">
               ${rows}
             </div>
           </div>
@@ -3154,6 +3482,123 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
       }
       this.onCurrentGroupFieldChange();
+    },
+
+    /* ============================================================================
+     * NovelAI 生图提示词、末尾强制生图指令与预设管理
+     * ============================================================================ */
+    renderNaiPresetSelect() {
+      const sel = document.getElementById("qqbot-nai-preset-select");
+      if (!sel || !this.serverState || !this.serverState.config) return;
+      const presets = Array.isArray(this.serverState.config.naiPresets)
+        ? this.serverState.config.naiPresets
+        : [];
+      const curVal = sel.value;
+      sel.innerHTML =
+        '<option value="default">内置跑团与日常OC标准生图预设</option>' +
+        presets
+          .map(
+            (p) =>
+              `<option value="${this.escapeAttr(String(p.id))}">${this.escapeHtml(p.name || "自定义生图预设")}</option>`,
+          )
+          .join("");
+      if (curVal && presets.some((p) => String(p.id) === String(curVal))) {
+        sel.value = curVal;
+      }
+    },
+
+    onNaiPresetSelectChange() {
+      const sel = document.getElementById("qqbot-nai-preset-select");
+      const g = this.getCurrentGroupConfig();
+      if (!sel || !g) return;
+      const val = sel.value;
+      const def = getDefaultNaiPromptConfig();
+      if (!val || val === "default") {
+        g.naiPrefix = def.prefix;
+        g.naiOcPrompt = def.ocPrompt;
+        g.naiKpPrompt = def.kpPrompt;
+      } else {
+        const presets = Array.isArray(this.serverState?.config?.naiPresets)
+          ? this.serverState.config.naiPresets
+          : [];
+        const found = presets.find((p) => String(p.id) === String(val));
+        if (found) {
+          g.naiPrefix = found.prefix || def.prefix;
+          g.naiOcPrompt = found.ocPrompt || def.ocPrompt;
+          g.naiKpPrompt = found.kpPrompt || def.kpPrompt;
+        }
+      }
+      const prefEl = document.getElementById("qqbot-nai-prefix-input");
+      const ocEl = document.getElementById("qqbot-nai-oc-prompt-input");
+      const kpEl = document.getElementById("qqbot-nai-kp-prompt-input");
+      if (prefEl) prefEl.value = g.naiPrefix;
+      if (ocEl) ocEl.value = g.naiOcPrompt;
+      if (kpEl) kpEl.value = g.naiKpPrompt;
+      this.saveAllSettings(false);
+      this.notify("已切换生图提示词预设");
+    },
+
+    async saveNaiPromptPreset() {
+      if (!this.serverState || !this.serverState.config) return;
+      this.onCurrentGroupFieldChange();
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      const def = getDefaultNaiPromptConfig();
+      const prefix = g.naiPrefix || def.prefix;
+      const ocPrompt = g.naiOcPrompt || def.ocPrompt;
+      const kpPrompt = g.naiKpPrompt || def.kpPrompt;
+
+      if (!Array.isArray(this.serverState.config.naiPresets)) {
+        this.serverState.config.naiPresets = [];
+      }
+      const idx = this.serverState.config.naiPresets.length + 1;
+      const newPreset = {
+        id: "naip_" + Date.now(),
+        name: `生图预设 ${idx} · ${prefix.slice(0, 18)}`,
+        prefix,
+        ocPrompt,
+        kpPrompt,
+      };
+      this.serverState.config.naiPresets.push(newPreset);
+      this.renderNaiPresetSelect();
+      const sel = document.getElementById("qqbot-nai-preset-select");
+      if (sel) sel.value = newPreset.id;
+      await this.saveAllSettings(true);
+      this.notify("已保存生图指令预设");
+    },
+
+    async deleteNaiPromptPreset() {
+      if (!this.serverState || !this.serverState.config) return;
+      const sel = document.getElementById("qqbot-nai-preset-select");
+      const val = sel ? sel.value : "";
+      if (!val || val === "default") {
+        this.notify("默认预设无需删除");
+        return;
+      }
+      this.serverState.config.naiPresets = (
+        this.serverState.config.naiPresets || []
+      ).filter((p) => String(p.id) !== String(val));
+      this.renderNaiPresetSelect();
+      await this.saveAllSettings(false);
+      this.notify("已删除该生图预设");
+    },
+
+    resetNaiPromptDefault() {
+      const g = this.getCurrentGroupConfig();
+      const def = getDefaultNaiPromptConfig();
+      if (g) {
+        g.naiPrefix = def.prefix;
+        g.naiOcPrompt = def.ocPrompt;
+        g.naiKpPrompt = def.kpPrompt;
+      }
+      const prefEl = document.getElementById("qqbot-nai-prefix-input");
+      const ocEl = document.getElementById("qqbot-nai-oc-prompt-input");
+      const kpEl = document.getElementById("qqbot-nai-kp-prompt-input");
+      if (prefEl) prefEl.value = def.prefix;
+      if (ocEl) ocEl.value = def.ocPrompt;
+      if (kpEl) kpEl.value = def.kpPrompt;
+      this.saveAllSettings(false);
+      this.notify("已恢复默认生图指令与画质词");
     },
 
     /* ============================================================================
@@ -3216,7 +3661,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         if (uEl) uEl.value = url;
         if (kEl) kEl.value = key;
         if (mEl) mEl.value = mod;
-        this.notify("已填入全局主API");
+        this.notify("已填入全局主API并保存");
       } else {
         const url =
           getGlobalVal("sub-proxy-url", stCfg.subProxyUrl) ||
@@ -3233,7 +3678,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         if (uEl) uEl.value = url;
         if (kEl) kEl.value = key;
         if (mEl) mEl.value = mod;
-        this.notify("已填入全局副API");
+        this.notify("已填入全局副API并保存");
       }
       this.onApiFieldChange();
     },
@@ -3327,7 +3772,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
-     * 思维链预设加载与分类条目逐条开关 - 支持天空之城等完整分组条目结构
+     * 思维链预设加载与分类条目逐条开关
      * ============================================================================ */
     renderThoughtItemsList() {
       const container = document.getElementById("qqbot-thought-items-list");
@@ -3347,14 +3792,14 @@ function createExpenditureLineChart(data, daysInMonth) {
           .replace(/\s+/g, " ")
           .slice(0, 42);
         return `
-          <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color);">
+          <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleThoughtItem('${this.escapeAttr(String(item.id))}');}" style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer;">
             <span style="width: 38px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "已开" : "已关"}</span>
             <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary);">
               <span style="font-weight: 700;">${this.escapeHtml(titleStr)}</span>
               <span style="color: var(--text-secondary); margin-left: 4px;">${this.escapeHtml(contentPreview)}</span>
             </div>
-            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleThoughtItem('${this.escapeAttr(String(item.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
-            <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.deleteThoughtItem('${this.escapeAttr(String(item.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">移除</button>
+            <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleThoughtItem('${this.escapeAttr(String(item.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
+            <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.deleteThoughtItem('${this.escapeAttr(String(item.id))}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">移除</button>
           </div>
         `;
       };
@@ -3468,13 +3913,15 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
       this.renderThoughtItemsList();
       this.saveAllSettings(false);
-      this.notify(enable ? "已全开思维链条目" : "已全关思维链条目");
+      this.notify(enable ? "已全开思维链条目并保存" : "已全关思维链条目并保存");
     },
 
     toggleThoughtItem(itemId) {
       const g = this.getCurrentGroupConfig();
       if (!g || !Array.isArray(g.thoughtItems)) return;
-      const target = g.thoughtItems.find((i) => String(i.id) === String(itemId));
+      const target = g.thoughtItems.find(
+        (i) => String(i.id) === String(itemId),
+      );
       if (target) {
         target.enabled = target.enabled === false;
         if (
@@ -3525,7 +3972,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (contentEl) contentEl.value = "";
       this.renderThoughtItemsList();
       this.saveAllSettings(false);
-      this.notify("已新增思维链条目");
+      this.notify("已新增思维链条目并保存");
     },
 
     async importThoughtChainPreset() {
@@ -3639,7 +4086,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
-     * 服务端与 Termux 静态网页双通道同步
+     * 服务端、Termux 8765 与浏览器 localStorage 三重持久化同步（绝不丢失任何设置）
      * ============================================================================ */
     async syncFromServer(populateInputs = false) {
       let synced = false;
@@ -3655,7 +4102,6 @@ function createExpenditureLineChart(data, daysInMonth) {
       } catch (_) {}
 
       if (!synced) {
-        // 若部署在GitHub等纯静态网站上，尝试检测手机本地 Termux 8765 磁盘桥接服务
         try {
           const tRes = await fetch("http://127.0.0.1:8765/load", {
             signal: AbortSignal.timeout(1200),
@@ -3696,6 +4142,10 @@ function createExpenditureLineChart(data, daysInMonth) {
             accessToken: "",
             mainApi: { url: "", apiKey: "", model: "" },
             subApi: { url: "", apiKey: "", model: "" },
+            accountPresets: [],
+            privateChats: {},
+            naiPresets: [],
+            visionCache: {},
             groups: {
               [defaultGid]: this.createDefaultGroupConfig(
                 defaultGid,
@@ -3706,6 +4156,9 @@ function createExpenditureLineChart(data, daysInMonth) {
         };
       }
 
+      // 关键：将浏览器 localStorage 中永久保存的所有模块配置合并进来，防止重启后被默认数据覆盖
+      this.mergeLocalPersistentIntoState();
+
       const data = this.serverState;
       const badge = document.getElementById("qqbot-conn-badge");
       if (badge && data.runtime) {
@@ -3715,8 +4168,14 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
 
       const selfBadge = document.getElementById("qqbot-self-badge");
-      if (selfBadge && data.runtime && data.runtime.selfId) {
-        selfBadge.textContent = `在线QQ ${data.runtime.selfId}`;
+      if (selfBadge) {
+        const sid =
+          (data.runtime && data.runtime.selfId) ||
+          (data.config && data.config.selfId) ||
+          "";
+        if (sid) {
+          selfBadge.textContent = `在线QQ ${sid}`;
+        }
       }
 
       if (populateInputs && data.config) {
@@ -3726,12 +4185,13 @@ function createExpenditureLineChart(data, daysInMonth) {
         if (epInput && data.config.onebotUrl) {
           epInput.value = data.config.onebotUrl;
         }
-        if (selfInput && data.config.selfId) {
+        if (selfInput && data.config.selfId !== undefined) {
           selfInput.value = data.config.selfId;
         }
         if (tkInput && data.config.accessToken !== undefined) {
           tkInput.value = data.config.accessToken;
         }
+        this.renderAccountPresetsSelect();
         this.populateApiConfigUI();
       }
 
@@ -3746,17 +4206,31 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
 
       if (!this.currentGroupId || !groupsObj[this.currentGroupId]) {
-        this.currentGroupId = Object.keys(groupsObj)[0];
+        const realGid = Object.keys(groupsObj).find((id) => id !== "88482026");
+        this.currentGroupId = realGid || Object.keys(groupsObj)[0];
+      }
+
+      const privsObj = (data.config && data.config.privateChats) || {};
+      const privIds = Object.keys(privsObj);
+      if (
+        privIds.length > 0 &&
+        (!this.currentPrivateUserId || !privsObj[this.currentPrivateUserId])
+      ) {
+        this.currentPrivateUserId = privIds[0];
       }
 
       if (populateInputs) {
         this.renderGroupSelectDropdown();
+        this.renderVisualGroupList();
         this.populateCurrentGroupUI();
+        this.renderPrivateChatsList();
+        this.populateCurrentPrivateUI();
         await this.loadCurrentGroupMemoryUI();
       }
     },
 
     createDefaultGroupConfig(groupId, groupName) {
+      const defNai = getDefaultNaiPromptConfig();
       return {
         groupId: String(groupId),
         groupName: groupName || "QQ群 " + groupId,
@@ -3767,6 +4241,10 @@ function createExpenditureLineChart(data, daysInMonth) {
         idleAskMin: 15,
         cooldownSec: 5,
         autoNaiImage: true,
+        naiMode: "trpg_every_round",
+        naiPrefix: defNai.prefix,
+        naiOcPrompt: defNai.ocPrompt,
+        naiKpPrompt: defNai.kpPrompt,
         modImgMode: "auto",
         personaId: "",
         aiPersona:
@@ -3776,9 +4254,11 @@ function createExpenditureLineChart(data, daysInMonth) {
         thoughtChainId: "",
         thoughtItems: getDefaultThoughtChainItems(),
         worldBookId: "",
+        enabledWorldBookIds: [],
         stickerCategoryId: "ALL",
         moduleId: "",
         chapterId: "ALL",
+        selectedModuleChapterIds: [],
         memberRemarks: {
           "10001": "早川秋",
           "10002": "佐藤葵",
@@ -3828,7 +4308,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       const entries = Object.values(groups);
       sel.innerHTML = entries
         .map((g) => {
-          const stateMark = g.enabled ? "监听中" : "已停用";
+          const stateMark = g.enabled !== false ? "监听中" : "已停用";
           return `<option value="${this.escapeAttr(g.groupId)}">${this.escapeHtml(g.groupName || g.groupId)} · ${g.groupId} · ${stateMark}</option>`;
         })
         .join("");
@@ -3843,11 +4323,122 @@ function createExpenditureLineChart(data, daysInMonth) {
           )
           .join("");
       }
+      this.renderVisualGroupList();
+    },
+
+    renderVisualGroupList() {
+      const container = document.getElementById("qqbot-visual-group-list");
+      const badge = document.getElementById("qqbot-pulled-group-count");
+      if (!container || !this.serverState || !this.serverState.config) return;
+      const groups = this.serverState.config.groups || {};
+      const entries = Object.values(groups);
+
+      if (badge) {
+        const activeCount = entries.filter((g) => g.enabled !== false).length;
+        badge.textContent = `已启用 ${activeCount} / 共 ${entries.length} 群`;
+      }
+
+      if (entries.length === 0) {
+        container.innerHTML =
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 6px;">暂未添加群聊，请点击顶部刷新按钮从QQ拉取群列表，或在下方输入群号点添加</div>';
+        return;
+      }
+
+      container.innerHTML = entries
+        .map((g) => {
+          const isCurrent = String(g.groupId) === String(this.currentGroupId);
+          const isOn = g.enabled !== false;
+          const modeText = g.mode === "trpg" ? "守秘人KP" : "日常OC";
+          const borderCol = isCurrent
+            ? "var(--accent-color)"
+            : "var(--border-color)";
+          const cardBg = isCurrent ? "var(--card-bg)" : "var(--secondary-bg)";
+          const statusBg = isOn ? "var(--accent-color)" : "var(--card-bg)";
+          const statusColor = isOn ? "#ffffff" : "var(--text-secondary)";
+
+          return `
+            <div onclick="if(window.QQBotConsole){window.QQBotConsole.selectGroupFromCard('${this.escapeAttr(g.groupId)}');}" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: ${cardBg}; border: 1.5px solid ${borderCol}; cursor: pointer;">
+              <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${statusBg}; color: ${statusColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "监听" : "停用"}</span>
+              <div style="flex: 1; min-width: 0; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  <span style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis;">${this.escapeHtml(g.groupName || "QQ群")}</span>
+                  ${isCurrent ? '<span style="font-size: 10px; color: var(--accent-color); font-weight: 700; flex-shrink: 0;">当前选中</span>' : ""}
+                </div>
+                <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 2px;">
+                  群号 ${this.escapeHtml(g.groupId)} · ${modeText} · 缓冲 ${g.debounceSec || 8}秒
+                </div>
+              </div>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleGroupEnabledFromCard('${this.escapeAttr(g.groupId)}');}" style="height: 26px; padding: 0 9px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.deleteGroupFromCard('${this.escapeAttr(g.groupId)}');}" style="height: 26px; padding: 0 9px; font-size: 11px; flex-shrink: 0;">移除</button>
+            </div>
+          `;
+        })
+        .join("");
+    },
+
+    async selectGroupFromCard(gid) {
+      if (!gid || !this.serverState || !this.serverState.config) return;
+      this.currentGroupId = String(gid);
+      this.renderGroupSelectDropdown();
+      this.populateCurrentGroupUI();
+      this.saveAllSettings(false);
+      await this.loadCurrentGroupMemoryUI();
+      await this.refreshSandboxLog();
+      this.notify(`已选中群 ${this.serverState.config.groups[gid]?.groupName || gid}`);
+    },
+
+    async toggleGroupEnabledFromCard(gid) {
+      if (
+        !gid ||
+        !this.serverState ||
+        !this.serverState.config ||
+        !this.serverState.config.groups[gid]
+      ) {
+        return;
+      }
+      const g = this.serverState.config.groups[gid];
+      g.enabled = g.enabled === false;
+      this.renderGroupSelectDropdown();
+      if (String(gid) === String(this.currentGroupId)) {
+        const enSel = document.getElementById("qqbot-group-enabled-select");
+        if (enSel) enSel.value = g.enabled ? "true" : "false";
+      }
+      await this.saveAllSettings(false);
+      this.notify(
+        `${g.groupName || gid} 已${g.enabled ? "开启监听" : "停用监听"}`,
+      );
+    },
+
+    async deleteGroupFromCard(gid) {
+      if (
+        !gid ||
+        !this.serverState ||
+        !this.serverState.config ||
+        !this.serverState.config.groups
+      ) {
+        return;
+      }
+      const groups = this.serverState.config.groups;
+      if (Object.keys(groups).length <= 1) {
+        this.notify("至少保留一个群聊配置");
+        return;
+      }
+      delete groups[gid];
+      if (String(this.currentGroupId) === String(gid)) {
+        this.currentGroupId = Object.keys(groups)[0] || "";
+      }
+      this.renderGroupSelectDropdown();
+      this.populateCurrentGroupUI();
+      await this.saveAllSettings(false, { replaceGroups: true });
+      await this.loadCurrentGroupMemoryUI();
+      await this.refreshSandboxLog();
+      this.notify("已移除该群聊并保存");
     },
 
     populateCurrentGroupUI() {
       const g = this.getCurrentGroupConfig();
       if (!g) return;
+      const defNai = getDefaultNaiPromptConfig();
 
       const setVal = (id, val) => {
         const el = document.getElementById(id);
@@ -3857,7 +4448,10 @@ function createExpenditureLineChart(data, daysInMonth) {
       const dashGroup = document.getElementById("qqbot-dash-group-name");
       if (dashGroup) dashGroup.textContent = g.groupName || g.groupId;
 
-      setVal("qqbot-group-enabled-select", g.enabled ? "true" : "false");
+      setVal(
+        "qqbot-group-enabled-select",
+        g.enabled !== false ? "true" : "false",
+      );
       setVal("qqbot-group-mode-select", g.mode || "trpg");
       setVal("qqbot-debounce-input", g.debounceSec ?? 8);
       setVal("qqbot-context-limit-input", g.contextLimit ?? 180);
@@ -3865,10 +4459,13 @@ function createExpenditureLineChart(data, daysInMonth) {
       setVal("qqbot-cooldown-input", g.cooldownSec ?? 5);
       setVal("qqbot-ai-persona-input", g.aiPersona || g.customPersona || "");
       setVal("qqbot-custom-prompt-input", g.customPrompt || "");
-      setVal(
-        "qqbot-nai-mode",
-        g.autoNaiImage === false ? "off" : "trpg_every_round",
-      );
+
+      const resolvedNaiMode =
+        g.naiMode || (g.autoNaiImage === false ? "off" : "trpg_every_round");
+      setVal("qqbot-nai-mode", resolvedNaiMode);
+      setVal("qqbot-nai-prefix-input", g.naiPrefix || defNai.prefix);
+      setVal("qqbot-nai-oc-prompt-input", g.naiOcPrompt || defNai.ocPrompt);
+      setVal("qqbot-nai-kp-prompt-input", g.naiKpPrompt || defNai.kpPrompt);
       setVal("qqbot-modimg-mode", g.modImgMode || "auto");
 
       this.renderResourceSelects();
@@ -3899,6 +4496,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     onCurrentGroupFieldChange() {
       const g = this.getCurrentGroupConfig();
       if (!g) return;
+      const defNai = getDefaultNaiPromptConfig();
 
       const getVal = (id, fallback) => {
         const el = document.getElementById(id);
@@ -3930,8 +4528,11 @@ function createExpenditureLineChart(data, daysInMonth) {
       g.stickerCategoryId = getVal("qqbot-sticker-select", "ALL");
       g.moduleId = getVal("qqbot-module-select", "");
       g.chapterId = getVal("qqbot-chapter-select", "ALL");
-      g.autoNaiImage =
-        getVal("qqbot-nai-mode", "trpg_every_round") === "trpg_every_round";
+      g.naiMode = getVal("qqbot-nai-mode", "trpg_every_round");
+      g.autoNaiImage = g.naiMode !== "off";
+      g.naiPrefix = getVal("qqbot-nai-prefix-input", defNai.prefix);
+      g.naiOcPrompt = getVal("qqbot-nai-oc-prompt-input", defNai.ocPrompt);
+      g.naiKpPrompt = getVal("qqbot-nai-kp-prompt-input", defNai.kpPrompt);
       g.modImgMode = getVal("qqbot-modimg-mode", "auto");
 
       this.renderGroupSelectDropdown();
@@ -3942,7 +4543,9 @@ function createExpenditureLineChart(data, daysInMonth) {
       const sel = document.getElementById("qqbot-group-select");
       if (!sel) return;
       this.currentGroupId = sel.value;
+      this.renderVisualGroupList();
       this.populateCurrentGroupUI();
+      this.saveAllSettings(false);
       await this.loadCurrentGroupMemoryUI();
       await this.refreshSandboxLog();
     },
@@ -3978,6 +4581,304 @@ function createExpenditureLineChart(data, daysInMonth) {
       await this.saveAllSettings(true);
       await this.loadCurrentGroupMemoryUI();
       await this.refreshSandboxLog();
+    },
+
+    /* ============================================================================
+     * 独立好友小窗列表管理：拉友、筛除、单人等待秒数、副AI阅读判断并唤醒主AI回复
+     * ============================================================================ */
+    getCurrentPrivateConfig() {
+      if (
+        !this.serverState ||
+        !this.serverState.config ||
+        !this.serverState.config.privateChats
+      ) {
+        return null;
+      }
+      if (!this.currentPrivateUserId) return null;
+      return (
+        this.serverState.config.privateChats[this.currentPrivateUserId] || null
+      );
+    },
+
+    renderPrivateChatsList() {
+      const container = document.getElementById("qqbot-private-chats-list");
+      const badge = document.getElementById("qqbot-private-count-badge");
+      if (!container || !this.serverState || !this.serverState.config) return;
+      const privMap = this.serverState.config.privateChats || {};
+      const entries = Object.values(privMap);
+
+      if (badge) {
+        const enabledCount = entries.filter((p) => p.enabled !== false).length;
+        badge.textContent = `启用 ${enabledCount} / 共 ${entries.length} 人`;
+      }
+
+      if (entries.length === 0) {
+        container.innerHTML =
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 8px;">暂未添加小窗好友，可点击右上角「拉友」一键拉取全部QQ好友并自由删减不需要的人，也可在上方输入好友QQ号点添加</div>';
+        return;
+      }
+
+      container.innerHTML = entries
+        .map((p) => {
+          const uid = String(p.userId || "");
+          const isCurrent = uid === String(this.currentPrivateUserId);
+          const isOn = p.enabled !== false;
+          const dispName = p.remark || p.nickname || uid;
+          const waitSec = Math.max(2, Number(p.waitSec) || 30);
+          const borderCol = isCurrent
+            ? "var(--accent-color)"
+            : "var(--border-color)";
+          const cardBg = isCurrent ? "var(--card-bg)" : "var(--secondary-bg)";
+          const stBg = isOn ? "var(--accent-color)" : "var(--card-bg)";
+          const stColor = isOn ? "#ffffff" : "var(--text-secondary)";
+
+          return `
+            <div onclick="if(window.QQBotConsole){window.QQBotConsole.selectPrivateChat('${this.escapeAttr(uid)}');}" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: ${cardBg}; border: 1.5px solid ${borderCol}; cursor: pointer;">
+              <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${stBg}; color: ${stColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "监听" : "停用"}</span>
+              <div style="flex: 1; min-width: 0; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  <span style="font-size: 12.5px; font-weight: 700; color: var(--text-primary);">${this.escapeHtml(dispName)}</span>
+                  <span style="font-size: 10.5px; color: var(--text-secondary);">QQ ${this.escapeHtml(uid)}</span>
+                </div>
+                <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  等待 ${waitSec} 秒后唤醒副AI判断${p.persona ? " · 含专属设定：" + this.escapeHtml(p.persona.slice(0, 18)) : ""}
+                </div>
+              </div>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.togglePrivateChatEnabled('${this.escapeAttr(uid)}');}" style="height: 26px; padding: 0 9px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.deletePrivateChat('${this.escapeAttr(uid)}');}" style="height: 26px; padding: 0 9px; font-size: 11px; flex-shrink: 0;">移除</button>
+            </div>
+          `;
+        })
+        .join("");
+    },
+
+    selectPrivateChat(uid) {
+      if (!uid || !this.serverState || !this.serverState.config) return;
+      this.currentPrivateUserId = String(uid);
+      this.renderPrivateChatsList();
+      this.populateCurrentPrivateUI();
+      this.saveAllSettings(false);
+    },
+
+    populateCurrentPrivateUI() {
+      const p = this.getCurrentPrivateConfig();
+      const nameBadge = document.getElementById("qqbot-priv-selected-name");
+      const enSel = document.getElementById("qqbot-priv-enabled-select");
+      const waitIn = document.getElementById("qqbot-priv-wait-input");
+      const perIn = document.getElementById("qqbot-priv-persona-input");
+
+      if (!p) {
+        if (nameBadge) nameBadge.textContent = "未选中好友";
+        if (enSel) enSel.value = "true";
+        if (waitIn) waitIn.value = "30";
+        if (perIn) perIn.value = "";
+        return;
+      }
+
+      if (nameBadge) {
+        nameBadge.textContent = `${p.remark || p.nickname || p.userId} · ${p.userId}`;
+      }
+      if (enSel) enSel.value = p.enabled !== false ? "true" : "false";
+      if (waitIn) waitIn.value = String(p.waitSec ?? 30);
+      if (perIn) perIn.value = p.persona || "";
+    },
+
+    onCurrentPrivateFieldChange() {
+      const p = this.getCurrentPrivateConfig();
+      if (!p) return;
+      const enSel = document.getElementById("qqbot-priv-enabled-select");
+      const waitIn = document.getElementById("qqbot-priv-wait-input");
+      const perIn = document.getElementById("qqbot-priv-persona-input");
+
+      if (enSel) p.enabled = enSel.value === "true";
+      if (waitIn) {
+        p.waitSec = Math.max(2, parseInt(waitIn.value, 10) || 30);
+      }
+      if (perIn) p.persona = perIn.value.trim();
+
+      this.renderPrivateChatsList();
+      this.saveAllSettings(false);
+    },
+
+    async addOrSelectPrivateChat() {
+      const qqEl = document.getElementById("qqbot-new-priv-qq");
+      const nameEl = document.getElementById("qqbot-new-priv-name");
+      const waitEl = document.getElementById("qqbot-new-priv-wait");
+
+      const uid = qqEl ? qqEl.value.trim() : "";
+      const rem = nameEl ? nameEl.value.trim() : "";
+      const waitSec = Math.max(
+        2,
+        parseInt(waitEl ? waitEl.value : "30", 10) || 30,
+      );
+
+      if (!uid) {
+        this.notify("请先输入好友QQ号");
+        return;
+      }
+      if (!this.serverState || !this.serverState.config) return;
+      if (!this.serverState.config.privateChats) {
+        this.serverState.config.privateChats = {};
+      }
+      const existing = this.serverState.config.privateChats[uid];
+      this.serverState.config.privateChats[uid] = {
+        userId: uid,
+        nickname: rem || (existing && existing.nickname) || uid,
+        remark: rem || (existing && existing.remark) || uid,
+        enabled: true,
+        waitSec,
+        persona: (existing && existing.persona) || "",
+      };
+      this.currentPrivateUserId = uid;
+      if (qqEl) qqEl.value = "";
+      if (nameEl) nameEl.value = "";
+      this.renderPrivateChatsList();
+      this.populateCurrentPrivateUI();
+      await this.saveAllSettings(true);
+      this.notify(`已添加小窗好友 ${rem || uid}`);
+    },
+
+    async togglePrivateChatEnabled(uid) {
+      if (
+        !uid ||
+        !this.serverState ||
+        !this.serverState.config ||
+        !this.serverState.config.privateChats ||
+        !this.serverState.config.privateChats[uid]
+      ) {
+        return;
+      }
+      const p = this.serverState.config.privateChats[uid];
+      p.enabled = p.enabled === false;
+      this.renderPrivateChatsList();
+      if (String(uid) === String(this.currentPrivateUserId)) {
+        this.populateCurrentPrivateUI();
+      }
+      await this.saveAllSettings(false);
+    },
+
+    async deletePrivateChat(uid) {
+      if (
+        !uid ||
+        !this.serverState ||
+        !this.serverState.config ||
+        !this.serverState.config.privateChats
+      ) {
+        return;
+      }
+      delete this.serverState.config.privateChats[uid];
+      if (String(this.currentPrivateUserId) === String(uid)) {
+        this.currentPrivateUserId =
+          Object.keys(this.serverState.config.privateChats)[0] || "";
+      }
+      this.renderPrivateChatsList();
+      this.populateCurrentPrivateUI();
+      await this.saveAllSettings(false, { replacePrivateChats: true });
+      this.notify("已移除该好友小窗");
+    },
+
+    async pruneDisabledPrivateChats() {
+      if (
+        !this.serverState ||
+        !this.serverState.config ||
+        !this.serverState.config.privateChats
+      ) {
+        return;
+      }
+      const privs = this.serverState.config.privateChats;
+      let removed = 0;
+      for (const uid of Object.keys(privs)) {
+        if (privs[uid] && privs[uid].enabled === false) {
+          delete privs[uid];
+          removed++;
+        }
+      }
+      if (!privs[this.currentPrivateUserId]) {
+        this.currentPrivateUserId = Object.keys(privs)[0] || "";
+      }
+      this.renderPrivateChatsList();
+      this.populateCurrentPrivateUI();
+      await this.saveAllSettings(false, { replacePrivateChats: true });
+      this.notify(
+        removed > 0
+          ? `已清理 ${removed} 个停用小窗好友`
+          : "当前没有处于停用状态的好友",
+      );
+    },
+
+    async pullAllFriendsForPrivate() {
+      const btn = document.getElementById("qqbot-pull-friends-btn");
+      if (btn) btn.textContent = "拉取中";
+      this.notify("正在拉取QQ好友列表...");
+      try {
+        if (!this.serverState || !this.serverState.config) return;
+        if (!this.serverState.config.privateChats) {
+          this.serverState.config.privateChats = {};
+        }
+        const privs = this.serverState.config.privateChats;
+        let pulledCount = 0;
+
+        if (this.directWsConnected && this.directWs) {
+          try {
+            const list = await this.callDirectOneBotWs("get_friend_list", {});
+            if (Array.isArray(list) && list.length > 0) {
+              const selfId = String(this.serverState.config.selfId || "");
+              list.forEach((f) => {
+                const uid = String(f.user_id || "");
+                if (!uid || (selfId && uid === selfId)) return;
+                const nick = String(f.nickname || uid).trim();
+                const rem = String(f.remark || nick || uid).trim();
+                if (!privs[uid]) {
+                  privs[uid] = {
+                    userId: uid,
+                    nickname: nick,
+                    remark: rem,
+                    enabled: true,
+                    waitSec: 30,
+                    persona: "",
+                  };
+                } else {
+                  privs[uid].nickname = nick;
+                  if (!privs[uid].remark || privs[uid].remark === uid) {
+                    privs[uid].remark = rem;
+                  }
+                }
+                pulledCount++;
+              });
+            }
+          } catch (_) {}
+        }
+
+        if (pulledCount === 0) {
+          try {
+            const res = await fetch("/api/qqbot/refresh-friends", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.privateChats) {
+                Object.assign(privs, data.privateChats);
+                pulledCount = Object.keys(data.privateChats).length;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!this.currentPrivateUserId && Object.keys(privs).length > 0) {
+          this.currentPrivateUserId = Object.keys(privs)[0];
+        }
+        this.renderPrivateChatsList();
+        this.populateCurrentPrivateUI();
+        await this.saveAllSettings(false);
+        if (pulledCount > 0) {
+          this.notify(`已拉取 ${pulledCount} 位QQ好友小窗`);
+        } else {
+          this.notify("请先连上3001端口或手动输入QQ号添加好友");
+        }
+      } finally {
+        if (btn) btn.textContent = "拉友";
+      }
     },
 
     /* ============================================================================
@@ -4250,8 +5151,66 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
     },
 
-    async saveAllSettings(showToast = false) {
+    collectCurrentDomFields() {
       if (!this.serverState || !this.serverState.config) return;
+      const g = this.getCurrentGroupConfig();
+      if (g) {
+        const getVal = (id) => {
+          const el = document.getElementById(id);
+          return el ? el.value : null;
+        };
+        const enVal = getVal("qqbot-group-enabled");
+        if (enVal !== null) g.enabled = enVal === "true";
+        const modeVal = getVal("qqbot-group-mode");
+        if (modeVal) g.mode = modeVal;
+        const debVal = getVal("qqbot-debounce-sec");
+        if (debVal !== null && debVal !== "") g.debounceSec = Number(debVal) || 8;
+        const ctxVal = getVal("qqbot-context-limit");
+        if (ctxVal !== null && ctxVal !== "") g.contextLimit = Number(ctxVal) || 180;
+        const idleVal = getVal("qqbot-idle-ask-min");
+        if (idleVal !== null && idleVal !== "") g.idleAskMin = Number(idleVal) || 0;
+        const coolVal = getVal("qqbot-cooldown-sec");
+        if (coolVal !== null && coolVal !== "") g.cooldownSec = Number(coolVal) || 5;
+        const perSel = getVal("qqbot-persona-select");
+        if (perSel !== null) g.personaId = perSel;
+        const stkSel = getVal("qqbot-sticker-cat-select");
+        if (stkSel !== null) g.stickerCategoryId = stkSel;
+        const aiPer = getVal("qqbot-ai-persona-input");
+        if (aiPer !== null) g.aiPersona = aiPer.trim();
+        const cusPr = getVal("qqbot-custom-prompt-input");
+        if (cusPr !== null) g.customPrompt = cusPr.trim();
+        const modSel = getVal("qqbot-module-select");
+        if (modSel !== null) g.moduleId = modSel;
+        const naiSel = getVal("qqbot-nai-image-select");
+        if (naiSel) {
+          g.naiMode = naiSel;
+          g.autoNaiImage = naiSel !== "off";
+        }
+        const naiPre = getVal("qqbot-nai-prefix-input");
+        if (naiPre !== null) g.naiPrefix = naiPre.trim();
+        const naiOc = getVal("qqbot-nai-oc-prompt-input");
+        if (naiOc !== null) g.naiOcPrompt = naiOc.trim();
+        const naiKp = getVal("qqbot-nai-kp-prompt-input");
+        if (naiKp !== null) g.naiKpPrompt = naiKp.trim();
+      }
+
+      const pCfg = this.getCurrentPrivateConfig();
+      if (pCfg) {
+        const pWait = document.getElementById("qqbot-priv-wait-input");
+        const pEn = document.getElementById("qqbot-priv-enabled-select");
+        const pPersona = document.getElementById("qqbot-priv-persona-input");
+        if (pWait && pWait.value !== "") {
+          pCfg.waitSec = Math.max(3, Math.min(3600, Number(pWait.value) || 30));
+        }
+        if (pEn) pCfg.enabled = pEn.value === "true";
+        if (pPersona) pCfg.persona = pPersona.value.trim();
+      }
+    },
+
+    async saveAllSettings(showToast = false, extraFlags = {}) {
+      if (!this.serverState || !this.serverState.config) return;
+      this.collectCurrentDomFields();
+
       const epInput = document.getElementById("qqbot-endpoint-input");
       const selfInput = document.getElementById("qqbot-selfid-input");
       const tkInput = document.getElementById("qqbot-token-input");
@@ -4260,7 +5219,9 @@ function createExpenditureLineChart(data, daysInMonth) {
         return el ? el.value.trim() : "";
       };
 
-      const rawUrl = epInput ? epInput.value.trim() : "";
+      const rawUrl = epInput
+        ? epInput.value.trim()
+        : this.serverState.config.onebotUrl || "ws://127.0.0.1:3001";
       let mode = "reverse_ws";
       if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
         mode = "http";
@@ -4273,19 +5234,56 @@ function createExpenditureLineChart(data, daysInMonth) {
       const payload = {
         connectionMode: mode,
         onebotUrl: rawUrl || "ws://127.0.0.1:3001",
-        selfId: selfInput ? selfInput.value.trim() : "",
-        accessToken: tkInput ? tkInput.value.trim() : "",
+        selfId: selfInput
+          ? selfInput.value.trim()
+          : this.serverState.config.selfId || "",
+        accessToken: tkInput
+          ? tkInput.value.trim()
+          : this.serverState.config.accessToken || "",
+        accountPresets: Array.isArray(this.serverState.config.accountPresets)
+          ? this.serverState.config.accountPresets
+          : [],
         mainApi: {
-          url: getVal("qqbot-main-api-url"),
-          apiKey: getVal("qqbot-main-api-key"),
-          model: getVal("qqbot-main-api-model"),
+          url:
+            getVal("qqbot-main-api-url") ||
+            (this.serverState.config.mainApi &&
+              this.serverState.config.mainApi.url) ||
+            "",
+          apiKey:
+            getVal("qqbot-main-api-key") ||
+            (this.serverState.config.mainApi &&
+              this.serverState.config.mainApi.apiKey) ||
+            "",
+          model:
+            getVal("qqbot-main-api-model") ||
+            (this.serverState.config.mainApi &&
+              this.serverState.config.mainApi.model) ||
+            "",
         },
         subApi: {
-          url: getVal("qqbot-sub-api-url"),
-          apiKey: getVal("qqbot-sub-api-key"),
-          model: getVal("qqbot-sub-api-model"),
+          url:
+            getVal("qqbot-sub-api-url") ||
+            (this.serverState.config.subApi &&
+              this.serverState.config.subApi.url) ||
+            "",
+          apiKey:
+            getVal("qqbot-sub-api-key") ||
+            (this.serverState.config.subApi &&
+              this.serverState.config.subApi.apiKey) ||
+            "",
+          model:
+            getVal("qqbot-sub-api-model") ||
+            (this.serverState.config.subApi &&
+              this.serverState.config.subApi.model) ||
+            "",
         },
         groups: this.serverState.config.groups || {},
+        privateChats: this.serverState.config.privateChats || {},
+        naiPresets: Array.isArray(this.serverState.config.naiPresets)
+          ? this.serverState.config.naiPresets
+          : [],
+        visionCache: this.serverState.config.visionCache || {},
+        ...extraFlags,
       };
 
       this.serverState.config = {
@@ -4293,6 +5291,10 @@ function createExpenditureLineChart(data, daysInMonth) {
         ...payload,
       };
 
+      // 1. 立即同步写入浏览器本地持久层，确保关掉网页或重启手机后 100% 保留
+      this.saveLocalPersistentConfig(this.serverState.config);
+
+      // 2. 同步写入后端磁盘
       let savedBackend = false;
       try {
         const res = await fetch("/api/qqbot/config", {
@@ -4303,13 +5305,17 @@ function createExpenditureLineChart(data, daysInMonth) {
         if (res.ok) {
           const data = await res.json();
           if (data && data.config) {
-            this.serverState.config = data.config;
+            this.serverState.config = {
+              ...data.config,
+              ...this.serverState.config,
+            };
+            this.saveLocalPersistentConfig(this.serverState.config);
             savedBackend = true;
           }
         }
       } catch (_) {}
 
-      // 同时同步到手机 Termux 8765 磁盘减负服务
+      // 3. 同时同步到手机 Termux 8765 磁盘减负服务
       if (!savedBackend || this.termuxDiskAvailable) {
         try {
           await fetch("http://127.0.0.1:8765/save", {
@@ -4327,7 +5333,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
 
       if (showToast) {
-        this.notify(savedBackend ? "设置已存本地磁盘" : "设置已保存生效");
+        this.notify(savedBackend ? "全部设定已永久保存" : "已永久保存在本机");
       }
     },
 
@@ -4385,7 +5391,11 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     async ensureAutoDirectWsConnection() {
-      if (this.directWsConnected && this.directWs && this.directWs.readyState === 1) {
+      if (
+        this.directWsConnected &&
+        this.directWs &&
+        this.directWs.readyState === 1
+      ) {
         return true;
       }
       if (this.isConnectingDirectWs) return false;
@@ -4397,9 +5407,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         cfg.onebotUrl ||
         "ws://127.0.0.1:3001";
       const token =
-        (tkInput && tkInput.value.trim()) ||
-        cfg.accessToken ||
-        "";
+        (tkInput && tkInput.value.trim()) || cfg.accessToken || "";
       if (
         (rawUrl.startsWith("ws://") || rawUrl.startsWith("wss://")) &&
         !rawUrl.includes("/api/qqbot/ws")
@@ -4428,7 +5436,6 @@ function createExpenditureLineChart(data, daysInMonth) {
           candidates.push(wsUrl.replace("localhost", "127.0.0.1"));
         }
 
-        // 同时支持带Token与免Token尝试，防止用户留了旧Token或未填Token
         const tokenVariants = token ? [token, ""] : [""];
 
         let connectedWs = null;
@@ -4478,7 +5485,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         const connBadge = document.getElementById("qqbot-conn-badge");
         if (connBadge) connBadge.textContent = "Termux直连在线";
         this.updateConnDetail(
-          "已成功连通手机Termux NapCat 3001端口，正在实时监听QQ群消息与图片...",
+          "已成功连通手机Termux NapCat 3001端口，正在实时监听QQ群聊与好友小窗消息...",
           true,
         );
 
@@ -4494,7 +5501,7 @@ function createExpenditureLineChart(data, daysInMonth) {
               this.serverState.config.selfId = String(info.user_id);
             }
             this.updateConnDetail(
-              `已成功连接 Termux NapCat · 登录QQ：${info.nickname || ""} ${info.user_id} · 实时收发与AI识图已启动`,
+              `已成功连接 Termux NapCat · 登录QQ：${info.nickname || ""} ${info.user_id} · 群聊与小窗实时监听已启动`,
               true,
             );
             this.appendDebugLog(
@@ -4506,12 +5513,11 @@ function createExpenditureLineChart(data, daysInMonth) {
         } catch (_) {
           this.appendDebugLog(
             "连接就绪",
-            "已连上 Termux 3001 端口，实时群消息监听已启动",
+            "已连上 Termux 3001 端口，实时群聊与小窗监听已启动",
             false,
           );
         }
 
-        // 自动静默拉取一次群列表，确保用户所在的群如 2163069348 自动加入列表并启用监听
         this.refreshOneBotGroups(true).catch(() => {});
 
         return true;
@@ -4570,7 +5576,7 @@ function createExpenditureLineChart(data, daysInMonth) {
             const label =
               sum && sum !== "[图片]" && sum !== "[动画表情]"
                 ? sum
-                : "群聊图片";
+                : "聊天图片";
             textParts.push(`[发送了图片：${label}]`);
           } else if (seg.type === "face") {
             textParts.push(`[QQ表情${(seg.data && seg.data.id) || ""}]`);
@@ -4607,7 +5613,10 @@ function createExpenditureLineChart(data, daysInMonth) {
         const cleaned = rawStr
           .replace(/\[CQ:reply,id=[^\]]+\]/g, "")
           .replace(/\[CQ:at,qq=([^\],]+)[^\]]*\]/g, "@$1 ")
-          .replace(/\[CQ:image,[^\]]*summary=([^,\]]+)[^\]]*\]/g, "[发送了图片：$1]")
+          .replace(
+            /\[CQ:image,[^\]]*summary=([^,\]]+)[^\]]*\]/g,
+            "[发送了图片：$1]",
+          )
           .replace(/\[CQ:image,[^\]]+\]/g, "[发送了图片]");
         textParts.push(cleaned);
       }
@@ -4638,6 +5647,107 @@ function createExpenditureLineChart(data, daysInMonth) {
         this.serverState.config.selfId = String(data.self_id);
       }
 
+      // 1. 处理好友小窗私聊消息
+      if (data.post_type === "message" && data.message_type === "private") {
+        const senderId = String(
+          data.user_id || (data.sender && data.sender.user_id) || "",
+        );
+        if (!senderId) return;
+        const selfId =
+          String(data.self_id || "") ||
+          (this.serverState &&
+            this.serverState.config &&
+            this.serverState.config.selfId) ||
+          "";
+        if (selfId && senderId === String(selfId)) return;
+
+        const rawRemark = String(
+          (data.sender &&
+            (data.sender.remark || data.sender.card || data.sender.nickname)) ||
+            senderId,
+        ).trim();
+
+        const parsed = this.parseOneBotGroupMessage(data);
+        if (
+          !parsed.text &&
+          parsed.imageUrls.length === 0 &&
+          parsed.imageFiles.length === 0
+        ) {
+          return;
+        }
+
+        if (!this.serverState) {
+          await this.syncFromServer(false);
+        }
+        if (!this.serverState.config.privateChats) {
+          this.serverState.config.privateChats = {};
+        }
+        if (!this.serverState.config.privateChats[senderId]) {
+          this.serverState.config.privateChats[senderId] = {
+            userId: senderId,
+            nickname: rawRemark || "好友 " + senderId,
+            remark: rawRemark || "",
+            enabled: true,
+            waitSec: 30,
+            persona: "",
+          };
+          this.renderPrivateChatsList();
+          await this.saveAllSettings(false);
+        }
+
+        const pCfg = this.serverState.config.privateChats[senderId];
+        const dispName = pCfg.remark || pCfg.nickname || rawRemark || senderId;
+        const logKey = "priv_" + senderId;
+        const msgId = String(data.message_id || "pmsg_" + Date.now());
+        const msgObj = {
+          messageId: msgId,
+          groupId: logKey,
+          userId: senderId,
+          senderId,
+          senderName: dispName,
+          qqRemark: dispName,
+          rawMessage: parsed.text,
+          content: parsed.text,
+          replyId: parsed.replyId || "",
+          imageUrls: parsed.imageUrls || [],
+          imageFiles: parsed.imageFiles || [],
+          visionDescription: "",
+          visionRecognized: false,
+          isSelf: false,
+          timestamp: data.time ? Number(data.time) * 1000 : Date.now(),
+        };
+
+        this.appendStaticMessage(logKey, msgObj);
+
+        fetch("/api/qqbot/webhook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }).catch(() => {});
+
+        const imgTip =
+          parsed.imageUrls.length > 0 || parsed.imageFiles.length > 0
+            ? ` · 附带 ${Math.max(parsed.imageUrls.length, parsed.imageFiles.length)} 张图片`
+            : "";
+        this.appendDebugLog(
+          "小窗消息",
+          `好友「${dispName}」：${parsed.text}${imgTip}`,
+          false,
+        );
+
+        if (pCfg.enabled !== false) {
+          this.scheduleDirectPrivateTurn(senderId, pCfg);
+        } else {
+          this.appendDebugLog(
+            "小窗未开",
+            `好友「${dispName}」小窗当前为停用状态，如需自动回复请在小窗栏目点开启`,
+            true,
+          );
+        }
+        return;
+      }
+
+      // 2. 处理QQ群聊消息
       if (data.post_type === "message" && data.message_type === "group") {
         const gid = String(data.group_id || "");
         if (!gid) return;
@@ -4679,6 +5789,7 @@ function createExpenditureLineChart(data, daysInMonth) {
             data.group_name || "QQ群 " + gid,
           );
           this.renderGroupSelectDropdown();
+          await this.saveAllSettings(false);
         } else if (data.group_name) {
           this.serverState.config.groups[gid].groupName = data.group_name;
         }
@@ -4690,7 +5801,6 @@ function createExpenditureLineChart(data, daysInMonth) {
           rawRemark,
         );
 
-        // 如果当前选中的还是默认演示群 88482026，且收到了真实QQ群消息，自动切换到该真实QQ群
         if (
           (!this.currentGroupId || this.currentGroupId === "88482026") &&
           gid !== "88482026"
@@ -4713,13 +5823,13 @@ function createExpenditureLineChart(data, daysInMonth) {
           imageUrls: parsed.imageUrls || [],
           imageFiles: parsed.imageFiles || [],
           visionDescription: "",
+          visionRecognized: false,
           isSelf: false,
           timestamp: data.time ? Number(data.time) * 1000 : Date.now(),
         };
 
         this.appendStaticMessage(gid, msgObj);
 
-        // 同步给后端磁盘（不阻塞前端实时展示与触发）
         fetch("/api/qqbot/webhook", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -4743,7 +5853,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         } else {
           this.appendDebugLog(
             "监听未开",
-            `群「${gCfg.groupName || gid}」当前处于停用监听状态，如需自动回复请在群聊分页改为启用本群监听`,
+            `群「${gCfg.groupName || gid}」当前处于停用监听状态，如需自动回复请在群聊栏目点开启`,
             true,
           );
         }
@@ -4756,14 +5866,198 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
       const waitSec = Math.max(2, Math.min(30, Number(gCfg.debounceSec) || 6));
       this.updateJudgeStatusUI(
-        `已收到「${gCfg.groupName || gid}」最新群消息，正在缓冲等待 ${waitSec} 秒合并连发消息...`,
+        `已收到「${gCfg.groupName || gid}」最新群消息，正在等待 ${waitSec} 秒合并连发消息后交由副AI识图与判断...`,
       );
       this.groupDebounceTimers[gid] = setTimeout(async () => {
         delete this.groupDebounceTimers[gid];
         const list = this.staticFallbackLogs[gid] || [];
-        const targetSeq = list.length > 0 ? list[list.length - 1].seq || Date.now() : Date.now();
+        const targetSeq =
+          list.length > 0
+            ? list[list.length - 1].seq || Date.now()
+            : Date.now();
         await this.processGroupTurn(gid, gCfg, targetSeq, false);
       }, waitSec * 1000);
+    },
+
+    scheduleDirectPrivateTurn(userId, pCfg) {
+      const uid = String(userId || "");
+      if (!uid) return;
+      if (this.privateDebounceTimers[uid]) {
+        clearTimeout(this.privateDebounceTimers[uid]);
+      }
+      const waitSec = Math.max(3, Math.min(3600, Number(pCfg.waitSec) || 30));
+      const dispName = pCfg.remark || pCfg.nickname || uid;
+      this.updateJudgeStatusUI(
+        `已收到好友「${dispName}」小窗消息，正在等待 ${waitSec} 秒后唤醒副AI阅读并判断是否调用主AI回复...`,
+      );
+      this.privateDebounceTimers[uid] = setTimeout(async () => {
+        delete this.privateDebounceTimers[uid];
+        await this.processPrivateTurn(uid, pCfg);
+      }, waitSec * 1000);
+    },
+
+    async processPrivateTurn(userId, pCfg) {
+      const uid = String(userId || "");
+      if (!uid || this.busyPrivateChats[uid]) return;
+      this.busyPrivateChats[uid] = true;
+      const logKey = "priv_" + uid;
+      const dispName = pCfg.remark || pCfg.nickname || uid;
+
+      try {
+        const messages = (this.staticFallbackLogs[logKey] || []).slice(-35);
+        if (messages.length === 0) return;
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.isSelf) return;
+
+        // 1. 副AI先统一识别该小窗里所有尚未识图的图片，并永久缓存替换文字，绝不重复识图
+        const activeVisionUrls = await this.recognizePendingImagesInMessages(
+          logKey,
+          null,
+          messages,
+        );
+
+        // 2. 副AI阅读小窗上下文并判断是否需要主AI回复
+        this.updateJudgeStatusUI(
+          `等待时间到，副AI正在阅读好友「${dispName}」的小窗消息与图片，判断是否需要回复...`,
+        );
+        const judge = await this.runSubApiPrivateJudge(pCfg, messages);
+
+        if (!judge.shouldReply) {
+          const skipMsg = `小窗副AI判定暂不回复「${dispName}」 · 原因：${judge.reason || "无需回复"}`;
+          this.updateJudgeStatusUI(skipMsg);
+          this.appendDebugLog("小窗副AI", skipMsg, false);
+          return;
+        }
+
+        const passMsg = `小窗副AI判定需要回复「${dispName}」 · 原因：${judge.reason || "回应好友私聊"} · 正在调用主AI生成小窗回复...`;
+        this.updateJudgeStatusUI(passMsg);
+        this.appendDebugLog("小窗副AI", passMsg, false);
+
+        // 3. 主AI生成私聊回复并连同识图结果与图片一起读取
+        const replyList = await this.runMainApiPrivateResponder(
+          pCfg,
+          messages,
+          judge,
+          activeVisionUrls,
+        );
+
+        for (const text of replyList) {
+          const clean = String(text || "").trim();
+          if (!clean) continue;
+          await this.sendBotMessage({
+            userId: uid,
+            message: clean,
+          });
+          this.appendStaticMessage(logKey, {
+            messageId: "pbot_" + Date.now(),
+            groupId: logKey,
+            userId: uid,
+            senderId: "BOT",
+            senderName: "我方AI",
+            rawMessage: clean,
+            content: clean,
+            isSelf: true,
+            timestamp: Date.now(),
+          });
+        }
+        this.updateJudgeStatusUI(
+          `已向好友「${dispName}」小窗发送主AI回复，继续监听后续消息`,
+        );
+      } catch (err) {
+        this.appendDebugLog(
+          "小窗报错",
+          `处理好友「${dispName}」小窗异常：${err.message || "请检查API配置"}`,
+          true,
+        );
+      } finally {
+        this.busyPrivateChats[uid] = false;
+      }
+    },
+
+    async runSubApiPrivateJudge(pCfg, messages) {
+      const dispName = pCfg.remark || pCfg.nickname || pCfg.userId;
+      const transcript = messages
+        .slice(-20)
+        .map((m) =>
+          m.isSelf
+            ? `[我方已发]: ${m.rawMessage || m.content}`
+            : `[${dispName}]: ${m.rawMessage || m.content}`,
+        )
+        .join("\n");
+
+      const sysPrompt = `你是QQ好友小窗私聊的副AI阅读裁判。
+请阅读好友「${dispName}」发来的最新私聊消息（如果包含图片，已由副AI自动完成识图并标注为【图片已识图：...】）。
+请判断此刻是否需要唤醒主AI回复该好友：
+- 如果对方在提问、闲聊、发图分享、跑团私聊行动或等待回应，则 shouldReply 设为 true；
+- 如果对方明确说先忙了、不用回、或者只是系统回执，则 shouldReply 设为 false。
+只输出严格JSON：
+{
+  "shouldReply": true,
+  "reason": "简短说明为什么需要回复或暂不回复"
+}`;
+
+      try {
+        const raw = await this.callBotAI(
+          sysPrompt,
+          `【小窗最近聊天记录】\n${transcript}\n\n请输出JSON判断：`,
+          true,
+        );
+        const parsed = this.extractJsonObject(raw);
+        if (parsed && typeof parsed.shouldReply === "boolean") {
+          return parsed;
+        }
+      } catch (_) {}
+      return { shouldReply: true, reason: "默认回复好友小窗消息" };
+    },
+
+    async runMainApiPrivateResponder(
+      pCfg,
+      messages,
+      judge,
+      activeVisionUrls = [],
+    ) {
+      const gCfg = this.getCurrentGroupConfig();
+      const basePersona = this.resolvePersonaPrompt(gCfg);
+      const dispName = pCfg.remark || pCfg.nickname || pCfg.userId;
+      const transcript = messages
+        .slice(-25)
+        .map((m) =>
+          m.isSelf
+            ? `[我方已发]: ${m.rawMessage || m.content}`
+            : `[${dispName}]: ${m.rawMessage || m.content}`,
+        )
+        .join("\n");
+
+      const sysPrompt = `你正在QQ小窗私聊中与好友「${dispName}」对话。
+【你的自身人设】
+${basePersona}
+
+${pCfg.persona ? `【该好友专属备注与关系设定】\n${pCfg.persona}\n` : ""}
+注意：
+1. 上下文中标注为【图片已识图：...】的内容是副AI已经为你识别好的图片画面细节，且原图已一并附带给你，请自然结合图片内容与好友聊天，绝不要说看不到图片。
+2. 语气自然亲切、符合你的人设，像真人使用QQ小窗一样回复，不要带生硬的机器前缀。
+请输出严格JSON格式：
+{
+  "messages": [
+    "发送给该好友小窗的第1条回复",
+    "可选的第2条简短补充"
+  ]
+}`;
+
+      const raw = await this.callBotAI(
+        sysPrompt,
+        `【副AI分析】${judge.reason || "正常回复"}\n\n【小窗聊天记录】\n${transcript}\n\n请生成JSON回复：`,
+        false,
+        activeVisionUrls,
+      );
+      const parsed = this.extractJsonObject(raw);
+      if (parsed && Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+        return parsed.messages;
+      }
+      if (parsed && Array.isArray(parsed.groupMessages)) {
+        return parsed.groupMessages;
+      }
+      return [String(raw || "").trim() || "我在呢。"];
     },
 
     appendStaticMessage(gid, msgObj) {
@@ -4818,7 +6112,6 @@ function createExpenditureLineChart(data, daysInMonth) {
       this.updateConnDetail(`正在尝试连接 ${rawUrl} ...`, true);
 
       try {
-        // 1. 若是正向 ws:// 地址，优先尝试浏览器直接连接本机 Termux OneBot
         if (
           (rawUrl.startsWith("ws://") || rawUrl.startsWith("wss://")) &&
           !rawUrl.includes("/api/qqbot/ws")
@@ -4831,7 +6124,6 @@ function createExpenditureLineChart(data, daysInMonth) {
           }
         }
 
-        // 2. 尝试通过本地后端连接
         let backendConnected = false;
         try {
           let mode = "reverse_ws";
@@ -4883,12 +6175,12 @@ function createExpenditureLineChart(data, daysInMonth) {
           if (selfBadge) selfBadge.textContent = "未连上3001";
           const isHttps = window.location.protocol === "https:";
           const tokenHint = !token
-            ? "你在 6099 网页后台新建 3001 端口时，系统默认自动生成了一串 Token 密钥，请把 6099 后台里的 Token 复制填进上方「密钥」框，或者去 6099 后台把 Token 删空并点保存！"
-            : "请核对上方「密钥」框里的 Token 是否与 6099 网页后台里的一模一样。";
+            ? "你在 6099 网页后台新建 3001 端口时，系统默认自动生成了一串 Token 密钥，可在 Termux 菜单输 3 查看并填进上方密钥框，或去 6099 后台把 Token 删空保存。"
+            : "请核对上方密钥框里的 Token 是否与 Termux 菜单输 3 查看到的 3001 密钥一致。";
           const httpsHint = isHttps
-            ? "另外当前网页为 https 加密网址，若手机浏览器拦截了本地 ws 连接，请点浏览器地址栏左侧图标打开「网站设置」，将「不安全内容」设为允许。"
+            ? "另外当前网页为 https 加密网址，若手机浏览器拦截了本地 ws 连接，请点浏览器地址栏左侧图标打开网站设置，将不安全内容设为允许。"
             : "";
-          const fullMsg = `未能连上 ${rawUrl}：1. ${tokenHint} 2. 确认 6099 后台新建的是「WebSocket服务端」且已打开启用开关。${httpsHint}`;
+          const fullMsg = `未能连上 ${rawUrl}：1. ${tokenHint} 2. 确认 6099 后台新建的是 WebSocket服务端 且已打开启用开关。${httpsHint}`;
           this.notify("未能连上3001请看下方提示");
           this.updateConnDetail(fullMsg, false);
         }
@@ -4899,7 +6191,7 @@ function createExpenditureLineChart(data, daysInMonth) {
 
     async refreshOneBotGroups(silent = false) {
       const refBtn = document.getElementById("qqbot-refresh-btn");
-      if (!silent && refBtn) refBtn.textContent = "刷新中";
+      if (!silent && refBtn) refBtn.textContent = "拉群中";
       if (!silent) {
         this.notify("正在拉取QQ群列表...");
         this.updateConnDetail("正在从已连接的QQ号拉取群聊列表...", true);
@@ -4922,9 +6214,9 @@ function createExpenditureLineChart(data, daysInMonth) {
               this.renderGroupSelectDropdown();
               await this.saveAllSettings(false);
               if (!silent) {
-                this.notify(`已同步${list.length}个QQ群`);
+                this.notify(`已拉取${list.length}个QQ群`);
                 this.updateConnDetail(
-                  `已成功拉取到 ${list.length} 个QQ群，可在下方分群管理下拉框中切换`,
+                  `已成功拉取到 ${list.length} 个QQ群并自动永久保存，可在群聊栏目卡片中直接点选切换`,
                   true,
                 );
               }
@@ -4965,19 +6257,19 @@ function createExpenditureLineChart(data, daysInMonth) {
             this.notify(
               data.refreshedFromOneBot
                 ? `已从QQ拉取${count}个群`
-                : `已刷新本地${count}个群`,
+                : `已加载已存的${count}个群`,
             );
             this.updateConnDetail(
               data.refreshedFromOneBot
-                ? `已从OneBot同步 ${count} 个QQ群`
-                : `当前尚未连上3001端口，已刷新本地 ${count} 个配置群；也可在分群管理里手动输入QQ群号点添加`,
+                ? `已从OneBot同步 ${count} 个QQ群并永久保存`
+                : `已加载本地保存的 ${count} 个QQ群；也可在群聊栏目直接输入群号点添加`,
               Boolean(data.refreshedFromOneBot),
             );
           }
         } else if (!silent) {
           this.notify("请先连上3001或手动添加群号");
           this.updateConnDetail(
-            "未检测到在线OneBot连接，请先核对密钥并点连接，或在下方分群管理直接输入QQ群号点添加",
+            "未检测到在线OneBot连接，请先核对密钥并点连接，或在群聊栏目直接输入QQ群号点添加",
             false,
           );
         }
@@ -4986,7 +6278,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           this.notify("已刷新本地群列表");
         }
       } finally {
-        if (!silent && refBtn) refBtn.textContent = "刷新";
+        if (!silent && refBtn) refBtn.textContent = "拉群";
       }
     },
 
@@ -5035,6 +6327,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         const badge = document.getElementById("qqbot-disk-status-badge");
         if (badge) badge.textContent = "本地账本已保存";
       } catch (_) {}
+      await this.saveAllSettings(false);
     },
 
     async clearCurrentGroupDisk() {
@@ -5068,7 +6361,6 @@ function createExpenditureLineChart(data, daysInMonth) {
 
     async tickGroupWatchers() {
       try {
-        // 如果已通过浏览器直连本机 Termux 3001，挂机超时盯梢也在本地检查
         const res = await fetch("/api/qqbot/state");
         if (!res.ok) return;
         const stateData = await res.json();
@@ -5081,7 +6373,8 @@ function createExpenditureLineChart(data, daysInMonth) {
         if (badge) {
           badge.textContent = this.directWsConnected
             ? "Termux直连在线"
-            : (stateData.runtime && stateData.runtime.statusText) || "等待连3001";
+            : (stateData.runtime && stateData.runtime.statusText) ||
+              "等待连3001";
         }
 
         const groups =
@@ -5110,7 +6403,6 @@ function createExpenditureLineChart(data, daysInMonth) {
           }
           const lw = this.localWaitNormalized[gid];
 
-          // 1. 仅当未走浏览器直连防抖定时器时，由后端轮询触发新消息
           if (
             !this.directWsConnected &&
             st.lastMessageSeq >
@@ -5130,7 +6422,6 @@ function createExpenditureLineChart(data, daysInMonth) {
             continue;
           }
 
-          // 2. 挂机超时询问
           const idleMin = Number(gCfg.idleAskMin) || 0;
           const waitStart = st.waitingForRpSince || lw.waitingSince || 0;
           const alreadyAsked = Boolean(st.idleAsked || lw.idleAsked);
@@ -5158,11 +6449,13 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
-     * QQ群图片自动识图引擎：将群友发送的QQ图片转为可识别格式并调用AI视觉识图
+     * 副AI自动识图与永久去重引擎：
+     * 1. 识图由副AI在定时阅读阶段统一执行，无论本轮是否调用主AI，先把未识别的图片认出来并替换文字；
+     * 2. 每张图片按消息ID+URL写入 visionCache 永久缓存，已经识图过的图片绝不二次重复识图；
+     * 3. 当副AI决定调用主AI时，识图文字与原图多模态数据一并传给主AI。
      * ============================================================================ */
     async resolveQqImageForVision(rawUrl, rawFile) {
       let cleanUrl = this.unescapeCqStr(rawUrl || "");
-      // 1. 若有 OneBot WS 连接且带 file 参数，尝试通过 get_image 获取最新地址或 base64
       if (!cleanUrl && this.directWsConnected && rawFile) {
         try {
           const imgInfo = await this.callDirectOneBotWs("get_image", {
@@ -5181,7 +6474,6 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (!cleanUrl) return "";
       if (cleanUrl.startsWith("data:image/")) return cleanUrl;
 
-      // 2. 优先通过服务端无防盗链代理拉取为 base64，确保海外或反代大模型也能100%读取QQ图片
       try {
         const res = await fetch("/api/qqbot/fetch-image", {
           method: "POST",
@@ -5199,38 +6491,87 @@ function createExpenditureLineChart(data, daysInMonth) {
       return cleanUrl;
     },
 
-    async recognizeSingleGroupImage(rawUrl, rawFile) {
+    getVisionCacheKey(msgId, rawUrl, rawFile) {
+      const k = String(rawFile || rawUrl || msgId || "").trim();
+      return k ? k.slice(-140) : String(msgId || "");
+    },
+
+    async recognizeSingleGroupImage(rawUrl, rawFile, cacheKey = "") {
+      if (
+        cacheKey &&
+        this.serverState &&
+        this.serverState.config &&
+        this.serverState.config.visionCache &&
+        this.serverState.config.visionCache[cacheKey]
+      ) {
+        return {
+          desc: this.serverState.config.visionCache[cacheKey],
+          visionUrl: await this.resolveQqImageForVision(rawUrl, rawFile),
+          fromCache: true,
+        };
+      }
+
       const visionUrl = await this.resolveQqImageForVision(rawUrl, rawFile);
-      if (!visionUrl) return "";
+      if (!visionUrl) return { desc: "", visionUrl: "", fromCache: false };
 
       const sysPrompt =
-        "你是QQ群聊内置的AI识图助手。请直接用简明、准确的中文描述这张图片里的画面内容、人物神态动作、场景细节；如果图片是表情包或带有文字、聊天截图，请把图里的文字完整读出来并说明表情包表达的情绪。不要寒暄，控制在80字以内。";
-      const userPrompt = "请识别并描述这张QQ群聊图片的内容：";
+        "你是群控中枢的副AI视觉识图模块。请直接用简明、准确的中文描述这张图片里的画面内容、人物动作神态、场景细节；如果图片是表情包、文字图或聊天截图，请把图里的文字完整读出来并说明表达的情绪。不要寒暄，控制在80字以内。";
+      const userPrompt = "请识别并描述这张QQ图片的内容：";
 
-      // 优先尝试副API识图，若副API不支持视觉则自动尝试主API识图
+      let finalDesc = "";
       try {
         const desc = await this.callBotAI(sysPrompt, userPrompt, true, [
           visionUrl,
         ]);
-        if (desc && !desc.includes("本地沙盘演练已收到消息") && !desc.includes("shouldReply")) {
-          return String(desc).trim();
+        if (
+          desc &&
+          !desc.includes("本地沙盘演练已收到消息") &&
+          !desc.includes("shouldReply")
+        ) {
+          finalDesc = String(desc).trim();
         }
       } catch (_) {}
 
-      try {
-        const descMain = await this.callBotAI(sysPrompt, userPrompt, false, [
-          visionUrl,
-        ]);
-        if (descMain && !descMain.includes("本地沙盘演练已收到消息")) {
-          return String(descMain).trim();
-        }
-      } catch (_) {}
+      if (!finalDesc) {
+        try {
+          const descMain = await this.callBotAI(sysPrompt, userPrompt, false, [
+            visionUrl,
+          ]);
+          if (descMain && !descMain.includes("本地沙盘演练已收到消息")) {
+            finalDesc = String(descMain).trim();
+          }
+        } catch (_) {}
+      }
 
-      return "";
+      if (finalDesc && cacheKey && this.serverState && this.serverState.config) {
+        if (!this.serverState.config.visionCache) {
+          this.serverState.config.visionCache = {};
+        }
+        this.serverState.config.visionCache[cacheKey] = finalDesc;
+        this.saveLocalPersistentConfig(this.serverState.config);
+      }
+
+      return { desc: finalDesc, visionUrl, fromCache: false };
+    },
+
+    applyVisionDescriptionToMessage(m, desc) {
+      if (!m || !desc) return;
+      m.visionDescription = desc;
+      m.visionRecognized = true;
+      const baseText = String(m.content || m.rawMessage || "").trim();
+      const replaced = baseText
+        .replace(/\[发送了图片(?:：[^\]]*)?\]/g, `[图片已识图：${desc}]`)
+        .replace(/\[AI识图内容：[^\]]*\]/g, "")
+        .trim();
+      const nextText = replaced.includes("图片已识图：")
+        ? replaced
+        : `${replaced ? replaced + " " : ""}[图片已识图：${desc}]`;
+      m.content = nextText;
+      m.rawMessage = nextText;
     },
 
     async recognizePendingImagesInMessages(groupId, gCfg, messages) {
-      const recent = messages.slice(-6);
+      const recent = messages.slice(-8);
       const latestVisionUrls = [];
 
       for (const m of recent) {
@@ -5239,37 +6580,66 @@ function createExpenditureLineChart(data, daysInMonth) {
         const files = Array.isArray(m.imageFiles) ? m.imageFiles : [];
         if (urls.length === 0 && files.length === 0) continue;
 
-        if (!m.visionDescription) {
-          const speaker = this.resolveMemberDisplayName(
-            gCfg,
-            m.senderId,
-            m.qqRemark || m.senderName,
+        const cacheKey = this.getVisionCacheKey(m.messageId, urls[0], files[0]);
+        const cachedDesc =
+          m.visionDescription ||
+          (this.serverState &&
+            this.serverState.config &&
+            this.serverState.config.visionCache &&
+            this.serverState.config.visionCache[cacheKey]) ||
+          "";
+
+        // 若已经识图过，直接复用缓存文字，绝不二次调用副AI重复识图
+        if (m.visionRecognized || cachedDesc) {
+          if (cachedDesc) {
+            this.applyVisionDescriptionToMessage(m, cachedDesc);
+          } else {
+            m.visionRecognized = true;
+          }
+          const resolved = await this.resolveQqImageForVision(
+            urls[0],
+            files[0],
           );
-          this.updateJudgeStatusUI(
-            `检测到 ${speaker} 发送了图片，正在调用AI视觉模型自动识图...`,
+          if (resolved) latestVisionUrls.push(resolved);
+          continue;
+        }
+
+        const speaker = gCfg
+          ? this.resolveMemberDisplayName(
+              gCfg,
+              m.senderId,
+              m.qqRemark || m.senderName,
+            )
+          : m.senderName || m.qqRemark || m.senderId;
+
+        this.updateJudgeStatusUI(
+          `副AI检测到 ${speaker} 发送了新图片，正在识图并转换为文字记录...`,
+        );
+        this.appendDebugLog(
+          "副AI识图",
+          `副AI正在首次识别 ${speaker} 发送的图片，识别后将永久缓存不再重复识图...`,
+          false,
+        );
+
+        const { desc, visionUrl } = await this.recognizeSingleGroupImage(
+          urls[0],
+          files[0],
+          cacheKey,
+        );
+        m.visionRecognized = true;
+
+        if (desc) {
+          this.applyVisionDescriptionToMessage(m, desc);
+
+          const localArr = this.staticFallbackLogs[groupId] || [];
+          const foundLocal = localArr.find(
+            (item) => String(item.messageId) === String(m.messageId),
           );
-          this.appendDebugLog(
-            "正在识图",
-            `正在识别 ${speaker} 发送的QQ群图片...`,
-            false,
-          );
-          const desc = await this.recognizeSingleGroupImage(urls[0], files[0]);
-          if (desc) {
-            m.visionDescription = desc;
-            if (!String(m.content || "").includes("AI识图内容")) {
-              m.content = `${m.content || "[发送了图片]"} [AI识图内容：${desc}]`;
-              m.rawMessage = m.content;
-            }
-            // 更新本地缓存与后端记录
-            const localArr = this.staticFallbackLogs[groupId] || [];
-            const foundLocal = localArr.find(
-              (item) => String(item.messageId) === String(m.messageId),
-            );
-            if (foundLocal) {
-              foundLocal.visionDescription = desc;
-              foundLocal.content = m.content;
-              foundLocal.rawMessage = m.rawMessage;
-            }
+          if (foundLocal) {
+            this.applyVisionDescriptionToMessage(foundLocal, desc);
+          }
+
+          if (!String(groupId).startsWith("priv_")) {
             fetch(
               `/api/qqbot/group/${encodeURIComponent(groupId)}/vision-update`,
               {
@@ -5281,25 +6651,24 @@ function createExpenditureLineChart(data, daysInMonth) {
                 }),
               },
             ).catch(() => {});
-
-            this.appendDebugLog(
-              "识图成功",
-              `${speaker} 的图片内容：${desc}`,
-              false,
-            );
-            await this.refreshSandboxLog();
-          } else {
-            this.appendDebugLog(
-              "识图提示",
-              "当前模型未返回独立文字描述，将直接向主模型传递原图多模态数据",
-              false,
-            );
           }
+
+          this.appendDebugLog(
+            "识图完成",
+            `副AI已将 ${speaker} 的图片转为文字：${desc}`,
+            false,
+          );
+          await this.refreshSandboxLog();
+        } else {
+          this.appendDebugLog(
+            "原图直传",
+            "副AI已标记该图片，将在唤醒主AI时直接把原图画面传给主AI",
+            false,
+          );
         }
 
-        if (urls[0]) {
-          const resolved = await this.resolveQqImageForVision(urls[0], files[0]);
-          if (resolved) latestVisionUrls.push(resolved);
+        if (visionUrl) {
+          latestVisionUrls.push(visionUrl);
         }
       }
 
@@ -5341,7 +6710,6 @@ function createExpenditureLineChart(data, daysInMonth) {
           }
         } catch (_) {}
 
-        // 合并浏览器直连收到的最新消息，防止前后端短暂不同步导致漏读刚收到的消息
         const localMsgs = this.staticFallbackLogs[groupId] || [];
         if (localMsgs.length > 0) {
           const existingIds = new Set(
@@ -5350,6 +6718,16 @@ function createExpenditureLineChart(data, daysInMonth) {
           for (const lm of localMsgs) {
             if (!existingIds.has(String(lm.messageId || ""))) {
               messages.push(lm);
+            } else {
+              const target = messages.find(
+                (m) => String(m.messageId || "") === String(lm.messageId || ""),
+              );
+              if (target && lm.visionDescription && !target.visionDescription) {
+                this.applyVisionDescriptionToMessage(
+                  target,
+                  lm.visionDescription,
+                );
+              }
             }
           }
           totalStored = Math.max(totalStored, messages.length);
@@ -5371,7 +6749,7 @@ function createExpenditureLineChart(data, daysInMonth) {
             )
           : "群友";
 
-        // 1. 如果最新群消息包含图片，先自动调用AI视觉识图并展示在调试台中
+        // 1. 副AI先统一对未识别的新图片进行识图并替换文字（无论本轮是否调用主AI都先完成识图，且已识图的图片绝不重复识图）
         const activeVisionUrls = await this.recognizePendingImagesInMessages(
           groupId,
           gCfg,
@@ -5403,7 +6781,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           return;
         }
 
-        // 3. 调用群控专用副API进行真人级场面判断
+        // 3. 副AI阅读群聊上下文（含刚才已替换为文字的识图内容）进行场面判断
         let judgeResult = {
           shouldReply: true,
           sceneType: "SINGLE_INTERACTION",
@@ -5417,7 +6795,7 @@ function createExpenditureLineChart(data, daysInMonth) {
 
         if (!forceReply) {
           this.updateJudgeStatusUI(
-            "群控副API正在阅读群聊上下文与成员人设，判断此刻是否应当开口...",
+            "群控副AI正在阅读群聊上下文与识图内容，判断此刻是否需要唤醒主AI开口...",
           );
           judgeResult = await this.runSubApiSceneJudge(gCfg, messages, memory);
         }
@@ -5429,19 +6807,19 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
 
         if (!judgeResult.shouldReply) {
-          const skipMsg = `副API判定暂不插话 · 场面：${judgeResult.sceneType || "等待群友对戏"} · 原因：${judgeResult.reason || "等待其他群友行动或继续RP"}`;
+          const skipMsg = `副AI判定暂不插话（新图片已完成识图存档） · 场面：${judgeResult.sceneType || "等待群友对戏"} · 原因：${judgeResult.reason || "等待其他群友行动或继续RP"}`;
           this.updateJudgeStatusUI(skipMsg);
-          this.appendDebugLog("副API裁判", skipMsg, false);
+          this.appendDebugLog("副AI裁判", skipMsg, false);
           await this.markGroupSeqProcessed(groupId, targetSeq, false);
           await this.refreshSandboxLog();
           return;
         }
 
-        const passMsg = `副API判定需要回应 · 对象：${judgeResult.targetSpeakerName || speakerRealName} · 原因：${judgeResult.reason || "回应群友发言"} · 正在调用主API生成回复...`;
+        const passMsg = `副AI判定需要回应 · 对象：${judgeResult.targetSpeakerName || speakerRealName} · 原因：${judgeResult.reason || "回应群友发言"} · 正在连同图片与上下文唤醒主AI生成回复...`;
         this.updateJudgeStatusUI(passMsg);
-        this.appendDebugLog("副API裁判", passMsg, false);
+        this.appendDebugLog("副AI裁判", passMsg, false);
 
-        // 4. 唤醒群控主API生成正式回复、小窗密信、表情包与生图指令（同时附带多模态图片）
+        // 4. 唤醒群控主AI生成正式回复、小窗密信、表情包与生图指令（同时附带识图文字与原图多模态数据）
         const replyPack = await this.runMainApiResponder(
           gCfg,
           messages,
@@ -5467,7 +6845,8 @@ function createExpenditureLineChart(data, daysInMonth) {
         await this.loadCurrentGroupMemoryUI();
       } catch (err) {
         console.error("处理QQ群回合出错:", err);
-        const errText = err.message || "请检查接口分页中的主API与副API地址及密钥";
+        const errText =
+          err.message || "请检查接口分页中的主API与副API地址及密钥";
         this.updateJudgeStatusUI("处理群消息异常：" + errText);
         this.appendDebugLog("接口报错", errText, true);
       } finally {
@@ -5528,7 +6907,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
-     * 副API：真人级场面裁判 Prompt 与调用 · 上下文直接传实时备注名不传QQ号
+     * 副API：真人级场面裁判 Prompt 与调用 · 上下文直接传实时备注名与副AI已识图文字
      * ============================================================================ */
     async runSubApiSceneJudge(gCfg, messages, memory) {
       const recentSlice = messages.slice(-25);
@@ -5553,15 +6932,15 @@ function createExpenditureLineChart(data, daysInMonth) {
           ? "跑团带团守秘人KP模式"
           : "日常陪聊与设定OC群友模式";
 
-      const sysPrompt = `你是QQ群控中枢的副API真人场面裁判。当前模式：${modeLabel}。
-请完整阅读群聊上下文，注意群友在括号内讨论的内容同样非常重要，不能忽略括号内对KP或OC的提问、行动声明或检定沟通。
+      const sysPrompt = `你是QQ群控中枢的副AI真人场面裁判。当前模式：${modeLabel}。
+请完整阅读群聊上下文（群友发送的图片已由你在前一步完成识图，并在消息中替换为【图片已识图：...】）。
 
 【本群成员名册与专属人设】
 ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
 
-请你像一个真正的资深人类跑团KP或真人OC群友一样，精准判断此刻是否应该开口说话：
-1. 单人独立互动 SINGLE_INTERACTION：某位群友单独和NPC搭话、单独向KP声明调查某个角落、或者提出一个不牵连其他人的独立行动，此时不需要死等全员，应立即决定回复该群友，并在 replyToMessageId 中填入该消息ID以便引用回复。
-2. 括号提问或检定结算 BRACKET_QUESTION_OR_DICE：群友在括号里确认规则、询问环境细节，或者刚投出了技能检定骰子结果，应立即回复并给出检定描写或解答。
+请你像一个真正的资深人类跑团KP或真人OC群友一样，精准判断此刻是否应该唤醒主AI开口说话：
+1. 单人独立互动 SINGLE_INTERACTION：某位群友单独和NPC搭话、发图互动、单独向KP声明调查某个角落、或者提出一个不牵连其他人的独立行动，此时不需要死等全员，应立即决定回复该群友，并在 replyToMessageId 中填入该消息ID以便引用回复。
+2. 括号提问或检定结算 BRACKET_QUESTION_OR_DICE：群友确认规则、询问环境细节，或者刚投出了技能检定骰子结果，应立即回复并给出检定描写或解答。
 3. 玩家结伴RP且NPC在场 PC_RP_NPC_PRESENT：群友们正在互相角色扮演对戏，如果对戏内容涉及在场NPC或主动向我方搭话，则自然接话；如果只是两位群友私下交流且不需要NPC打断，则保持安静等待他们聊完。
 4. 全员大场面等待 WAIT_ALL_ACTIONS：当前处于转场或全员危机鉴定阶段，我方刚要求所有在场调查员过骰子或表态，而目前只有部分人表态、还有活跃成员正在行动中，则暂不回复，等待其他人行动完毕。
 5. 还在RP等待信号 STILL_RP_WAIT：有人表示还在RP、等一下、正在打字，则立即保持安静不回复。
@@ -5610,8 +6989,32 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
     },
 
     /* ============================================================================
-     * 主API：完整挂载AI人设、要求、开启的思维链条目、每个群成员的实时名字与专属人设
+     * 主API：完整挂载AI人设、要求、思维链、群成员专属人设、以及面板中一五一十可编辑的生图指令与代码规范
      * ============================================================================ */
+    resolveNaiRuleForGroup(gCfg) {
+      const def = this.getDefaultNaiPromptConfig();
+      const naiMode =
+        gCfg.naiMode ||
+        (gCfg.autoNaiImage === false ? "off" : "trpg_every_round");
+      const ocRuleText = String(gCfg.naiOcPrompt || def.naiOcPrompt).trim();
+      const kpRuleText = String(gCfg.naiKpPrompt || def.naiKpPrompt).trim();
+
+      if (naiMode === "off") {
+        return "当前已关闭NovelAI生图，naiPrompt 字段必须留空字符串。";
+      }
+      if (naiMode === "always_force") {
+        return `当前已开启【每回合末尾强制生图】模式：无论当前是守秘人带团还是日常OC聊天，你每一轮回复都必须在返回的 JSON 的 naiPrompt 字段中填写英文 NovelAI 生图 Tag 代码串，绝不能留空！\n具体生图指令与代码规范如下：\n${gCfg.mode === "trpg" ? kpRuleText : ocRuleText}`;
+      }
+      if (naiMode === "oc_auto") {
+        return `当前已开启【日常OC按需生图】模式：\n${ocRuleText}`;
+      }
+      // 默认 trpg_every_round
+      if (gCfg.mode === "trpg") {
+        return `当前处于【守秘人KP模式 · 每回合末尾强制生图】：\n${kpRuleText}`;
+      }
+      return `当前处于【日常OC模式 · 按需自动生图】：\n${ocRuleText}`;
+    },
+
     async runMainApiResponder(
       gCfg,
       messages,
@@ -5628,7 +7031,6 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
         gCfg.stickerCategoryId,
       );
 
-      // 传送给AI的上下文直接显示每个人的实时备注名字，并附带AI识图结果
       const transcript = messages
         .map((m) => {
           if (m.isSelf) {
@@ -5641,26 +7043,25 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
           );
           const visionExtra =
             m.visionDescription &&
-            !String(m.rawMessage || m.content || "").includes("AI识图内容")
-              ? ` [AI识图内容：${m.visionDescription}]`
+            !String(m.rawMessage || m.content || "").includes("图片已识图")
+              ? ` [图片已识图：${m.visionDescription}]`
               : "";
           return `[${realName}|消息ID:${m.messageId}]: ${m.rawMessage || m.content}${visionExtra}`;
         })
         .join("\n");
 
-      const naiRule = gCfg.autoNaiImage
-        ? "当前已开启跑团正文每轮生图：只要本轮回复包含跑团正文的场景推进、环境描写、关键NPC登场或调查发现，必须在返回的 naiPrompt 字段中填写高质量英文NovelAI生图Tag串，聚焦画面光影、场景构图与人物动作；若仅是简短规则解答则 naiPrompt 留空。"
-        : "当前未开启每轮强制生图，naiPrompt 字段留空即可。";
+      const naiRule = this.resolveNaiRuleForGroup(gCfg);
 
       const sysPrompt = `你是运行在真实QQ群中的${gCfg.mode === "trpg" ? "跑团守秘人KP与NPC演绎者" : "真人感OC群友"}。
 请严格遵守以下核心准则：
 1. 称呼与人设对应：上下文中每位群友都以其实时备注名字显示，请严格按照【本群成员实时名字与专属人设名册】来认识每一位群友、记住他们的设定与关系，直接称呼他们的名字或角色名。
 2. 自然真人语气：像真人一样在QQ群里说话或带团描写，绝不机械复读，绝不替玩家扮演他们的角色，绝不强行篡改群友的行动意愿。
-3. 括号与场外互动：你能看到群友在括号里说的话。如果群友用括号问规则或闲聊，你可以自然解答或回应；正剧描写则保持沉浸细腻的文学质感。
-4. 识图与视觉理解：当群友发送图片或表情包时，上下文中会附带【AI识图内容】描述以及画面附件，你已经完整看清了群友所发图片的画面细节、文字与氛围，请自然结合图片内容进行回应、吐槽或推进剧情，绝不要说自己看不到图片。
+3. 场外与规则互动：如果群友询问规则或闲聊，你可以自然解答或回应；正剧描写则保持沉浸细腻的文学质感。
+4. 副AI识图与原图同步：当群友发送图片或表情包时，副AI已经先一步将图片内容识别为【图片已识图：...】文字，并将原图画面一并传给了你。你已经完整看清了群友所发图片的画面细节、文字与氛围，请自然结合图片内容进行回应、吐槽或推进剧情，绝不要说自己看不到图片。
 5. 单人回应与引用：如果当前是某位群友单独向NPC搭话或单独过检定，直接针对该群友给出回应与结果，不需要强行把其他没表态的群友一起拖进结算。
 6. 单人线与秘密小窗：如果某位群友触发了专属HO秘密、高难侦查独享情报、发狂幻觉或单人线剧情，在群里只发公开可见的表象，同时把专属秘密写进 privateMessages 数组中，并在 targetSlot 中填入该群友的实时名字或HO代号，系统会自动通过QQ小窗单独私发给他。
-7. ${naiRule}
+7. 【NovelAI生图指令与末尾代码规范】：
+${naiRule}
 
 【AI自身人设与身份设定】
 ${personaText}
@@ -5690,13 +7091,13 @@ ${stickerNames.length > 0 ? `【可用表情包名称】\n${stickerNames.join("�
   ],
   "stickerName": "可选的表情包名称，不发则留空",
   "moduleImageTitle": "可选的模组插图标题，不发则留空",
-  "naiPrompt": "若开启生图且本轮为跑团正文，填入英文NovelAI Tag串，否则留空"
+  "naiPrompt": "按照上方NovelAI生图指令填写的英文生图Tag代码串，若不生图则留空"
 }`;
 
       const userPrompt = `【本地双层滚动记忆账本】
 ${memory.summaryText || "尚无归档记忆"}
 
-【副API场面裁判分析】
+【副AI场面裁判分析】
 场景类型：${judgeResult.sceneType || "常规互动"}
 判断依据：${judgeResult.reason || "正常接话"}
 目标互动群友：${judgeResult.targetSpeakerName || "全员"}
@@ -5715,15 +7116,36 @@ ${transcript}
       );
       const parsed = this.extractJsonObject(raw);
       if (parsed && Array.isArray(parsed.groupMessages)) {
+        // 如果用户在正文末尾写了 [NAI: ...] 代码，也自动提取合并到 naiPrompt
+        if (!parsed.naiPrompt) {
+          for (let i = 0; i < parsed.groupMessages.length; i++) {
+            const mText = String(parsed.groupMessages[i] || "");
+            const naiMatch = mText.match(/\[NAI\s*:\s*([^\]]+)\]/i);
+            if (naiMatch && naiMatch[1]) {
+              parsed.naiPrompt = naiMatch[1].trim();
+              parsed.groupMessages[i] = mText
+                .replace(/\[NAI\s*:\s*[^\]]+\]/gi, "")
+                .trim();
+            }
+          }
+        }
         return parsed;
       }
+
+      let rawText = String(raw || "").trim() || "收到。";
+      let extractedNai = "";
+      const naiTagMatch = rawText.match(/\[NAI\s*:\s*([^\]]+)\]/i);
+      if (naiTagMatch && naiTagMatch[1]) {
+        extractedNai = naiTagMatch[1].trim();
+        rawText = rawText.replace(/\[NAI\s*:\s*[^\]]+\]/gi, "").trim();
+      }
       return {
-        groupMessages: [String(raw || "").trim() || "收到。"],
+        groupMessages: [rawText],
         quoteMessageId: judgeResult.replyToMessageId || "",
         privateMessages: [],
         stickerName: "",
         moduleImageTitle: "",
-        naiPrompt: "",
+        naiPrompt: extractedNai,
       };
     },
 
@@ -5731,7 +7153,6 @@ ${transcript}
       const rawText = String(payload.message || payload.content || "").trim();
       let wsSentOk = false;
 
-      // 1. 若浏览器已直连手机 Termux OneBot WS，直接通过 WS 发送到真实 QQ 群或小窗
       if (this.directWsConnected && this.directWs) {
         const segments = [];
         if (payload.replyToMessageId) {
@@ -5778,7 +7199,6 @@ ${transcript}
         }
       }
 
-      // 2. 无论后端与WS状态如何，立刻写入前端内存缓存与调试台，确保用户能在调试台看到AI发送的每一条消息
       if (payload.groupId && (rawText || payload.imageUrl)) {
         const botMsgObj = {
           seq: Date.now(),
@@ -5797,9 +7217,13 @@ ${transcript}
           "AI",
           `[AI已发${payload.userId ? "私聊" : "群消息"}] 群${payload.groupId}${wsSentOk ? " 已送达QQ" : ""}：${(rawText || "[图片]").slice(0, 120)}`,
         );
+      } else if (payload.userId && (rawText || payload.imageUrl)) {
+        this.appendDebugLog(
+          "AI小窗",
+          `[AI已发小窗] 好友${payload.userId}${wsSentOk ? " 已送达QQ" : ""}：${(rawText || "[图片]").slice(0, 120)}`,
+        );
       }
 
-      // 3. 同步写入本地磁盘记录
       try {
         await fetch("/api/qqbot/send", {
           method: "POST",
@@ -5833,7 +7257,7 @@ ${transcript}
         });
       }
 
-      // 2. 派发单人线小窗或秘密线索：支持按群友实时备注名、角色卡名、HO代号或QQ号匹配
+      // 2. 派发单人线小窗或秘密线索
       const privList = Array.isArray(replyPack.privateMessages)
         ? replyPack.privateMessages
         : [];
@@ -5916,36 +7340,67 @@ ${transcript}
         }
       }
 
-      // 5. 同回合强制调用 NovelAI 生图并发送到群
+      // 5. 同回合调用 NovelAI 生图，并将主AI发出的真实生图代码一五一十回显在面板中
+      const naiMode =
+        gCfg.naiMode ||
+        (gCfg.autoNaiImage === false ? "off" : "trpg_every_round");
+      let rawNaiPrompt = String(replyPack.naiPrompt || "").trim();
+
+      // 若开启了守秘人每轮强制生图或全模式强制生图，但模型漏填了 naiPrompt，则根据本轮正文自动补齐场景 Tag
       if (
-        gCfg.autoNaiImage &&
-        replyPack.naiPrompt &&
-        typeof window.callNovelAiDirect === "function"
+        !rawNaiPrompt &&
+        (naiMode === "always_force" ||
+          (naiMode === "trpg_every_round" && gCfg.mode === "trpg")) &&
+        groupMsgs.length > 0
       ) {
-        this.updateJudgeStatusUI(
-          "主API正文已发送，正在同回合调用NovelAI生成现场插图...",
+        rawNaiPrompt =
+          "1girl, 1boy, dramatic lighting, mystery atmosphere, detailed background, cinematic angle, trpg scene";
+      }
+
+      if (naiMode !== "off" && rawNaiPrompt) {
+        const def = this.getDefaultNaiPromptConfig();
+        const prefix = String(gCfg.naiPrefix || def.naiPrefix).trim();
+        const finalNaiTags = prefix
+          ? `${prefix}, ${rawNaiPrompt}`
+          : rawNaiPrompt;
+
+        const lastSentBox = document.getElementById("qqbot-nai-last-sent-box");
+        if (lastSentBox) {
+          lastSentBox.textContent = `【主AI本轮输出的 naiPrompt 代码】：${rawNaiPrompt}\n【拼接固定前缀后实际发往NovelAI的完整Tag】：${finalNaiTags}`;
+        }
+        this.appendDebugLog(
+          "生图代码",
+          `主AI发出NovelAI生图代码：${finalNaiTags}`,
+          false,
         );
-        try {
-          const imgDataUrl = await window.callNovelAiDirect(
-            String(replyPack.naiPrompt).trim(),
+
+        if (typeof window.callNovelAiDirect === "function") {
+          this.updateJudgeStatusUI(
+            "主AI正文已发送，正在按末尾生图代码调用NovelAI生成现场插图...",
           );
-          if (imgDataUrl) {
-            await this.sendBotMessage({
-              groupId,
-              message: "【跑团现场实时插图】",
-              imageUrl: imgDataUrl,
-            });
-            this.updateJudgeStatusUI(
-              "本轮跑团回复与NovelAI现场生图已全部发送完毕",
-            );
+          try {
+            const imgDataUrl = await window.callNovelAiDirect(finalNaiTags);
+            if (imgDataUrl) {
+              await this.sendBotMessage({
+                groupId,
+                message:
+                  gCfg.mode === "trpg"
+                    ? "【跑团现场实时插图】"
+                    : "【OC实时画面】",
+                imageUrl: imgDataUrl,
+              });
+              this.updateJudgeStatusUI(
+                "本轮回复与NovelAI现场生图已全部发送完毕",
+              );
+            }
+          } catch (naiErr) {
+            console.warn("群控同回合NovelAI生图失败:", naiErr);
+            this.updateJudgeStatusUI("正文已发送，NovelAI生图接口未响应");
           }
-        } catch (naiErr) {
-          console.warn("群控同回合NovelAI生图失败:", naiErr);
-          this.updateJudgeStatusUI("正文已发送，NovelAI生图接口未响应");
         }
       } else {
         this.updateJudgeStatusUI(
-          "本轮主API回复已发送完毕，正在监听后续群消息",
+          "本轮主AI回复已发送完毕，正在监听后续群消息",
         );
       }
     },
@@ -6077,7 +7532,9 @@ ${transcript}
       [...serverMsgs, ...localMsgs].forEach((m) => {
         if (!m) return;
         const key = String(
-          m.messageId || m.seq || `${m.senderId}_${m.timestamp}_${m.rawMessage}`,
+          m.messageId ||
+            m.seq ||
+            `${m.senderId}_${m.timestamp}_${m.rawMessage}`,
         );
         const existing = mergedMap.get(key);
         if (!existing) {
@@ -6088,6 +7545,9 @@ ${transcript}
             ...m,
             visionDescription:
               m.visionDescription || existing.visionDescription || "",
+            visionRecognized: Boolean(
+              m.visionRecognized || existing.visionRecognized,
+            ),
             imageUrls:
               Array.isArray(m.imageUrls) && m.imageUrls.length > 0
                 ? m.imageUrls
@@ -6097,7 +7557,9 @@ ${transcript}
       });
 
       const msgs = Array.from(mergedMap.values())
-        .sort((a, b) => (a.timestamp || a.seq || 0) - (b.timestamp || b.seq || 0))
+        .sort(
+          (a, b) => (a.timestamp || a.seq || 0) - (b.timestamp || b.seq || 0),
+        )
         .slice(-50);
 
       const finalCount = Math.max(total, msgs.length);
@@ -6139,7 +7601,7 @@ ${transcript}
                   .join("")}</div>`
               : "";
           const visionHtml = m.visionDescription
-            ? `<div style="margin-top: 5px; padding: 4px 8px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); font-size: 11px; line-height: 1.4; border-left: 3px solid var(--accent-color);">AI识图：${this.escapeHtml(m.visionDescription)}</div>`
+            ? `<div style="margin-top: 5px; padding: 4px 8px; border-radius: 6px; background: var(--secondary-bg); color: var(--text-primary); font-size: 11px; line-height: 1.4; border-left: 3px solid var(--accent-color);">副AI已识图缓存：${this.escapeHtml(m.visionDescription)}</div>`
             : "";
           return `
           <div style="display: flex; flex-direction: column; align-items: ${align}; gap: 2px;">
@@ -6168,7 +7630,11 @@ ${transcript}
       const first = bindings[0] || { qq: "10001", qqRemark: "早川秋" };
       const second = bindings[1] || first;
       const name1 = this.resolveMemberDisplayName(g, first.qq, first.qqRemark);
-      const name2 = this.resolveMemberDisplayName(g, second.qq, second.qqRemark);
+      const name2 = this.resolveMemberDisplayName(
+        g,
+        second.qq,
+        second.qqRemark,
+      );
 
       const presets = {
         single_npc: {
@@ -6528,7 +7994,6 @@ ${transcript}
       let model = "";
 
       if (useSubApi) {
-        // 群控副API：严格优先使用群控界面内独立配置的副API，与外部生图副API互不干扰
         proxyUrl =
           getInputVal("qqbot-sub-api-url") ||
           botSub.url ||
@@ -6557,7 +8022,6 @@ ${transcript}
           getInputVal("model-select") ||
           stCfg.model;
       } else {
-        // 群控主API：严格优先使用群控界面内独立配置的主API
         proxyUrl =
           getInputVal("qqbot-main-api-url") ||
           botMain.url ||
@@ -6651,7 +8115,6 @@ ${transcript}
         }),
       });
 
-      // 如果当前模型接口不支持多模态数组格式，自动降级为纯文本请求
       if (!res.ok && validImages.length > 0) {
         res = await fetch(endpoint, {
           method: "POST",
@@ -6733,4 +8196,3 @@ ${transcript}
     }, 1200);
   });
 })();
-
