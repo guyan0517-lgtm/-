@@ -14262,8 +14262,8 @@ ${chaptersDigest}
         .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
         .trim();
 
-      // 剥离聊天思维链预设可能产出的代码块或前置 {"thinking": "..."} JSON块
-      text = text.replace(/^```(?:json)?\s*\{\s*"(?:thinking|thought|reasoning)"[\s\S]*?\}\s*```/i, '').trim();
+      // 剥离聊天思维链预设可能产出的代码块或前置纯 {"thinking": "..."} JSON块
+      text = text.replace(/^```(?:json)?\s*(\{[\s\S]*?\})\s*```/i, '$1').trim();
 
       while (text.startsWith('{')) {
         let depth = 0;
@@ -14290,8 +14290,41 @@ ${chaptersDigest}
         }
         if (endIdx !== -1) {
           const headBlock = text.slice(0, endIdx + 1);
-          if (/^\{\s*"(?:thinking|thought|reasoning)"\s*:/i.test(headBlock)) {
-            text = text.slice(endIdx + 1).replace(/^```/g, '').trim();
+          const remainder = text.slice(endIdx + 1).replace(/^```/g, '').trim();
+          let parsedHead = null;
+          try {
+            parsedHead = JSON.parse(headBlock);
+          } catch (_) {
+            try {
+              parsedHead = JSON.parse(this.repairJsonTextForParse(headBlock));
+            } catch (_2) {
+              parsedHead = null;
+            }
+          }
+          if (parsedHead && typeof parsedHead === 'object') {
+            if (Array.isArray(parsedHead.chatResponse) && parsedHead.chatResponse.length > 0) {
+              const joined = parsedHead.chatResponse
+                .map(item => (typeof item === 'string' ? item : (item?.content || item?.text || item?.message || '')))
+                .filter(Boolean)
+                .join('\n\n')
+                .trim();
+              if (joined) {
+                text = remainder ? `${joined}\n\n${remainder}` : joined;
+                break;
+              }
+            }
+            const bodyField = parsedHead.content || parsedHead.chapterContent || parsedHead.text || parsedHead.chapter || parsedHead.body || parsedHead.markdown;
+            if (typeof bodyField === 'string' && bodyField.trim()) {
+              text = remainder ? `${bodyField.trim()}\n\n${remainder}` : bodyField.trim();
+              break;
+            }
+            if (this.isThoughtOnlyJsonObject(parsedHead) && remainder) {
+              text = remainder;
+              continue;
+            }
+          }
+          if (/^\{\s*"(?:thinking|thought|reasoning)"\s*:/i.test(headBlock) && remainder) {
+            text = remainder;
             continue;
           }
         }
@@ -14307,6 +14340,9 @@ ${chaptersDigest}
       text = text
         .replace(/\{\{\s*char\s*\}\}/gi, 'KPC')
         .replace(/\{\{\s*(?:user|pc)\s*\}\}/gi, '调查员');
+
+      // 清理多余的星号标记
+      text = text.replace(/\*{2,}/g, '');
 
       return text.trim();
     },
@@ -14420,6 +14456,150 @@ ${chaptersDigest}
       };
     },
 
+    salvageAi2FromRaw(rawText, plannedScenes = []) {
+      if (!rawText || typeof rawText !== 'string') return null;
+      let clean = rawText
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+      const guideMatch = clean.match(/"atmosphereAndMechanicsGuide"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"|\s*\})/i);
+      const atmosphereAndMechanicsGuide = guideMatch ? guideMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+
+      const deepenedScenes = [];
+      const scenesBlock = clean.match(/"deepenedScenes"\s*:\s*\[([\s\S]*?)(?:\](?=\s*,\s*"|\s*\})|$)/i);
+      if (scenesBlock && scenesBlock[1]) {
+        const itemReg = /\{([\s\S]*?)\}/g;
+        let m;
+        while ((m = itemReg.exec(scenesBlock[1])) !== null) {
+          const b = m[1];
+          const getSub = (k) => {
+            const sm = b.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"|\\s*$)`, 'i'));
+            return sm ? sm[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+          };
+          const sceneTitle = getSub('sceneTitle') || getSub('title');
+          if (sceneTitle) {
+            deepenedScenes.push({
+              sceneTitle,
+              atmosphereCues: getSub('atmosphereCues') || '',
+              kpcInteractionDesign: getSub('kpcInteractionDesign') || '',
+              cluesOrEvents: getSub('cluesOrEvents') || '',
+              pacingRule: getSub('pacingRule') || ''
+            });
+          }
+        }
+      }
+
+      const mapNodes = [];
+      const mapBlock = clean.match(/"mapNodes"\s*:\s*\[([\s\S]*?)(?:\](?=\s*,\s*"|\s*\})|$)/i);
+      if (mapBlock && mapBlock[1]) {
+        const itemReg = /\{([\s\S]*?)\}/g;
+        let m;
+        while ((m = itemReg.exec(mapBlock[1])) !== null) {
+          const b = m[1];
+          const getSub = (k) => {
+            const sm = b.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"|\\s*$)`, 'i'));
+            return sm ? sm[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+          };
+          const name = getSub('name');
+          if (name) {
+            mapNodes.push({
+              name,
+              parent: getSub('parent') || '',
+              level: 1,
+              desc: getSub('desc') || ''
+            });
+          }
+        }
+      }
+
+      const clues = [];
+      const cluesBlock = clean.match(/"clues"\s*:\s*\[([\s\S]*?)(?:\](?=\s*,\s*"|\s*\})|$)/i);
+      if (cluesBlock && cluesBlock[1]) {
+        const itemReg = /\{([\s\S]*?)\}/g;
+        let m;
+        while ((m = itemReg.exec(cluesBlock[1])) !== null) {
+          const b = m[1];
+          const getSub = (k) => {
+            const sm = b.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"|\\s*$)`, 'i'));
+            return sm ? sm[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+          };
+          const name = getSub('name');
+          if (name) {
+            clues.push({
+              name,
+              location: getSub('location') || '',
+              Trigger: getSub('Trigger') || getSub('trigger') || '',
+              content: getSub('content') || ''
+            });
+          }
+        }
+      }
+
+      if (deepenedScenes.length === 0 && mapNodes.length === 0 && !atmosphereAndMechanicsGuide) {
+        return null;
+      }
+      return {
+        atmosphereAndMechanicsGuide,
+        deepenedScenes: deepenedScenes.length > 0 ? deepenedScenes : plannedScenes.map(s => ({
+          sceneTitle: s.sceneTitle,
+          atmosphereCues: s.pacingNote || '',
+          kpcInteractionDesign: '',
+          cluesOrEvents: s.purpose || '',
+          pacingRule: ''
+        })),
+        mapNodes,
+        clues
+      };
+    },
+
+    salvageAi3FromRaw(rawText, deepenedScenes = []) {
+      if (!rawText || typeof rawText !== 'string') return null;
+      let clean = rawText
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+      const guideMatch = clean.match(/"kpMasterGuideChapter"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"(?:auditReport|finalScenes)"|\s*\})/i);
+      const auditMatch = clean.match(/"auditReport"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"(?:kpMasterGuideChapter|finalScenes)"|\s*\})/i);
+      const kpMasterGuideChapter = guideMatch ? guideMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+      const auditReport = auditMatch ? auditMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+
+      const finalScenes = [];
+      const scenesBlock = clean.match(/"finalScenes"\s*:\s*\[([\s\S]*?)(?:\](?=\s*,\s*"|\s*\})|$)/i);
+      if (scenesBlock && scenesBlock[1]) {
+        const itemReg = /\{([\s\S]*?)\}/g;
+        let m;
+        while ((m = itemReg.exec(scenesBlock[1])) !== null) {
+          const b = m[1];
+          const getSub = (k) => {
+            const sm = b.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*,\\s*"|\\s*$)`, 'i'));
+            return sm ? sm[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+          };
+          const sceneTitle = getSub('sceneTitle') || getSub('title');
+          const writingBlueprint = getSub('writingBlueprint') || getSub('blueprint') || '';
+          if (sceneTitle || writingBlueprint) {
+            finalScenes.push({
+              sceneTitle: sceneTitle || `第${finalScenes.length + 1}章`,
+              writingBlueprint
+            });
+          }
+        }
+      }
+
+      if (!kpMasterGuideChapter && finalScenes.length === 0) return null;
+      return {
+        auditReport,
+        kpMasterGuideChapter,
+        finalScenes: finalScenes.length > 0 ? finalScenes : deepenedScenes.map(s => ({
+          sceneTitle: s.sceneTitle || '事件章节',
+          writingBlueprint: `【场景重点】：${s.cluesOrEvents || s.purpose || ''}\n【环境与氛围】：${s.atmosphereCues || s.pacingNote || ''}\n【人物互动】：${s.kpcInteractionDesign || ''}\n【转场衔接】：${s.pacingRule || ''}`
+        }))
+      };
+    },
+
     async runAiModulePipeline(isResume = false) {
       if (this.aiWriterState.isRunning) return;
 
@@ -14504,24 +14684,24 @@ ${chaptersDigest}
         const drawnSeeds = drawMode === 'on' ? this.drawInspirationSeedsForTags(allTags) : [];
 
         const refGuidanceMap = {
-          free: '我们提倡顺应故事本身的气质去决定章节脉络：既可以是层层剥茧的箱庭探索，也可以是随时间推移不断升温的双人对手戏，让情节像呼吸一样自然延展。',
-          confession: '不妨参考经典的日常独白与心理拉扯模组：从极具生活气息的寻常场景切入，因为一句反常的坦白或一件不起眼的旧物，引出两人之间暗流涌动的试探与真心剖白。',
-          date_loop: '不妨参考约会箱庭与微异常模组：以一场轻松的同行或出游开场，在熟悉的风景里悄然掺入一丝不合常理的细节，让温馨的日常互动与抽丝剥茧的调查彼此交融。',
-          jealous_sweet: '不妨参考奇妙变故与情感反差模组：构思一个让人哭笑不得又不得不拉近距离的巧妙契机，把KPC平日里藏着的在意、嘴硬或温柔偏爱自然地烘托出来。',
-          multi_legend: '不妨参考多HO秘密与群像怪谈模组：每位调查员怀揣各自的私密过往或立场，个人暗线与主线谜团彼此咬合，在合作与猜忌中揭开全貌。'
+          free: '顺应故事本身的气质去决定章节脉络：既可以是层层剥茧的箱庭探索，也可以是随时间推移不断升温的双人对手戏。',
+          confession: '参考日常独白与心理拉扯模组：从寻常场景切入，引出两人之间暗流涌动的试探与真心剖白。',
+          date_loop: '参考约会箱庭与微异常模组：以轻松的同行或出游开场，让日常互动与抽丝剥茧的调查彼此交融。',
+          jealous_sweet: '参考奇妙变故与情感反差模组：构思一个不得不拉近距离的巧妙契机，把KPC藏着的在意自然烘托出来。',
+          multi_legend: '参考多HO秘密与群像怪谈模组：每位调查员怀揣各自的私密过往或立场，个人暗线与主线谜团彼此咬合。'
         };
         const refGuidance = refGuidanceMap[refMode] || refGuidanceMap.free;
 
         const craftPhilosophy = `
-【我们对优秀人类跑团模组的创作思考与倡导】：
-1. 像真正的人类模组作者那样搭建「模组书」：
-   - 一本成熟的跑团模组并不是AI单方面自说自话的网文，也不是聊天室里的单次回复，而是一本写给守秘人看的「带团指南与剧本文本」。
-   - 我们提倡清晰地区分「给玩家呈现的场景与台词」和「给守秘人交底的幕后逻辑」：在章节中使用【正文】呈现可直接朗读或演绎的环境氛围、感官细节与鲜活对话；使用【KP信息】说明背后的真相逻辑、线索触发条件与NPC应对不同玩家举动的反应；在需要掷骰的地方自然嵌入【检定】说明成功与失败的走向；在多HO模组中使用【秘密·HO1】等标记专属情报；在关键分歧处使用【KP批注】给守秘人贴心的控场建议。
-2. 故事的趣味源于「意外的转折」与「活生生的人」：
-   - 不妨在动笔前先多想一步：如果按照最常规的套路写，玩家第一眼就能猜到结局；但如果给事件加上一层意料之外、情理之中的反转，或者让KPC展现出表面姿态与内心真实动机的微妙反差，整个故事就会立刻活起来。
-   - 我们提倡用具体的器物、光影、温度、动作停顿和生活化的自然对白来传递情感。与其让角色说出空洞的深情口号或人生哲理，不如写他递水时微微泛白的手指、欲言又止移开的视线，或是故意用一句轻描淡写的吐槽掩饰关切。
-3. 留白与收束的艺术：
-   - 真正耐人寻味的场景往往在情绪最饱满的具体画面处自然落幕，把余韵留给桌上的守秘人与玩家，无需在段尾或篇末做宏大的哲学升华与总结陈词。`;
+【人类跑团模组编写规范与核心铁律】：
+1. 标题与事先信息规范（最高优先级）：
+   - 模组总标题与各章节标题必须朴实无华、自然简练，贴合人类真实跑团模组的命名习惯，严禁起类似「逃离绝望的孤岛风云」这种浮夸奇怪的标题。
+   - 格式必须干净规范，严禁在模组文本中自行添加多余的星号 * 以及括号注解，不要对模组里存在的事物做多余的场外解释，人类作者怎么写模组你就怎么写模组。
+   - 严禁在事先信息（00-模组已知信息）中复读用户的幕后指令或要求：如果用户在创作引子里强调了某个幕后设定（例如要求犯人必须是真人而不是古神），你只需要在幕后真相与剧情设定里照做即可，绝对禁止在「00-模组已知信息」或公开注意事项里特意写一句“本模组犯人一定是人类凶手而不是古神”之类的说明，这既不属于模组公开信息，更会导致严重剧透。
+2. 流程巧思、特殊互动环节与计数器配合：
+   - 场景描写与人物对话的语言完全自由发挥，不做任何限制。
+   - 但在模组的【流程】说明（【KP信息】与大纲导读）中，你可以详细解释流程应该怎么推进，设计一些流程上的巧思，防止带团AI在实践时写不懂；也可以在流程里设计有趣的特殊互动环节（例如跑团中常见的醉酒游戏、真心话大冒险、抽签问答或箱庭小游戏等）。
+   - 严禁在模组里设计“暗中检定一个数值”这种带团AI根本做不到的机制。如果流程或结局分支需要累计某个隐藏次数或数值（例如叫了多少次某人名字、小游戏累计得分、触发了多少次异常等），请在【KP信息】中明确指导带团AI使用聊天中的「计数」功能（在回复末尾附带 [计数:名称+1] 或 [计数:名称=数值]，事件结算或模组结束时附带 [计数:名称 清除]）来记录和判断。`;
 
         // ==========================================================
         // 第一阶段：AI1 审题破局与底牌立意构思
@@ -14533,18 +14713,18 @@ ${chaptersDigest}
           this.updateAiWriterStatus(10, 'AI1 正在构思模组核心诡计、故事转折、角色里设定与完整章节目录...');
           await this.saveAiWriterDraftToIDB();
 
-          const ai1System = `你是一位经验丰富、热爱创作的桌面跑团模组作者。
-我们希望你创作出一本真正像人类作者精心打磨过的跑团模组，既有扎实的模组结构，又有引人入胜的剧情转折与鲜活人物。
+          const ai1System = `你是一位经验丰富的人类桌面跑团模组作者。
+请创作出一本结构扎实、流程清晰、严格遵守人类模组编写规范的跑团模组。
 ${craftPhilosophy}
 ${tcPrompt ? '\n【创作者审美与文风参考】：\n' + tcPrompt : ''}`;
 
           const lengthDesc = lengthMode === 'short'
-            ? '短篇精悍（请根据故事实际地点与事件脉络自由规划正文章节数量，不限定固定章数）'
+            ? '短篇精悍（根据故事实际地点与事件脉络自由规划正文章节数量）'
             : (lengthMode === 'long'
-              ? '长篇多幕（请根据故事实际探索区域、多线分支与时间推进自由规划充实的正文章节数量，不限定固定章数）'
-              : '中篇饱满（请根据故事实际起承转合与核心调查地点自由规划合理的正文章节数量，严禁套用死板模板）');
+              ? '长篇多幕（根据故事实际探索区域、多线分支与时间推进自由规划充实的正文章节数量）'
+              : '中篇饱满（根据故事实际起承转合与核心调查地点自由规划合理的正文章节数量）');
 
-          const ai1User = `请结合以下设定，为我们构思这本跑团模组的整体蓝图、人物档案、完整章节目录、公开信息与守秘人真相：
+          const ai1User = `请结合以下设定，构思这本跑团模组的整体蓝图、人物档案、完整章节目录、公开信息与守秘人真相：
 - 规则体系：${ruleSystem.toUpperCase()}
 - 玩家规模：${scaleType}
 - 结构类型：${modType}
@@ -14552,39 +14732,39 @@ ${tcPrompt ? '\n【创作者审美与文风参考】：\n' + tcPrompt : ''}`;
 - 目标篇幅：${lengthDesc}
 - 选定标签：${allTags.join('、')}
 - 叙事脉络建议：${refGuidance}
-${customTitle ? '- 模组标题：' + customTitle : '- 模组标题：请起一个有画面感、耐人寻味的模组名字'}
-${userHook ? '- 创作引子：' + userHook : ''}
-${drawnSeeds.length > 0 ? '- 灵感参考（可自由汲取其中有意思的元素融入故事）：\n  ' + drawnSeeds.map((s, idx) => (idx + 1) + '. ' + s).join('\n  ') : ''}
+${customTitle ? '- 模组标题：' + customTitle : '- 模组标题：请起一个朴实无华、简练自然的模组名字，切忌浮夸'}
+${userHook ? '- 用户创作要求与引子（注意：若包含幕后底牌要求，只可在幕后真相与剧情中落实，严禁在 00-模组已知信息 中复读或剧透）：' + userHook : ''}
+${drawnSeeds.length > 0 ? '- 灵感参考：\n  ' + drawnSeeds.map((s, idx) => (idx + 1) + '. ' + s).join('\n  ') : ''}
 
-在构思时，不妨先思考：
-1. 这个故事表面上看起来是什么样的日常或委托？背地里真正发生了什么让人意想不到的隐情或转折？
-2. KPC或核心NPC有着怎样的性格魅力、说话习惯与不为人知的小秘密？
-3. 调查员从【导入】开始，会依次经历哪些具体的场景与阶段，最终如何走向【结局】？请根据具体故事舞台和地点自由决定章节数量与章节名，不要使用千篇一律的固定章节名。
+请严格注意：
+1. 标题朴实自然，正文中不要添加多余的星号 * 或括号注解。
+2. 00-模组已知信息 只写给玩家看的正常背景、导入钩子与公开信息，绝不把用户的幕后要求重复写出来，绝不剧透。
+3. 流程与机制中可设计巧妙的跑团互动环节（如真心话大冒险、醉酒游戏等），严禁设计“暗中检定”，如需隐藏数值或次数累计，请写明让带团AI使用 [计数:名称+1] 与 [计数:名称 清除]。
 
 请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
 {
-  "title": "模组名称",
-  "summary": "模组简介（120至220字，介绍故事舞台、开场悬念与核心看点，不剧透幕后底牌）",
+  "title": "朴实自然的模组名称",
+  "summary": "模组简介（介绍故事舞台与开场引子，不剧透幕后底牌，不复读用户场外指令）",
   "themeMode": "本模组的气质基调概述",
-  "creativeReflection": "作者构思手记：聊聊这个故事最巧妙的转折设计、情感张力来源以及人物互动的核心趣味",
+  "creativeReflection": "流程巧思与核心设计说明",
   "catAndNpcProfiles": [
     {
       "chapterTitle": "人物或HO章节标题，如：猫-角色名 或 03-HO1秘密与设定 或 NPC-主要人物",
       "roleName": "角色称呼与身份",
       "publicDesc": "玩家可见的公开外貌、性格印象与日常相处模式",
-      "secretProfile": "守秘人掌握的里设定：包含真实动机、隐瞒的往事、面对调查员不同态度时的具体反应与几句贴合性格的自然台词示范"
+      "secretProfile": "守秘人掌握的里设定：包含真实动机、隐瞒的往事、面对调查员不同态度时的具体反应"
     }
   ],
   "plannedScenes": [
     {
-      "sceneTitle": "贴合故事具体场景或事件的章节标题（根据剧情与地点自然决定章数，包含导入与各具体调查/推进阶段，不要跳章）",
-      "purpose": "本章节的核心剧情推进、关键场景转折与可获取的线索情报",
-      "pacingNote": "本章节的氛围营造重点与守秘人带团提示"
+      "sceneTitle": "朴实简练的章节标题（包含导入与各具体调查或互动阶段）",
+      "purpose": "本章节的核心流程推进、特殊互动环节设计与可获取的线索情报",
+      "pacingNote": "本章节的流程把控说明与带团指引"
     }
   ],
-  "endingsPlan": "多分支结局设计：清晰列出各结局（如结局A、结局B、特殊结局等）的进入条件、核心演出画面与余韵收束",
-  "publicInfoChapter": "完整的【00-模组已知信息】章节文本：包含模组简介、时代与舞台背景、人数与耗时、推荐技能、导入引子、PC/HO公开预设信息与开团前注意事项（供玩家阅读，不剧透底牌）",
-  "kpTruthAndMechanism": "完整的【01-幕后真相与机制】章节文本：包含事件完整真相、按时间顺序排列的幕后前因后果、神话生物或核心异常设定、以及本模组特有的趣味互动规则或特殊检定机制"
+  "endingsPlan": "多分支结局设计：清晰列出各结局的进入条件（若涉及隐藏累计条件，说明根据计数器的数值判定）、核心演出画面与收束",
+  "publicInfoChapter": "完整的【00-模组已知信息】章节文本：包含模组简介、时代与舞台背景、人数与耗时、推荐技能、导入引子与公开预设信息（严禁包含星号、多余括号注解，严禁复读用户场外要求或剧透真相）",
+  "kpTruthAndMechanism": "完整的【01-幕后真相与机制】章节文本：包含事件完整真相、幕后前因后果、特殊互动环节规则以及带团AI流程执行说明（如需隐藏计数，在此写明计数名称与加减清除规则，严禁出现暗中检定）"
 }`;
 
           const ai1Raw = await this.callAI(ai1System, ai1User, null, 'writeModule');
@@ -14626,13 +14806,12 @@ ${drawnSeeds.length > 0 ? '- 灵感参考（可自由汲取其中有意思的元
         if (!ai2Data) {
           cp.activeStep = 2;
           this.setAiWriterStepActive(2);
-          this.updateAiWriterStatus(32, 'AI2 正在丰富每一章的调查地点、线索链条、人物对手戏与检定分支...');
+          this.updateAiWriterStatus(32, 'AI2 正在丰富每一章的调查地点、流程巧思、互动环节与检定分支...');
           await this.saveAiWriterDraftToIDB();
 
-          const ai2System = `你是跑团模组的场景架构师与线索编排师。
-我们将把 AI1 构思的故事蓝图细化为可探索、可互动、逻辑自洽的分章导览、地图节点与线索卡。
-${craftPhilosophy}
-不妨思考如何让每一个章节都有值得玩家探索的具体场景、有意义的检定反馈，以及让线索像拼图一样散落在环境细节与人物交谈之中。`;
+          const ai2System = `你是跑团模组的场景架构师与流程编排师。
+我们将把 AI1 构思的故事蓝图细化为可探索、可互动、流程清晰的分章导览、地图节点与线索卡。
+${craftPhilosophy}`;
 
           const ai2User = `以下是本模组的第一阶段蓝图：
 ${JSON.stringify({
@@ -14645,16 +14824,16 @@ ${JSON.stringify({
   plannedScenes: ai1Data.plannedScenes
 }, null, 2)}
 
-请保持与 plannedScenes 相同的章节顺序与数量（共 ${ai1Data.plannedScenes.length} 个正文章节，绝不可漏章或合并成一章），为每一章补充丰富的场景细节、互动检定与线索关联，并提取本模组专属的地图地点与关键线索卡。
+请保持与 plannedScenes 相同的章节顺序与数量（共 ${ai1Data.plannedScenes.length} 个正文章节，绝不可漏章或合并成一章），为每一章补充具体的场景细节、流程执行逻辑、特殊互动小游戏或检定分支，并提取本模组专属的地图地点与关键线索卡。注意不要添加多余星号或括号注解，不要设计暗中检定。
 请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
 {
-  "atmosphereAndMechanicsGuide": "守秘人带团节奏与氛围指南：说明全篇的叙事基调、关键伏笔回收方式以及特殊机制的运作细节",
+  "atmosphereAndMechanicsGuide": "守秘人流程把控指南：详细说明流程推进巧思、特殊互动环节规则以及何时使用 [计数:名称+1] 与 [计数:名称 清除]",
   "deepenedScenes": [
     {
-      "sceneTitle": "与 plannedScenes 对应的章节标题",
-      "atmosphereCues": "本章核心场景的环境氛围、光影声音与关键器物细节",
-      "kpcInteractionDesign": "本章中KPC或NPC的态度变化、自然对话切入点以及面对调查员不同举动时的具体反应",
-      "cluesOrEvents": "本章包含的具体调查点、技能【检定】条件与成功/失败结果、可获得的线索或触发的转折事件",
+      "sceneTitle": "与 plannedScenes 对应的朴实章节标题",
+      "atmosphereCues": "本章核心场景的环境与器物细节",
+      "kpcInteractionDesign": "本章中KPC或NPC的互动方式、特殊环节或小游戏流程设计以及面对调查员不同举动时的具体反应",
+      "cluesOrEvents": "本章包含的具体调查点、公开技能【检定】条件与成功/失败结果、可获得的线索或触发的转折事件",
       "pacingRule": "本章转入下一章节的触发条件与衔接方式"
     }
   ],
@@ -14677,7 +14856,10 @@ ${JSON.stringify({
 }`;
 
           const ai2Raw = await this.callAI(ai2System, ai2User, null, 'writeModule');
-          const parsedAi2 = this.parseJsonFromAiResponse(ai2Raw);
+          let parsedAi2 = this.parseJsonFromAiResponse(ai2Raw);
+          if (!parsedAi2 || (!Array.isArray(parsedAi2.deepenedScenes) && !Array.isArray(parsedAi2.mapNodes))) {
+            parsedAi2 = this.salvageAi2FromRaw(ai2Raw, ai1Data.plannedScenes);
+          }
           if (!parsedAi2 || (!Array.isArray(parsedAi2.deepenedScenes) && !Array.isArray(parsedAi2.mapNodes))) {
             throw new Error('AI2 深化场景返回格式异常，已保存 AI1 成果，请点击继续从 AI2 重试');
           }
@@ -14712,8 +14894,7 @@ ${JSON.stringify({
           await this.saveAiWriterDraftToIDB();
 
           const ai3System = `你是跑团模组的总编审与导读撰写人。
-一本好用的跑团模组，在守秘人翻开【02-模组导读与大纲】时，就能一眼看清整本模组的章节目录、剧情起承转合的流程图、核心线索链以及玩家脱轨时的柔性引导方案。
-同时，请你审视每一章的细纲，确保章节之间衔接顺畅、绝不跳章，让对白与描写自然生动。
+请完成【02-模组导读与大纲】的编撰，并审视每一章的细纲，把流程怎么走、特殊互动环节怎么带写清楚，防止带团AI在实践时写不懂。
 ${craftPhilosophy}`;
 
           const ai3User = `模组名称：${customTitle || ai1Data.title || ''}
@@ -14727,18 +14908,21 @@ ${craftPhilosophy}`;
 请完成【02-模组导读与大纲】的撰写，并为全部 ${ai2Data.deepenedScenes.length} 个正文章节生成详实的执笔细纲（finalScenes 数量与顺序请与 deepenedScenes 保持一致，切勿遗漏任何一章）。
 请直接输出一个以 { 开头、以 } 结尾的合法 JSON 对象，严禁使用 \`\`\`json 代码块包裹，严禁在 JSON 前后附加任何解释说明或思考文字，所有字符串值内部的换行请写为 \\n，字符串值内部如需引用台词或名称请一律使用中文引号「」或“”：
 {
-  "auditReport": "总编审打磨手记：简述如何优化了本模组的剧情转折、线索咬合与对白自然度",
-  "kpMasterGuideChapter": "完整的【02-模组导读与大纲】正文（以【KP信息】开头）：包含 1. 模组整体脉络与起承转合流程图；2. 核心线索链与真相揭露节奏；3. 守秘人带团备团建议与柔性控场技巧",
+  "auditReport": "总编审打磨手记：简述流程衔接与互动设计要点",
+  "kpMasterGuideChapter": "完整的【02-模组导读与大纲】正文（以【KP信息】开头）：包含 1. 模组整体脉络与起承转合流程说明；2. 核心线索链与真相揭露节奏；3. 特殊互动环节或计数规则的带团执行指南（不要添加多余星号或括号注解）",
   "finalScenes": [
     {
-      "sceneTitle": "章节标题（共 ${ai2Data.deepenedScenes.length} 章，顺序完整）",
-      "writingBlueprint": "本章完整写作导引：包含开场画面与环境细节、具体可调查对象与【检定】分支、KPC或NPC的自然对话与反应、【KP信息】幕后提示以及通往下一章的过渡方式"
+      "sceneTitle": "朴实简练的章节标题（共 ${ai2Data.deepenedScenes.length} 章，顺序完整）",
+      "writingBlueprint": "本章完整写作导引：包含开场画面与环境、具体可调查对象与公开【检定】分支、KPC或NPC的对话与特殊互动游戏流程、【KP信息】流程指引以及通往下一章的过渡方式"
     }
   ]
 }`;
 
           const ai3Raw = await this.callAI(ai3System, ai3User, null, 'writeModule');
           parsedAi3 = this.parseJsonFromAiResponse(ai3Raw);
+          if (!parsedAi3 || (!parsedAi3.kpMasterGuideChapter && !Array.isArray(parsedAi3.finalScenes))) {
+            parsedAi3 = this.salvageAi3FromRaw(ai3Raw, ai2Data.deepenedScenes);
+          }
           if (!parsedAi3 || (!parsedAi3.kpMasterGuideChapter && !Array.isArray(parsedAi3.finalScenes))) {
             throw new Error('AI3 盲测与细纲返回格式异常，已保存前两阶成果，请点击继续从 AI3 重试');
           }
@@ -14766,19 +14950,19 @@ ${craftPhilosophy}`;
 
         const profiles = Array.isArray(ai1Data.catAndNpcProfiles) ? ai1Data.catAndNpcProfiles : [];
         const plannedTocLines = [
-          '01. 00-模组已知信息（公开导读与背景引子）',
-          '02. 01-幕后真相与机制（守秘人核心底牌与时间线）',
-          '03. 02-模组导读与大纲（完整目录与主线流程导览）'
+          '01. 00-模组已知信息',
+          '02. 01-幕后真相与机制',
+          '03. 02-模组导读与大纲'
         ];
         profiles.forEach((prof, idx) => {
           const pTitle = prof.chapterTitle || `猫-${prof.roleName || ('角色' + (idx + 1))}`;
-          plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${pTitle}（人物里设定与RP指南）`);
+          plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${pTitle}`);
         });
         resolvedScenes.forEach((sc, idx) => {
           const sTitle = sc.sceneTitle || `第${idx + 1}幕`;
-          plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${sTitle}（正文场景与调查事件）`);
+          plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${sTitle}`);
         });
-        plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${finalModTitle}-结局（多分支结局判定与演出）`);
+        plannedTocLines.push(`${String(plannedTocLines.length + 1).padStart(2, '0')}. ${finalModTitle}-结局`);
 
         const rawPublicInfo = this.cleanModuleChapterOutput(String(ai1Data.publicInfoChapter || ai1Data.summary || ''));
 
@@ -14801,9 +14985,9 @@ ${craftPhilosophy}`;
           const ch1Content = [
             '【KP信息】',
             `▍《${finalModTitle}》守秘人真相与核心机制`,
-            cleanReflection ? `\n【创作立意与转折巧思】\n${cleanReflection}` : '',
+            cleanReflection ? `\n【流程巧思与设计说明】\n${cleanReflection}` : '',
             `\n【幕后真相与完整因果】\n${cleanTruth || ai1Data.summary || ''}`,
-            cleanMechGuide ? `\n【特殊机制与氛围把控】\n${cleanMechGuide}` : ''
+            cleanMechGuide ? `\n【特殊机制与流程把控】\n${cleanMechGuide}` : ''
           ].filter(Boolean).join('\n');
           baseChapters.push({
             title: '01-幕后真相与机制',
@@ -14819,7 +15003,7 @@ ${craftPhilosophy}`;
             return `· 第 ${idx + 1} 阶段【${s.sceneTitle || ('第' + (idx + 1) + '幕')}】：${brief}${bp.length > 120 ? '...' : ''}`;
           }).join('\n');
           const clueSummary = (ai2Data.clues || []).map((c, idx) => {
-            return `· 线索${idx + 1}【${c.name || '关键线索'}】（${c.location || '探索获取'} / ${c.Trigger || '调查触发'}）：${c.content || ''}`;
+            return `· 线索${idx + 1}【${c.name || '关键线索'}】获取位置：${c.location || '探索获取'} / 触发条件：${c.Trigger || '调查触发'} / 内容：${c.content || ''}`;
           }).join('\n');
 
           const ch2Parts = [
@@ -14871,19 +15055,16 @@ ${craftPhilosophy}`;
 
         const scenesToWrite = resolvedScenes;
 
-        const ai4System = `你是一位文笔细腻、深谙跑团模组编写规范的人类模组作者。
-现在请你执笔撰写模组的具体章节正文。在动笔时，我们提倡遵循以下人类优秀模组的写作习惯：
-1. 标准清晰的跑团模组排版（参考真实人类跑团模组的结构）：
-   - 使用【正文】撰写守秘人可以直接向玩家描述或朗读的场景氛围、感官细节、突发事件与NPC台词。
-   - 使用【KP信息】向守秘人说明该场景背后的隐情、NPC此时的真实心理活动、以及当玩家采取不同行动（如追问、安抚、质疑、强行突破等）时的分支回应。
-   - 当遇到需要调查员掷骰的地方，使用【检定】标明技能名称（如侦查、心理学、聆听、图书馆使用、说服等）以及成功与失败分别获得的线索或后果。
-   - 在关键节点可使用【KP批注】提供贴心的带团控场建议。
-2. 记住这是「模组书」而非「单次聊天回复」：
-   - 请直接以模组作者的视角编写章节内容，称呼玩家角色为「调查员」（或对应HO名称），称呼核心同伴为角色名或「KPC」，切勿使用 {{char}}、{{user}} 等聊天宏，也不要在文末附加「当前待办清单」「玩家当前可选行动方向」等聊天室状态栏。
-   - 不要输出任何 JSON 思考块（如 {"thinking": "..."}）。
-3. 自然的对话与有生命力的描写：
-   - 让人物说真话、说符合处境与性格的话，通过具体的动作细节、器物触感与环境光影来烘托气氛，把情感与悬念藏在言外之意里，章节收尾停在自然的画面或转折悬念处即可。
-${tcPrompt ? '\n4. 文风审美与叙事思考参考：\n' + tcPrompt : ''}`;
+        const ai4System = `你是一位经验丰富的人类跑团模组作者。
+现在请你执笔撰写模组的具体章节正文。请遵守以下模组编写规范：
+1. 标准清晰的跑团模组排版：
+   - 使用【正文】撰写守秘人可以直接向玩家描述或朗读的场景、事件与NPC台词（场景描写与对话语言完全自由，不做任何限制）。
+   - 使用【KP信息】向守秘人说明该场景背后的流程逻辑、特殊互动环节或小游戏（如醉酒游戏、真心话大冒险等）的具体带团步骤、以及当玩家采取不同行动时的分支回应，确保带团AI一看就懂怎么走流程。
+   - 当遇到需要调查员公开掷骰的地方，使用【检定】标明技能名称以及成功与失败分别获得的线索或后果。严禁设计“暗中检定一个值”，若本环节需要暗中累计某个条件次数，请在【KP信息】中指导带团AI使用 [计数:名称+1] 记录。
+2. 格式干净纯粹：
+   - 人类怎么写模组你就怎么写模组，严禁自己添加多余的星号 * 以及括号注解，不要对模组中存在的东西做多余的场外解释。
+   - 直接输出纯正的模组章节文本，不要输出任何 JSON 思考块（如 {"thinking": "..."}），不要使用 {{char}}、{{user}} 等聊天宏，也不要在文末附加待办清单。
+${tcPrompt ? '\n3. 叙事参考：\n' + tcPrompt : ''}`;
 
         let previousSceneTail = cp.previousSceneTail || '';
         const startSceneIdx = typeof cp.completedSceneCount === 'number' ? cp.completedSceneCount : 0;
@@ -14901,7 +15082,7 @@ ${tcPrompt ? '\n4. 文风审美与叙事思考参考：\n' + tcPrompt : ''}`;
           const ai4SceneUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
 模组基调：${ai1Data.themeMode || ''}
-守秘人真相底牌（供你在【KP信息】中呼应暗线，在【正文】中请保持悬念）：
+守秘人真相底牌：
 ${ai1Data.kpTruthAndMechanism || ''}
 
 核心人物设定：
@@ -14918,7 +15099,7 @@ ${previousSceneTail ? '上一章结尾衔接回顾：\n' + previousSceneTail + '
 本章写作导引与要素：
 ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : JSON.stringify(sceneItem)}
 
-请直接输出【${sTitle}】的完整模组章节文本（有机穿插【正文】、【KP信息】、【检定】与【KP批注】，包含场景导入描写、具体可调查区域与线索、鲜活的人物互动对话分支以及通往【${nextSceneTitle}】的自然过渡，篇幅充实饱满，不要输出任何 JSON 思考块或文末待办列表）：`;
+请直接输出【${sTitle}】的完整模组章节文本（有机穿插【正文】、【KP信息】、【检定】与【KP批注】，不要添加多余的星号 * 或括号注解，不要输出任何 JSON 对象或文末待办列表）：`;
 
           const sceneTextRaw = await this.callAI(ai4System, ai4SceneUser, null, 'writeModule');
           let cleanSceneText = this.cleanModuleChapterOutput(String(sceneTextRaw || ''));
@@ -14959,9 +15140,9 @@ ${typeof sceneItem.writingBlueprint === 'string' ? sceneItem.writingBlueprint : 
 结局分支规划：${ai1Data.endingsPlan || ''}
 
 请撰写本模组的【${finalModTitle}-结局】章节完整文本：
-1. 使用【KP信息】清晰列出各个结局分支（如结局A / 结局B / 特殊结局等）的触发条件与判定逻辑。
-2. 使用【正文】为每一个结局撰写真实动人、画面感鲜明的结局演出与人物对话，并在最后附上守秘人结团奖励与理智结算提示。
-3. 结局画面请落在具体的动作、器物与余韵悠长的日常或重逢/离别瞬间，直接输出章节正文（不要输出任何 JSON 思考块或文末待办清单）：`;
+1. 使用【KP信息】清晰列出各个结局分支的触发条件与判定逻辑（若本模组使用了隐藏计数，请说明在结局结算后附带 [计数:名称 清除] 停止追踪）。
+2. 使用【正文】为每一个结局撰写完整的结局演出与人物对话，并在最后附上守秘人结团奖励与理智结算提示。
+3. 不要添加多余的星号 * 或括号注解，直接输出章节正文（不要输出任何 JSON 思考块或文末待办清单）：`;
 
           const endingRaw = await this.callAI(ai4System, ai4EndingUser, null, 'writeModule');
           let cleanEndingText = this.cleanModuleChapterOutput(String(endingRaw || ''));

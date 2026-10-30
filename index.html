@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v2.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3835,16 +3835,18 @@
           <!-- 卡片4：四阶AI流水线状态与防剧透预览 -->
           <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color, #4A7A68); flex-shrink: 0;">
-                  <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                  <polyline points="2 17 12 22 22 17"></polyline>
-                  <polyline points="2 12 12 17 22 12"></polyline>
-                </svg>
-                <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">进程</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button type="button" class="mod-capsule-btn primary" id="ai-mod-generate-btn" style="height: 30px; padding: 0 14px;">生成</button>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color, #4A7A68); flex-shrink: 0;">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                    <polyline points="2 17 12 22 22 17"></polyline>
+                    <polyline points="2 12 12 17 22 12"></polyline>
+                  </svg>
+                  <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">进程</span>
+                </div>
               </div>
               <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
-                <button type="button" class="mod-capsule-btn primary" id="ai-mod-generate-btn" style="height: 30px; padding: 0 14px;">生成</button>
                 <button type="button" class="mod-capsule-btn" id="ai-mod-resume-btn" style="height: 30px; padding: 0 14px; display: none;">继续</button>
                 <button type="button" class="mod-capsule-btn" id="ai-mod-save-btn" style="height: 30px; padding: 0 14px;" disabled>入库</button>
               </div>
@@ -9207,7 +9209,10 @@
 
     <div id="member-settings-modal" class="modal">
       <div class="modal-content">
-        <div class="modal-header"><span>编辑群成员</span></div>
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>编辑群成员</span>
+          <button type="button" id="member-counter-history-btn" class="moe-btn-mini" style="font-size: 11px; width: 40px; min-width: 40px; max-width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; line-height: 1; height: 22px; box-sizing: border-box;">履历</button>
+        </div>
         <div class="modal-body">
           <div class="form-group">
             <label for="member-name-input">名字</label
@@ -9341,6 +9346,18 @@
         <div class="modal-footer">
           <button class="cancel" id="cancel-member-settings-btn">取消</button>
           <button class="save" id="save-member-settings-btn">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="member-counter-history-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header"><span>履历</span></div>
+        <div class="modal-body">
+          <div id="member-counter-history-list" class="moe-list-box" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="cancel" id="close-member-counter-history-btn">关闭</button>
         </div>
       </div>
     </div>
@@ -22017,13 +22034,45 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 finishReason = "length";
               }
 
-              if (!fullText && !fullThinking && (rawStreamText.trim().startsWith("{") || rawStreamText.trim().startsWith("["))) {
-                return {
-                  ok: true,
-                  status: 200,
-                  text: rawStreamText.trim(),
-                  headers: new Headers({ "Content-Type": "application/json" }),
-                };
+              if (!fullText && !fullThinking && rawStreamText.trim()) {
+                const salvagedSse = parseSseTextToSynthesized(rawStreamText);
+                if (salvagedSse) {
+                  return {
+                    ok: true,
+                    status: 200,
+                    text: JSON.stringify(salvagedSse),
+                    headers: new Headers({ "Content-Type": "application/json" }),
+                  };
+                }
+                const trimmedRaw = rawStreamText.trim();
+                if (trimmedRaw.startsWith("{") || trimmedRaw.startsWith("[")) {
+                  return {
+                    ok: true,
+                    status: 200,
+                    text: trimmedRaw,
+                    headers: new Headers({ "Content-Type": "application/json" }),
+                  };
+                }
+                const firstBraceIdx = trimmedRaw.indexOf("{");
+                const lastBraceIdx = trimmedRaw.lastIndexOf("}");
+                if (firstBraceIdx !== -1 && lastBraceIdx > firstBraceIdx) {
+                  const candidateJson = trimmedRaw.slice(firstBraceIdx, lastBraceIdx + 1);
+                  try {
+                    const parsedCandidate = JSON.parse(candidateJson);
+                    if (parsedCandidate && (parsedCandidate.choices || parsedCandidate.candidates || parsedCandidate.content || parsedCandidate.error)) {
+                      return {
+                        ok: true,
+                        status: 200,
+                        text: candidateJson,
+                        headers: new Headers({ "Content-Type": "application/json" }),
+                      };
+                    }
+                  } catch (_) {}
+                }
+                const strippedComments = trimmedRaw.replace(/^:\s*[^\n\r]*$/gm, "").trim();
+                if (strippedComments) {
+                  fullText = strippedComments;
+                }
               }
 
               if (streamInterruptedErr && !fullText && !fullThinking) {
@@ -22060,12 +22109,42 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
-            // 非流式请求：直接一次性等待完整文本返回，不做分片猜测或流式混用
+            // 非流式请求：分块读取并重置看门狗，即使尾段连接异常断开也保留已收到的数据
             let resText = "";
             try {
-              resText = await res.text();
+              if (res.body && typeof res.body.getReader === "function") {
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                  const { done, value } = await reader.read();
+                  resetTimeout();
+                  ensureBackgroundKeepAlive();
+                  if (done) {
+                    const tail = decoder.decode();
+                    if (tail) resText += tail;
+                    break;
+                  }
+                  if (value) {
+                    resText += decoder.decode(value, { stream: true });
+                  }
+                }
+              } else {
+                resText = await res.text();
+              }
+            } catch (readBodyErr) {
+              if (!resText || !resText.trim()) {
+                throw readBodyErr;
+              }
+              console.warn("[非流式保活] 响应体尾段连接断开，保留已接收到的完整文本:", readBodyErr);
             } finally {
               if (timeoutId) clearTimeout(timeoutId);
+            }
+
+            if (res.ok && resText && /^\s*(?::[^\n]*\n\s*)*data:\s*/m.test(resText)) {
+              const salvagedNonStreamSse = parseSseTextToSynthesized(resText);
+              if (salvagedNonStreamSse) {
+                resText = JSON.stringify(salvagedNonStreamSse);
+              }
             }
 
             return {
@@ -22802,11 +22881,41 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             try {
               data = JSON.parse(res.text);
             } catch (_) {
-              const errMsg = extractApiErrorMessage(res.status, res.text);
-              return new Response(
-                JSON.stringify({ error: { message: errMsg }, message: errMsg }),
-                { status: 502, headers: { "Content-Type": "application/json" } }
-              );
+              const salvagedFromSse = typeof parseSseTextToSynthesized === "function" ? parseSseTextToSynthesized(res.text) : null;
+              if (salvagedFromSse) {
+                data = salvagedFromSse;
+              } else {
+                const rawTrim = typeof res.text === "string" ? res.text.trim() : "";
+                const fbIdx = rawTrim.indexOf("{");
+                const lbIdx = rawTrim.lastIndexOf("}");
+                let recoveredObj = null;
+                if (fbIdx !== -1 && lbIdx > fbIdx) {
+                  try {
+                    recoveredObj = JSON.parse(rawTrim.slice(fbIdx, lbIdx + 1));
+                  } catch (_e2) {}
+                }
+                if (recoveredObj && typeof recoveredObj === "object") {
+                  data = recoveredObj;
+                } else if (res.ok && rawTrim && !/^<(!DOCTYPE|html)\b/i.test(rawTrim)) {
+                  data = {
+                    choices: [
+                      {
+                        index: 0,
+                        message: {
+                          role: "assistant",
+                          content: rawTrim,
+                        },
+                      },
+                    ],
+                  };
+                } else {
+                  const errMsg = extractApiErrorMessage(res.status, res.text);
+                  return new Response(
+                    JSON.stringify({ error: { message: errMsg }, message: errMsg }),
+                    { status: 502, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+              }
             }
 
             // 兼容不同中转站返回结构，确保 choices[0].message.content 一定为字符串
@@ -34378,9 +34487,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             writeModule: "sub-api-use-write-module",
           };
           const domCheckbox = purpose && domIdMap[purpose] ? document.getElementById(domIdMap[purpose]) : null;
-          const isPurposeSubChecked = purpose === "writeModule"
-            ? (uses.writeModule !== undefined ? Boolean(uses.writeModule) : (domCheckbox ? Boolean(domCheckbox.checked) : true))
-            : Boolean(purpose && ((domCheckbox && domCheckbox.checked) || uses[purpose]));
+          const isPurposeSubChecked = Boolean(purpose && ((domCheckbox && domCheckbox.checked) || uses[purpose]));
 
           // 仅当传入了 purpose、且在副 API 用途列表中勾选了该项时，严格调用副 API，绝不回退主 API
           if (isPurposeSubChecked) {
@@ -36613,10 +36720,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
 
           const uses = state.apiConfig.subApiUses || {};
-          if (uses.writeModule === undefined) {
-            uses.writeModule = true;
-            state.apiConfig.subApiUses = uses;
-          }
           const subSummary = document.getElementById("sub-api-use-summary");
           if (subSummary) subSummary.checked = !!uses.summary;
           const subFanfic = document.getElementById("sub-api-use-fanfic");
@@ -36632,7 +36735,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const subMap = document.getElementById("sub-api-use-map");
           if (subMap) subMap.checked = !!uses.map;
           const subWriteModule = document.getElementById("sub-api-use-write-module");
-          if (subWriteModule) subWriteModule.checked = uses.writeModule !== undefined ? !!uses.writeModule : true;
+          if (subWriteModule) subWriteModule.checked = !!uses.writeModule;
 
           const syncSubApiUses = async () => {
             if (!state.apiConfig) state.apiConfig = {};
@@ -36644,7 +36747,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               draw: subDraw ? subDraw.checked : false,
               forcedImage: subForcedImage ? subForcedImage.checked : false,
               map: subMap ? subMap.checked : false,
-              writeModule: subWriteModule ? subWriteModule.checked : true,
+              writeModule: subWriteModule ? subWriteModule.checked : false,
             };
             const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
             if (dbInstance && dbInstance.apiConfig) {
@@ -47883,7 +47986,12 @@ ${recentHistoryText}
 - 代对方录入：.st 角色全名 力量 60 敏捷 70 hp 12
 - 增减数值：.st hp-5 或 .st 角色全名 hp-5
 4. 嵌入规则：
-指令可直接自然嵌入在剧情叙事或角色台词中，单次回复支持包含多条指令。`);
+指令可直接自然嵌入在剧情叙事或角色台词中，单次回复支持包含多条指令。
+5. 隐藏计数器指令：
+平时一般不需要使用。仅当模组流程或特殊事件需要秘密统计某项次数或数值时，你可以在气泡文本末尾附加隐藏计数标记，系统会自动剥离该标记使其对玩家不可见，并在每回合最后一次AI回复的尾部向你展示当前计数值：
+- 增加或减少计数：[计数: 计数名称 +1] 或 [计数: 计数名称 -1]
+- 直接设置计数值：[计数: 计数名称 = 3]
+- 达成条件或无需继续统计时清除该计数：[计数: 计数名称 清除]`);
 
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
@@ -48213,6 +48321,7 @@ ${statusMember ? `- 输出系统状态栏: {"type": "system_status", "name": "${
 - 发送文本: {"type": "text", "name": "角色名", "content": "文本内容"}
 - 引用回复某人的消息: {"type": "quote_reply", "name": "角色名", "target_sender": "被引用者名字", "target_content": "被引用消息原文", "reply_content": "回复文本内容"}${isPeerGrpPrompt ? "。针对某个玩家做出的检定结果进行判定或回应时，AI必须使用引用回复引注该玩家的检定消息" : ""}
 ${isPeerGrpPrompt ? `- 无痕私密对话: 若某段话、私密线索或暗中传音只需让群里某一位特定玩家看到，可在消息对象中加上 "visibleTo": ["目标玩家群昵称"]，例如 {"type": "text", "name": "角色名", "content": "私密内容", "visibleTo": ["${myNickname}"]}\n` : ""}${isGroupMusicAllowed ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}- 发起进入战斗确认卡片: 当剧情推进到战斗爆发或遭遇强敌时，发送 {"type": "suggest_combat"}
+- 隐藏计数: 平时一般不用；仅当模组流程或特殊互动环节需要暗中累计某个条件次数或隐藏数值时，在你的文本消息末尾附带 [计数:名称+1]、[计数:名称-1] 或 [计数:名称=数值]，系统会自动无感记录并剥离该标记，不会显示在聊天气泡中；当模组结束或该计数事件完成结算不再需要时，附带 [计数:名称 清除] 即可停止追踪
 ${groupModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI图片分享: {"type": "naiimag", "name": "你的角色名", "prompt": "纯英文Danbooru标签描述词，使用英文逗号分隔，严禁出现中文，包含1girl或1boy、18-22 years old、mature_female或mature_male、tall、long_legs、detailed_face、角色外貌特征、服装、动作、表情、光影与场景..."}${(() => { const cp = (chat.settings && chat.settings.keeperCharPrompts) || {}; const lines = Object.entries(cp).filter(([_, v]) => v && String(v).trim()).map(([k, v]) => `${k}: ${String(v).trim()}`); return lines.length > 0 ? `\n  生图角色固定外貌标签(若画面出现对应人物必须原样附带进prompt): ${lines.join(" | ")}` : ""; })()}\n` : ""}`);
 
               const groupWhisperRuleBlock = isPeerGrpPrompt
@@ -48914,6 +49023,7 @@ ${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
 - 发送文本: {"type": "text", "content": "你好呀！"}
 - 发送语音: {"type": "voice_message", "content": "语音的文字内容..."}
 - 发送表情: {"type": "sticker", "sticker_name": "表情的名字"}，表情名必须在表情列表中，禁止杜撰
+- 隐藏计数: 平时一般不用；仅当模组流程或特殊互动环节需要暗中累计某个条件次数或隐藏数值时，在你的文本消息末尾附带 [计数:名称+1]、[计数:名称-1] 或 [计数:名称=数值]，系统会自动无感记录并剥离该标记，不会显示在聊天气泡中；当模组结束或该计数事件完成结算不再需要时，附带 [计数:名称 清除] 即可停止追踪
 ${(((typeof state !== 'undefined' && state.apiConfig && state.apiConfig.globalAiMusicEnabled !== undefined) ? (state.apiConfig.globalAiMusicEnabled !== false) : (localStorage.getItem("global_ai_music_enabled") !== "false")) && (chat?.settings?.aiMusicEnabled !== false)) ? (typeof window.formatAiMusicInstruction === "function" ? window.formatAiMusicInstruction(chat?.settings?.aiMusicPreference) : "") : ""}${singleModuleSwitchCmd}${chat.loadModuleImages && chat.activeModuleId ? `- 发送模组插图与CG: 模组正文中标记的【图1】、【图2】等插图节点，当带团推进到该节点所在位置时，直接在文本中原样输出该【图N】标记，系统会自动将其渲染为高清插图卡片。\n` : ""}${localStorage.getItem("novelai-enabled") === "true" ? `- NovelAI真实图片分享: {"type": "naiimag", "prompt": "纯英文Danbooru标签描述词，使用英文逗号分隔，严禁出现中文，包含1girl或1boy、18-22 years old、mature_female或mature_male、tall、long_legs、detailed_face、角色外貌特征、服装、动作、表情、光影与场景..."}${(() => { const cp = (chat.settings && chat.settings.keeperCharPrompts) || {}; const lines = Object.entries(cp).filter(([_, v]) => v && String(v).trim()).map(([k, v]) => `${k === "me" ? (chat.settings.myName || "我") : (chat.name || k)}: ${String(v).trim()}`); return lines.length > 0 ? `\n  生图角色固定外貌标签(若画面出现对应人物必须原样附带进prompt): ${lines.join(" | ")}` : ""; })()}` : ""}`);
 
               const singleMyPersonaBlock = window.formatPromptSection("我的人设", `
@@ -49420,6 +49530,33 @@ ${stickerContext || "无"}
                     mItem._musicPlayingLabel = musicTagStr;
                     mItem.content = `${musicTagStr}\n${mItem.content}`;
                     break;
+                  }
+                }
+              }
+            }
+
+            if (chat && chat.settings && chat.settings.aiCounters && typeof chat.settings.aiCounters === "object") {
+              const activeCounterEntries = Object.entries(chat.settings.aiCounters).filter(
+                ([k, v]) => k && v !== undefined && v !== null && String(k).trim() !== ""
+              );
+              if (activeCounterEntries.length > 0) {
+                const counterTailLine = "\n[当前回合计数：" + activeCounterEntries.map(([k, v]) => `${k}=${v}`).join("，") + "]";
+                let attachedToAssistant = false;
+                for (let mIdx = messagesPayload.length - 1; mIdx >= 0; mIdx--) {
+                  const mItem = messagesPayload[mIdx];
+                  if (mItem && mItem.role === "assistant" && typeof mItem.content === "string") {
+                    const cTrim = mItem.content.trim();
+                    if (!cTrim.startsWith("==================================================")) {
+                      mItem.content = `${mItem.content}${counterTailLine}`;
+                      attachedToAssistant = true;
+                      break;
+                    }
+                  }
+                }
+                if (!attachedToAssistant && messagesPayload.length > 0) {
+                  const lastM = messagesPayload[messagesPayload.length - 1];
+                  if (lastM && typeof lastM.content === "string") {
+                    lastM.content = `${lastM.content}${counterTailLine}`;
                   }
                 }
               }
@@ -50043,6 +50180,146 @@ ${stickerContext || "无"}
               } else {
                 throw new Error("模型未返回有效回复内容，请检查模型状态");
               }
+            }
+            if (chat && Array.isArray(messagesArray)) {
+              if (!chat.settings) chat.settings = {};
+              if (!chat.settings.aiCounters || typeof chat.settings.aiCounters !== "object") {
+                chat.settings.aiCounters = {};
+              }
+              if (!Array.isArray(chat.settings.aiCounterHistory)) {
+                chat.settings.aiCounterHistory = [];
+              }
+              const counterRegex = /[\[【]计数(?:器)?\s*[:：]\s*([^\]】\n\r]+?)[\]】]/gi;
+              const stripCounterTags = (str) => String(str || "").replace(counterRegex, "").trim();
+
+              let fallbackPreviewText = "";
+              for (let i = 0; i < messagesArray.length; i++) {
+                const m = messagesArray[i];
+                if (!m) continue;
+                const rawT = String(m.content || m.message || m.text || m.reply_content || (m.quote_reply && m.quote_reply.reply_content) || "");
+                const cleanedT = stripCounterTags(rawT);
+                if (cleanedT && m.type !== "system_status" && m.type !== "status_bar") {
+                  fallbackPreviewText = cleanedT.slice(0, 12);
+                  break;
+                }
+              }
+
+              const resolveSpeakerInfo = (item) => {
+                const rawName = String(item?.name || item?.senderName || "").trim();
+                const members = Array.isArray(chat.members) ? chat.members : [];
+                if (chat.isGroup && members.length > 0) {
+                  let matched = rawName
+                    ? members.find((m) => m && (m.groupNickname === rawName || m.originalName === rawName || m.name === rawName))
+                    : null;
+                  if (!matched && chat.settings?.keeperTargetId && chat.settings.keeperTargetId !== "none") {
+                    matched = members.find((m) => m && String(m.id) === String(chat.settings.keeperTargetId));
+                  }
+                  if (!matched) {
+                    matched = members.find((m) => m && !m.isPeerMember && m.roleType !== "peer" && m.roleType !== "system_status" && m.roleType !== "dice" && !m.isDiceBot) || members[0];
+                  }
+                  return {
+                    memberId: matched ? matched.id : (chat.id || ""),
+                    memberName: rawName || (matched ? (matched.groupNickname || matched.originalName || "AI") : "AI"),
+                  };
+                }
+                return {
+                  memberId: chat.id || "",
+                  memberName: rawName || chat.settings?.aiName || chat.name || "AI",
+                };
+              };
+
+              const applySingleCounterExpr = (exprStr, speakerInfo, msgPreview) => {
+                const rawExpr = String(exprStr || "").trim();
+                if (!rawExpr) return;
+                const clearMatch = rawExpr.match(/^(.*?)\s*(?:清除|清空|删除|归零|clear|reset)$/i);
+                if (clearMatch) {
+                  const cName = clearMatch[1].replace(/[:：=\s]+$/g, "").trim();
+                  if (!cName) return;
+                  const hasOld = Object.prototype.hasOwnProperty.call(chat.settings.aiCounters, cName);
+                  const oldVal = hasOld ? chat.settings.aiCounters[cName] : 0;
+                  delete chat.settings.aiCounters[cName];
+                  chat.settings.aiCounterHistory.push({
+                    id: "cnt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                    memberId: speakerInfo.memberId,
+                    memberName: speakerInfo.memberName,
+                    messagePreview: msgPreview || fallbackPreviewText || "当前回合消息",
+                    counterName: cName,
+                    oldValue: hasOld ? oldVal : 0,
+                    newValue: "已清除",
+                    isClear: true,
+                    timestamp: Date.now(),
+                  });
+                  return;
+                }
+                const opMatch = rawExpr.match(/^(.*?)\s*([+\-=＋－＝])\s*(-?\d+(?:\.\d+)?)$/);
+                if (opMatch) {
+                  const cName = opMatch[1].replace(/[:：\s]+$/g, "").trim();
+                  if (!cName) return;
+                  const opRaw = opMatch[2];
+                  const op = opRaw === "＋" ? "+" : (opRaw === "－" ? "-" : (opRaw === "＝" ? "=" : opRaw));
+                  const num = Number(opMatch[3]);
+                  if (Number.isNaN(num)) return;
+                  const hasOld = Object.prototype.hasOwnProperty.call(chat.settings.aiCounters, cName);
+                  const oldVal = hasOld ? (Number(chat.settings.aiCounters[cName]) || 0) : 0;
+                  const newVal = op === "=" ? num : (op === "-" ? oldVal - num : oldVal + num);
+                  chat.settings.aiCounters[cName] = newVal;
+                  chat.settings.aiCounterHistory.push({
+                    id: "cnt_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                    memberId: speakerInfo.memberId,
+                    memberName: speakerInfo.memberName,
+                    messagePreview: msgPreview || fallbackPreviewText || "当前回合消息",
+                    counterName: cName,
+                    oldValue: hasOld ? oldVal : 0,
+                    newValue: newVal,
+                    isClear: false,
+                    timestamp: Date.now(),
+                  });
+                }
+              };
+
+              const keptAfterCounterStrip = [];
+              for (let i = 0; i < messagesArray.length; i++) {
+                const item = messagesArray[i];
+                if (!item) continue;
+                const speakerInfo = resolveSpeakerInfo(item);
+                if (item.type === "counter" || item.type === "ai_counter") {
+                  const cName = String(item.counterName || item.name || item.key || "").trim();
+                  const cAct = String(item.action || item.op || "").trim();
+                  if (cName) {
+                    if (/清除|清空|clear|reset/i.test(cAct) || item.clear === true) {
+                      applySingleCounterExpr(`${cName} 清除`, speakerInfo, fallbackPreviewText);
+                    } else if (item.value !== undefined) {
+                      const prefixOp = (cAct === "+" || cAct === "-") ? cAct : "=";
+                      applySingleCounterExpr(`${cName} ${prefixOp}${item.value}`, speakerInfo, fallbackPreviewText);
+                    }
+                  }
+                  continue;
+                }
+                const rawItemText = String(item.content || item.message || item.text || item.reply_content || (item.quote_reply && item.quote_reply.reply_content) || "");
+                if (rawItemText && /[\[【]计数(?:器)?\s*[:：]/i.test(rawItemText)) {
+                  const cleanedItemText = stripCounterTags(rawItemText);
+                  const msgPreview = (cleanedItemText || fallbackPreviewText || "当前回合消息").slice(0, 12);
+                  let mMatch;
+                  const localRegex = /[\[【]计数(?:器)?\s*[:：]\s*([^\]】\n\r]+?)[\]】]/gi;
+                  while ((mMatch = localRegex.exec(rawItemText)) !== null) {
+                    applySingleCounterExpr(mMatch[1], speakerInfo, msgPreview);
+                  }
+                  if (typeof item.content === "string") item.content = stripCounterTags(item.content);
+                  if (typeof item.message === "string") item.message = stripCounterTags(item.message);
+                  if (typeof item.text === "string") item.text = stripCounterTags(item.text);
+                  if (typeof item.reply_content === "string") item.reply_content = stripCounterTags(item.reply_content);
+                  if (item.quote_reply && typeof item.quote_reply.reply_content === "string") {
+                    item.quote_reply.reply_content = stripCounterTags(item.quote_reply.reply_content);
+                  }
+                  const hasRemainingText = Boolean((item.content && item.content.trim()) || (item.message && item.message.trim()) || (item.quote_reply && item.quote_reply.reply_content && item.quote_reply.reply_content.trim()));
+                  const hasOtherPayload = Boolean(item.image || item.imageUrl || item.payload || item.prompt || item.fields || item.values || item.give_item);
+                  if (!hasRemainingText && !hasOtherPayload) {
+                    continue;
+                  }
+                }
+                keptAfterCounterStrip.push(item);
+              }
+              messagesArray = keptAfterCounterStrip;
             }
             if (typeof parseAndAddAiGiftItems === "function") {
               await parseAndAddAiGiftItems(chat, messagesArray);
@@ -91182,6 +91459,84 @@ ${stickerContext || "无"}
               } else {
                 privacyBtn.style.display = "none";
               }
+            }
+
+            const counterHistoryBtn = document.getElementById("member-counter-history-btn");
+            if (counterHistoryBtn) {
+              if (isPeerHuman || isStatusRole) {
+                counterHistoryBtn.style.display = "none";
+                counterHistoryBtn.onclick = null;
+              } else {
+                counterHistoryBtn.style.display = "inline-flex";
+                counterHistoryBtn.onclick = () => {
+                  const historyModal = document.getElementById("member-counter-history-modal");
+                  const historyListEl = document.getElementById("member-counter-history-list");
+                  if (!historyModal || !historyListEl) return;
+                  historyListEl.innerHTML = "";
+                  const currentChat = state.chats[state.activeChatId];
+                  const activeCounters = (currentChat && currentChat.settings && currentChat.settings.aiCounters && typeof currentChat.settings.aiCounters === "object")
+                    ? currentChat.settings.aiCounters
+                    : {};
+                  const allHistory = (currentChat && currentChat.settings && Array.isArray(currentChat.settings.aiCounterHistory))
+                    ? currentChat.settings.aiCounterHistory
+                    : [];
+                  const memberNameStr = member.groupNickname || member.originalName || "";
+                  const memberSpecificHistory = allHistory.filter(
+                    (h) => h && (String(h.memberId) === String(member.id) || (memberNameStr && h.memberName === memberNameStr))
+                  );
+                  const displayHistory = memberSpecificHistory.length > 0 ? memberSpecificHistory : allHistory;
+                  const activeEntries = Object.entries(activeCounters).filter(([k, v]) => k && v !== undefined && v !== null);
+                  if (activeEntries.length > 0) {
+                    const activeBox = document.createElement("div");
+                    activeBox.style.cssText = "padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); font-size: 12px; color: var(--text-primary); display: flex; flex-wrap: wrap; gap: 8px; align-items: center;";
+                    activeEntries.forEach(([k, v]) => {
+                      const tag = document.createElement("span");
+                      tag.style.cssText = "padding: 2px 8px; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); font-size: 11px; color: var(--text-primary);";
+                      tag.textContent = `${k}：${v}`;
+                      activeBox.appendChild(tag);
+                    });
+                    historyListEl.appendChild(activeBox);
+                  }
+                  if (displayHistory.length === 0) {
+                    const emptyEl = document.createElement("div");
+                    emptyEl.style.cssText = "padding: 24px 12px; text-align: center; font-size: 12px; color: var(--text-secondary);";
+                    emptyEl.textContent = "暂无计数更改记录";
+                    historyListEl.appendChild(emptyEl);
+                  } else {
+                    const reversed = [...displayHistory].reverse();
+                    reversed.forEach((rec) => {
+                      const row = document.createElement("div");
+                      row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color);";
+                      const leftCol = document.createElement("div");
+                      leftCol.style.cssText = "flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; gap: 3px;";
+                      const titleLine = document.createElement("div");
+                      titleLine.style.cssText = "font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+                      if (rec.isClear || rec.newValue === "已清除") {
+                        titleLine.textContent = `${rec.counterName}：由 ${rec.oldValue} 清除`;
+                      } else {
+                        titleLine.textContent = `${rec.counterName}：由 ${rec.oldValue} 改为 ${rec.newValue}`;
+                      }
+                      const msgLine = document.createElement("div");
+                      msgLine.style.cssText = "font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+                      msgLine.textContent = `消息开头：${rec.messagePreview || "无"}`;
+                      leftCol.appendChild(titleLine);
+                      leftCol.appendChild(msgLine);
+                      row.appendChild(leftCol);
+                      historyListEl.appendChild(row);
+                    });
+                  }
+                  historyModal.classList.add("visible");
+                };
+              }
+            }
+
+            const closeCounterHistoryBtn = document.getElementById("close-member-counter-history-btn");
+            if (closeCounterHistoryBtn && !closeCounterHistoryBtn._bound) {
+              closeCounterHistoryBtn._bound = true;
+              closeCounterHistoryBtn.addEventListener("click", () => {
+                const historyModal = document.getElementById("member-counter-history-modal");
+                if (historyModal) historyModal.classList.remove("visible");
+              });
             }
 
             document
