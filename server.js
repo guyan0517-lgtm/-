@@ -2612,6 +2612,143 @@ app.get('/api/qqbot/group/:groupId/context', (req, res) => {
   }
 });
 
+app.post('/api/qqbot/group/:groupId/sync-history', async (req, res) => {
+  try {
+    const groupId = String(req.params.groupId || '');
+    if (!groupId) return res.status(400).json({ ok: false, error: 'Missing groupId' });
+    const cfg = loadQqBotConfig();
+    const isPrivate = groupId.startsWith('priv_');
+    const rawTargetId = isPrivate ? groupId.replace(/^priv_/, '') : groupId;
+    const gCfg = !isPrivate && cfg.groups ? cfg.groups[groupId] : null;
+    const selfId = String((req.body && req.body.selfId) || cfg.selfId || '');
+
+    let incomingList = Array.isArray(req.body && req.body.messages) ? req.body.messages : null;
+    if (!incomingList && qqBotRuntime.wsConnected) {
+      try {
+        const count = Math.max(10, Math.min(100, Number(req.body && req.body.count) || 35));
+        const resp = await callOneBotApi(
+          isPrivate ? 'get_friend_msg_history' : 'get_group_msg_history',
+          isPrivate
+            ? { user_id: Number(rawTargetId) || rawTargetId, count }
+            : { group_id: Number(rawTargetId) || rawTargetId, count }
+        );
+        const data = resp && resp.data !== undefined ? resp.data : resp;
+        if (data && Array.isArray(data.messages)) {
+          incomingList = data.messages;
+        } else if (Array.isArray(data)) {
+          incomingList = data;
+        }
+      } catch (_) {}
+    }
+
+    if (Array.isArray(incomingList) && incomingList.length > 0) {
+      const p = getGroupHistoryPath(groupId);
+      let existing = [];
+      if (fs.existsSync(p)) {
+        try {
+          existing = JSON.parse(fs.readFileSync(p, 'utf8'));
+          if (!Array.isArray(existing)) existing = [];
+        } catch (_) {
+          existing = [];
+        }
+      }
+      const seenIds = new Set(existing.map(m => String(m && m.messageId || '')).filter(Boolean));
+      for (const item of incomingList) {
+        if (!item || typeof item !== 'object') continue;
+        // Support both already-normalized message objects and raw OneBot message events
+        const msgId = String(item.messageId || item.message_id || item.real_id || '');
+        if (msgId && seenIds.has(msgId)) continue;
+
+        let entry = null;
+        if (item.rawMessage !== undefined || item.content !== undefined) {
+          const senderId = String(item.senderId || '');
+          const isSelf = Boolean(item.isSelf !== undefined ? item.isSelf : (item.isBot || (selfId && senderId === selfId)));
+          const text = String(item.rawMessage !== undefined ? item.rawMessage : (item.content || '')).trim();
+          if (!text && (!Array.isArray(item.imageUrls) || item.imageUrls.length === 0)) continue;
+          entry = {
+            seq: 0,
+            messageId: msgId || ('hist_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+            groupId,
+            senderId,
+            senderName: String(item.senderName || item.qqRemark || senderId || '群成员'),
+            qqRemark: String(item.qqRemark || item.senderName || senderId || ''),
+            content: text,
+            rawMessage: text,
+            replyId: item.replyId || '',
+            atTargets: Array.isArray(item.atTargets) ? item.atTargets : [],
+            imageUrls: Array.isArray(item.imageUrls) ? item.imageUrls : [],
+            imageFiles: Array.isArray(item.imageFiles) ? item.imageFiles : [],
+            isBot: isSelf,
+            isSelf,
+            timestamp: Number(item.timestamp) || Date.now()
+          };
+        } else {
+          const parsed = extractOneBotMessageText(item);
+          if (!parsed.text && parsed.imageUrls.length === 0) continue;
+          const senderObj = item.sender || {};
+          const senderId = String(item.user_id || senderObj.user_id || '');
+          const qqRemark = String(senderObj.card || senderObj.nickname || senderId || '群成员');
+          const isSelf = Boolean(selfId && senderId && senderId === selfId);
+          const realName = isSelf
+            ? (gCfg && gCfg.botName ? gCfg.botName : '我方AI')
+            : resolveMemberRealtimeName(gCfg, senderId, qqRemark);
+          const ts = item.time ? (Number(item.time) < 1e12 ? Number(item.time) * 1000 : Number(item.time)) : Date.now();
+          entry = {
+            seq: 0,
+            messageId: msgId || ('hist_' + ts + '_' + Math.random().toString(36).slice(2, 6)),
+            groupId,
+            senderId,
+            senderName: realName,
+            qqRemark,
+            content: parsed.text,
+            rawMessage: parsed.text,
+            replyId: parsed.replyId || '',
+            atTargets: parsed.atTargets || [],
+            imageUrls: parsed.imageUrls || [],
+            imageFiles: parsed.imageFiles || [],
+            isBot: isSelf,
+            isSelf,
+            timestamp: ts
+          };
+        }
+
+        if (entry) {
+          if (entry.messageId) seenIds.add(String(entry.messageId));
+          existing.push(entry);
+        }
+      }
+
+      existing.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+      if (existing.length > 2000) {
+        existing = existing.slice(-2000);
+      }
+      existing = existing.map((m, idx) => ({
+        ...m,
+        seq: idx + 1
+      }));
+      fs.writeFileSync(p, JSON.stringify(existing), 'utf8');
+
+      if (existing.length > 0) {
+        const lastSeq = existing[existing.length - 1].seq;
+        const st = getGroupSeqRuntimeState(groupId);
+        if (lastSeq > st.lastSeenSeq) {
+          st.lastSeenSeq = lastSeq;
+        }
+      }
+    }
+
+    const hist = loadGroupHistoryFromDisk(groupId, 60);
+    return res.json({
+      ok: true,
+      groupId,
+      totalMessages: hist.total,
+      messages: hist.messages
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/api/qqbot/group/:groupId/memory', (req, res) => {
   try {
     const groupId = String(req.params.groupId || '');

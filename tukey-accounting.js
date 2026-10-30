@@ -4303,6 +4303,18 @@ function createExpenditureLineChart(data, daysInMonth) {
           if (tRes.ok) {
             this.termuxDiskAvailable = true;
             const parsed = await tRes.json();
+            if (parsed && parsed.memory && typeof parsed.memory === "object") {
+              this.staticFallbackMemory = {
+                ...this.staticFallbackMemory,
+                ...parsed.memory,
+              };
+            }
+            if (parsed && parsed.logs && typeof parsed.logs === "object") {
+              this.staticFallbackLogs = {
+                ...this.staticFallbackLogs,
+                ...parsed.logs,
+              };
+            }
             if (parsed && parsed.config) {
               this.serverState = {
                 ok: true,
@@ -4579,6 +4591,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       this.saveAllSettings(false);
       await this.loadCurrentGroupMemoryUI();
       await this.refreshSandboxLog();
+      this.syncRecentHistoryFromOneBot(this.currentGroupId, true).catch(() => {});
       this.notify(`已选中群 ${this.serverState.config.groups[gid]?.groupName || gid}`);
     },
 
@@ -4761,6 +4774,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       this.saveAllSettings(false);
       await this.loadCurrentGroupMemoryUI();
       await this.refreshSandboxLog();
+      this.syncRecentHistoryFromOneBot(this.currentGroupId, true).catch(() => {});
     },
 
     async addOrSelectGroup() {
@@ -5786,6 +5800,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
 
         this.refreshOneBotGroups(true).catch(() => {});
+        this.syncRecentHistoryFromOneBot(this.currentGroupId, true).catch(() => {});
 
         return true;
       } finally {
@@ -6206,7 +6221,31 @@ function createExpenditureLineChart(data, daysInMonth) {
       const dispName = pCfg.remark || pCfg.nickname || uid;
 
       try {
-        const messages = (this.staticFallbackLogs[logKey] || []).slice(-35);
+        let localArr = this.staticFallbackLogs[logKey] || [];
+        if (localArr.length < 10) {
+          try {
+            const cRes = await fetch(
+              `/api/qqbot/group/${encodeURIComponent(logKey)}/context?limit=35`,
+            );
+            if (cRes.ok) {
+              const cData = await cRes.json();
+              if (cData && Array.isArray(cData.messages) && cData.messages.length > 0) {
+                const seen = new Set();
+                const merged = [];
+                for (const m of [...cData.messages, ...localArr]) {
+                  if (!m) continue;
+                  const key = String(m.messageId || m.seq || "") + "_" + String(m.rawMessage || m.content || "");
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  merged.push(m);
+                }
+                localArr = merged.slice(-60);
+                this.staticFallbackLogs[logKey] = localArr;
+              }
+            }
+          } catch (_) {}
+        }
+        const messages = localArr.slice(-35);
         if (messages.length === 0) return;
         const lastMsg = messages[messages.length - 1];
         if (lastMsg && lastMsg.isSelf) return;
@@ -7836,6 +7875,209 @@ ${transcript}
         })
         .join("");
       box.scrollTop = box.scrollHeight;
+    },
+
+    async syncRecentHistoryFromOneBot(targetGroupId, silent = true) {
+      const gid = String(targetGroupId || this.currentGroupId || "").trim();
+      if (!gid) return;
+      const cfg = (this.serverState && this.serverState.config) || {};
+      const selfInput = document.getElementById("qqbot-selfid-input");
+      const selfId = String((selfInput && selfInput.value.trim()) || cfg.selfId || "");
+      const gCfg = (cfg.groups && cfg.groups[gid]) || this.getCurrentGroupConfig();
+
+      let normalizedMessages = [];
+      // 1. 若浏览器已直连 NapCat 3001，主动向 OneBot 拉取最近群聊历史消息（包含关网页/重启期间错过的聊天记录）
+      if (this.directWsConnected && this.directWs && this.directWs.readyState === 1) {
+        try {
+          const resp = await this.callDirectOneBotWs("get_group_msg_history", {
+            group_id: Number(gid) || gid,
+            count: 35,
+          });
+          const rawList =
+            resp && Array.isArray(resp.messages)
+              ? resp.messages
+              : Array.isArray(resp)
+                ? resp
+                : [];
+          for (const rawEvt of rawList) {
+            if (!rawEvt || typeof rawEvt !== "object") continue;
+            const parsed = this.parseOneBotGroupMessage(rawEvt);
+            if (!parsed.text && parsed.imageUrls.length === 0) continue;
+            const senderObj = rawEvt.sender || {};
+            const senderId = String(rawEvt.user_id || senderObj.user_id || "");
+            const qqRemark = String(
+              senderObj.card || senderObj.nickname || senderId || "群成员",
+            );
+            const isSelf = Boolean(selfId && senderId && senderId === selfId);
+            const dispName = isSelf
+              ? (gCfg && gCfg.botName) || "我方AI"
+              : this.resolveMemberDisplayName(gCfg, senderId, qqRemark);
+            const ts = rawEvt.time
+              ? Number(rawEvt.time) < 1e12
+                ? Number(rawEvt.time) * 1000
+                : Number(rawEvt.time)
+              : Date.now();
+            const msgId = String(
+              rawEvt.message_id ||
+                rawEvt.real_id ||
+                "hist_" + ts + "_" + senderId,
+            );
+            normalizedMessages.push({
+              seq: 0,
+              messageId: msgId,
+              groupId: gid,
+              senderId,
+              senderName: dispName,
+              qqRemark,
+              content: parsed.text,
+              rawMessage: parsed.text,
+              replyId: parsed.replyId || "",
+              atTargets: parsed.atTargets || [],
+              imageUrls: parsed.imageUrls || [],
+              imageFiles: parsed.imageFiles || [],
+              isBot: isSelf,
+              isSelf,
+              timestamp: ts,
+            });
+          }
+        } catch (_) {}
+
+        // 同时为已启用监听的好友私聊拉取历史小窗消息
+        const privMap = cfg.privateChats || {};
+        for (const uid of Object.keys(privMap)) {
+          const pCfg = privMap[uid];
+          if (!pCfg || pCfg.enabled === false) continue;
+          try {
+            const pResp = await this.callDirectOneBotWs("get_friend_msg_history", {
+              user_id: Number(uid) || uid,
+              count: 25,
+            });
+            const pList =
+              pResp && Array.isArray(pResp.messages)
+                ? pResp.messages
+                : Array.isArray(pResp)
+                  ? pResp
+                  : [];
+            if (pList.length > 0) {
+              const logKey = "priv_" + uid;
+              const existingPriv = this.staticFallbackLogs[logKey] || [];
+              const seenPriv = new Set(
+                existingPriv.map((m) => String((m && m.messageId) || "")).filter(Boolean),
+              );
+              const pNormalized = [];
+              for (const rawEvt of pList) {
+                if (!rawEvt || typeof rawEvt !== "object") continue;
+                const parsed = this.parseOneBotGroupMessage(rawEvt);
+                if (!parsed.text && parsed.imageUrls.length === 0) continue;
+                const senderObj = rawEvt.sender || {};
+                const senderId = String(rawEvt.user_id || senderObj.user_id || "");
+                const isSelf = Boolean(selfId && senderId && senderId === selfId);
+                const dispName = isSelf
+                  ? "我方AI"
+                  : String(pCfg.remark || pCfg.nickname || senderObj.nickname || uid);
+                const ts = rawEvt.time
+                  ? Number(rawEvt.time) < 1e12
+                    ? Number(rawEvt.time) * 1000
+                    : Number(rawEvt.time)
+                  : Date.now();
+                const msgId = String(
+                  rawEvt.message_id ||
+                    rawEvt.real_id ||
+                    "phist_" + ts + "_" + senderId,
+                );
+                const entry = {
+                  seq: 0,
+                  messageId: msgId,
+                  groupId: logKey,
+                  senderId,
+                  senderName: dispName,
+                  qqRemark: dispName,
+                  content: parsed.text,
+                  rawMessage: parsed.text,
+                  replyId: parsed.replyId || "",
+                  imageUrls: parsed.imageUrls || [],
+                  imageFiles: parsed.imageFiles || [],
+                  isBot: isSelf,
+                  isSelf,
+                  timestamp: ts,
+                };
+                pNormalized.push(entry);
+                if (!seenPriv.has(msgId)) {
+                  seenPriv.add(msgId);
+                  existingPriv.push(entry);
+                }
+              }
+              existingPriv.sort(
+                (a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0),
+              );
+              this.staticFallbackLogs[logKey] = existingPriv
+                .slice(-60)
+                .map((m, idx) => ({ ...m, seq: idx + 1 }));
+              fetch(`/api/qqbot/group/${encodeURIComponent(logKey)}/sync-history`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ selfId, messages: pNormalized }),
+              }).catch(() => {});
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 2. 合并进内存最近窗口（限制60条防占浏览器内存）并同步写入本地磁盘
+      if (normalizedMessages.length > 0) {
+        const currentArr = this.staticFallbackLogs[gid] || [];
+        const seen = new Set(
+          currentArr.map((m) => String((m && m.messageId) || "")).filter(Boolean),
+        );
+        for (const item of normalizedMessages) {
+          if (item.messageId && seen.has(String(item.messageId))) continue;
+          if (item.messageId) seen.add(String(item.messageId));
+          currentArr.push(item);
+        }
+        currentArr.sort(
+          (a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0),
+        );
+        this.staticFallbackLogs[gid] = currentArr
+          .slice(-60)
+          .map((m, idx) => ({ ...m, seq: idx + 1 }));
+      }
+
+      try {
+        const res = await fetch(
+          `/api/qqbot/group/${encodeURIComponent(gid)}/sync-history`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              selfId,
+              count: 35,
+              messages: normalizedMessages.length > 0 ? normalizedMessages : undefined,
+            }),
+          },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.messages) && data.messages.length > 0) {
+            this.staticFallbackLogs[gid] = data.messages.slice(-60);
+          }
+        }
+      } catch (_) {}
+
+      if (this.termuxDiskAvailable) {
+        fetch("http://127.0.0.1:8765/save", {
+          method: "POST",
+          body: JSON.stringify({
+            config: this.serverState && this.serverState.config,
+            memory: this.staticFallbackMemory,
+            logs: this.staticFallbackLogs,
+          }),
+        }).catch(() => {});
+      }
+
+      await this.refreshSandboxLog();
+      if (!silent) {
+        this.notify("已同步历史聊天记录");
+      }
     },
 
     updateJudgeStatusUI(text) {
