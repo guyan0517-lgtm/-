@@ -16370,7 +16370,8 @@ ${chapDigest}
       this.build3DSceneGeometry(data);
       this.renderZoneStrip(data);
       this.createFloatingLabels(data);
-      this.focusZone(0, false);
+      // 默认以全览模式打开，避免单栋建筑被强行放大或加上突兀高亮框
+      this.focusZone(-1, false);
     },
 
     escapeHtml(str) {
@@ -16386,49 +16387,62 @@ ${chapDigest}
       const mode = styleSelect ? styleSelect.value : (this.currentStyleTheme || 'auto');
 
       const presets = {
-        rose_gothic: { accent: '#e87a90', dark: '#28222a', wall: '#fcfaf9', plaza: '#f6eff3' },
-        ivory_courtyard: { accent: '#d89c6a', dark: '#3c3530', wall: '#fdfcf7', plaza: '#f5f1e8' },
-        clinical_ward: { accent: '#6fb3b8', dark: '#2b363c', wall: '#f8fbfc', plaza: '#edf3f5' },
-        classic_manor: { accent: '#b85d57', dark: '#2c2627', wall: '#faf6f0', plaza: '#efe8df' },
-        shrine_mist: { accent: '#c9594c', dark: '#292528', wall: '#fbf7f2', plaza: '#efe9e2' },
-        starlight_observatory: { accent: '#6d83c4', dark: '#212536', wall: '#f8f9fd', plaza: '#ebeff8' }
+        rose_gothic: { accent: '#f08cae', dark: '#262028', wall: '#ffffff', plaza: '#f6f0f3' },
+        ivory_courtyard: { accent: '#d89c6a', dark: '#362f2b', wall: '#ffffff', plaza: '#f5f1ea' },
+        clinical_ward: { accent: '#7bc0c6', dark: '#273238', wall: '#ffffff', plaza: '#eef4f6' },
+        classic_manor: { accent: '#c86d67', dark: '#2a2324', wall: '#ffffff', plaza: '#f3ece6' },
+        shrine_mist: { accent: '#d6685b', dark: '#282326', wall: '#ffffff', plaza: '#f4eee9' },
+        starlight_observatory: { accent: '#7b90d2', dark: '#202434', wall: '#ffffff', plaza: '#edf0f8' }
       };
 
-      const style = getComputedStyle(document.documentElement);
-      const cssAccent = (style.getPropertyValue('--accent-color') || '#e87a90').trim() || '#e87a90';
-      const chosen = presets[mode] || { accent: cssAccent, dark: '#2b252c', wall: '#fcfaf9', plaza: '#f5f0f3' };
-      const accent = chosen.accent;
+      let chosen = presets[mode];
+      if (!chosen) {
+        // auto 模式下根据模组标题或默认柔粉黑曜石学院风配色，避免系统默认纯蓝与粉色建筑撞色
+        const modTitle = String(this.currentAtlasData?.title || '');
+        if (/病|医|疗养|实验/.test(modTitle)) {
+          chosen = presets.clinical_ward;
+        } else if (/神社|祠|庙|和风|町/.test(modTitle)) {
+          chosen = presets.shrine_mist;
+        } else if (/星|海|深渊|观测/.test(modTitle)) {
+          chosen = presets.starlight_observatory;
+        } else if (/庄园|洋馆|公馆|古堡/.test(modTitle)) {
+          chosen = presets.classic_manor;
+        } else {
+          chosen = presets.rose_gothic;
+        }
+      }
 
+      const accent = chosen.accent;
       return {
         accent,
-        accentSoft: this.mixHex(accent, '#ffffff', 0.36),
-        accentLight: this.mixHex(accent, '#ffffff', 0.74),
-        accentDeep: this.mixHex(accent, chosen.dark, 0.32),
-        wallPure: chosen.wall,
-        wallSide: this.mixHex(chosen.wall, chosen.dark, 0.06),
-        wallShadow: this.mixHex(chosen.wall, chosen.dark, 0.14),
+        accentSoft: this.mixHex(accent, '#ffffff', 0.28),
+        accentLight: this.mixHex(accent, '#ffffff', 0.78),
+        accentGlow: this.mixHex(accent, '#ffffff', 0.88),
+        accentDeep: this.mixHex(accent, chosen.dark, 0.28),
+        wallPure: '#ffffff',
+        wallSide: this.mixHex('#ffffff', chosen.plaza, 0.45),
+        wallShadow: this.mixHex(chosen.plaza, chosen.dark, 0.08),
         obsidian: chosen.dark,
-        obsidianSoft: this.mixHex(chosen.dark, '#ffffff', 0.18),
-        plazaA: chosen.plaza,
-        plazaB: this.mixHex(chosen.plaza, chosen.dark, 0.06),
-        plazaBorder: this.mixHex(chosen.plaza, chosen.dark, 0.16),
-        windowTint: this.mixHex(accent, chosen.dark, 0.55)
+        obsidianSoft: this.mixHex(chosen.dark, '#ffffff', 0.16),
+        plazaA: '#fbf9fa',
+        plazaB: this.mixHex(chosen.plaza, chosen.dark, 0.07),
+        plazaSide: this.mixHex(chosen.plaza, chosen.dark, 0.12)
       };
     },
 
     parseHex(hex) {
-      const clean = String(hex || '#e87a90').replace('#', '').trim();
+      const clean = String(hex || '#f08cae').replace('#', '').trim();
       if (clean.length === 3) {
         return [
-          parseInt(clean[0] + clean[0], 16) || 232,
-          parseInt(clean[1] + clean[1], 16) || 122,
-          parseInt(clean[2] + clean[2], 16) || 144
+          parseInt(clean[0] + clean[0], 16) || 240,
+          parseInt(clean[1] + clean[1], 16) || 140,
+          parseInt(clean[2] + clean[2], 16) || 174
         ];
       }
       return [
-        parseInt(clean.slice(0, 2), 16) || 232,
-        parseInt(clean.slice(2, 4), 16) || 122,
-        parseInt(clean.slice(4, 6), 16) || 144
+        parseInt(clean.slice(0, 2), 16) || 240,
+        parseInt(clean.slice(2, 4), 16) || 140,
+        parseInt(clean.slice(4, 6), 16) || 174
       ];
     },
 
@@ -16451,23 +16465,30 @@ ${chapDigest}
 
     shadeColor(colorStr, factor) {
       let [r, g, b] = this.toRgbTuple(colorStr);
-      r = Math.max(0, Math.min(255, Math.round(r * factor)));
-      g = Math.max(0, Math.min(255, Math.round(g * factor)));
-      b = Math.max(0, Math.min(255, Math.round(b * factor)));
+      if (factor > 1) {
+        // 柔和提亮（向纯白高光过渡，不产生生硬色块）
+        const t = Math.min(0.45, factor - 1);
+        r = Math.round(r + (255 - r) * t);
+        g = Math.round(g + (255 - g) * t);
+        b = Math.round(b + (255 - b) * t);
+      } else {
+        r = Math.max(0, Math.min(255, Math.round(r * factor)));
+        g = Math.max(0, Math.min(255, Math.round(g * factor)));
+        b = Math.max(0, Math.min(255, Math.round(b * factor)));
+      }
       return `rgb(${r}, ${g}, ${b})`;
     },
 
     // =======================================================================
-    // 严格外法线凸体构建器（保证任意角度与俯瞰图 0 穿模、0 翻转）
+    // 无边框柔光立体凸体构建器（消除一切生硬网格线，呈现丝滑白瓷与柔光立体质感）
     // =======================================================================
-    createConvexSolid(rawFaces, solidCenter, tierPriority = 1, zoneIdx = -1) {
+    createConvexSolid(rawFaces, solidCenter, isBaseLayer = false, zoneIdx = -1) {
       const preparedFaces = [];
       for (let i = 0; i < rawFaces.length; i++) {
         const rf = rawFaces[i];
         const verts = rf.verts;
         if (!verts || verts.length < 3) continue;
 
-        // 计算面中心
         let fcx = 0, fcy = 0, fcz = 0;
         for (let k = 0; k < verts.length; k++) {
           fcx += verts[k].x;
@@ -16478,7 +16499,6 @@ ${chapDigest}
         fcy /= verts.length;
         fcz /= verts.length;
 
-        // 计算法向量 (v1 - v0) x (v2 - v0)
         const ux = verts[1].x - verts[0].x;
         const uy = verts[1].y - verts[0].y;
         const uz = verts[1].z - verts[0].z;
@@ -16494,7 +16514,6 @@ ${chapDigest}
         ny /= len;
         nz /= len;
 
-        // 确保法向量严格背离凸体中心指向外部
         const outX = fcx - solidCenter.x;
         const outY = fcy - solidCenter.y;
         const outZ = fcz - solidCenter.z;
@@ -16513,7 +16532,7 @@ ${chapDigest}
           ny,
           nz,
           baseColor: rf.color,
-          stroke: rf.stroke,
+          trimStroke: rf.trimStroke || null,
           cullBack: rf.cullBack !== false
         });
       }
@@ -16522,13 +16541,13 @@ ${chapDigest}
         cx: solidCenter.x,
         cy: solidCenter.y,
         cz: solidCenter.z,
-        tier: tierPriority,
+        isBaseLayer,
         zoneIdx,
         faces: preparedFaces
       });
     },
 
-    addBoxSolid(cx, cy, cz, w, h, d, color, stroke, zoneIdx = -1, tier = 1) {
+    addBoxSolid(cx, cy, cz, w, h, d, color, trimStroke = null, zoneIdx = -1, isBaseLayer = false) {
       const hw = w * 0.5;
       const hh = h * 0.5;
       const hd = d * 0.5;
@@ -16543,16 +16562,22 @@ ${chapDigest}
         { x: cx - hw, y: cy + hh, z: cz + hd }
       ];
       const rawFaces = [
-        { verts: [v[3], v[2], v[6], v[7]], color }, // Top (+Y)
-        { verts: [v[4], v[5], v[6], v[7]], color }, // Front (+Z)
-        { verts: [v[1], v[0], v[3], v[2]], color }, // Back (-Z)
-        { verts: [v[0], v[4], v[7], v[3]], color }, // Left (-X)
-        { verts: [v[5], v[1], v[2], v[6]], color }  // Right (+X)
+        { verts: [v[3], v[2], v[6], v[7]], color, trimStroke }, // Top (+Y)
+        { verts: [v[4], v[5], v[6], v[7]], color },             // Front (+Z)
+        { verts: [v[1], v[0], v[3], v[2]], color },             // Back (-Z)
+        { verts: [v[0], v[4], v[7], v[3]], color },             // Left (-X)
+        { verts: [v[5], v[1], v[2], v[6]], color }              // Right (+X)
       ];
-      this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, tier, zoneIdx);
+      this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, isBaseLayer, zoneIdx);
     },
 
-    addPrismSolid(cx, baseY, cz, radius, height, sides, color, stroke, zoneIdx = -1, tier = 1) {
+    // 原图同款：黑曜石/柔粉倒角方垫屋顶（带一圈极细纯白内嵌高光边）
+    addBevelCapSolid(cx, baseY, cz, w, h, d, capColor, trimColor, zoneIdx = -1) {
+      this.addBoxSolid(cx, baseY + h * 0.5, cz, w, h, d, capColor, null, zoneIdx, false);
+      this.addBoxSolid(cx, baseY + h + 0.18, cz, w * 0.78, 0.36, d * 0.78, capColor, trimColor, zoneIdx, false);
+    },
+
+    addPrismSolid(cx, baseY, cz, radius, height, sides, color, trimStroke = null, zoneIdx = -1) {
       const bot = [];
       const top = [];
       for (let i = 0; i < sides; i++) {
@@ -16567,23 +16592,24 @@ ${chapDigest}
         const ni = (i + 1) % sides;
         rawFaces.push({
           verts: [bot[i], bot[ni], top[ni], top[i]],
-          color,
-          stroke
+          color
         });
       }
       rawFaces.push({
         verts: top,
         color,
-        stroke
+        trimStroke
       });
-      this.createConvexSolid(rawFaces, { x: cx, y: baseY + height * 0.5, z: cz }, tier, zoneIdx);
+      this.createConvexSolid(rawFaces, { x: cx, y: baseY + height * 0.5, z: cz }, false, zoneIdx);
     },
 
-    addPyramidSolid(cx, baseY, cz, radius, height, sides, color, stroke, zoneIdx = -1, tier = 2) {
+    addPyramidSolid(cx, baseY, cz, radius, height, sides, color, trimStroke = null, zoneIdx = -1) {
+      // 使用高细分面数且无边框渲染，使圆锥尖顶如丝绸般顺滑无折线
+      const smoothSides = Math.max(sides, 14);
       const apex = { x: cx, y: baseY + height, z: cz };
       const ring = [];
-      for (let i = 0; i < sides; i++) {
-        const ang = (i / sides) * Math.PI * 2 + Math.PI / sides;
+      for (let i = 0; i < smoothSides; i++) {
+        const ang = (i / smoothSides) * Math.PI * 2 + Math.PI / smoothSides;
         ring.push({
           x: cx + Math.cos(ang) * radius,
           y: baseY,
@@ -16591,23 +16617,23 @@ ${chapDigest}
         });
       }
       const rawFaces = [];
-      for (let i = 0; i < sides; i++) {
+      for (let i = 0; i < smoothSides; i++) {
         const p1 = ring[i];
-        const p2 = ring[(i + 1) % sides];
+        const p2 = ring[(i + 1) % smoothSides];
         rawFaces.push({
           verts: [p1, p2, apex],
-          color,
-          stroke
+          color
         });
       }
-      this.createConvexSolid(rawFaces, { x: cx, y: baseY + height * 0.35, z: cz }, tier, zoneIdx);
+      this.createConvexSolid(rawFaces, { x: cx, y: baseY + height * 0.32, z: cz }, false, zoneIdx);
     },
 
-    addDomeSolid(cx, baseY, cz, radius, height, sides, color, stroke, zoneIdx = -1, tier = 2) {
-      const rings = 3;
+    addDomeSolid(cx, baseY, cz, radius, height, sides, color, ribColor = null, zoneIdx = -1) {
+      const smoothSides = Math.max(sides, 16);
+      const rings = 5;
       let prevRing = [];
-      for (let i = 0; i < sides; i++) {
-        const ang = (i / sides) * Math.PI * 2;
+      for (let i = 0; i < smoothSides; i++) {
+        const ang = (i / smoothSides) * Math.PI * 2;
         prevRing.push({
           x: cx + Math.cos(ang) * radius,
           y: baseY,
@@ -16618,38 +16644,38 @@ ${chapDigest}
       for (let r = 1; r <= rings; r++) {
         const t = r / rings;
         const elev = (t * Math.PI) * 0.48;
-        const curR = Math.max(0.4, Math.cos(elev) * radius);
+        const curR = Math.max(0.35, Math.cos(elev) * radius);
         const curY = baseY + Math.sin(elev) * height;
         const nextRing = [];
-        for (let i = 0; i < sides; i++) {
-          const ang = (i / sides) * Math.PI * 2;
+        for (let i = 0; i < smoothSides; i++) {
+          const ang = (i / smoothSides) * Math.PI * 2;
           nextRing.push({
             x: cx + Math.cos(ang) * curR,
             y: curY,
             z: cz + Math.sin(ang) * curR
           });
         }
-        for (let i = 0; i < sides; i++) {
-          const ni = (i + 1) % sides;
+        const ringShade = this.shadeColor(color, 0.96 + r * 0.03);
+        for (let i = 0; i < smoothSides; i++) {
+          const ni = (i + 1) % smoothSides;
           rawFaces.push({
             verts: [prevRing[i], prevRing[ni], nextRing[ni], nextRing[i]],
-            color,
-            stroke
+            color: ringShade
           });
         }
         if (r === rings) {
           rawFaces.push({
             verts: nextRing,
-            color,
-            stroke
+            color: this.shadeColor(color, 1.08),
+            trimStroke: ribColor
           });
         }
         prevRing = nextRing;
       }
-      this.createConvexSolid(rawFaces, { x: cx, y: baseY + height * 0.4, z: cz }, tier, zoneIdx);
+      this.createConvexSolid(rawFaces, { x: cx, y: baseY + height * 0.38, z: cz }, false, zoneIdx);
     },
 
-    addGableRoofSolid(cx, baseY, cz, w, h, d, color, stroke, zoneIdx = -1, tier = 2) {
+    addGableRoofSolid(cx, baseY, cz, w, h, d, color, trimStroke = null, zoneIdx = -1) {
       const hw = w * 0.5;
       const hd = d * 0.5;
       const fl = { x: cx - hw, y: baseY, z: cz + hd };
@@ -16660,15 +16686,15 @@ ${chapDigest}
       const rr = { x: cx + hw, y: baseY + h, z: cz };
 
       const rawFaces = [
-        { verts: [fl, fr, rr, rl], color, stroke },
-        { verts: [br, bl, rl, rr], color, stroke },
-        { verts: [bl, fl, rl], color, stroke },
-        { verts: [fr, br, rr], color, stroke }
+        { verts: [fl, fr, rr, rl], color },
+        { verts: [br, bl, rl, rr], color },
+        { verts: [bl, fl, rl], color },
+        { verts: [fr, br, rr], color }
       ];
-      this.createConvexSolid(rawFaces, { x: cx, y: baseY + h * 0.35, z: cz }, tier, zoneIdx);
+      this.createConvexSolid(rawFaces, { x: cx, y: baseY + h * 0.35, z: cz }, false, zoneIdx);
     },
 
-    addDiamondSolid(cx, cy, cz, radius, height, color, stroke, zoneIdx = -1, tier = 3) {
+    addDiamondSolid(cx, cy, cz, radius, height, color, trimStroke = null, zoneIdx = -1) {
       const top = { x: cx, y: cy + height * 0.5, z: cz };
       const bot = { x: cx, y: cy - height * 0.5, z: cz };
       const ring = [
@@ -16682,11 +16708,11 @@ ${chapDigest}
         const p1 = ring[i];
         const p2 = ring[(i + 1) % 4];
         rawFaces.push(
-          { verts: [p1, p2, top], color, stroke },
-          { verts: [p2, p1, bot], color, stroke }
+          { verts: [p1, p2, top], color },
+          { verts: [p2, p1, bot], color }
         );
       }
-      this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, tier, zoneIdx);
+      this.createConvexSolid(rawFaces, { x: cx, y: cy, z: cz }, false, zoneIdx);
     },
 
     build3DSceneGeometry(data) {
@@ -16697,50 +16723,46 @@ ${chapDigest}
       const pal = this.resolveThemePalette();
       const zones = Array.isArray(data.zones) ? data.zones : [];
 
-      // 1. 立体双层学院庭院底座（Layer 0）
-      this.addBoxSolid(0, -3.2, 0, 118, 5.2, 96, pal.wallSide, pal.plazaBorder, -1, 0);
-      this.addBoxSolid(0, -0.35, 0, 110, 0.7, 88, pal.plazaA, pal.plazaBorder, -1, 0);
+      // 1. 纯白柔雾阶梯底座（无生硬黑边，融于云雾背景）
+      this.addBoxSolid(0, -2.2, 0, 112, 4.0, 92, pal.wallSide, null, -1, true);
+      this.addBoxSolid(0, -0.15, 0, 104, 0.3, 84, pal.wallPure, null, -1, true);
 
-      // 棋盘大理石地砖与中庭星盘纹理
+      // 柔和棋盘大理石地砖（无生硬描边，留出纯白柔光砖缝）
       const cols = 10;
       const rows = 8;
-      const tileW = 102 / cols;
-      const tileD = 80 / rows;
+      const tileW = 94 / cols;
+      const tileD = 74 / rows;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const tx = -51 + (c + 0.5) * tileW;
-          const tz = -40 + (r + 0.5) * tileD;
+          const tx = -47 + (c + 0.5) * tileW;
+          const tz = -37 + (r + 0.5) * tileD;
           const isEven = (r + c) % 2 === 0;
-          const isCenterCross = (c === 4 || c === 5 || r === 3 || r === 4);
-          const hw = tileW * 0.47;
-          const hd = tileD * 0.47;
+          const hw = tileW * 0.43;
+          const hd = tileD * 0.43;
           this.plazaFaces.push({
             verts: [
-              { x: tx - hw, y: 0.05, z: tz - hd },
-              { x: tx + hw, y: 0.05, z: tz - hd },
-              { x: tx + hw, y: 0.05, z: tz + hd },
-              { x: tx - hw, y: 0.05, z: tz + hd }
+              { x: tx - hw, y: 0.04, z: tz - hd },
+              { x: tx + hw, y: 0.04, z: tz - hd },
+              { x: tx + hw, y: 0.04, z: tz + hd },
+              { x: tx - hw, y: 0.04, z: tz + hd }
             ],
             cx: tx,
             cz: tz,
-            color: isCenterCross
-              ? (isEven ? pal.accentLight : pal.wallPure)
-              : (isEven ? pal.wallPure : pal.plazaB),
-            stroke: pal.plazaBorder
+            color: isEven ? pal.wallPure : pal.plazaB
           });
         }
       }
 
-      // 庭院四角精致围栏墩柱与黑粉星碑
-      const cornerCoords = [
-        { x: -49, z: -38 },
-        { x: 49, z: -38 },
-        { x: -49, z: 38 },
-        { x: 49, z: 38 }
+      // 原图同款：庭院四周散落的黑曜石与柔粉倒角小方碑（带纯白细内框）
+      const padCoords = [
+        { x: -16, z: 28, dark: true },
+        { x: 16, z: 22, dark: true },
+        { x: -38, z: 14, dark: false },
+        { x: 38, z: -16, dark: true }
       ];
-      cornerCoords.forEach((cc, i) => {
-        this.addBoxSolid(cc.x, 1.4, cc.z, 6.2, 2.8, 6.2, i % 2 === 0 ? pal.obsidian : pal.accentSoft, pal.wallPure, -1, 1);
-        this.addBoxSolid(cc.x, 3.1, cc.z, 4.4, 0.7, 4.4, pal.wallPure, pal.plazaBorder, -1, 1.2);
+      padCoords.forEach((pc) => {
+        const col = pc.dark ? pal.obsidian : pal.accentSoft;
+        this.addBevelCapSolid(pc.x, 0.1, pc.z, 7.2, 1.8, 7.2, col, 'rgba(255,255,255,0.85)', -1);
       });
 
       // 2. 自动防重叠建筑坐标布局
@@ -16753,7 +16775,7 @@ ${chapDigest}
             const dx = px - (other._px ?? other.x ?? 0);
             const dz = pz - (other._pz ?? other.z ?? 0);
             const dist = Math.hypot(dx, dz);
-            const minDist = 25;
+            const minDist = 24;
             if (dist < minDist) {
               const ang = dist > 0.1 ? Math.atan2(dz, dx) : (idx * 1.15);
               px += Math.cos(ang) * (minDist - dist);
@@ -16761,164 +16783,138 @@ ${chapDigest}
             }
           }
         }
-        px = Math.max(-39, Math.min(39, px));
-        pz = Math.max(-28, Math.min(28, pz));
+        px = Math.max(-38, Math.min(38, px));
+        pz = Math.max(-26, Math.min(26, pz));
         z._px = px;
         z._pz = pz;
         return { zone: z, idx, x: px, z: pz };
       });
 
-      // 3. 建筑间花园连廊汀步
-      for (let i = 0; i < placed.length - 1; i++) {
-        const a = placed[i];
-        const b = placed[i + 1];
-        const midX = (a.x + b.x) * 0.5;
-        const midZ = (a.z + b.z) * 0.5;
-        this.addBoxSolid(midX, 0.45, midZ, 5.2, 0.9, 5.2, pal.obsidianSoft, pal.wallPure, -1, 0.8);
-        this.addBoxSolid(midX, 1.05, midZ, 3.6, 0.35, 3.6, pal.accentSoft, pal.wallPure, -1, 0.9);
-      }
-
-      // 4. 为每个 Zone 生成多层精细立体建筑构件
+      // 3. 为每个 Zone 生成原图同款白瓷立体建筑群
       placed.forEach(({ zone, idx, x, z }) => {
-        const w = Math.max(16, Math.min(23, Number(zone.width) || 19));
-        const d = Math.max(16, Math.min(22, Number(zone.depth) || 18));
-        const h = Math.max(22, Math.min(36, Number(zone.height) || 28));
-        const roofMain = zone.accentTone === 'dark' ? pal.obsidian : pal.accent;
-        const roofSub = zone.accentTone === 'dark' ? pal.accentSoft : pal.obsidian;
-
-        // 双层阶梯白瓷台基（Tier 1.0 - 1.2）
-        this.addBoxSolid(x, 0.9, z, w + 3.4, 1.8, d + 3.4, pal.wallSide, pal.plazaBorder, idx, 1.0);
-        this.addBoxSolid(x, 2.2, z, w + 1.2, 0.9, d + 1.2, pal.wallPure, pal.plazaBorder, idx, 1.15);
-
-        let topY = h;
+        const w = Math.max(15, Math.min(22, Number(zone.width) || 18));
+        const d = Math.max(15, Math.min(21, Number(zone.depth) || 18));
+        const h = Math.max(22, Math.min(35, Number(zone.height) || 28));
         const arch = zone.archType || 'spire';
 
+        // 纯白白瓷阶梯台基
+        this.addBoxSolid(x, 1.0, z, w + 2.4, 2.0, d + 2.4, pal.wallPure, null, idx, false);
+
+        let topY = h;
+
         if (arch === 'clocktower') {
-          // 八棱哥特钟塔：分段塔身 + 挑檐腰线 + 四角飞扶壁翼塔 + 琉璃钟室 + 高耸八棱尖顶 + 星钻
-          const towerW = w * 0.62;
+          // 01 蔷薇钟塔：高耸纯白塔身 + 柔粉雕花钟窗层 + 黑曜石陡峭八棱高尖顶 + 四角小尖塔
+          const towerW = w * 0.58;
           const lowerH = h * 0.34;
-          const upperH = h * 0.26;
-          const base0 = 2.65;
-          this.addBoxSolid(x, base0 + lowerH * 0.5, z, towerW, lowerH, towerW, pal.wallPure, pal.plazaBorder, idx, 1.5);
-          // 挑檐腰线
-          const midY = base0 + lowerH;
-          this.addBoxSolid(x, midY + 0.5, z, towerW + 1.6, 1.0, towerW + 1.6, pal.accentLight, pal.plazaBorder, idx, 1.8);
-          this.addBoxSolid(x, midY + 1.0 + upperH * 0.5, z, towerW * 0.92, upperH, towerW * 0.92, pal.wallPure, pal.plazaBorder, idx, 2.0);
+          const belfryH = h * 0.22;
+          const base0 = 2.0;
 
-          // 四角飞扶壁翼柱与黑曜石小尖顶
-          const off = towerW * 0.56;
-          const buttH = lowerH + upperH * 0.55;
-          [[-off, -off], [off, -off], [-off, off], [off, off]].forEach(([bx, bz]) => {
-            this.addBoxSolid(x + bx, base0 + buttH * 0.5, z + bz, 3.2, buttH, 3.2, pal.wallSide, pal.plazaBorder, idx, 1.7);
-            this.addPyramidSolid(x + bx, base0 + buttH, z + bz, 2.6, 4.6, 4, roofSub, pal.wallPure, idx, 2.4);
-          });
+          this.addBoxSolid(x, base0 + lowerH * 0.5, z, towerW, lowerH, towerW, pal.wallPure, null, idx);
+          // 钟室层：纯白塔身嵌柔粉窗廊腰线
+          const belfryY = base0 + lowerH;
+          this.addBoxSolid(x, belfryY + 0.5, z, towerW + 1.2, 1.0, towerW + 1.2, pal.accentSoft, null, idx);
+          this.addBoxSolid(x, belfryY + 1.0 + belfryH * 0.5, z, towerW * 0.92, belfryH, towerW * 0.92, pal.wallPure, null, idx);
+          // 四面柔粉圆钟面装饰凸块
+          const cOff = towerW * 0.47;
+          const cMidY = belfryY + 1.0 + belfryH * 0.52;
+          this.addBoxSolid(x, cMidY, z + cOff, towerW * 0.38, belfryH * 0.48, 0.6, pal.accentSoft, null, idx);
+          this.addBoxSolid(x + cOff, cMidY, z, 0.6, belfryH * 0.48, towerW * 0.38, pal.accentSoft, null, idx);
+          this.addBoxSolid(x - cOff, cMidY, z, 0.6, belfryH * 0.48, towerW * 0.38, pal.accentSoft, null, idx);
 
-          // 柔粉琉璃钟室环带
-          const belfryY = midY + 1.0 + upperH;
-          this.addBoxSolid(x, belfryY + 2.6, z, towerW * 0.86, 5.2, towerW * 0.86, pal.accentSoft, pal.wallPure, idx, 2.5);
-          // 哥特八棱高尖顶
-          const spireBaseY = belfryY + 5.2;
+          // 顶部黑曜石大尖顶 + 四角柔粉小尖顶
+          const spireY = belfryY + 1.0 + belfryH;
           const spireH = h * 0.38;
-          this.addPyramidSolid(x, spireBaseY, z, towerW * 0.56, spireH, 8, roofMain, pal.wallPure, idx, 3.0);
-          topY = spireBaseY + spireH + 3.2;
-          this.addDiamondSolid(x, topY - 1.2, z, 1.6, 2.8, pal.obsidian, pal.wallPure, idx, 3.5);
+          this.addPyramidSolid(x, spireY, z, towerW * 0.56, spireH, 16, pal.obsidian, null, idx);
+          const pOff = towerW * 0.42;
+          [[-pOff, -pOff], [pOff, -pOff], [-pOff, pOff], [pOff, pOff]].forEach(([px, pz], pi) => {
+            this.addPyramidSolid(x + px, spireY - 0.5, z + pz, 2.0, spireH * 0.46, 12, pi % 2 === 0 ? pal.accent : pal.obsidian, null, idx);
+          });
+          topY = spireY + spireH + 2.5;
         } else if (arch === 'dome' || arch === 'greenhouse') {
-          // 琉璃穹顶温室：八角白瓷基厅 + 左右阳光翼廊 + 三层肋架琉璃圆穹顶 + 采光顶亭
-          const base0 = 2.65;
-          const baseH = h * 0.42;
-          this.addPrismSolid(x, base0, z, w * 0.48, baseH, 8, pal.wallPure, pal.plazaBorder, idx, 1.6);
-          // 左右对称玻璃翼廊
-          const wingH = baseH * 0.74;
-          this.addBoxSolid(x - w * 0.44, base0 + wingH * 0.5, z, w * 0.34, wingH, d * 0.48, pal.wallSide, pal.plazaBorder, idx, 1.5);
-          this.addBoxSolid(x + w * 0.44, base0 + wingH * 0.5, z, w * 0.34, wingH, d * 0.48, pal.wallSide, pal.plazaBorder, idx, 1.5);
-          this.addGableRoofSolid(x - w * 0.44, base0 + wingH, z, w * 0.36, 3.0, d * 0.50, roofSub, pal.wallPure, idx, 2.1);
-          this.addGableRoofSolid(x + w * 0.44, base0 + wingH, z, w * 0.36, 3.0, d * 0.50, roofSub, pal.wallPure, idx, 2.1);
+          // 02 琉璃温室：纯白圆柱高厅 + 丝滑柔粉多层穹顶 + 顶部黑曜石悬浮晶钻 + 侧翼小方亭
+          const base0 = 2.0;
+          const baseH = h * 0.44;
+          this.addPrismSolid(x, base0, z, w * 0.44, baseH, 16, pal.wallPure, null, idx);
+          // 侧翼纯白花房与黑曜石倒角顶垫
+          const wingH = baseH * 0.85;
+          this.addBoxSolid(x - w * 0.48, base0 + wingH * 0.5, z - 2, w * 0.38, wingH, d * 0.42, pal.wallPure, null, idx);
+          this.addBevelCapSolid(x - w * 0.48, base0 + wingH, z - 2, w * 0.32, 1.3, d * 0.34, pal.obsidian, 'rgba(255,255,255,0.85)', idx);
 
+          // 柔粉圆润穹顶 + 纯白环肋
           const domeY = base0 + baseH;
-          const domeR = w * 0.44;
-          const domeH = h * 0.38;
-          this.addDomeSolid(x, domeY, z, domeR, domeH, 10, pal.accentSoft, pal.wallPure, idx, 2.6);
-          this.addDiamondSolid(x, domeY + domeH + 1.8, z, 1.5, 2.6, pal.obsidian, pal.wallPure, idx, 3.4);
-          topY = domeY + domeH + 4.0;
+          const domeR = w * 0.43;
+          const domeH = h * 0.36;
+          this.addDomeSolid(x, domeY, z, domeR, domeH, 18, pal.accentSoft, 'rgba(255,255,255,0.9)', idx);
+          this.addDiamondSolid(x, domeY + domeH + 1.8, z, 1.7, 2.4, pal.obsidian, null, idx);
+          topY = domeY + domeH + 4.2;
         } else if (arch === 'hall' || arch === 'mansion') {
-          // 丝绒礼堂 / 巴洛克主宅：双层主殿 + 前出山花门廊 + 双坡斜顶 + 左右双尖塔
-          const base0 = 2.65;
-          const floor1H = h * 0.26;
-          const floor2H = h * 0.22;
-          this.addBoxSolid(x, base0 + floor1H * 0.5, z, w * 0.90, floor1H, d * 0.76, pal.wallPure, pal.plazaBorder, idx, 1.5);
-          this.addBoxSolid(x, base0 + floor1H + 0.4, z, w * 0.94, 0.8, d * 0.80, pal.accentLight, pal.plazaBorder, idx, 1.75);
-          this.addBoxSolid(x, base0 + floor1H + 0.8 + floor2H * 0.5, z, w * 0.86, floor2H, d * 0.72, pal.wallPure, pal.plazaBorder, idx, 2.0);
-
-          // 前出入口柱廊与山花三角顶
-          const portH = (floor1H + floor2H) * 0.82;
-          this.addBoxSolid(x, base0 + portH * 0.5, z + d * 0.42, w * 0.38, portH, d * 0.24, pal.accentLight, pal.plazaBorder, idx, 1.8);
-          this.addGableRoofSolid(x, base0 + portH, z + d * 0.42, w * 0.42, 3.2, d * 0.28, roofSub, pal.wallPure, idx, 2.3);
-
-          // 主殿大斜坡屋顶
-          const roofY = base0 + floor1H + 0.8 + floor2H;
+          // 03 丝绒礼堂：纯白宽阔主殿 + 黑曜石陡坡折角大屋顶 + 侧立高耸尖塔
+          const base0 = 2.0;
+          const bodyH = h * 0.46;
+          this.addBoxSolid(x + 2, base0 + bodyH * 0.5, z, w * 0.72, bodyH, d * 0.68, pal.wallPure, null, idx);
+          const roofY = base0 + bodyH;
           const roofH = h * 0.30;
-          this.addGableRoofSolid(x, roofY, z, w * 0.92, roofH, d * 0.78, roofMain, pal.wallPure, idx, 2.6);
-          // 左右双翼尖塔
-          this.addPyramidSolid(x - w * 0.32, roofY, z + d * 0.20, 3.0, roofH * 1.25, 4, roofSub, pal.wallPure, idx, 3.1);
-          this.addPyramidSolid(x + w * 0.32, roofY, z + d * 0.20, 3.0, roofH * 1.25, 4, roofSub, pal.wallPure, idx, 3.1);
-          topY = roofY + roofH * 1.25 + 3.0;
+          this.addGableRoofSolid(x + 2, roofY, z, w * 0.76, roofH, d * 0.72, pal.obsidian, null, idx);
+
+          // 礼堂左侧紧邻的哥特副尖塔（与原图中心偏左的尖锥完全一致）
+          const sideTowerH = bodyH * 1.05;
+          this.addBoxSolid(x - w * 0.34, base0 + sideTowerH * 0.5, z - 1, w * 0.32, sideTowerH, d * 0.32, pal.wallPure, null, idx);
+          this.addPyramidSolid(x - w * 0.34, base0 + sideTowerH, z - 1, w * 0.24, roofH * 1.45, 16, pal.obsidianSoft, null, idx);
+          topY = base0 + sideTowerH + roofH * 1.45 + 2.5;
+        } else if (arch === 'ward' || arch === 'courtyard') {
+          // 04 菲林画廊：错落纯白方厅群 + 原图标志性的黑曜石与柔粉倒角天窗顶垫
+          const base0 = 2.0;
+          const h1 = h * 0.52;
+          const h2 = h * 0.38;
+          this.addBoxSolid(x - w * 0.16, base0 + h1 * 0.5, z - 1, w * 0.56, h1, d * 0.56, pal.wallPure, null, idx);
+          this.addBevelCapSolid(x - w * 0.16, base0 + h1, z - 1, w * 0.42, 1.5, d * 0.42, pal.obsidian, 'rgba(255,255,255,0.85)', idx);
+
+          this.addBoxSolid(x + w * 0.24, base0 + h2 * 0.5, z + 3, w * 0.48, h2, d * 0.48, pal.wallPure, null, idx);
+          this.addBevelCapSolid(x + w * 0.24, base0 + h2, z + 3, w * 0.36, 1.3, d * 0.36, pal.accentSoft, 'rgba(255,255,255,0.85)', idx);
+          topY = base0 + h1 + 4.0;
         } else if (arch === 'pagoda') {
-          // 重檐飞阁楼台：三层递减楼身 + 三重挑檐四坡屋顶 + 宝顶
-          let curY = 2.65;
-          const tiers = 3;
-          for (let t = 0; t < tiers; t++) {
+          // 重檐楼台：三层纯白楼阁 + 柔粉与黑曜石交错挑檐顶
+          let curY = 2.0;
+          for (let t = 0; t < 3; t++) {
             const scale = 1 - t * 0.20;
             const th = (h * 0.20) * (1 - t * 0.08);
-            this.addBoxSolid(x, curY + th * 0.5, z, w * 0.74 * scale, th, d * 0.74 * scale, pal.wallPure, pal.plazaBorder, idx, 1.5 + t * 0.5);
+            this.addBoxSolid(x, curY + th * 0.5, z, w * 0.70 * scale, th, d * 0.70 * scale, pal.wallPure, null, idx);
             curY += th;
             const rh = h * 0.11;
-            this.addPyramidSolid(x, curY, z, w * 0.60 * scale, rh, 4, t % 2 === 0 ? roofMain : roofSub, pal.wallPure, idx, 1.75 + t * 0.5);
+            this.addPyramidSolid(x, curY, z, w * 0.56 * scale, rh, 4, t % 2 === 0 ? pal.obsidian : pal.accentSoft, null, idx);
             curY += rh * 0.82;
           }
-          this.addPyramidSolid(x, curY, z, 1.8, 4.2, 6, pal.accent, pal.wallPure, idx, 3.4);
-          topY = curY + 5.2;
-        } else if (arch === 'ward' || arch === 'courtyard') {
-          // 天窗回廊展馆 / 复合馆舍：高低错层双翼 + 采光玻璃顶厅 + 钟楼小阁
-          const base0 = 2.65;
-          const h1 = h * 0.42;
-          const h2 = h * 0.56;
-          this.addBoxSolid(x - w * 0.16, base0 + h1 * 0.5, z + d * 0.12, w * 0.68, h1, d * 0.62, pal.wallPure, pal.plazaBorder, idx, 1.5);
-          this.addBoxSolid(x + w * 0.20, base0 + h2 * 0.5, z - d * 0.12, w * 0.54, h2, d * 0.62, pal.wallSide, pal.plazaBorder, idx, 1.7);
-          // 屋顶斜顶与天窗阁楼
-          this.addGableRoofSolid(x - w * 0.16, base0 + h1, z + d * 0.12, w * 0.72, 3.6, d * 0.66, roofMain, pal.wallPure, idx, 2.4);
-          this.addBoxSolid(x + w * 0.20, base0 + h2 + 1.2, z - d * 0.12, w * 0.40, 2.4, d * 0.42, pal.accentSoft, pal.wallPure, idx, 2.6);
-          this.addPyramidSolid(x + w * 0.20, base0 + h2 + 2.4, z - d * 0.12, w * 0.28, 4.5, 4, roofSub, pal.wallPure, idx, 3.1);
-          topY = base0 + h2 + 8.0;
+          topY = curY + 3.5;
         } else if (arch === 'observatory') {
-          // 星象观测台：八棱高台 + 观星副翼 + 旋转半球穹顶
-          const base0 = 2.65;
+          // 星象观测圆台
+          const base0 = 2.0;
           const cylH = h * 0.48;
-          this.addPrismSolid(x, base0, z, w * 0.44, cylH, 10, pal.wallPure, pal.plazaBorder, idx, 1.6);
-          this.addBoxSolid(x + w * 0.36, base0 + cylH * 0.36, z, w * 0.38, cylH * 0.72, d * 0.46, pal.accentLight, pal.plazaBorder, idx, 1.5);
-          this.addGableRoofSolid(x + w * 0.36, base0 + cylH * 0.72, z, w * 0.40, 2.8, d * 0.48, roofSub, pal.wallPure, idx, 2.2);
-          this.addDomeSolid(x, base0 + cylH, z, w * 0.42, h * 0.36, 10, roofMain, pal.wallPure, idx, 2.7);
-          topY = base0 + cylH + h * 0.36 + 3.5;
+          this.addPrismSolid(x, base0, z, w * 0.42, cylH, 16, pal.wallPure, null, idx);
+          this.addDomeSolid(x, base0 + cylH, z, w * 0.40, h * 0.36, 18, pal.obsidian, 'rgba(255,255,255,0.85)', idx);
+          topY = base0 + cylH + h * 0.36 + 3.0;
         } else {
-          // 默认：簇拥多尖顶城堡寝宫（主城堡 + 四角高低错落黑曜石与柔粉尖塔）
-          const base0 = 2.65;
-          const castleH = h * 0.48;
-          this.addBoxSolid(x, base0 + castleH * 0.5, z, w * 0.74, castleH, d * 0.74, pal.wallPure, pal.plazaBorder, idx, 1.5);
+          // 05 公爵寝宫：纯白城堡高台 + 簇拥多尖顶圆锥群（柔粉主尖顶 + 黑曜石子尖顶 + 侧翼柔粉顶垫塔）
+          const base0 = 2.0;
+          const castleH = h * 0.46;
+          this.addBoxSolid(x - 2, base0 + castleH * 0.5, z, w * 0.68, castleH, d * 0.68, pal.wallPure, null, idx);
           const baseTop = base0 + castleH;
-          const mainSpireH = h * 0.40;
-          this.addPyramidSolid(x, baseTop, z, w * 0.32, mainSpireH, 6, pal.accent, pal.wallPure, idx, 2.9);
-
-          const subOffsets = [
-            { dx: -w * 0.28, dz: -d * 0.24, sh: mainSpireH * 0.74, col: pal.obsidian },
-            { dx: w * 0.28, dz: -d * 0.22, sh: mainSpireH * 0.68, col: pal.obsidian },
-            { dx: -w * 0.24, dz: d * 0.26, sh: mainSpireH * 0.64, col: pal.obsidianSoft },
-            { dx: w * 0.26, dz: d * 0.26, sh: mainSpireH * 0.78, col: pal.accentSoft }
+          const mainSpireH = h * 0.36;
+          // 中心柔粉圆锥尖顶
+          this.addPyramidSolid(x - 2, baseTop, z, w * 0.26, mainSpireH, 16, pal.accentSoft, null, idx);
+          // 环绕黑曜石尖锥群
+          const cones = [
+            { dx: -5.2, dz: 1.5, r: 2.3, sh: mainSpireH * 0.68, col: pal.obsidian },
+            { dx: 3.8, dz: -2.0, r: 2.5, sh: mainSpireH * 0.76, col: pal.obsidian },
+            { dx: -1.5, dz: 4.5, r: 2.6, sh: mainSpireH * 0.72, col: pal.obsidian }
           ];
-          subOffsets.forEach(so => {
-            const turH = castleH * 1.12;
-            this.addBoxSolid(x + so.dx, base0 + turH * 0.5, z + so.dz, 4.8, turH, 4.8, pal.wallPure, pal.plazaBorder, idx, 1.8);
-            this.addPyramidSolid(x + so.dx, base0 + turH, z + so.dz, 3.3, so.sh, 6, so.col, pal.wallPure, idx, 2.8);
+          cones.forEach(c => {
+            this.addPyramidSolid(x - 2 + c.dx, baseTop, z + c.dz, c.r, c.sh, 16, c.col, null, idx);
           });
-          topY = baseTop + mainSpireH + 3.5;
+          // 右侧独立纯白方塔配柔粉倒角顶垫（与原图右侧白塔完全对应）
+          const sideH = castleH * 0.92;
+          this.addBoxSolid(x + w * 0.42, base0 + sideH * 0.5, z - 2, w * 0.38, sideH, d * 0.38, pal.wallPure, null, idx);
+          this.addBevelCapSolid(x + w * 0.42, base0 + sideH, z - 2, w * 0.30, 1.3, d * 0.30, pal.accentSoft, 'rgba(255,255,255,0.85)', idx);
+          topY = baseTop + mainSpireH + 3.2;
         }
 
         this.labelAnchors.push({
@@ -16937,6 +16933,7 @@ ${chapDigest}
       if (!layer) return;
       layer.innerHTML = '';
 
+      const pal = this.resolveThemePalette();
       this.labelAnchors.forEach((anchor, i) => {
         const pill = document.createElement('button');
         pill.type = 'button';
@@ -16952,19 +16949,19 @@ ${chapDigest}
           'display:inline-flex',
           'align-items:center',
           'gap:4px',
-          'padding:2px 8px',
+          'padding:2px 9px',
           'border-radius:999px',
-          'background:var(--card-bg)',
-          'border:1.5px solid var(--border-color)',
-          'box-shadow:0 3px 10px rgba(0,0,0,0.10)',
+          'background:rgba(255,255,255,0.92)',
+          'border:1px solid rgba(255,255,255,0.98)',
+          'box-shadow:0 3px 10px rgba(38,32,40,0.08)',
           'font-size:11px',
           'font-weight:800',
-          'color:var(--text-primary)',
+          `color:${pal.obsidian}`,
           'white-space:nowrap',
-          'transition:border-color 0.2s, background 0.2s'
+          'transition:transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease'
         ].join(';');
 
-        pill.innerHTML = `<span class="atlas-pill-code" style="color:var(--accent-color); font-weight:900;">${this.escapeHtml(anchor.code)}</span><span>${this.escapeHtml(anchor.name)}</span>`;
+        pill.innerHTML = `<span class="atlas-pill-code" style="color:${pal.accent}; font-weight:900;">${this.escapeHtml(anchor.code)}</span><span>${this.escapeHtml(anchor.name)}</span>`;
         pill.addEventListener('click', (e) => {
           e.stopPropagation();
           this.focusZone(i, true);
@@ -17035,9 +17032,9 @@ ${chapDigest}
 
       if (zoneIdx >= 0 && zoneIdx < zones.length) {
         const target = zones[zoneIdx];
-        this.camera.targetPanX = -(target._px ?? target.x ?? 0) * 0.48;
-        this.camera.targetPanZ = -(target._pz ?? target.z ?? 0) * 0.48;
-        this.camera.targetZoom = 1.18;
+        this.camera.targetPanX = -(target._px ?? target.x ?? 0) * 0.35;
+        this.camera.targetPanZ = -(target._pz ?? target.z ?? 0) * 0.35;
+        this.camera.targetZoom = 1.12;
       } else {
         this.camera.targetPanX = 0;
         this.camera.targetPanZ = 0;
@@ -17061,34 +17058,39 @@ ${chapDigest}
       const z = zones[activeIdx];
       if (!z) return;
 
+      const pal = this.resolveThemePalette();
+
       // 1. 更新底部路线图标高亮
       const strip = document.getElementById('atlas-zone-strip');
       if (strip) {
         Array.from(strip.children).forEach((btn, idx) => {
-          const isSel = idx === this.selectedZoneIndex;
-          btn.style.borderColor = isSel ? 'var(--accent-color)' : 'var(--border-color)';
+          const isSel = idx === activeIdx;
+          btn.style.borderColor = isSel ? pal.accent : 'var(--border-color)';
           btn.style.background = isSel ? 'var(--secondary-bg)' : 'var(--card-bg)';
           const iconBox = btn.querySelector('.atlas-zone-icon-box');
           if (iconBox) {
-            iconBox.style.background = isSel ? 'var(--accent-color)' : 'var(--secondary-bg)';
+            iconBox.style.background = isSel ? pal.accent : 'var(--secondary-bg)';
             iconBox.style.color = isSel ? '#ffffff' : 'var(--text-primary)';
             iconBox.innerHTML = this.getZoneSvgIcon(zones[idx]?.archType, isSel);
           }
         });
       }
 
-      // 2. 更新屋顶悬浮铭牌高亮
+      // 2. 更新屋顶悬浮铭牌样式（始终保持通透精致的白底胶囊，选中时柔光描边）
       this.labelAnchors.forEach((anchor, idx) => {
         if (!anchor.el) return;
         const isSel = idx === this.selectedZoneIndex;
-        anchor.el.style.borderColor = isSel ? 'var(--accent-color)' : 'var(--border-color)';
-        anchor.el.style.background = isSel ? 'var(--accent-color)' : 'var(--card-bg)';
-        anchor.el.style.color = isSel ? '#ffffff' : 'var(--text-primary)';
+        anchor.el.style.borderColor = isSel ? pal.accent : 'rgba(255,255,255,0.98)';
+        anchor.el.style.background = isSel ? '#ffffff' : 'rgba(255,255,255,0.92)';
+        anchor.el.style.color = pal.obsidian;
+        anchor.el.style.boxShadow = isSel
+          ? `0 4px 14px ${this.mixHex(pal.accent, '#ffffff', 0.35)}`
+          : '0 3px 10px rgba(38,32,40,0.08)';
         const codeSpan = anchor.el.querySelector('.atlas-pill-code');
-        if (codeSpan) codeSpan.style.color = isSel ? '#ffffff' : 'var(--accent-color)';
+        if (codeSpan) codeSpan.style.color = pal.accent;
       });
 
-      // 3. 更新下方建筑档案卡片（同时兼容新旧 DOM ID）
+      // 3. 更新下方建筑档案卡片
       const codeEl = document.getElementById('atlas-detail-code') || document.getElementById('atlas-detail-num');
       const nameEl = document.getElementById('atlas-detail-name') || document.getElementById('atlas-detail-title');
       const subEl = document.getElementById('atlas-detail-sub') || document.getElementById('atlas-detail-en');
@@ -17109,7 +17111,7 @@ ${chapDigest}
       if (starsEl) {
         const count = Math.max(1, Math.min(5, Number(z.rating) || 5));
         starsEl.innerHTML = Array.from({ length: count }).map(() =>
-          `<svg width="12" height="12" viewBox="0 0 24 24" fill="var(--accent-color)" stroke="var(--accent-color)" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
+          `<svg width="12" height="12" viewBox="0 0 24 24" fill="${pal.accent}" stroke="${pal.accent}" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
         ).join('');
       }
       if (descEl) descEl.textContent = z.desc || '';
@@ -17123,9 +17125,9 @@ ${chapDigest}
           cluesWrap.style.display = 'flex';
           cluesList.innerHTML = spots.map(sp => `
             <div style="display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border-radius:10px; background:var(--secondary-bg); border:1px solid var(--border-color);">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${pal.accent}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>
               <div style="flex:1; min-width:0; font-size:11.5px; line-height:1.5; color:var(--text-primary);">
-                <span style="font-weight:700; color:var(--accent-color);">${this.escapeHtml(sp.name)}</span>
+                <span style="font-weight:700; color:${pal.accent};">${this.escapeHtml(sp.name)}</span>
                 <span style="color:var(--text-secondary);"> · ${this.escapeHtml(sp.info)}</span>
               </div>
             </div>
@@ -17155,10 +17157,9 @@ ${chapDigest}
         this.pointer.lastX = e.clientX;
         this.pointer.lastY = e.clientY;
 
-        // 修正水平旋转方向：手指往左滑时，模型正面跟随手指往左转
+        // 手指往左滑时，模型正面跟随手指往左转
         this.camera.targetYaw -= dx * 0.0095;
         this.camera.yaw = this.camera.targetYaw;
-        // 垂直仰俯角：0.30（平视立体角）到 1.18（高清正交感俯瞰图）
         this.camera.targetPitch = Math.max(0.30, Math.min(1.18, this.camera.targetPitch + dy * 0.0065));
         this.camera.pitch = this.camera.targetPitch;
         this.requestRender();
@@ -17178,7 +17179,7 @@ ${chapDigest}
       canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? -0.08 : 0.08;
-        this.camera.targetZoom = Math.max(0.72, Math.min(1.68, this.camera.targetZoom + delta));
+        this.camera.targetZoom = Math.max(0.75, Math.min(1.65, this.camera.targetZoom + delta));
         this.requestRender();
       }, { passive: false });
     },
@@ -17227,7 +17228,6 @@ ${chapDigest}
       }
     },
 
-    // 正交微透视轴测投影：保证垂直墙体永远笔直不歪斜，俯瞰图方正清晰
     projectPoint(pt, cosY, sinY, cosP, sinP, scale, centerX, centerY) {
       const wx = pt.x + this.camera.panX;
       const wy = pt.y;
@@ -17237,11 +17237,10 @@ ${chapDigest}
       const rz = wx * sinY + wz * cosY;
 
       const ry = wy * cosP - rz * sinP;
-      // camZ 为朝向屏幕外（镜头方向）的深度坐标：值越小离镜头越远，值越大离镜头越近
       const camZ = wy * sinP + rz * cosP;
 
       const fov = 1800;
-      const persp = fov / Math.max(900, fov - camZ * 0.22);
+      const persp = fov / Math.max(900, fov - camZ * 0.20);
       return {
         x: centerX + rx * scale * persp,
         y: centerY - ry * scale * persp,
@@ -17300,12 +17299,13 @@ ${chapDigest}
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, cssW, cssH);
 
+      // 1. 原图同款：梦幻柔雾粉白渐变背景
       const pal = this.resolveThemePalette();
-      const grad = ctx.createRadialGradient(cssW * 0.5, cssH * 0.48, 16, cssW * 0.5, cssH * 0.5, cssW * 0.72);
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.65, pal.accentLight);
-      grad.addColorStop(1, pal.plazaA);
-      ctx.fillStyle = grad;
+      const bgGrad = ctx.createRadialGradient(cssW * 0.5, cssH * 0.44, 10, cssW * 0.5, cssH * 0.5, cssW * 0.72);
+      bgGrad.addColorStop(0, '#ffffff');
+      bgGrad.addColorStop(0.55, pal.accentGlow);
+      bgGrad.addColorStop(1, pal.accentLight);
+      ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, cssW, cssH);
 
       const cosY = Math.cos(this.camera.yaw);
@@ -17313,27 +17313,26 @@ ${chapDigest}
       const cosP = Math.cos(this.camera.pitch);
       const sinP = Math.sin(this.camera.pitch);
 
-      // 镜头朝向单位向量 V（指向观察者）
+      // 镜头视线方向单位向量 V（指向观察者）
       const Vx = sinY * cosP;
       const Vy = sinP;
       const Vz = cosY * cosP;
 
-      // 主光源方向向量 L（左上方柔光）
-      const Lx = -0.42 * cosY - 0.35 * sinY;
-      const Ly = 0.78;
-      const Lz = -0.42 * sinY + 0.35 * cosY;
+      // 柔和顶侧光方向向量 L
+      const Lx = -0.38 * cosY - 0.32 * sinY;
+      const Ly = 0.82;
+      const Lz = -0.38 * sinY + 0.32 * cosY;
 
-      const baseScale = (Math.min(cssW, cssH) / 118) * this.camera.zoom;
+      const baseScale = (Math.min(cssW, cssH) / 114) * this.camera.zoom;
       const centerX = cssW * 0.5;
-      // 随仰角动态居中，确保平视与俯瞰图都在视窗正中央
       const pitchRatio = (this.camera.pitch - 0.30) / (1.18 - 0.30);
       const centerY = cssH * (0.61 - pitchRatio * 0.09);
 
-      // 1. 先绘制底层基座实体（tier === 0）
-      const baseSolids = this.solids.filter(s => s.tier < 0.5);
+      // 2. 绘制底层柔白基座
+      const baseSolids = this.solids.filter(s => s.isBaseLayer);
       this.renderSolidList(ctx, baseSolids, cosY, sinY, cosP, sinP, Vx, Vy, Vz, Lx, Ly, Lz, baseScale, centerX, centerY, pal);
 
-      // 2. 绘制棋盘广场地砖（从远到近：camZ 从小到大）
+      // 3. 绘制无描边柔光棋盘地砖
       const projectedPlaza = this.plazaFaces.map(f => {
         const pts = f.verts.map(v => this.projectPoint(v, cosY, sinY, cosP, sinP, baseScale, centerX, centerY));
         const avgCamZ = (pts[0].camZ + pts[1].camZ + pts[2].camZ + pts[3].camZ) * 0.25;
@@ -17348,45 +17347,98 @@ ${chapDigest}
         ctx.closePath();
         ctx.fillStyle = f.color;
         ctx.fill();
-        ctx.strokeStyle = f.stroke;
-        ctx.lineWidth = 0.55;
-        ctx.stroke();
       });
 
-      // 3. 绘制所有地上立体建筑凸体构件（tier >= 0.5）
-      const upperSolids = this.solids.filter(s => s.tier >= 0.5);
+      // 4. 在每座建筑底部绘制柔和环境光遮蔽投影（代替生硬底边线）
+      this.labelAnchors.forEach((anchor, idx) => {
+        const groundPt = this.projectPoint({ x: anchor.x, y: 0.1, z: anchor.z }, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
+        const isSel = idx === this.selectedZoneIndex;
+        const rad = (isSel ? 28 : 22) * this.camera.zoom;
+        const aoGrad = ctx.createRadialGradient(groundPt.x, groundPt.y, 2, groundPt.x, groundPt.y, rad);
+        if (isSel) {
+          aoGrad.addColorStop(0, this.mixHex(pal.accent, '#ffffff', 0.45));
+          aoGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        } else {
+          aoGrad.addColorStop(0, 'rgba(38,32,40,0.09)');
+          aoGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        }
+        ctx.save();
+        ctx.translate(groundPt.x, groundPt.y);
+        ctx.scale(1, Math.max(0.48, sinP));
+        ctx.translate(-groundPt.x, -groundPt.y);
+        ctx.fillStyle = aoGrad;
+        ctx.beginPath();
+        ctx.arc(groundPt.x, groundPt.y, rad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // 5. 绘制所有地上立体建筑凸体（无边框丝滑立体着色）
+      const upperSolids = this.solids.filter(s => !s.isBaseLayer);
       this.renderSolidList(ctx, upperSolids, cosY, sinY, cosP, sinP, Vx, Vy, Vz, Lx, Ly, Lz, baseScale, centerX, centerY, pal);
 
-      // 4. 更新屋顶悬浮铭牌与精致小锚点
-      this.labelAnchors.forEach((anchor, idx) => {
+      // 6. 原图同款：底座四周梦幻柔白云雾边缘渐变（消除底座生硬边界）
+      const mistGrad = ctx.createRadialGradient(cssW * 0.5, cssH * 0.50, cssW * 0.28, cssW * 0.5, cssH * 0.52, cssW * 0.62);
+      mistGrad.addColorStop(0, 'rgba(255,255,255,0)');
+      mistGrad.addColorStop(0.75, 'rgba(255,255,255,0.18)');
+      mistGrad.addColorStop(1, 'rgba(255,251,253,0.78)');
+      ctx.fillStyle = mistGrad;
+      ctx.fillRect(0, 0, cssW, cssH);
+
+      // 7. 计算屋顶悬浮铭牌位置并自动防重叠排布
+      const labelItems = this.labelAnchors.map((anchor, idx) => {
         const proj = this.projectPoint(anchor, cosY, sinY, cosP, sinP, baseScale, centerX, centerY);
         anchor.screenX = proj.x;
         anchor.screenY = proj.y;
+        return {
+          anchor,
+          idx,
+          x: Math.max(44, Math.min(cssW - 44, proj.x)),
+          y: Math.max(26, Math.min(cssH - 22, proj.y - 4)),
+          camZ: proj.camZ
+        };
+      });
 
-        const isSel = idx === this.selectedZoneIndex;
-        // 屋顶顶端精致小星芒点
+      // 按屏幕 Y 从上往下排序，若两个胶囊靠得太近则自动错开垂直高度
+      labelItems.sort((a, b) => a.y - b.y);
+      for (let pass = 0; pass < 3; pass++) {
+        for (let i = 0; i < labelItems.length; i++) {
+          for (let j = i + 1; j < labelItems.length; j++) {
+            const a = labelItems[i];
+            const b = labelItems[j];
+            const dx = Math.abs(a.x - b.x);
+            const dy = b.y - a.y;
+            if (dx < 76 && dy < 23) {
+              const push = (23 - dy) * 0.55;
+              a.y = Math.max(24, a.y - push);
+              b.y = Math.min(cssH - 20, b.y + push);
+            }
+          }
+        }
+      }
+
+      labelItems.forEach(({ anchor, idx, x, y, camZ }) => {
+        // 铭牌下方原图同款小巧十字星芒
         ctx.save();
-        ctx.translate(proj.x, proj.y + 3);
-        ctx.fillStyle = isSel ? pal.accent : pal.obsidian;
+        ctx.translate(anchor.screenX, anchor.screenY + 2);
+        ctx.fillStyle = idx === this.selectedZoneIndex ? pal.accent : pal.obsidian;
         ctx.beginPath();
-        ctx.moveTo(0, -3.2);
-        ctx.lineTo(0.9, -0.9);
-        ctx.lineTo(3.2, 0);
-        ctx.lineTo(0.9, 0.9);
-        ctx.lineTo(0, 3.2);
-        ctx.lineTo(-0.9, 0.9);
-        ctx.lineTo(-3.2, 0);
-        ctx.lineTo(-0.9, -0.9);
+        ctx.moveTo(0, -3.0);
+        ctx.lineTo(0.8, -0.8);
+        ctx.lineTo(3.0, 0);
+        ctx.lineTo(0.8, 0.8);
+        ctx.lineTo(0, 3.0);
+        ctx.lineTo(-0.8, 0.8);
+        ctx.lineTo(-3.0, 0);
+        ctx.lineTo(-0.8, -0.8);
         ctx.closePath();
         ctx.fill();
         ctx.restore();
 
         if (anchor.el) {
-          const clampedX = Math.max(40, Math.min(cssW - 40, proj.x));
-          const clampedY = Math.max(24, Math.min(cssH - 18, proj.y - 2));
-          anchor.el.style.left = `${clampedX.toFixed(1)}px`;
-          anchor.el.style.top = `${clampedY.toFixed(1)}px`;
-          anchor.el.style.zIndex = String(Math.max(10, Math.round(200 + proj.camZ)));
+          anchor.el.style.left = `${x.toFixed(1)}px`;
+          anchor.el.style.top = `${y.toFixed(1)}px`;
+          anchor.el.style.zIndex = String(Math.max(10, Math.round(200 + camZ)));
         }
       });
 
@@ -17394,17 +17446,14 @@ ${chapDigest}
     },
 
     renderSolidList(ctx, solidList, cosY, sinY, cosP, sinP, Vx, Vy, Vz, Lx, Ly, Lz, baseScale, centerX, centerY, pal) {
-      // 按凸体中心在镜头方向的深度 camZ 从远到近（从小到大）+ 层级高度排序
+      // 严格按照凸体中心在镜头视线方向的三维真实深度 fullCamZ 由远及近排序
       const sortedSolids = solidList.map(s => {
         const wx = s.cx + this.camera.panX;
         const wy = s.cy;
         const wz = s.cz + this.camera.panZ;
         const rz = wx * sinY + wz * cosY;
-        const groundCamZ = rz * cosP;
         const fullCamZ = wy * sinP + rz * cosP;
-        // 同一建筑内部严格按 tier 从下往上绘制，不同建筑之间按地面与空间深度由远及近绘制
-        const sortKey = groundCamZ * 1.15 + fullCamZ * 0.45 + s.tier * 6.5;
-        return { s, sortKey };
+        return { s, sortKey: fullCamZ };
       });
 
       sortedSolids.sort((a, b) => a.sortKey - b.sortKey);
@@ -17416,34 +17465,36 @@ ${chapDigest}
         for (let i = 0; i < s.faces.length; i++) {
           const f = s.faces[i];
           const dotCam = f.nx * Vx + f.ny * Vy + f.nz * Vz;
-          // 严格背面剔除：背向镜头的墙面与底面绝不绘制，彻底杜绝穿模与歪斜
-          if (f.cullBack && dotCam <= 0.01) continue;
+          if (f.cullBack && dotCam <= 0.005) continue;
 
           const pts = f.verts.map(v => this.projectPoint(v, cosY, sinY, cosP, sinP, baseScale, centerX, centerY));
           let avgZ = 0;
           for (let k = 0; k < pts.length; k++) avgZ += pts[k].camZ;
           avgZ /= pts.length;
 
-          const dotLight = Math.max(-0.6, Math.min(1, f.nx * Lx + f.ny * Ly + f.nz * Lz));
-          const lightFactor = 0.92 + dotLight * 0.14 + (isFocused ? 0.05 : 0);
+          // 柔和漫反射与顶面微高光，让纯白墙体与粉黑尖顶呈现出细腻的陶瓷与丝绸体积感
+          const dotLight = Math.max(-0.5, Math.min(1, f.nx * Lx + f.ny * Ly + f.nz * Lz));
+          const lightFactor = 0.91 + dotLight * 0.14 + (isFocused ? 0.04 : 0);
           visibleFaces.push({ f, pts, avgZ, lightFactor });
         }
 
-        // 同一凸体的可见正面按 avgZ 由远及近微排
         visibleFaces.sort((a, b) => a.avgZ - b.avgZ);
 
         for (let i = 0; i < visibleFaces.length; i++) {
           const { f, pts, lightFactor } = visibleFaces[i];
+          const fillCol = this.shadeColor(f.baseColor, lightFactor);
+
           ctx.beginPath();
           ctx.moveTo(pts[0].x, pts[0].y);
           for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
           ctx.closePath();
 
-          ctx.fillStyle = this.shadeColor(f.baseColor, lightFactor);
+          ctx.fillStyle = fillCol;
           ctx.fill();
 
-          ctx.strokeStyle = isFocused ? pal.accent : (f.stroke || pal.plazaBorder);
-          ctx.lineWidth = isFocused ? 1.15 : 0.7;
+          // 关键：使用与填充色完全相同的细微边缘来消除 Canvas 三角形抗锯齿白缝，只有在构件显式指定了装饰内框（如倒角顶垫的白线）时才绘制装饰细线
+          ctx.strokeStyle = f.trimStroke || fillCol;
+          ctx.lineWidth = f.trimStroke ? 0.85 : 0.45;
           ctx.lineJoin = 'round';
           ctx.stroke();
         }
@@ -17465,5 +17516,6 @@ ${chapDigest}
 
   console.log('[模组] 模组深度重构、小说化四阶流水线与 3D 沙盘引擎已就绪');
 })(window);
+
 
 
