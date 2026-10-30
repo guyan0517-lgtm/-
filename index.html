@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -17734,11 +17734,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               </div>
               <div style="display: flex; flex-direction: column; gap: 4px;">
                 <label style="font-size: 11px; color: var(--text-secondary);">每次读取多少条群记录</label>
-                <input type="text" id="qqbot-context-limit-input" list="qqbot-context-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" value="180" placeholder="上下文条数" style="width: 100%; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <input type="text" id="qqbot-context-limit-input" list="qqbot-context-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" value="180" placeholder="上下文条数" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+                  <button type="button" id="qqbot-reload-context-btn" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.reloadContextMessages(false);}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">读取</button>
+                </div>
                 <datalist id="qqbot-context-datalist">
+                  <option value="10">10条精简读取</option>
+                  <option value="50">50条轻量聊天</option>
                   <option value="100">100条日常聊天</option>
                   <option value="180">180条跑团标准</option>
                   <option value="300">300条长线剧情</option>
+                  <option value="500">500条超长记录</option>
                 </datalist>
               </div>
             </div>

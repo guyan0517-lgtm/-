@@ -4507,6 +4507,69 @@ function createExpenditureLineChart(data, daysInMonth) {
       return this.serverState.config.groups[this.currentGroupId] || null;
     },
 
+    getGroupContextLimit(gid) {
+      const targetId = String(gid || this.currentGroupId || "").trim();
+      const cfg = (this.serverState && this.serverState.config) || {};
+      const groups = cfg.groups || {};
+      if (
+        targetId &&
+        groups[targetId] &&
+        Number(groups[targetId].contextLimit) > 0
+      ) {
+        return Math.max(
+          1,
+          Math.min(2000, Math.floor(Number(groups[targetId].contextLimit))),
+        );
+      }
+      const curCfg = this.getCurrentGroupConfig();
+      if (curCfg && Number(curCfg.contextLimit) > 0) {
+        return Math.max(
+          1,
+          Math.min(2000, Math.floor(Number(curCfg.contextLimit))),
+        );
+      }
+      const domEl = document.getElementById("qqbot-context-limit-input");
+      if (domEl && Number(domEl.value) > 0) {
+        return Math.max(1, Math.min(2000, Math.floor(Number(domEl.value))));
+      }
+      return 180;
+    },
+
+    async reloadContextMessages(silent = false) {
+      const g = this.getCurrentGroupConfig();
+      const inputEl = document.getElementById("qqbot-context-limit-input");
+      if (g && inputEl) {
+        const parsed = parseInt(String(inputEl.value || "").trim(), 10);
+        if (parsed > 0) {
+          g.contextLimit = Math.max(1, Math.min(2000, parsed));
+          inputEl.value = String(g.contextLimit);
+        }
+      }
+      const limit = this.getGroupContextLimit(this.currentGroupId);
+      const reloadBtn = document.getElementById("qqbot-reload-context-btn");
+      if (!silent && reloadBtn) reloadBtn.textContent = "读取中";
+      try {
+        this.renderGroupSelectDropdown();
+        await this.saveAllSettings(false);
+        if (this.currentGroupId) {
+          const curLogs = this.staticFallbackLogs[this.currentGroupId] || [];
+          if (curLogs.length > limit) {
+            this.staticFallbackLogs[this.currentGroupId] = curLogs.slice(-limit);
+          }
+          await this.syncRecentHistoryFromOneBot(this.currentGroupId, true, true);
+        }
+        await this.refreshSandboxLog();
+        if (!silent) {
+          const loadedCount = (
+            this.staticFallbackLogs[this.currentGroupId] || []
+          ).length;
+          this.notify(`已按设定重新拉取并读取 ${loadedCount}/${limit} 条记录`);
+        }
+      } finally {
+        if (!silent && reloadBtn) reloadBtn.textContent = "读取";
+      }
+    },
+
     renderGroupSelectDropdown() {
       const sel = document.getElementById("qqbot-group-select");
       const dl = document.getElementById("qqbot-group-datalist");
@@ -4572,7 +4635,7 @@ function createExpenditureLineChart(data, daysInMonth) {
                   ${isCurrent ? '<span style="font-size: 10px; color: var(--accent-color); font-weight: 700; flex-shrink: 0;">当前选中</span>' : ""}
                 </div>
                 <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 2px;">
-                  群号 ${this.escapeHtml(g.groupId)} · ${modeText} · 缓冲 ${g.debounceSec || 8}秒
+                  群号 ${this.escapeHtml(g.groupId)} · ${modeText} · 缓冲 ${g.debounceSec || 8}秒 · 读取 ${g.contextLimit || 180}条
                 </div>
               </div>
               <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleGroupEnabledFromCard('${this.escapeAttr(g.groupId)}');}" style="height: 26px; padding: 0 9px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
@@ -4720,6 +4783,8 @@ function createExpenditureLineChart(data, daysInMonth) {
         return el ? el.value : fallback;
       };
 
+      const prevContextLimit = Number(g.contextLimit) || 180;
+
       g.enabled = getVal("qqbot-group-enabled-select", "true") === "true";
       if (!g.enabled && this.currentGroupId) {
         if (this.groupDebounceTimers && this.groupDebounceTimers[this.currentGroupId]) {
@@ -4736,8 +4801,8 @@ function createExpenditureLineChart(data, daysInMonth) {
         parseInt(getVal("qqbot-debounce-input", "8"), 10) || 8,
       );
       g.contextLimit = Math.max(
-        20,
-        parseInt(getVal("qqbot-context-limit-input", "180"), 10) || 180,
+        1,
+        Math.min(2000, parseInt(getVal("qqbot-context-limit-input", "180"), 10) || 180),
       );
       g.idleAskMin = Math.max(
         0,
@@ -4763,6 +4828,9 @@ function createExpenditureLineChart(data, daysInMonth) {
 
       this.renderGroupSelectDropdown();
       this.saveAllSettings(false);
+      if (prevContextLimit !== g.contextLimit && this.currentGroupId) {
+        this.reloadContextMessages(false).catch(() => {});
+      }
     },
 
     async onGroupSelectChange() {
@@ -6221,11 +6289,12 @@ function createExpenditureLineChart(data, daysInMonth) {
       const dispName = pCfg.remark || pCfg.nickname || uid;
 
       try {
+        const limit = this.getGroupContextLimit(logKey);
         let localArr = this.staticFallbackLogs[logKey] || [];
-        if (localArr.length < 10) {
+        if (localArr.length < limit) {
           try {
             const cRes = await fetch(
-              `/api/qqbot/group/${encodeURIComponent(logKey)}/context?limit=35`,
+              `/api/qqbot/group/${encodeURIComponent(logKey)}/context?limit=${limit}`,
             );
             if (cRes.ok) {
               const cData = await cRes.json();
@@ -6239,13 +6308,13 @@ function createExpenditureLineChart(data, daysInMonth) {
                   seen.add(key);
                   merged.push(m);
                 }
-                localArr = merged.slice(-60);
+                localArr = merged.slice(-limit);
                 this.staticFallbackLogs[logKey] = localArr;
               }
             }
           } catch (_) {}
         }
-        const messages = localArr.slice(-35);
+        const messages = localArr.slice(-limit);
         if (messages.length === 0) return;
         const lastMsg = messages[messages.length - 1];
         if (lastMsg && lastMsg.isSelf) return;
@@ -6321,8 +6390,9 @@ function createExpenditureLineChart(data, daysInMonth) {
 
     async runSubApiPrivateJudge(pCfg, messages, activeVisionUrls = []) {
       const dispName = pCfg.remark || pCfg.nickname || pCfg.userId;
+      const limit = this.getGroupContextLimit();
       const transcript = messages
-        .slice(-20)
+        .slice(-limit)
         .map((m) =>
           m.isSelf
             ? `[我方已发]: ${m.rawMessage || m.content}`
@@ -6366,8 +6436,9 @@ function createExpenditureLineChart(data, daysInMonth) {
       const basePersona = pCfg.aiPersona || this.resolvePersonaPrompt(gCfg);
       const userPersonaText = pCfg.userPersona || pCfg.persona || "";
       const dispName = pCfg.remark || pCfg.nickname || pCfg.userId;
+      const limit = this.getGroupContextLimit();
       const transcript = messages
-        .slice(-25)
+        .slice(-limit)
         .map((m) =>
           m.isSelf
             ? `[我方已发]: ${m.rawMessage || m.content}`
@@ -6419,8 +6490,9 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
         arr.length > 0 ? Number(arr[arr.length - 1].seq) || arr.length : 0;
       msgObj.seq = prevSeq + 1;
       arr.push(msgObj);
-      if (arr.length > 60) {
-        this.staticFallbackLogs[gid] = arr.slice(-60);
+      const limit = this.getGroupContextLimit(gid);
+      if (arr.length > limit) {
+        this.staticFallbackLogs[gid] = arr.slice(-limit);
       }
       if (!this.localWaitNormalized[gid]) {
         this.localWaitNormalized[gid] = {
@@ -6908,10 +6980,7 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
       this.busyGroups[groupId] = true;
 
       try {
-        const limit = Math.max(
-          30,
-          Math.min(800, Number(gCfg.contextLimit) || 180),
-        );
+        const limit = this.getGroupContextLimit(groupId);
         let messages = [];
         let memory = {
           summaryText: this.staticFallbackMemory[groupId] || "",
@@ -6944,6 +7013,16 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
           }
           totalStored = Math.max(totalStored, messages.length);
         }
+
+        messages.sort(
+          (a, b) =>
+            (Number(a.timestamp || a.seq) || 0) -
+            (Number(b.timestamp || b.seq) || 0),
+        );
+        if (messages.length > limit) {
+          messages = messages.slice(-limit);
+        }
+        this.staticFallbackLogs[groupId] = messages;
 
         if (messages.length === 0) return;
 
@@ -7130,7 +7209,8 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
      * 副API：真人级场面裁判 Prompt 与调用 · 直接查看原图与实时备注名
      * ============================================================================ */
     async runSubApiSceneJudge(gCfg, messages, memory, activeVisionUrls = []) {
-      const recentSlice = messages.slice(-25);
+      const limit = this.getGroupContextLimit(gCfg && gCfg.groupId);
+      const recentSlice = messages.slice(-limit);
       const memberRoster = this.resolvePlayerCardsPrompt(gCfg);
 
       const transcript = recentSlice
@@ -7257,7 +7337,9 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
           ? []
           : this.resolveAvailableStickerNames(gCfg.stickerCategoryId);
 
-      const transcript = messages
+      const limit = this.getGroupContextLimit(gCfg && gCfg.groupId);
+      const windowMessages = messages.slice(-limit);
+      const transcript = windowMessages
         .map((m) => {
           if (m.isSelf) {
             return `[我方已发消息]: ${m.rawMessage || m.content}`;
@@ -7772,12 +7854,13 @@ ${transcript}
       const box = document.getElementById("qqbot-live-console-log");
       if (!box || !this.currentGroupId) return;
       const gCfg = this.getCurrentGroupConfig();
+      const limit = this.getGroupContextLimit(this.currentGroupId);
       let serverMsgs = [];
       let total = 0;
 
       try {
         const res = await fetch(
-          `/api/qqbot/group/${encodeURIComponent(this.currentGroupId)}/context?limit=50`,
+          `/api/qqbot/group/${encodeURIComponent(this.currentGroupId)}/context?limit=${limit}`,
         );
         if (res.ok) {
           const data = await res.json();
@@ -7819,17 +7902,20 @@ ${transcript}
         .sort(
           (a, b) => (a.timestamp || a.seq || 0) - (b.timestamp || b.seq || 0),
         )
-        .slice(-50);
+        .slice(-limit);
 
-      const finalCount = Math.max(total, msgs.length);
+      this.staticFallbackLogs[this.currentGroupId] = msgs;
+
       const badge = document.getElementById("qqbot-disk-status-badge");
       if (badge) {
-        badge.textContent = `已收发 ${finalCount} 条`;
+        badge.textContent = `窗口 ${msgs.length}/${limit} 条`;
       }
       const groupBadge = document.getElementById("qqbot-group-count-badge");
       if (groupBadge) {
         groupBadge.textContent =
-          finalCount > 0 ? `本群已收发 ${finalCount} 条` : "实时监听已开启";
+          msgs.length > 0
+            ? `当前读取 ${msgs.length}/${limit} 条`
+            : `已设读取 ${limit} 条`;
       }
 
       if (msgs.length === 0) {
@@ -7877,21 +7963,26 @@ ${transcript}
       box.scrollTop = box.scrollHeight;
     },
 
-    async syncRecentHistoryFromOneBot(targetGroupId, silent = true) {
+    async syncRecentHistoryFromOneBot(
+      targetGroupId,
+      silent = true,
+      forceOneBotPull = false,
+    ) {
       const gid = String(targetGroupId || this.currentGroupId || "").trim();
       if (!gid) return;
       const cfg = (this.serverState && this.serverState.config) || {};
       const selfInput = document.getElementById("qqbot-selfid-input");
       const selfId = String((selfInput && selfInput.value.trim()) || cfg.selfId || "");
       const gCfg = (cfg.groups && cfg.groups[gid]) || this.getCurrentGroupConfig();
+      const limit = this.getGroupContextLimit(gid);
 
       let normalizedMessages = [];
-      // 1. 若浏览器已直连 NapCat 3001，主动向 OneBot 拉取最近群聊历史消息（包含关网页/重启期间错过的聊天记录）
+      // 1. 若浏览器已直连 NapCat 3001，主动向 OneBot 拉取设定条数的群聊历史消息
       if (this.directWsConnected && this.directWs && this.directWs.readyState === 1) {
         try {
           const resp = await this.callDirectOneBotWs("get_group_msg_history", {
             group_id: Number(gid) || gid,
-            count: 35,
+            count: limit,
           });
           const rawList =
             resp && Array.isArray(resp.messages)
@@ -7950,7 +8041,7 @@ ${transcript}
           try {
             const pResp = await this.callDirectOneBotWs("get_friend_msg_history", {
               user_id: Number(uid) || uid,
-              count: 25,
+              count: limit,
             });
             const pList =
               pResp && Array.isArray(pResp.messages)
@@ -8011,19 +8102,19 @@ ${transcript}
                 (a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0),
               );
               this.staticFallbackLogs[logKey] = existingPriv
-                .slice(-60)
+                .slice(-limit)
                 .map((m, idx) => ({ ...m, seq: idx + 1 }));
               fetch(`/api/qqbot/group/${encodeURIComponent(logKey)}/sync-history`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ selfId, messages: pNormalized }),
+                body: JSON.stringify({ selfId, count: limit, messages: pNormalized }),
               }).catch(() => {});
             }
           } catch (_) {}
         }
       }
 
-      // 2. 合并进内存最近窗口（限制60条防占浏览器内存）并同步写入本地磁盘
+      // 2. 合并进内存滑动窗口（严格保留最近 limit 条）并同步写入本地磁盘
       if (normalizedMessages.length > 0) {
         const currentArr = this.staticFallbackLogs[gid] || [];
         const seen = new Set(
@@ -8038,8 +8129,13 @@ ${transcript}
           (a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0),
         );
         this.staticFallbackLogs[gid] = currentArr
-          .slice(-60)
+          .slice(-limit)
           .map((m, idx) => ({ ...m, seq: idx + 1 }));
+      } else if (
+        Array.isArray(this.staticFallbackLogs[gid]) &&
+        this.staticFallbackLogs[gid].length > limit
+      ) {
+        this.staticFallbackLogs[gid] = this.staticFallbackLogs[gid].slice(-limit);
       }
 
       try {
@@ -8050,7 +8146,8 @@ ${transcript}
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               selfId,
-              count: 35,
+              count: limit,
+              forceOneBotPull: Boolean(forceOneBotPull),
               messages: normalizedMessages.length > 0 ? normalizedMessages : undefined,
             }),
           },
@@ -8058,7 +8155,7 @@ ${transcript}
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.messages) && data.messages.length > 0) {
-            this.staticFallbackLogs[gid] = data.messages.slice(-60);
+            this.staticFallbackLogs[gid] = data.messages.slice(-limit);
           }
         }
       } catch (_) {}
@@ -8076,7 +8173,8 @@ ${transcript}
 
       await this.refreshSandboxLog();
       if (!silent) {
-        this.notify("已同步历史聊天记录");
+        const curCount = (this.staticFallbackLogs[gid] || []).length;
+        this.notify(`已同步并读取最近 ${curCount}/${limit} 条聊天记录`);
       }
     },
 

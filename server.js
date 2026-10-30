@@ -2581,9 +2581,10 @@ app.post('/api/qqbot/group/:groupId/sync-members', async (req, res) => {
 app.get('/api/qqbot/group/:groupId/context', (req, res) => {
   try {
     const groupId = String(req.params.groupId || '');
-    const limit = Math.max(10, Math.min(800, Number(req.query.limit) || 180));
     const cfg = loadQqBotConfig();
     const gCfg = cfg.groups && cfg.groups[groupId];
+    const fallbackLimit = (gCfg && Number(gCfg.contextLimit) > 0) ? Number(gCfg.contextLimit) : 180;
+    const limit = Math.max(1, Math.min(2000, Number(req.query.limit) || fallbackLimit));
     const hist = loadGroupHistoryFromDisk(groupId, limit);
     const messages = hist.messages.map(m => {
       if (m.isSelf) return m;
@@ -2601,6 +2602,7 @@ app.get('/api/qqbot/group/:groupId/context', (req, res) => {
     return res.json({
       ok: true,
       groupId,
+      contextLimit: limit,
       totalMessages: hist.total,
       totalStored: hist.total,
       messages,
@@ -2621,22 +2623,27 @@ app.post('/api/qqbot/group/:groupId/sync-history', async (req, res) => {
     const rawTargetId = isPrivate ? groupId.replace(/^priv_/, '') : groupId;
     const gCfg = !isPrivate && cfg.groups ? cfg.groups[groupId] : null;
     const selfId = String((req.body && req.body.selfId) || cfg.selfId || '');
+    const configuredLimit = (gCfg && Number(gCfg.contextLimit) > 0) ? Number(gCfg.contextLimit) : 180;
+    const reqCount = Math.max(1, Math.min(2000, Number(req.body && req.body.count) || configuredLimit));
 
     let incomingList = Array.isArray(req.body && req.body.messages) ? req.body.messages : null;
-    if (!incomingList && qqBotRuntime.wsConnected) {
+    if ((!incomingList || (req.body && req.body.forceOneBotPull)) && qqBotRuntime.wsConnected) {
       try {
-        const count = Math.max(10, Math.min(100, Number(req.body && req.body.count) || 35));
         const resp = await callOneBotApi(
           isPrivate ? 'get_friend_msg_history' : 'get_group_msg_history',
           isPrivate
-            ? { user_id: Number(rawTargetId) || rawTargetId, count }
-            : { group_id: Number(rawTargetId) || rawTargetId, count }
+            ? { user_id: Number(rawTargetId) || rawTargetId, count: reqCount }
+            : { group_id: Number(rawTargetId) || rawTargetId, count: reqCount }
         );
         const data = resp && resp.data !== undefined ? resp.data : resp;
+        let pulled = null;
         if (data && Array.isArray(data.messages)) {
-          incomingList = data.messages;
+          pulled = data.messages;
         } else if (Array.isArray(data)) {
-          incomingList = data;
+          pulled = data;
+        }
+        if (Array.isArray(pulled) && pulled.length > 0) {
+          incomingList = Array.isArray(incomingList) ? [...pulled, ...incomingList] : pulled;
         }
       } catch (_) {}
     }
@@ -2737,10 +2744,11 @@ app.post('/api/qqbot/group/:groupId/sync-history', async (req, res) => {
       }
     }
 
-    const hist = loadGroupHistoryFromDisk(groupId, 60);
+    const hist = loadGroupHistoryFromDisk(groupId, reqCount);
     return res.json({
       ok: true,
       groupId,
+      contextLimit: reqCount,
       totalMessages: hist.total,
       messages: hist.messages
     });
