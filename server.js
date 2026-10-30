@@ -1560,6 +1560,8 @@ function getDefaultQqBotConfig() {
     accountPresets: [],
     privateChats: {},
     naiPresets: [],
+    customStickers: [],
+    globalPaused: false,
     visionCache: {},
     groups: {
       '88482026': {
@@ -1668,6 +1670,8 @@ function loadQqBotConfig() {
           accountPresets: Array.isArray(parsed.accountPresets) ? parsed.accountPresets : [],
           privateChats: (parsed.privateChats && typeof parsed.privateChats === 'object') ? parsed.privateChats : {},
           naiPresets: Array.isArray(parsed.naiPresets) ? parsed.naiPresets : [],
+          customStickers: Array.isArray(parsed.customStickers) ? parsed.customStickers : [],
+          globalPaused: Boolean(parsed.globalPaused),
           visionCache: (parsed.visionCache && typeof parsed.visionCache === 'object') ? parsed.visionCache : {},
           groups: normGroups
         };
@@ -2100,7 +2104,7 @@ function handleIncomingOneBotEvent(data) {
 
     appendGroupMessageToDisk(groupId, msgEntry);
 
-    if (!isSelf && cfg.groups[groupId] && cfg.groups[groupId].enabled !== false) {
+    if (!isSelf && !cfg.globalPaused && cfg.groups[groupId] && cfg.groups[groupId].enabled !== false) {
       qqBotRuntime.pendingGroupEvents.set(groupId, {
         lastMessageAt: Date.now(),
         lastMessageId: msgEntry.messageId,
@@ -2318,6 +2322,8 @@ app.post('/api/qqbot/config', (req, res) => {
       accountPresets: Array.isArray(incoming.accountPresets) ? incoming.accountPresets : (current.accountPresets || []),
       privateChats: mergedPrivateChats,
       naiPresets: Array.isArray(incoming.naiPresets) ? incoming.naiPresets : (current.naiPresets || []),
+      customStickers: Array.isArray(incoming.customStickers) ? incoming.customStickers : (current.customStickers || []),
+      globalPaused: incoming.globalPaused !== undefined ? Boolean(incoming.globalPaused) : Boolean(current.globalPaused),
       visionCache: { ...(current.visionCache || {}), ...(incoming.visionCache || {}) },
       groups: mergedGroups
     };
@@ -2755,7 +2761,8 @@ app.post('/api/qqbot/send', async (req, res) => {
       botName = '守秘人KP',
       markProcessedSeq,
       waitingForRpSince,
-      idleAsked
+      idleAsked,
+      skipOneBotSend = false
     } = req.body || {};
 
     const gid = String(groupId || '');
@@ -2807,24 +2814,26 @@ app.post('/api/qqbot/send', async (req, res) => {
       segments.push({ type: 'image', data: { file: fileVal } });
     }
 
-    let deliveredToOneBot = false;
+    let deliveredToOneBot = Boolean(skipOneBotSend);
     let oneBotError = '';
-    try {
-      if ((targetType === 'private' || userId) && userId) {
-        await callOneBotApi('send_private_msg', {
-          user_id: Number(userId) || String(userId),
-          message: segments
-        });
-        deliveredToOneBot = true;
-      } else if (gid) {
-        await callOneBotApi('send_group_msg', {
-          group_id: Number(gid) || String(gid),
-          message: segments
-        });
-        deliveredToOneBot = true;
+    if (!skipOneBotSend && segments.length > 0) {
+      try {
+        if ((targetType === 'private' || userId) && userId) {
+          await callOneBotApi('send_private_msg', {
+            user_id: Number(userId) || String(userId),
+            message: segments
+          });
+          deliveredToOneBot = true;
+        } else if (gid) {
+          await callOneBotApi('send_group_msg', {
+            group_id: Number(gid) || String(gid),
+            message: segments
+          });
+          deliveredToOneBot = true;
+        }
+      } catch (err) {
+        oneBotError = err.message;
       }
-    } catch (err) {
-      oneBotError = err.message;
     }
 
     if (gid) {

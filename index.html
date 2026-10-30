@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v4.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v4.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -17550,9 +17550,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
               <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">实时收发、副AI识图与调试台</span>
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">实时收发、原图直读与调试台</span>
               </div>
-              <span style="font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0;">副AI识图不重复</span>
+              <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                <span id="qqbot-master-pause-badge" style="font-size: 11px; font-weight: 600; color: var(--accent-color);">监听运行中</span>
+                <button type="button" id="qqbot-master-pause-btn" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleMasterPause();}" style="height: 26px; padding: 0 10px; font-size: 11.5px; flex-shrink: 0;">暂停</button>
+              </div>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
@@ -17571,18 +17574,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             </div>
 
             <div id="qqbot-judge-status-box" style="padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); font-size: 11.5px; color: var(--text-primary); line-height: 1.5;">
-              实时监听就绪：收到QQ群或小窗消息时，副AI会先自动识图并替换保存，再判断此刻是否需要唤醒主AI回复。
+              实时监听就绪：收到QQ群或小窗消息与图片时，直接把原图与上下文传给副AI判断，需要回复时立即唤醒主AI；点击右上角暂停可一键停止所有监听与API调用。
             </div>
 
-            <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">消息收发记录 · 左侧他人发言与识图结果 / 右侧AI已发消息</div>
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">消息收发记录 · 左侧他人发言与图片 / 右侧AI已发消息</div>
             <div id="qqbot-live-console-log" style="height: 195px; overflow-y: auto; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; font-size: 12px;"></div>
 
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">运行调试台 · 实时显示收包、副AI识图、裁判决定、主AI发送与生图代码</span>
+              <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">运行调试台 · 实时显示收包、原图直读、裁判决定、主AI发送与生图代码</span>
               <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.clearDebugTraceLog();}" style="height: 22px; padding: 0 8px; font-size: 10.5px;">清屏</button>
             </div>
             <div id="qqbot-debug-trace-log" style="height: 115px; overflow-y: auto; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 4px; font-size: 11px; line-height: 1.45; color: var(--text-primary);">
-              <div style="color: var(--text-secondary);">调试台已启动，正在监听 127.0.0.1:3001 实时消息数据包与副AI识图状态...</div>
+              <div style="color: var(--text-secondary);">调试台已启动，正在监听 127.0.0.1:3001 实时消息数据包...</div>
             </div>
 
             <div style="font-size: 10.5px; color: var(--text-secondary);">下方四个按钮为本地模拟演练按钮：点击可立刻模拟一句群友发言来测试AI回复是否正常</div>
@@ -17904,12 +17907,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 </select>
               </div>
               <div style="display: flex; flex-direction: column; gap: 4px;">
-                <label style="font-size: 11px; color: var(--text-secondary);">允许使用的表情包分类</label>
-                <select id="qqbot-sticker-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" style="width: 100%; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
-                  <option value="ALL">全部可用表情包</option>
-                </select>
+                <label style="font-size: 11px; color: var(--text-secondary);">允许使用的表情包与本地上传</label>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <select id="qqbot-sticker-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
+                    <option value="ALL">全部可用表情包</option>
+                  </select>
+                  <button type="button" id="qqbot-sticker-upload-btn" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.triggerStickerUpload();}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">上传</button>
+                  <input type="file" id="qqbot-sticker-file-input" accept="image/*" multiple onchange="if(window.QQBotConsole){window.QQBotConsole.handleStickerFilesUpload(this);}" style="display: none;" />
+                </div>
               </div>
             </div>
+
+            <div id="qqbot-custom-stickers-box" style="display: none; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);"></div>
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary);">AI自身人设与性格设定</label>
