@@ -2179,6 +2179,30 @@ function createExpenditureLineChart(data, daysInMonth) {
         : "ws://127.0.0.1:3000/api/qqbot/ws";
     },
 
+    currentTab: "monitor",
+
+    switchTab(tabKey) {
+      const tabs = ["monitor", "group", "member", "persona", "module", "api"];
+      const target = tabs.includes(tabKey) ? tabKey : "monitor";
+      this.currentTab = target;
+      tabs.forEach((k) => {
+        const pane = document.getElementById(`qqbot-tab-${k}`);
+        if (pane) {
+          pane.style.display = k === target ? "flex" : "none";
+        }
+        const btn = document.getElementById(`qqbot-tab-btn-${k}`);
+        if (btn) {
+          if (k === target) {
+            btn.classList.add("primary");
+          } else {
+            btn.classList.remove("primary");
+          }
+        }
+      });
+      const scroller = document.getElementById("qqbot-main-scroll");
+      if (scroller) scroller.scrollTop = 0;
+    },
+
     openTutorialModal() {
       this.populateTutorialReverseWsUrl();
       const modal = document.getElementById("qqbot-tutorial-modal");
@@ -2188,6 +2212,17 @@ function createExpenditureLineChart(data, daysInMonth) {
     closeTutorialModal() {
       const modal = document.getElementById("qqbot-tutorial-modal");
       if (modal) modal.style.display = "none";
+    },
+
+    async copyTermuxPanelCmd() {
+      if (typeof window.copyVaultStartupCmd === "function") {
+        await window.copyVaultStartupCmd("android");
+      }
+      this.notify("已复制Termux 1/2/3面板命令");
+      this.updateConnDetail(
+        "已复制Termux 1/2/3启动面板命令：去Termux粘贴回车一次，即可输入 1 重启存储、输入 2 启动NapCat、输入 3 直接查看 6099 与 3001 密钥",
+        true,
+      );
     },
 
     async copyCmdById(inputId, tipText) {
@@ -2208,7 +2243,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     async copyTermuxCmd() {
-      await this.copyCmdById("qqbot-termux-cmd-input", "已复制Termux磁盘命令");
+      await this.copyTermuxPanelCmd();
     },
 
     async copyReverseWsUrl() {
