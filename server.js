@@ -1845,12 +1845,23 @@ function saveGroupMemoryToDisk(groupId, memoryData) {
   }
 }
 
+function unescapeCqUrl(str) {
+  return String(str || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&#91;/g, '[')
+    .replace(/&#93;/g, ']')
+    .replace(/&#44;/g, ',')
+    .trim();
+}
+
 function extractOneBotMessageText(rawEvt) {
-  if (!rawEvt) return { text: '', replyId: '', hasSticker: false, stickerHint: '' };
+  if (!rawEvt) return { text: '', replyId: '', hasSticker: false, stickerHint: '', imageUrls: [], imageFiles: [] };
   let replyId = '';
   let hasSticker = false;
   let stickerHint = '';
   let textParts = [];
+  const imageUrls = [];
+  const imageFiles = [];
 
   if (Array.isArray(rawEvt.message)) {
     for (const seg of rawEvt.message) {
@@ -1864,34 +1875,62 @@ function extractOneBotMessageText(rawEvt) {
         textParts.push(`@${qq} `);
       } else if (seg.type === 'image' || seg.type === 'mface') {
         hasSticker = true;
-        const summary = String(seg.data?.summary || seg.data?.file || '表情图片');
-        stickerHint = summary;
-        textParts.push(`[发送了图片或表情：${summary}]`);
+        const imgUrl = unescapeCqUrl(seg.data?.url || '');
+        const imgFile = String(seg.data?.file || '').trim();
+        if (imgUrl && !imageUrls.includes(imgUrl)) imageUrls.push(imgUrl);
+        if (imgFile && !imageFiles.includes(imgFile)) imageFiles.push(imgFile);
+        const summary = String(seg.data?.summary || '').trim();
+        const cleanSummary = (summary && summary !== '[图片]' && summary !== '[动画表情]') ? summary : '群聊图片';
+        stickerHint = cleanSummary;
+        textParts.push(`[发送了图片：${cleanSummary}]`);
       } else if (seg.type === 'face') {
         textParts.push(`[QQ表情${seg.data?.id || ''}]`);
       }
     }
-  } else {
-    const rawStr = String(rawEvt.raw_message || rawEvt.message || '');
+  }
+
+  const rawStr = String(rawEvt.raw_message || (typeof rawEvt.message === 'string' ? rawEvt.message : '') || '');
+  if (rawStr) {
+    const cqImgRegex = /\[CQ:image,([^\]]+)\]/g;
+    let m;
+    while ((m = cqImgRegex.exec(rawStr)) !== null) {
+      hasSticker = true;
+      const paramsStr = m[1];
+      const urlMatch = paramsStr.match(/(?:^|,)url=([^,\]]+)/);
+      const fileMatch = paramsStr.match(/(?:^|,)file=([^,\]]+)/);
+      if (urlMatch && urlMatch[1]) {
+        const u = unescapeCqUrl(urlMatch[1]);
+        if (u && !imageUrls.includes(u)) imageUrls.push(u);
+      }
+      if (fileMatch && fileMatch[1]) {
+        const f = unescapeCqUrl(fileMatch[1]);
+        if (f && !imageFiles.includes(f)) imageFiles.push(f);
+      }
+    }
+  }
+
+  if (!Array.isArray(rawEvt.message) && rawStr) {
     const repMatch = rawStr.match(/\[CQ:reply,id=([^\],]+)\]/);
     if (repMatch) replyId = repMatch[1];
     if (/\[CQ:image/.test(rawStr)) {
       hasSticker = true;
-      stickerHint = '图片或表情包';
+      stickerHint = '群聊图片';
     }
     const cleaned = rawStr
       .replace(/\[CQ:reply,id=[^\]]+\]/g, '')
       .replace(/\[CQ:at,qq=([^\],]+)[^\]]*\]/g, '@$1 ')
-      .replace(/\[CQ:image,[^\]]*summary=([^,\]]+)[^\]]*\]/g, '[发送了表情：$1]')
-      .replace(/\[CQ:image,[^\]]+\]/g, '[发送了图片或表情包]');
+      .replace(/\[CQ:image,[^\]]*summary=([^,\]]+)[^\]]*\]/g, '[发送了图片：$1]')
+      .replace(/\[CQ:image,[^\]]+\]/g, '[发送了图片]');
     textParts.push(cleaned);
   }
 
   return {
-    text: textParts.join('').trim(),
+    text: textParts.join('').trim() || (imageUrls.length > 0 ? '[发送了图片]' : ''),
     replyId,
     hasSticker,
-    stickerHint
+    stickerHint,
+    imageUrls,
+    imageFiles
   };
 }
 
@@ -1952,7 +1991,6 @@ function handleIncomingOneBotEvent(data) {
     const groupId = String(data.group_id || '');
     if (!groupId) return;
     const senderId = String(data.user_id || data.sender?.user_id || '');
-    // 优先读取AI那个QQ号给该群友设置的好友备注 remark，其次读取群备注 card，再次读取QQ昵称 nickname
     const rawQqRemark = String(
       data.sender?.remark ||
       data.sender?.card ||
@@ -1961,14 +1999,14 @@ function handleIncomingOneBotEvent(data) {
     ).trim();
 
     const parsed = extractOneBotMessageText(data);
-    if (!parsed.text && !parsed.hasSticker) return;
+    if (!parsed.text && !parsed.hasSticker && (!parsed.imageUrls || parsed.imageUrls.length === 0)) return;
 
     const cfg = loadQqBotConfig();
     if (!cfg.groups[groupId]) {
       cfg.groups[groupId] = normalizeGroupConfig(groupId, {
         groupId,
         groupName: String(data.group_name || `QQ群 ${groupId}`),
-        enabled: false
+        enabled: true
       });
     }
 
@@ -1987,6 +2025,9 @@ function handleIncomingOneBotEvent(data) {
       replyId: parsed.replyId || '',
       hasSticker: parsed.hasSticker,
       stickerHint: parsed.stickerHint || '',
+      imageUrls: parsed.imageUrls || [],
+      imageFiles: parsed.imageFiles || [],
+      visionDescription: data.visionDescription || '',
       isBot: isSelf,
       isSelf,
       timestamp: (data.time ? Number(data.time) * 1000 : Date.now())
@@ -1994,7 +2035,7 @@ function handleIncomingOneBotEvent(data) {
 
     appendGroupMessageToDisk(groupId, msgEntry);
 
-    if (!isSelf && cfg.groups[groupId] && cfg.groups[groupId].enabled) {
+    if (!isSelf && cfg.groups[groupId] && cfg.groups[groupId].enabled !== false) {
       qqBotRuntime.pendingGroupEvents.set(groupId, {
         lastMessageAt: Date.now(),
         lastMessageId: msgEntry.messageId,
@@ -2297,7 +2338,7 @@ app.post('/api/qqbot/refresh-groups', async (req, res) => {
         cfg.groups[gid] = normalizeGroupConfig(gid, {
           groupId: gid,
           groupName: gname,
-          enabled: false,
+          enabled: true,
           mode: 'oc_chat'
         });
       } else {
@@ -2465,6 +2506,65 @@ app.post('/api/qqbot/group/:groupId/clear', (req, res) => {
     }
     qqBotRuntime.pendingGroupEvents.delete(groupId);
     qqBotRuntime.groupSeqState.delete(groupId);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/fetch-image', async (req, res) => {
+  try {
+    const rawUrl = String(req.body?.url || '').trim().replace(/&amp;/g, '&');
+    if (!rawUrl || !/^https?:\/\//i.test(rawUrl)) {
+      return res.status(400).json({ ok: false, error: '无效图片地址' });
+    }
+    const imgRes = await fetch(rawUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!imgRes.ok) {
+      return res.status(502).json({ ok: false, error: '拉取QQ图片HTTP ' + imgRes.status });
+    }
+    const mime = imgRes.headers.get('content-type') || 'image/jpeg';
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    const dataUrl = `data:${mime.split(';')[0]};base64,${buf.toString('base64')}`;
+    return res.json({ ok: true, dataUrl });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/group/:groupId/vision-update', (req, res) => {
+  try {
+    const groupId = String(req.params.groupId || '');
+    const { messageId, visionDescription } = req.body || {};
+    if (!groupId || !messageId || !visionDescription) {
+      return res.json({ ok: false });
+    }
+    const p = getGroupHistoryPath(groupId);
+    if (fs.existsSync(p)) {
+      const arr = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (Array.isArray(arr)) {
+        let updated = false;
+        for (let i = arr.length - 1; i >= 0; i--) {
+          if (String(arr[i].messageId) === String(messageId)) {
+            arr[i].visionDescription = String(visionDescription);
+            if (!String(arr[i].content || '').includes('AI识图内容')) {
+              arr[i].content = `${arr[i].content || '[发送了图片]'} [AI识图内容：${visionDescription}]`;
+              arr[i].rawMessage = arr[i].content;
+            }
+            updated = true;
+            break;
+          }
+        }
+        if (updated) {
+          fs.writeFileSync(p, JSON.stringify(arr), 'utf8');
+        }
+      }
+    }
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

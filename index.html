@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v4.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v4.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -17525,7 +17525,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
       <!-- 顶部栏目切换小卡头与当前群快捷切换栏 -->
       <div style="background: var(--card-bg); border-bottom: 1px solid var(--border-color); padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;">
         <div id="qqbot-top-tabs" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px;">
-          <button type="button" id="qqbot-tab-btn-monitor" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.switchTab('monitor');}" style="height: 30px; padding: 0; justify-content: center; font-size: 12px;">监控</button>
+          <button type="button" id="qqbot-tab-btn-monitor" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.switchTab('monitor');}" style="height: 30px; padding: 0; justify-content: center; font-size: 12px;">调试</button>
           <button type="button" id="qqbot-tab-btn-group" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.switchTab('group');}" style="height: 30px; padding: 0; justify-content: center; font-size: 12px;">群聊</button>
           <button type="button" id="qqbot-tab-btn-member" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.switchTab('member');}" style="height: 30px; padding: 0; justify-content: center; font-size: 12px;">成员</button>
           <button type="button" id="qqbot-tab-btn-persona" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.switchTab('persona');}" style="height: 30px; padding: 0; justify-content: center; font-size: 12px;">设定</button>
@@ -17538,13 +17538,75 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           <select id="qqbot-group-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onGroupSelectChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
             <option value="88482026">八月二十二日跑团群 · 88482026</option>
           </select>
-          <span id="qqbot-conn-badge" style="font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0; padding: 0 4px;">本地待命</span>
+          <span id="qqbot-conn-badge" style="font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0; padding: 0 4px;">自动连3001中</span>
         </div>
       </div>
 
       <div id="qqbot-main-scroll" style="flex: 1; overflow-y: auto; padding: 10px 12px 28px; display: flex; flex-direction: column; gap: 10px;">
-        <!-- ==================== 分页 1：监控 ==================== -->
+        <!-- ==================== 分页 1：调试 ==================== -->
         <div id="qqbot-tab-monitor" class="qqbot-tab-pane" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- 实时群聊收发与AI调试台 -->
+          <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">实时群聊收发、AI识图与调试台</span>
+              </div>
+              <span style="font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0;">支持QQ群自动识图</span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+              <div style="padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 10px; color: var(--text-secondary);">当前监听群聊</span>
+                <span id="qqbot-dash-group-name" style="font-size: 11.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">八月二十二日跑团群</span>
+              </div>
+              <div style="padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 10px; color: var(--text-secondary);">群成员与备注</span>
+                <span id="qqbot-dash-member-count" style="font-size: 11.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">已识别 2 人</span>
+              </div>
+              <div style="padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-size: 10px; color: var(--text-secondary);">实时收发统计</span>
+                <span id="qqbot-disk-status-badge" style="font-size: 11.5px; font-weight: 700; color: var(--accent-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">已收发 0 条</span>
+              </div>
+            </div>
+
+            <div id="qqbot-judge-status-box" style="padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); font-size: 11.5px; color: var(--text-primary); line-height: 1.5;">
+              实时监听就绪：收到QQ群文字或图片时，将在此实时显示群消息、AI识图内容、副API裁判决定与主API发送的群回复。
+            </div>
+
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">群聊消息与AI发送记录 · 左侧群友发言 / 右侧AI已发群消息</div>
+            <div id="qqbot-live-console-log" style="height: 200px; overflow-y: auto; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; font-size: 12px;"></div>
+
+            <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">运行调试台 · 实时显示收包、AI识图结果、主副API调用与报错详情</div>
+            <div id="qqbot-debug-trace-log" style="height: 115px; overflow-y: auto; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 4px; font-size: 11px; line-height: 1.45; color: var(--text-primary);">
+              <div style="color: var(--text-secondary);">调试台已启动，正在监听 127.0.0.1:3001 实时群聊数据包与AI识图状态...</div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('single_npc');}" style="height: 30px; justify-content: center; font-size: 11.5px;">单人</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('bracket_ask');}" style="height: 30px; justify-content: center; font-size: 11.5px;">括号</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('still_rp');}" style="height: 30px; justify-content: center; font-size: 11.5px;">待机</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('dice_check');}" style="height: 30px; justify-content: center; font-size: 11.5px;">检定</button>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px; padding-top: 2px;">
+              <select id="qqbot-sim-sender" class="moe-input" style="width: 92px; flex-shrink: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 18px 0 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                <option value="10001|早川秋">早川秋</option>
+                <option value="10002|佐藤葵">佐藤葵</option>
+                <option value="BOT|主动发群">直接发群</option>
+              </select>
+              <input type="text" id="qqbot-sim-input" list="qqbot-sim-datalist" class="moe-input" placeholder="输入模拟群友发言或直接发往QQ群..." style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+              <datalist id="qqbot-sim-datalist">
+                <option value="我走到吧台前询问老板昨晚有没有见过可疑的人">单人搭话NPC</option>
+                <option value="请问KP，这扇门锁着吗？我可以过开锁检定吗">场外询问KP</option>
+                <option value="等一下我还在RP，先别推进剧情">发送还在RP信号</option>
+                <option value="我们已经RP完了，KP可以继续往下推剧情啦">发送结束RP信号</option>
+              </datalist>
+              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.submitSandboxInput();}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">发送</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.forceTriggerReply();}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">推进</button>
+            </div>
+          </div>
+
           <!-- Termux 与 OneBot 账号连接卡片 -->
           <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
@@ -17552,16 +17614,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
                 <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">手机Termux与QQ号接口连接</span>
               </div>
-              <span id="qqbot-self-badge" style="font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0;">支持静态网页直连</span>
-            </div>
-
-            <!-- Termux 1/2/3 三合一启动面板快捷栏 -->
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
-              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
-                <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">Termux 数字 1 / 2 / 3 快捷启动面板</span>
-                <span style="font-size: 11px; color: var(--text-secondary); line-height: 1.35;">点右侧面板复制粘贴到 Termux 一次，以后输 1 重启存储、输 2 启动群控、输 3 直接看 6099 与 3001 密钥</span>
-              </div>
-              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyTermuxPanelCmd();}" style="height: 32px; padding: 0 12px; font-size: 12px; flex-shrink: 0;">面板</button>
+              <span id="qqbot-self-badge" style="font-size: 11px; font-weight: 600; color: var(--accent-color); flex-shrink: 0;">支持自动重连</span>
             </div>
 
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -17591,70 +17644,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               </datalist>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding-top: 2px;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding-top: 2px;">
               <button type="button" id="qqbot-connect-btn" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.connectOneBot();}" style="height: 32px; justify-content: center; font-size: 12px;">连接</button>
-              <button type="button" id="qqbot-refresh-btn" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.refreshOneBotGroups(false);}" style="height: 32px; justify-content: center; font-size: 12px;">刷新</button>
-              <button type="button" id="qqbot-sync-btn" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.syncGroupMembersFromQQ();}" style="height: 32px; justify-content: center; font-size: 12px;">同步</button>
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.openTutorialModal();}" style="height: 32px; justify-content: center; font-size: 12px;">教程</button>
+              <button type="button" id="qqbot-refresh-btn" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.refreshOneBotGroups(false);}" style="height: 32px; justify-content: center; font-size: 12px;">拉群</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.copyTermuxPanelCmd();}" style="height: 32px; justify-content: center; font-size: 12px;">面板</button>
             </div>
 
             <div id="qqbot-conn-detail-box" style="padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); font-size: 11.5px; color: var(--text-secondary); line-height: 1.45;">
-              点击连接即可直连手机Termux内的3001端口；在Termux里输入 3 回车即可直接查看 6099 登录密钥与 3001 接口密钥。
-            </div>
-          </div>
-
-          <!-- 实时群控中枢看板与现场监控台 -->
-          <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-              <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">实时群控监控台与副API裁判画面</span>
-              </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
-              <div style="padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 2px; min-width: 0;">
-                <span style="font-size: 10px; color: var(--text-secondary);">当前监听群聊</span>
-                <span id="qqbot-dash-group-name" style="font-size: 11.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">八月二十二日跑团群</span>
-              </div>
-              <div style="padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 2px; min-width: 0;">
-                <span style="font-size: 10px; color: var(--text-secondary);">群成员与备注</span>
-                <span id="qqbot-dash-member-count" style="font-size: 11.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">已识别 2 人</span>
-              </div>
-              <div style="padding: 6px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 2px; min-width: 0;">
-                <span style="font-size: 10px; color: var(--text-secondary);">本地磁盘消息</span>
-                <span id="qqbot-disk-status-badge" style="font-size: 11.5px; font-weight: 700; color: var(--accent-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">本地已存 0 条</span>
-              </div>
-            </div>
-
-            <div id="qqbot-judge-status-box" style="padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); font-size: 11.5px; color: var(--text-primary); line-height: 1.5;">
-              副API场面裁判待命：有新消息时自动读取群备注名与专属人设，判断单人搭话、括号提问或等待全员RP。
-            </div>
-
-            <div id="qqbot-live-console-log" style="height: 185px; overflow-y: auto; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; font-size: 12px;"></div>
-
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('single_npc');}" style="height: 30px; justify-content: center; font-size: 11.5px;">单人</button>
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('bracket_ask');}" style="height: 30px; justify-content: center; font-size: 11.5px;">括号</button>
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('still_rp');}" style="height: 30px; justify-content: center; font-size: 11.5px;">待机</button>
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.simulateQuickScene('dice_check');}" style="height: 30px; justify-content: center; font-size: 11.5px;">检定</button>
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 6px; padding-top: 2px;">
-              <select id="qqbot-sim-sender" class="moe-input" style="width: 92px; flex-shrink: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 18px 0 6px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
-                <option value="10001|早川秋">早川秋</option>
-                <option value="10002|佐藤葵">佐藤葵</option>
-                <option value="BOT|主动发群">直接发群</option>
-              </select>
-              <input type="text" id="qqbot-sim-input" list="qqbot-sim-datalist" class="moe-input" placeholder="输入模拟群友发言或直接发往QQ群..." style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
-              <datalist id="qqbot-sim-datalist">
-                <option value="我走到吧台前询问老板昨晚有没有见过可疑的人">单人搭话NPC</option>
-                <option value="请问KP，这扇门锁着吗？我可以过开锁检定吗">场外询问KP</option>
-                <option value="等一下我还在RP，先别推进剧情">发送还在RP信号</option>
-                <option value="我们已经RP完了，KP可以继续往下推剧情啦">发送结束RP信号</option>
-              </datalist>
-              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.submitSandboxInput();}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">发送</button>
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.forceTriggerReply();}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">推进</button>
+              打开本页会自动尝试连接手机Termux 3001端口；点「面板」可复制 Termux 数字 1 / 2 / 3 启动菜单命令，在Termux输 3 回车即可直接查看 6099 与 3001 密钥。
             </div>
           </div>
         </div>
@@ -17667,7 +17664,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">分群管理与自动唤醒策略</span>
               </div>
-              <span id="qqbot-group-count-badge" style="font-size: 11px; color: var(--text-secondary); flex-shrink: 0;">无新消息零消耗</span>
+              <span id="qqbot-group-count-badge" style="font-size: 11px; color: var(--accent-color); font-weight: 600; flex-shrink: 0;">实时监听已开启</span>
             </div>
 
             <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
@@ -18053,14 +18050,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           </div>
           <div class="modal-body" style="padding: 12px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; font-size: 12px; line-height: 1.6; color: var(--text-primary);">
             <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
-              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">最省心方法：升级你的 Termux 1 / 2 / 3 自动启动面板</div>
-              <div>点击下方「面板」按钮复制命令，去 Termux 里粘贴回车一次。以后每次打开 Termux 都会自动显示快捷菜单：</div>
+              <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">最省心方法：使用你的 Termux 1 / 2 / 3 自动启动面板</div>
+              <div>在调试分页点击「面板」按钮即可复制面板安装命令，去 Termux 里粘贴回车一次。以后每次打开 Termux 都会自动显示快捷菜单：</div>
               <div>· 输入 <b>1</b> 回车：重启本地图片与群控硬盘存储服务</div>
               <div>· 输入 <b>2</b> 回车：一键启动或自动安装 QQ 群控 NapCat</div>
               <div>· 输入 <b>3</b> 回车：直接查出 6099 网页登录 Token 与 3001 接口密钥</div>
-              <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.copyTermuxPanelCmd();}" style="height: 32px; width: 100%; justify-content: center; font-size: 12px;">面板</button>
-              </div>
             </div>
 
             <div style="padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
