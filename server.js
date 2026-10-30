@@ -1524,57 +1524,119 @@ const qqBotRuntime = {
   connectionMode: 'reverse_ws',
   lastEventAt: 0,
   lastError: '',
-  pendingGroupEvents: new Map()
+  pendingGroupEvents: new Map(),
+  groupSeqState: new Map()
 };
+
+function getDefaultThoughtItems() {
+  return [
+    { id: 'tc_single', title: '单人搭话独立回应', content: '当某位群友单独向NPC搭话或声明独立行动且不牵连他人时，直接引用回复该群友，无需死等全员表态。', enabled: true },
+    { id: 'tc_bracket', title: '识别括号场外沟通', content: '完整阅读群友在括号内发的规则提问、环境确认或场外沟通，及时给出清晰解答。', enabled: true },
+    { id: 'tc_rp_quiet', title: '玩家对戏保持安静', content: '当群友之间正在进行角色扮演对戏且不需要NPC插话时，副API自动判定保持安静不打断。', enabled: true },
+    { id: 'tc_secret', title: '单人线秘密发小窗', content: '遇到专属HO秘密、高难侦查独享线索或单人线剧情时，表面信息发群内，秘密内容通过小窗或单人群私发。', enabled: true },
+    { id: 'tc_no_godmod', title: '禁止替群友做决定', content: '绝不替玩家扮演其角色台词与心理，绝不强行篡改玩家的行动意愿，保持自然真人语气。', enabled: true }
+  ];
+}
 
 function getDefaultQqBotConfig() {
   return {
+    connectionMode: 'reverse_ws',
+    onebotUrl: 'ws://127.0.0.1:3000/api/qqbot/ws',
     endpoint: 'ws://127.0.0.1:3000/api/qqbot/ws',
     accessToken: '',
     selfId: '',
     nickname: '群控助手',
     activeGroupId: '88482026',
+    mainApi: {
+      url: '',
+      apiKey: '',
+      model: ''
+    },
+    subApi: {
+      url: '',
+      apiKey: '',
+      model: ''
+    },
     groups: {
       '88482026': {
         groupId: '88482026',
         groupName: '八月二十二日跑团群',
         enabled: true,
-        mode: 'trpg_kp',
+        mode: 'trpg',
         debounceSec: 8,
-        contextLimit: 150,
-        idleCheckMin: 15,
+        contextLimit: 180,
+        idleAskMin: 15,
         cooldownSec: 5,
-        personaId: '',
-        personaName: '守秘人KP',
-        customPersona: '你是一位经验丰富、沉稳自然的真人跑团守秘人KP兼群友。说话自然流畅，绝不说教，绝不端架子，遇到单人向NPC搭话或独立行动时直接回应对应玩家，遇到全员关键节点时引导大家自然互动。',
-        thoughtChainId: '',
-        worldBookId: '',
-        stickerCategoryId: 'all',
-        moduleId: '',
-        chapterId: 'auto',
-        naiMode: 'trpg_every_round',
+        autoNaiImage: true,
         modImgMode: 'auto',
-        players: [
+        personaId: '',
+        aiPersona: '你是一位经验丰富、沉稳自然的真人跑团守秘人KP兼群友。说话自然流畅，绝不说教，遇到单人向NPC搭话或独立行动时直接回应对应玩家，遇到全员关键节点时引导大家自然互动。',
+        customPrompt: '单条消息保持自然分段气泡感，不要长篇大论刷屏；严格区分公开表象与私聊秘密线索。',
+        thoughtChainId: '',
+        thoughtItems: getDefaultThoughtItems(),
+        worldBookId: '',
+        stickerCategoryId: 'ALL',
+        moduleId: '',
+        chapterId: 'ALL',
+        memberRemarks: {
+          '10001': '早川秋',
+          '10002': '佐藤葵'
+        },
+        playerBindings: [
           {
             qq: '10001',
-            name: '早川秋',
-            hoCode: 'HO1',
+            alias: '',
+            qqRemark: '早川秋',
+            slot: 'HO1',
             cardId: '',
-            skillsSummary: '侦查70 图书馆65 心理学60 闪避50',
-            allowPrivate: true
+            cardName: '早川秋',
+            persona: '冷静敏锐的刑侦调查员，擅长观察环境细节与审讯推理，性格外冷内热，对异常现象抱有强烈求知欲。'
           },
           {
             qq: '10002',
-            name: '佐藤葵',
-            hoCode: 'HO2',
+            alias: '',
+            qqRemark: '佐藤葵',
+            slot: 'HO2',
             cardId: '',
-            skillsSummary: '话术75 聆听65 急救60 神秘学55',
-            allowPrivate: true
+            cardName: '佐藤葵',
+            persona: '温和细心的民俗学研究生，擅长交涉、聆听与古籍查阅，说话礼貌温和，在团队中负责调和气氛与情报整理。'
           }
         ]
       }
     }
   };
+}
+
+function normalizeGroupConfig(gid, g) {
+  const defGroup = getDefaultQqBotConfig().groups['88482026'];
+  const merged = {
+    ...defGroup,
+    ...(g || {}),
+    groupId: String(gid)
+  };
+  if (merged.mode === 'trpg_kp') merged.mode = 'trpg';
+  if (!Array.isArray(merged.thoughtItems) || merged.thoughtItems.length === 0) {
+    merged.thoughtItems = getDefaultThoughtItems();
+  }
+  if (!merged.memberRemarks || typeof merged.memberRemarks !== 'object') {
+    merged.memberRemarks = {};
+  }
+  if (!Array.isArray(merged.playerBindings)) {
+    if (Array.isArray(merged.players) && merged.players.length > 0) {
+      merged.playerBindings = merged.players.map(p => ({
+        qq: String(p.qq || ''),
+        alias: String(p.alias || ''),
+        qqRemark: String(p.qqRemark || p.name || ''),
+        slot: String(p.slot || p.hoCode || '群友'),
+        cardId: String(p.cardId || ''),
+        cardName: String(p.cardName || p.name || '未绑角色卡'),
+        persona: String(p.persona || p.skillsSummary || '')
+      }));
+    } else {
+      merged.playerBindings = [];
+    }
+  }
+  return merged;
 }
 
 function loadQqBotConfig() {
@@ -1584,10 +1646,19 @@ function loadQqBotConfig() {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
         const def = getDefaultQqBotConfig();
+        const rawGroups = (parsed.groups && Object.keys(parsed.groups).length > 0) ? parsed.groups : def.groups;
+        const normGroups = {};
+        for (const gid of Object.keys(rawGroups)) {
+          normGroups[gid] = normalizeGroupConfig(gid, rawGroups[gid]);
+        }
         return {
           ...def,
           ...parsed,
-          groups: (parsed.groups && Object.keys(parsed.groups).length > 0) ? parsed.groups : def.groups
+          onebotUrl: parsed.onebotUrl || parsed.endpoint || def.onebotUrl,
+          endpoint: parsed.onebotUrl || parsed.endpoint || def.endpoint,
+          mainApi: { ...def.mainApi, ...(parsed.mainApi || {}) },
+          subApi: { ...def.subApi, ...(parsed.subApi || {}) },
+          groups: normGroups
         };
       }
     }
@@ -1614,20 +1685,41 @@ function getGroupMemoryPath(groupId) {
   return path.join(QQBOT_DIR, `memory_${safeId}.json`);
 }
 
-function loadGroupHistoryFromDisk(groupId, limit = 150) {
+function normalizeStoredMessage(m, idx) {
+  if (!m || typeof m !== 'object') return null;
+  const text = String(m.rawMessage !== undefined ? m.rawMessage : (m.content || '')).trim();
+  const isSelf = Boolean(m.isSelf !== undefined ? m.isSelf : m.isBot);
+  return {
+    ...m,
+    seq: Number(m.seq) || (idx + 1),
+    messageId: String(m.messageId || ('msg_' + (idx + 1))),
+    senderId: String(m.senderId || ''),
+    senderName: String(m.senderName || m.senderId || '群成员'),
+    qqRemark: String(m.qqRemark || m.senderName || ''),
+    content: text,
+    rawMessage: text,
+    isBot: isSelf,
+    isSelf
+  };
+}
+
+function loadGroupHistoryFromDisk(groupId, limit = 180) {
   try {
     const p = getGroupHistoryPath(groupId);
-    if (!fs.existsSync(p)) return { total: 0, messages: [] };
+    if (!fs.existsSync(p)) return { total: 0, messages: [], lastSeq: 0 };
     const raw = fs.readFileSync(p, 'utf8');
     const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return { total: 0, messages: [] };
-    const cleanLimit = Math.max(1, Math.min(1000, Number(limit) || 150));
+    if (!Array.isArray(arr)) return { total: 0, messages: [], lastSeq: 0 };
+    const normalized = arr.map((m, idx) => normalizeStoredMessage(m, idx)).filter(Boolean);
+    const cleanLimit = Math.max(1, Math.min(1000, Number(limit) || 180));
+    const lastSeq = normalized.length > 0 ? normalized[normalized.length - 1].seq : 0;
     return {
-      total: arr.length,
-      messages: arr.slice(-cleanLimit)
+      total: normalized.length,
+      lastSeq,
+      messages: normalized.slice(-cleanLimit)
     };
   } catch (_) {
-    return { total: 0, messages: [] };
+    return { total: 0, messages: [], lastSeq: 0 };
   }
 }
 
@@ -1644,16 +1736,50 @@ function appendGroupMessageToDisk(groupId, msgObj) {
       }
     }
     if (msgObj.messageId && arr.some(m => String(m.messageId) === String(msgObj.messageId))) {
-      return arr.length;
+      const last = arr[arr.length - 1];
+      return { total: arr.length, entry: normalizeStoredMessage(last, arr.length - 1) };
     }
-    arr.push(msgObj);
+    const prevLastSeq = arr.length > 0 ? (Number(arr[arr.length - 1].seq) || arr.length) : 0;
+    const nextSeq = prevLastSeq + 1;
+    const text = String(msgObj.rawMessage !== undefined ? msgObj.rawMessage : (msgObj.content || '')).trim();
+    const isSelf = Boolean(msgObj.isSelf !== undefined ? msgObj.isSelf : msgObj.isBot);
+    const entry = {
+      ...msgObj,
+      seq: nextSeq,
+      content: text,
+      rawMessage: text,
+      isBot: isSelf,
+      isSelf,
+      timestamp: msgObj.timestamp || Date.now()
+    };
+    arr.push(entry);
     if (arr.length > 2000) {
       arr = arr.slice(-2000);
     }
     fs.writeFileSync(p, JSON.stringify(arr), 'utf8');
-    return arr.length;
+
+    const gid = String(groupId);
+    const prevSt = qqBotRuntime.groupSeqState.get(gid) || {
+      lastMessageSeq: 0,
+      lastProcessedSeq: 0,
+      lastMessageAt: 0,
+      waitingForRpSince: 0,
+      idleAsked: false
+    };
+    if (!isSelf) {
+      prevSt.lastMessageSeq = nextSeq;
+      prevSt.lastMessageAt = Date.now();
+      prevSt.idleAsked = false;
+    } else {
+      prevSt.lastMessageSeq = nextSeq;
+      prevSt.lastProcessedSeq = nextSeq;
+      prevSt.waitingForRpSince = Date.now();
+    }
+    qqBotRuntime.groupSeqState.set(gid, prevSt);
+
+    return { total: arr.length, entry };
   } catch (_) {
-    return 0;
+    return { total: 0, entry: null };
   }
 }
 
@@ -1662,18 +1788,31 @@ function loadGroupMemoryFromDisk(groupId) {
     const p = getGroupMemoryPath(groupId);
     if (fs.existsSync(p)) {
       const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
-      if (parsed && typeof parsed.ledger === 'string') return parsed;
+      if (parsed && (typeof parsed.summaryText === 'string' || typeof parsed.ledger === 'string')) {
+        const text = parsed.summaryText || parsed.ledger || '';
+        return {
+          groupId: String(groupId),
+          updatedAt: parsed.updatedAt || 0,
+          lastSummarizedSeq: Number(parsed.lastSummarizedSeq || parsed.summarizedCount) || 0,
+          summarizedCount: Number(parsed.lastSummarizedSeq || parsed.summarizedCount) || 0,
+          summaryText: text,
+          ledger: text
+        };
+      }
     }
   } catch (_) {}
+  const defaultText = [
+    '一、已发生关键事件与时间线：暂无已归档事件，等待群聊推进后由副API自动提炼。',
+    '二、当前所处场景与已获线索道具：全员处于初始场景阶段。',
+    '三、人物关系态度、技能检定结果与待回收伏笔：各群成员关系正常，暂无未决检定。'
+  ].join('\n');
   return {
     groupId: String(groupId),
     updatedAt: 0,
+    lastSummarizedSeq: 0,
     summarizedCount: 0,
-    ledger: [
-      '一、已发生关键事件与时间线：暂无已归档事件，等待群聊推进后自动提炼。',
-      '二、当前所处场景与持有线索道具：全员处于初始准备阶段。',
-      '三、人物态度关系与待回收伏笔：各角色关系正常，暂无未决检定。'
-    ].join('\n')
+    summaryText: defaultText,
+    ledger: defaultText
   };
 }
 
@@ -1681,11 +1820,23 @@ function saveGroupMemoryToDisk(groupId, memoryData) {
   try {
     const p = getGroupMemoryPath(groupId);
     const prev = loadGroupMemoryFromDisk(groupId);
+    const text = String(
+      memoryData.summaryText !== undefined
+        ? memoryData.summaryText
+        : (memoryData.ledger !== undefined ? memoryData.ledger : prev.summaryText)
+    );
+    const seq = Number(
+      memoryData.lastSummarizedSeq !== undefined
+        ? memoryData.lastSummarizedSeq
+        : (memoryData.summarizedCount !== undefined ? memoryData.summarizedCount : prev.lastSummarizedSeq)
+    ) || 0;
     const next = {
-      ...prev,
-      ...memoryData,
       groupId: String(groupId),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      lastSummarizedSeq: seq,
+      summarizedCount: seq,
+      summaryText: text,
+      ledger: text
     };
     fs.writeFileSync(p, JSON.stringify(next, null, 2), 'utf8');
     return next;
@@ -1744,6 +1895,37 @@ function extractOneBotMessageText(rawEvt) {
   };
 }
 
+function resolveMemberRealtimeName(groupCfg, senderId, incomingRemark) {
+  const sid = String(senderId || '').trim();
+  const cleanIncoming = String(incomingRemark || '').trim();
+  if (!groupCfg) return cleanIncoming || sid || '群成员';
+
+  if (!groupCfg.memberRemarks) groupCfg.memberRemarks = {};
+  if (cleanIncoming && cleanIncoming !== sid) {
+    groupCfg.memberRemarks[sid] = cleanIncoming;
+  }
+
+  if (Array.isArray(groupCfg.playerBindings)) {
+    const bound = groupCfg.playerBindings.find(b => String(b.qq) === sid);
+    if (bound) {
+      if (cleanIncoming && cleanIncoming !== sid) {
+        bound.qqRemark = cleanIncoming;
+      }
+      if (bound.alias && String(bound.alias).trim()) {
+        return String(bound.alias).trim();
+      }
+      if (bound.qqRemark && String(bound.qqRemark).trim()) {
+        return String(bound.qqRemark).trim();
+      }
+      if (bound.cardName && bound.cardName !== '未绑定角色卡' && bound.cardName !== '未绑角色卡') {
+        return String(bound.cardName).trim();
+      }
+    }
+  }
+
+  return cleanIncoming || groupCfg.memberRemarks[sid] || sid || '群成员';
+}
+
 function handleIncomingOneBotEvent(data) {
   if (!data || typeof data !== 'object') return;
   if (data.echo && qqBotRuntime.pendingEchoes.has(data.echo)) {
@@ -1770,47 +1952,43 @@ function handleIncomingOneBotEvent(data) {
     const groupId = String(data.group_id || '');
     if (!groupId) return;
     const senderId = String(data.user_id || data.sender?.user_id || '');
-    const senderName = String(data.sender?.card || data.sender?.nickname || senderId || '群成员');
+    // 优先读取AI那个QQ号给该群友设置的好友备注 remark，其次读取群备注 card，再次读取QQ昵称 nickname
+    const rawQqRemark = String(
+      data.sender?.remark ||
+      data.sender?.card ||
+      data.sender?.nickname ||
+      ''
+    ).trim();
+
     const parsed = extractOneBotMessageText(data);
     if (!parsed.text && !parsed.hasSticker) return;
 
     const cfg = loadQqBotConfig();
     if (!cfg.groups[groupId]) {
-      cfg.groups[groupId] = {
+      cfg.groups[groupId] = normalizeGroupConfig(groupId, {
         groupId,
         groupName: String(data.group_name || `QQ群 ${groupId}`),
-        enabled: false,
-        mode: 'oc_chat',
-        debounceSec: 8,
-        contextLimit: 150,
-        idleCheckMin: 15,
-        cooldownSec: 5,
-        personaId: '',
-        personaName: cfg.nickname || '群控助手',
-        customPersona: '',
-        thoughtChainId: '',
-        worldBookId: '',
-        stickerCategoryId: 'all',
-        moduleId: '',
-        chapterId: 'auto',
-        naiMode: 'off',
-        modImgMode: 'auto',
-        players: []
-      };
-      saveQqBotConfig(cfg);
+        enabled: false
+      });
     }
+
+    const displayName = resolveMemberRealtimeName(cfg.groups[groupId], senderId, rawQqRemark);
+    saveQqBotConfig(cfg);
 
     const isSelf = Boolean(qqBotRuntime.selfId && senderId === qqBotRuntime.selfId);
     const msgEntry = {
       messageId: String(data.message_id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
       groupId,
       senderId,
-      senderName,
+      senderName: displayName,
+      qqRemark: rawQqRemark || displayName,
       content: parsed.text,
+      rawMessage: parsed.text,
       replyId: parsed.replyId || '',
       hasSticker: parsed.hasSticker,
       stickerHint: parsed.stickerHint || '',
       isBot: isSelf,
+      isSelf,
       timestamp: (data.time ? Number(data.time) * 1000 : Date.now())
     };
 
@@ -1821,7 +1999,7 @@ function handleIncomingOneBotEvent(data) {
         lastMessageAt: Date.now(),
         lastMessageId: msgEntry.messageId,
         lastSenderId: senderId,
-        lastSenderName: senderName,
+        lastSenderName: displayName,
         lastContent: msgEntry.content
       });
     }
@@ -1830,7 +2008,7 @@ function handleIncomingOneBotEvent(data) {
 
 async function callOneBotApi(action, params = {}) {
   const cfg = loadQqBotConfig();
-  const endpoint = String(cfg.endpoint || '').trim();
+  const endpoint = String(cfg.onebotUrl || cfg.endpoint || '').trim();
   const token = String(cfg.accessToken || '').trim();
 
   // 1. 优先通过已连接的反向或正向 WebSocket 发送 OneBot 动作
@@ -1886,7 +2064,7 @@ async function callOneBotApi(action, params = {}) {
     return json.data !== undefined ? json.data : json;
   }
 
-  throw new Error('当前未检测到活跃的 OneBot 连接，请先在 NapCat 或 Lagrange 中配置反向 WS 或启动本地端');
+  throw new Error('当前未检测到活跃的 OneBot 连接');
 }
 
 function connectForwardOneBotWsIfNeeded(endpoint, token) {
@@ -1940,6 +2118,14 @@ function connectForwardOneBotWsIfNeeded(endpoint, token) {
   }
 }
 
+app.use('/api/qqbot', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 app.post('/api/qqbot/webhook', (req, res) => {
   try {
     handleIncomingOneBotEvent(req.body);
@@ -1956,25 +2142,43 @@ app.get('/api/qqbot/state', (req, res) => {
     const hist = loadGroupHistoryFromDisk(gid, 1);
     const mem = loadGroupMemoryFromDisk(gid);
     const pending = qqBotRuntime.pendingGroupEvents.get(gid) || null;
+    const seqSt = qqBotRuntime.groupSeqState.get(gid) || {
+      lastMessageSeq: hist.lastSeq || 0,
+      lastProcessedSeq: hist.lastSeq || 0,
+      lastMessageAt: hist.messages[0]?.timestamp || 0,
+      waitingForRpSince: 0,
+      idleAsked: false
+    };
     groupStats[gid] = {
       totalMessages: hist.total,
       lastMessage: hist.messages[0] || null,
+      lastMessageSeq: seqSt.lastMessageSeq || hist.lastSeq || 0,
+      lastProcessedSeq: seqSt.lastProcessedSeq || 0,
+      lastMessageAt: seqSt.lastMessageAt || hist.messages[0]?.timestamp || 0,
+      waitingForRpSince: seqSt.waitingForRpSince || 0,
+      idleAsked: Boolean(seqSt.idleAsked),
       memoryUpdatedAt: mem.updatedAt || 0,
       pendingTrigger: pending
     };
   }
   const hasReverse = Array.from(qqBotRuntime.reverseSockets).some(w => w.readyState === 1);
   const hasForward = Boolean(qqBotRuntime.forwardSocket && qqBotRuntime.forwardSocket.readyState === 1);
+  const isConn = Boolean(hasReverse || hasForward || qqBotRuntime.connected);
+  const statusText = isConn
+    ? `已连接 ${qqBotRuntime.selfId || cfg.selfId || 'OneBot'}`
+    : '本地待命';
   return res.json({
     ok: true,
     runtime: {
-      connected: Boolean(hasReverse || hasForward || qqBotRuntime.connected),
+      connected: isConn,
+      statusText,
       hasReverseWs: hasReverse,
       hasForwardWs: hasForward,
       selfId: qqBotRuntime.selfId || cfg.selfId || '',
       nickname: qqBotRuntime.nickname || cfg.nickname || '',
       lastEventAt: qqBotRuntime.lastEventAt,
-      lastError: qqBotRuntime.lastError
+      lastError: qqBotRuntime.lastError,
+      groupStats
     },
     config: cfg,
     groupStats
@@ -1985,10 +2189,24 @@ app.post('/api/qqbot/config', (req, res) => {
   try {
     const incoming = req.body || {};
     const current = loadQqBotConfig();
+    const nextUrl = incoming.onebotUrl || incoming.endpoint || current.onebotUrl;
+    const mergedGroups = { ...current.groups };
+    if (incoming.groups && typeof incoming.groups === 'object') {
+      for (const gid of Object.keys(incoming.groups)) {
+        mergedGroups[gid] = normalizeGroupConfig(gid, {
+          ...(current.groups[gid] || {}),
+          ...incoming.groups[gid]
+        });
+      }
+    }
     const merged = {
       ...current,
       ...incoming,
-      groups: incoming.groups ? { ...current.groups, ...incoming.groups } : current.groups
+      onebotUrl: nextUrl,
+      endpoint: nextUrl,
+      mainApi: { ...current.mainApi, ...(incoming.mainApi || {}) },
+      subApi: { ...current.subApi, ...(incoming.subApi || {}) },
+      groups: mergedGroups
     };
     saveQqBotConfig(merged);
     if (merged.selfId) qqBotRuntime.selfId = String(merged.selfId);
@@ -2001,16 +2219,20 @@ app.post('/api/qqbot/config', (req, res) => {
 
 app.post('/api/qqbot/connect', async (req, res) => {
   try {
-    const { endpoint, accessToken, selfId, nickname } = req.body || {};
+    const { onebotUrl, endpoint, accessToken, selfId, nickname } = req.body || {};
     const cfg = loadQqBotConfig();
-    if (endpoint !== undefined) cfg.endpoint = String(endpoint).trim();
+    const targetUrl = String(onebotUrl || endpoint || cfg.onebotUrl || '').trim();
+    if (targetUrl) {
+      cfg.onebotUrl = targetUrl;
+      cfg.endpoint = targetUrl;
+    }
     if (accessToken !== undefined) cfg.accessToken = String(accessToken).trim();
     if (selfId !== undefined) cfg.selfId = String(selfId).trim();
     if (nickname !== undefined) cfg.nickname = String(nickname).trim();
     saveQqBotConfig(cfg);
 
-    if (/^wss?:\/\//i.test(cfg.endpoint) && !cfg.endpoint.includes('/api/qqbot/ws')) {
-      connectForwardOneBotWsIfNeeded(cfg.endpoint, cfg.accessToken);
+    if (/^wss?:\/\//i.test(cfg.onebotUrl) && !cfg.onebotUrl.includes('/api/qqbot/ws')) {
+      connectForwardOneBotWsIfNeeded(cfg.onebotUrl, cfg.accessToken);
       await new Promise(r => setTimeout(r, 600));
     }
 
@@ -2030,14 +2252,24 @@ app.post('/api/qqbot/connect', async (req, res) => {
 
     const hasReverse = Array.from(qqBotRuntime.reverseSockets).some(w => w.readyState === 1);
     const hasForward = Boolean(qqBotRuntime.forwardSocket && qqBotRuntime.forwardSocket.readyState === 1);
+    const isConn = Boolean(hasReverse || hasForward || loginInfo);
+    const statusText = isConn
+      ? `已连接 ${qqBotRuntime.selfId || cfg.selfId || 'OneBot'}`
+      : '监听待命';
     return res.json({
       ok: true,
-      connected: Boolean(hasReverse || hasForward || loginInfo),
+      connected: isConn,
       selfId: qqBotRuntime.selfId || cfg.selfId,
       nickname: qqBotRuntime.nickname || cfg.nickname,
-      message: (hasReverse || hasForward || loginInfo)
-        ? `已成功连接 OneBot 节点，当前登录账号：${qqBotRuntime.nickname || ''} ${qqBotRuntime.selfId || ''}`
-        : '配置已存入本地磁盘，反向 WebSocket 监听通道已就绪，等待本地 NapCat 或 Lagrange 接入'
+      runtime: {
+        connected: isConn,
+        statusText,
+        selfId: qqBotRuntime.selfId || cfg.selfId,
+        nickname: qqBotRuntime.nickname || cfg.nickname
+      },
+      message: isConn
+        ? `已成功连接 OneBot 节点，当前账号：${qqBotRuntime.nickname || ''} ${qqBotRuntime.selfId || ''}`
+        : '反向监听与本地桥接已就绪，等待手机 Termux 协议端接入'
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -2062,27 +2294,12 @@ app.post('/api/qqbot/refresh-groups', async (req, res) => {
       if (!gid) return;
       const gname = String(g.group_name || `QQ群 ${gid}`);
       if (!cfg.groups[gid]) {
-        cfg.groups[gid] = {
+        cfg.groups[gid] = normalizeGroupConfig(gid, {
           groupId: gid,
           groupName: gname,
           enabled: false,
-          mode: 'oc_chat',
-          debounceSec: 8,
-          contextLimit: 150,
-          idleCheckMin: 15,
-          cooldownSec: 5,
-          personaId: '',
-          personaName: cfg.nickname || '群控助手',
-          customPersona: '',
-          thoughtChainId: '',
-          worldBookId: '',
-          stickerCategoryId: 'all',
-          moduleId: '',
-          chapterId: 'auto',
-          naiMode: 'off',
-          modImgMode: 'auto',
-          players: []
-        };
+          mode: 'oc_chat'
+        });
       } else {
         cfg.groups[gid].groupName = gname;
       }
@@ -2092,8 +2309,99 @@ app.post('/api/qqbot/refresh-groups', async (req, res) => {
     return res.json({
       ok: true,
       fetchedFromOneBot,
-      groups: cfg.groups,
+      groups: Object.values(cfg.groups),
+      groupsMap: cfg.groups,
       count: Object.keys(cfg.groups).length
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 同步指定QQ群的所有群成员及AI账号给他们改的好友备注与群名片
+app.post('/api/qqbot/group/:groupId/sync-members', async (req, res) => {
+  try {
+    const groupId = String(req.params.groupId || '');
+    const cfg = loadQqBotConfig();
+    if (!cfg.groups[groupId]) {
+      cfg.groups[groupId] = normalizeGroupConfig(groupId, { groupId });
+    }
+    const gCfg = cfg.groups[groupId];
+    if (!gCfg.memberRemarks) gCfg.memberRemarks = {};
+    if (!Array.isArray(gCfg.playerBindings)) gCfg.playerBindings = [];
+
+    let friendRemarkMap = {};
+    try {
+      const friends = await callOneBotApi('get_friend_list', {});
+      if (Array.isArray(friends)) {
+        friends.forEach(f => {
+          const uid = String(f.user_id || '');
+          const rem = String(f.remark || '').trim();
+          if (uid && rem) friendRemarkMap[uid] = rem;
+        });
+      }
+    } catch (_) {}
+
+    let memberList = [];
+    let syncedFromOneBot = false;
+    try {
+      const rawMembers = await callOneBotApi('get_group_member_list', {
+        group_id: Number(groupId) || String(groupId)
+      });
+      if (Array.isArray(rawMembers)) {
+        memberList = rawMembers;
+        syncedFromOneBot = true;
+      }
+    } catch (_) {}
+
+    memberList.forEach(m => {
+      const uid = String(m.user_id || '');
+      if (!uid || (qqBotRuntime.selfId && uid === qqBotRuntime.selfId)) return;
+      const bestRemark = String(
+        friendRemarkMap[uid] ||
+        m.remark ||
+        m.card ||
+        m.nickname ||
+        uid
+      ).trim();
+      gCfg.memberRemarks[uid] = bestRemark;
+
+      const existing = gCfg.playerBindings.find(b => String(b.qq) === uid);
+      if (existing) {
+        existing.qqRemark = bestRemark;
+      } else {
+        gCfg.playerBindings.push({
+          qq: uid,
+          alias: '',
+          qqRemark: bestRemark,
+          slot: '群友',
+          cardId: '',
+          cardName: '未绑角色卡',
+          persona: ''
+        });
+      }
+    });
+
+    // 同时从本地已存聊天记录里提取发言过的群友备注
+    const hist = loadGroupHistoryFromDisk(groupId, 200);
+    hist.messages.forEach(msg => {
+      if (!msg || msg.isSelf || !msg.senderId) return;
+      const uid = String(msg.senderId);
+      const best = String(friendRemarkMap[uid] || msg.qqRemark || msg.senderName || uid).trim();
+      if (best) gCfg.memberRemarks[uid] = best;
+      const existing = gCfg.playerBindings.find(b => String(b.qq) === uid);
+      if (existing && !existing.qqRemark && best !== uid) {
+        existing.qqRemark = best;
+      }
+    });
+
+    saveQqBotConfig(cfg);
+    return res.json({
+      ok: true,
+      syncedFromOneBot,
+      group: gCfg,
+      playerBindings: gCfg.playerBindings,
+      memberRemarks: gCfg.memberRemarks
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -2103,8 +2411,18 @@ app.post('/api/qqbot/refresh-groups', async (req, res) => {
 app.get('/api/qqbot/group/:groupId/context', (req, res) => {
   try {
     const groupId = String(req.params.groupId || '');
-    const limit = Math.max(10, Math.min(800, Number(req.query.limit) || 150));
+    const limit = Math.max(10, Math.min(800, Number(req.query.limit) || 180));
+    const cfg = loadQqBotConfig();
+    const gCfg = cfg.groups && cfg.groups[groupId];
     const hist = loadGroupHistoryFromDisk(groupId, limit);
+    const messages = hist.messages.map(m => {
+      if (m.isSelf) return m;
+      const realName = resolveMemberRealtimeName(gCfg, m.senderId, m.qqRemark || m.senderName);
+      return {
+        ...m,
+        senderName: realName
+      };
+    });
     const memory = loadGroupMemoryFromDisk(groupId);
     const pending = qqBotRuntime.pendingGroupEvents.get(groupId) || null;
     if (req.query.ackPending === '1') {
@@ -2114,7 +2432,8 @@ app.get('/api/qqbot/group/:groupId/context', (req, res) => {
       ok: true,
       groupId,
       totalMessages: hist.total,
-      messages: hist.messages,
+      totalStored: hist.total,
+      messages,
       memory,
       pending
     });
@@ -2126,10 +2445,10 @@ app.get('/api/qqbot/group/:groupId/context', (req, res) => {
 app.post('/api/qqbot/group/:groupId/memory', (req, res) => {
   try {
     const groupId = String(req.params.groupId || '');
-    const { ledger, summarizedCount } = req.body || {};
+    const { summaryText, ledger, lastSummarizedSeq, summarizedCount } = req.body || {};
     const saved = saveGroupMemoryToDisk(groupId, {
-      ledger: String(ledger || ''),
-      summarizedCount: Number(summarizedCount) || 0
+      summaryText: summaryText !== undefined ? summaryText : ledger,
+      lastSummarizedSeq: lastSummarizedSeq !== undefined ? lastSummarizedSeq : summarizedCount
     });
     return res.json({ ok: true, memory: saved });
   } catch (err) {
@@ -2145,6 +2464,7 @@ app.post('/api/qqbot/group/:groupId/clear', (req, res) => {
       fs.writeFileSync(p, '[]', 'utf8');
     }
     qqBotRuntime.pendingGroupEvents.delete(groupId);
+    qqBotRuntime.groupSeqState.delete(groupId);
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -2153,29 +2473,46 @@ app.post('/api/qqbot/group/:groupId/clear', (req, res) => {
 
 app.post('/api/qqbot/simulate', (req, res) => {
   try {
-    const { groupId, senderId = '10001', senderName = '早川秋', content = '', hasSticker = false, stickerHint = '' } = req.body || {};
+    const {
+      groupId,
+      senderId = '10001',
+      senderName = '早川秋',
+      message,
+      content = '',
+      hasSticker = false,
+      stickerHint = ''
+    } = req.body || {};
     const gid = String(groupId || '88482026');
+    const cfg = loadQqBotConfig();
+    const gCfg = cfg.groups && cfg.groups[gid];
+    const resolvedName = resolveMemberRealtimeName(gCfg, senderId, senderName);
+    if (gCfg) saveQqBotConfig(cfg);
+
+    const text = String(message !== undefined ? message : content);
     const msgEntry = {
       messageId: 'sim_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
       groupId: gid,
       senderId: String(senderId),
-      senderName: String(senderName),
-      content: String(content || ''),
+      senderName: resolvedName,
+      qqRemark: String(senderName || resolvedName),
+      content: text,
+      rawMessage: text,
       replyId: '',
       hasSticker: Boolean(hasSticker),
       stickerHint: String(stickerHint || ''),
       isBot: false,
+      isSelf: false,
       timestamp: Date.now()
     };
-    const total = appendGroupMessageToDisk(gid, msgEntry);
+    const { total, entry } = appendGroupMessageToDisk(gid, msgEntry);
     qqBotRuntime.pendingGroupEvents.set(gid, {
       lastMessageAt: Date.now(),
       lastMessageId: msgEntry.messageId,
       lastSenderId: msgEntry.senderId,
-      lastSenderName: msgEntry.senderName,
-      lastContent: msgEntry.content
+      lastSenderName: resolvedName,
+      lastContent: text
     });
-    return res.json({ ok: true, message: msgEntry, total });
+    return res.json({ ok: true, message: entry, entry, total });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -2187,19 +2524,56 @@ app.post('/api/qqbot/send', async (req, res) => {
       targetType = 'group',
       groupId = '',
       userId = '',
+      message,
       content = '',
       replyToMessageId = '',
       imageUrl = '',
       stickerName = '',
-      botName = '守秘人KP'
+      botName = '守秘人KP',
+      markProcessedSeq,
+      waitingForRpSince,
+      idleAsked
     } = req.body || {};
 
-    const segments = [];
-    if (replyToMessageId) {
-      segments.push({ type: 'reply', data: { id: String(replyToMessageId) } });
+    const gid = String(groupId || '');
+    if (gid && (markProcessedSeq !== undefined || waitingForRpSince !== undefined || idleAsked !== undefined)) {
+      const prevSt = qqBotRuntime.groupSeqState.get(gid) || {
+        lastMessageSeq: 0,
+        lastProcessedSeq: 0,
+        lastMessageAt: 0,
+        waitingForRpSince: 0,
+        idleAsked: false
+      };
+      if (markProcessedSeq !== undefined) {
+        prevSt.lastProcessedSeq = Math.max(prevSt.lastProcessedSeq || 0, Number(markProcessedSeq) || 0);
+      }
+      if (waitingForRpSince !== undefined) {
+        prevSt.waitingForRpSince = Number(waitingForRpSince) || Date.now();
+      }
+      if (idleAsked !== undefined) {
+        prevSt.idleAsked = Boolean(idleAsked);
+      }
+      qqBotRuntime.groupSeqState.set(gid, prevSt);
     }
-    if (content && String(content).trim()) {
-      segments.push({ type: 'text', data: { text: String(content).trim() } });
+
+    let rawText = String(message !== undefined ? message : content).trim();
+    let finalReplyId = String(replyToMessageId || '').trim();
+    const cqReplyMatch = rawText.match(/^\[CQ:reply,id=([^\]]+)\]/);
+    if (cqReplyMatch) {
+      if (!finalReplyId) finalReplyId = cqReplyMatch[1];
+      rawText = rawText.replace(/^\[CQ:reply,id=[^\]]+\]/, '').trim();
+    }
+
+    if (!rawText && !imageUrl && !stickerName) {
+      return res.json({ ok: true, stateUpdated: true });
+    }
+
+    const segments = [];
+    if (finalReplyId) {
+      segments.push({ type: 'reply', data: { id: String(finalReplyId) } });
+    }
+    if (rawText) {
+      segments.push({ type: 'text', data: { text: rawText } });
     }
     if (imageUrl && String(imageUrl).trim()) {
       let fileVal = String(imageUrl).trim();
@@ -2213,15 +2587,15 @@ app.post('/api/qqbot/send', async (req, res) => {
     let deliveredToOneBot = false;
     let oneBotError = '';
     try {
-      if (targetType === 'private' && userId) {
+      if ((targetType === 'private' || userId) && userId) {
         await callOneBotApi('send_private_msg', {
           user_id: Number(userId) || String(userId),
           message: segments
         });
         deliveredToOneBot = true;
-      } else if (groupId) {
+      } else if (gid) {
         await callOneBotApi('send_group_msg', {
-          group_id: Number(groupId) || String(groupId),
+          group_id: Number(gid) || String(gid),
           message: segments
         });
         deliveredToOneBot = true;
@@ -2230,24 +2604,32 @@ app.post('/api/qqbot/send', async (req, res) => {
       oneBotError = err.message;
     }
 
-    if (groupId) {
+    if (gid) {
+      const cfg = loadQqBotConfig();
+      const gCfg = cfg.groups && cfg.groups[gid];
       const displayParts = [];
-      if (replyToMessageId) displayParts.push(`[引用回复 ${replyToMessageId}]`);
-      if (targetType === 'private' && userId) displayParts.push(`[私聊小窗发给 ${userId}]`);
-      if (content) displayParts.push(String(content).trim());
-      if (stickerName) displayParts.push(`[发送表情包：${stickerName}]`);
-      else if (imageUrl) displayParts.push('[发送场景插图]');
+      if (finalReplyId) displayParts.push(`[引用回复 ${finalReplyId}]`);
+      if (userId) {
+        const targetDisplay = resolveMemberRealtimeName(gCfg, userId, '');
+        displayParts.push(`[小窗私发给 ${targetDisplay}]`);
+      }
+      if (rawText) displayParts.push(rawText);
+      if (stickerName) displayParts.push(`[表情：${stickerName}]`);
+      else if (imageUrl) displayParts.push('[发送插图]');
 
-      appendGroupMessageToDisk(groupId, {
+      const joinedText = displayParts.join(' ');
+      appendGroupMessageToDisk(gid, {
         messageId: 'bot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        groupId: String(groupId),
+        groupId: gid,
         senderId: qqBotRuntime.selfId || 'BOT',
         senderName: String(botName || qqBotRuntime.nickname || '守秘人KP'),
-        content: displayParts.join(' '),
-        replyId: String(replyToMessageId || ''),
+        content: joinedText,
+        rawMessage: joinedText,
+        replyId: finalReplyId,
         imageUrl: imageUrl || '',
         isBot: true,
-        isPrivateNotice: targetType === 'private',
+        isSelf: true,
+        isPrivateNotice: Boolean(userId),
         timestamp: Date.now()
       });
     }
