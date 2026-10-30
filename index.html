@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v3.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v3.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -15227,24 +15227,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">模组</label>
-            <select id="atlas-module-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.selectModule(this.value);}" class="moe-input" style="flex: 1; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+            <select id="atlas-module-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.selectModule(this.value);}" class="moe-input" style="flex: 1; height: 36px; line-height: 22px; font-size: 12px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
               <option value="">正在读取模组库...</option>
             </select>
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">画风</label>
-            <select id="atlas-style-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.setStyleTheme(this.value);}" class="moe-input" style="flex: 1; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
-              <option value="auto" selected>贴合模组氛围自动配色</option>
-              <option value="rose_gothic">黑粉蔷薇哥特学院</option>
-              <option value="ivory_courtyard">纯白琉璃圣殿庭院</option>
-              <option value="clinical_ward">苍白病院与研究设施</option>
-              <option value="classic_manor">古典西洋钟楼洋馆</option>
-              <option value="shrine_mist">暮色神社与旧木町</option>
-              <option value="starlight_observatory">深海星穹秘仪高塔</option>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">来源</label>
+            <select id="atlas-source-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.setSourceMode(this.value);}" class="moe-input" style="flex: 1; height: 36px; line-height: 22px; font-size: 12px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="minimap" selected>参照小地图与模组布局</option>
+              <option value="free">AI自由构思立体沙盘</option>
+            </select>
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px; margin-left: 2px;">配色</label>
+            <select id="atlas-style-select" onchange="if(window.ModuleAtlas3D){window.ModuleAtlas3D.setStyleTheme(this.value);}" class="moe-input" style="width: 126px; flex-shrink: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+              <option value="auto" selected>系统默认配色</option>
+              <option value="module">模组专属配色</option>
             </select>
           </div>
           <div id="atlas-status-bar" style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; display: flex; justify-content: space-between; align-items: center;">
-            <span id="atlas-status-text">选择模组后自动加载立体建筑沙盘，点击生成可由AI定制多层精细建筑群</span>
+            <span id="atlas-status-text">自动还原小地图与模组布局，可随时切换系统默认配色或模组专属配色</span>
             <span id="atlas-storage-badge" style="color: var(--accent-color); font-weight: 600; flex-shrink: 0; margin-left: 6px;">就绪</span>
           </div>
         </div>
