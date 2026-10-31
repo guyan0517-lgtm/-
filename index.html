@@ -1071,8 +1071,8 @@
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
+                width="22"
+                height="22"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -2496,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -84375,15 +84375,15 @@ ${stickerContext || "无"}
               if (addWbBtn) addWbBtn.style.display = "none";
               if (manageCatBtn) manageCatBtn.style.display = "none";
               if (deleteSelectedWbBtn) deleteSelectedWbBtn.style.display = "none";
-              if (importRxBtn) importRxBtn.style.display = "inline-flex";
-              if (addRxBtn) addRxBtn.style.display = "inline-block";
+              if (importRxBtn) importRxBtn.style.display = "";
+              if (addRxBtn) addRxBtn.style.display = "";
               window.renderRegexRulesList();
             } else {
               if (wbList) wbList.style.display = "block";
               if (rxList) rxList.style.display = "none";
-              if (importWbBtn) importWbBtn.style.display = "inline-block";
-              if (editModeWbBtn) editModeWbBtn.style.display = "inline-block";
-              if (addWbBtn) addWbBtn.style.display = "inline-block";
+              if (importWbBtn) importWbBtn.style.display = "";
+              if (editModeWbBtn) editModeWbBtn.style.display = "";
+              if (addWbBtn) addWbBtn.style.display = "";
               if (importRxBtn) importRxBtn.style.display = "none";
               if (addRxBtn) addRxBtn.style.display = "none";
               renderWorldBookScreen();

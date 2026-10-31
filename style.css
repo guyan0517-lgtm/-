@@ -3030,6 +3030,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 /* === 修正：放大所有主要的“+”号按钮 === */
 #add-chat-btn,
 #add-world-book-btn,
+#add-regex-btn,
 #create-album-btn-page {
   font-size: 28px; /* 显著增大字体大小，使其视觉上与旁边的图标匹配 */
   font-weight: 300; /* 使用更细的字重，让加号看起来更清爽，不显粗笨 */
