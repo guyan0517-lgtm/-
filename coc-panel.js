@@ -357,9 +357,11 @@ class CocPanel {
 
   updateTotalPoints() {
     let total = 0;
+    const customSet = new Set(Array.isArray(this.data.customSkills) ? this.data.customSkills : []);
     if (this.data.skills) {
       Object.entries(this.data.skills).forEach(([name, val]) => {
-        const base = getSkillBaseValue(name, this.data.stats);
+        const isStd = COC_STANDARD_SKILLS.some(s => s.name === name);
+        const base = (!isStd || customSet.has(name)) ? 0 : getSkillBaseValue(name, this.data.stats);
         const num = parseInt(val, 10);
         if (!isNaN(num) && num > base) {
           total += (num - base);
@@ -373,23 +375,34 @@ class CocPanel {
   }
 
   setData(data) {
-    const defaultData = getDefaultCocData();
-    if (!data) {
-      this.data = defaultData;
+    if (typeof window.cloneAndNormalizeCocData === "function") {
+      this.data = window.cloneAndNormalizeCocData(data);
     } else {
-      this.data = {
-        stats: { ...defaultData.stats, ...(data.stats || {}) },
-        calculated: { ...defaultData.calculated, ...(data.calculated || {}) },
-        skills: { ...defaultData.skills, ...(data.skills || {}) },
-        customSkills: Array.isArray(data.customSkills) ? [...data.customSkills] : [],
-        totalPoints: data.totalPoints || 0,
-        rulebook: (data && data.rulebook) || "coc7"
-      };
+      const defaultData = getDefaultCocData();
+      if (!data) {
+        this.data = defaultData;
+      } else {
+        const mergedSkills = { ...defaultData.skills, ...(data.skills || {}) };
+        const customList = Array.isArray(data.customSkills) ? [...data.customSkills] : [];
+        Object.keys(data.skills || {}).forEach(k => {
+          if (k && !COC_STANDARD_SKILLS.some(s => s.name === k) && !customList.includes(k)) {
+            customList.push(k);
+          }
+        });
+        this.data = {
+          stats: { ...defaultData.stats, ...(data.stats || {}) },
+          calculated: { ...defaultData.calculated, ...(data.calculated || {}) },
+          skills: mergedSkills,
+          customSkills: customList,
+          totalPoints: data.totalPoints || 0,
+          rulebook: (data && data.rulebook) || "coc7"
+        };
+      }
     }
 
     this.container.querySelectorAll(".coc-stat-input").forEach(input => {
       const stat = input.dataset.stat;
-      input.value = this.data.stats[stat] || 50;
+      input.value = this.data.stats[stat] ?? 50;
     });
 
     const armorInput = this.container.querySelector(".coc-armor-input");
@@ -432,6 +445,12 @@ class CocPanel {
     if (rulebookSelect) {
       this.data.rulebook = rulebookSelect.value;
     }
+    if (!Array.isArray(this.data.customSkills)) this.data.customSkills = [];
+    Object.keys(this.data.skills || {}).forEach(k => {
+      if (k && !COC_STANDARD_SKILLS.some(s => s.name === k) && !this.data.customSkills.includes(k)) {
+        this.data.customSkills.push(k);
+      }
+    });
     this.data.calculated = calculateCocStats(this.data.stats, this.data.calculated);
     this.updateTotalPoints();
     return JSON.parse(JSON.stringify(this.data));
@@ -582,6 +601,11 @@ function openCocSkillsModal(cocPanelInstance) {
   // 深度复制技能数据到草稿中，只有点保存时才写入真正的面板数据
   currentWorkingSkills = JSON.parse(JSON.stringify(currentActiveCocPanel.data.skills || {}));
   currentWorkingCustomSkills = [...(currentActiveCocPanel.data.customSkills || [])];
+  Object.keys(currentWorkingSkills).forEach(k => {
+    if (k && !COC_STANDARD_SKILLS.some(s => s.name === k) && !currentWorkingCustomSkills.includes(k)) {
+      currentWorkingCustomSkills.push(k);
+    }
+  });
 
   try {
     renderCocModalSkillsGrid();
@@ -1190,7 +1214,8 @@ ${combinedWbText}
             }
           } else {
             if (currentChat && currentChat.settings) {
-              currentChat.settings.cocPanel = cocPanel.data;
+              currentChat.settings.aiCocPanel = cocPanel.getData();
+              currentChat.settings.cocPanel = currentChat.settings.aiCocPanel;
               if (window.db && window.db.chats) await window.db.chats.put(currentChat);
             }
           }
@@ -1224,6 +1249,61 @@ ${combinedWbText}
 }
 
 window.openCocFillModal = openCocFillModal;
+
+window.cloneAndNormalizeCocData = function(rawCoc) {
+  const defaultData = getDefaultCocData();
+  if (!rawCoc || typeof rawCoc !== "object") {
+    return JSON.parse(JSON.stringify(defaultData));
+  }
+  const stats = { ...defaultData.stats };
+  const rawStats = rawCoc.stats || rawCoc.cocStats || {};
+  Object.keys(stats).forEach(k => {
+    const num = parseInt(rawStats[k], 10);
+    if (!isNaN(num)) stats[k] = num;
+  });
+
+  const dodgeBase = Math.floor((stats.dex || 50) / 2);
+  const skills = { ...defaultData.skills, "闪避": dodgeBase };
+  const rawSkills = rawCoc.skills || rawCoc.cocSkills || {};
+  const customSkills = Array.isArray(rawCoc.customSkills) ? [...rawCoc.customSkills] : [];
+
+  Object.entries(rawSkills).forEach(([k, v]) => {
+    const cleanKey = String(k || "").trim();
+    if (!cleanKey) return;
+    const num = parseInt(v, 10);
+    if (!isNaN(num)) {
+      skills[cleanKey] = num;
+      const isStd = COC_STANDARD_SKILLS.some(s => s.name === cleanKey);
+      if (!isStd && !customSkills.includes(cleanKey)) {
+        customSkills.push(cleanKey);
+      }
+    }
+  });
+
+  const calculated = calculateCocStats(stats, rawCoc.calculated || {});
+  const customSet = new Set(customSkills);
+  let totalPoints = 0;
+  Object.entries(skills).forEach(([name, val]) => {
+    const isStd = COC_STANDARD_SKILLS.some(s => s.name === name);
+    const base = (!isStd || customSet.has(name)) ? 0 : getSkillBaseValue(name, stats);
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num > base) {
+      totalPoints += (num - base);
+    }
+  });
+
+  let rulebook = rawCoc.rulebook || "coc7";
+  if (rulebook === "yunwoshi") rulebook = "canyunwoshi";
+
+  return JSON.parse(JSON.stringify({
+    stats,
+    calculated,
+    skills,
+    customSkills,
+    totalPoints,
+    rulebook
+  }));
+};
 
 window.CocPanel = CocPanel;
 window.createCocPanel = function(containerId, options = {}) {

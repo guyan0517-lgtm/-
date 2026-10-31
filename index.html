@@ -2443,7 +2443,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -56592,7 +56592,16 @@ ${stickerContext || "无"}
             }
             document.getElementById("my-persona").value = preset.persona;
             if (preset.cocPanel && window.myCocPanel) {
-              window.myCocPanel.setData(preset.cocPanel);
+              const clonedPresetCoc = typeof window.cloneAndNormalizeCocData === "function"
+                ? window.cloneAndNormalizeCocData(preset.cocPanel)
+                : JSON.parse(JSON.stringify(preset.cocPanel));
+              window.myCocPanel.setData(clonedPresetCoc);
+              if (state.activeChatId && state.chats[state.activeChatId]) {
+                const curChat = state.chats[state.activeChatId];
+                if (!curChat.settings) curChat.settings = {};
+                curChat.settings.myCocPanel = window.myCocPanel.getData();
+                db.chats.put(curChat).catch(() => {});
+              }
             }
           }
           closePersonaLibrary();
@@ -59624,7 +59633,11 @@ ${stickerContext || "无"}
                 gender: contactChat.settings.gender || "",
                 genderNote: contactChat.settings.genderNote || "",
                 avatarFrame: contactChat.settings.aiAvatarFrame || "",
-                cocPanel: contactChat.settings.aiCocPanel ? JSON.parse(JSON.stringify(contactChat.settings.aiCocPanel)) : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
+                cocPanel: (contactChat.settings.aiCocPanel || contactChat.settings.cocPanel || contactChat.cocPanel)
+                  ? (typeof window.cloneAndNormalizeCocData === "function"
+                      ? window.cloneAndNormalizeCocData(contactChat.settings.aiCocPanel || contactChat.settings.cocPanel || contactChat.cocPanel)
+                      : JSON.parse(JSON.stringify(contactChat.settings.aiCocPanel || contactChat.settings.cocPanel || contactChat.cocPanel)))
+                  : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
                 isAdmin: false,
                 groupTitle: "",
                 addedByPeerCode: myPeerCodeNow,
@@ -59662,6 +59675,11 @@ ${stickerContext || "无"}
                   groupNickname: foundNpc.name,
                   avatar: foundNpc.avatar || defaultGroupMemberAvatar,
                   persona: foundNpc.persona,
+                  cocPanel: foundNpc.cocPanel
+                    ? (typeof window.cloneAndNormalizeCocData === "function"
+                        ? window.cloneAndNormalizeCocData(foundNpc.cocPanel)
+                        : JSON.parse(JSON.stringify(foundNpc.cocPanel)))
+                    : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
                   avatarFrame: "", // NPC没有头像框
                   isAdmin: false,
                   groupTitle: "",
@@ -60174,7 +60192,11 @@ ${stickerContext || "无"}
                 gender: cSettings.gender || "",
                 genderNote: cSettings.genderNote || "",
                 avatarFrame: cSettings.aiAvatarFrame || "",
-                cocPanel: cSettings.aiCocPanel ? JSON.parse(JSON.stringify(cSettings.aiCocPanel)) : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
+                cocPanel: (cSettings.aiCocPanel || cSettings.cocPanel || contactChat.cocPanel)
+                  ? (typeof window.cloneAndNormalizeCocData === "function"
+                      ? window.cloneAndNormalizeCocData(cSettings.aiCocPanel || cSettings.cocPanel || contactChat.cocPanel)
+                      : JSON.parse(JSON.stringify(cSettings.aiCocPanel || cSettings.cocPanel || contactChat.cocPanel)))
+                  : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
                 isAdmin: false,
                 groupTitle: "",
                 addedByPeerCode: myPeerCodeNow,
@@ -60214,6 +60236,11 @@ ${stickerContext || "无"}
                   groupNickname: foundNpc.name,
                   avatar: foundNpc.avatar || defaultGroupMemberAvatar,
                   persona: foundNpc.persona || "",
+                  cocPanel: foundNpc.cocPanel
+                    ? (typeof window.cloneAndNormalizeCocData === "function"
+                        ? window.cloneAndNormalizeCocData(foundNpc.cocPanel)
+                        : JSON.parse(JSON.stringify(foundNpc.cocPanel)))
+                    : (typeof getDefaultCocData === "function" ? getDefaultCocData() : null),
                   avatarFrame: "",
                   isAdmin: false,
                   groupTitle: "",
@@ -64422,6 +64449,9 @@ ${stickerContext || "无"}
           document.getElementById("npc-editor-name-input").value = npc.name;
           document.getElementById("preset-avatar-preview").src = npc.avatar;
           document.getElementById("preset-persona-input").value = npc.persona;
+          if (window.presetCocPanel) {
+            window.presetCocPanel.setData(npc.cocPanel || null);
+          }
 
           // 根据NPC模式，显隐特定UI元素
           document.getElementById("npc-editor-name-group").style.display =
@@ -64453,6 +64483,7 @@ ${stickerContext || "无"}
             .getElementById("preset-persona-input")
             .value.trim();
           const avatar = document.getElementById("preset-avatar-preview").src;
+          const cocData = window.presetCocPanel ? window.presetCocPanel.getData() : null;
 
           if (!name) {
             alert("NPC名字不能为空！");
@@ -64466,6 +64497,7 @@ ${stickerContext || "无"}
               npc.name = name;
               npc.persona = persona;
               npc.avatar = avatar;
+              npc.cocPanel = cocData;
             }
           } else {
             // 添加一个全新的NPC
@@ -64474,6 +64506,7 @@ ${stickerContext || "无"}
               name: name,
               persona: persona,
               avatar: avatar,
+              cocPanel: cocData,
             };
             chat.npcLibrary.push(newNpc);
           }
@@ -92505,8 +92538,19 @@ ${stickerContext || "无"}
                       if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(aiAvatarPreview, importedAvatar);
                       else if (aiAvatarPreview) aiAvatarPreview.src = importedAvatar;
                     }
-                    if (s.aiCocPanel && window.aiCocPanel) {
-                      window.aiCocPanel.setData(s.aiCocPanel);
+                    const srcAiCoc = s.aiCocPanel || s.cocPanel || sourceChat.cocPanel;
+                    if (srcAiCoc && window.aiCocPanel) {
+                      const clonedAiCoc = typeof window.cloneAndNormalizeCocData === "function"
+                        ? window.cloneAndNormalizeCocData(srcAiCoc)
+                        : JSON.parse(JSON.stringify(srcAiCoc));
+                      window.aiCocPanel.setData(clonedAiCoc);
+                      const curChat = state.chats[state.activeChatId];
+                      if (curChat) {
+                        if (!curChat.settings) curChat.settings = {};
+                        curChat.settings.aiCocPanel = window.aiCocPanel.getData();
+                        curChat.settings.cocPanel = curChat.settings.aiCocPanel;
+                        db.chats.put(curChat).catch(() => {});
+                      }
                     }
                     // 同步守秘人提示词
                     const importedKeeperPrompt = s.keeperPrompt || (s.keeperCharPrompts && s.keeperCharPrompts[sourceChat.id]) || (s.keeperCharPrompts && s.keeperCharPrompts["ai"]) || "";
@@ -92521,50 +92565,71 @@ ${stickerContext || "无"}
                       if (keeperPromptInput) keeperPromptInput.value = importedKeeperPrompt;
                     }
                   } else {
+                    const curChat = state.chats[state.activeChatId];
+                    if (curChat && !curChat.settings) curChat.settings = {};
                     const importedName = s.myName || s.myNickname || sourceChat.myNickname || "";
                     if (importedName) {
                       const myNameInput = document.getElementById("my-name-input");
                       if (myNameInput) myNameInput.value = importedName;
                       const nickInput = document.getElementById("my-group-nickname-input");
                       if (nickInput) nickInput.value = importedName;
+                      if (curChat && curChat.settings) {
+                        curChat.settings.myName = importedName;
+                        if (curChat.isGroup) curChat.settings.myNickname = importedName;
+                      }
                     }
                     const importedMyAge = s.myAge || sourceChat.myAge || "";
                     if (importedMyAge) {
                       setAgeSelectValue("my-age-input", importedMyAge);
+                      if (curChat && curChat.settings) curChat.settings.myAge = importedMyAge;
                     }
                     const importedMyBirthday = s.myBirthday || sourceChat.myBirthday || "";
                     if (importedMyBirthday) {
                       setBirthdaySelects("my", importedMyBirthday);
+                      if (curChat && curChat.settings) curChat.settings.myBirthday = importedMyBirthday;
                     }
                     const importedMyGender = s.myGender || sourceChat.myGender || "";
                     if (importedMyGender) {
                       setGenderInputValue("my", importedMyGender);
+                      if (curChat && curChat.settings) curChat.settings.myGender = importedMyGender;
                     }
                     const importedMyGenderNote = s.myGenderNote || sourceChat.myGenderNote || "";
                     if (importedMyGenderNote) {
                       const gNoteInput = document.getElementById("my-gender-note-input");
                       if (gNoteInput) gNoteInput.value = importedMyGenderNote;
+                      if (curChat && curChat.settings) curChat.settings.myGenderNote = importedMyGenderNote;
                     }
                     const importedMyPersona = s.myPersona || sourceChat.myPersona || "";
                     if (importedMyPersona) {
                       const myPersonaInput = document.getElementById("my-persona");
                       if (myPersonaInput) myPersonaInput.value = importedMyPersona;
+                      if (curChat && curChat.settings) curChat.settings.myPersona = importedMyPersona;
                     }
                     const importedMyAvatar = s.myAvatar || sourceChat.myAvatar || "";
                     if (importedMyAvatar) {
                       const myAvatarPreview = document.getElementById("my-avatar-preview");
                       if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(myAvatarPreview, importedMyAvatar);
                       else if (myAvatarPreview) myAvatarPreview.src = importedMyAvatar;
+                      if (curChat && curChat.settings) curChat.settings.myAvatar = importedMyAvatar;
                     }
-                    if ((s.myCocPanel || sourceChat.myCocPanel) && window.myCocPanel) {
-                      window.myCocPanel.setData(s.myCocPanel || sourceChat.myCocPanel);
+                    const srcMyCoc = s.myCocPanel || sourceChat.myCocPanel;
+                    if (srcMyCoc && window.myCocPanel) {
+                      const clonedMyCoc = typeof window.cloneAndNormalizeCocData === "function"
+                        ? window.cloneAndNormalizeCocData(srcMyCoc)
+                        : JSON.parse(JSON.stringify(srcMyCoc));
+                      window.myCocPanel.setData(clonedMyCoc);
+                      if (curChat && curChat.settings) {
+                        curChat.settings.myCocPanel = window.myCocPanel.getData();
+                      }
                     }
                     if (s.keeperCharPrompts && s.keeperCharPrompts["me"]) {
-                      const curChat = state.chats[state.activeChatId];
                       if (curChat && curChat.settings) {
                         if (!curChat.settings.keeperCharPrompts) curChat.settings.keeperCharPrompts = {};
                         curChat.settings.keeperCharPrompts["me"] = s.keeperCharPrompts["me"];
                       }
+                    }
+                    if (curChat) {
+                      db.chats.put(curChat).catch(() => {});
                     }
                   }
                   importMyPersonaModal.classList.remove("visible");
@@ -92661,6 +92726,7 @@ ${stickerContext || "无"}
                 currentChat.name,
                 currentChat.title,
                 currentChat.settings?.aiName,
+                currentChat.settings?.remarkName,
                 currentChat.settings?.myName
               ].map(normalizeNameStr).filter(Boolean);
 
@@ -92681,6 +92747,7 @@ ${stickerContext || "无"}
                     const matched = targetNames.some(tn => mNames.some(mn => checkNameMatched(tn, mn)));
                     if (matched) {
                       const memberKeeperPrompt = (c.settings && c.settings.keeperCharPrompts && (c.settings.keeperCharPrompts[m.id] || c.settings.keeperCharPrompts[m.name])) || m.keeperPrompt || (c.settings && c.settings.keeperPrompt) || "";
+                      const mCoc = m.cocPanel || m.fullCocPanel || (m.settings && (m.settings.aiCocPanel || m.settings.cocPanel)) || null;
                       matches.push({
                         sourceName: c.name || c.title || "群聊",
                         memberName: m.groupNickname || m.name || m.nickname || friendDisplayName,
@@ -92690,7 +92757,7 @@ ${stickerContext || "无"}
                         birthday: m.birthday || "",
                         gender: m.gender || "",
                         genderNote: m.genderNote || "",
-                        cocPanel: m.cocPanel || null,
+                        cocPanel: mCoc,
                         keeperPrompt: memberKeeperPrompt
                       });
                     }
@@ -92719,24 +92786,45 @@ ${stickerContext || "无"}
                   `;
 
                   row.querySelector(".sync-apply-btn").addEventListener("click", () => {
+                    const curChat = state.chats[state.activeChatId];
+                    if (curChat && !curChat.settings) curChat.settings = {};
                     const aiPersonaInput = document.getElementById("ai-persona");
-                    if (aiPersonaInput && item.persona) aiPersonaInput.value = item.persona;
-                    if (item.age !== undefined) setAgeSelectValue("ai-age-input", item.age || "");
+                    if (aiPersonaInput && item.persona) {
+                      aiPersonaInput.value = item.persona;
+                      if (curChat && curChat.settings) curChat.settings.aiPersona = item.persona;
+                    }
+                    if (item.age !== undefined) {
+                      setAgeSelectValue("ai-age-input", item.age || "");
+                      if (curChat && curChat.settings) curChat.settings.age = item.age || "";
+                    }
                     setBirthdaySelects("ai", item.birthday || "");
-                    if (item.gender !== undefined) setGenderInputValue("ai", item.gender || "");
-                    if (item.genderNote) {
+                    if (curChat && curChat.settings) curChat.settings.birthday = item.birthday || "";
+                    if (item.gender !== undefined) {
+                      setGenderInputValue("ai", item.gender || "");
+                      if (curChat && curChat.settings) curChat.settings.gender = item.gender || "";
+                    }
+                    if (item.genderNote !== undefined) {
                       const aiGenderNoteInput = document.getElementById("ai-gender-note-input");
-                      if (aiGenderNoteInput) aiGenderNoteInput.value = item.genderNote;
+                      if (aiGenderNoteInput) aiGenderNoteInput.value = item.genderNote || "";
+                      if (curChat && curChat.settings) curChat.settings.genderNote = item.genderNote || "";
                     }
                     if (item.avatar) {
                       const aiAvatarPreview = document.getElementById("ai-avatar-preview");
-                      if (aiAvatarPreview) aiAvatarPreview.src = item.avatar;
+                      if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(aiAvatarPreview, item.avatar);
+                      else if (aiAvatarPreview) aiAvatarPreview.src = item.avatar;
+                      if (curChat && curChat.settings) curChat.settings.aiAvatar = item.avatar;
                     }
                     if (item.cocPanel && window.aiCocPanel) {
-                      window.aiCocPanel.setData(item.cocPanel);
+                      const clonedAiCoc = typeof window.cloneAndNormalizeCocData === "function"
+                        ? window.cloneAndNormalizeCocData(item.cocPanel)
+                        : JSON.parse(JSON.stringify(item.cocPanel));
+                      window.aiCocPanel.setData(clonedAiCoc);
+                      if (curChat && curChat.settings) {
+                        curChat.settings.aiCocPanel = window.aiCocPanel.getData();
+                        curChat.settings.cocPanel = curChat.settings.aiCocPanel;
+                      }
                     }
                     if (item.keeperPrompt) {
-                      const curChat = state.chats[state.activeChatId];
                       if (curChat && curChat.settings) {
                         curChat.settings.keeperPrompt = item.keeperPrompt;
                         if (!curChat.settings.keeperCharPrompts) curChat.settings.keeperCharPrompts = {};
@@ -92744,6 +92832,9 @@ ${stickerContext || "无"}
                       }
                       const keeperPromptInput = document.getElementById("keeper-prompt-input");
                       if (keeperPromptInput) keeperPromptInput.value = item.keeperPrompt;
+                    }
+                    if (curChat) {
+                      db.chats.put(curChat).catch(() => {});
                     }
                     syncPersonaModal.classList.remove("visible");
                     if (typeof window.showCustomAlert === "function") {
@@ -92777,9 +92868,10 @@ ${stickerContext || "无"}
 
               Object.values(state.chats).forEach((c) => {
                 if (!c.isGroup) {
-                  const cNames = [c.name, c.title, c.settings?.aiName].map(normalizeNameStr).filter(Boolean);
+                  const cNames = [c.name, c.title, c.settings?.aiName, c.settings?.remarkName].map(normalizeNameStr).filter(Boolean);
                   if (cNames.some(cn => checkNameMatched(cn, memberName))) {
                     const cKeeperPrompt = (c.settings && c.settings.keeperPrompt) || (c.settings && c.settings.keeperCharPrompts && (c.settings.keeperCharPrompts[c.id] || c.settings.keeperCharPrompts["ai"])) || "";
+                    const cCoc = c.settings?.aiCocPanel || c.settings?.cocPanel || c.cocPanel || null;
                     matches.push({
                       sourceName: `私聊: ${c.name || c.title || memberName}`,
                       memberName: memberName,
@@ -92789,7 +92881,7 @@ ${stickerContext || "无"}
                       birthday: c.settings?.birthday || c.settings?.aiBirthday || "",
                       gender: c.settings?.gender || c.settings?.aiGender || "",
                       genderNote: c.settings?.genderNote || c.settings?.aiGenderNote || "",
-                      cocPanel: c.settings?.aiCocPanel || null,
+                      cocPanel: cCoc,
                       keeperPrompt: cKeeperPrompt
                     });
                   }
@@ -92799,9 +92891,11 @@ ${stickerContext || "无"}
               Object.values(state.chats).forEach((c) => {
                 if (c.isGroup && Array.isArray(c.members)) {
                   c.members.forEach((m) => {
+                    if (c.id === state.activeChatId && editingMemberId && String(m.id) === String(editingMemberId)) return;
                     const mNames = [m.name, m.nickname, m.card, m.originalName, m.groupNickname].map(normalizeNameStr).filter(Boolean);
                     if (mNames.some(mn => checkNameMatched(mn, memberName))) {
                       const mKeeperPrompt = (c.settings && c.settings.keeperCharPrompts && (c.settings.keeperCharPrompts[m.id] || c.settings.keeperCharPrompts[m.name])) || m.keeperPrompt || (c.settings && c.settings.keeperPrompt) || "";
+                      const mCoc = m.cocPanel || m.fullCocPanel || (m.settings && (m.settings.aiCocPanel || m.settings.cocPanel)) || null;
                       matches.push({
                         sourceName: `群聊: ${c.name || c.title || "群聊"}`,
                         memberName: m.groupNickname || m.name || m.nickname || memberName,
@@ -92811,7 +92905,7 @@ ${stickerContext || "无"}
                         birthday: m.birthday || "",
                         gender: m.gender || "",
                         genderNote: m.genderNote || "",
-                        cocPanel: m.cocPanel || null,
+                        cocPanel: mCoc,
                         keeperPrompt: mKeeperPrompt
                       });
                     }
@@ -92840,24 +92934,47 @@ ${stickerContext || "无"}
                   `;
 
                   row.querySelector(".sync-apply-btn").addEventListener("click", () => {
+                    const curChat = state.chats[state.activeChatId];
+                    const curMember = (curChat && Array.isArray(curChat.members) && editingMemberId)
+                      ? curChat.members.find(m => String(m.id) === String(editingMemberId))
+                      : null;
+
                     const mPersonaInput = document.getElementById("member-persona-input");
-                    if (mPersonaInput && item.persona) mPersonaInput.value = item.persona;
-                    if (item.age !== undefined) setAgeSelectValue("member-age-input", item.age || "");
+                    if (mPersonaInput && item.persona) {
+                      mPersonaInput.value = item.persona;
+                      if (curMember) curMember.persona = item.persona;
+                    }
+                    if (item.age !== undefined) {
+                      setAgeSelectValue("member-age-input", item.age || "");
+                      if (curMember) curMember.age = item.age || "";
+                    }
                     setBirthdaySelects("member", item.birthday || "");
-                    if (item.gender !== undefined) setGenderInputValue("member", item.gender || "");
-                    if (item.genderNote) {
+                    if (curMember) curMember.birthday = item.birthday || "";
+                    if (item.gender !== undefined) {
+                      setGenderInputValue("member", item.gender || "");
+                      if (curMember) curMember.gender = item.gender || "";
+                    }
+                    if (item.genderNote !== undefined) {
                       const mGenderNoteInput = document.getElementById("member-gender-note-input");
-                      if (mGenderNoteInput) mGenderNoteInput.value = item.genderNote;
+                      if (mGenderNoteInput) mGenderNoteInput.value = item.genderNote || "";
+                      if (curMember) curMember.genderNote = item.genderNote || "";
                     }
                     if (item.avatar) {
                       const memberAvatarPreview = document.getElementById("member-avatar-preview");
-                      if (memberAvatarPreview) memberAvatarPreview.src = item.avatar;
+                      if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(memberAvatarPreview, item.avatar);
+                      else if (memberAvatarPreview) memberAvatarPreview.src = item.avatar;
+                      if (curMember) curMember.avatar = item.avatar;
                     }
                     if (item.cocPanel && window.memberCocPanel) {
-                      window.memberCocPanel.setData(item.cocPanel);
+                      const clonedMemCoc = typeof window.cloneAndNormalizeCocData === "function"
+                        ? window.cloneAndNormalizeCocData(item.cocPanel)
+                        : JSON.parse(JSON.stringify(item.cocPanel));
+                      window.memberCocPanel.setData(clonedMemCoc);
+                      if (curMember) {
+                        curMember.cocPanel = window.memberCocPanel.getData();
+                      }
                     }
                     if (item.keeperPrompt && editingMemberId) {
-                      const curChat = state.chats[state.activeChatId];
                       if (curChat && curChat.settings) {
                         if (!curChat.settings.keeperCharPrompts) curChat.settings.keeperCharPrompts = {};
                         curChat.settings.keeperCharPrompts[editingMemberId] = item.keeperPrompt;
@@ -92866,6 +92983,9 @@ ${stickerContext || "无"}
                       if (typeof tempKeeperCharPrompts !== "undefined") {
                         tempKeeperCharPrompts[editingMemberId] = item.keeperPrompt;
                       }
+                    }
+                    if (curChat) {
+                      db.chats.put(curChat).catch(() => {});
                     }
                     syncPersonaModal.classList.remove("visible");
                     if (typeof window.showCustomAlert === "function") {

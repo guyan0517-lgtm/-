@@ -863,6 +863,9 @@
     },
 
     sanitizeCocPanelForPeerUI: function (cocPanel) {
+      if (typeof window.cloneAndNormalizeCocData === "function") {
+        return window.cloneAndNormalizeCocData(cocPanel);
+      }
       const def = typeof window.getDefaultCocData === "function"
         ? window.getDefaultCocData()
         : {
@@ -877,7 +880,7 @@
         return {
           stats: { ...def.stats },
           calculated: { ...def.calculated },
-          skills: {},
+          skills: { ...(def.skills || {}) },
           customSkills: [],
           totalPoints: 0,
           rulebook: "coc7"
@@ -887,12 +890,14 @@
       const calculated = typeof window.calculateCocStats === "function"
         ? window.calculateCocStats(stats, cocPanel.calculated || {})
         : (cocPanel.calculated ? { ...def.calculated, ...cocPanel.calculated } : { ...def.calculated });
+      const skills = { ...(def.skills || {}), ...(cocPanel.skills || {}) };
+      const customSkills = Array.isArray(cocPanel.customSkills) ? [...cocPanel.customSkills] : [];
       return {
         stats: stats,
         calculated: calculated,
-        skills: {},
-        customSkills: [],
-        totalPoints: 0,
+        skills: skills,
+        customSkills: customSkills,
+        totalPoints: Number(cocPanel.totalPoints) || 0,
         rulebook: cocPanel.rulebook || "coc7"
       };
     },

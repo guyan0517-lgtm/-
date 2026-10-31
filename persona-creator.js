@@ -1367,28 +1367,39 @@
 
       let aiCocPanelData = null;
       if (currentCardData.cocStats) {
-        const stats = currentCardData.cocStats;
-        const skills = currentCardData.cocSkills || {};
-        const calculated = typeof calculateCocStats === "function" ? calculateCocStats(stats) : {
-          hp: 10,
-          maxHp: 10,
-          mp: 10,
-          maxMp: 10,
-          san: stats.pow || 50,
-          maxSan: 99,
-          db: "0",
-          build: 0
-        };
-        aiCocPanelData = {
-          stats: stats,
-          calculated: calculated,
-          skills: skills,
-          customSkills: [],
-          totalPoints: 0,
+        const rawCocObj = {
+          stats: currentCardData.cocStats,
+          skills: currentCardData.cocSkills || {},
           rulebook: "coc7"
         };
+        if (typeof window.cloneAndNormalizeCocData === "function") {
+          aiCocPanelData = window.cloneAndNormalizeCocData(rawCocObj);
+        } else {
+          const stats = currentCardData.cocStats;
+          const skills = currentCardData.cocSkills || {};
+          const calculated = typeof calculateCocStats === "function" ? calculateCocStats(stats) : {
+            hp: 10,
+            maxHp: 10,
+            mp: 10,
+            maxMp: 10,
+            san: stats.pow || 50,
+            maxSan: 99,
+            db: "0",
+            build: 0
+          };
+          aiCocPanelData = {
+            stats: stats,
+            calculated: calculated,
+            skills: skills,
+            customSkills: [],
+            totalPoints: 0,
+            rulebook: "coc7"
+          };
+        }
       } else {
-        aiCocPanelData = typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} };
+        aiCocPanelData = typeof window.cloneAndNormalizeCocData === "function"
+          ? window.cloneAndNormalizeCocData(null)
+          : (typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} });
       }
 
       const newChat = {
