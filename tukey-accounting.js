@@ -2217,7 +2217,15 @@ function createExpenditureLineChart(data, daysInMonth) {
     debugTraces: [],
     lastApiReasoningContent: "",
     groupDebounceTimers: {},
+    groupDebounceDeadlines: {},
     privateDebounceTimers: {},
+    privateDebounceDeadlines: {},
+    recentBotSentRecords: [],
+    bgWorker: null,
+    bgTickCount: 0,
+    bgLastTickAt: 0,
+    bgAudioCtx: null,
+    bgLockActive: false,
     pendingRerunGroups: {},
     pendingRerunPrivates: {},
     isConnectingDirectWs: false,
@@ -2395,13 +2403,80 @@ function createExpenditureLineChart(data, daysInMonth) {
           delete this.groupDebounceTimers[gid];
         }
       }
+      if (this.groupDebounceDeadlines) {
+        this.groupDebounceDeadlines = {};
+      }
       if (this.privateDebounceTimers) {
         for (const uid of Object.keys(this.privateDebounceTimers)) {
           clearTimeout(this.privateDebounceTimers[uid]);
           delete this.privateDebounceTimers[uid];
         }
       }
+      if (this.privateDebounceDeadlines) {
+        this.privateDebounceDeadlines = {};
+      }
       this.pendingRerunGroups = {};
+      this.pendingRerunPrivates = {};
+    },
+
+    recordBotSentFingerprint(targetKey, text) {
+      const clean = String(text || "").trim();
+      const now = Date.now();
+      if (!Array.isArray(this.recentBotSentRecords)) {
+        this.recentBotSentRecords = [];
+      }
+      this.recentBotSentRecords = this.recentBotSentRecords.filter(
+        (r) => r && now - r.time < 30000,
+      );
+      this.recentBotSentRecords.push({
+        targetKey: String(targetKey || ""),
+        text: clean,
+        time: now,
+      });
+    },
+
+    isSelfSentMessageEvent(data, targetKey, senderId, parsedText) {
+      if (!data || typeof data !== "object") return false;
+      if (
+        data.post_type === "message_sent" ||
+        data.isSelf === true ||
+        data.isBot === true
+      ) {
+        return true;
+      }
+      const sid = String(senderId || "").trim();
+      if (sid === "BOT") return true;
+      const selfInput = document.getElementById("qqbot-selfid-input");
+      const selfId = String(
+        data.self_id ||
+          (this.serverState &&
+            this.serverState.config &&
+            this.serverState.config.selfId) ||
+          (this.serverState &&
+            this.serverState.runtime &&
+            this.serverState.runtime.selfId) ||
+          (selfInput && selfInput.value.trim()) ||
+          "",
+      ).trim();
+      if (selfId && sid && sid === selfId) {
+        return true;
+      }
+      const cleanText = String(parsedText || "").trim();
+      const now = Date.now();
+      if (Array.isArray(this.recentBotSentRecords) && this.recentBotSentRecords.length > 0) {
+        this.recentBotSentRecords = this.recentBotSentRecords.filter(
+          (r) => r && now - r.time < 30000,
+        );
+        const tKey = String(targetKey || "");
+        const matched = this.recentBotSentRecords.some(
+          (r) =>
+            r.targetKey === tKey &&
+            now - r.time < 18000 &&
+            ((cleanText && r.text === cleanText) || (!cleanText && !r.text)),
+        );
+        if (matched) return true;
+      }
+      return false;
     },
 
     renderMasterPauseUI() {
@@ -2524,12 +2599,22 @@ function createExpenditureLineChart(data, daysInMonth) {
       await this.refreshSandboxLog();
       this.renderDebugTraceLog();
       this.startBackgroundWatcher();
+      this.ensureBackgroundKeepAlive();
       this.ensureAutoDirectWsConnection();
+      const onWakeUp = () => {
+        if (!this.isGlobalPaused()) {
+          this.checkDueDebounceDeadlines();
+          this.ensureAutoDirectWsConnection().catch(() => {});
+          this.tickGroupWatchers().catch(() => {});
+        }
+      };
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
-          this.ensureAutoDirectWsConnection();
+          onWakeUp();
         }
       });
+      window.addEventListener("focus", onWakeUp);
+      window.addEventListener("pageshow", onWakeUp);
     },
 
     populateTutorialReverseWsUrl() {
@@ -6714,19 +6799,28 @@ function createExpenditureLineChart(data, daysInMonth) {
         this.serverState.config.selfId = String(data.self_id);
       }
 
+      // 忽略自身发出的回显事件，绝不把机器人自己发的消息视为新消息
+      if (
+        data.post_type === "message_sent" ||
+        data.isSelf === true ||
+        data.isBot === true
+      ) {
+        return;
+      }
+
       // 1. 处理好友小窗私聊消息
       if (data.post_type === "message" && data.message_type === "private") {
         const senderId = String(
           data.user_id || (data.sender && data.sender.user_id) || "",
         );
         if (!senderId) return;
-        const selfId =
-          String(data.self_id || "") ||
-          (this.serverState &&
-            this.serverState.config &&
-            this.serverState.config.selfId) ||
-          "";
-        if (selfId && senderId === String(selfId)) return;
+        const parsed = this.parseOneBotGroupMessage(data);
+        const logKey = "priv_" + senderId;
+        if (
+          this.isSelfSentMessageEvent(data, logKey, senderId, parsed.text)
+        ) {
+          return;
+        }
 
         const rawRemark = String(
           (data.sender &&
@@ -6734,7 +6828,6 @@ function createExpenditureLineChart(data, daysInMonth) {
             senderId,
         ).trim();
 
-        const parsed = this.parseOneBotGroupMessage(data);
         if (
           !parsed.text &&
           parsed.imageUrls.length === 0 &&
@@ -6764,7 +6857,6 @@ function createExpenditureLineChart(data, daysInMonth) {
 
         const pCfg = this.serverState.config.privateChats[senderId];
         const dispName = pCfg.remark || pCfg.nickname || rawRemark || senderId;
-        const logKey = "priv_" + senderId;
         const msgId = String(data.message_id || "pmsg_" + Date.now());
         const msgObj = {
           messageId: msgId,
@@ -6830,13 +6922,10 @@ function createExpenditureLineChart(data, daysInMonth) {
         const senderId = String(
           data.user_id || (data.sender && data.sender.user_id) || "",
         );
-        const selfId =
-          String(data.self_id || "") ||
-          (this.serverState &&
-            this.serverState.config &&
-            this.serverState.config.selfId) ||
-          "";
-        if (selfId && senderId === String(selfId)) return;
+        const parsed = this.parseOneBotGroupMessage(data);
+        if (this.isSelfSentMessageEvent(data, gid, senderId, parsed.text)) {
+          return;
+        }
 
         const rawRemark = String(
           (data.sender &&
@@ -6844,7 +6933,6 @@ function createExpenditureLineChart(data, daysInMonth) {
             senderId,
         ).trim();
 
-        const parsed = this.parseOneBotGroupMessage(data);
         if (
           !parsed.text &&
           parsed.imageUrls.length === 0 &&
@@ -6946,34 +7034,70 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     scheduleDirectGroupTurn(gid, gCfg) {
+      const groupKey = String(gid || "");
+      if (!groupKey) return;
       if (this.isGlobalPaused() || !gCfg || gCfg.enabled === false) {
-        if (this.groupDebounceTimers[gid]) {
-          clearTimeout(this.groupDebounceTimers[gid]);
-          delete this.groupDebounceTimers[gid];
+        if (this.groupDebounceTimers[groupKey]) {
+          clearTimeout(this.groupDebounceTimers[groupKey]);
+          delete this.groupDebounceTimers[groupKey];
         }
+        delete this.groupDebounceDeadlines[groupKey];
         return;
       }
-      const waitSec = Math.max(2, Math.min(300, Number(gCfg.debounceSec) || 8));
+      const rawSec = Number(gCfg.debounceSec);
+      const waitSec = Math.max(
+        1,
+        Math.min(3600, Number.isFinite(rawSec) && rawSec > 0 ? rawSec : 5),
+      );
       // 固定时间窗口打包机制：收到第1条消息后启动倒计时，期间新来的消息直接并入打包队列，绝不重置倒计时
-      if (this.groupDebounceTimers[gid]) {
+      if (
+        this.groupDebounceTimers[groupKey] ||
+        this.groupDebounceDeadlines[groupKey]
+      ) {
+        const remainSec = Math.max(
+          1,
+          Math.ceil(
+            ((this.groupDebounceDeadlines[groupKey] || Date.now()) -
+              Date.now()) /
+              1000,
+          ),
+        );
         this.updateJudgeStatusUI(
-          `群「${gCfg.groupName || gid}」固定打包窗口计时中，新消息已并入当前批次，到点后统一发送给AI...`,
+          `群「${gCfg.groupName || groupKey}」固定打包窗口倒计时剩余 ${remainSec} 秒，新消息已并入当前批次且不重置时间...`,
         );
         return;
       }
+      this.groupDebounceDeadlines[groupKey] = Date.now() + waitSec * 1000;
       this.updateJudgeStatusUI(
-        `已收到「${gCfg.groupName || gid}」第1条新消息，已开启 ${waitSec} 秒固定打包窗口（期间新发消息不重置时间）...`,
+        `已收到「${gCfg.groupName || groupKey}」第1条新消息，已开启 ${waitSec} 秒固定打包窗口，期间新消息不重置时间...`,
       );
-      this.groupDebounceTimers[gid] = setTimeout(async () => {
-        delete this.groupDebounceTimers[gid];
-        if (this.isGlobalPaused() || !gCfg || gCfg.enabled === false) return;
-        const list = this.staticFallbackLogs[gid] || [];
-        const targetSeq =
-          list.length > 0
-            ? list[list.length - 1].seq || Date.now()
-            : Date.now();
-        await this.processGroupTurn(gid, gCfg, targetSeq, false);
+      this.groupDebounceTimers[groupKey] = setTimeout(() => {
+        this.fireScheduledGroupTurn(groupKey);
       }, waitSec * 1000);
+    },
+
+    async fireScheduledGroupTurn(gid) {
+      const groupKey = String(gid || "");
+      if (!groupKey) return;
+      if (this.groupDebounceTimers[groupKey]) {
+        clearTimeout(this.groupDebounceTimers[groupKey]);
+        delete this.groupDebounceTimers[groupKey];
+      }
+      delete this.groupDebounceDeadlines[groupKey];
+      const gCfg =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups &&
+          this.serverState.config.groups[groupKey]) ||
+        null;
+      if (this.isGlobalPaused() || !gCfg || gCfg.enabled === false) return;
+      const list = this.staticFallbackLogs[groupKey] || [];
+      if (list.length > 0 && list[list.length - 1].isSelf) return;
+      const targetSeq =
+        list.length > 0
+          ? list[list.length - 1].seq || Date.now()
+          : Date.now();
+      await this.processGroupTurn(groupKey, gCfg, targetSeq, false);
     },
 
     scheduleDirectPrivateTurn(userId, pCfg) {
@@ -6984,25 +7108,77 @@ function createExpenditureLineChart(data, daysInMonth) {
           clearTimeout(this.privateDebounceTimers[uid]);
           delete this.privateDebounceTimers[uid];
         }
+        delete this.privateDebounceDeadlines[uid];
         return;
       }
-      const waitSec = Math.max(2, Math.min(3600, Number(pCfg.waitSec) || 15));
+      const rawSec = Number(pCfg.waitSec);
+      const waitSec = Math.max(
+        1,
+        Math.min(3600, Number.isFinite(rawSec) && rawSec > 0 ? rawSec : 5),
+      );
       const dispName = pCfg.remark || pCfg.nickname || uid;
       // 固定时间窗口打包机制：收到小窗第1条消息启动倒计时，期间追加消息不重置倒计时，到期直接由主API回复
-      if (this.privateDebounceTimers[uid]) {
+      if (
+        this.privateDebounceTimers[uid] ||
+        this.privateDebounceDeadlines[uid]
+      ) {
+        const remainSec = Math.max(
+          1,
+          Math.ceil(
+            ((this.privateDebounceDeadlines[uid] || Date.now()) - Date.now()) /
+              1000,
+          ),
+        );
         this.updateJudgeStatusUI(
-          `好友「${dispName}」小窗固定打包窗口计时中，新消息已并入当前批次，到点直接由主API回复...`,
+          `好友「${dispName}」小窗固定打包窗口倒计时剩余 ${remainSec} 秒，新消息已并入当前批次且不重置时间...`,
         );
         return;
       }
+      this.privateDebounceDeadlines[uid] = Date.now() + waitSec * 1000;
       this.updateJudgeStatusUI(
         `已收到好友「${dispName}」小窗消息，已开启 ${waitSec} 秒固定打包窗口，到期后跳过副AI直接调用主API回复...`,
       );
-      this.privateDebounceTimers[uid] = setTimeout(async () => {
-        delete this.privateDebounceTimers[uid];
-        if (this.isGlobalPaused() || !pCfg || pCfg.enabled === false) return;
-        await this.processPrivateTurn(uid, pCfg);
+      this.privateDebounceTimers[uid] = setTimeout(() => {
+        this.fireScheduledPrivateTurn(uid);
       }, waitSec * 1000);
+    },
+
+    async fireScheduledPrivateTurn(userId) {
+      const uid = String(userId || "");
+      if (!uid) return;
+      if (this.privateDebounceTimers[uid]) {
+        clearTimeout(this.privateDebounceTimers[uid]);
+        delete this.privateDebounceTimers[uid];
+      }
+      delete this.privateDebounceDeadlines[uid];
+      const pCfg =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.privateChats &&
+          this.serverState.config.privateChats[uid]) ||
+        null;
+      if (this.isGlobalPaused() || !pCfg || pCfg.enabled === false) return;
+      const logKey = "priv_" + uid;
+      const list = this.staticFallbackLogs[logKey] || [];
+      if (list.length > 0 && list[list.length - 1].isSelf) return;
+      await this.processPrivateTurn(uid, pCfg);
+    },
+
+    checkDueDebounceDeadlines() {
+      if (this.isGlobalPaused()) return;
+      const now = Date.now();
+      for (const gid of Object.keys(this.groupDebounceDeadlines || {})) {
+        const dl = this.groupDebounceDeadlines[gid];
+        if (dl && now >= dl) {
+          this.fireScheduledGroupTurn(gid).catch(() => {});
+        }
+      }
+      for (const uid of Object.keys(this.privateDebounceDeadlines || {})) {
+        const dl = this.privateDebounceDeadlines[uid];
+        if (dl && now >= dl) {
+          this.fireScheduledPrivateTurn(uid).catch(() => {});
+        }
+      }
     },
 
     async processPrivateTurn(userId, pCfg) {
@@ -7300,9 +7476,10 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
           lastReplyAt: 0,
         };
       }
-      if (!msgObj.isSelf) {
-        this.localWaitNormalized[gid].lastSeenSeq = msgObj.seq;
-      }
+      this.localWaitNormalized[gid].lastSeenSeq = Math.max(
+        this.localWaitNormalized[gid].lastSeenSeq || 0,
+        msgObj.seq,
+      );
       if (this.termuxDiskAvailable) {
         fetch("http://127.0.0.1:8765/save", {
           method: "POST",
@@ -7565,14 +7742,85 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
     },
 
     /* ============================================================================
-     * 事件驱动唤醒与挂机盯梢循环 - 无新消息零API消耗
+     * 事件驱动唤醒与后台保活盯梢循环 - 切换到后台或其他界面依然自动检测与调用
      * ============================================================================ */
+    ensureBackgroundKeepAlive() {
+      if (
+        !this.bgLockActive &&
+        typeof navigator !== "undefined" &&
+        navigator.locks &&
+        typeof navigator.locks.request === "function"
+      ) {
+        this.bgLockActive = true;
+        navigator.locks
+          .request("ephone_qqbot_bg_keepalive", () => new Promise(() => {}))
+          .catch(() => {
+            this.bgLockActive = false;
+          });
+      }
+      const unlockAudioKeepAlive = () => {
+        try {
+          if (this.bgAudioCtx) {
+            if (this.bgAudioCtx.state === "suspended") {
+              this.bgAudioCtx.resume().catch(() => {});
+            }
+            return;
+          }
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          gain.gain.value = 0.00001;
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(0);
+          this.bgAudioCtx = ctx;
+        } catch (_) {}
+      };
+      document.addEventListener("pointerdown", unlockAudioKeepAlive, {
+        passive: true,
+      });
+      document.addEventListener("keydown", unlockAudioKeepAlive, {
+        passive: true,
+      });
+    },
+
+    onBackgroundHeartbeatTick() {
+      const now = Date.now();
+      if (now - (this.bgLastTickAt || 0) < 700) return;
+      this.bgLastTickAt = now;
+      this.bgTickCount = (this.bgTickCount || 0) + 1;
+
+      if (!this.isGlobalPaused()) {
+        this.checkDueDebounceDeadlines();
+      }
+      if (this.bgTickCount % 3 === 0) {
+        this.ensureAutoDirectWsConnection().catch(() => {});
+        this.tickGroupWatchers().catch(() => {});
+      }
+    },
+
     startBackgroundWatcher() {
       if (this.pollTimer) clearInterval(this.pollTimer);
       this.pollTimer = setInterval(() => {
-        this.ensureAutoDirectWsConnection().catch(() => {});
-        this.tickGroupWatchers();
-      }, 3000);
+        this.onBackgroundHeartbeatTick();
+      }, 1000);
+
+      if (!this.bgWorker && typeof Worker !== "undefined" && typeof Blob !== "undefined") {
+        try {
+          const workerCode =
+            "setInterval(function(){ postMessage('tick'); }, 1000);";
+          const blob = new Blob([workerCode], {
+            type: "application/javascript",
+          });
+          const workerUrl = URL.createObjectURL(blob);
+          this.bgWorker = new Worker(workerUrl);
+          this.bgWorker.onmessage = () => {
+            this.onBackgroundHeartbeatTick();
+          };
+        } catch (_) {}
+      }
     },
 
     async tickGroupWatchers() {
@@ -7581,6 +7829,8 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
           this.renderMasterPauseUI();
           return;
         }
+        this.checkDueDebounceDeadlines();
+
         const res = await fetch("/api/qqbot/state");
         if (!res.ok) return;
         const stateData = await res.json();
@@ -7604,12 +7854,25 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
           (stateData.runtime && stateData.runtime.groupStats) ||
           stateData.groupStats ||
           {};
+        const privates =
+          (this.serverState.config && this.serverState.config.privateChats) ||
+          {};
+        const privateStats =
+          (stateData.runtime && stateData.runtime.privateStats) ||
+          stateData.privateStats ||
+          {};
         const now = Date.now();
 
         for (const gid of Object.keys(groups)) {
           const gCfg = groups[gid];
           if (!gCfg || gCfg.enabled === false) continue;
-          if (this.busyGroups[gid] || this.groupDebounceTimers[gid]) continue;
+          if (
+            this.busyGroups[gid] ||
+            this.groupDebounceTimers[gid] ||
+            this.groupDebounceDeadlines[gid]
+          ) {
+            continue;
+          }
 
           const st = groupStats[gid];
           if (!st) continue;
@@ -7625,13 +7888,17 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
           const lw = this.localWaitNormalized[gid];
 
           if (
-            !this.directWsConnected &&
             st.lastMessageSeq >
-              Math.max(st.lastProcessedSeq || 0, lw.lastSeenSeq)
+            Math.max(st.lastProcessedSeq || 0, lw.lastSeenSeq)
           ) {
             lw.lastSeenSeq = st.lastMessageSeq;
-            this.scheduleDirectGroupTurn(gid, gCfg);
-            continue;
+            const lastIsSelf = Boolean(
+              st.lastMessage && (st.lastMessage.isSelf || st.lastMessage.isBot),
+            );
+            if (!lastIsSelf && !this.directWsConnected) {
+              this.scheduleDirectGroupTurn(gid, gCfg);
+              continue;
+            }
           }
 
           const idleMin = Number(gCfg.idleAskMin) || 0;
@@ -7642,6 +7909,43 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
             if (now - waitStart >= idleMs) {
               lw.idleAsked = true;
               await this.triggerIdleRpCheck(gid, gCfg, st.lastMessageSeq);
+            }
+          }
+        }
+
+        for (const uid of Object.keys(privates)) {
+          const pCfg = privates[uid];
+          if (!pCfg || pCfg.enabled === false) continue;
+          if (
+            this.busyPrivateChats[uid] ||
+            this.privateDebounceTimers[uid] ||
+            this.privateDebounceDeadlines[uid]
+          ) {
+            continue;
+          }
+          const pst = privateStats[uid];
+          if (!pst) continue;
+          const privKey = "priv_" + uid;
+          if (!this.localWaitNormalized[privKey]) {
+            this.localWaitNormalized[privKey] = {
+              lastSeenSeq: pst.lastProcessedSeq || pst.lastMessageSeq || 0,
+              waitingSince: 0,
+              idleAsked: false,
+              lastReplyAt: 0,
+            };
+          }
+          const plw = this.localWaitNormalized[privKey];
+          if (
+            pst.lastMessageSeq >
+            Math.max(pst.lastProcessedSeq || 0, plw.lastSeenSeq)
+          ) {
+            plw.lastSeenSeq = pst.lastMessageSeq;
+            const lastIsSelf = Boolean(
+              pst.lastMessage &&
+                (pst.lastMessage.isSelf || pst.lastMessage.isBot),
+            );
+            if (!lastIsSelf && !this.directWsConnected) {
+              this.scheduleDirectPrivateTurn(uid, pCfg);
             }
           }
         }
@@ -8877,6 +9181,10 @@ ${tailBlock}
 
     async sendBotMessage(payload) {
       const rawText = String(payload.message || payload.content || "").trim();
+      const targetKey = payload.userId
+        ? "priv_" + String(payload.userId)
+        : String(payload.groupId || "");
+      this.recordBotSentFingerprint(targetKey, rawText);
       let wsSentOk = false;
 
       if (this.directWsConnected && this.directWs) {
@@ -8925,7 +9233,7 @@ ${tailBlock}
         }
       }
 
-      if (payload.groupId && (rawText || payload.imageUrl)) {
+      if (payload.groupId && !payload.userId && (rawText || payload.imageUrl)) {
         const botMsgObj = {
           seq: Date.now(),
           messageId: "bot_" + Date.now(),
@@ -8941,7 +9249,7 @@ ${tailBlock}
         this.appendStaticMessage(String(payload.groupId), botMsgObj);
         this.appendDebugLog(
           "AI",
-          `[AI已发${payload.userId ? "私聊" : "群消息"}] 群${payload.groupId}${wsSentOk ? " 已送达QQ" : ""}：${(rawText || "[纯图片]").slice(0, 120)}`,
+          `[AI已发群消息] 群${payload.groupId}${wsSentOk ? " 已送达QQ" : ""}：${(rawText || "[纯图片]").slice(0, 120)}`,
         );
       } else if (payload.userId && (rawText || payload.imageUrl)) {
         this.appendDebugLog(
@@ -8950,12 +9258,26 @@ ${tailBlock}
         );
       }
 
+      const groupList = payload.groupId
+        ? this.staticFallbackLogs[String(payload.groupId)] || []
+        : [];
+      const latestGroupSeq =
+        groupList.length > 0
+          ? Number(groupList[groupList.length - 1].seq) || Date.now()
+          : Date.now();
+
       try {
         await fetch("/api/qqbot/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...payload,
+            markProcessedSeq:
+              payload.markProcessedSeq !== undefined
+                ? payload.markProcessedSeq
+                : payload.groupId
+                  ? latestGroupSeq
+                  : undefined,
             skipOneBotSend: wsSentOk,
           }),
         });
@@ -10334,9 +10656,10 @@ ${tailBlock}
 
   window.QQBotConsole = QQBotConsole;
 
-  document.addEventListener("DOMContentLoaded", () => {
+  const bootQQBotBackground = () => {
     const icon = document.getElementById("tukey-accounting-app-icon");
-    if (icon) {
+    if (icon && !icon._qqbotBound) {
+      icon._qqbotBound = true;
       icon.addEventListener(
         "click",
         (e) => {
@@ -10349,6 +10672,13 @@ ${tailBlock}
     }
     setTimeout(() => {
       QQBotConsole.init().catch(() => {});
-    }, 1200);
-  });
+    }, 600);
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootQQBotBackground);
+  } else {
+    bootQQBotBackground();
+  }
 })();
+

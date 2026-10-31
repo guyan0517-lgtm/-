@@ -2064,9 +2064,18 @@ function handleIncomingOneBotEvent(data) {
     return;
   }
 
+  // 忽略机器人自身发出的回显事件，绝不将自己发的消息视为新消息
+  if (data.post_type === 'message_sent' || data.isSelf || data.isBot) {
+    return;
+  }
+
   if (data.post_type === 'message' && data.message_type === 'private') {
     const senderId = String(data.user_id || data.sender?.user_id || '');
     if (!senderId) return;
+    const cfg = loadQqBotConfig();
+    const resolvedSelfId = String(data.self_id || qqBotRuntime.selfId || cfg.selfId || '').trim();
+    if (resolvedSelfId && senderId === resolvedSelfId) return;
+
     const rawQqRemark = String(
       data.sender?.remark ||
       data.sender?.card ||
@@ -2076,7 +2085,6 @@ function handleIncomingOneBotEvent(data) {
     const parsed = extractOneBotMessageText(data);
     if (!parsed.text && !parsed.hasSticker && (!parsed.imageUrls || parsed.imageUrls.length === 0)) return;
 
-    const cfg = loadQqBotConfig();
     if (!cfg.privateChats) cfg.privateChats = {};
     if (!cfg.privateChats[senderId]) {
       cfg.privateChats[senderId] = {
@@ -2091,7 +2099,6 @@ function handleIncomingOneBotEvent(data) {
     }
     const pCfg = cfg.privateChats[senderId];
     const dispName = pCfg.remark || pCfg.nickname || rawQqRemark || senderId;
-    const isSelf = Boolean(qqBotRuntime.selfId && senderId === qqBotRuntime.selfId);
     const privKey = 'priv_' + senderId;
     const msgEntry = {
       messageId: String(data.message_id || ('pmsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
@@ -2109,8 +2116,8 @@ function handleIncomingOneBotEvent(data) {
       imageFiles: parsed.imageFiles || [],
       visionDescription: data.visionDescription || '',
       visionRecognized: Boolean(data.visionRecognized),
-      isBot: isSelf,
-      isSelf,
+      isBot: false,
+      isSelf: false,
       timestamp: (data.time ? Number(data.time) * 1000 : Date.now())
     };
     appendGroupMessageToDisk(privKey, msgEntry);
@@ -2121,6 +2128,10 @@ function handleIncomingOneBotEvent(data) {
     const groupId = String(data.group_id || '');
     if (!groupId) return;
     const senderId = String(data.user_id || data.sender?.user_id || '');
+    const cfg = loadQqBotConfig();
+    const resolvedSelfId = String(data.self_id || qqBotRuntime.selfId || cfg.selfId || '').trim();
+    if (resolvedSelfId && senderId === resolvedSelfId) return;
+
     const rawQqRemark = String(
       data.sender?.remark ||
       data.sender?.card ||
@@ -2131,7 +2142,6 @@ function handleIncomingOneBotEvent(data) {
     const parsed = extractOneBotMessageText(data);
     if (!parsed.text && !parsed.hasSticker && (!parsed.imageUrls || parsed.imageUrls.length === 0)) return;
 
-    const cfg = loadQqBotConfig();
     if (!cfg.groups[groupId]) {
       cfg.groups[groupId] = normalizeGroupConfig(groupId, {
         groupId,
@@ -2143,7 +2153,6 @@ function handleIncomingOneBotEvent(data) {
     const displayName = resolveMemberRealtimeName(cfg.groups[groupId], senderId, rawQqRemark);
     saveQqBotConfig(cfg);
 
-    const isSelf = Boolean(qqBotRuntime.selfId && senderId === qqBotRuntime.selfId);
     const msgEntry = {
       messageId: String(data.message_id || ('msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
       groupId,
@@ -2159,14 +2168,14 @@ function handleIncomingOneBotEvent(data) {
       imageFiles: parsed.imageFiles || [],
       visionDescription: data.visionDescription || '',
       visionRecognized: Boolean(data.visionRecognized),
-      isBot: isSelf,
-      isSelf,
+      isBot: false,
+      isSelf: false,
       timestamp: (data.time ? Number(data.time) * 1000 : Date.now())
     };
 
     appendGroupMessageToDisk(groupId, msgEntry);
 
-    if (!isSelf && !cfg.globalPaused && cfg.groups[groupId] && cfg.groups[groupId].enabled !== false) {
+    if (!cfg.globalPaused && cfg.groups[groupId] && cfg.groups[groupId].enabled !== false) {
       qqBotRuntime.pendingGroupEvents.set(groupId, {
         lastMessageAt: Date.now(),
         lastMessageId: msgEntry.messageId,
@@ -2333,6 +2342,23 @@ app.get('/api/qqbot/state', (req, res) => {
       pendingTrigger: pending
     };
   }
+  const privateStats = {};
+  for (const uid of Object.keys(cfg.privateChats || {})) {
+    const privKey = 'priv_' + uid;
+    const hist = loadGroupHistoryFromDisk(privKey, 1);
+    const seqSt = qqBotRuntime.groupSeqState.get(privKey) || {
+      lastMessageSeq: hist.lastSeq || 0,
+      lastProcessedSeq: hist.lastSeq || 0,
+      lastMessageAt: hist.messages[0]?.timestamp || 0
+    };
+    privateStats[uid] = {
+      totalMessages: hist.total,
+      lastMessage: hist.messages[0] || null,
+      lastMessageSeq: seqSt.lastMessageSeq || hist.lastSeq || 0,
+      lastProcessedSeq: seqSt.lastProcessedSeq || 0,
+      lastMessageAt: seqSt.lastMessageAt || hist.messages[0]?.timestamp || 0
+    };
+  }
   const hasReverse = Array.from(qqBotRuntime.reverseSockets).some(w => w.readyState === 1);
   const hasForward = Boolean(qqBotRuntime.forwardSocket && qqBotRuntime.forwardSocket.readyState === 1);
   const isConn = Boolean(hasReverse || hasForward || qqBotRuntime.connected);
@@ -2350,10 +2376,12 @@ app.get('/api/qqbot/state', (req, res) => {
       nickname: qqBotRuntime.nickname || cfg.nickname || '',
       lastEventAt: qqBotRuntime.lastEventAt,
       lastError: qqBotRuntime.lastError,
-      groupStats
+      groupStats,
+      privateStats
     },
     config: cfg,
-    groupStats
+    groupStats,
+    privateStats
   });
 });
 
@@ -3094,6 +3122,22 @@ app.post('/api/qqbot/send', async (req, res) => {
         isBot: true,
         isSelf: true,
         isPrivateNotice: Boolean(userId),
+        timestamp: Date.now()
+      });
+    } else if (userId && (rawText || imageUrl || stickerName)) {
+      const privKey = 'priv_' + String(userId);
+      const privText = rawText || (stickerName ? `[表情：${stickerName}]` : '[发送图片]');
+      appendGroupMessageToDisk(privKey, {
+        messageId: 'pbot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        groupId: privKey,
+        userId: String(userId),
+        senderId: qqBotRuntime.selfId || 'BOT',
+        senderName: String(botName || qqBotRuntime.nickname || '我方AI'),
+        content: privText,
+        rawMessage: privText,
+        imageUrl: imageUrl || '',
+        isBot: true,
+        isSelf: true,
         timestamp: Date.now()
       });
     }
