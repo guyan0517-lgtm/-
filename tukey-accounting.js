@@ -2116,14 +2116,65 @@ function createExpenditureLineChart(data, daysInMonth) {
   }
 
   function getDefaultNaiPromptConfig() {
+    const prefix =
+      "masterpiece, best quality, ultra-detailed, cinematic lighting, anime illustration, delicate details";
+    const ocPrompt =
+      "当目前处于日常陪聊OC模式且已开启OC生图时：如果群友或好友明确请求看照片、自拍、看看你现在的样子或周围环境，或者当前日常互动出现了非常适合配图的画面感瞬间，请在返回的 naiPrompt 字段中填写描述当前人物外貌、穿搭、动作神态与环境光影的英文NovelAI生图Tag词串；普通日常文字闲聊时 naiPrompt 留空即可。";
+    const kpPrompt =
+      "当目前处于跑团带团守秘人KP模式或已开启每回合末尾强制生图时：本轮回复的末尾必须强制生成一张展现当前跑团现场画面、调查员行动、NPC神态或环境氛围的插图！你必须在返回的JSON对象中的 naiPrompt 字段里填写完整、高质量的英文NovelAI生图Tag词串，严禁留空！英文Tag需包含场景构图、光影氛围、关键人物外貌动作与环境细节，系统会在发送完本轮文字后立即调用NovelAI生图并发送到群里。";
     return {
-      prefix:
-        "masterpiece, best quality, ultra-detailed, cinematic lighting, anime illustration, delicate details",
-      ocPrompt:
-        "当目前处于日常陪聊OC模式且已开启OC生图时：如果群友或好友明确请求看照片、自拍、看看你现在的样子或周围环境，或者当前日常互动出现了非常适合配图的画面感瞬间，请在返回的 naiPrompt 字段中填写描述当前人物外貌、穿搭、动作神态与环境光影的英文NovelAI生图Tag词串；普通日常文字闲聊时 naiPrompt 留空即可。",
-      kpPrompt:
-        "当目前处于跑团带团守秘人KP模式或已开启每回合末尾强制生图时：本轮回复的末尾必须强制生成一张展现当前跑团现场画面、调查员行动、NPC神态或环境氛围的插图！你必须在返回的JSON对象中的 naiPrompt 字段里填写完整、高质量的英文NovelAI生图Tag词串，严禁留空！英文Tag需包含场景构图、光影氛围、关键人物外貌动作与环境细节，系统会在发送完本轮文字后立即调用NovelAI生图并发送到群里。",
+      prefix,
+      ocPrompt,
+      kpPrompt,
+      naiPrefix: prefix,
+      naiOcPrompt: ocPrompt,
+      naiKpPrompt: kpPrompt,
     };
+  }
+
+  function getBuiltinSubJudgePresets() {
+    return [
+      {
+        id: "strict_smart",
+        name: "严格精准裁判 · 群友互聊与未点名绝不乱回",
+        prompt: `请严格判断当前打包的群聊消息是否真的需要唤醒主AI开口说话：
+1. 【必须保持安静 shouldReply: false 的情况（最高优先级）】：
+   - 群友之间正在互相闲聊、互相吐槽、讨论战术或彼此对戏（RP），且话语并非对AI（KP/NPC/我方角色）说的；
+   - 群友只是发了一句日常感叹、哈哈、表情包、复读，没有向我方提问或发起需要反馈的行动；
+   - 有人表示“等一下”、“还在RP”、“别急”等等待信号；
+   - 我方刚刚要求全员投骰子或表态，目前还有其他在场调查员尚未表态。
+   以上情况一律将 shouldReply 设为 false！绝不能只要有人说话就盲目触发调用！
+2. 【需要唤醒主AI shouldReply: true 的情况】：
+   - 群友明确点名呼唤我方角色、向KP提问（如括号问规则/问环境细节）、或直接与在场NPC搭话互动；
+   - 调查员明确向KP声明了具体的跑团调查行动（如推门、搜查、使用技能）或投出了检定骰子结果等待KP结算；
+   - 群友明确表示“RP完了，KP可以继续推进剧情了”。
+3. 引用回复规范：replyToMessageId 默认必须留空字符串 ""！只有当3人以上同时交叉说话且你要回的那句已被刷到前面去时，才填入对应消息ID。`,
+      },
+      {
+        id: "trpg_kp",
+        name: "跑团KP裁判 · 仅行动宣言、检定、问KP或搭话NPC时回复",
+        prompt: `你是跑团守秘人KP的专属副AI场面裁判。请严格遵循以下守则判断是否唤醒主AI：
+1. 调查员之间内部的讨论、商量计划、互相角色扮演对戏（未拉拢在场NPC且未向KP申报行动）时，shouldReply 必须设为 false，绝不打断玩家对戏！
+2. 仅当调查员明确向KP申报行动、向在场NPC搭话、投出技能检定骰子、用括号向KP提问、或声明结束RP请求推进时，才将 shouldReply 设为 true。
+3. replyToMessageId 默认留空 ""，仅在多人交叉刷屏且回应非最新消息时填写。`,
+      },
+      {
+        id: "oc_daily",
+        name: "日常OC裁判 · 仅喊AI名字、接AI话茬或求互动时回复",
+        prompt: `你是日常OC群友的专属副AI裁判。请模仿真人在群里的社交分寸感：
+1. 当群里其他人正在两两聊天、聊他们自己的话题、或随口发感慨且没有叫你名字时，shouldReply 必须设为 false，安静潜水，不要每句话都插嘴！
+2. 只有当群友明确喊你的名字、艾特你、顺着你上一句话继续往下聊、或者发图专门给你看时，才将 shouldReply 设为 true。
+3. replyToMessageId 默认留空 ""。`,
+      },
+    ];
+  }
+
+  function getDefaultSubJudgePrompt(mode) {
+    const presets = getBuiltinSubJudgePresets();
+    if (mode === "oc_chat") {
+      return presets[0].prompt;
+    }
+    return presets[0].prompt;
   }
 
   function getDefaultTailPrompt() {
@@ -2149,7 +2200,14 @@ function createExpenditureLineChart(data, daysInMonth) {
     pollTimer: null,
     busyGroups: {},
     busyPrivates: {},
+    busyPrivateChats: {},
     localWaitNormalized: {},
+    getDefaultNaiPromptConfig() {
+      return getDefaultNaiPromptConfig();
+    },
+    getDefaultSubJudgePrompt(mode) {
+      return getDefaultSubJudgePrompt(mode);
+    },
     directWs: null,
     directWsConnected: false,
     directPendingEchoes: new Map(),
@@ -2901,7 +2959,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (thoughtEl) {
         const cur = g ? g.thoughtChainId : thoughtEl.value;
         thoughtEl.innerHTML =
-          '<option value="">选择思维链预设导入到下方列表</option>' +
+          '<option value="">选择思维链预设导入</option>' +
           this.cachedResources.thoughts
             .map(
               (t) =>
@@ -2916,7 +2974,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         const cur = g ? g.worldBookId : wbEl.value;
         const cats = this.cachedResources.worldbookCats || [];
         wbEl.innerHTML =
-          '<option value="">选择世界书或直接在下方卡片点开关</option>' +
+          '<option value="">全部世界书分类</option>' +
           '<option value="ALL">全部世界书条目</option>' +
           cats
             .map(
@@ -2977,6 +3035,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       this.renderWorldBookItemsList();
       this.renderModuleChaptersList();
       this.renderNaiPresetSelect();
+      this.renderSubJudgePresetSelect();
 
       const cardEl = document.getElementById("qqbot-bind-card-select");
       if (cardEl) {
@@ -3422,7 +3481,7 @@ function createExpenditureLineChart(data, daysInMonth) {
             const wc =
               chap.wordCount || (chap.content ? chap.content.length : 0);
             return `
-              <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleChapter('${this.escapeAttr(String(chap.id))}');}" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer;">
+              <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleChapter('${this.escapeAttr(String(chap.id))}');}" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer; flex-shrink: 0;">
                 <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${bBg}; color: ${bColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "启用" : "停用"}</span>
                 <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-primary);">
                   <span style="font-weight: 700;">${this.escapeHtml(chap.title || "未命名章节")}</span>
@@ -3435,7 +3494,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           .join("");
 
         htmlParts.push(`
-          <div style="border-radius: 10px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
+          <div style="border-radius: 10px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden; flex-shrink: 0;">
             <div style="display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleModuleCategoryFold('${this.escapeAttr(categoryName)}');}">
               <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBadgeBg}; color: ${catBadgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${enabledInCat}/${chaps.length}</span>
               <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(categoryName)}</span>
@@ -3574,7 +3633,9 @@ function createExpenditureLineChart(data, daysInMonth) {
 
     renderWorldBookItemsList() {
       const container = document.getElementById("qqbot-worldbook-items-list");
-      const countBadge = document.getElementById("qqbot-wb-active-count");
+      const countBadge =
+        document.getElementById("qqbot-worldbook-active-badge") ||
+        document.getElementById("qqbot-wb-active-count");
       const g = this.getCurrentGroupConfig();
       if (!container || !g) return;
 
@@ -3582,7 +3643,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (allBooks.length === 0) {
         if (countBadge) countBadge.textContent = "暂无世界书";
         container.innerHTML =
-          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px;">当前尚无世界书条目，可在世界书App中创建</div>';
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px; flex-shrink: 0;">当前尚无世界书条目，可在世界书App中创建</div>';
         return;
       }
 
@@ -3600,7 +3661,7 @@ function createExpenditureLineChart(data, daysInMonth) {
         enabledSet.has(String(b.id)),
       ).length;
       if (countBadge) {
-        countBadge.textContent = `已启用 ${totalEnabled} / ${allBooks.length} 条`;
+        countBadge.textContent = `已开 ${totalEnabled} / ${allBooks.length} 条`;
       }
 
       const rawCats = this.cachedResources.worldbookCats || [];
@@ -3628,10 +3689,13 @@ function createExpenditureLineChart(data, daysInMonth) {
         });
         if (books.length === 0) return;
 
-        const isCollapsed = Boolean(this.worldBookCollapsedMap[cat.id]);
         const onCount = books.filter((b) =>
           enabledSet.has(String(b.id)),
         ).length;
+        if (this.worldBookCollapsedMap[cat.id] === undefined) {
+          this.worldBookCollapsedMap[cat.id] = categories.length > 2 && onCount === 0;
+        }
+        const isCollapsed = Boolean(this.worldBookCollapsedMap[cat.id]);
         const isAllOn = onCount === books.length;
         const catBg = isAllOn
           ? "var(--accent-color)"
@@ -3649,7 +3713,7 @@ function createExpenditureLineChart(data, daysInMonth) {
               .replace(/\s+/g, " ")
               .slice(0, 38);
             return `
-              <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookEntry('${this.escapeAttr(String(b.id))}');}" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer;">
+              <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookEntry('${this.escapeAttr(String(b.id))}');}" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer; flex-shrink: 0;">
                 <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${bBg}; color: ${bColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "启用" : "停用"}</span>
                 <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-primary);">
                   <span style="font-weight: 700;">${this.escapeHtml(b.name || "世界书条目")}</span>
@@ -3662,14 +3726,14 @@ function createExpenditureLineChart(data, daysInMonth) {
           .join("");
 
         htmlParts.push(`
-          <div style="border-radius: 10px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
-            <div style="display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}">
-              <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBg}; color: ${catColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${onCount}/${books.length}</span>
+          <div style="border-radius: 10px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden; flex-shrink: 0;">
+            <div style="display: flex; align-items: center; gap: 6px; padding: 8px 10px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}">
+              <span style="width: 46px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${catBg}; color: ${catColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${onCount}/${books.length}</span>
               <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(cat.name)}</span>
               <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategory('${this.escapeAttr(cat.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isAllOn ? "全关" : "全开"}</button>
               <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleWorldBookCategoryFold('${this.escapeAttr(cat.id)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">${isCollapsed ? "展开" : "收起"}</button>
             </div>
-            <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 5px; padding: 0 8px 8px;">
+            <div style="display: ${isCollapsed ? "none" : "flex"}; flex-direction: column; gap: 6px; padding: 0 8px 8px;">
               ${rows}
             </div>
           </div>
@@ -4002,7 +4066,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           .replace(/\s+/g, " ")
           .slice(0, 42);
         return `
-          <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleThoughtItem('${this.escapeAttr(String(item.id))}');}" style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer;">
+          <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleThoughtItem('${this.escapeAttr(String(item.id))}');}" style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid ${isOn ? "var(--accent-color)" : "var(--border-color)"}; cursor: pointer; flex-shrink: 0;">
             <span style="width: 38px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "已开" : "已关"}</span>
             <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary);">
               <span style="font-weight: 700;">${this.escapeHtml(titleStr)}</span>
@@ -4041,7 +4105,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           const grpBadgeColor = isAllOn ? "#ffffff" : "var(--text-primary)";
 
           htmlParts.push(`
-            <div style="border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden;">
+            <div style="border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); overflow: hidden; flex-shrink: 0;">
               <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer;" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleThoughtGroupFold('${this.escapeAttr(gid)}');}">
                 <span style="width: 42px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${grpBadgeBg}; color: ${grpBadgeColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${onCount}/${grpEntries.length}</span>
                 <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(grp.name || "思维链分类")}</span>
@@ -4645,7 +4709,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           const statusColor = isOn ? "#ffffff" : "var(--text-secondary)";
 
           return `
-            <div onclick="if(window.QQBotConsole){window.QQBotConsole.selectGroupFromCard('${this.escapeAttr(g.groupId)}');}" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: ${cardBg}; border: 1.5px solid ${borderCol}; cursor: pointer;">
+            <div onclick="if(window.QQBotConsole){window.QQBotConsole.selectGroupFromCard('${this.escapeAttr(g.groupId)}');}" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: ${cardBg}; border: 1.5px solid ${borderCol}; cursor: pointer; flex-shrink: 0;">
               <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${statusBg}; color: ${statusColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "监听" : "停用"}</span>
               <div style="flex: 1; min-width: 0; overflow: hidden;">
                 <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -4755,6 +4819,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       setVal("qqbot-context-limit-input", g.contextLimit ?? 180);
       setVal("qqbot-idle-ask-input", g.idleAskMin ?? 15);
       setVal("qqbot-cooldown-input", g.cooldownSec ?? 5);
+      setVal("qqbot-cross-memory-select", g.crossMemoryMode || "all");
       setVal("qqbot-ai-persona-input", g.aiPersona || g.customPersona || "");
       setVal("qqbot-custom-prompt-input", g.customPrompt || "");
       setVal(
@@ -4771,6 +4836,15 @@ function createExpenditureLineChart(data, daysInMonth) {
       );
       setVal("qqbot-tail-preset-select", "");
 
+      const resolvedSubJudgePrompt =
+        g.subJudgePrompt && String(g.subJudgePrompt).trim()
+          ? g.subJudgePrompt
+          : (this.serverState &&
+              this.serverState.config &&
+              this.serverState.config.subJudgePrompt) ||
+            getDefaultSubJudgePrompt(g.mode || "trpg");
+      setVal("qqbot-subjudge-prompt-input", resolvedSubJudgePrompt);
+
       const resolvedNaiMode =
         g.naiMode || (g.autoNaiImage === false ? "off" : "trpg_every_round");
       setVal("qqbot-nai-mode", resolvedNaiMode);
@@ -4785,6 +4859,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       this.renderModuleChaptersList();
       this.renderPlayerBindingsList();
       this.renderSimSenderSelect();
+      this.populateCurrentPrivateUI();
     },
 
     renderSimSenderSelect() {
@@ -4843,12 +4918,21 @@ function createExpenditureLineChart(data, daysInMonth) {
         1,
         parseInt(getVal("qqbot-cooldown-input", "5"), 10) || 5,
       );
+      g.crossMemoryMode = getVal("qqbot-cross-memory-select", "all");
       g.personaId = getVal("qqbot-persona-select", "");
       g.aiPersona = getVal("qqbot-ai-persona-input", "");
       g.customPrompt = getVal("qqbot-custom-prompt-input", "");
       g.tailPromptEnabled =
         getVal("qqbot-tail-enabled-select", "true") === "true";
       g.tailPrompt = getVal("qqbot-tail-prompt-input", getDefaultTailPrompt());
+      const subJudgeText = getVal(
+        "qqbot-subjudge-prompt-input",
+        getDefaultSubJudgePrompt(g.mode),
+      );
+      g.subJudgePrompt = subJudgeText;
+      if (this.serverState && this.serverState.config) {
+        this.serverState.config.subJudgePrompt = subJudgeText;
+      }
       g.worldBookId = getVal("qqbot-worldbook-select", "");
       g.stickerCategoryId = getVal("qqbot-sticker-select", "ALL");
       g.moduleId = getVal("qqbot-module-select", "");
@@ -4865,6 +4949,120 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (prevContextLimit !== g.contextLimit && this.currentGroupId) {
         this.reloadContextMessages(false).catch(() => {});
       }
+    },
+
+    renderSubJudgePresetSelect() {
+      const sel = document.getElementById("qqbot-subjudge-preset-select");
+      if (!sel) return;
+      const builtins = getBuiltinSubJudgePresets();
+      const customPresets =
+        this.serverState &&
+        this.serverState.config &&
+        Array.isArray(this.serverState.config.subJudgePresets)
+          ? this.serverState.config.subJudgePresets
+          : [];
+      const curVal = sel.value;
+      sel.innerHTML =
+        builtins
+          .map(
+            (p) =>
+              `<option value="${this.escapeAttr(p.id)}">${this.escapeHtml(p.name)}</option>`,
+          )
+          .join("") +
+        customPresets
+          .map(
+            (p) =>
+              `<option value="${this.escapeAttr(String(p.id))}">自定义 · ${this.escapeHtml(p.name || "裁判预设")}</option>`,
+          )
+          .join("");
+      if (curVal) sel.value = curVal;
+    },
+
+    onSubJudgePresetSelectChange() {
+      const sel = document.getElementById("qqbot-subjudge-preset-select");
+      const input = document.getElementById("qqbot-subjudge-prompt-input");
+      if (!sel || !input) return;
+      const val = sel.value;
+      const builtins = getBuiltinSubJudgePresets();
+      const foundBuiltin = builtins.find((p) => p.id === val);
+      if (foundBuiltin) {
+        input.value = foundBuiltin.prompt;
+        this.onCurrentGroupFieldChange();
+        this.notify(`已切换副API裁判预设：${foundBuiltin.name}`);
+        return;
+      }
+      const customPresets =
+        this.serverState &&
+        this.serverState.config &&
+        Array.isArray(this.serverState.config.subJudgePresets)
+          ? this.serverState.config.subJudgePresets
+          : [];
+      const foundCustom = customPresets.find(
+        (p) => String(p.id) === String(val),
+      );
+      if (foundCustom) {
+        input.value = foundCustom.prompt || "";
+        this.onCurrentGroupFieldChange();
+        this.notify(`已加载自定义裁判预设：${foundCustom.name}`);
+      }
+    },
+
+    async saveSubJudgePreset() {
+      if (!this.serverState || !this.serverState.config) return;
+      const input = document.getElementById("qqbot-subjudge-prompt-input");
+      const promptText = input ? input.value.trim() : "";
+      if (!promptText) {
+        this.notify("请先填写副API裁判提示词再点存设");
+        return;
+      }
+      if (!Array.isArray(this.serverState.config.subJudgePresets)) {
+        this.serverState.config.subJudgePresets = [];
+      }
+      const presets = this.serverState.config.subJudgePresets;
+      const id = "sjp_" + Date.now();
+      const name =
+        "裁判预设" +
+        (presets.length + 1) +
+        " · " +
+        promptText.replace(/\s+/g, " ").slice(0, 10);
+      presets.push({ id, name, prompt: promptText });
+      this.renderSubJudgePresetSelect();
+      const sel = document.getElementById("qqbot-subjudge-preset-select");
+      if (sel) sel.value = id;
+      this.onCurrentGroupFieldChange();
+      await this.saveAllSettings(true);
+      this.notify("已保存副API裁判提示词预设");
+    },
+
+    async deleteSubJudgePreset() {
+      if (!this.serverState || !this.serverState.config) return;
+      const sel = document.getElementById("qqbot-subjudge-preset-select");
+      const val = sel ? sel.value : "";
+      if (!val || !String(val).startsWith("sjp_")) {
+        this.notify("内置预设不可删除，请选择自定义预设后点删设");
+        return;
+      }
+      const presets = Array.isArray(this.serverState.config.subJudgePresets)
+        ? this.serverState.config.subJudgePresets
+        : [];
+      this.serverState.config.subJudgePresets = presets.filter(
+        (p) => String(p.id) !== String(val),
+      );
+      this.renderSubJudgePresetSelect();
+      await this.saveAllSettings(false);
+      this.notify("已删除该副API裁判预设");
+    },
+
+    resetSubJudgePromptDefault() {
+      const g = this.getCurrentGroupConfig();
+      const input = document.getElementById("qqbot-subjudge-prompt-input");
+      const sel = document.getElementById("qqbot-subjudge-preset-select");
+      if (input) {
+        input.value = getDefaultSubJudgePrompt(g ? g.mode : "trpg");
+      }
+      if (sel) sel.value = "strict_smart";
+      this.onCurrentGroupFieldChange();
+      this.notify("已恢复默认严格精准副API裁判提示词");
     },
 
     onTailPresetSelectChange() {
@@ -4991,7 +5189,7 @@ function createExpenditureLineChart(data, daysInMonth) {
           const stColor = isOn ? "#ffffff" : "var(--text-secondary)";
 
           return `
-            <div onclick="if(window.QQBotConsole){window.QQBotConsole.selectPrivateChat('${this.escapeAttr(uid)}');}" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: ${cardBg}; border: 1.5px solid ${borderCol}; cursor: pointer;">
+            <div onclick="if(window.QQBotConsole){window.QQBotConsole.selectPrivateChat('${this.escapeAttr(uid)}');}" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: ${cardBg}; border: 1.5px solid ${borderCol}; cursor: pointer; flex-shrink: 0;">
               <span style="width: 44px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: ${stBg}; color: ${stColor}; border: 1px solid var(--border-color); font-size: 10.5px; font-weight: 700; flex-shrink: 0;">${isOn ? "监听" : "停用"}</span>
               <div style="flex: 1; min-width: 0; overflow: hidden;">
                 <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -4999,7 +5197,7 @@ function createExpenditureLineChart(data, daysInMonth) {
                   <span style="font-size: 10.5px; color: var(--text-secondary);">QQ ${this.escapeHtml(uid)}</span>
                 </div>
                 <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                  等待 ${waitSec} 秒后唤醒副AI判断${p.persona ? " · 含专属设定：" + this.escapeHtml(p.persona.slice(0, 18)) : ""}
+                  打包等待 ${waitSec} 秒直调主API${p.userPersona || p.persona ? " · 含专属人设" : ""}
                 </div>
               </div>
               <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.togglePrivateChatEnabled('${this.escapeAttr(uid)}');}" style="height: 26px; padding: 0 9px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
@@ -5018,21 +5216,50 @@ function createExpenditureLineChart(data, daysInMonth) {
       this.saveAllSettings(false);
     },
 
+    renderPrivateSharedGroupOptions(selectedVal) {
+      const sel = document.getElementById("qqbot-priv-shared-group-select");
+      if (!sel) return;
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const groupOptions = Object.keys(groups)
+        .map((gid) => {
+          const g = groups[gid];
+          const gName = (g && g.groupName) || gid;
+          return `<option value="${this.escapeAttr(String(gid))}">共享指定群：${this.escapeHtml(gName)} · ${this.escapeHtml(String(gid))}</option>`;
+        })
+        .join("");
+      sel.innerHTML =
+        '<option value="ALL">共享全部已启用群聊与小群的记忆总结</option>' +
+        '<option value="CURRENT">共享当前顶部选中群聊的记忆总结</option>' +
+        groupOptions +
+        '<option value="NONE">不共享群聊记忆 · 仅使用本小窗独立记忆</option>';
+      sel.value = selectedVal || "ALL";
+      if (!sel.value) sel.value = "ALL";
+    },
+
     populateCurrentPrivateUI() {
       const p = this.getCurrentPrivateConfig();
-      const nameBadge = document.getElementById("qqbot-priv-selected-name");
+      const nameBadge =
+        document.getElementById("qqbot-current-priv-title-tag") ||
+        document.getElementById("qqbot-priv-selected-name");
       const enSel = document.getElementById("qqbot-priv-enabled-select");
       const waitIn = document.getElementById("qqbot-priv-wait-input");
       const userPerIn = document.getElementById("qqbot-priv-user-persona");
       const aiPerIn = document.getElementById("qqbot-priv-ai-persona");
+      const memIn = document.getElementById("qqbot-priv-memory-textarea");
       const legacyPerIn = document.getElementById("qqbot-priv-persona-input");
 
       if (!p) {
-        if (nameBadge) nameBadge.textContent = "未选中好友";
+        if (nameBadge) nameBadge.textContent = "未选择小窗";
         if (enSel) enSel.value = "true";
-        if (waitIn) waitIn.value = "30";
+        if (waitIn) waitIn.value = "15";
+        this.renderPrivateSharedGroupOptions("ALL");
         if (userPerIn) userPerIn.value = "";
         if (aiPerIn) aiPerIn.value = "";
+        if (memIn) memIn.value = "";
         if (legacyPerIn) legacyPerIn.value = "";
         return;
       }
@@ -5041,9 +5268,11 @@ function createExpenditureLineChart(data, daysInMonth) {
         nameBadge.textContent = `${p.remark || p.nickname || p.userId} · ${p.userId}`;
       }
       if (enSel) enSel.value = p.enabled !== false ? "true" : "false";
-      if (waitIn) waitIn.value = String(p.waitSec ?? 30);
+      if (waitIn) waitIn.value = String(p.waitSec ?? 15);
+      this.renderPrivateSharedGroupOptions(p.sharedGroupId || "ALL");
       if (userPerIn) userPerIn.value = p.userPersona || p.persona || "";
       if (aiPerIn) aiPerIn.value = p.aiPersona || "";
+      if (memIn) memIn.value = p.memorySummary || "";
       if (legacyPerIn) legacyPerIn.value = p.persona || "";
     },
 
@@ -5052,8 +5281,12 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (!p) return;
       const enSel = document.getElementById("qqbot-priv-enabled-select");
       const waitIn = document.getElementById("qqbot-priv-wait-input");
+      const sharedGrpSel = document.getElementById(
+        "qqbot-priv-shared-group-select",
+      );
       const userPerIn = document.getElementById("qqbot-priv-user-persona");
       const aiPerIn = document.getElementById("qqbot-priv-ai-persona");
+      const memIn = document.getElementById("qqbot-priv-memory-textarea");
       const legacyPerIn = document.getElementById("qqbot-priv-persona-input");
 
       if (enSel) {
@@ -5064,7 +5297,10 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
       }
       if (waitIn) {
-        p.waitSec = Math.max(2, parseInt(waitIn.value, 10) || 30);
+        p.waitSec = Math.max(2, parseInt(waitIn.value, 10) || 15);
+      }
+      if (sharedGrpSel) {
+        p.sharedGroupId = sharedGrpSel.value || "ALL";
       }
       if (userPerIn) {
         p.userPersona = userPerIn.value.trim();
@@ -5075,9 +5311,70 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (aiPerIn) {
         p.aiPersona = aiPerIn.value.trim();
       }
+      if (memIn) {
+        p.memorySummary = memIn.value.trim();
+      }
 
       this.renderPrivateChatsList();
       this.saveAllSettings(false);
+    },
+
+    async proactiveSendPrivateChat() {
+      const p = this.getCurrentPrivateConfig();
+      if (!p || !p.userId) {
+        this.notify("请先在上方列表点击选择一位小窗好友");
+        return;
+      }
+      const inp = document.getElementById("qqbot-priv-proactive-input");
+      const customDirective = inp ? inp.value.trim() : "";
+      const uid = String(p.userId);
+      const logKey = "priv_" + uid;
+      const dispName = p.remark || p.nickname || uid;
+
+      this.notify(`正在唤醒主AI主动给「${dispName}」发送小窗消息...`);
+      this.updateJudgeStatusUI(
+        `正在唤醒主AI结合共享记忆主动给好友「${dispName}」发小窗消息...`,
+      );
+      try {
+        const limit = this.getGroupContextLimit(logKey);
+        const messages = (this.staticFallbackLogs[logKey] || []).slice(-limit);
+        const reasonText =
+          customDirective ||
+          "请结合你们的人设关系、共享的群聊剧情与小窗记忆，自然主动地找该好友私聊搭话或推进单人秘密线";
+        const replyList = await this.runMainApiPrivateResponder(
+          p,
+          messages,
+          { shouldReply: true, reason: reasonText },
+          [],
+        );
+        for (const text of replyList) {
+          const clean = String(text || "").trim();
+          if (!clean) continue;
+          await this.sendBotMessage({
+            userId: uid,
+            message: clean,
+          });
+          this.appendStaticMessage(logKey, {
+            messageId: "pbot_" + Date.now(),
+            groupId: logKey,
+            userId: uid,
+            senderId: "BOT",
+            senderName: "我方AI",
+            rawMessage: clean,
+            content: clean,
+            isSelf: true,
+            timestamp: Date.now(),
+          });
+        }
+        if (inp) inp.value = "";
+        this.notify(`已主动向「${dispName}」发送小窗私聊`);
+      } catch (err) {
+        this.appendDebugLog(
+          "小窗报错",
+          `主动发送小窗失败：${err.message || "请检查主API配置"}`,
+          true,
+        );
+      }
     },
 
     async addOrSelectPrivateChat() {
@@ -5399,7 +5696,7 @@ function createExpenditureLineChart(data, daysInMonth) {
             ? b.persona
             : "暂未填写专属人设，点击右侧编辑可为该群友写人设";
           return `
-        <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+        <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); flex-shrink: 0;">
           <div style="display: flex; align-items: center; gap: 6px;">
             <span style="width: 46px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border-color); font-size: 11px; font-weight: 700; color: var(--accent-color); flex-shrink: 0;">${this.escapeHtml(b.slot || "群友")}</span>
             <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-primary);">
@@ -6303,12 +6600,16 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
         return;
       }
+      const waitSec = Math.max(2, Math.min(300, Number(gCfg.debounceSec) || 8));
+      // 固定时间窗口打包机制：收到第1条消息后启动倒计时，期间新来的消息直接并入打包队列，绝不重置倒计时
       if (this.groupDebounceTimers[gid]) {
-        clearTimeout(this.groupDebounceTimers[gid]);
+        this.updateJudgeStatusUI(
+          `群「${gCfg.groupName || gid}」固定打包窗口计时中，新消息已并入当前批次，到点后统一发送给AI...`,
+        );
+        return;
       }
-      const waitSec = Math.max(2, Math.min(30, Number(gCfg.debounceSec) || 6));
       this.updateJudgeStatusUI(
-        `已收到「${gCfg.groupName || gid}」最新群消息，正在等待 ${waitSec} 秒合并连发消息后交由副AI判断...`,
+        `已收到「${gCfg.groupName || gid}」第1条新消息，已开启 ${waitSec} 秒固定打包窗口（期间新发消息不重置时间）...`,
       );
       this.groupDebounceTimers[gid] = setTimeout(async () => {
         delete this.groupDebounceTimers[gid];
@@ -6332,13 +6633,17 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
         return;
       }
-      if (this.privateDebounceTimers[uid]) {
-        clearTimeout(this.privateDebounceTimers[uid]);
-      }
-      const waitSec = Math.max(3, Math.min(3600, Number(pCfg.waitSec) || 30));
+      const waitSec = Math.max(2, Math.min(3600, Number(pCfg.waitSec) || 15));
       const dispName = pCfg.remark || pCfg.nickname || uid;
+      // 固定时间窗口打包机制：收到小窗第1条消息启动倒计时，期间追加消息不重置倒计时，到期直接由主API回复
+      if (this.privateDebounceTimers[uid]) {
+        this.updateJudgeStatusUI(
+          `好友「${dispName}」小窗固定打包窗口计时中，新消息已并入当前批次，到点直接由主API回复...`,
+        );
+        return;
+      }
       this.updateJudgeStatusUI(
-        `已收到好友「${dispName}」小窗消息，正在等待 ${waitSec} 秒后唤醒副AI阅读并判断是否调用主AI回复...`,
+        `已收到好友「${dispName}」小窗消息，已开启 ${waitSec} 秒固定打包窗口，到期后跳过副AI直接调用主API回复...`,
       );
       this.privateDebounceTimers[uid] = setTimeout(async () => {
         delete this.privateDebounceTimers[uid];
@@ -6349,6 +6654,7 @@ function createExpenditureLineChart(data, daysInMonth) {
 
     async processPrivateTurn(userId, pCfg) {
       const uid = String(userId || "");
+      if (!this.busyPrivateChats) this.busyPrivateChats = {};
       if (!uid || this.busyPrivateChats[uid]) return;
       if (this.isGlobalPaused() || !pCfg || pCfg.enabled === false) return;
       this.busyPrivateChats[uid] = true;
@@ -6386,35 +6692,23 @@ function createExpenditureLineChart(data, daysInMonth) {
         const lastMsg = messages[messages.length - 1];
         if (lastMsg && lastMsg.isSelf) return;
 
-        // 1. 提取小窗原图画面直接传给副AI与主AI，不再预先将图片转为文字
+        // 1. 提取小窗原图画面直接传给主AI
         const activeVisionUrls = await this.recognizePendingImagesInMessages(
           logKey,
           null,
           messages,
         );
 
-        // 2. 副AI直接阅读小窗上下文与原图并判断是否需要主AI回复
-        this.updateJudgeStatusUI(
-          `等待时间到，副AI正在直接阅读好友「${dispName}」的小窗消息与原图，判断是否需要回复...`,
-        );
-        const judge = await this.runSubApiPrivateJudge(
-          pCfg,
-          messages,
-          activeVisionUrls,
-        );
+        // 2. 小窗消息跳过副AI裁判，直接唤醒主API生成小窗回复
+        const directMsg = `小窗打包等待结束，跳过副AI判断，正在直接调用主API回复好友「${dispName}」...`;
+        this.updateJudgeStatusUI(directMsg);
+        this.appendDebugLog("小窗直回", directMsg, false);
 
-        if (!judge.shouldReply) {
-          const skipMsg = `小窗副AI判定暂不回复「${dispName}」 · 原因：${judge.reason || "无需回复"}`;
-          this.updateJudgeStatusUI(skipMsg);
-          this.appendDebugLog("小窗副AI", skipMsg, false);
-          return;
-        }
+        const judge = {
+          shouldReply: true,
+          reason: "好友小窗私聊跳过副AI直接由主API回复",
+        };
 
-        const passMsg = `小窗副AI判定需要回复「${dispName}」 · 原因：${judge.reason || "回应好友私聊"} · 正在将原图与上下文传给主AI生成小窗回复...`;
-        this.updateJudgeStatusUI(passMsg);
-        this.appendDebugLog("小窗副AI", passMsg, false);
-
-        // 3. 主AI直接查看原图与上下文生成私聊回复
         const replyList = await this.runMainApiPrivateResponder(
           pCfg,
           messages,
@@ -6455,42 +6749,64 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
     },
 
-    async runSubApiPrivateJudge(pCfg, messages, activeVisionUrls = []) {
-      const dispName = pCfg.remark || pCfg.nickname || pCfg.userId;
-      const limit = this.getGroupContextLimit();
-      const transcript = messages
-        .slice(-limit)
-        .map((m) =>
-          m.isSelf
-            ? `[我方已发]: ${m.rawMessage || m.content}`
-            : `[${dispName}]: ${m.rawMessage || m.content}`,
-        )
-        .join("\n");
-
-      const sysPrompt = `你是QQ好友小窗私聊的副AI阅读裁判。
-请阅读好友「${dispName}」发来的最新私聊消息，如果对方发了图片，原图已直接附带在本次请求中。
-请判断此刻是否需要唤醒主AI回复该好友：
-- 如果对方在提问、闲聊、发图分享、跑团私聊行动或等待回应，则 shouldReply 设为 true；
-- 如果对方明确说先忙了、不用回、或者只是系统回执，则 shouldReply 设为 false。
-只输出严格JSON：
-{
-  "shouldReply": true,
-  "reason": "简短说明为什么需要回复或暂不回复"
-}`;
-
-      try {
-        const raw = await this.callBotAI(
-          sysPrompt,
-          `【小窗最近聊天记录】\n${transcript}\n\n请输出JSON判断：`,
-          true,
-          activeVisionUrls,
-        );
-        const parsed = this.extractJsonObject(raw);
-        if (parsed && typeof parsed.shouldReply === "boolean") {
-          return parsed;
+    resolvePrivateSharedGroupMemoryPrompt(pCfg) {
+      const shareMode = (pCfg && pCfg.sharedGroupId) || "ALL";
+      if (shareMode === "NONE") return "";
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const targetGids = [];
+      if (shareMode === "ALL") {
+        for (const gid of Object.keys(groups)) {
+          if (groups[gid] && groups[gid].enabled !== false) {
+            targetGids.push(gid);
+          }
         }
-      } catch (_) {}
-      return { shouldReply: true, reason: "默认回复好友小窗消息" };
+      } else if (shareMode === "CURRENT") {
+        if (this.currentGroupId && groups[this.currentGroupId]) {
+          targetGids.push(this.currentGroupId);
+        }
+      } else if (groups[shareMode]) {
+        targetGids.push(shareMode);
+      }
+
+      const blocks = [];
+      for (const gid of targetGids) {
+        const g = groups[gid];
+        if (!g) continue;
+        const gName = g.groupName || gid;
+        const memObj = this.staticFallbackMemory[gid] || {};
+        const sumText = String(memObj.summaryText || g.memorySummary || "").trim();
+        const recentArr = (this.staticFallbackLogs[gid] || []).slice(-10);
+        const recentLines = recentArr
+          .map((m) => {
+            if (!m) return "";
+            const speaker = m.isSelf
+              ? "我方AI"
+              : this.resolveMemberDisplayName(
+                  g,
+                  m.senderId,
+                  m.qqRemark || m.senderName,
+                );
+            return `[${speaker}]: ${m.rawMessage || m.content || ""}`;
+          })
+          .filter(Boolean)
+          .join("\n");
+        if (sumText || recentLines) {
+          blocks.push(
+            `--- 共享群聊「${gName} (${gid})」记忆与近期剧情 ---\n` +
+              (sumText ? `【群记忆总结】：\n${sumText}\n` : "") +
+              (recentLines ? `【群近期对话】：\n${recentLines}` : ""),
+          );
+        }
+      }
+      return blocks.join("\n\n");
+    },
+
+    async runSubApiPrivateJudge(pCfg, messages, activeVisionUrls = []) {
+      return { shouldReply: true, reason: "小窗直接由主API回复" };
     },
 
     async runMainApiPrivateResponder(
@@ -6499,9 +6815,31 @@ function createExpenditureLineChart(data, daysInMonth) {
       judge,
       activeVisionUrls = [],
     ) {
-      const gCfg = this.getCurrentGroupConfig();
-      const basePersona = pCfg.aiPersona || this.resolvePersonaPrompt(gCfg);
-      const userPersonaText = pCfg.userPersona || pCfg.persona || "";
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const shareMode = (pCfg && pCfg.sharedGroupId) || "ALL";
+      const refGroup =
+        (shareMode !== "ALL" &&
+          shareMode !== "NONE" &&
+          shareMode !== "CURRENT" &&
+          groups[shareMode]) ||
+        this.getCurrentGroupConfig();
+      const basePersona = pCfg.aiPersona || this.resolvePersonaPrompt(refGroup);
+      let userPersonaText = pCfg.userPersona || pCfg.persona || "";
+      if (!userPersonaText && refGroup && Array.isArray(refGroup.playerBindings)) {
+        const matchedBind = refGroup.playerBindings.find(
+          (b) => String(b.qq) === String(pCfg.userId),
+        );
+        if (matchedBind && matchedBind.persona) {
+          userPersonaText = matchedBind.persona;
+        }
+      }
+      const sharedGroupMemoryText =
+        this.resolvePrivateSharedGroupMemoryPrompt(pCfg);
+      const privMemoryText = String(pCfg.memorySummary || "").trim();
       const dispName = pCfg.remark || pCfg.nickname || pCfg.userId;
       const limit = this.getGroupContextLimit();
       const transcript = messages
@@ -6517,10 +6855,12 @@ function createExpenditureLineChart(data, daysInMonth) {
 【你的自身人设】
 ${basePersona}
 
-${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaText}\n` : ""}
+${userPersonaText ? `【该好友专属人设与关系设定】\n${userPersonaText}\n` : ""}
+${privMemoryText ? `【本小窗专属记忆与秘密线总结】\n${privMemoryText}\n` : ""}
+${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态】\n${sharedGroupMemoryText}\n` : ""}
 注意：
 1. 如果好友发送了图片或表情包，原图已经直接传给了你，请直接看图并结合画面内容自然回应，绝不要说看不到图片。
-2. 说话风格必须像真人在QQ小窗日常聊天一样自然简短、生活化，每次回复1到2句短话即可，不要长篇大论，不要喋喋不休说个不停。
+2. 你已经共享了上方关联群聊的记忆与剧情，如果当前是跑团单人线、暗中调查或秘密沟通，请自然衔接群内剧情与该调查员的专属身份；如果是日常闲聊，请像真人在QQ小窗聊天一样自然简短、生活化。
 3. 请先在 thinking 字段中简短梳理好友意图与回复思路（系统会自动剥离 thinking 字段并存入本地磁盘，绝不会发给好友），再在 messages 数组中填写发给好友的干净回复正文。
 请输出严格JSON格式：
 {
@@ -6532,7 +6872,7 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
 
       const raw = await this.callBotAI(
         sysPrompt,
-        `【副AI分析】${judge.reason || "正常回复"}\n\n【小窗聊天记录】\n${transcript}\n\n请生成JSON回复：`,
+        `【触发指令】${judge.reason || "直接回复好友小窗"}\n\n【小窗聊天记录】\n${transcript || "（尚无历史消息，请主动开场搭话）"}\n\n请生成JSON回复：`,
         false,
         activeVisionUrls,
       );
@@ -6928,17 +7268,8 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
             st.lastMessageSeq >
               Math.max(st.lastProcessedSeq || 0, lw.lastSeenSeq)
           ) {
-            const debounceMs =
-              Math.max(2, Number(gCfg.debounceSec) || 8) * 1000;
-            const cooldownMs =
-              Math.max(1, Number(gCfg.cooldownSec) || 5) * 1000;
-            if (
-              now - (st.lastMessageAt || 0) >= debounceMs &&
-              now - lw.lastReplyAt >= cooldownMs
-            ) {
-              lw.lastSeenSeq = st.lastMessageSeq;
-              await this.processGroupTurn(gid, gCfg, st.lastMessageSeq, false);
-            }
+            lw.lastSeenSeq = st.lastMessageSeq;
+            this.scheduleDirectGroupTurn(gid, gCfg);
             continue;
           }
 
@@ -7329,33 +7660,35 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
           ? "跑团带团守秘人KP模式"
           : "日常陪聊与设定OC群友模式";
 
+      const customJudgeRules =
+        (gCfg.subJudgePrompt && String(gCfg.subJudgePrompt).trim()) ||
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.subJudgePrompt &&
+          String(this.serverState.config.subJudgePrompt).trim()) ||
+        getDefaultSubJudgePrompt(gCfg.mode);
+
       const sysPrompt = `你是QQ群控中枢的副AI真人场面裁判。当前模式：${modeLabel}。
 请完整阅读群聊上下文，如果群友发送了图片，原图已直接附带在本次请求中。
 
 【本群成员名册与专属人设】
 ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
 
-请你像一个真正的资深人类跑团KP或真人OC群友一样，精准判断此刻是否应该唤醒主AI开口说话：
-1. 单人独立互动 SINGLE_INTERACTION：某位群友单独和NPC搭话、发图互动、单独向KP声明调查某个角落、或者提出一个不牵连其他人的独立行动，此时不需要死等全员，应立即决定回复该群友。
-2. 括号提问或检定结算 BRACKET_QUESTION_OR_DICE：群友确认规则、询问环境细节，或者刚投出了技能检定骰子结果，应立即回复并给出检定描写或解答。
-3. 玩家结伴RP且NPC在场 PC_RP_NPC_PRESENT：群友们正在互相角色扮演对戏，如果对戏内容涉及在场NPC或主动向我方搭话，则自然接话；如果只是两位群友私下交流且不需要NPC打断，则保持安静等待他们聊完。
-4. 全员大场面等待 WAIT_ALL_ACTIONS：当前处于转场或全员危机鉴定阶段，我方刚要求所有在场调查员过骰子或表态，而目前只有部分人表态、还有活跃成员正在行动中，则暂不回复，等待其他人行动完毕。
-5. 还在RP等待信号 STILL_RP_WAIT：有人表示还在RP、等一下、正在打字，则立即保持安静不回复。
-6. 结束RP推进信号 FINISH_RP_ADVANCE：群友们表示RP结束、可以继续推剧情了，则立即回复并推进下一幕。
-7. 引用回复规范：replyToMessageId 默认必须留空字符串 ""！当群里只有1个人在说话、或者直接回应最后一条消息时，所有人都知道你在回谁，绝对不要填 replyToMessageId。只有当3个以上不同的人同时交叉刷屏、且你要回的那句话已经被别人的消息顶到前面去了，才填写对应的消息ID。
+【你必须严格执行的副API裁判规则】
+${customJudgeRules}
 
 只输出严格的JSON对象，格式如下：
 {
-  "shouldReply": true,
+  "shouldReply": false,
   "sceneType": "SINGLE_INTERACTION | BRACKET_QUESTION_OR_DICE | PC_RP_NPC_PRESENT | WAIT_ALL_ACTIONS | STILL_RP_WAIT | FINISH_RP_ADVANCE",
-  "reason": "简短说明为什么此时应该回复或应该继续等待",
+  "reason": "简短说明为什么此时应该回复或应该保持安静不打扰",
   "targetSpeakerName": "如果是针对某位群友的独立行动或回答，填入其实时名字，否则留空",
   "replyToMessageId": "",
   "needPrivateHint": false,
   "privateTargetName": "如果该行动触发了只有某位成员能看到的秘密线索或单人线，填入其实时名字或HO代号，否则留空"
 }`;
 
-      const userPrompt = `【过往记忆摘要】\n${memory.summaryText || "暂无历史摘要"}\n\n【最新群聊记录】\n${transcript}\n\n请判断当前场面并输出JSON：`;
+      const userPrompt = `【过往记忆摘要】\n${memory.summaryText || "暂无历史摘要"}\n\n【本批次打包群聊记录】\n${transcript}\n\n请严格按照裁判规则判断是否需要唤醒主AI并输出JSON：`;
 
       try {
         const raw = await this.callBotAI(
@@ -7369,10 +7702,11 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
           return parsed;
         }
       } catch (e) {
-        console.warn("副API判断调用异常，回退为默认回复:", e);
+        console.warn("副API判断调用异常:", e);
       }
 
       const lastMsg = messages[messages.length - 1];
+      const lastText = String((lastMsg && (lastMsg.rawMessage || lastMsg.content)) || "").trim();
       const fallbackName = lastMsg
         ? this.resolveMemberDisplayName(
             gCfg,
@@ -7380,15 +7714,154 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
             lastMsg.qqRemark || lastMsg.senderName,
           )
         : "";
+      const explicitlyCallsKpOrBot =
+        /kp|gm|守秘人|\.r|检定|过骰|投骰|[（(]/i.test(lastText) ||
+        Boolean(this.serverState && this.serverState.config && this.serverState.config.selfId && lastText.includes(String(this.serverState.config.selfId)));
       return {
-        shouldReply: true,
+        shouldReply: explicitlyCallsKpOrBot,
         sceneType: "SINGLE_INTERACTION",
-        reason: "默认响应最新群消息",
+        reason: explicitlyCallsKpOrBot
+          ? "检测到明确呼叫KP或检定指令，唤醒主AI"
+          : "副API未返回有效JSON且消息未明确呼叫AI，保持安静避免乱回",
         targetSpeakerName: fallbackName,
         replyToMessageId: "",
         needPrivateHint: false,
         privateTargetName: "",
       };
+    },
+
+    resolveCrossSharedMemoryPrompt(currentGroupId, gCfg) {
+      const mode = (gCfg && gCfg.crossMemoryMode) || "all";
+      if (mode === "off") return "";
+
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const privates =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.privateChats) ||
+        {};
+
+      const parts = [];
+
+      // 1. 共享其他群聊与小群的记忆总结与近期对话
+      if (mode === "all" || mode === "groups_only") {
+        for (const gid of Object.keys(groups)) {
+          if (String(gid) === String(currentGroupId)) continue;
+          const otherGrp = groups[gid];
+          if (!otherGrp || otherGrp.enabled === false) continue;
+          const gName = otherGrp.groupName || gid;
+          const memObj = this.staticFallbackMemory[gid] || {};
+          const sumText = String(
+            memObj.summaryText || otherGrp.memorySummary || "",
+          ).trim();
+          const recentMsgs = (this.staticFallbackLogs[gid] || []).slice(-8);
+          const recentStr = recentMsgs
+            .map((m) => {
+              if (!m) return "";
+              const spk = m.isSelf
+                ? "我方AI"
+                : this.resolveMemberDisplayName(
+                    otherGrp,
+                    m.senderId,
+                    m.qqRemark || m.senderName,
+                  );
+              return `[${spk}]: ${m.rawMessage || m.content || ""}`;
+            })
+            .filter(Boolean)
+            .join("\n");
+          if (sumText || recentStr) {
+            parts.push(
+              `【关联群聊/小群「${gName} (群号:${gid})」共享记忆与动态】\n` +
+                (sumText ? `记忆总结：${sumText}\n` : "") +
+                (recentStr ? `最近对话：\n${recentStr}` : ""),
+            );
+          }
+        }
+      }
+
+      // 2. 共享单人小窗的记忆总结与近期私聊动态
+      if (mode === "all" || mode === "private_only") {
+        for (const uid of Object.keys(privates)) {
+          const p = privates[uid];
+          if (!p || p.enabled === false) continue;
+          const pName = p.remark || p.nickname || uid;
+          const logKey = "priv_" + uid;
+          const pMem = String(p.memorySummary || "").trim();
+          const pRecent = (this.staticFallbackLogs[logKey] || []).slice(-8);
+          const pRecentStr = pRecent
+            .map((m) => {
+              if (!m) return "";
+              return m.isSelf
+                ? `[我方AI -> ${pName}]: ${m.rawMessage || m.content || ""}`
+                : `[${pName} 小窗私聊]: ${m.rawMessage || m.content || ""}`;
+            })
+            .filter(Boolean)
+            .join("\n");
+          if (pMem || pRecentStr) {
+            parts.push(
+              `【单人小窗「${pName} (QQ:${uid})」共享记忆与私聊动态】\n` +
+                (pMem ? `小窗秘密记忆：${pMem}\n` : "") +
+                (pRecentStr ? `最近小窗对话：\n${pRecentStr}` : ""),
+            );
+          }
+        }
+      }
+
+      return parts.join("\n\n");
+    },
+
+    resolveAvailableRoutingTargetsPrompt(currentGroupId, gCfg) {
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const privates =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.privateChats) ||
+        {};
+
+      const groupLines = Object.keys(groups)
+        .filter((gid) => groups[gid] && groups[gid].enabled !== false)
+        .map((gid) => {
+          const g = groups[gid];
+          const tag =
+            String(gid) === String(currentGroupId) ? "（当前触发群）" : "（可跨群投递的小群/关联群）";
+          return `- 群名称：${g.groupName || gid} | 群号：${gid} ${tag}`;
+        });
+
+      const privLines = Object.keys(privates)
+        .filter((uid) => privates[uid] && privates[uid].enabled !== false)
+        .map((uid) => {
+          const p = privates[uid];
+          return `- 小窗好友：${p.remark || p.nickname || uid} | QQ号：${uid}`;
+        });
+
+      if (Array.isArray(gCfg && gCfg.playerBindings)) {
+        gCfg.playerBindings.forEach((b) => {
+          if (!b || !b.qq) return;
+          const disp = this.resolveMemberDisplayName(gCfg, b.qq, b.qqRemark);
+          privLines.push(
+            `- 群成员小窗：${disp} | 定位：${b.slot || "群友"} | QQ号：${b.qq}`,
+          );
+        });
+      }
+
+      return [
+        groupLines.length > 0
+          ? `【可自由选择发送的目标群聊列表（主群与各小群）】\n${groupLines.join("\n")}`
+          : "",
+        privLines.length > 0
+          ? `【可主动发起私聊的目标单人小窗列表】\n${privLines.join("\n")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
     },
 
     /* ============================================================================
@@ -7695,11 +8168,20 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
       ].join("\n");
       promptSections.push(formatPromptSectionBlock("格式与指令", formatAndRulesBody));
 
-      // 4. 无痕私密对话规范（单人线与小窗秘密）
-      const privateRuleBody =
-        "如果某位群友触发了专属HO秘密、高难侦查独享情报、发狂幻觉或单人线剧情，在群聊公屏 groupMessages 中只发公开可见的表象，绝不能在公屏泄露秘密或提及“已私聊你”；同时把专属秘密写进 privateMessages 数组中，并在 targetSlot 中填入该群友的实时名字或HO代号，系统会自动通过QQ小窗单独私发给他。";
+      // 4. 无痕私密对话、跨群路由与主动发小窗规范
+      const routingTargetsPrompt = this.resolveAvailableRoutingTargetsPrompt(
+        gCfg.groupId,
+        gCfg,
+      );
+      const privateRuleBody = [
+        "1. 主动发单人小窗（privateMessages）：如果某位群友触发了专属HO秘密、高难侦查独享情报、发狂幻觉、单人线剧情，或者你在大群看到某人的动向后想主动私下找他的小窗说话，请在群聊公屏 groupMessages 中只发公开表象（也可留空数组），同时把私密内容写进 privateMessages 数组中，在 targetSlot 中填入该好友的实时名字、QQ号或HO代号，系统会自动通过QQ小窗单独私发给他。",
+        "2. 主AI自主选择发往哪个群聊（targetGroupMessages）：虽然你可能是在主群被唤醒，但你可以综合各小群与单人小窗的共享记忆，自主决定把消息发往哪个群聊！如果是发在当前群，直接填在 groupMessages 即可；如果你想把剧情或通知发往其他小群或分群，请在 targetGroupMessages 数组中填写 `{ \"targetGroup\": \"目标群名称或群号\", \"text\": \"发往该群的正文\" }`，系统会自动投递到对应群聊！",
+        routingTargetsPrompt,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       promptSections.push(
-        formatPromptSectionBlock("无痕私密对话规范", privateRuleBody),
+        formatPromptSectionBlock("跨群选择与主动小窗规范", privateRuleBody),
       );
 
       // 5. 我的人设与AI角色设定 + 群成员人设
@@ -7775,13 +8257,19 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
 {
   "thinking": "在此处用中文严格按照【思维链】模块的各个条目一步步完成思考与自检（系统收到后会自动剥离并存入本地磁盘，绝不会发到QQ群）",
   "groupMessages": [
-    "剥离思维链后实际发送到QQ群的第1条干净消息文本"
+    "剥离思维链后实际发送到当前QQ群的第1条干净消息文本（若本轮仅发往其他小群或小窗，可留空数组）"
+  ],
+  "targetGroupMessages": [
+    {
+      "targetGroup": "若需跨群发往其他小群或分群，填入目标群名称或群号，否则留空数组",
+      "text": "主AI选择发往该目标群聊的干净消息正文"
+    }
   ],
   "quoteMessageId": "",
   "privateMessages": [
     {
-      "targetSlot": "接收秘密小窗的群友实时名字或HO代号",
-      "text": "单独发给该群友小窗的秘密线索或单人线描写"
+      "targetSlot": "接收主动私聊小窗的好友实时名字、QQ号或HO代号",
+      "text": "单独主动发给该好友小窗的秘密线索、单人线描写或私聊话语"
     }
   ],
   "stickerName": "",
@@ -7806,15 +8294,20 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
             )
           : "";
 
-      const userPrompt = `【本地双层滚动记忆账本】
-${memory.summaryText || "尚无归档记忆"}
+      const crossSharedMemoryText = this.resolveCrossSharedMemoryPrompt(
+        gCfg.groupId,
+        gCfg,
+      );
 
+      const userPrompt = `【本群本地双层滚动记忆账本】
+${memory.summaryText || "尚无归档记忆"}
+${crossSharedMemoryText ? `\n==================== 【跨群小群与单人小窗共享记忆及最新动态】 ====================\n${crossSharedMemoryText}\n` : ""}
 【副AI场面裁判分析】
 场景类型：${judgeResult.sceneType || "常规互动"}
 判断依据：${judgeResult.reason || "正常接话"}
 目标互动群友：${judgeResult.targetSpeakerName || "全员"}
 
-【最近群聊完整上下文】
+【本群最近完整上下文】
 ${transcript}
 ${tailBlock}
 请生成本轮响应JSON：`;
@@ -7855,7 +8348,15 @@ ${tailBlock}
 
       const finalThoughtText = collectedThoughts.join("\n\n").trim();
 
-      if (parsed && Array.isArray(parsed.groupMessages)) {
+      if (
+        parsed &&
+        (Array.isArray(parsed.groupMessages) ||
+          Array.isArray(parsed.targetGroupMessages) ||
+          Array.isArray(parsed.privateMessages))
+      ) {
+        if (!Array.isArray(parsed.groupMessages)) {
+          parsed.groupMessages = [];
+        }
         // 确保每条群消息与私聊消息内部也不残留任何 <think> 标签或 NAI 标签
         parsed.groupMessages = parsed.groupMessages
           .map((mText) => {
@@ -7863,6 +8364,20 @@ ${tailBlock}
             return cleanedMsg;
           })
           .filter(Boolean);
+
+        if (Array.isArray(parsed.targetGroupMessages)) {
+          parsed.targetGroupMessages = parsed.targetGroupMessages
+            .map((tm) => {
+              if (!tm || typeof tm !== "object") return null;
+              const cleanText = this.stripThinkingTags(String(tm.text || "")).cleaned.trim();
+              if (!cleanText || !tm.targetGroup) return null;
+              return {
+                targetGroup: String(tm.targetGroup).trim(),
+                text: cleanText,
+              };
+            })
+            .filter(Boolean);
+        }
 
         if (Array.isArray(parsed.privateMessages)) {
           parsed.privateMessages = parsed.privateMessages.map((pm) => {
@@ -8069,7 +8584,7 @@ ${tailBlock}
         replyPack.quoteMessageId || judgeResult.replyToMessageId || "";
       const quoteId = this.shouldAllowQuoteReply(groupId, rawQuoteId);
 
-      // 1. 发送群聊公开消息
+      // 1. 发送当前群聊公开消息
       for (let i = 0; i < groupMsgs.length; i++) {
         const text = String(groupMsgs[i]).trim();
         await this.sendBotMessage({
@@ -8082,10 +8597,57 @@ ${tailBlock}
         });
       }
 
-      // 2. 派发单人线小窗或秘密线索
+      // 1.5 主AI自主选择跨群发送到指定小群或关联群聊
+      const targetGroupMsgs = Array.isArray(replyPack.targetGroupMessages)
+        ? replyPack.targetGroupMessages
+        : [];
+      const allGroups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      for (const tgm of targetGroupMsgs) {
+        if (!tgm || !tgm.text || !tgm.targetGroup) continue;
+        const tKey = String(tgm.targetGroup).trim();
+        let resolvedGid = "";
+        if (allGroups[tKey]) {
+          resolvedGid = tKey;
+        } else {
+          for (const gid of Object.keys(allGroups)) {
+            const gObj = allGroups[gid];
+            if (
+              gObj &&
+              (String(gObj.groupName) === tKey ||
+                (gObj.groupName && String(gObj.groupName).includes(tKey)) ||
+                tKey.includes(String(gid)))
+            ) {
+              resolvedGid = gid;
+              break;
+            }
+          }
+        }
+        if (resolvedGid) {
+          this.appendDebugLog(
+            "跨群路由",
+            `主AI自主选择发往群「${(allGroups[resolvedGid] && allGroups[resolvedGid].groupName) || resolvedGid}」：${tgm.text.slice(0, 80)}`,
+            false,
+          );
+          await this.sendBotMessage({
+            groupId: resolvedGid,
+            message: tgm.text,
+          });
+        }
+      }
+
+      // 2. 派发单人线小窗、主动私聊或秘密线索（同时匹配群成员名册与独立好友小窗列表）
       const privList = Array.isArray(replyPack.privateMessages)
         ? replyPack.privateMessages
         : [];
+      const allPrivates =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.privateChats) ||
+        {};
       for (const pm of privList) {
         if (!pm || !pm.text) continue;
         let targetId = String(pm.targetUserId || "").trim();
@@ -8113,18 +8675,55 @@ ${tailBlock}
           }
         }
 
+        if (!targetId && targetKey) {
+          if (allPrivates[targetKey]) {
+            targetId = targetKey;
+          } else {
+            for (const uid of Object.keys(allPrivates)) {
+              const pObj = allPrivates[uid];
+              if (
+                pObj &&
+                (pObj.remark === targetKey ||
+                  pObj.nickname === targetKey ||
+                  (pObj.remark && pObj.remark.includes(targetKey)) ||
+                  (pObj.nickname && pObj.nickname.includes(targetKey)))
+              ) {
+                targetId = uid;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!targetId && /^\d{5,12}$/.test(targetKey)) {
+          targetId = targetKey;
+        }
+
         if (!targetId) continue;
 
-        if (isSoloGroup) {
+        if (isSoloGroup || allGroups[targetId]) {
           await this.sendBotMessage({
             groupId: targetId,
-            message: `【单人线】${pm.text}`,
+            message: pm.text,
           });
         } else {
+          const cleanPrivText = String(pm.text).trim();
           await this.sendBotMessage({
             groupId,
             userId: targetId,
-            message: `【专属秘密线索】${pm.text}`,
+            message: cleanPrivText,
+          });
+          const privLogKey = "priv_" + targetId;
+          this.appendStaticMessage(privLogKey, {
+            messageId: "pbot_" + Date.now(),
+            groupId: privLogKey,
+            userId: targetId,
+            senderId: "BOT",
+            senderName: "我方AI",
+            rawMessage: cleanPrivText,
+            content: cleanPrivText,
+            isSelf: true,
+            timestamp: Date.now(),
           });
         }
       }

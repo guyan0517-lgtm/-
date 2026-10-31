@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -17797,6 +17797,45 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 </datalist>
               </div>
             </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 11px; color: var(--text-secondary);">跨群小群与单人小窗记忆共享及主AI跨群路由</label>
+              <select id="qqbot-cross-memory-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" style="width: 100%; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
+                <option value="all" selected>共享全部小群与单人小窗记忆 · 允许主AI自选目标群与小窗发送</option>
+                <option value="groups_only">仅共享其他群聊与小群记忆 · 允许主AI跨群发送</option>
+                <option value="private_only">仅共享单人小窗记忆 · 允许主AI主动发小窗</option>
+                <option value="off">仅使用本群独立记忆</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 副API裁判提示词与预设管理卡片 -->
+          <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span style="font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">副API裁判提示词与预设 · 控制何时唤醒主AI</span>
+              </div>
+              <span style="font-size: 11px; color: var(--accent-color); font-weight: 600; flex-shrink: 0;">可修改保存</span>
+            </div>
+
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.45;">
+              群聊收到第1条消息后会开启固定等待窗口，把这段时间内的消息打包交给副API裁判。你可在此自由修改副API的裁判规则并保存为预设，防止群友闲聊时副API胡乱触发主API。
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">预设</label>
+              <select id="qqbot-subjudge-preset-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onSubJudgePresetSelectChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--secondary-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
+                <option value="strict_smart">严格精准裁判 · 群友互聊与未点名绝不乱回</option>
+                <option value="trpg_kp">跑团KP裁判 · 仅行动宣言、检定、问KP或搭话NPC时回复</option>
+                <option value="oc_daily">日常OC裁判 · 仅喊AI名字、接AI话茬或求互动时回复</option>
+              </select>
+              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.saveSubJudgePreset();}" style="height: 34px; padding: 0 8px; font-size: 11.5px; flex-shrink: 0;">存设</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.deleteSubJudgePreset();}" style="height: 34px; padding: 0 8px; font-size: 11.5px; flex-shrink: 0;">删设</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.resetSubJudgePromptDefault();}" style="height: 34px; padding: 0 8px; font-size: 11.5px; flex-shrink: 0;">默认</button>
+            </div>
+
+            <textarea id="qqbot-subjudge-prompt-input" rows="5" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" placeholder="输入发给副API的裁判规则提示词..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 11.5px; line-height: 1.5; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);"></textarea>
           </div>
 
           <!-- 群成员备注与每个人专属人设美化卡片 -->
@@ -17876,15 +17915,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <div id="qqbot-private-chats-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto;"></div>
           </div>
 
-          <!-- 当前小窗等待秒数、副AI检测与专属人设配置 -->
+          <!-- 当前小窗等待秒数、共享群聊记忆、主动发信与专属人设配置 -->
           <div class="mod-lib-card" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 13px; font-weight: 700; color: var(--text-primary);">当前选中好友小窗回复配置</span>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-primary);">当前选中好友小窗回复与记忆共享配置</span>
               <span id="qqbot-current-priv-title-tag" style="font-size: 11px; color: var(--accent-color); font-weight: 600;">未选择小窗</span>
             </div>
 
             <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.45;">
-              当你或好友在小窗发消息后，系统会等待你填写的秒数；到时间后副AI会先识别你发的所有图片并阅读你上面发的所有消息，判断需不需要回复，需要回复时立即调动主AI回复你的小窗。
+              小窗收到第1条消息后开启固定秒数打包窗口，期间发来的消息不会重置计时；倒计时结束后跳过副API裁判，直接唤醒主API阅读打包消息、原图与共享群记忆进行回复。
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
@@ -17896,26 +17935,48 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 </select>
               </div>
               <div style="display: flex; flex-direction: column; gap: 4px;">
-                <label style="font-size: 11px; color: var(--text-secondary);">发消息后等几秒让副AI阅读</label>
-                <input type="text" id="qqbot-priv-wait-input" list="qqbot-priv-wait-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentPrivateFieldChange();}" class="moe-input" value="30" placeholder="可填秒数如30或60" style="width: 100%; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+                <label style="font-size: 11px; color: var(--text-secondary);">收到消息后打包等待秒数</label>
+                <input type="text" id="qqbot-priv-wait-input" list="qqbot-priv-wait-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentPrivateFieldChange();}" class="moe-input" value="15" placeholder="可填秒数如15或30" style="width: 100%; height: 36px; line-height: 22px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
                 <datalist id="qqbot-priv-wait-datalist">
-                  <option value="5">5秒快速阅读回复</option>
-                  <option value="15">15秒合并连发消息</option>
-                  <option value="30">30秒半分钟合并阅读</option>
-                  <option value="60">60秒一分钟合并阅读</option>
-                  <option value="90">90秒一分半钟合并阅读</option>
+                  <option value="5">5秒快速打包直接主API回复</option>
+                  <option value="15">15秒合并连发消息直接主API回复</option>
+                  <option value="30">30秒半分钟合并直接主API回复</option>
+                  <option value="60">60秒一分钟合并直接主API回复</option>
                 </datalist>
               </div>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 11px; color: var(--text-secondary);">选择该小窗要共享的群聊记忆与总结账本</label>
+              <select id="qqbot-priv-shared-group-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentPrivateFieldChange();}" class="moe-input" style="width: 100%; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
+                <option value="ALL" selected>共享全部已启用群聊与小群的记忆总结</option>
+                <option value="CURRENT">共享当前顶部选中群聊的记忆总结</option>
+                <option value="NONE">不共享群聊记忆 · 仅使用本小窗独立记忆</option>
+              </select>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px;">
               <label style="font-size: 11px; color: var(--text-secondary);">这位小窗好友的称呼与专属人设</label>
-              <textarea id="qqbot-priv-user-persona" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentPrivateFieldChange();}" class="moe-input" rows="2" placeholder="填写这位好友是谁、和AI是什么关系、性格特点..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 12px; line-height: 1.45; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);"></textarea>
+              <textarea id="qqbot-priv-user-persona" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentPrivateFieldChange();}" class="moe-input" rows="2" placeholder="填写这位好友是谁、调查员身份、和AI是什么关系、性格特点..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 12px; line-height: 1.45; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);"></textarea>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
               <label style="font-size: 11px; color: var(--text-secondary);">AI在该小窗里的专属人设与语气要求</label>
-              <textarea id="qqbot-priv-ai-persona" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentPrivateFieldChange();}" class="moe-input" rows="2" placeholder="留空则默认复用当前群聊的AI人设；也可单独写小窗私聊时的亲密语气与人设..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 12px; line-height: 1.45; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);"></textarea>
+              <textarea id="qqbot-priv-ai-persona" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentPrivateFieldChange();}" class="moe-input" rows="2" placeholder="留空则默认复用所选共享群聊的AI人设；也可单独写小窗私聊时的专属身份与语气..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 12px; line-height: 1.45; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);"></textarea>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 11px; color: var(--text-secondary);">该小窗专属记忆与秘密线总结</label>
+              <textarea id="qqbot-priv-memory-textarea" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentPrivateFieldChange();}" class="moe-input" rows="2" placeholder="记录AI与这位好友在小窗里的私密约定、单人线剧情或秘密记忆，大群共享时也会自动读取..." style="width: 100%; box-sizing: border-box; resize: vertical; font-size: 12px; line-height: 1.45; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);"></textarea>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px; padding-top: 2px;">
+              <input type="text" id="qqbot-priv-proactive-input" list="qqbot-priv-proactive-datalist" class="moe-input" placeholder="留空让主AI结合记忆主动搭话，或输入指定内容或方向..." style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+              <datalist id="qqbot-priv-proactive-datalist">
+                <option value="结合当前群聊剧情与秘密线，主动给这位好友发一条私聊消息">结合群聊剧情主动发私聊</option>
+                <option value="像平时一样自然地找对方私聊搭话关心近况">日常自然主动找对方私聊</option>
+              </datalist>
+              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.proactiveSendPrivateChat();}" style="height: 34px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">主动</button>
             </div>
           </div>
         </div>
@@ -17972,14 +18033,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             </div>
 
             <div style="display: flex; align-items: center; gap: 6px;">
-              <select id="qqbot-worldbook-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onWorldBookSelectChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
-                <option value="">选择世界书分类快速载入</option>
+              <select id="qqbot-worldbook-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onWorldBookSelectChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                <option value="">全部世界书分类</option>
               </select>
-              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.loadWorldBookEntries();}" style="height: 34px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">载入</button>
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleAllWorldBookEntries(true);}" style="height: 34px; padding: 0 8px; font-size: 12px; flex-shrink: 0;">全开</button>
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleAllWorldBookEntries(false);}" style="height: 34px; padding: 0 8px; font-size: 12px; flex-shrink: 0;">全关</button>
+              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.loadWorldBookEntries();}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">载入</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleAllWorldBookEntries(true);}" style="height: 36px; padding: 0 8px; font-size: 12px; flex-shrink: 0;">全开</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.toggleAllWorldBookEntries(false);}" style="height: 36px; padding: 0 8px; font-size: 12px; flex-shrink: 0;">全关</button>
             </div>
-            <div id="qqbot-worldbook-items-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto;"></div>
+            <div id="qqbot-worldbook-items-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; padding-right: 2px;"></div>
           </div>
 
           <!-- 思维链极简开关卡片 -->
