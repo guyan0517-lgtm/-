@@ -1579,6 +1579,8 @@ function getDefaultQqBotConfig() {
         personaId: '',
         aiPersona: '你是一位经验丰富、沉稳自然的真人跑团守秘人KP兼群友。说话自然流畅，绝不说教，遇到单人向NPC搭话或独立行动时直接回应对应玩家，遇到全员关键节点时引导大家自然互动。',
         customPrompt: '单条消息保持自然分段气泡感，不要长篇大论刷屏；严格区分公开表象与私聊秘密线索。',
+        tailPromptEnabled: true,
+        tailPrompt: '每一回合都必须精益求精！你必须端正态度，严禁偷懒缩水！每回合必须在顶级 thinking 字段内用中文一条不漏地彻底自检思维链，绝不能擅自快进剧情。必须严格遵照单回合行动原则与世界书设定，先充分渲染情绪氛围与环境场景细节，再描写人物互动细节。单气泡字数要饱满，切勿为了省事而简写略写，保持细腻深度的文风，每一回合都必须做到最好！',
         thoughtChainId: '',
         thoughtItems: getDefaultThoughtItems(),
         worldBookId: '',
@@ -1698,6 +1700,66 @@ function getGroupHistoryPath(groupId) {
 function getGroupMemoryPath(groupId) {
   const safeId = String(groupId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
   return path.join(QQBOT_DIR, `memory_${safeId}.json`);
+}
+
+function getGroupThoughtsPath(groupId) {
+  const safeId = String(groupId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(QQBOT_DIR, `thoughts_${safeId}.json`);
+}
+
+function loadGroupThoughtsFromDisk(groupId, limit = 30) {
+  try {
+    const p = getGroupThoughtsPath(groupId);
+    if (!fs.existsSync(p)) return [];
+    const raw = fs.readFileSync(p, 'utf8');
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const cleanLimit = Math.max(1, Math.min(100, Number(limit) || 30));
+    return arr.slice(-cleanLimit);
+  } catch (_) {
+    return [];
+  }
+}
+
+function appendGroupThoughtToDisk(groupId, entry) {
+  try {
+    fs.mkdirSync(QQBOT_DIR, { recursive: true });
+    const p = getGroupThoughtsPath(groupId);
+    let arr = loadGroupThoughtsFromDisk(groupId, 50);
+    const record = {
+      id: String((entry && entry.id) || ('th_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
+      groupId: String(groupId || ''),
+      timestamp: Number((entry && entry.timestamp) || Date.now()),
+      timeStr: String((entry && entry.timeStr) || ''),
+      mode: String((entry && entry.mode) || 'trpg'),
+      targetName: String((entry && entry.targetName) || ''),
+      thinking: String((entry && entry.thinking) || ''),
+      cleanMessages: Array.isArray(entry && entry.cleanMessages) ? entry.cleanMessages : [],
+      privateMessages: Array.isArray(entry && entry.privateMessages) ? entry.privateMessages : [],
+      naiPrompt: String((entry && entry.naiPrompt) || ''),
+      rawResponse: String((entry && entry.rawResponse) || '')
+    };
+    arr.push(record);
+    if (arr.length > 30) {
+      arr = arr.slice(-30);
+    }
+    fs.writeFileSync(p, JSON.stringify(arr, null, 2), 'utf8');
+    return { total: arr.length, entry: record };
+  } catch (_) {
+    return { total: 0, entry: null };
+  }
+}
+
+function clearGroupThoughtsOnDisk(groupId) {
+  try {
+    const p = getGroupThoughtsPath(groupId);
+    if (fs.existsSync(p)) {
+      fs.writeFileSync(p, '[]', 'utf8');
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function normalizeStoredMessage(m, idx) {
@@ -2781,6 +2843,31 @@ app.post('/api/qqbot/group/:groupId/clear', (req, res) => {
     qqBotRuntime.pendingGroupEvents.delete(groupId);
     qqBotRuntime.groupSeqState.delete(groupId);
     return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/qqbot/group/:groupId/thoughts', (req, res) => {
+  try {
+    const groupId = String(req.params.groupId || '');
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 30));
+    const thoughts = loadGroupThoughtsFromDisk(groupId, limit);
+    return res.json({ ok: true, groupId, thoughts });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/qqbot/group/:groupId/thoughts', (req, res) => {
+  try {
+    const groupId = String(req.params.groupId || '');
+    if (req.body && req.body.clear) {
+      clearGroupThoughtsOnDisk(groupId);
+      return res.json({ ok: true, groupId, thoughts: [] });
+    }
+    const { total, entry } = appendGroupThoughtToDisk(groupId, req.body || {});
+    return res.json({ ok: true, groupId, total, entry });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

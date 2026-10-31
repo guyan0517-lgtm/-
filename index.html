@@ -2442,7 +2442,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -17580,9 +17580,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">消息收发记录 · 左侧他人发言与图片 / 右侧AI已发消息</div>
             <div id="qqbot-live-console-log" style="height: 195px; overflow-y: auto; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; font-size: 12px;"></div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">运行调试台 · 实时显示收包、原图直读、裁判决定、主AI发送与生图代码</span>
-              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.clearDebugTraceLog();}" style="height: 22px; padding: 0 8px; font-size: 10.5px;">清屏</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+              <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">运行调试台 · 实时显示收包、原图直读、裁判决定、思维剥离与生图代码</span>
+              <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.openThoughtViewerModal();}" style="height: 22px; padding: 0 8px; font-size: 10.5px;">思维</button>
+                <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.clearDebugTraceLog();}" style="height: 22px; padding: 0 8px; font-size: 10.5px;">清屏</button>
+              </div>
             </div>
             <div id="qqbot-debug-trace-log" style="height: 115px; overflow-y: auto; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 4px; font-size: 11px; line-height: 1.45; color: var(--text-primary);">
               <div style="color: var(--text-secondary);">调试台已启动，正在监听 127.0.0.1:3001 实时消息数据包...</div>
@@ -17611,6 +17614,30 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               </datalist>
               <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.submitSandboxInput();}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">发送</button>
               <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.forceTriggerReply();}" style="height: 36px; padding: 0 10px; font-size: 12px; flex-shrink: 0;">推进</button>
+            </div>
+
+            <!-- 每回合尾部注入提示词 · 同地狱模块末尾要求 -->
+            <div style="margin-top: 4px; padding: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                <span style="font-size: 11.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">每回合尾部注入提示词 · 同地狱模块末尾要求</span>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                  <select id="qqbot-tail-enabled-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" style="height: 26px; line-height: 18px; font-size: 11px; padding: 0 18px 0 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                    <option value="true">开启尾部注入</option>
+                    <option value="false">暂停尾部注入</option>
+                  </select>
+                  <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.resetTailPromptDefault();}" style="height: 26px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">默认</button>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">模板</label>
+                <select id="qqbot-tail-preset-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onTailPresetSelectChange();}" class="moe-input" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box; vertical-align: middle;">
+                  <option value="hell_default">地狱模块默认尾部督促 · 严禁偷懒缩水与快进剧情</option>
+                  <option value="kp_single_turn">KP单回合停顿留白要求 · 先写环境氛围再写人物细节</option>
+                  <option value="strict_thinking">强制中文思维链逐条自检 · 严禁漏写thinking字段</option>
+                  <option value="daily_oc">日常OC真人口语要求 · 简短自然不长篇大论</option>
+                </select>
+              </div>
+              <textarea id="qqbot-tail-prompt-input" rows="3" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" placeholder="输入每回合最末尾强制注入给主AI的要求与督促提示词..." style="width: 100%; font-size: 11.5px; line-height: 1.45; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); resize: vertical; box-sizing: border-box;">每一回合都必须精益求精！你必须端正态度，严禁偷懒缩水！每回合必须在顶级 thinking 字段内用中文一条不漏地彻底自检思维链，绝不能擅自快进剧情。必须严格遵照单回合行动原则与世界书设定，先充分渲染情绪氛围与环境场景细节，再描写人物互动细节。单气泡字数要饱满，切勿为了省事而简写略写，保持细腻深度的文风，每一回合都必须做到最好！</textarea>
             </div>
           </div>
 
@@ -18226,9 +18253,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">三、群聊、小窗、识图与生图逻辑说明</div>
               <div>· <b>群聊与成员</b>：在群聊页点「拉群」会列出所有群，点「同步」会把群友的QQ备注名全部导进来，点「编辑」就能给群友写专属人设。</div>
               <div>· <b>小窗与筛选</b>：在小窗页点「拉友」会拉取AI的所有QQ好友，把不需要聊的好友点「移除」或点「筛除」删掉，留下要聊的小窗并设置等待秒数，比如30秒或60秒。</div>
-              <div>· <b>副AI自动识图不重复</b>：无论群聊还是小窗，到了等待秒数后，副AI会先阅读消息并自动把新图片识别成文字替换保存，已经识过的图绝不重复识图；当副AI判断需要回复时，会把识图结果和原图一起发给主AI进行回复。</div>
+              <div>· <b>思维链剥离与原稿查阅</b>：主AI生成的思维链会在发送前100%自动剥离，绝不发往QQ也不会刷屏调试台，并直接写入本地磁盘释放浏览器内存；点击调试台右上角「思维」即可随时查阅历次完整思维链与回复原稿。</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- 思维链与完整回复原稿查阅弹窗（按需从本地磁盘读取，关闭即释放DOM内存） -->
+      <div id="qqbot-thought-viewer-modal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 396px; width: 95%; max-height: 86vh; display: flex; flex-direction: column; border-radius: 16px; background: var(--card-bg); border: 1px solid var(--border-color); overflow: hidden;">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-color); gap: 8px;">
+            <span style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">思维链与完整回复原稿 · 本地磁盘</span>
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.refreshThoughtViewerModal();}" style="height: 26px; padding: 0 9px; font-size: 11px;">刷新</button>
+              <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.clearThoughtRecords();}" style="height: 26px; padding: 0 9px; font-size: 11px;">清空</button>
+              <button type="button" class="mod-capsule-btn primary" onclick="if(window.QQBotConsole){window.QQBotConsole.closeThoughtViewerModal();}" style="height: 26px; padding: 0 9px; font-size: 11px;">关闭</button>
+            </div>
+          </div>
+          <div id="qqbot-thought-viewer-list" class="modal-body" style="padding: 12px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; font-size: 12px; line-height: 1.55; color: var(--text-primary);"></div>
         </div>
       </div>
     </div>

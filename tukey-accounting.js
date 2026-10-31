@@ -2126,6 +2126,21 @@ function createExpenditureLineChart(data, daysInMonth) {
     };
   }
 
+  function getDefaultTailPrompt() {
+    return "每一回合都必须精益求精！你必须端正态度，严禁偷懒缩水！每回合必须在顶级 thinking 字段内用中文一条不漏地彻底自检思维链，绝不能擅自快进剧情。必须严格遵照单回合行动原则与世界书设定，先充分渲染情绪氛围与环境场景细节，再描写人物互动细节。单气泡字数要饱满，切勿为了省事而简写略写，保持细腻深度的文风，每一回合都必须做到最好！";
+  }
+
+  function getKeeperPrefixInstruction() {
+    return "你现在的身份是跑团的守秘人（KP/GM）。你的核心职责是主持跑团、推进模组剧情、扮演模组内的所有NPC、描述周围环境与氛围、并根据玩家（PL/调查员）的行动给出合理的反馈与检定要求。请严格遵守跑团规则与模组设定，绝不能代替玩家做决定或强行控制玩家角色的行为（禁上帝视角操控PC），始终保持客观、沉浸、富有画面感的叙事风格。\n【沉浸式演绎核心准则（Show, Don't Tell）】：严禁使用干瘪的总结性陈词或旁白直接交代设定！必须通过具体的视听感官细节、微表情、肢体动作、环境光影变化以及符合人物性格的对话来自然展现剧情与人物状态。";
+  }
+
+  function formatPromptSectionBlock(title, body) {
+    const cleanTitle = String(title || "").trim();
+    const cleanBody = String(body || "").trim();
+    if (!cleanBody) return "";
+    return `\n==================== 【${cleanTitle} 开始】 ====================\n${cleanBody}\n==================== 【${cleanTitle} 结束】 ====================\n`;
+  }
+
   const QQBotConsole = {
     initialized: false,
     serverState: null,
@@ -2142,6 +2157,7 @@ function createExpenditureLineChart(data, daysInMonth) {
     staticFallbackLogs: {},
     staticFallbackMemory: {},
     debugTraces: [],
+    lastApiReasoningContent: "",
     groupDebounceTimers: {},
     privateDebounceTimers: {},
     pendingRerunGroups: {},
@@ -4458,6 +4474,8 @@ function createExpenditureLineChart(data, daysInMonth) {
           "你是一位经验丰富、沉稳自然的真人跑团守秘人KP兼群友。说话自然流畅，绝不说教，遇到单人向NPC搭话或独立行动时直接回应对应玩家，遇到全员关键节点时引导大家自然互动。",
         customPrompt:
           "单条消息保持自然分段气泡感，不要长篇大论刷屏；严格区分公开表象与私聊秘密线索。",
+        tailPromptEnabled: true,
+        tailPrompt: getDefaultTailPrompt(),
         thoughtChainId: "",
         thoughtItems: getDefaultThoughtChainItems(),
         worldBookId: "",
@@ -4739,6 +4757,19 @@ function createExpenditureLineChart(data, daysInMonth) {
       setVal("qqbot-cooldown-input", g.cooldownSec ?? 5);
       setVal("qqbot-ai-persona-input", g.aiPersona || g.customPersona || "");
       setVal("qqbot-custom-prompt-input", g.customPrompt || "");
+      setVal(
+        "qqbot-tail-enabled-select",
+        g.tailPromptEnabled !== false ? "true" : "false",
+      );
+      setVal(
+        "qqbot-tail-prompt-input",
+        g.tailPrompt !== undefined &&
+          g.tailPrompt !== null &&
+          String(g.tailPrompt).trim() !== ""
+          ? g.tailPrompt
+          : getDefaultTailPrompt(),
+      );
+      setVal("qqbot-tail-preset-select", "");
 
       const resolvedNaiMode =
         g.naiMode || (g.autoNaiImage === false ? "off" : "trpg_every_round");
@@ -4815,6 +4846,9 @@ function createExpenditureLineChart(data, daysInMonth) {
       g.personaId = getVal("qqbot-persona-select", "");
       g.aiPersona = getVal("qqbot-ai-persona-input", "");
       g.customPrompt = getVal("qqbot-custom-prompt-input", "");
+      g.tailPromptEnabled =
+        getVal("qqbot-tail-enabled-select", "true") === "true";
+      g.tailPrompt = getVal("qqbot-tail-prompt-input", getDefaultTailPrompt());
       g.worldBookId = getVal("qqbot-worldbook-select", "");
       g.stickerCategoryId = getVal("qqbot-sticker-select", "ALL");
       g.moduleId = getVal("qqbot-module-select", "");
@@ -4831,6 +4865,35 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (prevContextLimit !== g.contextLimit && this.currentGroupId) {
         this.reloadContextMessages(false).catch(() => {});
       }
+    },
+
+    onTailPresetSelectChange() {
+      const sel = document.getElementById("qqbot-tail-preset-select");
+      const input = document.getElementById("qqbot-tail-prompt-input");
+      if (!sel || !input) return;
+      const val = sel.value;
+      if (!val) return;
+      if (val === "hell_default") {
+        input.value = getDefaultTailPrompt();
+      } else if (val === "kp_strict") {
+        input.value =
+          "每一回合都必须精益求精！你必须端正态度，严禁偷懒缩水！每回合必须在顶级 thinking 字段内用中文一条不漏地彻底自检思维链，绝不能擅自替调查员做决定或快进剧情。必须严格遵循 Show, Don't Tell 沉浸演绎原则，通过视听感官细节、环境光影与NPC神态动作自然推动跑团，严禁发送任何表情包，严禁把秘密线索直接发在公屏！";
+      } else if (val === "oc_daily") {
+        input.value =
+          "每回合必须在顶级 thinking 字段内先用中文快速自检当前群聊语境与说话对象，随后在 groupMessages 中输出完全符合真人QQ群聊习惯的自然短句。严禁长篇大论说教或写小作文，保持生活化、口语化与真实人设感！";
+      }
+      sel.value = "";
+      this.onCurrentGroupFieldChange();
+      this.notify("已填入尾部提示词预设并保存");
+    },
+
+    resetTailPromptDefault() {
+      const input = document.getElementById("qqbot-tail-prompt-input");
+      const enSel = document.getElementById("qqbot-tail-enabled-select");
+      if (input) input.value = getDefaultTailPrompt();
+      if (enSel) enSel.value = "true";
+      this.onCurrentGroupFieldChange();
+      this.notify("已恢复默认地狱尾部提示词并保存");
     },
 
     async onGroupSelectChange() {
@@ -5509,6 +5572,10 @@ function createExpenditureLineChart(data, daysInMonth) {
         if (aiPer !== null) g.aiPersona = aiPer.trim();
         const cusPr = getVal("qqbot-custom-prompt-input");
         if (cusPr !== null) g.customPrompt = cusPr.trim();
+        const tailEn = getVal("qqbot-tail-enabled-select");
+        if (tailEn !== null) g.tailPromptEnabled = tailEn === "true";
+        const tailPr = getVal("qqbot-tail-prompt-input");
+        if (tailPr !== null) g.tailPrompt = tailPr.trim();
         const wbSel = getVal("qqbot-worldbook-select");
         if (wbSel !== null) g.worldBookId = wbSel;
         const modSel = getVal("qqbot-module-select");
@@ -6454,8 +6521,10 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
 注意：
 1. 如果好友发送了图片或表情包，原图已经直接传给了你，请直接看图并结合画面内容自然回应，绝不要说看不到图片。
 2. 说话风格必须像真人在QQ小窗日常聊天一样自然简短、生活化，每次回复1到2句短话即可，不要长篇大论，不要喋喋不休说个不停。
+3. 请先在 thinking 字段中简短梳理好友意图与回复思路（系统会自动剥离 thinking 字段并存入本地磁盘，绝不会发给好友），再在 messages 数组中填写发给好友的干净回复正文。
 请输出严格JSON格式：
 {
+  "thinking": "简短思考过程（系统会自动剥离，不会发送到QQ）",
   "messages": [
     "发送给该好友小窗的第1条简短回复"
   ]
@@ -6467,14 +6536,42 @@ ${userPersonaText ? `【该好友专属备注与关系设定】\n${userPersonaTe
         false,
         activeVisionUrls,
       );
-      const parsed = this.extractJsonObject(raw);
+      const tagStripped = this.stripThinkingTags(raw);
+      const parsed = this.extractJsonObject(tagStripped.cleaned || raw);
+      const collectedThoughts = [];
+      if (this.lastApiReasoningContent) {
+        collectedThoughts.push(this.lastApiReasoningContent);
+      }
+      if (tagStripped.extractedThoughts) {
+        collectedThoughts.push(tagStripped.extractedThoughts);
+      }
+      if (parsed && typeof parsed.thinking === "string" && parsed.thinking.trim()) {
+        collectedThoughts.push(parsed.thinking.trim());
+      }
+      let outMsgs = [];
       if (parsed && Array.isArray(parsed.messages) && parsed.messages.length > 0) {
-        return parsed.messages;
+        outMsgs = parsed.messages;
+      } else if (parsed && Array.isArray(parsed.groupMessages)) {
+        outMsgs = parsed.groupMessages;
+      } else {
+        outMsgs = [String(tagStripped.cleaned || raw || "").trim() || "我在呢。"];
       }
-      if (parsed && Array.isArray(parsed.groupMessages)) {
-        return parsed.groupMessages;
+      const cleanMsgs = outMsgs
+        .map((m) => this.stripThinkingTags(String(m || "")).cleaned.trim())
+        .filter(Boolean);
+      const finalThoughtText = collectedThoughts.join("\n\n").trim();
+      if (finalThoughtText || raw) {
+        this.saveThoughtRecordToDisk(this.currentGroupId || "private", {
+          timestamp: Date.now(),
+          mode: "private",
+          sceneType: `小窗:${dispName}`,
+          thinking: finalThoughtText || "（本轮未单独输出思维链字段）",
+          groupMessages: cleanMsgs,
+          privateMessages: [],
+          rawResponse: String(raw || "").slice(0, 10000),
+        }).catch(() => {});
       }
-      return [String(raw || "").trim() || "我在呢。"];
+      return cleanMsgs.length > 0 ? cleanMsgs : ["我在呢。"];
     },
 
     appendStaticMessage(gid, msgObj) {
@@ -7320,6 +7417,214 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
       return `当前处于【日常OC模式 · 按需自动生图】：\n${ocRuleText}`;
     },
 
+    stripThinkingTags(str) {
+      let text = String(str || "");
+      const extracted = [];
+      const tagRegexes = [
+        /<think>([\s\S]*?)<\/think>/gi,
+        /<thinking>([\s\S]*?)<\/thinking>/gi,
+        /【思维链】([\s\S]*?)【\/思维链】/gi,
+        /\[thinking\]([\s\S]*?)\[\/thinking\]/gi,
+      ];
+      for (const rgx of tagRegexes) {
+        text = text.replace(rgx, (_, inner) => {
+          if (inner && String(inner).trim()) {
+            extracted.push(String(inner).trim());
+          }
+          return "";
+        });
+      }
+      return {
+        cleaned: text.trim(),
+        extractedThoughts: extracted.join("\n\n").trim(),
+      };
+    },
+
+    async saveThoughtRecordToDisk(groupId, record) {
+      const gid = String(groupId || this.currentGroupId || "default").trim();
+      const safeGid = gid.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const entry = {
+        id: "th_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        groupId: gid,
+        timestamp: record.timestamp || Date.now(),
+        mode: record.mode || "trpg",
+        sceneType: record.sceneType || "",
+        thinking: String(record.thinking || ""),
+        groupMessages: Array.isArray(record.groupMessages)
+          ? record.groupMessages
+          : [],
+        privateMessages: Array.isArray(record.privateMessages)
+          ? record.privateMessages
+          : [],
+        rawResponse: String(record.rawResponse || ""),
+      };
+
+      // 1. 尝试写入后端磁盘接口
+      try {
+        const res = await fetch(
+          `/api/qqbot/group/${encodeURIComponent(gid)}/thoughts`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(entry),
+          },
+        );
+        if (res.ok) return true;
+      } catch (_) {}
+
+      // 2. Termux 本地磁盘归档服务直写（不占浏览器内存）
+      try {
+        const fileUrl = `http://127.0.0.1:8765/qqbot_thoughts_${safeGid}.json`;
+        let list = [];
+        const getRes = await fetch(fileUrl);
+        if (getRes.ok) {
+          const parsed = await getRes.json();
+          if (Array.isArray(parsed)) list = parsed;
+        }
+        list.unshift(entry);
+        if (list.length > 30) list = list.slice(0, 30);
+        await fetch(fileUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(list),
+        });
+        return true;
+      } catch (_) {}
+      return false;
+    },
+
+    async loadThoughtRecordsFromDisk(groupId) {
+      const gid = String(groupId || this.currentGroupId || "default").trim();
+      const safeGid = gid.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+      try {
+        const res = await fetch(
+          `/api/qqbot/group/${encodeURIComponent(gid)}/thoughts?limit=30`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.thoughts) && data.thoughts.length > 0) {
+            return data.thoughts;
+          }
+        }
+      } catch (_) {}
+
+      try {
+        const fileUrl = `http://127.0.0.1:8765/qqbot_thoughts_${safeGid}.json`;
+        const getRes = await fetch(fileUrl);
+        if (getRes.ok) {
+          const parsed = await getRes.json();
+          if (Array.isArray(parsed)) return parsed.slice(0, 30);
+        }
+      } catch (_) {}
+
+      return [];
+    },
+
+    async openThoughtViewerModal() {
+      const modal = document.getElementById("qqbot-thought-viewer-modal");
+      if (!modal) return;
+      modal.style.display = "flex";
+      await this.refreshThoughtViewerModal();
+    },
+
+    closeThoughtViewerModal() {
+      const modal = document.getElementById("qqbot-thought-viewer-modal");
+      const listEl = document.getElementById("qqbot-thought-viewer-list");
+      if (listEl) {
+        // 关闭时立即清空节点，彻底释放浏览器内存
+        listEl.innerHTML = "";
+      }
+      if (modal) {
+        modal.style.display = "none";
+      }
+    },
+
+    async refreshThoughtViewerModal() {
+      const listEl = document.getElementById("qqbot-thought-viewer-list");
+      const subEl = document.getElementById("qqbot-thought-modal-subtitle");
+      if (!listEl) return;
+      const g = this.getCurrentGroupConfig();
+      const gid = (g && g.groupId) || this.currentGroupId || "default";
+      const gName = (g && g.groupName) || gid;
+      if (subEl) {
+        subEl.textContent = `当前群聊：${gName} · 仅存本地磁盘与按需读取，关闭窗口即释放内存`;
+      }
+      listEl.innerHTML =
+        '<div style="font-size: 12px; color: var(--text-secondary); padding: 14px; text-align: center;">正在从本地磁盘读取思维链与回复原稿...</div>';
+
+      const records = await this.loadThoughtRecordsFromDisk(gid);
+      if (!Array.isArray(records) || records.length === 0) {
+        listEl.innerHTML =
+          '<div style="font-size: 12px; color: var(--text-secondary); padding: 18px; text-align: center; background: var(--secondary-bg); border-radius: 12px; border: 1px dashed var(--border-color);">当前群聊暂无已记录的思维链原稿。当AI生成带思维链的回复后，会自动剥离思维链并存盘于此。</div>';
+        return;
+      }
+
+      listEl.innerHTML = records
+        .map((rec, idx) => {
+          const dt = new Date(rec.timestamp || Date.now());
+          const timeStr = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}:${String(dt.getSeconds()).padStart(2, "0")}`;
+          const modeLabel =
+            rec.mode === "trpg"
+              ? "跑团KP"
+              : rec.mode === "private"
+                ? "好友小窗"
+                : "日常OC";
+          const cleanMsgsText = Array.isArray(rec.groupMessages)
+            ? rec.groupMessages.join("\n")
+            : "";
+          const privMsgsText =
+            Array.isArray(rec.privateMessages) && rec.privateMessages.length > 0
+              ? rec.privateMessages
+                  .map((p) => `[私发 ${p.targetSlot || ""}] ${p.text || ""}`)
+                  .join("\n")
+              : "";
+          return `
+            <div style="padding: 10px 12px; border-radius: 12px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">#${idx + 1} · ${this.escapeHtml(modeLabel)} ${rec.sceneType ? "· " + this.escapeHtml(rec.sceneType) : ""}</span>
+                <span style="font-size: 11px; color: var(--text-secondary);">${this.escapeHtml(timeStr)}</span>
+              </div>
+              <div>
+                <div style="font-size: 11px; font-weight: 700; color: var(--accent-color); margin-bottom: 4px;">已剥离的思维链过程 · 未发往QQ</div>
+                <pre style="margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color); font-size: 11.5px; line-height: 1.55; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto;">${this.escapeHtml(rec.thinking || "无思维链内容")}</pre>
+              </div>
+              <div>
+                <div style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px;">剥离后实际发往QQ的干净正文</div>
+                <pre style="margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color); font-size: 11.5px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; word-break: break-word;">${this.escapeHtml(cleanMsgsText || "无公屏正文")}${privMsgsText ? "\n" + this.escapeHtml(privMsgsText) : ""}</pre>
+              </div>
+              <details style="font-size: 11px; color: var(--text-secondary);">
+                <summary style="cursor: pointer; user-select: none; font-weight: 600;">展开查看本次AI返回的完整JSON原稿</summary>
+                <pre style="margin: 6px 0 0 0; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color); font-size: 11px; line-height: 1.45; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto;">${this.escapeHtml(rec.rawResponse || "")}</pre>
+              </details>
+            </div>
+          `;
+        })
+        .join("");
+    },
+
+    async clearThoughtRecords() {
+      const g = this.getCurrentGroupConfig();
+      const gid = (g && g.groupId) || this.currentGroupId || "default";
+      const safeGid = String(gid).replace(/[^a-zA-Z0-9_-]/g, "_");
+      try {
+        await fetch(`/api/qqbot/group/${encodeURIComponent(gid)}/thoughts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clear: true }),
+        });
+      } catch (_) {}
+      try {
+        await fetch(`http://127.0.0.1:8765/qqbot_thoughts_${safeGid}.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([]),
+        });
+      } catch (_) {}
+      await this.refreshThoughtViewerModal();
+      this.notify("已清空本群本地磁盘上的思维链记录");
+    },
+
     async runMainApiResponder(
       gCfg,
       messages,
@@ -7360,33 +7665,117 @@ ${memberRoster || "按群内显示的实时备注名字区分每位群成员"}
         ? "当前为跑团守秘人KP带团模式：正剧剧情与环境描写请保持沉浸、克制、有画面感；严肃认真带团期间绝对禁止发送表情包，stickerName 必须留空字符串。如果群友场外提问规则，则自然简洁地解答。"
         : "当前为日常陪聊OC群友模式：请完全模仿真人在QQ群聊天的说话习惯，口语化、简短自然、有生活气息，不要像写文章或做演讲一样长篇大论，不要一直在那滔滔不绝讲话；通常1到2条简短气泡即可，每条一两句话，点到为止。表情包极少使用，大多数时候 stickerName 留空字符串，仅在情绪非常强烈或特别搞笑时偶尔发一张，并且正文中绝对不要写出任何类似 表情包名称 的文字描述。";
 
-      const sysPrompt = `你是运行在真实QQ群中的${isTrpg ? "跑团守秘人KP与NPC演绎者" : "真人感OC群友"}。
-请严格遵守以下核心准则：
-1. 称呼与人设对应：上下文中每位群友都以其实时备注名字显示，请严格按照【本群成员实时名字与专属人设名册】来认识每一位群友、记住他们的设定与关系，直接称呼他们的名字或角色名。
-2. 真人说话习惯与表情包纪律：${styleGuideline}
-3. 原图直传看图：当群友发送图片或表情包时，原图画面已经直接附带在本次请求中传给了你。请直接看图并结合画面细节自然回应，绝不要说自己看不到图片。
-4. 适度引用回复：quoteMessageId 默认必须留空字符串 ""！当群里只有1个人在说话、或者你回应的就是最后一条消息时，所有人都知道你在回他，绝对不要填 quoteMessageId。只有当3人以上同时交叉说话非常混乱、且你回的那句话已经被刷过去时，才填入对应消息ID。
-5. 单人线与秘密小窗：如果某位群友触发了专属HO秘密、高难侦查独享情报、发狂幻觉或单人线剧情，在群里只发公开可见的表象，同时把专属秘密写进 privateMessages 数组中，并在 targetSlot 中填入该群友的实时名字或HO代号，系统会自动通过QQ小窗单独私发给他。
-6. 【NovelAI生图指令与末尾代码规范】：
-${naiRule}
+      // 组装与主聊天群聊完全对齐的模块化系统提示词（严格排除：音乐模块、道具模块、战斗模块、地图模块、系统状态栏模块）
+      const promptSections = [];
 
-【AI自身人设与身份设定】
-${personaText}
+      // 1. KP模式专属开头话术（keeperPrefixInstruction）
+      if (isTrpg) {
+        promptSections.push(
+          formatPromptSectionBlock("带团", getKeeperPrefixInstruction()),
+        );
+      }
 
-${gCfg.customPrompt ? `【带团与聊天要求规范】\n${gCfg.customPrompt}\n` : ""}
-【当前启用的思维链条目】
-${thoughtText}
+      // 2. 思维链模块（强制在 JSON 顶级 thinking 字段内用中文逐条思考，发送前由系统自动剥离并归档本地磁盘）
+      const thoughtSectionBody = [
+        "---------- 【思维链填写规范与顶级字段代码定义】 ----------",
+        "你必须在返回的 JSON 对象的第一个顶级字段 `\"thinking\"` 中，使用中文严格按照下方启用的思维链条目与规则进行一步步深度思考与自检！",
+        "重要机制说明：系统收到你的 JSON 回复后，会自动将 `\"thinking\"` 字段（以及任何 `<think>...</think>` 标签）100%剥离并单独保存到本地磁盘供用户随时通过控制台「思维」按钮查阅，绝不会把 `\"thinking\"` 发送到QQ群里！因此请在 `\"thinking\"` 中尽情展开详尽完整的中文思维链推导，而 `\"groupMessages\"` 数组中只允许存放剥离思维链后的纯净台词与剧情正文，严禁在 `\"groupMessages\"` 正文中夹带任何思考过程！",
+        "---------- 【思维链头部、通用规则与已启用条目】 ----------",
+        thoughtText,
+      ].join("\n");
+      promptSections.push(formatPromptSectionBlock("思维链", thoughtSectionBody));
 
-${playerCardsContext ? `【本群成员实时名字与专属人设名册】\n${playerCardsContext}\n` : ""}
-${worldbookText ? `【世界书设定】\n${worldbookText}\n` : ""}
-${moduleContext.text ? `【当前挂载跑团模组与KP真相】\n${moduleContext.text}\n` : ""}
-${moduleContext.imageTitles.length > 0 ? `【可用模组插图列表】\n${moduleContext.imageTitles.join("、")}\n若本轮剧情恰好揭示其中某张模组插图或地图，可在 moduleImageTitle 中填入对应标题。\n` : ""}
-${!isTrpg && stickerNames.length > 0 ? `【可用表情包名称】\n${stickerNames.join("、")}\n绝大多数回合请将 stickerName 留空 ""，仅在气氛特别合适时偶尔填入一个名称，且绝不在 groupMessages 正文中写出表情文字。\n` : ""}
+      // 3. 格式与指令规范
+      const formatAndRulesBody = [
+        `你是运行在真实QQ群中的${isTrpg ? "跑团守秘人KP与NPC演绎者" : "真人感OC群友"}。`,
+        `1. 称呼与人设对应：上下文中每位群友都以其实时备注名字显示，请严格按照【群成员人设】来认识每一位群友、记住他们的设定与关系，直接称呼他们的名字或角色名。`,
+        `2. 真人说话习惯与表情包纪律：${styleGuideline}`,
+        `3. 原图直传看图：当群友发送图片或表情包时，原图画面已经直接附带在本次请求中传给了你。请直接看图并结合画面细节自然回应，绝不要说自己看不到图片。`,
+        `4. 适度引用回复：quoteMessageId 默认必须留空字符串 ""！当群里只有1个人在说话、或者你回应的就是最后一条消息时，所有人都知道你在回他，绝对不要填 quoteMessageId。只有当3人以上同时交叉说话非常混乱、且你回的那句话已经被刷过去时，才填入对应消息ID。`,
+      ].join("\n");
+      promptSections.push(formatPromptSectionBlock("格式与指令", formatAndRulesBody));
 
-请只输出严格的JSON格式，结构如下：
+      // 4. 无痕私密对话规范（单人线与小窗秘密）
+      const privateRuleBody =
+        "如果某位群友触发了专属HO秘密、高难侦查独享情报、发狂幻觉或单人线剧情，在群聊公屏 groupMessages 中只发公开可见的表象，绝不能在公屏泄露秘密或提及“已私聊你”；同时把专属秘密写进 privateMessages 数组中，并在 targetSlot 中填入该群友的实时名字或HO代号，系统会自动通过QQ小窗单独私发给他。";
+      promptSections.push(
+        formatPromptSectionBlock("无痕私密对话规范", privateRuleBody),
+      );
+
+      // 5. 我的人设与AI角色设定 + 群成员人设
+      const personaSectionBody = [
+        "【AI自身人设与身份设定】",
+        personaText,
+        gCfg.customPrompt
+          ? `\n【带团与聊天要求规范】\n${gCfg.customPrompt}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      promptSections.push(
+        formatPromptSectionBlock("我的人设与AI角色设定", personaSectionBody),
+      );
+
+      if (playerCardsContext) {
+        promptSections.push(
+          formatPromptSectionBlock(
+            "群成员人设",
+            `以下是本群成员的实时名字、HO定位、角色卡属性技能与专属人设名册：\n${playerCardsContext}`,
+          ),
+        );
+      }
+
+      // 6. 世界书设定
+      if (worldbookText) {
+        promptSections.push(formatPromptSectionBlock("世界书", worldbookText));
+      }
+
+      // 7. 模组设定（含保密总则与插图规则）
+      if (moduleContext.text) {
+        const modParts = [
+          "---------- 【模组保密总则】 ----------",
+          "【最高机密警告】：以下模组内容（包括背景真相、幕后黑手、未触发的剧情事件、隐藏NPC动机与暗线数据）仅供你（作为KP/GM）在幕后统筹全局与合理引导剧情使用！",
+          "严禁在公屏对话或旁白中直接向调查员剧透尚未通过调查或检定获取的真相！所有线索必须通过调查员的实际行动、合理交互或技能检定成功后才能逐步揭晓。",
+          moduleContext.text,
+        ];
+        if (moduleContext.imageTitles.length > 0) {
+          modParts.push(
+            "---------- 【模组插图原位注入规则】 ----------",
+            `当前可用模组插图列表：${moduleContext.imageTitles.join("、")}`,
+            "当剧情推进到需要向玩家展示上述某张特定的模组线索图、地图、NPC立绘或现场CG时，请在返回的 JSON 中的 `moduleImageTitle` 字段填入对应的完整插图标题，系统会自动将该张模组原图发送到QQ群。",
+          );
+        }
+        promptSections.push(
+          formatPromptSectionBlock("模组", modParts.join("\n\n")),
+        );
+      }
+
+      // 8. 跑团模式下的检定与属性引导规范（不含音乐、道具、战斗、地图、系统状态栏模块）
+      if (isTrpg) {
+        const cocDiceRule =
+          "当调查员执行具有风险、不确定性或需要专业技能的行动（如侦查、图书馆查阅、聆听、心理学、潜行、交涉、理智检定SAN Check等）时，请根据下方【群成员人设】中绑定的角色卡属性与技能数值，在叙事中自然要求玩家进行对应技能检定，或根据玩家在群里发出的掷骰结果推进成功/失败分支剧情。";
+        promptSections.push(
+          formatPromptSectionBlock("检定与角色卡联动规范", cocDiceRule),
+        );
+      }
+
+      // 9. NovelAI生图与表情包规范
+      const mediaParts = [`【NovelAI生图指令与末尾代码规范】\n${naiRule}`];
+      if (!isTrpg && stickerNames.length > 0) {
+        mediaParts.push(
+          `【可用表情包名称】\n${stickerNames.join("、")}\n绝大多数回合请将 stickerName 留空 ""，仅在气氛特别合适时偶尔填入一个名称，且绝不在 groupMessages 正文中写出表情文字。`,
+        );
+      }
+      promptSections.push(
+        formatPromptSectionBlock("生图与表情规范", mediaParts.join("\n\n")),
+      );
+
+      // 10. JSON输出格式总纲
+      const jsonSchemaInstruction = `请只输出严格的JSON格式，结构如下（第一个字段必须是 "thinking"）：
 {
+  "thinking": "在此处用中文严格按照【思维链】模块的各个条目一步步完成思考与自检（系统收到后会自动剥离并存入本地磁盘，绝不会发到QQ群）",
   "groupMessages": [
-    "发送到QQ群的第1条消息文本"
+    "剥离思维链后实际发送到QQ群的第1条干净消息文本"
   ],
   "quoteMessageId": "",
   "privateMessages": [
@@ -7399,6 +7788,23 @@ ${!isTrpg && stickerNames.length > 0 ? `【可用表情包名称】\n${stickerNa
   "moduleImageTitle": "",
   "naiPrompt": "按照上方NovelAI生图指令填写的英文生图Tag代码串，若不生图则留空"
 }`;
+      promptSections.push(jsonSchemaInstruction);
+
+      const sysPrompt = promptSections.filter(Boolean).join("\n");
+
+      // 组装每回合尾部注入提示词（同地狱模块末尾要求，支持在群聊控制台随时开关与修改）
+      const tailEnabled = gCfg.tailPromptEnabled !== false;
+      const rawTailPrompt =
+        gCfg.tailPrompt !== undefined && gCfg.tailPrompt !== null
+          ? String(gCfg.tailPrompt).trim()
+          : getDefaultTailPrompt();
+      const tailBlock =
+        tailEnabled && rawTailPrompt
+          ? formatPromptSectionBlock(
+              "每回合尾部强制要求",
+              `${rawTailPrompt}\n（提醒：请先在 JSON 顶级 "thinking" 字段中完成中文思维链自检，再输出干净的 "groupMessages" 正文！）`,
+            )
+          : "";
 
       const userPrompt = `【本地双层滚动记忆账本】
 ${memory.summaryText || "尚无归档记忆"}
@@ -7410,7 +7816,7 @@ ${memory.summaryText || "尚无归档记忆"}
 
 【最近群聊完整上下文】
 ${transcript}
-
+${tailBlock}
 请生成本轮响应JSON：`;
 
       const raw = await this.callBotAI(
@@ -7419,8 +7825,55 @@ ${transcript}
         false,
         activeVisionUrls,
       );
-      const parsed = this.extractJsonObject(raw);
+
+      // 1. 提取并剥离所有可能的思维链标签与字段
+      const tagStripped = this.stripThinkingTags(raw);
+      const parsed = this.extractJsonObject(tagStripped.cleaned || raw);
+      const collectedThoughts = [];
+      if (this.lastApiReasoningContent) {
+        collectedThoughts.push(this.lastApiReasoningContent);
+      }
+      if (tagStripped.extractedThoughts) {
+        collectedThoughts.push(tagStripped.extractedThoughts);
+      }
+
+      if (parsed && typeof parsed === "object") {
+        const jsonThought =
+          parsed.thinking ||
+          parsed.thought ||
+          parsed.thoughtChain ||
+          parsed.reasoning ||
+          "";
+        if (typeof jsonThought === "string" && jsonThought.trim()) {
+          collectedThoughts.push(jsonThought.trim());
+        }
+        delete parsed.thinking;
+        delete parsed.thought;
+        delete parsed.thoughtChain;
+        delete parsed.reasoning;
+      }
+
+      const finalThoughtText = collectedThoughts.join("\n\n").trim();
+
       if (parsed && Array.isArray(parsed.groupMessages)) {
+        // 确保每条群消息与私聊消息内部也不残留任何 <think> 标签或 NAI 标签
+        parsed.groupMessages = parsed.groupMessages
+          .map((mText) => {
+            const cleanedMsg = this.stripThinkingTags(String(mText || "")).cleaned;
+            return cleanedMsg;
+          })
+          .filter(Boolean);
+
+        if (Array.isArray(parsed.privateMessages)) {
+          parsed.privateMessages = parsed.privateMessages.map((pm) => {
+            if (!pm || typeof pm !== "object") return pm;
+            return {
+              ...pm,
+              text: this.stripThinkingTags(String(pm.text || "")).cleaned,
+            };
+          });
+        }
+
         if (!parsed.naiPrompt) {
           for (let i = 0; i < parsed.groupMessages.length; i++) {
             const mText = String(parsed.groupMessages[i] || "");
@@ -7433,16 +7886,56 @@ ${transcript}
             }
           }
         }
+
+        // 在控制台留下一行极简摘要，并将完整思维链与原稿写入本地磁盘（绝不塞入浏览器内存或刷屏控制台）
+        if (finalThoughtText) {
+          this.appendDebugLog(
+            "思维链",
+            `已生成并剥离思维链 ${finalThoughtText.length} 字，原稿已存本地磁盘，点「思维」按钮可查`,
+          );
+        }
+        this.saveThoughtRecordToDisk(gCfg.groupId, {
+          timestamp: Date.now(),
+          mode: gCfg.mode || "trpg",
+          sceneType: judgeResult.sceneType || "常规互动",
+          thinking: finalThoughtText || "（本轮模型未返回独立 thinking 字段）",
+          groupMessages: parsed.groupMessages,
+          privateMessages: parsed.privateMessages || [],
+          rawResponse: String(raw || "").slice(0, 12000),
+        }).catch(() => {});
+
         return parsed;
       }
 
-      let rawText = String(raw || "").trim() || "收到。";
+      let rawText =
+        String(tagStripped.cleaned || raw || "").trim() || "收到。";
+      // 若模型未按标准JSON返回，尝试剥离裸露的 "thinking": "..." 片段
+      rawText = rawText
+        .replace(/^[\s\S]*?"groupMessages"\s*:\s*\[/i, "[")
+        .trim();
       let extractedNai = "";
       const naiTagMatch = rawText.match(/\[NAI\s*:\s*([^\]]+)\]/i);
       if (naiTagMatch && naiTagMatch[1]) {
         extractedNai = naiTagMatch[1].trim();
         rawText = rawText.replace(/\[NAI\s*:\s*[^\]]+\]/gi, "").trim();
       }
+
+      if (finalThoughtText) {
+        this.appendDebugLog(
+          "思维链",
+          `已生成并剥离思维链 ${finalThoughtText.length} 字，原稿已存本地磁盘，点「思维」按钮可查`,
+        );
+      }
+      this.saveThoughtRecordToDisk(gCfg.groupId, {
+        timestamp: Date.now(),
+        mode: gCfg.mode || "trpg",
+        sceneType: judgeResult.sceneType || "常规互动",
+        thinking: finalThoughtText || "（非标准JSON返回，已做标签剥离）",
+        groupMessages: [rawText],
+        privateMessages: [],
+        rawResponse: String(raw || "").slice(0, 12000),
+      }).catch(() => {});
+
       return {
         groupMessages: [rawText],
         quoteMessageId: "",
@@ -7565,8 +8058,8 @@ ${transcript}
       const groupMsgs = Array.isArray(replyPack.groupMessages)
         ? replyPack.groupMessages
             .map((t) =>
-              String(t || "")
-                .replace(/\[表情\s*[:：][^\]]*\]/gi, "")
+              this.stripThinkingTags(String(t || ""))
+                .cleaned.replace(/\[表情\s*[:：][^\]]*\]/gi, "")
                 .replace(/【表情\s*[:：][^】]*】/gi, "")
                 .trim(),
             )
@@ -8724,13 +9217,14 @@ ${transcript}
         throw new Error(`API HTTP ${res.status}: ${errText.slice(0, 120)}`);
       }
       const data = await res.json();
-      return (
-        (data.choices &&
-          data.choices[0] &&
-          data.choices[0].message &&
-          data.choices[0].message.content) ||
-        ""
-      );
+      const msgObj =
+        (data.choices && data.choices[0] && data.choices[0].message) || {};
+      if (!useSubApi) {
+        this.lastApiReasoningContent = String(
+          msgObj.reasoning_content || msgObj.thinking || "",
+        ).trim();
+      }
+      return msgObj.content || "";
     },
 
     extractJsonObject(raw) {
