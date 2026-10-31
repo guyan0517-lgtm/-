@@ -1549,10 +1549,11 @@ ${worldviewContext}
         let totalComments = 0;
         for (const postData of newPostsData) {
           // --- 3. 保存帖子时，也保存AI原创的分类 ---
+          const rawPostContent = sanitizeBookshelfPunctuation(postData.content || "");
           const newPost = {
             groupId: groupId,
             title: sanitizeBookshelfPunctuation(postData.title || ""),
-            content: sanitizeBookshelfPunctuation(postData.content || ""),
+            content: typeof window.applyCustomRegexRules === "function" ? window.applyCustomRegexRules(rawPostContent, "bookshelf") : rawPostContent,
             author: postData.author,
             timestamp: Date.now() + totalPosts,
             categories: postData.categories || [], // 保存原创分类
@@ -1772,9 +1773,12 @@ ${contextInstructions || "- 自由发挥，保持连载节奏，注重人物心�
         parsed.story ||
         parsed.content ||
         "这一章的正文生成失败，请重试。";
-      const chapterContent = sanitizeBookshelfPunctuation(
+      const sanitizedFirstChapter = sanitizeBookshelfPunctuation(
         rawChapterContent.replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim()
       );
+      const chapterContent = typeof window.applyCustomRegexRules === "function"
+        ? window.applyCustomRegexRules(sanitizedFirstChapter, "bookshelf")
+        : sanitizedFirstChapter;
       const chapterSummary = sanitizeBookshelfPunctuation(parsed.chapterSummary || "");
       const baseCategories = Array.isArray(parsed.categories)
         ? parsed.categories
@@ -2749,10 +2753,11 @@ ${JSON.stringify(publicFigures, null, 2)}
         let totalComments = 0;
         for (const postData of newPostsData) {
           // --- ▼▼▼ 【核心新增】保存分类数据 ---
+          const rawEntPostContent = sanitizeBookshelfPunctuation(postData.content || "");
           const newPost = {
             groupId: groupId,
             title: sanitizeBookshelfPunctuation(postData.title || ""),
-            content: sanitizeBookshelfPunctuation(postData.content || ""),
+            content: typeof window.applyCustomRegexRules === "function" ? window.applyCustomRegexRules(rawEntPostContent, "bookshelf") : rawEntPostContent,
             author: postData.author,
             timestamp: Date.now() + totalPosts,
             categories: postData.categories || [], // 保存分类
@@ -2886,10 +2891,11 @@ ${JSON.stringify(publicFigures, null, 2)}
 
       if (postData.title && postData.content) {
         // --- ▼▼▼ 【核心新增】保存分类数据 ---
+        const rawDreamContent = sanitizeBookshelfPunctuation(postData.content || "");
         const newPost = {
           groupId: groupId,
           title: sanitizeBookshelfPunctuation(postData.title || ""),
-          content: sanitizeBookshelfPunctuation(postData.content || ""),
+          content: typeof window.applyCustomRegexRules === "function" ? window.applyCustomRegexRules(rawDreamContent, "bookshelf") : rawDreamContent,
           author: postingChar.name,
           timestamp: Date.now(),
           categories: postData.categories || [], // 保存分类
@@ -3192,9 +3198,12 @@ ${customPromptRequirement}
         parsed.story ||
         parsed.content ||
         "本章生成失败，请重试。";
-      const chapterContent = sanitizeBookshelfPunctuation(
+      const sanitizedNextChapter = sanitizeBookshelfPunctuation(
         rawChapterContent.replace(/\n*【下一章生成指令\/提示词】[\s\S]*$/, "").trim()
       );
+      const chapterContent = typeof window.applyCustomRegexRules === "function"
+        ? window.applyCustomRegexRules(sanitizedNextChapter, "bookshelf")
+        : sanitizedNextChapter;
       const chapterSummary = sanitizeBookshelfPunctuation(parsed.chapterSummary || "");
       const baseCategories = Array.isArray(parsed.categories)
         ? parsed.categories

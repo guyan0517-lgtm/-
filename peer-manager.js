@@ -4628,6 +4628,24 @@
         senderAvatarFrame: data.senderAvatarFrame || incomingRaw.senderAvatarFrame || "",
         timestamp: incomingRaw.timestamp || data.timestamp || Date.now()
       };
+      if (
+        !msgToInsert.isPeerUserMessage &&
+        !msgToInsert.senderPeerCode &&
+        msgToInsert.role === "assistant" &&
+        msgToInsert.type !== "system_status" &&
+        msgToInsert.type !== "inventory_card" &&
+        msgToInsert.type !== "naiimag" &&
+        !msgToInsert._regexApplied &&
+        typeof window.applyCustomRegexRules === "function"
+      ) {
+        if (typeof msgToInsert.content === "string" && msgToInsert.content) {
+          msgToInsert.content = window.applyCustomRegexRules(msgToInsert.content, "chat");
+        }
+        if (msgToInsert.type === "quote_reply" && typeof msgToInsert.reply_content === "string" && msgToInsert.reply_content) {
+          msgToInsert.reply_content = window.applyCustomRegexRules(msgToInsert.reply_content, "chat");
+        }
+        msgToInsert._regexApplied = true;
+      }
 
       const applyNaiMsgUpdateIfPresent = (list) => {
         if (!Array.isArray(list) || msgToInsert.type !== "naiimag") return null;

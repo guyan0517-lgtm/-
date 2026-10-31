@@ -1062,9 +1062,62 @@
             >
 
             <span class="action-btn" id="add-world-book-btn">+</span>
+
+            <span
+              class="action-btn"
+              id="import-regex-btn"
+              style="display: none"
+              title="导入正则"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </span>
+
+            <span
+              class="action-btn"
+              id="add-regex-btn"
+              style="display: none"
+              title="新增正则"
+              >+</span
+            >
           </div>
         </div>
+        <div class="wb-regex-top-tabs">
+          <button
+            type="button"
+            class="wb-regex-tab-btn active"
+            id="wb-top-tab-worldbook"
+            onclick="if(window.switchWorldBookTopTab){window.switchWorldBookTopTab('worldbook');}"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            <span>世界书</span>
+          </button>
+          <button
+            type="button"
+            class="wb-regex-tab-btn"
+            id="wb-top-tab-regex"
+            onclick="if(window.switchWorldBookTopTab){window.switchWorldBookTopTab('regex');}"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            <span>正则</span>
+          </button>
+        </div>
+        <input type="file" id="regex-file-import-input" accept=".txt,.json" multiple hidden />
         <div id="world-book-list"></div>
+        <div id="regex-rules-list" style="display: none"></div>
       </div>
 
       <div id="world-book-editor-screen" class="screen">
@@ -2443,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -9359,6 +9412,153 @@
         </div>
         <div class="modal-footer">
           <button class="cancel" id="close-member-counter-history-btn">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="ai-foreshadowing-modal" class="modal">
+      <div class="modal-content" style="max-width: 350px;">
+        <div class="modal-header">
+          <div class="foreshadow-header-bar">
+            <div class="foreshadow-char-meta">
+              <img id="foreshadow-char-avatar" class="foreshadow-char-avatar" src="" alt="头像" />
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left;">
+                <span id="foreshadow-char-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">伏笔</span>
+                <span style="font-size: 11px; color: var(--text-secondary);">尾部单次附带 · 控制台隐藏</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">开关</span>
+              <label class="toggle-switch" style="margin: 0; flex-shrink: 0;">
+                <input type="checkbox" id="foreshadow-enable-switch" />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px;">
+          <div id="foreshadow-locked-view" class="foreshadow-lock-card">
+            <div class="foreshadow-lock-icon-circle">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">当前内容默认隐藏</div>
+            <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">包含角色跨回合未揭晓的短期意图与剧情暗线伏笔，点击下方按钮解锁查看</div>
+            <button type="button" class="moe-btn" id="foreshadow-unlock-btn" style="height: 32px; padding: 0 18px; font-size: 12.5px; border-radius: 9px; width: auto;">解锁</button>
+          </div>
+
+          <div id="foreshadow-unlocked-view" style="display: none; flex-direction: column; gap: 10px;">
+            <div class="foreshadow-section-card">
+              <div class="foreshadow-section-head">
+                <span class="foreshadow-section-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <span>短期</span>
+                </span>
+                <select id="foreshadow-short-preset-select" class="moe-input" style="width: 96px; flex-shrink: 0; padding: 0 4px; font-size: 11.5px; height: 26px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; cursor: pointer;">
+                  <option value="">快捷填入</option>
+                  <option value="无">设为无</option>
+                  <option value="手心藏物待下回合揭晓">手心藏物</option>
+                  <option value="真心话保密待回去揭晓">保密真话</option>
+                  <option value="海龟汤汤底：">海龟汤底</option>
+                </select>
+              </div>
+              <textarea id="foreshadow-short-term-input" class="moe-input" rows="3" placeholder="暂无短期未完动作或海龟汤底..." style="width: 100%; font-size: 12.5px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+
+            <div class="foreshadow-section-card">
+              <div class="foreshadow-section-head">
+                <span class="foreshadow-section-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  <span>伏笔</span>
+                </span>
+                <select id="foreshadow-plot-preset-select" class="moe-input" style="width: 96px; flex-shrink: 0; padding: 0 4px; font-size: 11.5px; height: 26px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; cursor: pointer;">
+                  <option value="">快捷填入</option>
+                  <option value="无">设为无</option>
+                  <option value="路人擦肩实则暗中顺走财物">暗中失窃</option>
+                  <option value="异常接触实则种下延迟发作的诅咒">潜伏诅咒</option>
+                  <option value="幕后黑手伪装路人暗中观察">黑手伪装</option>
+                </select>
+              </div>
+              <textarea id="foreshadow-plot-input" class="moe-input" rows="3" placeholder="暂无隐藏暗线或延迟伏笔..." style="width: 100%; font-size: 12.5px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button type="button" class="moe-btn-secondary" id="foreshadow-relock-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">锁定</button>
+              <button type="button" class="moe-btn-secondary" id="foreshadow-clear-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">清空</button>
+              <button type="button" class="moe-btn" id="foreshadow-save-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">保存</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="cancel" id="close-ai-foreshadowing-btn" style="width: 100%;">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="regex-rule-editor-modal" class="modal">
+      <div class="modal-content" style="max-width: 350px;">
+        <div class="modal-header">
+          <span id="regex-editor-modal-title">正则</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px;">
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 12px; margin-bottom: 4px; display: block;">名称</label>
+            <div style="display: flex; gap: 6px; align-items: center; position: relative; z-index: 100;">
+              <select id="regex-preset-select" class="moe-input" style="width: 92px; flex-shrink: 0; padding: 0 4px; font-size: 12px; font-weight: 500; height: 32px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; position: relative; z-index: 100; display: inline-block; vertical-align: middle; box-sizing: border-box; cursor: pointer;">
+                <option value="">常用模板</option>
+                <option value="clean_stars">去星号</option>
+                <option value="clean_empty_lines">去多余空行</option>
+                <option value="en_comma_to_zh">英文逗号</option>
+                <option value="clean_brackets">去圆括号</option>
+              </select>
+              <input type="text" id="regex-name-input" class="moe-input" placeholder="输入规则名称" style="flex: 1; padding: 0 10px; font-size: 12.5px; height: 32px; line-height: 30px; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box;" />
+            </div>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label style="font-size: 12px; margin: 0;">查找</label>
+              <select id="regex-find-preset-select" class="moe-input" style="width: 92px; flex-shrink: 0; padding: 0 4px; font-size: 11.5px; height: 26px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; cursor: pointer;">
+                <option value="">快捷选择</option>
+                <option value="\*+([^*]+)\*+">星号包裹</option>
+                <option value="\n{3,}">连续空行</option>
+                <option value="([\u4e00-\u9fa5]),">中文后英文逗号</option>
+                <option value="（[^）]*）|\([^)]*\)">括号心理描写</option>
+              </select>
+            </div>
+            <textarea id="regex-find-input" class="moe-input" rows="2" placeholder="输入要查找的文本或正则表达式" style="width: 100%; font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); resize: vertical; box-sizing: border-box;"></textarea>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label style="font-size: 12px; margin: 0;">替换</label>
+              <select id="regex-replace-preset-select" class="moe-input" style="width: 92px; flex-shrink: 0; padding: 0 4px; font-size: 11.5px; height: 26px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; cursor: pointer;">
+                <option value="">快捷选择</option>
+                <option value="__EMPTY__">替换为空</option>
+                <option value="$1">保留首组</option>
+                <option value="\n\n">单个空行</option>
+                <option value="$1，">中文逗号</option>
+              </select>
+            </div>
+            <textarea id="regex-replace-input" class="moe-input" rows="2" placeholder="留空表示直接删掉匹配到的内容" style="width: 100%; font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); resize: vertical; box-sizing: border-box;"></textarea>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 12px; margin-bottom: 6px; display: block;">范围</label>
+            <div style="display: flex; align-items: center; gap: 14px; padding: 8px 12px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+              <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer; margin: 0;">
+                <input type="checkbox" id="regex-scope-chat" checked style="width: 18px; height: 18px; flex-shrink: 0; margin: 0;" />
+                <span>聊天</span>
+              </label>
+              <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer; margin: 0;">
+                <input type="checkbox" id="regex-scope-bookshelf" checked style="width: 18px; height: 18px; flex-shrink: 0; margin: 0;" />
+                <span>书柜</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="cancel" id="cancel-regex-editor-btn">取消</button>
+          <button type="button" class="save" id="save-regex-rule-btn">保存</button>
         </div>
       </div>
     </div>
@@ -38833,8 +39033,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           groupContainer.innerHTML = `
 			        <div class="world-book-group-header">
-			            <span class="arrow">▼</span>
-			            <span class="group-name">${groupName}</span>
+			            <div class="world-book-group-header-left">
+			                <span class="arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
+			                <span class="world-book-group-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span>
+			                <span class="group-name">${groupName}</span>
+			            </div>
+			            <span class="world-book-group-count">${books.length}</span>
 			        </div>
 			        <div class="world-book-group-content"></div>
 			    `;
@@ -38846,7 +39050,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             ".world-book-group-content",
           );
 
-          // 默认给头部和内容区都加上 collapsed 类
           headerEl.classList.add("collapsed");
           contentEl.classList.add("collapsed");
 
@@ -38855,9 +39058,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const item = document.createElement("div");
             item.className = "list-item";
             item.dataset.bookId = book.id;
-            item.innerHTML = `<div class="item-title">${book.name}</div><div class="item-content">${(
-              book.content || "暂无内容..."
-            ).substring(0, 50)}</div>`;
+            const previewStr = String(book.content || "暂无内容...").replace(/\s+/g, " ").trim().substring(0, 50);
+            item.innerHTML = `
+              <div class="wb-item-icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></div>
+              <div class="wb-item-main">
+                <div class="item-title">${book.name}</div>
+                <div class="item-content">${previewStr}</div>
+              </div>
+              <div class="wb-item-chevron"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+            `;
             item.addEventListener("click", () => openWorldBookEditor(book.id));
             addLongPressListener(item, async () => {
               const confirmed = await showCustomConfirm(
@@ -40949,7 +41158,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
-            let formattedText = rawContentText;
+            let formattedText = typeof window.stripAiForeshadowingTags === "function"
+              ? window.stripAiForeshadowingTags(rawContentText)
+              : rawContentText.replace(/\n*[\[【](?:当前)?伏笔(?:状态|栏|记录)?\s*[|｜:：][\s\S]*?[\]】]/gi, "").trim();
 
             if (formattedText.includes("【图") || formattedText.includes("[图")) {
               formattedText = formattedText.replace(/(?:【|\[)图\s*(\d+)(?:[：:][^】\]]*)?(?:】|\])/g, (match, p1) => {
@@ -41151,7 +41362,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               avatarEl.addEventListener("click", (e) => {
                 e.stopPropagation();
                 const characterName = chat.isGroup ? msg.senderName : chat.name;
-                handleUserPat(chat.id, characterName);
+                const isPeerMsg = Boolean(msg.isPeerUserMessage || msg.senderPeerCode);
+                if (chat.isGroup && !isPeerMsg && typeof window.openAiForeshadowingModal === "function") {
+                  window.openAiForeshadowingModal(chat, characterName, avatarSrc);
+                } else {
+                  handleUserPat(chat.id, characterName);
+                }
               });
             }
           }
@@ -47799,11 +48015,13 @@ ${recentHistoryText}
                 }
 
                 // 2.2 普通文本消息
+                const rawOfflineText = msgData.content || "";
                 const aiMessage = {
                   role: "assistant",
                   senderName: chat.name,
                   timestamp: messageTimestamp++,
-                  content: msgData.content || "",
+                  content: typeof window.applyCustomRegexRules === "function" ? window.applyCustomRegexRules(rawOfflineText, "chat") : rawOfflineText,
+                  _regexApplied: true,
                 };
                 chat.history.push(aiMessage);
                 await incrementMessageCount(chatId);
@@ -48511,7 +48729,14 @@ ${recentHistoryText}
 平时一般不需要使用。仅当模组流程或特殊事件需要秘密统计某项次数或数值时，你可以在气泡文本末尾附加隐藏计数标记，系统会自动剥离该标记使其对玩家不可见，并在每回合最后一次AI回复的尾部向你展示当前计数值：
 - 增加或减少计数：[计数: 计数名称 +1] 或 [计数: 计数名称 -1]
 - 直接设置计数值：[计数: 计数名称 = 3]
-- 达成条件或无需继续统计时清除该计数：[计数: 计数名称 清除]`);
+- 达成条件或无需继续统计时清除该计数：[计数: 计数名称 清除]` + (chat && chat.settings && chat.settings.foreshadowingEnabled === true ? `
+6. 隐藏短期与伏笔记录指令：
+当前已开启隐藏短期与伏笔追踪，系统会在每回合最后一次AI回复的尾部向你展示上一回合的[当前伏笔状态｜短期：...｜伏笔：...]，并在收到你的回复后自动剥离你输出的标记使其对玩家完全隐藏。请严格按以下尺度维护，既不能为了填表硬凑废话，也不能在出现关键设计时漏写：
+- 短期：仅记录跨回合尚未完成且带有信息差、悬念或预设真意的连贯动作与盘算。例如：本回合伸出手掌心哄骗PC要给某物、实则手心里藏着另一件特定物品准备下回合逗PC；玩真心话大冒险时说先保密、等回去再告诉PC，但心里已定好回去具体要说的话；或者与PC玩海龟汤、猜谜时心里已经拟定好的汤底真相与谜底。如果不记，下回合就会忘记原本藏了什么或原本想说什么。严禁记录开门、出门、走路、喝水等顺理成章、毫无悬念的日常流水账动作。
+- 伏笔：仅记录自由剧情或模组推进中表面看似寻常意外、实则暗藏玄机或延迟爆发的暗线设定。例如：小孩撞翻PC茶水后跑开，表面只是普通小意外，实则顺手偷走了PC的钱包，或该小孩实为古神化身在撞击瞬间给PC种下了过段时间才会发作的诅咒。
+- 滚动更新原则：每一回合请对照上一回合尾部的记录。若某项短期动作或谜底在本回合正文中已经揭晓完成，或者某条伏笔已经彻底爆发揭开，必须在本回合直接将其删掉；若尚未揭晓或尚未发作，必须原样保留；若本回合新产生了上述值得记录的悬念动作或暗线伏笔，立刻补充进去；若某一项确实没有任何需要记录的内容，则填无。
+- 输出格式：请在本回合最后一条消息正文的末尾换行附加：
+[伏笔状态｜短期：具体内容或无｜伏笔：具体内容或无]` : ""));
 
             let systemPrompt, messagesPayload;
             // 记忆互通核心逻辑 - 构建附加上下文
@@ -50084,6 +50309,25 @@ ${stickerContext || "无"}
               }
             }
 
+            if (chat && chat.settings && chat.settings.foreshadowingEnabled === true) {
+              const fsLatest = (chat.settings.aiForeshadowingLatest && typeof chat.settings.aiForeshadowingLatest === "object")
+                ? chat.settings.aiForeshadowingLatest
+                : { shortTerm: "无", foreshadowing: "无" };
+              const shortStr = String(fsLatest.shortTerm || "无").trim() || "无";
+              const plotStr = String(fsLatest.foreshadowing || "无").trim() || "无";
+              const foreshadowTailLine = `\n[当前伏笔状态｜短期：${shortStr}｜伏笔：${plotStr}]`;
+              for (let mIdx = messagesPayload.length - 1; mIdx >= 0; mIdx--) {
+                const mItem = messagesPayload[mIdx];
+                if (mItem && mItem.role === "assistant" && typeof mItem.content === "string") {
+                  const cTrim = mItem.content.trim();
+                  if (!cTrim.startsWith("==================================================")) {
+                    mItem.content = `${mItem.content}${foreshadowTailLine}`;
+                    break;
+                  }
+                }
+              }
+            }
+
             if (usedMashuCanonicalKeys.has("history")) {
               let lastUserPayloadIdx = -1;
               for (let i = messagesPayload.length - 1; i >= 0; i--) {
@@ -50845,6 +51089,79 @@ ${stickerContext || "无"}
                 keptAfterCounterStrip.push(item);
               }
               messagesArray = keptAfterCounterStrip;
+
+              const foreshadowTagRegex = /[\[【](?:当前)?伏笔(?:状态|栏|记录)?\s*[|｜:：]\s*([\s\S]*?)[\]】]/gi;
+              const stripForeshadowTags = (str) => String(str || "").replace(foreshadowTagRegex, "").trim();
+              const parseAndSaveForeshadowExpr = (innerStr, speakerInfo) => {
+                const rawInner = String(innerStr || "").trim();
+                if (!rawInner) return;
+                let parsedShort = null;
+                let parsedPlot = null;
+                const shortMatch = rawInner.match(/短期(?:事件|动作|意图)?\s*[:：]\s*([\s\S]*?)(?=(?:\s*[|｜/／；;\n]\s*伏笔|\s*伏笔(?:暗线)?\s*[:：]|$))/i);
+                const plotMatch = rawInner.match(/伏笔(?:暗线)?\s*[:：]\s*([\s\S]*?)(?=(?:\s*[|｜/／；;\n]\s*短期|$))/i);
+                if (shortMatch) parsedShort = shortMatch[1].replace(/[|｜\s]+$/g, "").trim();
+                if (plotMatch) parsedPlot = plotMatch[1].replace(/[|｜\s]+$/g, "").trim();
+                if (parsedShort === null && parsedPlot === null) {
+                  const parts = rawInner.split(/\s*[|｜]\s*/);
+                  if (parts.length >= 2) {
+                    parsedShort = parts[0].replace(/^短期\s*[:：]?\s*/i, "").trim();
+                    parsedPlot = parts.slice(1).join("｜").replace(/^伏笔\s*[:：]?\s*/i, "").trim();
+                  } else {
+                    parsedPlot = rawInner;
+                  }
+                }
+                if (!chat.settings.aiForeshadowingLatest || typeof chat.settings.aiForeshadowingLatest !== "object") {
+                  chat.settings.aiForeshadowingLatest = { shortTerm: "无", foreshadowing: "无" };
+                }
+                if (!chat.settings.aiForeshadowingByMember || typeof chat.settings.aiForeshadowingByMember !== "object") {
+                  chat.settings.aiForeshadowingByMember = {};
+                }
+                const updatedEntry = {
+                  shortTerm: parsedShort !== null ? (parsedShort || "无") : (chat.settings.aiForeshadowingLatest.shortTerm || "无"),
+                  foreshadowing: parsedPlot !== null ? (parsedPlot || "无") : (chat.settings.aiForeshadowingLatest.foreshadowing || "无"),
+                  updatedAt: Date.now(),
+                  speakerName: speakerInfo?.memberName || "AI",
+                };
+                chat.settings.aiForeshadowingLatest = updatedEntry;
+                if (speakerInfo && speakerInfo.memberName) {
+                  chat.settings.aiForeshadowingByMember[speakerInfo.memberName] = { ...updatedEntry };
+                }
+              };
+
+              const keptAfterForeshadowStrip = [];
+              for (let i = 0; i < messagesArray.length; i++) {
+                const item = messagesArray[i];
+                if (!item) continue;
+                const speakerInfo = resolveSpeakerInfo(item);
+                if (item.type === "foreshadowing" || item.type === "foreshadow") {
+                  const sVal = String(item.shortTerm || item.short || "无").trim();
+                  const pVal = String(item.foreshadowing || item.plot || item.content || "无").trim();
+                  parseAndSaveForeshadowExpr(`短期：${sVal}｜伏笔：${pVal}`, speakerInfo);
+                  continue;
+                }
+                const rawItemText = String(item.content || item.message || item.text || item.reply_content || (item.quote_reply && item.quote_reply.reply_content) || "");
+                if (rawItemText && /[\[【](?:当前)?伏笔(?:状态|栏|记录)?\s*[|｜:：]/i.test(rawItemText)) {
+                  let fsMatch;
+                  const localFsRegex = /[\[【](?:当前)?伏笔(?:状态|栏|记录)?\s*[|｜:：]\s*([\s\S]*?)[\]】]/gi;
+                  while ((fsMatch = localFsRegex.exec(rawItemText)) !== null) {
+                    parseAndSaveForeshadowExpr(fsMatch[1], speakerInfo);
+                  }
+                  if (typeof item.content === "string") item.content = stripForeshadowTags(item.content);
+                  if (typeof item.message === "string") item.message = stripForeshadowTags(item.message);
+                  if (typeof item.text === "string") item.text = stripForeshadowTags(item.text);
+                  if (typeof item.reply_content === "string") item.reply_content = stripForeshadowTags(item.reply_content);
+                  if (item.quote_reply && typeof item.quote_reply.reply_content === "string") {
+                    item.quote_reply.reply_content = stripForeshadowTags(item.quote_reply.reply_content);
+                  }
+                  const hasRemainingText = Boolean((item.content && item.content.trim()) || (item.message && item.message.trim()) || (item.quote_reply && item.quote_reply.reply_content && item.quote_reply.reply_content.trim()));
+                  const hasOtherPayload = Boolean(item.image || item.imageUrl || item.payload || item.prompt || item.fields || item.values || item.give_item);
+                  if (!hasRemainingText && !hasOtherPayload) {
+                    continue;
+                  }
+                }
+                keptAfterForeshadowStrip.push(item);
+              }
+              messagesArray = keptAfterForeshadowStrip;
             }
             if (typeof parseAndAddAiGiftItems === "function") {
               await parseAndAddAiGiftItems(chat, messagesArray);
@@ -54750,6 +55067,23 @@ ${stickerContext || "无"}
                 }
                 if (typeof aiMessage.content === "string" && aiMessage.content && typeof window.sanitizeAiHumanDiceCommands === "function") {
                   aiMessage.content = window.sanitizeAiHumanDiceCommands(aiMessage.content, chat);
+                }
+                if (
+                  !aiMessage.isPeerUserMessage &&
+                  !aiMessage.senderPeerCode &&
+                  aiMessage.role === "assistant" &&
+                  aiMessage.type !== "system_status" &&
+                  aiMessage.type !== "inventory_card" &&
+                  aiMessage.type !== "naiimag" &&
+                  typeof window.applyCustomRegexRules === "function"
+                ) {
+                  if (typeof aiMessage.content === "string" && aiMessage.content) {
+                    aiMessage.content = window.applyCustomRegexRules(aiMessage.content, "chat");
+                  }
+                  if (aiMessage.type === "quote_reply" && typeof aiMessage.reply_content === "string" && aiMessage.reply_content) {
+                    aiMessage.reply_content = window.applyCustomRegexRules(aiMessage.reply_content, "chat");
+                  }
+                  aiMessage._regexApplied = true;
                 }
                 if (chat.isGroup && chat.activeLineMode === "solo") {
                   const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
@@ -63164,11 +63498,13 @@ ${stickerContext || "无"}
 
               messagesArray.forEach((msgData, index) => {
                 if (msgData.name && msgData.message) {
+                  const rawBgMsg = String(msgData.message);
                   const aiMessage = {
                     role: "assistant",
                     senderName: msgData.name,
-                    content: String(msgData.message),
+                    content: typeof window.applyCustomRegexRules === "function" ? window.applyCustomRegexRules(rawBgMsg, "chat") : rawBgMsg,
                     timestamp: messageTimestamp++,
+                    _regexApplied: true,
                   };
                   chat.history.push(aiMessage);
                   if (chat.isGroup && Array.isArray(chat.mainLineHistory) && chat.activeLineMode !== "solo") {
@@ -72909,7 +73245,11 @@ ${stickerContext || "无"}
             const prevIsCtx = idx > 0 ? isContextHistoryMsg(allMsgs[idx - 1], idx - 1) : false;
             const nextIsCtx = idx < allMsgs.length - 1 ? isContextHistoryMsg(allMsgs[idx + 1], idx + 1) : false;
 
-            let blockStr = `=== 第 ${idx + 1} 块消息 · ${roleTitle} ===\n${cleanDebugNewlines(rawContent)}`;
+            const hiddenSafeRawContent = typeof window.stripForeshadowingFromDebugText === "function"
+              ? window.stripForeshadowingFromDebugText(rawContent)
+              : rawContent;
+
+            let blockStr = `=== 第 ${idx + 1} 块消息 · ${roleTitle} ===\n${cleanDebugNewlines(hiddenSafeRawContent)}`;
             if (curIsCtx && !prevIsCtx) {
               blockStr = `==================================================\n【上下文 开始】\n${blockStr}`;
             }
@@ -72925,11 +73265,12 @@ ${stickerContext || "无"}
 
         function extractFullReceivedText(received) {
           if (!received) return "无";
-          if (typeof received === "string") return cleanDebugNewlines(received);
+          const sanitizeDbgRecv = (str) => (typeof window.stripForeshadowingFromDebugText === "function" ? window.stripForeshadowingFromDebugText(str) : str);
+          if (typeof received === "string") return cleanDebugNewlines(sanitizeDbgRecv(received));
 
           let parts = [];
           if (received.reasoningContent && typeof received.reasoningContent === "string" && received.reasoningContent.trim()) {
-            parts.push(`=== AI 深度思考推理 ===\n${cleanDebugNewlines(received.reasoningContent.trim())}`);
+            parts.push(`=== AI 深度思考推理 ===\n${cleanDebugNewlines(sanitizeDbgRecv(received.reasoningContent.trim()))}`);
           }
 
           let mainContent = "";
@@ -72944,10 +73285,11 @@ ${stickerContext || "无"}
           }
 
           if (mainContent) {
+            const cleanMain = sanitizeDbgRecv(mainContent);
             if (parts.length > 0) {
-              parts.push(`=== AI 完整回复与输出内容 ===\n${cleanDebugNewlines(mainContent)}`);
+              parts.push(`=== AI 完整回复与输出内容 ===\n${cleanDebugNewlines(cleanMain)}`);
             } else {
-              parts.push(cleanDebugNewlines(mainContent));
+              parts.push(cleanDebugNewlines(cleanMain));
             }
           }
 
@@ -83640,8 +83982,12 @@ ${stickerContext || "无"}
 
           groupContainer.innerHTML = `
 			        <div class="world-book-group-header">
-			            <span class="arrow">▼</span>
-			            <span class="group-name">${groupName}</span>
+			            <div class="world-book-group-header-left">
+			                <span class="arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
+			                <span class="world-book-group-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span>
+			                <span class="group-name">${groupName}</span>
+			            </div>
+			            <span class="world-book-group-count">${books.length}</span>
 			        </div>
 			        <div class="world-book-group-content"></div>
 			    `;
@@ -83661,11 +84007,15 @@ ${stickerContext || "无"}
             const item = document.createElement("div");
             item.className = "list-item";
             item.dataset.bookId = book.id;
-            item.innerHTML = `<div class="item-title">${book.name}</div><div class="item-content">${(
-              book.content || "暂无内容..."
-            ).substring(0, 50)}</div>`;
-
-            // 旧的 item.addEventListener('click', ...) 已被移除，由事件委托统一处理
+            const previewStr = String(book.content || "暂无内容...").replace(/\s+/g, " ").trim().substring(0, 50);
+            item.innerHTML = `
+              <div class="wb-item-icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></div>
+              <div class="wb-item-main">
+                <div class="item-title">${book.name}</div>
+                <div class="item-content">${previewStr}</div>
+              </div>
+              <div class="wb-item-chevron"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+            `;
 
             addLongPressListener(item, async () => {
               const confirmed = await showCustomConfirm(
@@ -83686,6 +84036,621 @@ ${stickerContext || "无"}
 
           return groupContainer;
         }
+
+        // ================= 伏笔面板与控制台隐藏及正则系统核心逻辑 =================
+        window.stripAiForeshadowingTags = function (str) {
+          if (!str || typeof str !== "string") return str;
+          return str.replace(/\n*[\[【](?:当前)?伏笔(?:状态|栏|记录)?\s*[|｜:：][\s\S]*?[\]】]/gi, "").trim();
+        };
+
+        window.stripForeshadowingFromDebugText = function (str) {
+          if (!str || typeof str !== "string") return str;
+          let cleaned = str;
+          cleaned = cleaned.replace(/\n*6\.\s*隐藏短期与伏笔记录指令：[\s\S]*?\[伏笔状态｜短期：具体内容或无｜伏笔：具体内容或无\]/g, "");
+          cleaned = cleaned.replace(/\n*[\[【](?:当前)?伏笔(?:状态|栏|记录)?\s*[|｜:：][\s\S]*?[\]】]/gi, "");
+          cleaned = cleaned.replace(/\\n[\[【](?:当前)?伏笔(?:状态|栏|记录)?\s*[|｜:：][\s\S]*?[\]】]/gi, "");
+          return cleaned;
+        };
+
+        let activeForeshadowContext = { chatId: null, characterName: "" };
+
+        window.openAiForeshadowingModal = function (chat, characterName, avatarSrc) {
+          if (!chat) return;
+          if (!chat.settings) chat.settings = {};
+          const modal = document.getElementById("ai-foreshadowing-modal");
+          if (!modal) return;
+
+          const charName = String(characterName || chat.name || "AI").trim();
+          activeForeshadowContext = { chatId: chat.id, characterName: charName };
+
+          const avaEl = document.getElementById("foreshadow-char-avatar");
+          const nameEl = document.getElementById("foreshadow-char-name");
+          const enableSwitch = document.getElementById("foreshadow-enable-switch");
+          const lockedView = document.getElementById("foreshadow-locked-view");
+          const unlockedView = document.getElementById("foreshadow-unlocked-view");
+          const shortInput = document.getElementById("foreshadow-short-term-input");
+          const plotInput = document.getElementById("foreshadow-plot-input");
+          const shortPreset = document.getElementById("foreshadow-short-preset-select");
+          const plotPreset = document.getElementById("foreshadow-plot-preset-select");
+
+          if (avaEl) avaEl.src = avatarSrc || defaultGroupMemberAvatar || defaultAvatar;
+          if (nameEl) nameEl.textContent = `${charName} · 伏笔`;
+          if (enableSwitch) enableSwitch.checked = Boolean(chat.settings.foreshadowingEnabled);
+
+          // 每次打开面板默认锁定隐藏，防止误触剧透
+          if (lockedView) lockedView.style.display = "flex";
+          if (unlockedView) unlockedView.style.display = "none";
+          if (shortPreset) shortPreset.value = "";
+          if (plotPreset) plotPreset.value = "";
+
+          const byMember = (chat.settings.aiForeshadowingByMember && typeof chat.settings.aiForeshadowingByMember === "object")
+            ? chat.settings.aiForeshadowingByMember
+            : {};
+          const latestGlobal = (chat.settings.aiForeshadowingLatest && typeof chat.settings.aiForeshadowingLatest === "object")
+            ? chat.settings.aiForeshadowingLatest
+            : { shortTerm: "无", foreshadowing: "无" };
+          const memberEntry = byMember[charName] || latestGlobal;
+
+          if (shortInput) shortInput.value = String(memberEntry.shortTerm || "无");
+          if (plotInput) plotInput.value = String(memberEntry.foreshadowing || "无");
+
+          modal.classList.add("visible");
+        };
+
+        (function initForeshadowingAndRegexEvents() {
+          const fsModal = document.getElementById("ai-foreshadowing-modal");
+          const fsCloseBtn = document.getElementById("close-ai-foreshadowing-btn");
+          const fsUnlockBtn = document.getElementById("foreshadow-unlock-btn");
+          const fsRelockBtn = document.getElementById("foreshadow-relock-btn");
+          const fsClearBtn = document.getElementById("foreshadow-clear-btn");
+          const fsSaveBtn = document.getElementById("foreshadow-save-btn");
+          const fsEnableSwitch = document.getElementById("foreshadow-enable-switch");
+          const fsShortPreset = document.getElementById("foreshadow-short-preset-select");
+          const fsPlotPreset = document.getElementById("foreshadow-plot-preset-select");
+          const fsShortInput = document.getElementById("foreshadow-short-term-input");
+          const fsPlotInput = document.getElementById("foreshadow-plot-input");
+
+          if (fsCloseBtn && fsModal) {
+            fsCloseBtn.addEventListener("click", () => fsModal.classList.remove("visible"));
+          }
+          if (fsUnlockBtn) {
+            fsUnlockBtn.addEventListener("click", () => {
+              const lockedView = document.getElementById("foreshadow-locked-view");
+              const unlockedView = document.getElementById("foreshadow-unlocked-view");
+              if (lockedView) lockedView.style.display = "none";
+              if (unlockedView) unlockedView.style.display = "flex";
+            });
+          }
+          if (fsRelockBtn) {
+            fsRelockBtn.addEventListener("click", () => {
+              const lockedView = document.getElementById("foreshadow-locked-view");
+              const unlockedView = document.getElementById("foreshadow-unlocked-view");
+              if (lockedView) lockedView.style.display = "flex";
+              if (unlockedView) unlockedView.style.display = "none";
+            });
+          }
+          if (fsShortPreset && fsShortInput) {
+            fsShortPreset.addEventListener("change", () => {
+              if (fsShortPreset.value) {
+                fsShortInput.value = fsShortPreset.value;
+              }
+            });
+          }
+          if (fsPlotPreset && fsPlotInput) {
+            fsPlotPreset.addEventListener("change", () => {
+              if (fsPlotPreset.value) {
+                fsPlotInput.value = fsPlotPreset.value;
+              }
+            });
+          }
+          if (fsEnableSwitch) {
+            fsEnableSwitch.addEventListener("change", async () => {
+              const targetChat = state.chats && state.chats[activeForeshadowContext.chatId];
+              if (!targetChat) return;
+              if (!targetChat.settings) targetChat.settings = {};
+              targetChat.settings.foreshadowingEnabled = Boolean(fsEnableSwitch.checked);
+              await db.chats.put(targetChat);
+            });
+          }
+          if (fsClearBtn) {
+            fsClearBtn.addEventListener("click", async () => {
+              if (fsShortInput) fsShortInput.value = "无";
+              if (fsPlotInput) fsPlotInput.value = "无";
+              const targetChat = state.chats && state.chats[activeForeshadowContext.chatId];
+              if (!targetChat) return;
+              if (!targetChat.settings) targetChat.settings = {};
+              const emptyEntry = { shortTerm: "无", foreshadowing: "无", updatedAt: Date.now() };
+              targetChat.settings.aiForeshadowingLatest = emptyEntry;
+              if (!targetChat.settings.aiForeshadowingByMember || typeof targetChat.settings.aiForeshadowingByMember !== "object") {
+                targetChat.settings.aiForeshadowingByMember = {};
+              }
+              if (activeForeshadowContext.characterName) {
+                targetChat.settings.aiForeshadowingByMember[activeForeshadowContext.characterName] = { ...emptyEntry };
+              }
+              await db.chats.put(targetChat);
+            });
+          }
+          if (fsSaveBtn) {
+            fsSaveBtn.addEventListener("click", async () => {
+              const targetChat = state.chats && state.chats[activeForeshadowContext.chatId];
+              if (!targetChat) return;
+              if (!targetChat.settings) targetChat.settings = {};
+              const sVal = String(fsShortInput?.value || "无").trim() || "无";
+              const pVal = String(fsPlotInput?.value || "无").trim() || "无";
+              const savedEntry = {
+                shortTerm: sVal,
+                foreshadowing: pVal,
+                updatedAt: Date.now(),
+                speakerName: activeForeshadowContext.characterName || "AI",
+              };
+              targetChat.settings.aiForeshadowingLatest = savedEntry;
+              if (!targetChat.settings.aiForeshadowingByMember || typeof targetChat.settings.aiForeshadowingByMember !== "object") {
+                targetChat.settings.aiForeshadowingByMember = {};
+              }
+              if (activeForeshadowContext.characterName) {
+                targetChat.settings.aiForeshadowingByMember[activeForeshadowContext.characterName] = { ...savedEntry };
+              }
+              await db.chats.put(targetChat);
+              if (fsModal) fsModal.classList.remove("visible");
+            });
+          }
+
+          // ---------------- 正则系统存储、渲染、编辑与导入 ----------------
+          const REGEX_STORAGE_KEY = "tukey_custom_regex_rules_v1";
+          let editingRegexRuleId = null;
+
+          function getStoredRegexRules() {
+            if (state && state.globalSettings && Array.isArray(state.globalSettings.customRegexRules)) {
+              return state.globalSettings.customRegexRules;
+            }
+            try {
+              const raw = localStorage.getItem(REGEX_STORAGE_KEY);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                  if (state && state.globalSettings) {
+                    state.globalSettings.customRegexRules = parsed;
+                  }
+                  return parsed;
+                }
+              }
+            } catch (e) {}
+            return [];
+          }
+
+          async function saveStoredRegexRules(rulesArray) {
+            const cleanList = Array.isArray(rulesArray) ? rulesArray : [];
+            try {
+              localStorage.setItem(REGEX_STORAGE_KEY, JSON.stringify(cleanList));
+            } catch (e) {}
+            if (state && state.globalSettings) {
+              state.globalSettings.customRegexRules = cleanList;
+              try {
+                await db.globalSettings.put(state.globalSettings);
+              } catch (e) {}
+            }
+          }
+
+          window.applyCustomRegexRules = function (rawText, targetScope) {
+            if (!rawText || typeof rawText !== "string") return rawText;
+            const rules = getStoredRegexRules();
+            if (!Array.isArray(rules) || rules.length === 0) return rawText;
+
+            let resultText = rawText;
+            for (let i = 0; i < rules.length; i++) {
+              const r = rules[i];
+              if (!r || r.enabled === false || !r.findRegex) continue;
+              if (targetScope === "chat" && r.scopeChat === false) continue;
+              if (targetScope === "bookshelf" && r.scopeBookshelf === false) continue;
+
+              try {
+                let patternStr = String(r.findRegex);
+                let flagsStr = String(r.flags || "g");
+                const slashMatch = patternStr.match(/^\/([\s\S]+)\/([gimsuy]*)$/);
+                if (slashMatch) {
+                  patternStr = slashMatch[1];
+                  flagsStr = slashMatch[2] || "g";
+                }
+                if (!flagsStr.includes("g")) flagsStr += "g";
+                const rx = new RegExp(patternStr, flagsStr);
+                const repStr = r.replaceString !== undefined && r.replaceString !== null
+                  ? String(r.replaceString).replace(/\\n/g, "\n").replace(/\\t/g, "\t")
+                  : "";
+                resultText = resultText.replace(rx, repStr);
+              } catch (err) {
+                console.warn("正则规则执行跳过:", r.name, err);
+              }
+            }
+            return resultText;
+          };
+
+          window.renderRegexRulesList = function () {
+            const listEl = document.getElementById("regex-rules-list");
+            if (!listEl) return;
+            const rules = getStoredRegexRules();
+            listEl.innerHTML = "";
+
+            if (rules.length === 0) {
+              listEl.innerHTML = `
+                <div class="foreshadow-lock-card" style="margin-top: 24px;">
+                  <div class="foreshadow-lock-icon-circle">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                  </div>
+                  <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">暂无正则规则</div>
+                  <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">点击右上角加号新增规则，或点击导入图标导入 txt 与 json 格式正则</div>
+                </div>
+              `;
+              return;
+            }
+
+            rules.forEach((rule) => {
+              const card = document.createElement("div");
+              card.className = "regex-rule-card";
+              const scopeLabels = [];
+              if (rule.scopeChat !== false) scopeLabels.push("聊天");
+              if (rule.scopeBookshelf !== false) scopeLabels.push("书柜");
+              const scopeText = scopeLabels.length > 0 ? scopeLabels.join("·") : "未指定";
+              const replacePreview = rule.replaceString ? rule.replaceString : "空";
+
+              card.innerHTML = `
+                <div class="regex-rule-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                </div>
+                <div class="regex-rule-info">
+                  <div class="regex-rule-title-row">
+                    <span class="regex-rule-name"></span>
+                    <span class="regex-scope-badge">${scopeText}</span>
+                  </div>
+                  <div class="regex-rule-preview"></div>
+                </div>
+                <div class="regex-rule-actions">
+                  <button type="button" class="moe-btn-mini regex-edit-btn" style="height: 26px; padding: 0 8px; font-size: 11.5px;">编辑</button>
+                  <button type="button" class="moe-btn-mini regex-del-btn" style="height: 26px; padding: 0 8px; font-size: 11.5px;">删除</button>
+                  <label class="toggle-switch" style="margin: 0; flex-shrink: 0;">
+                    <input type="checkbox" class="regex-toggle-input" ${rule.enabled !== false ? "checked" : ""} />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              `;
+              card.querySelector(".regex-rule-name").textContent = rule.name || "未命名规则";
+              card.querySelector(".regex-rule-preview").textContent = `${rule.findRegex || ""} → ${replacePreview}`;
+
+              const toggleInput = card.querySelector(".regex-toggle-input");
+              toggleInput.addEventListener("change", async (e) => {
+                e.stopPropagation();
+                const all = getStoredRegexRules();
+                const target = all.find((it) => it.id === rule.id);
+                if (target) {
+                  target.enabled = Boolean(toggleInput.checked);
+                  await saveStoredRegexRules(all);
+                }
+              });
+
+              card.querySelector(".regex-edit-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                openRegexRuleEditor(rule.id);
+              });
+
+              card.querySelector(".regex-del-btn").addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const confirmed = await showCustomConfirm("删除正则", `确定要删除规则 ${rule.name || ""} 吗？`, { confirmButtonClass: "btn-danger" });
+                if (confirmed) {
+                  const nextRules = getStoredRegexRules().filter((it) => it.id !== rule.id);
+                  await saveStoredRegexRules(nextRules);
+                  window.renderRegexRulesList();
+                }
+              });
+
+              listEl.appendChild(card);
+            });
+          };
+
+          window.switchWorldBookTopTab = function (tabName) {
+            const isRegex = tabName === "regex";
+            const wbTabBtn = document.getElementById("wb-top-tab-worldbook");
+            const rxTabBtn = document.getElementById("wb-top-tab-regex");
+            const wbList = document.getElementById("world-book-list");
+            const rxList = document.getElementById("regex-rules-list");
+
+            const importWbBtn = document.getElementById("import-world-book-btn");
+            const editModeWbBtn = document.getElementById("toggle-world-book-edit-mode-btn");
+            const addWbBtn = document.getElementById("add-world-book-btn");
+            const manageCatBtn = document.getElementById("manage-categories-in-edit-mode-btn");
+            const deleteSelectedWbBtn = document.getElementById("world-book-delete-selected-btn");
+
+            const importRxBtn = document.getElementById("import-regex-btn");
+            const addRxBtn = document.getElementById("add-regex-btn");
+
+            if (wbTabBtn) wbTabBtn.classList.toggle("active", !isRegex);
+            if (rxTabBtn) rxTabBtn.classList.toggle("active", isRegex);
+
+            if (isRegex) {
+              if (isWorldBookEditMode && typeof toggleWorldBookEditMode === "function") {
+                toggleWorldBookEditMode();
+              }
+              if (wbList) wbList.style.display = "none";
+              if (rxList) rxList.style.display = "flex";
+              if (importWbBtn) importWbBtn.style.display = "none";
+              if (editModeWbBtn) editModeWbBtn.style.display = "none";
+              if (addWbBtn) addWbBtn.style.display = "none";
+              if (manageCatBtn) manageCatBtn.style.display = "none";
+              if (deleteSelectedWbBtn) deleteSelectedWbBtn.style.display = "none";
+              if (importRxBtn) importRxBtn.style.display = "inline-flex";
+              if (addRxBtn) addRxBtn.style.display = "inline-block";
+              window.renderRegexRulesList();
+            } else {
+              if (wbList) wbList.style.display = "block";
+              if (rxList) rxList.style.display = "none";
+              if (importWbBtn) importWbBtn.style.display = "inline-block";
+              if (editModeWbBtn) editModeWbBtn.style.display = "inline-block";
+              if (addWbBtn) addWbBtn.style.display = "inline-block";
+              if (importRxBtn) importRxBtn.style.display = "none";
+              if (addRxBtn) addRxBtn.style.display = "none";
+              renderWorldBookScreen();
+            }
+          };
+
+          function openRegexRuleEditor(ruleId = null) {
+            editingRegexRuleId = ruleId;
+            const modal = document.getElementById("regex-rule-editor-modal");
+            if (!modal) return;
+            const nameInput = document.getElementById("regex-name-input");
+            const findInput = document.getElementById("regex-find-input");
+            const replaceInput = document.getElementById("regex-replace-input");
+            const scopeChat = document.getElementById("regex-scope-chat");
+            const scopeBookshelf = document.getElementById("regex-scope-bookshelf");
+            const presetSelect = document.getElementById("regex-preset-select");
+            const findPresetSelect = document.getElementById("regex-find-preset-select");
+            const replacePresetSelect = document.getElementById("regex-replace-preset-select");
+
+            if (presetSelect) presetSelect.value = "";
+            if (findPresetSelect) findPresetSelect.value = "";
+            if (replacePresetSelect) replacePresetSelect.value = "";
+
+            if (ruleId) {
+              const found = getStoredRegexRules().find((r) => r.id === ruleId);
+              if (found) {
+                if (nameInput) nameInput.value = found.name || "";
+                if (findInput) findInput.value = found.findRegex || "";
+                if (replaceInput) replaceInput.value = found.replaceString || "";
+                if (scopeChat) scopeChat.checked = found.scopeChat !== false;
+                if (scopeBookshelf) scopeBookshelf.checked = found.scopeBookshelf !== false;
+              }
+            } else {
+              if (nameInput) nameInput.value = "";
+              if (findInput) findInput.value = "";
+              if (replaceInput) replaceInput.value = "";
+              if (scopeChat) scopeChat.checked = true;
+              if (scopeBookshelf) scopeBookshelf.checked = true;
+            }
+            modal.classList.add("visible");
+          }
+
+          const addRxBtn = document.getElementById("add-regex-btn");
+          const importRxBtn = document.getElementById("import-regex-btn");
+          const rxFileInput = document.getElementById("regex-file-import-input");
+          const cancelRxBtn = document.getElementById("cancel-regex-editor-btn");
+          const saveRxBtn = document.getElementById("save-regex-rule-btn");
+          const rxModal = document.getElementById("regex-rule-editor-modal");
+          const rxPresetSelect = document.getElementById("regex-preset-select");
+          const rxFindPreset = document.getElementById("regex-find-preset-select");
+          const rxReplacePreset = document.getElementById("regex-replace-preset-select");
+
+          if (addRxBtn) {
+            addRxBtn.addEventListener("click", () => openRegexRuleEditor(null));
+          }
+          if (cancelRxBtn && rxModal) {
+            cancelRxBtn.addEventListener("click", () => rxModal.classList.remove("visible"));
+          }
+          if (rxPresetSelect) {
+            rxPresetSelect.addEventListener("change", () => {
+              const val = rxPresetSelect.value;
+              const nameInput = document.getElementById("regex-name-input");
+              const findInput = document.getElementById("regex-find-input");
+              const replaceInput = document.getElementById("regex-replace-input");
+              if (val === "clean_stars") {
+                if (nameInput) nameInput.value = "去星号";
+                if (findInput) findInput.value = "\\*+([^*]+)\\*+";
+                if (replaceInput) replaceInput.value = "$1";
+              } else if (val === "clean_empty_lines") {
+                if (nameInput) nameInput.value = "去多余空行";
+                if (findInput) findInput.value = "\\n{3,}";
+                if (replaceInput) replaceInput.value = "\\n\\n";
+              } else if (val === "en_comma_to_zh") {
+                if (nameInput) nameInput.value = "英文逗号转中文";
+                if (findInput) findInput.value = "([\\u4e00-\\u9fa5]),";
+                if (replaceInput) replaceInput.value = "$1，";
+              } else if (val === "clean_brackets") {
+                if (nameInput) nameInput.value = "去括号心理";
+                if (findInput) findInput.value = "（[^）]*）|\\([^)]*\\)";
+                if (replaceInput) replaceInput.value = "";
+              }
+            });
+          }
+          if (rxFindPreset) {
+            rxFindPreset.addEventListener("change", () => {
+              const findInput = document.getElementById("regex-find-input");
+              if (rxFindPreset.value && findInput) {
+                findInput.value = rxFindPreset.value;
+              }
+            });
+          }
+          if (rxReplacePreset) {
+            rxReplacePreset.addEventListener("change", () => {
+              const replaceInput = document.getElementById("regex-replace-input");
+              if (rxReplacePreset.value && replaceInput) {
+                replaceInput.value = rxReplacePreset.value === "__EMPTY__" ? "" : rxReplacePreset.value;
+              }
+            });
+          }
+
+          if (saveRxBtn) {
+            saveRxBtn.addEventListener("click", async () => {
+              const nameVal = document.getElementById("regex-name-input")?.value.trim() || "正则规则";
+              const findVal = document.getElementById("regex-find-input")?.value || "";
+              const replaceVal = document.getElementById("regex-replace-input")?.value || "";
+              const scopeChat = Boolean(document.getElementById("regex-scope-chat")?.checked);
+              const scopeBookshelf = Boolean(document.getElementById("regex-scope-bookshelf")?.checked);
+
+              if (!findVal.trim()) {
+                await showCustomAlert("提示", "请输入要查找的内容或正则表达式");
+                return;
+              }
+
+              const rules = getStoredRegexRules();
+              if (editingRegexRuleId) {
+                const target = rules.find((r) => r.id === editingRegexRuleId);
+                if (target) {
+                  target.name = nameVal;
+                  target.findRegex = findVal;
+                  target.replaceString = replaceVal;
+                  target.scopeChat = scopeChat;
+                  target.scopeBookshelf = scopeBookshelf;
+                }
+              } else {
+                rules.push({
+                  id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                  name: nameVal,
+                  findRegex: findVal,
+                  replaceString: replaceVal,
+                  flags: "g",
+                  enabled: true,
+                  scopeChat: scopeChat,
+                  scopeBookshelf: scopeBookshelf,
+                });
+              }
+
+              await saveStoredRegexRules(rules);
+              if (rxModal) rxModal.classList.remove("visible");
+              window.renderRegexRulesList();
+            });
+          }
+
+          function parseImportedRegexContent(text, fileName) {
+            const extracted = [];
+            const raw = String(text || "").trim();
+            if (!raw) return extracted;
+
+            try {
+              const jsonData = JSON.parse(raw);
+              const list = Array.isArray(jsonData)
+                ? jsonData
+                : (Array.isArray(jsonData.regexScripts) ? jsonData.regexScripts : (Array.isArray(jsonData.rules) ? jsonData.rules : [jsonData]));
+              list.forEach((item, idx) => {
+                if (!item || typeof item !== "object") return;
+                const findStr = item.findRegex ?? item.regex ?? item.find ?? item.pattern ?? "";
+                if (!String(findStr).trim()) return;
+                const repStr = item.replaceString ?? item.replace ?? item.replacement ?? "";
+                const nameStr = item.scriptName || item.name || item.title || `${fileName.replace(/\.[^.]+$/, "")}_${idx + 1}`;
+                const enabledVal = item.disabled !== undefined ? !item.disabled : (item.enabled !== false);
+                extracted.push({
+                  id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6) + "_" + idx,
+                  name: String(nameStr).trim(),
+                  findRegex: String(findStr),
+                  replaceString: String(repStr),
+                  flags: item.flags || "g",
+                  enabled: Boolean(enabledVal),
+                  scopeChat: item.scopeChat !== false,
+                  scopeBookshelf: item.scopeBookshelf !== false,
+                });
+              });
+              if (extracted.length > 0) return extracted;
+            } catch (e) {}
+
+            // 解析 TXT 块格式（支持 名称/查找/替换 分段，或 查找=替换 单行格式）
+            const blocks = raw.split(/\n\s*---+\s*\n|\n{2,}/);
+            blocks.forEach((blk, bIdx) => {
+              const trimmedBlk = blk.trim();
+              if (!trimmedBlk) return;
+              const nameMatch = trimmedBlk.match(/(?:名称|名字|规则|name)\s*[:：=]\s*([^\r\n]+)/i);
+              const findMatch = trimmedBlk.match(/(?:查找|正则|匹配|find|regex)\s*[:：=]\s*([^\r\n]+)/i);
+              const repMatch = trimmedBlk.match(/(?:替换|替换为|replace)\s*[:：=]\s*([^\r\n]*)/i);
+              if (findMatch && findMatch[1].trim()) {
+                extracted.push({
+                  id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6) + "_" + bIdx,
+                  name: nameMatch ? nameMatch[1].trim() : `${fileName.replace(/\.[^.]+$/, "")}_${bIdx + 1}`,
+                  findRegex: findMatch[1].trim(),
+                  replaceString: repMatch ? repMatch[1] : "",
+                  flags: "g",
+                  enabled: true,
+                  scopeChat: true,
+                  scopeBookshelf: true,
+                });
+                return;
+              }
+
+              const lines = trimmedBlk.split(/\r?\n/);
+              lines.forEach((line, lIdx) => {
+                const cleanLine = line.trim();
+                if (!cleanLine || cleanLine.startsWith("#") || cleanLine.startsWith("//")) return;
+                const sepMatch = cleanLine.match(/^(.+?)\s*(?:===|=>|->|=)\s*(.*)$/);
+                if (sepMatch && sepMatch[1].trim()) {
+                  extracted.push({
+                    id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6) + "_" + bIdx + "_" + lIdx,
+                    name: `${fileName.replace(/\.[^.]+$/, "")}_${extracted.length + 1}`,
+                    findRegex: sepMatch[1].trim(),
+                    replaceString: sepMatch[2] || "",
+                    flags: "g",
+                    enabled: true,
+                    scopeChat: true,
+                    scopeBookshelf: true,
+                  });
+                }
+              });
+            });
+
+            if (extracted.length === 0 && raw) {
+              extracted.push({
+                id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                name: fileName.replace(/\.[^.]+$/, "") || "导入正则",
+                findRegex: raw.split(/\r?\n/)[0].trim(),
+                replaceString: raw.split(/\r?\n/)[1] || "",
+                flags: "g",
+                enabled: true,
+                scopeChat: true,
+                scopeBookshelf: true,
+              });
+            }
+
+            return extracted;
+          }
+
+          if (importRxBtn && rxFileInput) {
+            importRxBtn.addEventListener("click", () => {
+              rxFileInput.value = "";
+              rxFileInput.click();
+            });
+            rxFileInput.addEventListener("change", async (e) => {
+              const files = Array.from(e.target.files || []);
+              if (files.length === 0) return;
+              const currentRules = getStoredRegexRules();
+              let addedCount = 0;
+
+              for (const file of files) {
+                try {
+                  const text = await file.text();
+                  const parsedRules = parseImportedRegexContent(text, file.name || "正则");
+                  parsedRules.forEach((r) => {
+                    if (r && r.findRegex) {
+                      currentRules.push(r);
+                      addedCount++;
+                    }
+                  });
+                } catch (err) {
+                  console.error("读取正则文件失败:", err);
+                }
+              }
+
+              if (addedCount > 0) {
+                await saveStoredRegexRules(currentRules);
+                window.renderRegexRulesList();
+                await showCustomAlert("导入成功", `已成功导入 ${addedCount} 条正则规则`);
+              } else {
+                await showCustomAlert("导入提示", "未能在文件中识别到有效的正则规则");
+              }
+            });
+          }
+        })();
 
         // 快捷回复功能核心逻辑
 
