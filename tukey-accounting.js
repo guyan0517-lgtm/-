@@ -3050,6 +3050,7 @@ function createExpenditureLineChart(data, daysInMonth) {
             .join("");
         if (cur) cardEl.value = cur;
       }
+      this.renderSubGroupSelectOptions();
     },
 
     triggerStickerUpload() {
@@ -4527,6 +4528,9 @@ function createExpenditureLineChart(data, daysInMonth) {
         contextLimit: 180,
         idleAskMin: 15,
         cooldownSec: 5,
+        crossMemoryMode: "all",
+        linkedGroupIds: [],
+        sharePrivateMemory: true,
         autoNaiImage: true,
         naiMode: "trpg_every_round",
         naiPrefix: defNai.prefix,
@@ -4675,7 +4679,30 @@ function createExpenditureLineChart(data, daysInMonth) {
           )
           .join("");
       }
+      this.renderSubGroupSelectOptions();
+      this.renderLinkedGroupsChecklist();
       this.renderVisualGroupList();
+    },
+
+    renderSubGroupSelectOptions() {
+      const subSel = document.getElementById("qqbot-bind-subgroup-select");
+      if (!subSel || !this.serverState || !this.serverState.config) return;
+      const groups = this.serverState.config.groups || {};
+      const entries = Object.values(groups).filter(
+        (g) => g && String(g.groupId) !== String(this.currentGroupId),
+      );
+      const prevVal = subSel.value;
+      subSel.innerHTML =
+        '<option value="">按群名自动识别或在此指定他和AI的专属小群</option>' +
+        entries
+          .map(
+            (g) =>
+              `<option value="${this.escapeAttr(g.groupId)}">${this.escapeHtml(g.groupName || g.groupId)} · ${this.escapeHtml(g.groupId)}</option>`,
+          )
+          .join("");
+      if (prevVal && groups[prevVal]) {
+        subSel.value = prevVal;
+      }
     },
 
     renderVisualGroupList() {
@@ -4701,6 +4728,13 @@ function createExpenditureLineChart(data, daysInMonth) {
           const isCurrent = String(g.groupId) === String(this.currentGroupId);
           const isOn = g.enabled !== false;
           const modeText = g.mode === "trpg" ? "守秘人KP" : "日常OC";
+          const memMode = g.crossMemoryMode || "all";
+          const memLabel =
+            memMode === "off"
+              ? "独立群"
+              : memMode === "linked"
+                ? `关联${Array.isArray(g.linkedGroupIds) ? g.linkedGroupIds.length : 0}群`
+                : "互通群";
           const borderCol = isCurrent
             ? "var(--accent-color)"
             : "var(--border-color)";
@@ -4717,7 +4751,7 @@ function createExpenditureLineChart(data, daysInMonth) {
                   ${isCurrent ? '<span style="font-size: 10px; color: var(--accent-color); font-weight: 700; flex-shrink: 0;">当前选中</span>' : ""}
                 </div>
                 <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 2px;">
-                  群号 ${this.escapeHtml(g.groupId)} · ${modeText} · 缓冲 ${g.debounceSec || 8}秒 · 读取 ${g.contextLimit || 180}条
+                  群号 ${this.escapeHtml(g.groupId)} · ${modeText} · ${memLabel} · 缓冲 ${g.debounceSec || 8}秒 · 读取 ${g.contextLimit || 180}条
                 </div>
               </div>
               <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleGroupEnabledFromCard('${this.escapeAttr(g.groupId)}');}" style="height: 26px; padding: 0 9px; font-size: 11px; flex-shrink: 0;">${isOn ? "停用" : "启用"}</button>
@@ -4854,12 +4888,233 @@ function createExpenditureLineChart(data, daysInMonth) {
       setVal("qqbot-modimg-mode", g.modImgMode || "auto");
 
       this.renderResourceSelects();
+      this.renderLinkedGroupsChecklist();
       this.renderWorldBookItemsList();
       this.renderThoughtItemsList();
       this.renderModuleChaptersList();
       this.renderPlayerBindingsList();
       this.renderSimSenderSelect();
       this.populateCurrentPrivateUI();
+    },
+
+    isGroupIndependent(gCfg) {
+      return Boolean(gCfg && gCfg.crossMemoryMode === "off");
+    },
+
+    shouldSharePrivateMemoryForGroup(gCfg) {
+      if (!gCfg) return false;
+      const mode = gCfg.crossMemoryMode || "all";
+      if (mode === "off" || mode === "groups_only") return false;
+      if (mode === "all" || mode === "private_only") return true;
+      if (mode === "linked") {
+        return gCfg.sharePrivateMemory !== false;
+      }
+      return true;
+    },
+
+    isTargetGroupLinkedToCurrent(currentGroupId, gCfg, targetGid, targetGrpCfg) {
+      if (!gCfg || !targetGid) return false;
+      if (String(targetGid) === String(currentGroupId)) return false;
+      const mode = gCfg.crossMemoryMode || "all";
+      if (mode === "off" || mode === "private_only") return false;
+      // 如果目标群本身被设为了独立群聊，则其他群也看不到它的记忆
+      if (targetGrpCfg && targetGrpCfg.crossMemoryMode === "off") {
+        return false;
+      }
+      if (mode === "all" || mode === "groups_only") {
+        return true;
+      }
+      if (mode === "linked") {
+        const linkedArr = Array.isArray(gCfg.linkedGroupIds)
+          ? gCfg.linkedGroupIds.map(String)
+          : [];
+        if (linkedArr.includes(String(targetGid))) return true;
+        if (Array.isArray(gCfg.playerBindings)) {
+          const boundSub = gCfg.playerBindings.some(
+            (b) => b && b.subGroupId && String(b.subGroupId) === String(targetGid),
+          );
+          if (boundSub) return true;
+        }
+        return false;
+      }
+      return true;
+    },
+
+    renderLinkedGroupsChecklist() {
+      const wrap = document.getElementById("qqbot-linked-groups-wrap");
+      const listEl = document.getElementById("qqbot-linked-groups-list");
+      const g = this.getCurrentGroupConfig();
+      if (!wrap || !listEl || !g) return;
+
+      const mode = g.crossMemoryMode || "all";
+      if (mode === "off") {
+        wrap.style.display = "none";
+        return;
+      }
+      wrap.style.display = "flex";
+
+      if (!Array.isArray(g.linkedGroupIds)) {
+        g.linkedGroupIds = [];
+      }
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const otherGroups = Object.values(groups).filter(
+        (item) => item && String(item.groupId) !== String(g.groupId),
+      );
+
+      const rowsHtml = [];
+
+      // 单人小窗记忆共享开关行
+      const privAllowed = this.shouldSharePrivateMemoryForGroup(g);
+      const privBadgeBg = privAllowed ? "var(--accent-color)" : "var(--card-bg)";
+      const privBadgeCol = privAllowed ? "#ffffff" : "var(--text-secondary)";
+      rowsHtml.push(`
+        <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleLinkedPrivateMemory();}" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color); cursor: pointer; flex-shrink: 0;">
+          <span style="width: 38px; height: 20px; line-height: 20px; text-align: center; border-radius: 5px; background: ${privBadgeBg}; color: ${privBadgeCol}; border: 1px solid var(--border-color); font-size: 10px; font-weight: 700; flex-shrink: 0;">${privAllowed ? "互通" : "隔离"}</span>
+          <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 600; color: var(--text-primary);">
+            全部单人小窗记忆与私聊线索
+          </div>
+          <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleLinkedPrivateMemory();}" style="height: 22px; padding: 0 8px; font-size: 10.5px; flex-shrink: 0;">${privAllowed ? "隔离" : "关联"}</button>
+        </div>
+      `);
+
+      if (otherGroups.length === 0) {
+        rowsHtml.push(
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px 2px;">暂无其他群聊，添加更多群后可在此勾选关联群聊</div>',
+        );
+      } else {
+        otherGroups.forEach((og) => {
+          const ogId = String(og.groupId);
+          const ogIndependent = og.crossMemoryMode === "off";
+          const isLinked = this.isTargetGroupLinkedToCurrent(
+            g.groupId,
+            g,
+            ogId,
+            og,
+          );
+          const badgeBg = isLinked ? "var(--accent-color)" : "var(--card-bg)";
+          const badgeCol = isLinked ? "#ffffff" : "var(--text-secondary)";
+          const statusWord = ogIndependent
+            ? "对方独立"
+            : isLinked
+              ? "已关联"
+              : "未关联";
+          rowsHtml.push(`
+            <div onclick="if(window.QQBotConsole){window.QQBotConsole.toggleLinkedGroup('${this.escapeAttr(ogId)}');}" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color); cursor: pointer; flex-shrink: 0;">
+              <span style="width: 48px; height: 20px; line-height: 20px; text-align: center; border-radius: 5px; background: ${badgeBg}; color: ${badgeCol}; border: 1px solid var(--border-color); font-size: 10px; font-weight: 700; flex-shrink: 0;">${statusWord}</span>
+              <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary);">
+                <span style="font-weight: 600;">${this.escapeHtml(og.groupName || ogId)}</span>
+                <span style="font-size: 10.5px; color: var(--text-secondary); margin-left: 4px;">${this.escapeHtml(ogId)}</span>
+              </div>
+              <button type="button" class="mod-capsule-btn" onclick="event.stopPropagation();if(window.QQBotConsole){window.QQBotConsole.toggleLinkedGroup('${this.escapeAttr(ogId)}');}" style="height: 22px; padding: 0 8px; font-size: 10.5px; flex-shrink: 0;">${isLinked ? "独立" : "关联"}</button>
+            </div>
+          `);
+        });
+      }
+
+      listEl.innerHTML = rowsHtml.join("");
+    },
+
+    toggleLinkedPrivateMemory() {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      const curAllowed = this.shouldSharePrivateMemoryForGroup(g);
+      g.crossMemoryMode = "linked";
+      const sel = document.getElementById("qqbot-cross-memory-select");
+      if (sel) sel.value = "linked";
+      g.sharePrivateMemory = !curAllowed;
+      this.renderLinkedGroupsChecklist();
+      this.renderVisualGroupList();
+      this.saveAllSettings(false);
+    },
+
+    toggleLinkedGroup(targetGid) {
+      const g = this.getCurrentGroupConfig();
+      if (!g || !targetGid) return;
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const targetGrp = groups[targetGid];
+
+      // 如果当前是全部互通模式，先将除目标群以外的其他群初始化进关联列表，再切换为指定关联模式
+      if (g.crossMemoryMode === "all" || g.crossMemoryMode === "groups_only") {
+        g.linkedGroupIds = Object.keys(groups).filter(
+          (gid) =>
+            String(gid) !== String(g.groupId) &&
+            groups[gid] &&
+            groups[gid].crossMemoryMode !== "off",
+        );
+      }
+      g.crossMemoryMode = "linked";
+      const sel = document.getElementById("qqbot-cross-memory-select");
+      if (sel) sel.value = "linked";
+
+      if (!Array.isArray(g.linkedGroupIds)) {
+        g.linkedGroupIds = [];
+      }
+      const strId = String(targetGid);
+      const idx = g.linkedGroupIds.findIndex((id) => String(id) === strId);
+      if (idx >= 0) {
+        g.linkedGroupIds.splice(idx, 1);
+      } else {
+        g.linkedGroupIds.push(strId);
+        // 若对方群原本处于独立群聊模式，同步开启对方群与本群的双向关联
+        if (targetGrp && targetGrp.crossMemoryMode === "off") {
+          targetGrp.crossMemoryMode = "linked";
+          if (!Array.isArray(targetGrp.linkedGroupIds)) {
+            targetGrp.linkedGroupIds = [];
+          }
+          if (!targetGrp.linkedGroupIds.map(String).includes(String(g.groupId))) {
+            targetGrp.linkedGroupIds.push(String(g.groupId));
+          }
+        }
+      }
+      this.renderLinkedGroupsChecklist();
+      this.renderVisualGroupList();
+      this.saveAllSettings(false);
+    },
+
+    selectAllLinkedGroups() {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      g.crossMemoryMode = "linked";
+      const sel = document.getElementById("qqbot-cross-memory-select");
+      if (sel) sel.value = "linked";
+      g.sharePrivateMemory = true;
+      g.linkedGroupIds = Object.keys(groups).filter(
+        (gid) =>
+          String(gid) !== String(g.groupId) &&
+          groups[gid] &&
+          groups[gid].crossMemoryMode !== "off",
+      );
+      this.renderLinkedGroupsChecklist();
+      this.renderVisualGroupList();
+      this.saveAllSettings(false);
+      this.notify("已关联全部非独立群聊与小窗");
+    },
+
+    clearAllLinkedGroups() {
+      const g = this.getCurrentGroupConfig();
+      if (!g) return;
+      g.crossMemoryMode = "linked";
+      const sel = document.getElementById("qqbot-cross-memory-select");
+      if (sel) sel.value = "linked";
+      g.linkedGroupIds = [];
+      g.sharePrivateMemory = false;
+      this.renderLinkedGroupsChecklist();
+      this.renderVisualGroupList();
+      this.saveAllSettings(false);
+      this.notify("已清空本群关联列表");
     },
 
     renderSimSenderSelect() {
@@ -4945,6 +5200,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       g.modImgMode = getVal("qqbot-modimg-mode", "auto");
 
       this.renderGroupSelectDropdown();
+      this.renderLinkedGroupsChecklist();
       this.saveAllSettings(false);
       if (prevContextLimit !== g.contextLimit && this.currentGroupId) {
         this.reloadContextMessages(false).catch(() => {});
@@ -5565,8 +5821,85 @@ function createExpenditureLineChart(data, daysInMonth) {
     },
 
     /* ============================================================================
-     * 群成员备注名与每个人专属人设管理
+     * 群成员备注名与每个人专属人设及专属线索小群管理
      * ============================================================================ */
+    resolveMemberSubGroup(gCfg, binding) {
+      if (!binding) return null;
+      const groups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const currentGid = String((gCfg && gCfg.groupId) || this.currentGroupId || "");
+
+      if (binding.subGroupId && groups[binding.subGroupId]) {
+        const gObj = groups[binding.subGroupId];
+        return {
+          subGroupId: String(binding.subGroupId),
+          subGroupName: gObj.groupName || binding.subGroupName || String(binding.subGroupId),
+          isAutoMatched: false,
+        };
+      }
+      if (binding.subGroupId) {
+        return {
+          subGroupId: String(binding.subGroupId),
+          subGroupName: binding.subGroupName || String(binding.subGroupId),
+          isAutoMatched: false,
+        };
+      }
+
+      const realName = this.resolveMemberDisplayName(
+        gCfg,
+        binding.qq,
+        binding.qqRemark,
+      );
+      const candidateTokens = [
+        realName,
+        binding.alias,
+        binding.qqRemark,
+        binding.cardName !== "未绑角色卡" ? binding.cardName : "",
+        binding.slot && binding.slot !== "群友" && binding.slot !== "调查员" && binding.slot !== "单人群"
+          ? binding.slot
+          : "",
+      ]
+        .map((s) => String(s || "").trim())
+        .filter((s) => s.length >= 1);
+
+      for (const gid of Object.keys(groups)) {
+        if (String(gid) === currentGid) continue;
+        const gObj = groups[gid];
+        if (!gObj || gObj.enabled === false) continue;
+        const gName = String(gObj.groupName || "").trim();
+        if (gName) {
+          for (const tk of candidateTokens) {
+            if (tk && gName.toLowerCase().includes(tk.toLowerCase())) {
+              return {
+                subGroupId: String(gid),
+                subGroupName: gName,
+                isAutoMatched: true,
+              };
+            }
+          }
+        }
+        const subRemarks = gObj.memberRemarks || {};
+        const subBindings = Array.isArray(gObj.playerBindings)
+          ? gObj.playerBindings
+          : [];
+        const remarkKeys = Object.keys(subRemarks);
+        const hasMemberInSub =
+          Boolean(subRemarks[binding.qq]) ||
+          subBindings.some((sb) => String(sb.qq) === String(binding.qq));
+        if (hasMemberInSub && remarkKeys.length > 0 && remarkKeys.length <= 4) {
+          return {
+            subGroupId: String(gid),
+            subGroupName: gName || String(gid),
+            isAutoMatched: true,
+          };
+        }
+      }
+      return null;
+    },
+
     addPlayerBinding() {
       const g = this.getCurrentGroupConfig();
       if (!g) return;
@@ -5574,12 +5907,14 @@ function createExpenditureLineChart(data, daysInMonth) {
       const aliasInput = document.getElementById("qqbot-bind-alias-input");
       const hoSelect = document.getElementById("qqbot-bind-ho-select");
       const cardSelect = document.getElementById("qqbot-bind-card-select");
+      const subGroupSelect = document.getElementById("qqbot-bind-subgroup-select");
       const personaInput = document.getElementById("qqbot-bind-persona-input");
 
       const qq = qqInput ? qqInput.value.trim() : "";
       const alias = aliasInput ? aliasInput.value.trim() : "";
       const ho = hoSelect ? hoSelect.value : "群友";
       const cardId = cardSelect ? cardSelect.value : "";
+      const subGroupId = subGroupSelect ? subGroupSelect.value.trim() : "";
       const persona = personaInput ? personaInput.value.trim() : "";
 
       if (!qq) {
@@ -5601,6 +5936,13 @@ function createExpenditureLineChart(data, daysInMonth) {
         g.memberRemarks[qq] ||
         "";
 
+      const allGroups =
+        (this.serverState &&
+          this.serverState.config &&
+          this.serverState.config.groups) ||
+        {};
+      const subGroupObj = subGroupId ? allGroups[subGroupId] : null;
+
       const item = {
         qq,
         alias,
@@ -5610,6 +5952,8 @@ function createExpenditureLineChart(data, daysInMonth) {
         cardName: cardObj
           ? cardObj.name
           : alias || prevRemark || "未绑角色卡",
+        subGroupId: subGroupId || "",
+        subGroupName: subGroupObj ? subGroupObj.groupName || subGroupId : "",
         persona: persona || (cardObj && cardObj.persona ? cardObj.persona : ""),
       };
 
@@ -5621,6 +5965,7 @@ function createExpenditureLineChart(data, daysInMonth) {
 
       if (qqInput) qqInput.value = "";
       if (aliasInput) aliasInput.value = "";
+      if (subGroupSelect) subGroupSelect.value = "";
       if (personaInput) personaInput.value = "";
       this.renderPlayerBindingsList();
       this.renderSimSenderSelect();
@@ -5637,14 +5982,17 @@ function createExpenditureLineChart(data, daysInMonth) {
       const aliasInput = document.getElementById("qqbot-bind-alias-input");
       const hoSelect = document.getElementById("qqbot-bind-ho-select");
       const cardSelect = document.getElementById("qqbot-bind-card-select");
+      const subGroupSelect = document.getElementById("qqbot-bind-subgroup-select");
       const personaInput = document.getElementById("qqbot-bind-persona-input");
 
+      this.renderSubGroupSelectOptions();
       if (qqInput) qqInput.value = found.qq || "";
       if (aliasInput) aliasInput.value = found.alias || "";
       if (hoSelect && found.slot) hoSelect.value = found.slot;
       if (cardSelect) cardSelect.value = found.cardId || "";
+      if (subGroupSelect) subGroupSelect.value = found.subGroupId || "";
       if (personaInput) personaInput.value = found.persona || "";
-      this.notify("已载入成员信息可修改");
+      this.notify("已载入成员信息与小群配置可修改");
     },
 
     removePlayerBinding(qq) {
@@ -5680,7 +6028,7 @@ function createExpenditureLineChart(data, daysInMonth) {
 
       if (list.length === 0) {
         container.innerHTML =
-          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px 2px;">暂未添加群成员人设，可点击下方同步按钮自动拉取群成员与QQ备注，或手动填写每个人的专属人设</div>';
+          '<div style="font-size: 11px; color: var(--text-secondary); padding: 4px 2px;">暂未添加群成员人设，可点击右上角同步按钮自动拉取群成员与QQ备注，或手动填写每个人的专属人设与小群</div>';
         return;
       }
 
@@ -5692,9 +6040,13 @@ function createExpenditureLineChart(data, daysInMonth) {
             : b.qqRemark
               ? "QQ备注识别"
               : "QQ号直显";
+          const subGroup = this.resolveMemberSubGroup(g, b);
+          const subGroupBadge = subGroup
+            ? `<div style="font-size: 11px; color: var(--accent-color); font-weight: 600; line-height: 1.35;">他与AI的小群：${this.escapeHtml(subGroup.subGroupName)} · 群号 ${this.escapeHtml(subGroup.subGroupId)}</div>`
+            : "";
           const personaPreview = b.persona
             ? b.persona
-            : "暂未填写专属人设，点击右侧编辑可为该群友写人设";
+            : "暂未填写专属人设，点击右侧编辑可为该群友写人设或指定他的线索小群";
           return `
         <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); flex-shrink: 0;">
           <div style="display: flex; align-items: center; gap: 6px;">
@@ -5707,6 +6059,7 @@ function createExpenditureLineChart(data, daysInMonth) {
             <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.editPlayerBinding('${this.escapeAttr(b.qq)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">编辑</button>
             <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.removePlayerBinding('${this.escapeAttr(b.qq)}');}" style="height: 24px; padding: 0 8px; font-size: 11px; flex-shrink: 0;">移除</button>
           </div>
+          ${subGroupBadge}
           <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
             人设：${this.escapeHtml(personaPreview)}
           </div>
@@ -6760,12 +7113,20 @@ function createExpenditureLineChart(data, daysInMonth) {
       const targetGids = [];
       if (shareMode === "ALL") {
         for (const gid of Object.keys(groups)) {
-          if (groups[gid] && groups[gid].enabled !== false) {
+          if (
+            groups[gid] &&
+            groups[gid].enabled !== false &&
+            groups[gid].crossMemoryMode !== "off"
+          ) {
             targetGids.push(gid);
           }
         }
       } else if (shareMode === "CURRENT") {
-        if (this.currentGroupId && groups[this.currentGroupId]) {
+        if (
+          this.currentGroupId &&
+          groups[this.currentGroupId] &&
+          groups[this.currentGroupId].crossMemoryMode !== "off"
+        ) {
           targetGids.push(this.currentGroupId);
         }
       } else if (groups[shareMode]) {
@@ -7731,8 +8092,7 @@ ${customJudgeRules}
     },
 
     resolveCrossSharedMemoryPrompt(currentGroupId, gCfg) {
-      const mode = (gCfg && gCfg.crossMemoryMode) || "all";
-      if (mode === "off") return "";
+      if (this.isGroupIndependent(gCfg)) return "";
 
       const groups =
         (this.serverState &&
@@ -7747,44 +8107,52 @@ ${customJudgeRules}
 
       const parts = [];
 
-      // 1. 共享其他群聊与小群的记忆总结与近期对话
-      if (mode === "all" || mode === "groups_only") {
-        for (const gid of Object.keys(groups)) {
-          if (String(gid) === String(currentGroupId)) continue;
-          const otherGrp = groups[gid];
-          if (!otherGrp || otherGrp.enabled === false) continue;
-          const gName = otherGrp.groupName || gid;
-          const memObj = this.staticFallbackMemory[gid] || {};
-          const sumText = String(
-            memObj.summaryText || otherGrp.memorySummary || "",
-          ).trim();
-          const recentMsgs = (this.staticFallbackLogs[gid] || []).slice(-8);
-          const recentStr = recentMsgs
-            .map((m) => {
-              if (!m) return "";
-              const spk = m.isSelf
-                ? "我方AI"
-                : this.resolveMemberDisplayName(
-                    otherGrp,
-                    m.senderId,
-                    m.qqRemark || m.senderName,
-                  );
-              return `[${spk}]: ${m.rawMessage || m.content || ""}`;
-            })
-            .filter(Boolean)
-            .join("\n");
-          if (sumText || recentStr) {
-            parts.push(
-              `【关联群聊/小群「${gName} (群号:${gid})」共享记忆与动态】\n` +
-                (sumText ? `记忆总结：${sumText}\n` : "") +
-                (recentStr ? `最近对话：\n${recentStr}` : ""),
-            );
-          }
+      // 1. 共享已关联的其他群聊与小群的记忆总结与近期对话（独立群聊绝不互通）
+      for (const gid of Object.keys(groups)) {
+        if (String(gid) === String(currentGroupId)) continue;
+        const otherGrp = groups[gid];
+        if (!otherGrp || otherGrp.enabled === false) continue;
+        if (
+          !this.isTargetGroupLinkedToCurrent(
+            currentGroupId,
+            gCfg,
+            gid,
+            otherGrp,
+          )
+        ) {
+          continue;
+        }
+        const gName = otherGrp.groupName || gid;
+        const memObj = this.staticFallbackMemory[gid] || {};
+        const sumText = String(
+          memObj.summaryText || otherGrp.memorySummary || "",
+        ).trim();
+        const recentMsgs = (this.staticFallbackLogs[gid] || []).slice(-8);
+        const recentStr = recentMsgs
+          .map((m) => {
+            if (!m) return "";
+            const spk = m.isSelf
+              ? "我方AI"
+              : this.resolveMemberDisplayName(
+                  otherGrp,
+                  m.senderId,
+                  m.qqRemark || m.senderName,
+                );
+            return `[${spk}]: ${m.rawMessage || m.content || ""}`;
+          })
+          .filter(Boolean)
+          .join("\n");
+        if (sumText || recentStr) {
+          parts.push(
+            `【关联群聊/小群「${gName} · 群号:${gid}」共享记忆与动态】\n` +
+              (sumText ? `记忆总结：${sumText}\n` : "") +
+              (recentStr ? `最近对话：\n${recentStr}` : ""),
+          );
         }
       }
 
       // 2. 共享单人小窗的记忆总结与近期私聊动态
-      if (mode === "all" || mode === "private_only") {
+      if (this.shouldSharePrivateMemoryForGroup(gCfg)) {
         for (const uid of Object.keys(privates)) {
           const p = privates[uid];
           if (!p || p.enabled === false) continue;
@@ -7803,7 +8171,7 @@ ${customJudgeRules}
             .join("\n");
           if (pMem || pRecentStr) {
             parts.push(
-              `【单人小窗「${pName} (QQ:${uid})」共享记忆与私聊动态】\n` +
+              `【单人小窗「${pName} · QQ:${uid}」共享记忆与私聊动态】\n` +
                 (pMem ? `小窗秘密记忆：${pMem}\n` : "") +
                 (pRecentStr ? `最近小窗对话：\n${pRecentStr}` : ""),
             );
@@ -7815,6 +8183,8 @@ ${customJudgeRules}
     },
 
     resolveAvailableRoutingTargetsPrompt(currentGroupId, gCfg) {
+      if (this.isGroupIndependent(gCfg)) return "";
+
       const groups =
         (this.serverState &&
           this.serverState.config &&
@@ -7826,49 +8196,91 @@ ${customJudgeRules}
           this.serverState.config.privateChats) ||
         {};
 
-      const groupLines = Object.keys(groups)
-        .filter((gid) => groups[gid] && groups[gid].enabled !== false)
-        .map((gid) => {
-          const g = groups[gid];
-          const tag =
-            String(gid) === String(currentGroupId) ? "（当前触发群）" : "（可跨群投递的小群/关联群）";
-          return `- 群名称：${g.groupName || gid} | 群号：${gid} ${tag}`;
-        });
-
-      const privLines = Object.keys(privates)
-        .filter((uid) => privates[uid] && privates[uid].enabled !== false)
-        .map((uid) => {
-          const p = privates[uid];
-          return `- 小窗好友：${p.remark || p.nickname || uid} | QQ号：${uid}`;
-        });
-
+      const memberSubGroupLines = [];
       if (Array.isArray(gCfg && gCfg.playerBindings)) {
         gCfg.playerBindings.forEach((b) => {
           if (!b || !b.qq) return;
           const disp = this.resolveMemberDisplayName(gCfg, b.qq, b.qqRemark);
-          privLines.push(
-            `- 群成员小窗：${disp} | 定位：${b.slot || "群友"} | QQ号：${b.qq}`,
-          );
+          const subGroup = this.resolveMemberSubGroup(gCfg, b);
+          if (subGroup) {
+            const subGrpObj = groups[subGroup.subGroupId];
+            if (!subGrpObj || subGrpObj.crossMemoryMode !== "off") {
+              memberSubGroupLines.push(
+                `- 你和「${disp}」的小群 | 定位：${b.slot || "群友"} | 群名称：「${subGroup.subGroupName}」 | 群号：${subGroup.subGroupId} -> 当「${disp}」获得个人秘密线索、暗骰结果、独享情报或单人线剧情时，请主动发往这个小群群号 ${subGroup.subGroupId}`,
+              );
+            }
+          }
         });
       }
 
+      const groupLines = Object.keys(groups)
+        .filter((gid) => {
+          const g = groups[gid];
+          if (!g || g.enabled === false) return false;
+          if (String(gid) === String(currentGroupId)) return true;
+          return this.isTargetGroupLinkedToCurrent(
+            currentGroupId,
+            gCfg,
+            gid,
+            g,
+          );
+        })
+        .map((gid) => {
+          const g = groups[gid];
+          const isCurrent = String(gid) === String(currentGroupId);
+          const tag = isCurrent
+            ? "当前触发主群"
+            : "已关联小群，可主动发线索或剧情到此群号";
+          return `- 群名称：${g.groupName || gid} | 群号：${gid} | 状态：${tag}`;
+        });
+
+      const privLines = [];
+      if (this.shouldSharePrivateMemoryForGroup(gCfg)) {
+        Object.keys(privates)
+          .filter((uid) => privates[uid] && privates[uid].enabled !== false)
+          .forEach((uid) => {
+            const p = privates[uid];
+            privLines.push(
+              `- 小窗好友：${p.remark || p.nickname || uid} | QQ号：${uid}`,
+            );
+          });
+
+        if (Array.isArray(gCfg && gCfg.playerBindings)) {
+          gCfg.playerBindings.forEach((b) => {
+            if (!b || !b.qq) return;
+            const disp = this.resolveMemberDisplayName(gCfg, b.qq, b.qqRemark);
+            const subGroup = this.resolveMemberSubGroup(gCfg, b);
+            privLines.push(
+              `- 群成员：${disp} | 定位：${b.slot || "群友"} | QQ号：${b.qq}${subGroup ? ` | 他与你的专属小群群号：${subGroup.subGroupId}` : ""}`,
+            );
+          });
+        }
+      }
+
       return [
+        memberSubGroupLines.length > 0
+          ? `【你与各位调查员/群友的专属线索小群对照表】\n${memberSubGroupLines.join("\n")}`
+          : "",
         groupLines.length > 0
-          ? `【可自由选择发送的目标群聊列表（主群与各小群）】\n${groupLines.join("\n")}`
+          ? `【当前已关联的全部群聊与小群群号列表】\n${groupLines.join("\n")}`
           : "",
         privLines.length > 0
-          ? `【可主动发起私聊的目标单人小窗列表】\n${privLines.join("\n")}`
+          ? `【可主动联系的成员与单人小窗列表】\n${privLines.join("\n")}`
           : "",
       ]
         .filter(Boolean)
         .join("\n\n");
     },
 
+    getDefaultNaiPromptConfig() {
+      return getDefaultNaiPromptConfig();
+    },
+
     /* ============================================================================
      * 主API：完整挂载AI人设、要求、思维链、群成员专属人设、以及面板中一五一十可编辑的生图指令与代码规范
      * ============================================================================ */
     resolveNaiRuleForGroup(gCfg) {
-      const def = this.getDefaultNaiPromptConfig();
+      const def = getDefaultNaiPromptConfig();
       const naiMode =
         gCfg.naiMode ||
         (gCfg.autoNaiImage === false ? "off" : "trpg_every_round");
@@ -8168,21 +8580,23 @@ ${customJudgeRules}
       ].join("\n");
       promptSections.push(formatPromptSectionBlock("格式与指令", formatAndRulesBody));
 
-      // 4. 无痕私密对话、跨群路由与主动发小窗规范
-      const routingTargetsPrompt = this.resolveAvailableRoutingTargetsPrompt(
-        gCfg.groupId,
-        gCfg,
-      );
-      const privateRuleBody = [
-        "1. 主动发单人小窗（privateMessages）：如果某位群友触发了专属HO秘密、高难侦查独享情报、发狂幻觉、单人线剧情，或者你在大群看到某人的动向后想主动私下找他的小窗说话，请在群聊公屏 groupMessages 中只发公开表象（也可留空数组），同时把私密内容写进 privateMessages 数组中，在 targetSlot 中填入该好友的实时名字、QQ号或HO代号，系统会自动通过QQ小窗单独私发给他。",
-        "2. 主AI自主选择发往哪个群聊（targetGroupMessages）：虽然你可能是在主群被唤醒，但你可以综合各小群与单人小窗的共享记忆，自主决定把消息发往哪个群聊！如果是发在当前群，直接填在 groupMessages 即可；如果你想把剧情或通知发往其他小群或分群，请在 targetGroupMessages 数组中填写 `{ \"targetGroup\": \"目标群名称或群号\", \"text\": \"发往该群的正文\" }`，系统会自动投递到对应群聊！",
-        routingTargetsPrompt,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
-      promptSections.push(
-        formatPromptSectionBlock("跨群选择与主动小窗规范", privateRuleBody),
-      );
+      // 4. 无痕私密对话、专属小群发线索与主动发小窗规范（独立群聊不注入跨群路由）
+      if (!this.isGroupIndependent(gCfg)) {
+        const routingTargetsPrompt = this.resolveAvailableRoutingTargetsPrompt(
+          gCfg.groupId,
+          gCfg,
+        );
+        const privateRuleBody = [
+          "1. 主动往某人的专属小群发送秘密线索（targetGroupMessages）：你清楚知道你和每位调查员/群友各自关联的小群群号。当某位群友触发了专属HO秘密、个人侦查线索、暗骰检定结果、发狂幻觉或单人行动剧情时，请在当前大群 groupMessages 中只发公开表象，同时在 targetGroupMessages 数组中填入 `{ \"targetGroup\": \"他和你的小群群号或群名称\", \"text\": \"单独发到他和你的小群里的秘密线索与剧情描写\" }`，主动把线索发进他与你的小群里！",
+          "2. 单人小窗直发兜底（privateMessages）：如果某位群友没有配置专属小群，或者你想直接发到他的单人私聊小窗，也可以写进 privateMessages 数组中（填写 targetSlot 为该成员名字、HO代号或QQ号）；若该成员已有绑定的专属小群，系统同样会自动把线索投递进他和你的小群。",
+          routingTargetsPrompt,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+        promptSections.push(
+          formatPromptSectionBlock("专属小群发线索与跨群路由规范", privateRuleBody),
+        );
+      }
 
       // 5. 我的人设与AI角色设定 + 群成员人设
       const personaSectionBody = [
@@ -8597,10 +9011,14 @@ ${tailBlock}
         });
       }
 
-      // 1.5 主AI自主选择跨群发送到指定小群或关联群聊
-      const targetGroupMsgs = Array.isArray(replyPack.targetGroupMessages)
-        ? replyPack.targetGroupMessages
-        : [];
+      // 若本群被设为独立群聊，回复完全独立，不向其他群或小窗派发跨群消息
+      const isIndependent = this.isGroupIndependent(gCfg);
+
+      // 1.5 主AI主动向专属线索小群或关联群聊发送线索与消息
+      const targetGroupMsgs =
+        !isIndependent && Array.isArray(replyPack.targetGroupMessages)
+          ? replyPack.targetGroupMessages
+          : [];
       const allGroups =
         (this.serverState &&
           this.serverState.config &&
@@ -8626,10 +9044,39 @@ ${tailBlock}
             }
           }
         }
-        if (resolvedGid) {
+        // 若AI填的是某位玩家的名字、HO代号或QQ号，自动查找该玩家绑定的专属小群群号
+        if (!resolvedGid && Array.isArray(gCfg.playerBindings)) {
+          const matchedBinding = gCfg.playerBindings.find((b) => {
+            const disp = this.resolveMemberDisplayName(gCfg, b.qq, b.qqRemark);
+            return (
+              String(b.qq) === tKey ||
+              b.slot === tKey ||
+              b.alias === tKey ||
+              b.qqRemark === tKey ||
+              b.cardName === tKey ||
+              disp === tKey ||
+              tKey.includes(disp)
+            );
+          });
+          if (matchedBinding) {
+            const subObj = this.resolveMemberSubGroup(gCfg, matchedBinding);
+            if (subObj && subObj.subGroupId) {
+              resolvedGid = subObj.subGroupId;
+            }
+          }
+        }
+        if (
+          resolvedGid &&
+          this.isTargetGroupLinkedToCurrent(
+            groupId,
+            gCfg,
+            resolvedGid,
+            allGroups[resolvedGid],
+          )
+        ) {
           this.appendDebugLog(
-            "跨群路由",
-            `主AI自主选择发往群「${(allGroups[resolvedGid] && allGroups[resolvedGid].groupName) || resolvedGid}」：${tgm.text.slice(0, 80)}`,
+            "小群线索",
+            `主AI主动发送线索至小群「${(allGroups[resolvedGid] && allGroups[resolvedGid].groupName) || resolvedGid}」：${tgm.text.slice(0, 80)}`,
             false,
           );
           await this.sendBotMessage({
@@ -8639,10 +9086,11 @@ ${tailBlock}
         }
       }
 
-      // 2. 派发单人线小窗、主动私聊或秘密线索（同时匹配群成员名册与独立好友小窗列表）
-      const privList = Array.isArray(replyPack.privateMessages)
-        ? replyPack.privateMessages
-        : [];
+      // 2. 派发个人秘密线索与单人小窗（若该成员已关联专属小群，优先把线索发进他和AI的小群）
+      const privList =
+        !isIndependent && Array.isArray(replyPack.privateMessages)
+          ? replyPack.privateMessages
+          : [];
       const allPrivates =
         (this.serverState &&
           this.serverState.config &&
@@ -8655,6 +9103,7 @@ ${tailBlock}
           pm.targetSlot || pm.targetName || pm.targetUserId || "",
         ).trim();
         let isSoloGroup = false;
+        let matchedSubGroupId = "";
 
         if (Array.isArray(gCfg.playerBindings)) {
           const found = gCfg.playerBindings.find((b) => {
@@ -8672,7 +9121,24 @@ ${tailBlock}
           if (found) {
             targetId = found.qq;
             if (found.slot === "单人群") isSoloGroup = true;
+            const subObj = this.resolveMemberSubGroup(gCfg, found);
+            if (subObj && subObj.subGroupId) {
+              matchedSubGroupId = subObj.subGroupId;
+            }
           }
+        }
+
+        if (matchedSubGroupId) {
+          this.appendDebugLog(
+            "小群线索",
+            `主AI将「${targetKey}」的秘密线索发往专属小群「${(allGroups[matchedSubGroupId] && allGroups[matchedSubGroupId].groupName) || matchedSubGroupId}」：${String(pm.text).slice(0, 80)}`,
+            false,
+          );
+          await this.sendBotMessage({
+            groupId: matchedSubGroupId,
+            message: String(pm.text).trim(),
+          });
+          continue;
         }
 
         if (!targetId && targetKey) {
@@ -8794,7 +9260,7 @@ ${tailBlock}
       }
 
       if (naiMode !== "off" && rawNaiPrompt) {
-        const def = this.getDefaultNaiPromptConfig();
+        const def = getDefaultNaiPromptConfig();
         const prefix = String(gCfg.naiPrefix || def.naiPrefix).trim();
         const finalNaiTags = prefix
           ? `${prefix}, ${rawNaiPrompt}`
@@ -9593,6 +10059,10 @@ ${tailBlock}
           if (customPersona) {
             detail += ` | 专属人设:${customPersona}`;
           }
+          const subGroup = this.resolveMemberSubGroup(gCfg, b);
+          if (subGroup) {
+            detail += ` | 你和「${realName}」的专属线索小群:「${subGroup.subGroupName}」群号:${subGroup.subGroupId}`;
+          }
           return `- 实时名字:${realName} | 定位:${b.slot || "群友"}${detail}`;
         })
         .join("\n");
@@ -9785,6 +10255,8 @@ ${tailBlock}
 
       let res = await fetch(endpoint, {
         method: "POST",
+        _isSubApiCall: Boolean(useSubApi),
+        _useCallerUrl: true,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
@@ -9799,6 +10271,8 @@ ${tailBlock}
       if (!res.ok && validImages.length > 0) {
         res = await fetch(endpoint, {
           method: "POST",
+          _isSubApiCall: Boolean(useSubApi),
+          _useCallerUrl: true,
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,

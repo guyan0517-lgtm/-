@@ -1761,6 +1761,7 @@
                     id="background-interval-input"
                     min="30"
                     value="60"
+                    autocomplete="off"
                     class="moe-input center-text"
                   />
                 </div>
@@ -2442,7 +2443,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v5.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -10418,6 +10419,7 @@
               value="28"
               min="1"
               max="50"
+              autocomplete="off"
               style="
                 background-color: #f8f9fa;
                 color: #333;
@@ -10441,6 +10443,7 @@
               min="1"
               max="20"
               step="0.5"
+              autocomplete="off"
               style="
                 background-color: #f8f9fa;
                 color: #333;
@@ -10562,6 +10565,7 @@
             <textarea
               id="nai-default-artist"
               rows="2"
+              autocomplete="off"
               style="
                 background-color: #f8f9fa;
                 color: #333;
@@ -10580,6 +10584,7 @@
             <textarea
               id="nai-default-positive"
               rows="3"
+              autocomplete="off"
               style="
                 background-color: #f8f9fa;
                 color: #333;
@@ -10601,6 +10606,7 @@
             <textarea
               id="nai-default-negative"
               rows="3"
+              autocomplete="off"
               style="
                 background-color: #f8f9fa;
                 color: #333;
@@ -17798,14 +17804,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               </div>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <label style="font-size: 11px; color: var(--text-secondary);">跨群小群与单人小窗记忆共享及主AI跨群路由</label>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 11px; color: var(--text-secondary);">本群独立性与多群小窗记忆互通模式</label>
               <select id="qqbot-cross-memory-select" onchange="if(window.QQBotConsole){window.QQBotConsole.onCurrentGroupFieldChange();}" class="moe-input" style="width: 100%; height: 36px; line-height: 22px; font-size: 12px; padding: 0 22px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
-                <option value="all" selected>共享全部小群与单人小窗记忆 · 允许主AI自选目标群与小窗发送</option>
-                <option value="groups_only">仅共享其他群聊与小群记忆 · 允许主AI跨群发送</option>
-                <option value="private_only">仅共享单人小窗记忆 · 允许主AI主动发小窗</option>
-                <option value="off">仅使用本群独立记忆</option>
+                <option value="off">独立群聊 · 不看其他群与小窗记忆且回复完全独立</option>
+                <option value="linked">指定关联 · 自由勾选与本群互通记忆的群聊及小窗</option>
+                <option value="all" selected>全部互通 · 共享所有已启用群聊与单人小窗记忆</option>
+                <option value="groups_only">仅群互通 · 仅共享其他群聊与小群记忆</option>
+                <option value="private_only">仅窗互通 · 仅共享单人小窗记忆</option>
               </select>
+              <div id="qqbot-linked-groups-wrap" style="display: none; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                  <span style="font-size: 11px; font-weight: 600; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">点选与本群共享记忆及线索的关联群与小窗</span>
+                  <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                    <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.selectAllLinkedGroups();}" style="height: 24px; padding: 0 8px; font-size: 11px;">全选</button>
+                    <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.clearAllLinkedGroups();}" style="height: 24px; padding: 0 8px; font-size: 11px;">清空</button>
+                  </div>
+                </div>
+                <div id="qqbot-linked-groups-list" style="display: flex; flex-direction: column; gap: 5px; max-height: 170px; overflow-y: auto;"></div>
+              </div>
             </div>
           </div>
 
@@ -17877,6 +17894,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 </select>
                 <select id="qqbot-bind-card-select" class="moe-input" style="width: 100%; height: 34px; line-height: 20px; font-size: 12px; padding: 0 18px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
                   <option value="">不绑角色卡直接用下方人设</option>
+                </select>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">他与AI的小群</span>
+                <select id="qqbot-bind-subgroup-select" class="moe-input" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 18px 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); cursor: pointer; box-sizing: border-box;">
+                  <option value="">按群名自动识别或在此指定他和AI的专属小群</option>
                 </select>
               </div>
 
@@ -22253,7 +22277,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? (typeof activeBodyObj === "string" ? activeBodyObj : JSON.stringify(activeBodyObj))
                 : undefined;
 
-              const directStartT = Date.now();
               try {
                 ensureBackgroundKeepAlive();
                 resetTimeout();
@@ -22266,10 +22289,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               } catch (err) {
                 currentDirectErr = err;
               }
-              const directElapsedMs = Date.now() - directStartT;
+
+              // 强制铁律：无论什么情况下都不能把非流式改成流式
 
               const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
-              if (!currentRes && !isStaticHost && !controller.signal.aborted && !options._noAutoRetry && directElapsedMs < 1500) {
+              if (!currentRes && !isStaticHost && !controller.signal.aborted && !options._noAutoRetry) {
                 try {
                   resetTimeout();
                   const proxyRes = await origFetch("/api/proxy", {
@@ -22561,33 +22585,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
-            // 非流式请求：分块读取并重置看门狗，即使尾段连接异常断开也保留已收到的数据
+            // 强制铁律：无论什么情况下都不能把非流式改成流式
+            // 非流式请求直接使用浏览器原生C++网络层res.text()完整读取，避免手动getReader在长耗时或分块尾帧下抛Failed to fetch
             let resText = "";
             try {
-              if (res.body && typeof res.body.getReader === "function") {
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                while (true) {
-                  const { done, value } = await reader.read();
-                  resetTimeout();
-                  ensureBackgroundKeepAlive();
-                  if (done) {
-                    const tail = decoder.decode();
-                    if (tail) resText += tail;
-                    break;
-                  }
-                  if (value) {
-                    resText += decoder.decode(value, { stream: true });
-                  }
-                }
-              } else {
-                resText = await res.text();
-              }
-            } catch (readBodyErr) {
-              if (!resText || !resText.trim()) {
-                throw readBodyErr;
-              }
-              console.warn("[非流式保活] 响应体尾段连接断开，保留已接收到的完整文本:", readBodyErr);
+              resText = await res.text();
+              resetTimeout();
             } finally {
               if (timeoutId) clearTimeout(timeoutId);
             }
@@ -23211,7 +23214,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const domProxy = document.getElementById(isSubCall ? "sub-proxy-url" : "proxy-url")?.value?.trim() || "";
             const domKey = document.getElementById(isSubCall ? "sub-api-key" : "api-key")?.value?.trim() || "";
 
-            const rawBase = (isSubCall ? subProxy : mainProxy) || domProxy || urlStr;
+            const preferCallerUrl = Boolean(init && init._useCallerUrl && urlStr && /^https?:\/\//i.test(urlStr));
+            const rawBase = preferCallerUrl
+              ? urlStr
+              : ((isSubCall ? subProxy : mainProxy) || domProxy || urlStr);
             const targetUrl = formatChatCompletionUrl(rawBase);
             if (!targetUrl) {
               throw new Error("请在设置中填写有效的反代地址");
@@ -23261,7 +23267,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
-            const normalizedMessages = normalizeMessagesForClaudeRelay(rawMessages);
+            const normalizedMessages = isClaudeOrLlmapi
+              ? normalizeMessagesForClaudeRelay(rawMessages)
+              : rawMessages;
 
             const openAiPayload = {
               model: modelId,
@@ -29173,12 +29181,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return used;
         }
 
-        function replaceMashuPlaceholdersInText(text, mashuBlocksMap) {
+        function replaceMashuPlaceholdersInText(text, mashuBlocksMap, consumedSet) {
           if (!text || typeof text !== "string") return "";
           return text.replace(/\{\{\s*(?:麻薯[-—_:\s]*)?([^}\n]+?)\s*\}\}/g, (fullMatch, innerName) => {
             const tagName = String(innerName || "").trim();
             const canonical = MASHU_ALIAS_TO_CANONICAL.get(tagName);
             if (canonical && mashuBlocksMap && Object.prototype.hasOwnProperty.call(mashuBlocksMap, canonical)) {
+              if (consumedSet instanceof Set) {
+                if (consumedSet.has(canonical)) {
+                  return "";
+                }
+                consumedSet.add(canonical);
+              }
               return String(mashuBlocksMap[canonical] || "");
             }
             return fullMatch;
@@ -35774,7 +35788,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.resolveNovelAIModel = resolveNovelAIModel;
 
-        function loadNovelAISettings() {
+        function loadNovelAISettings(isOpeningModal = false) {
           const switchEl = document.getElementById("novelai-switch");
           const modelEl = document.getElementById("novelai-model");
           const keyEl = document.getElementById("novelai-api-key");
@@ -35826,7 +35840,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             customProxyGroup.style.display =
               settings.cors_proxy === "custom" ? "block" : "none";
           }
-          window._naiModalLoadedOnce = true;
+          if (isOpeningModal) {
+            window._naiModalLoadedOnce = true;
+          }
 
           if (!window._naiPromptAutoSaveBound) {
             window._naiPromptAutoSaveBound = true;
@@ -35835,6 +35851,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (el) {
                 const syncToStorage = () => {
                   try {
+                    const modalEl = document.getElementById("novelai-settings-modal");
+                    const isModalVisible = modalEl && (modalEl.style.display === "flex" || modalEl.style.display === "block");
+                    if (!isModalVisible) return;
                     const current = getNovelAISettings();
                     const aEl = document.getElementById("nai-default-artist");
                     const pEl = document.getElementById("nai-default-positive");
@@ -35843,6 +35862,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     if (pEl) current.default_positive = pEl.value;
                     if (nEl) current.default_negative = nEl.value;
                     localStorage.setItem("novelai-settings", JSON.stringify(current));
+                    if (window.state && window.state.apiConfig) {
+                      window.state.apiConfig.novelaiConfig = current;
+                      if (window.db && window.db.apiConfig) {
+                        window.db.apiConfig.put(window.state.apiConfig).catch(() => {});
+                      }
+                    }
                   } catch (_) {}
                 };
                 el.addEventListener("input", syncToStorage);
@@ -35852,7 +35877,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }
 
-        function saveNovelAISettings() {
+        function saveNovelAISettings(onlyMainApiFields = false) {
           // 保存API Key和模型等基础配置
           const switchEl = document.getElementById("novelai-switch");
           const modelEl = document.getElementById("novelai-model");
@@ -35862,6 +35887,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (keyEl && keyEl.value.trim()) localStorage.setItem("novelai-api-key", keyEl.value.trim());
 
           const prevSettings = getNovelAISettings();
+          const modalEl = document.getElementById("novelai-settings-modal");
+          const isModalVisible = modalEl && (modalEl.style.display === "flex" || modalEl.style.display === "block");
+
+          if (onlyMainApiFields && !isModalVisible && !window._naiModalLoadedOnce) {
+            localStorage.setItem("novelai-settings", JSON.stringify(prevSettings));
+            if (window.state && window.state.apiConfig) {
+              window.state.apiConfig.novelaiConfig = prevSettings;
+            }
+            return;
+          }
+
           const artistInput = document.getElementById("nai-default-artist");
           const posInput = document.getElementById("nai-default-positive");
           const negInput = document.getElementById("nai-default-negative");
@@ -35870,9 +35906,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const domPosVal = posInput ? posInput.value : "";
           const domNegVal = negInput ? negInput.value : "";
 
+          const rawSteps = parseInt(document.getElementById("nai-steps")?.value, 10);
+          const validSteps = (!isNaN(rawSteps) && rawSteps >= 1 && rawSteps <= 50)
+            ? rawSteps
+            : (prevSettings.steps >= 1 && prevSettings.steps <= 50 ? prevSettings.steps : 28);
+
           const settings = {
             resolution: document.getElementById("nai-resolution")?.value || prevSettings.resolution,
-            steps: parseInt(document.getElementById("nai-steps")?.value) || prevSettings.steps,
+            steps: (isModalVisible || window._naiModalLoadedOnce) ? validSteps : prevSettings.steps,
             cfg_scale: parseFloat(
               document.getElementById("nai-cfg-scale")?.value,
             ) || prevSettings.cfg_scale,
@@ -35883,26 +35924,41 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               document.getElementById("nai-quality-toggle") ? document.getElementById("nai-quality-toggle").checked : prevSettings.quality_toggle,
             smea: document.getElementById("nai-smea") ? document.getElementById("nai-smea").checked : prevSettings.smea,
             smea_dyn: document.getElementById("nai-smea-dyn") ? document.getElementById("nai-smea-dyn").checked : prevSettings.smea_dyn,
-            artist_prompt: window._naiModalLoadedOnce ? domArtistVal : (domArtistVal || prevSettings.artist_prompt || ""),
-            default_positive: window._naiModalLoadedOnce ? domPosVal : (domPosVal || prevSettings.default_positive || ""),
-            default_negative: window._naiModalLoadedOnce ? domNegVal : (domNegVal || prevSettings.default_negative || ""),
+            artist_prompt: (isModalVisible || window._naiModalLoadedOnce) ? (domArtistVal || prevSettings.artist_prompt || "") : (prevSettings.artist_prompt || ""),
+            default_positive: (isModalVisible || window._naiModalLoadedOnce) ? (domPosVal || prevSettings.default_positive || "") : (prevSettings.default_positive || ""),
+            default_negative: (isModalVisible || window._naiModalLoadedOnce) ? (domNegVal || prevSettings.default_negative || "") : (prevSettings.default_negative || ""),
             cors_proxy: document.getElementById("nai-cors-proxy")?.value || prevSettings.cors_proxy,
             custom_proxy_url: document.getElementById("nai-custom-proxy-url")
               ? document.getElementById("nai-custom-proxy-url").value
               : prevSettings.custom_proxy_url,
           };
 
+          if (isModalVisible) {
+            settings.artist_prompt = domArtistVal;
+            settings.default_positive = domPosVal;
+            settings.default_negative = domNegVal;
+          }
+
           localStorage.setItem("novelai-settings", JSON.stringify(settings));
+          if (window.state && window.state.apiConfig) {
+            window.state.apiConfig.novelaiConfig = settings;
+            if (window.db && window.db.apiConfig) {
+              window.db.apiConfig.put(window.state.apiConfig).catch(() => {});
+            }
+          }
         }
 
         function resetNovelAISettings() {
           localStorage.removeItem("novelai-settings");
-          loadNovelAISettings();
+          if (window.state && window.state.apiConfig) {
+            delete window.state.apiConfig.novelaiConfig;
+          }
+          loadNovelAISettings(true);
           alert("已恢复默认设置！");
         }
         setTimeout(() => {
           try {
-            loadNovelAISettings();
+            loadNovelAISettings(false);
           } catch (_) {}
         }, 0);
 
@@ -35925,13 +35981,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             custom_proxy_url: "",
           };
 
+          let parsed = null;
           const saved = localStorage.getItem("novelai-settings");
           if (saved) {
             try {
-              return { ...defaultSettings, ...JSON.parse(saved) };
-            } catch (e) {
-              return defaultSettings;
+              parsed = JSON.parse(saved);
+            } catch (_) {}
+          }
+          if (!parsed && window.state && window.state.apiConfig && window.state.apiConfig.novelaiConfig) {
+            parsed = window.state.apiConfig.novelaiConfig;
+          }
+          if (parsed && typeof parsed === "object") {
+            const merged = { ...defaultSettings, ...parsed };
+            const numericSteps = parseInt(merged.steps, 10);
+            if (isNaN(numericSteps) || numericSteps < 1 || numericSteps > 50) {
+              merged.steps = 28;
+            } else {
+              merged.steps = numericSteps;
             }
+            return merged;
           }
           return defaultSettings;
         }
@@ -48874,8 +48942,9 @@ ${chat.activeLineMode === "solo" ? "现在，请根据以上所有规则和下�
                 whisperRule: groupWhisperRuleBlock,
                 keeper: keeperPromptBlock,
               };
-              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, groupMashuMap);
-              thoughtChainPromptBlock = replaceMashuPlaceholdersInText(thoughtChainPromptBlock, groupMashuMap);
+              const consumedGroupMashuKeys = new Set();
+              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, groupMashuMap, consumedGroupMashuKeys);
+              thoughtChainPromptBlock = replaceMashuPlaceholdersInText(thoughtChainPromptBlock, groupMashuMap, consumedGroupMashuKeys);
 
               const hasSplitPersonaTakeover = usedMashuCanonicalKeys.has("myPersona") || usedMashuCanonicalKeys.has("peerPersona");
               const effectiveGroupMyPersona = hasSplitPersonaTakeover
@@ -49521,8 +49590,9 @@ ${stickerContext || "无"}
                 whisperRule: "",
                 keeper: keeperPromptBlock,
               };
-              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, singleMashuMap);
-              thoughtChainPromptBlock = replaceMashuPlaceholdersInText(thoughtChainPromptBlock, singleMashuMap);
+              const consumedSingleMashuKeys = new Set();
+              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, singleMashuMap, consumedSingleMashuKeys);
+              thoughtChainPromptBlock = replaceMashuPlaceholdersInText(thoughtChainPromptBlock, singleMashuMap, consumedSingleMashuKeys);
 
               systemPrompt = [
                 usedMashuCanonicalKeys.has("aiPersona") ? "" : singlePersonaBlock,
@@ -50067,9 +50137,11 @@ ${stickerContext || "无"}
               historyPromptBlock = contextPayloadBlocks.length > 0
                 ? window.formatPromptSection("上下文", contextPayloadBlocks.join("\n\n"))
                 : "";
-              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, { history: historyPromptBlock });
-              systemPrompt = replaceMashuPlaceholdersInText(systemPrompt, { history: historyPromptBlock });
+              const consumedHistoryKeys = new Set();
+              tcHeaderPromptBlock = replaceMashuPlaceholdersInText(tcHeaderPromptBlock, { history: historyPromptBlock }, consumedHistoryKeys);
+              systemPrompt = replaceMashuPlaceholdersInText(systemPrompt, { history: historyPromptBlock }, consumedHistoryKeys);
             }
+            const historyCountEmbeddedInSystem = usedMashuCanonicalKeys.has("history") ? messagesPayload.length : 0;
 
             // 在上下文最后一条消息之后附带本轮天气与幸运系统消息
             if (turnActiveWeather || turnActiveLuck) {
@@ -50289,6 +50361,7 @@ ${stickerContext || "无"}
                 }
               }
             } else {
+              // 强制铁律：无论什么情况下都不能把非流式改成流式
               // 非流式模式：直接一次性读取完整响应文本，不与流式逻辑交互
               rawText = await response.text();
             }
@@ -89521,8 +89594,9 @@ ${stickerContext || "无"}
                 );
               }
               if (typeof saveNovelAISettings === "function") {
-                try { saveNovelAISettings(); } catch (_) {}
+                try { saveNovelAISettings(true); } catch (_) {}
               }
+              await db.apiConfig.put(state.apiConfig);
               alert("API设置已保存!");
             });
 
@@ -89646,7 +89720,7 @@ ${stickerContext || "无"}
           document
             .getElementById("novelai-settings-btn")
             .addEventListener("click", () => {
-              loadNovelAISettings();
+              loadNovelAISettings(true);
               document.getElementById("novelai-settings-modal").style.display =
                 "flex";
             });
