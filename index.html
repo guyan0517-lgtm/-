@@ -2496,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22583,24 +22583,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
-            const isCompleteJsonObjectText = (str) => {
-              if (!str || typeof str !== "string") return false;
-              const t = str.trim();
-              if (!((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]")))) return false;
-              try {
-                const p = JSON.parse(t);
-                if (Array.isArray(p)) return p.length > 0;
-                return Boolean(p && (p.choices || p.candidates || p.content || p.error || p.message));
-              } catch (_) {
-                return false;
-              }
-            };
-
-            const hasCompleteSvgTag = (str) => {
-              if (!str || typeof str !== "string") return false;
-              return /<svg\b[\s\S]*?<\/svg>/i.test(str);
-            };
-
+            // ====== 核心流式与非流式读写保护区开始：已加锁保护，严禁任何功能修改此区块 ======
             // 严格区分流式与非流式：仅当请求明确开启流式时才走流式读取
             const isStreamReq = Boolean((parsedBody && parsedBody.stream === true) || finalUrl.includes("streamGenerateContent"));
             if (isStreamReq && res.body) {
@@ -22630,6 +22613,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     return true;
                   }
                   const choice = parsed.choices?.[0];
+                  if (choice?.finish_reason && typeof choice.finish_reason === "string" && choice.finish_reason.toLowerCase() !== "null") {
+                    sawFinishReason = choice.finish_reason;
+                    finishReason = choice.finish_reason;
+                  } else if (parsed.stop_reason === "max_tokens" || parsed.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+                    sawFinishReason = "length";
+                    finishReason = "length";
+                  } else if (parsed.stop_reason || parsed.candidates?.[0]?.finishReason) {
+                    sawFinishReason = parsed.stop_reason || parsed.candidates?.[0]?.finishReason;
+                    finishReason = "stop";
+                  }
                   const delta = choice?.delta || {};
                   const deltaContent =
                     delta.content ||
@@ -22651,33 +22644,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       ? parsed.candidates[0].content.parts.map((p) => (p && p.thought ? p.text || "" : "")).join("")
                       : "") ||
                     "";
-
-                  const rawChoiceFinish = choice?.finish_reason;
-                  const validChoiceFinish =
-                    rawChoiceFinish &&
-                    typeof rawChoiceFinish === "string" &&
-                    rawChoiceFinish.toLowerCase() !== "null"
-                      ? rawChoiceFinish
-                      : null;
-
-                  if (deltaContent || deltaReasoning) {
-                    sawFinishReason = null;
-                  }
-
-                  if (validChoiceFinish) {
-                    sawFinishReason = validChoiceFinish;
-                    finishReason = validChoiceFinish;
-                  } else if (parsed.stop_reason === "max_tokens" || parsed.candidates?.[0]?.finishReason === "MAX_TOKENS") {
-                    sawFinishReason = "length";
-                    finishReason = "length";
-                  } else if (
-                    (parsed.stop_reason && typeof parsed.stop_reason === "string" && parsed.stop_reason !== "null") ||
-                    (parsed.candidates?.[0]?.finishReason && parsed.candidates[0].finishReason !== "FINISH_REASON_UNSPECIFIED")
-                  ) {
-                    sawFinishReason = parsed.stop_reason || parsed.candidates?.[0]?.finishReason || "stop";
-                    finishReason = "stop";
-                  }
-
                   if (deltaContent) fullText += deltaContent;
                   if (deltaReasoning) fullThinking += deltaReasoning;
                   if (typeof options.onStreamChunk === "function" && (deltaContent || deltaReasoning)) {
@@ -22696,32 +22662,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               try {
                 while (true) {
-                  const alreadyFinished =
-                    Boolean(sawDoneMarker) ||
-                    Boolean(sawFinishReason) ||
-                    hasCompleteSvgTag(fullText) ||
-                    hasCompleteSvgTag(rawStreamText) ||
-                    isCompleteJsonObjectText(rawStreamText);
-
-                  let readResult;
-                  if (alreadyFinished) {
-                    let settleTimer = null;
-                    readResult = await Promise.race([
-                      reader.read(),
-                      new Promise((resolve) => {
-                        settleTimer = setTimeout(() => resolve({ done: true, value: undefined, _settledEarly: true }), 600);
-                      }),
-                    ]);
-                    if (settleTimer) clearTimeout(settleTimer);
-                    if (readResult && readResult._settledEarly) {
-                      try { await reader.cancel(); } catch (_) {}
-                      break;
-                    }
-                  } else {
-                    readResult = await reader.read();
-                  }
-
-                  const { done, value } = readResult;
+                  const { done, value } = await reader.read();
                   resetTimeout();
                   ensureBackgroundKeepAlive();
                   if (done) {
@@ -22756,25 +22697,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       buffer = "";
                     }
                   }
-                  if (typeof options.onStreamChunk === "function" && !fullText && rawStreamText.includes("<svg")) {
-                    options.onStreamChunk({
-                      content: rawStreamText,
-                      thinking: fullThinking,
-                      deltaContent: chunkStr,
-                      deltaReasoning: "",
-                    });
-                  }
                   if (sawDoneMarker) {
                     try { await reader.cancel(); } catch (_) {}
                     break;
                   }
                 }
               } catch (streamErr) {
-                if (!sawDoneMarker && !sawFinishReason && !hasCompleteSvgTag(fullText) && !hasCompleteSvgTag(rawStreamText)) {
-                  streamInterruptedErr = streamErr;
-                  finishReason = "length";
-                  console.warn("[流式保活] 传输中途截断或连接断开，保留已接收到的全部内容:", streamErr);
-                }
+                streamInterruptedErr = streamErr;
+                finishReason = "length";
+                console.warn("[流式保活] 传输中途截断或连接断开，保留已接收到的全部内容:", streamErr);
               } finally {
                 if (timeoutId) clearTimeout(timeoutId);
               }
@@ -22866,65 +22797,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
-            // 强制铁律：无论什么情况下都不能把非流式改成流式
-            // 非流式请求优先渐进读取已到达的数据块，一旦完整JSON或SVG闭合即刻完成，防止本地代理或长连接未关流导致卡死到8分钟超时
+            // 强制铁律：无论什么情况下都不能把非流式改成流式，非流式一次性完整读取响应文本
             let resText = "";
             try {
-              if (res.body && typeof res.body.getReader === "function") {
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                while (true) {
-                  const isBodyComplete =
-                    isCompleteJsonObjectText(resText) ||
-                    hasCompleteSvgTag(resText) ||
-                    /\bdata:\s*\[DONE\]/i.test(resText);
-
-                  let readRes;
-                  if (isBodyComplete) {
-                    let bodySettleTimer = null;
-                    readRes = await Promise.race([
-                      reader.read(),
-                      new Promise((resolve) => {
-                        bodySettleTimer = setTimeout(() => resolve({ done: true, value: undefined, _settledEarly: true }), 450);
-                      }),
-                    ]);
-                    if (bodySettleTimer) clearTimeout(bodySettleTimer);
-                    if (readRes && readRes._settledEarly) {
-                      try { await reader.cancel(); } catch (_) {}
-                      break;
-                    }
-                  } else {
-                    readRes = await reader.read();
-                  }
-
-                  const { done, value } = readRes;
-                  resetTimeout();
-                  ensureBackgroundKeepAlive();
-                  if (done) {
-                    const tail = decoder.decode();
-                    if (tail) resText += tail;
-                    break;
-                  }
-                  const chunk = decoder.decode(value, { stream: true });
-                  resText += chunk;
-                  if (typeof options.onStreamChunk === "function" && resText) {
-                    options.onStreamChunk({
-                      content: resText,
-                      thinking: "",
-                      deltaContent: chunk,
-                      deltaReasoning: "",
-                    });
-                  }
-                }
-              } else {
-                resText = await res.text();
-                resetTimeout();
-              }
-            } catch (nonStreamErr) {
-              if (!resText || !resText.trim()) {
-                throw nonStreamErr;
-              }
-              console.warn("[非流式保活] 连接断开但已收到响应内容，直接采用已收到的内容:", nonStreamErr);
+              resText = await res.text();
+              resetTimeout();
             } finally {
               if (timeoutId) clearTimeout(timeoutId);
             }
@@ -22942,6 +22819,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               text: resText,
               headers: new Headers({ "Content-Type": "application/json" }),
             };
+            // ====== 核心流式与非流式读写保护区结束：严禁任何功能修改此区块 ======
           } catch (err) {
             if (timeoutId) clearTimeout(timeoutId);
             if (didWatchdogTimeout && !(options.signal && options.signal.aborted)) {
@@ -22957,7 +22835,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
         }
-        window.requestLlmapiWithFallback = requestLlmapiWithFallback;
+        try {
+          Object.defineProperty(window, "requestLlmapiWithFallback", {
+            value: requestLlmapiWithFallback,
+            writable: false,
+            configurable: false,
+          });
+        } catch (_) {
+          window.requestLlmapiWithFallback = requestLlmapiWithFallback;
+        }
 
         const API_CONSOLE_STORAGE_KEY = "tukey_api_console_logs_v1";
         function getApiConsoleLogs() {
@@ -23516,9 +23402,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               let fallbackRes = await requestLlmapiWithFallback(effectiveUrlStr, {
                 ...initForDefault,
                 onStreamChunk: (chunk) => {
-                  if (init && typeof init.onStreamChunk === "function") {
-                    try { init.onStreamChunk(chunk); } catch (_) {}
-                  }
                   if (isStreamActive && typeof window.onAiStreamTokenReceived === "function") {
                     window.onAiStreamTokenReceived(chunk);
                   }
@@ -23633,9 +23516,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               },
               body: JSON.stringify(openAiPayload),
               onStreamChunk: (chunk) => {
-                if (init && typeof init.onStreamChunk === "function") {
-                  try { init.onStreamChunk(chunk); } catch (_) {}
-                }
                 if (isStreamActive && typeof window.onAiStreamTokenReceived === "function") {
                   window.onAiStreamTokenReceived(chunk);
                 }
