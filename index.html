@@ -2496,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -39058,14 +39058,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const item = document.createElement("div");
             item.className = "list-item";
             item.dataset.bookId = book.id;
-            const previewStr = String(book.content || "暂无内容...").replace(/\s+/g, " ").trim().substring(0, 50);
+            item.style.cssText = "display:flex !important;flex-direction:row !important;align-items:center !important;justify-content:space-between !important;gap:12px;text-align:left;overflow:hidden;";
+            const safeBookName = String(book.name || "未命名").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const previewStr = String(book.content || "暂无内容...").replace(/\s+/g, " ").trim().substring(0, 50).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             item.innerHTML = `
-              <div class="wb-item-icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></div>
-              <div class="wb-item-main">
-                <div class="item-title">${book.name}</div>
-                <div class="item-content">${previewStr}</div>
+              <div class="wb-item-icon-box" style="width:34px;height:34px;min-width:34px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></div>
+              <div class="wb-item-main" style="flex:1 1 0%;width:0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;overflow:hidden;text-align:left;">
+                <div class="item-title" style="width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin:0;">${safeBookName}</div>
+                <div class="item-content" style="width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin:0;">${previewStr}</div>
               </div>
-              <div class="wb-item-chevron"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+              <div class="wb-item-chevron" style="width:18px;height:18px;min-width:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:auto;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
             `;
             item.addEventListener("click", () => openWorldBookEditor(book.id));
             addLongPressListener(item, async () => {
@@ -84007,14 +84009,16 @@ ${stickerContext || "无"}
             const item = document.createElement("div");
             item.className = "list-item";
             item.dataset.bookId = book.id;
-            const previewStr = String(book.content || "暂无内容...").replace(/\s+/g, " ").trim().substring(0, 50);
+            item.style.cssText = "display:flex !important;flex-direction:row !important;align-items:center !important;justify-content:space-between !important;gap:12px;text-align:left;overflow:hidden;";
+            const safeBookName = String(book.name || "未命名").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const previewStr = String(book.content || "暂无内容...").replace(/\s+/g, " ").trim().substring(0, 50).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             item.innerHTML = `
-              <div class="wb-item-icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></div>
-              <div class="wb-item-main">
-                <div class="item-title">${book.name}</div>
-                <div class="item-content">${previewStr}</div>
+              <div class="wb-item-icon-box" style="width:34px;height:34px;min-width:34px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></div>
+              <div class="wb-item-main" style="flex:1 1 0%;width:0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;overflow:hidden;text-align:left;">
+                <div class="item-title" style="width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin:0;">${safeBookName}</div>
+                <div class="item-content" style="width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin:0;">${previewStr}</div>
               </div>
-              <div class="wb-item-chevron"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+              <div class="wb-item-chevron" style="width:18px;height:18px;min-width:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:auto;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
             `;
 
             addLongPressListener(item, async () => {
@@ -84345,8 +84349,10 @@ ${stickerContext || "无"}
             });
           };
 
+          window.currentWorldBookTopTab = "worldbook";
           window.switchWorldBookTopTab = function (tabName) {
             const isRegex = tabName === "regex";
+            window.currentWorldBookTopTab = isRegex ? "regex" : "worldbook";
             const wbTabBtn = document.getElementById("wb-top-tab-worldbook");
             const rxTabBtn = document.getElementById("wb-top-tab-regex");
             const wbList = document.getElementById("world-book-list");
@@ -84370,13 +84376,13 @@ ${stickerContext || "无"}
               }
               if (wbList) wbList.style.display = "none";
               if (rxList) rxList.style.display = "flex";
-              if (importWbBtn) importWbBtn.style.display = "none";
+              if (importWbBtn) importWbBtn.style.display = "";
               if (editModeWbBtn) editModeWbBtn.style.display = "none";
-              if (addWbBtn) addWbBtn.style.display = "none";
+              if (addWbBtn) addWbBtn.style.display = "";
               if (manageCatBtn) manageCatBtn.style.display = "none";
               if (deleteSelectedWbBtn) deleteSelectedWbBtn.style.display = "none";
-              if (importRxBtn) importRxBtn.style.display = "";
-              if (addRxBtn) addRxBtn.style.display = "";
+              if (importRxBtn) importRxBtn.style.display = "none";
+              if (addRxBtn) addRxBtn.style.display = "none";
               window.renderRegexRulesList();
             } else {
               if (wbList) wbList.style.display = "block";
@@ -84436,6 +84442,7 @@ ${stickerContext || "无"}
           const rxFindPreset = document.getElementById("regex-find-preset-select");
           const rxReplacePreset = document.getElementById("regex-replace-preset-select");
 
+          window.openRegexRuleEditor = openRegexRuleEditor;
           if (addRxBtn) {
             addRxBtn.addEventListener("click", () => openRegexRuleEditor(null));
           }
@@ -90936,6 +90943,11 @@ ${stickerContext || "无"}
           document
             .getElementById("import-world-book-btn")
             .addEventListener("click", () => {
+              if (window.currentWorldBookTopTab === "regex") {
+                const rxInputEl = document.getElementById("regex-file-import-input");
+                if (rxInputEl) rxInputEl.click();
+                return;
+              }
               // 直接打开文件选择器，无需输入密码
               const inputEl = document.getElementById("world-book-import-input");
               if (inputEl) inputEl.click();
@@ -90977,6 +90989,12 @@ ${stickerContext || "无"}
           document
             .getElementById("add-world-book-btn")
             .addEventListener("click", async () => {
+              if (window.currentWorldBookTopTab === "regex") {
+                if (typeof window.openRegexRuleEditor === "function") {
+                  window.openRegexRuleEditor(null);
+                }
+                return;
+              }
               const name = await showCustomPrompt("创建世界书", "请输入书名");
               if (name && name.trim()) {
                 const newBook = {

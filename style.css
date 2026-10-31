@@ -35121,22 +35121,39 @@ select,
   max-height: 0;
 }
 
-#world-book-list .list-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
-  border-radius: 11px;
-  background: var(--secondary-bg);
-  border: 1px solid var(--border-color);
-  margin: 0;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  box-sizing: border-box;
+#toggle-world-book-edit-mode-btn {
+  width: auto !important;
+  min-width: 40px;
+  padding: 0 8px !important;
+  border-radius: 16px !important;
+  font-size: 14px !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 
+#world-book-screen #world-book-list .list-item,
+#world-book-list .list-item {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  border-radius: 12px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-color);
+  margin: 0 !important;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  text-align: left !important;
+}
+
+#world-book-screen #world-book-list.selection-mode .list-item,
 #world-book-list.selection-mode .list-item {
-  padding-left: 48px;
+  padding-left: 48px !important;
 }
 
 #world-book-list.selection-mode .list-item::before {
@@ -35150,54 +35167,75 @@ select,
   font-size: 13px;
 }
 
+#world-book-screen #world-book-list .list-item .wb-item-icon-box,
 .wb-item-icon-box {
-  width: 32px;
-  height: 32px;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
   border-radius: 9px;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   color: var(--accent-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
 }
 
+#world-book-screen #world-book-list .list-item .wb-item-main,
 .wb-item-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex: 1 1 0% !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  overflow: hidden !important;
+  text-align: left !important;
+  margin: 0 !important;
 }
 
+#world-book-screen #world-book-list .list-item .item-title,
 #world-book-list .list-item .item-title {
+  width: 100% !important;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+  text-align: left !important;
+  line-height: 1.35;
 }
 
+#world-book-screen #world-book-list .list-item .item-content,
 #world-book-list .list-item .item-content {
+  width: 100% !important;
   font-size: 11.5px;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+  text-align: left !important;
+  line-height: 1.35;
 }
 
+#world-book-screen #world-book-list .list-item .wb-item-chevron,
 .wb-item-chevron {
-  width: 18px;
-  height: 18px;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
   color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
   opacity: 0.7;
 }
 
@@ -35213,51 +35251,64 @@ select,
 }
 
 .regex-rule-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  padding: 12px 14px !important;
   border-radius: 13px;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
-  box-sizing: border-box;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  text-align: left !important;
 }
 
 .regex-rule-icon {
-  width: 34px;
-  height: 34px;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
   border-radius: 10px;
   background: var(--secondary-bg);
   border: 1px solid var(--border-color);
   color: var(--accent-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
 }
 
 .regex-rule-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex: 1 1 0% !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+  overflow: hidden !important;
+  text-align: left !important;
 }
 
 .regex-rule-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 .regex-rule-name {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  text-align: left !important;
 }
 
 .regex-scope-badge {
@@ -35267,24 +35318,27 @@ select,
   background: var(--secondary-bg);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  flex-shrink: 0;
-  white-space: nowrap;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
 }
 
 .regex-rule-preview {
+  width: 100% !important;
   font-size: 11.5px;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  text-align: left !important;
 }
 
 .regex-rule-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  margin-left: auto;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
 }
 
 /* 伏笔面板样式 */
