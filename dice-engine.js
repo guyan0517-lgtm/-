@@ -2365,13 +2365,8 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
         return { hp, db };
       };
 
-      const renderAttrItem = (lbl, val) => `
-        <div style="display: flex; align-items: center; white-space: nowrap; font-size: 11px; gap: 1px;">
-          <span style="font-weight: 600; color: var(--text-secondary); display: inline-block;">${lbl}</span>
-          <span style="color: var(--text-secondary);">:</span>
-          <span style="color: var(--text-secondary); opacity: 0.85; font-weight: 600; font-size: 11px; display: inline-block; padding-left: 1px;">${val}</span>
-        </div>
-      `;
+      const renderAttrItem = (lbl, val) =>
+        `<div style="display: flex; align-items: center; white-space: nowrap; font-size: 11px; gap: 1px;"><span style="font-weight: 600; color: var(--text-secondary); display: inline-block;">${lbl}</span><span style="color: var(--text-secondary);">:</span><span style="color: var(--text-secondary); opacity: 0.85; font-weight: 600; font-size: 11px; display: inline-block; padding-left: 1px;">${val}</span></div>`;
 
       if (!isFive) {
         const attrs = generateCoc7Attributes();
@@ -2379,7 +2374,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
         const dataStr = encodeURIComponent(JSON.stringify(attrs));
 
         const cardHtml = `
-          <div class="coc-gen-result-card" style="font-size: 11px; line-height: 1.5; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px; overflow: hidden;">
+          <div class="coc-gen-result-card" style="white-space: normal !important; font-size: 11px; line-height: 1.45; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px; overflow: hidden;">
             <div class="coc-card-header" style="padding: 6px 10px; font-weight: 600; color: var(--text-primary); font-size: 12px; background: var(--secondary-bg); border-bottom: 1px solid var(--border-color);">COC7 七版人物属性 (${target.name})</div>
             <div style="padding: 8px 10px;">
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 8px; font-size: 11px; color: var(--text-secondary);">
@@ -2405,13 +2400,13 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
                   <span style="color: var(--text-secondary); opacity: 0.85; font-weight: 600; font-size: 11px; padding-left: 1px;">${calc.db}</span>
                 </div>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
                 <div style="font-size: 10px; color: var(--text-secondary);">合计:${attrs.total} 含幸运:${attrs.totalWithLuk}</div>
                 <button type="button" class="moe-btn-compact coc-apply-attrs-btn" data-target-id="${target.id || ''}" data-target-name="${target.name || ''}" data-attrs="${dataStr}" style="padding: 2px 10px; font-size: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); cursor: pointer; color: var(--accent-color); font-weight: 600;">选择</button>
               </div>
             </div>
           </div>
-        `;
+        `.replace(/>\s+</g, "><").trim();
         const text = `${target.name} 生成了一组 COC7 属性`;
         return { handled: true, text, html: cardHtml };
       } else {
@@ -2448,7 +2443,7 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
                     <span style="color: var(--text-secondary); opacity: 0.85; font-weight: 600; font-size: 11px; padding-left: 1px;">${calc.db}</span>
                   </div>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
                   <div style="font-size: 10px; color: var(--text-secondary);">合计:${a.total} 含运:${a.totalWithLuk}</div>
                   <button type="button" class="moe-btn-compact coc-apply-attrs-btn" data-target-id="${target.id || ''}" data-target-name="${target.name || ''}" data-attrs="${dataStr}" style="padding: 1px 10px; font-size: 10px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); cursor: pointer; color: var(--accent-color); font-weight: 600;">选择</button>
                 </div>
@@ -2458,11 +2453,11 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
         }
 
         const fullHtml = `
-          <div class="coc-gen-multi-card" style="font-size: 11px; line-height: 1.5; padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px;">
+          <div class="coc-gen-multi-card" style="white-space: normal !important; font-size: 11px; line-height: 1.45; padding: 8px 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 4px;">
             <div class="coc-card-header" style="font-weight: 600; margin-bottom: 6px; color: var(--text-primary); font-size: 12px;">COC7 七版人物属性生成 5组 (${target.name})</div>
             ${listHtml}
           </div>
-        `;
+        `.replace(/>\s+</g, "><").trim();
         const text = `${target.name} 生成了 5 组 COC7 属性`;
         return { handled: true, text, html: fullHtml };
       }

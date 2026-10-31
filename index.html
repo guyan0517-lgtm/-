@@ -2496,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v6.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -9417,79 +9417,89 @@
     </div>
 
     <div id="ai-foreshadowing-modal" class="modal">
-      <div class="modal-content" style="max-width: 350px;">
+      <div class="modal-content">
         <div class="modal-header">
           <div class="foreshadow-header-bar">
             <div class="foreshadow-char-meta">
               <img id="foreshadow-char-avatar" class="foreshadow-char-avatar" src="" alt="头像" />
-              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left;">
-                <span id="foreshadow-char-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">伏笔</span>
-                <span style="font-size: 11px; color: var(--text-secondary);">尾部单次附带 · 控制台隐藏</span>
-              </div>
+              <span id="foreshadow-char-name" style="font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">伏笔</span>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-              <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">开关</span>
-              <label class="toggle-switch" style="margin: 0; flex-shrink: 0;">
+              <span style="font-size: 11.5px; color: var(--text-secondary); font-weight: 500;">启用</span>
+              <label class="toggle-switch">
                 <input type="checkbox" id="foreshadow-enable-switch" />
                 <span class="slider"></span>
               </label>
             </div>
           </div>
         </div>
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px;">
+        <div class="modal-body">
           <div id="foreshadow-locked-view" class="foreshadow-lock-card">
             <div class="foreshadow-lock-icon-circle">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
             </div>
-            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">当前内容默认隐藏</div>
-            <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">包含角色跨回合未揭晓的短期意图与剧情暗线伏笔，点击下方按钮解锁查看</div>
-            <button type="button" class="moe-btn" id="foreshadow-unlock-btn" style="height: 32px; padding: 0 18px; font-size: 12.5px; border-radius: 9px; width: auto;">解锁</button>
+            <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary);">状态栏默认隐藏</div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.45;">解锁后可查看当前短期与伏笔状态</div>
+            <button type="button" class="chat-mod-footer-btn primary" id="foreshadow-unlock-btn" style="flex: none !important; width: 88px !important; height: 28px !important; font-size: 11.5px !important; border-radius: 8px !important; margin-top: 2px !important;">解锁</button>
           </div>
 
-          <div id="foreshadow-unlocked-view" style="display: none; flex-direction: column; gap: 10px;">
+          <div id="foreshadow-readonly-view" style="display: none; flex-direction: column; gap: 10px;">
             <div class="foreshadow-section-card">
               <div class="foreshadow-section-head">
                 <span class="foreshadow-section-title">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   <span>短期</span>
                 </span>
-                <select id="foreshadow-short-preset-select" class="moe-input" style="width: 96px; flex-shrink: 0; padding: 0 4px; font-size: 11.5px; height: 26px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; cursor: pointer;">
-                  <option value="">快捷填入</option>
-                  <option value="无">设为无</option>
-                  <option value="手心藏物待下回合揭晓">手心藏物</option>
-                  <option value="真心话保密待回去揭晓">保密真话</option>
-                  <option value="海龟汤汤底：">海龟汤底</option>
-                </select>
+                <span id="foreshadow-short-badge" class="foreshadow-status-badge">未记录</span>
               </div>
-              <textarea id="foreshadow-short-term-input" class="moe-input" rows="3" placeholder="暂无短期未完动作或海龟汤底..." style="width: 100%; font-size: 12.5px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); resize: vertical; box-sizing: border-box;"></textarea>
+              <div id="foreshadow-short-status-list" class="foreshadow-status-list"></div>
             </div>
 
             <div class="foreshadow-section-card">
               <div class="foreshadow-section-head">
                 <span class="foreshadow-section-title">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                   <span>伏笔</span>
                 </span>
-                <select id="foreshadow-plot-preset-select" class="moe-input" style="width: 96px; flex-shrink: 0; padding: 0 4px; font-size: 11.5px; height: 26px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; cursor: pointer;">
-                  <option value="">快捷填入</option>
-                  <option value="无">设为无</option>
-                  <option value="路人擦肩实则暗中顺走财物">暗中失窃</option>
-                  <option value="异常接触实则种下延迟发作的诅咒">潜伏诅咒</option>
-                  <option value="幕后黑手伪装路人暗中观察">黑手伪装</option>
-                </select>
+                <span id="foreshadow-plot-badge" class="foreshadow-status-badge">未记录</span>
               </div>
-              <textarea id="foreshadow-plot-input" class="moe-input" rows="3" placeholder="暂无隐藏暗线或延迟伏笔..." style="width: 100%; font-size: 12.5px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); resize: vertical; box-sizing: border-box;"></textarea>
+              <div id="foreshadow-plot-status-list" class="foreshadow-status-list"></div>
+            </div>
+          </div>
+
+          <div id="foreshadow-edit-view" style="display: none; flex-direction: column; gap: 10px;">
+            <div class="foreshadow-section-card">
+              <div class="foreshadow-section-head">
+                <span class="foreshadow-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <span>短期</span>
+                </span>
+              </div>
+              <textarea id="foreshadow-short-term-input" class="moe-input" rows="3" placeholder="输入短期记录或填无" style="width: 100%; font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); resize: none; box-sizing: border-box;"></textarea>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <button type="button" class="moe-btn-secondary" id="foreshadow-relock-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">锁定</button>
-              <button type="button" class="moe-btn-secondary" id="foreshadow-clear-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">清空</button>
-              <button type="button" class="moe-btn" id="foreshadow-save-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">保存</button>
+            <div class="foreshadow-section-card">
+              <div class="foreshadow-section-head">
+                <span class="foreshadow-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color); flex-shrink: 0;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  <span>伏笔</span>
+                </span>
+              </div>
+              <textarea id="foreshadow-plot-input" class="moe-input" rows="3" placeholder="输入伏笔记录或填无" style="width: 100%; font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); resize: none; box-sizing: border-box;"></textarea>
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="cancel" id="close-ai-foreshadowing-btn" style="width: 100%;">关闭</button>
+          <div id="foreshadow-footer-normal" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+            <button type="button" class="chat-mod-footer-btn secondary" id="foreshadow-relock-btn" style="display: none;">锁定</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="foreshadow-enter-edit-btn" style="display: none;">编辑</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="close-ai-foreshadowing-btn">关闭</button>
+          </div>
+          <div id="foreshadow-footer-edit" style="display: none; align-items: center; gap: 8px; width: 100%;">
+            <button type="button" class="chat-mod-footer-btn secondary" id="foreshadow-cancel-edit-btn">取消</button>
+            <button type="button" class="chat-mod-footer-btn secondary" id="foreshadow-clear-btn">清空</button>
+            <button type="button" class="chat-mod-footer-btn primary" id="foreshadow-save-btn">保存</button>
+          </div>
         </div>
       </div>
     </div>
@@ -22573,6 +22583,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
             }
 
+            const isCompleteJsonObjectText = (str) => {
+              if (!str || typeof str !== "string") return false;
+              const t = str.trim();
+              if (!((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]")))) return false;
+              try {
+                const p = JSON.parse(t);
+                if (Array.isArray(p)) return p.length > 0;
+                return Boolean(p && (p.choices || p.candidates || p.content || p.error || p.message));
+              } catch (_) {
+                return false;
+              }
+            };
+
+            const hasCompleteSvgTag = (str) => {
+              if (!str || typeof str !== "string") return false;
+              return /<svg\b[\s\S]*?<\/svg>/i.test(str);
+            };
+
             // 严格区分流式与非流式：仅当请求明确开启流式时才走流式读取
             const isStreamReq = Boolean((parsedBody && parsedBody.stream === true) || finalUrl.includes("streamGenerateContent"));
             if (isStreamReq && res.body) {
@@ -22589,17 +22617,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
               const processSseLine = (line) => {
                 const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith("data:")) return;
+                if (!trimmed || !trimmed.startsWith("data:")) return false;
                 const dataStr = trimmed.slice(5).trim();
                 if (dataStr === "[DONE]") {
                   sawDoneMarker = true;
-                  return;
+                  return true;
                 }
                 try {
                   const parsed = JSON.parse(dataStr);
                   if (parsed.type === "message_stop") {
                     sawDoneMarker = true;
-                    return;
+                    return true;
                   }
                   const choice = parsed.choices?.[0];
                   const delta = choice?.delta || {};
@@ -22642,8 +22670,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   } else if (parsed.stop_reason === "max_tokens" || parsed.candidates?.[0]?.finishReason === "MAX_TOKENS") {
                     sawFinishReason = "length";
                     finishReason = "length";
-                  } else if (parsed.stop_reason && typeof parsed.stop_reason === "string" && parsed.stop_reason !== "null") {
-                    sawFinishReason = parsed.stop_reason;
+                  } else if (
+                    (parsed.stop_reason && typeof parsed.stop_reason === "string" && parsed.stop_reason !== "null") ||
+                    (parsed.candidates?.[0]?.finishReason && parsed.candidates[0].finishReason !== "FINISH_REASON_UNSPECIFIED")
+                  ) {
+                    sawFinishReason = parsed.stop_reason || parsed.candidates?.[0]?.finishReason || "stop";
                     finishReason = "stop";
                   }
 
@@ -22657,12 +22688,40 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       deltaReasoning,
                     });
                   }
-                } catch (_) {}
+                  return true;
+                } catch (_) {
+                  return false;
+                }
               };
 
               try {
                 while (true) {
-                  const { done, value } = await reader.read();
+                  const alreadyFinished =
+                    Boolean(sawDoneMarker) ||
+                    Boolean(sawFinishReason) ||
+                    hasCompleteSvgTag(fullText) ||
+                    hasCompleteSvgTag(rawStreamText) ||
+                    isCompleteJsonObjectText(rawStreamText);
+
+                  let readResult;
+                  if (alreadyFinished) {
+                    let settleTimer = null;
+                    readResult = await Promise.race([
+                      reader.read(),
+                      new Promise((resolve) => {
+                        settleTimer = setTimeout(() => resolve({ done: true, value: undefined, _settledEarly: true }), 600);
+                      }),
+                    ]);
+                    if (settleTimer) clearTimeout(settleTimer);
+                    if (readResult && readResult._settledEarly) {
+                      try { await reader.cancel(); } catch (_) {}
+                      break;
+                    }
+                  } else {
+                    readResult = await reader.read();
+                  }
+
+                  const { done, value } = readResult;
                   resetTimeout();
                   ensureBackgroundKeepAlive();
                   if (done) {
@@ -22683,13 +22742,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     processSseLine(line);
                     if (sawDoneMarker) break;
                   }
+                  if (!sawDoneMarker && buffer.trim()) {
+                    const trimmedBuf = buffer.trim();
+                    if (
+                      trimmedBuf === "data: [DONE]" ||
+                      trimmedBuf === "data:[DONE]" ||
+                      trimmedBuf.includes('"message_stop"') ||
+                      (trimmedBuf.startsWith("data:") && processSseLine(trimmedBuf))
+                    ) {
+                      if (trimmedBuf.includes("[DONE]") || trimmedBuf.includes('"message_stop"')) {
+                        sawDoneMarker = true;
+                      }
+                      buffer = "";
+                    }
+                  }
+                  if (typeof options.onStreamChunk === "function" && !fullText && rawStreamText.includes("<svg")) {
+                    options.onStreamChunk({
+                      content: rawStreamText,
+                      thinking: fullThinking,
+                      deltaContent: chunkStr,
+                      deltaReasoning: "",
+                    });
+                  }
                   if (sawDoneMarker) {
                     try { await reader.cancel(); } catch (_) {}
                     break;
                   }
                 }
               } catch (streamErr) {
-                if (!sawDoneMarker && !sawFinishReason) {
+                if (!sawDoneMarker && !sawFinishReason && !hasCompleteSvgTag(fullText) && !hasCompleteSvgTag(rawStreamText)) {
                   streamInterruptedErr = streamErr;
                   finishReason = "length";
                   console.warn("[流式保活] 传输中途截断或连接断开，保留已接收到的全部内容:", streamErr);
@@ -22786,11 +22867,64 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             // 强制铁律：无论什么情况下都不能把非流式改成流式
-            // 非流式请求直接使用浏览器原生C++网络层res.text()完整读取，避免手动getReader在长耗时或分块尾帧下抛Failed to fetch
+            // 非流式请求优先渐进读取已到达的数据块，一旦完整JSON或SVG闭合即刻完成，防止本地代理或长连接未关流导致卡死到8分钟超时
             let resText = "";
             try {
-              resText = await res.text();
-              resetTimeout();
+              if (res.body && typeof res.body.getReader === "function") {
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                  const isBodyComplete =
+                    isCompleteJsonObjectText(resText) ||
+                    hasCompleteSvgTag(resText) ||
+                    /\bdata:\s*\[DONE\]/i.test(resText);
+
+                  let readRes;
+                  if (isBodyComplete) {
+                    let bodySettleTimer = null;
+                    readRes = await Promise.race([
+                      reader.read(),
+                      new Promise((resolve) => {
+                        bodySettleTimer = setTimeout(() => resolve({ done: true, value: undefined, _settledEarly: true }), 450);
+                      }),
+                    ]);
+                    if (bodySettleTimer) clearTimeout(bodySettleTimer);
+                    if (readRes && readRes._settledEarly) {
+                      try { await reader.cancel(); } catch (_) {}
+                      break;
+                    }
+                  } else {
+                    readRes = await reader.read();
+                  }
+
+                  const { done, value } = readRes;
+                  resetTimeout();
+                  ensureBackgroundKeepAlive();
+                  if (done) {
+                    const tail = decoder.decode();
+                    if (tail) resText += tail;
+                    break;
+                  }
+                  const chunk = decoder.decode(value, { stream: true });
+                  resText += chunk;
+                  if (typeof options.onStreamChunk === "function" && resText) {
+                    options.onStreamChunk({
+                      content: resText,
+                      thinking: "",
+                      deltaContent: chunk,
+                      deltaReasoning: "",
+                    });
+                  }
+                }
+              } else {
+                resText = await res.text();
+                resetTimeout();
+              }
+            } catch (nonStreamErr) {
+              if (!resText || !resText.trim()) {
+                throw nonStreamErr;
+              }
+              console.warn("[非流式保活] 连接断开但已收到响应内容，直接采用已收到的内容:", nonStreamErr);
             } finally {
               if (timeoutId) clearTimeout(timeoutId);
             }
@@ -23381,11 +23515,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               let fallbackRes = await requestLlmapiWithFallback(effectiveUrlStr, {
                 ...initForDefault,
-                onStreamChunk: isStreamActive ? (chunk) => {
-                  if (typeof window.onAiStreamTokenReceived === "function") {
+                onStreamChunk: (chunk) => {
+                  if (init && typeof init.onStreamChunk === "function") {
+                    try { init.onStreamChunk(chunk); } catch (_) {}
+                  }
+                  if (isStreamActive && typeof window.onAiStreamTokenReceived === "function") {
                     window.onAiStreamTokenReceived(chunk);
                   }
-                } : undefined,
+                },
               });
               const durStr = ((Date.now() - fetchStartT) / 1000).toFixed(1) + "秒";
               try {
@@ -23495,11 +23632,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ...(openAiPayload.stream ? { Accept: "text/event-stream" } : {})
               },
               body: JSON.stringify(openAiPayload),
-              onStreamChunk: isStreamActive ? (chunk) => {
-                if (typeof window.onAiStreamTokenReceived === "function") {
+              onStreamChunk: (chunk) => {
+                if (init && typeof init.onStreamChunk === "function") {
+                  try { init.onStreamChunk(chunk); } catch (_) {}
+                }
+                if (isStreamActive && typeof window.onAiStreamTokenReceived === "function") {
                   window.onAiStreamTokenReceived(chunk);
                 }
-              } : undefined,
+              },
             });
 
             if (!res.ok) {
@@ -41255,9 +41395,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   .replace(/<br\s*\/?>\s*\n/gi, "<br>")
                   .replace(/(<\/(?:p|div|blockquote|ul|ol|li|table|tr|h[1-6])>)\s*\n+/gi, "$1");
               }
-              contentHtml = formattedText + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
+              const cleanHtmlPart = msg.htmlContent ? String(msg.htmlContent).replace(/>\s+</g, "><").trim() : "";
+              contentHtml = formattedText + (cleanHtmlPart ? `<br>${cleanHtmlPart}` : "");
             } else {
-              contentHtml = formattedText.replace(/\n/g, "<br>") + (msg.htmlContent ? `<br>${msg.htmlContent}` : "");
+              const cleanHtmlPart = msg.htmlContent ? String(msg.htmlContent).replace(/>\s+</g, "><").trim() : "";
+              contentHtml = formattedText.replace(/\n/g, "<br>") + (cleanHtmlPart ? `<br>${cleanHtmlPart}` : "");
             }
           }
 
@@ -46990,6 +47132,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 headers: requestHeaders,
                 body: JSON.stringify(requestBody),
                 _noAutoRetry: true,
+                _isSubApiCall: Boolean(apiConfig.isSub),
                 onStreamChunk: (chunk) => {
                   if (chunk && typeof chunk.content === "string" && chunk.content) {
                     streamedMapText = chunk.content;
@@ -84058,6 +84201,86 @@ ${stickerContext || "无"}
 
         let activeForeshadowContext = { chatId: null, characterName: "" };
 
+        function renderForeshadowSectionItems(listEl, badgeEl, rawValue) {
+          if (!listEl) return;
+          listEl.innerHTML = "";
+          const cleanStr = String(rawValue || "").trim();
+          const isEmpty = !cleanStr || cleanStr === "无" || cleanStr === "暂无" || cleanStr === "空";
+          if (isEmpty) {
+            if (badgeEl) badgeEl.textContent = "未记录";
+            const row = document.createElement("div");
+            row.className = "foreshadow-status-item is-empty";
+            row.innerHTML = `<span class="foreshadow-status-dot"></span><span class="foreshadow-status-text">无</span>`;
+            listEl.appendChild(row);
+            return;
+          }
+          const parts = cleanStr
+            .split(/[\n；;]+/)
+            .map((s) => s.trim())
+            .filter((s) => s && s !== "无");
+          const finalItems = parts.length > 0 ? parts : [cleanStr];
+          if (badgeEl) badgeEl.textContent = `${finalItems.length} 项`;
+          finalItems.forEach((itemText) => {
+            const row = document.createElement("div");
+            row.className = "foreshadow-status-item";
+            const dot = document.createElement("span");
+            dot.className = "foreshadow-status-dot";
+            const txt = document.createElement("span");
+            txt.className = "foreshadow-status-text";
+            txt.textContent = itemText;
+            row.appendChild(dot);
+            row.appendChild(txt);
+            listEl.appendChild(row);
+          });
+        }
+
+        function updateForeshadowReadonlyDisplay(shortVal, plotVal) {
+          renderForeshadowSectionItems(
+            document.getElementById("foreshadow-short-status-list"),
+            document.getElementById("foreshadow-short-badge"),
+            shortVal
+          );
+          renderForeshadowSectionItems(
+            document.getElementById("foreshadow-plot-status-list"),
+            document.getElementById("foreshadow-plot-badge"),
+            plotVal
+          );
+        }
+
+        function setForeshadowModalViewMode(mode) {
+          const lockedView = document.getElementById("foreshadow-locked-view");
+          const readonlyView = document.getElementById("foreshadow-readonly-view");
+          const editView = document.getElementById("foreshadow-edit-view");
+          const footerNormal = document.getElementById("foreshadow-footer-normal");
+          const footerEdit = document.getElementById("foreshadow-footer-edit");
+          const relockBtn = document.getElementById("foreshadow-relock-btn");
+          const enterEditBtn = document.getElementById("foreshadow-enter-edit-btn");
+
+          if (mode === "readonly") {
+            if (lockedView) lockedView.style.display = "none";
+            if (readonlyView) readonlyView.style.display = "flex";
+            if (editView) editView.style.display = "none";
+            if (footerNormal) footerNormal.style.display = "flex";
+            if (footerEdit) footerEdit.style.display = "none";
+            if (relockBtn) relockBtn.style.display = "inline-flex";
+            if (enterEditBtn) enterEditBtn.style.display = "inline-flex";
+          } else if (mode === "edit") {
+            if (lockedView) lockedView.style.display = "none";
+            if (readonlyView) readonlyView.style.display = "none";
+            if (editView) editView.style.display = "flex";
+            if (footerNormal) footerNormal.style.display = "none";
+            if (footerEdit) footerEdit.style.display = "flex";
+          } else {
+            if (lockedView) lockedView.style.display = "flex";
+            if (readonlyView) readonlyView.style.display = "none";
+            if (editView) editView.style.display = "none";
+            if (footerNormal) footerNormal.style.display = "flex";
+            if (footerEdit) footerEdit.style.display = "none";
+            if (relockBtn) relockBtn.style.display = "none";
+            if (enterEditBtn) enterEditBtn.style.display = "none";
+          }
+        }
+
         window.openAiForeshadowingModal = function (chat, characterName, avatarSrc) {
           if (!chat) return;
           if (!chat.settings) chat.settings = {};
@@ -84070,22 +84293,12 @@ ${stickerContext || "无"}
           const avaEl = document.getElementById("foreshadow-char-avatar");
           const nameEl = document.getElementById("foreshadow-char-name");
           const enableSwitch = document.getElementById("foreshadow-enable-switch");
-          const lockedView = document.getElementById("foreshadow-locked-view");
-          const unlockedView = document.getElementById("foreshadow-unlocked-view");
           const shortInput = document.getElementById("foreshadow-short-term-input");
           const plotInput = document.getElementById("foreshadow-plot-input");
-          const shortPreset = document.getElementById("foreshadow-short-preset-select");
-          const plotPreset = document.getElementById("foreshadow-plot-preset-select");
 
           if (avaEl) avaEl.src = avatarSrc || defaultGroupMemberAvatar || defaultAvatar;
           if (nameEl) nameEl.textContent = `${charName} · 伏笔`;
           if (enableSwitch) enableSwitch.checked = Boolean(chat.settings.foreshadowingEnabled);
-
-          // 每次打开面板默认锁定隐藏，防止误触剧透
-          if (lockedView) lockedView.style.display = "flex";
-          if (unlockedView) unlockedView.style.display = "none";
-          if (shortPreset) shortPreset.value = "";
-          if (plotPreset) plotPreset.value = "";
 
           const byMember = (chat.settings.aiForeshadowingByMember && typeof chat.settings.aiForeshadowingByMember === "object")
             ? chat.settings.aiForeshadowingByMember
@@ -84095,9 +84308,14 @@ ${stickerContext || "无"}
             : { shortTerm: "无", foreshadowing: "无" };
           const memberEntry = byMember[charName] || latestGlobal;
 
-          if (shortInput) shortInput.value = String(memberEntry.shortTerm || "无");
-          if (plotInput) plotInput.value = String(memberEntry.foreshadowing || "无");
+          const sVal = String(memberEntry.shortTerm || "无").trim() || "无";
+          const pVal = String(memberEntry.foreshadowing || "无").trim() || "无";
+          if (shortInput) shortInput.value = sVal;
+          if (plotInput) plotInput.value = pVal;
+          updateForeshadowReadonlyDisplay(sVal, pVal);
 
+          // 每次打开面板默认处于锁定状态
+          setForeshadowModalViewMode("locked");
           modal.classList.add("visible");
         };
 
@@ -84106,11 +84324,11 @@ ${stickerContext || "无"}
           const fsCloseBtn = document.getElementById("close-ai-foreshadowing-btn");
           const fsUnlockBtn = document.getElementById("foreshadow-unlock-btn");
           const fsRelockBtn = document.getElementById("foreshadow-relock-btn");
+          const fsEnterEditBtn = document.getElementById("foreshadow-enter-edit-btn");
+          const fsCancelEditBtn = document.getElementById("foreshadow-cancel-edit-btn");
           const fsClearBtn = document.getElementById("foreshadow-clear-btn");
           const fsSaveBtn = document.getElementById("foreshadow-save-btn");
           const fsEnableSwitch = document.getElementById("foreshadow-enable-switch");
-          const fsShortPreset = document.getElementById("foreshadow-short-preset-select");
-          const fsPlotPreset = document.getElementById("foreshadow-plot-preset-select");
           const fsShortInput = document.getElementById("foreshadow-short-term-input");
           const fsPlotInput = document.getElementById("foreshadow-plot-input");
 
@@ -84119,32 +84337,30 @@ ${stickerContext || "无"}
           }
           if (fsUnlockBtn) {
             fsUnlockBtn.addEventListener("click", () => {
-              const lockedView = document.getElementById("foreshadow-locked-view");
-              const unlockedView = document.getElementById("foreshadow-unlocked-view");
-              if (lockedView) lockedView.style.display = "none";
-              if (unlockedView) unlockedView.style.display = "flex";
+              setForeshadowModalViewMode("readonly");
             });
           }
           if (fsRelockBtn) {
             fsRelockBtn.addEventListener("click", () => {
-              const lockedView = document.getElementById("foreshadow-locked-view");
-              const unlockedView = document.getElementById("foreshadow-unlocked-view");
-              if (lockedView) lockedView.style.display = "flex";
-              if (unlockedView) unlockedView.style.display = "none";
+              setForeshadowModalViewMode("locked");
             });
           }
-          if (fsShortPreset && fsShortInput) {
-            fsShortPreset.addEventListener("change", () => {
-              if (fsShortPreset.value) {
-                fsShortInput.value = fsShortPreset.value;
-              }
+          if (fsEnterEditBtn) {
+            fsEnterEditBtn.addEventListener("click", () => {
+              setForeshadowModalViewMode("edit");
             });
           }
-          if (fsPlotPreset && fsPlotInput) {
-            fsPlotPreset.addEventListener("change", () => {
-              if (fsPlotPreset.value) {
-                fsPlotInput.value = fsPlotPreset.value;
+          if (fsCancelEditBtn) {
+            fsCancelEditBtn.addEventListener("click", () => {
+              const targetChat = state.chats && state.chats[activeForeshadowContext.chatId];
+              if (targetChat && targetChat.settings) {
+                const byMember = targetChat.settings.aiForeshadowingByMember || {};
+                const latestGlobal = targetChat.settings.aiForeshadowingLatest || { shortTerm: "无", foreshadowing: "无" };
+                const memberEntry = byMember[activeForeshadowContext.characterName] || latestGlobal;
+                if (fsShortInput) fsShortInput.value = String(memberEntry.shortTerm || "无");
+                if (fsPlotInput) fsPlotInput.value = String(memberEntry.foreshadowing || "无");
               }
+              setForeshadowModalViewMode("readonly");
             });
           }
           if (fsEnableSwitch) {
@@ -84160,6 +84376,7 @@ ${stickerContext || "无"}
             fsClearBtn.addEventListener("click", async () => {
               if (fsShortInput) fsShortInput.value = "无";
               if (fsPlotInput) fsPlotInput.value = "无";
+              updateForeshadowReadonlyDisplay("无", "无");
               const targetChat = state.chats && state.chats[activeForeshadowContext.chatId];
               if (!targetChat) return;
               if (!targetChat.settings) targetChat.settings = {};
@@ -84172,6 +84389,7 @@ ${stickerContext || "无"}
                 targetChat.settings.aiForeshadowingByMember[activeForeshadowContext.characterName] = { ...emptyEntry };
               }
               await db.chats.put(targetChat);
+              setForeshadowModalViewMode("readonly");
             });
           }
           if (fsSaveBtn) {
@@ -84195,7 +84413,8 @@ ${stickerContext || "无"}
                 targetChat.settings.aiForeshadowingByMember[activeForeshadowContext.characterName] = { ...savedEntry };
               }
               await db.chats.put(targetChat);
-              if (fsModal) fsModal.classList.remove("visible");
+              updateForeshadowReadonlyDisplay(sVal, pVal);
+              setForeshadowModalViewMode("readonly");
             });
           }
 
