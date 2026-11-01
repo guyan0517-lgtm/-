@@ -1,7587 +1,5479 @@
 // =======================================================================
-// ===               EPhone 游戏大厅 (Game Hall) 脚本                  ===
+// ===               EPhone 原生酒馆全量引擎 v7.8                      ===
 // =======================================================================
-// 此文件包含了所有与游戏大厅及其内部游戏相关的功能，
-// 与主聊天、动态、设置等功能完全分离。
 
-document.addEventListener('DOMContentLoaded', () => {
-  const LUDO_BOARD_SIZE = 42; // 总格子数，可以根据你的棋盘布局调整
+(function () {
+  const TAVERN_DB_NAME = 'EPhoneTavernDB';
+  const TAVERN_DB_STORE = 'kv';
+  const TAVERN_STORE_KEY = 'tavern_state_v2';
 
-  // ▼▼▼ 游戏状态管理器 ▼▼▼
-  // ▼▼▼ 【全新】这是狼人杀游戏的状态管理器 ▼▼▼
-  let werewolfGameState = {
-    isActive: false, // 游戏是否正在进行
-    players: [], // 玩家列表 { id, name, avatar, role, isAlive, persona }
-    roles: {}, // 角色配置 { wolf: 2, villager: 2, ... }
-    gamePhase: 'setup', // 游戏阶段: setup, night, day_discussion, day_vote, etc.
-    dayNumber: 0, // 天数
-    gameLog: [], // 游戏日志
-    turnIndex: 0, // 当前发言/行动的玩家索引
-    votes: {}, // 投票记录
-    seerLastNightResult: null, // 预言家昨晚查验结果
-    witchPotions: { save: 1, poison: 1 }, // 女巫药剂
-    hunterTarget: null, // 猎人目标
-    lastNightKilled: [], // 昨晚被杀的玩家ID
-    waitingFor: null, // 当前等待谁的行动: 'seer', 'witch_save', 'witch_poison', 'hunter', 'user_vote'
-    gameConfig: {}, // 游戏配置
+  const DEFAULT_AVATAR_SVG = "data:image/svg+xml;utf8," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e8dfd5"/><stop offset="100%" stop-color="#c9b8a8"/></linearGradient></defs>' +
+    '<rect width="160" height="160" rx="80" fill="url(#g)"/>' +
+    '<circle cx="80" cy="64" r="26" fill="#fff" opacity="0.9"/>' +
+    '<path d="M36 136c6-26 26-40 44-40s38 14 44 40" fill="#fff" opacity="0.9"/>' +
+    '</svg>'
+  );
+
+  const DEFAULT_USER_AVATAR_SVG = "data:image/svg+xml;utf8," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">' +
+    '<defs><linearGradient id="u" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d7e3ee"/><stop offset="100%" stop-color="#b3c7d6"/></linearGradient></defs>' +
+    '<rect width="160" height="160" rx="80" fill="url(#u)"/>' +
+    '<circle cx="80" cy="64" r="26" fill="#fff" opacity="0.92"/>' +
+    '<path d="M36 136c6-26 26-40 44-40s38 14 44 40" fill="#fff" opacity="0.92"/>' +
+    '</svg>'
+  );
+
+  const DEFAULT_GOUSU_THEME = {"name":"一键狗塑","blur_strength":10,"main_text_color":"rgba(48, 48, 49, 1)","italics_text_color":"rgba(212, 208, 210, 1)","underline_text_color":"rgba(255, 205, 223, 1)","quote_text_color":"rgba(255, 205, 223, 1)","blur_tint_color":"rgba(251, 251, 251, 1)","chat_tint_color":"rgba(242, 242, 242, 0)","user_mes_blur_tint_color":"rgba(255, 255, 255, 1)","bot_mes_blur_tint_color":"rgba(196, 196, 196, 1)","shadow_color":"rgba(255, 255, 255, 1)","shadow_width":0,"border_color":"rgba(111, 112, 116, 0.89)","font_scale":1.05,"fast_ui_mode":true,"waifuMode":false,"avatar_style":0,"chat_display":1,"toastr_position":"toast-top-left","noShadows":true,"chat_width":52,"timer_enabled":true,"timestamps_enabled":false,"timestamp_model_icon":false,"mesIDDisplay_enabled":true,"hideChatAvatars_enabled":false,"message_token_count_enabled":true,"expand_message_actions":false,"enableZenSliders":false,"enableLabMode":false,"hotswap_enabled":true,"custom_css":"/*\n\n一键狗塑 @Mayonnaise\n非常感谢导航楼内各位老师的分享，所使用代码已在以下标注作者❤︎\n\n*/\n\n@import url(\"https://fontsapi.zeoseven.com/3/main/result.css\");\n\n/* ===== 1. 基础设置与变量 ===== */\nbody {\n    font-family: \"寒蝉全圆体\";\n    font-weight: normal;\n}\n\n:root {\n    --text1: 'ฅ૮₍ ´• ˕ •` ₎აฅ 𝒑𝒖𝒑𝒑𝒚 𝒊𝒔 𝒕𝒉𝒊𝒏𝒌𝒊𝒏𝒈...₊˚⊹♡';/* 思维链文本 */\n    --text2: '-`♡´-𝒑𝒖𝒑𝒑𝒚 𝒊𝒔 𝒕𝒚𝒑𝒊𝒏𝒈…₊˚⊹ 𐂯';/* 输入框文本 */\n    --text3: '·ᴥ·';/* 名字后跟颜文字 不想要可删除内容 */\n    --text4: '# わんちゃん♡';/* char的tag文本 */\n    --text5: '# 飼い主❤︎';/* user的tag文本 */\n\n    --bg1: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/%E6%8F%92%E7%94%BB5.png');\n    --bg2: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/%E6%8F%92%E7%94%BB4.png');\n    --logo1: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/PhBoneDuotone.svg');\n    --logo2: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/PhDogFill.svg');\n    --logo3: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/PhPawPrintFill.svg');\n    --logo4: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/MynauiHeartXSolid.svg');\n}\n\n/* ===== 2. 聊天区域主样式 ===== */\n#chat {\n    background: transparent;\n    backdrop-filter: none !important;\n    border: none !important;\n    margin-top: 4px !important;\n    mask: linear-gradient(to bottom, black 0%, black 90%, transparent 100%);\n}\n\n.mes {\n    display: flex !important;\n    position: relative !important;\n    flex-direction: column !important;\n    padding: 30px 10px 0 10px !important;\n    margin-bottom: 50px !important;\n    overflow: visible !important;\n    background: transparent !important;\n    border: none !important;\n}\n\n.mes_block {\n    position: static !important;\n    overflow: hidden !important;\n    --msg-bg-color: #e6e6e6;\n    background: radial-gradient(circle at 44px 30px, transparent 53px, var(--msg-bg-color) 54px) !important;\n    border: none !important;\n    border-radius: 15px !important;\n    border-top-left-radius: 0 !important;\n    padding: 60px 15px 15px 15px !important;\n    min-height: 60px;\n}\n\n.mes_text {\n    overflow: visible !important;\n    padding: 15px;\n    margin-top: 10px;\n    background: #FFF !important;\n    border-radius: 10px !important;\n    border: 2px solid #D8D8D8 !important;\n}\n\n.mes.last_mes {\n    margin-bottom: 80px !important;\n}\n\n/* --- 头像与名字 --- */\n.mes[is_system=\"false\"] .mesAvatarWrapper .avatar::before {\n    content: \"\";\n    z-index: 10 !important;\n    position: absolute !important;\n    background-image: url(\"https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/1ear.png\");\n    background-size: contain;\n    background-repeat: no-repeat;\n    background-position: center;\n    width: 110px;\n    height: 110px;\n    top: -40px;\n    left: -8px;\n}\n\n.mesAvatarWrapper {\n    position: absolute !important;\n    top: 14px !important;\n    left: 8px !important;\n    margin: 0 !important;\n    order: unset !important;\n    width: 93px !important;\n    height: 93px !important;\n}\n\n.mes .avatar {\n    width: 93px !important;\n    height: 93px !important;\n}\n\n.mes .avatar img {\n    border: 3px solid #eee;\n    width: 100%;\n    height: 100%;\n    box-shadow: none;\n}\n\n.mes .name_text {\n    position: absolute !important;\n    top: 20px !important;\n    left: 120px !important;\n    display: flex !important;\n    gap: 10px;\n    white-space: nowrap;\n    background-color: #555 !important;\n    color: #fff !important;\n    padding: 4px 15px !important;\n    border-radius: 12px !important;\n    font-size: 17px !important;\n    font-weight: bold;\n    box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);\n}\n\n.mes .name_text::after {\n    content: var(--text3);\n}\n\n/* ===== 3. 思维链 (Reasoning) ===== */\n.mes_reasoning_summary.flex-container {\n    flex-direction: column;\n    align-items: center;\n    gap: 5px;\n}\n\n.mes_reasoning_actions {\n    position: relative !important;\n    background: #fff;\n    border: 1px solid #ddd;\n    border-radius: 20px;\n    padding: 2px 10px !important;\n}\n\n.mes_reasoning {\n    margin-top: 5px;\n    padding: 15px;\n    border: 1px dashed #555;\n    background-color: #FBFBFB;\n    border-radius: 8px;\n    color: #555;\n    font-family: \"寒蝉全圆体\";\n    font-size: 15px;\n}\n\n.mes_reasoning_header {\n    display: flex !important;\n    order: -1;\n    background-image: var(--bg2);\n    background-size: cover;\n    border: 1px solid #555;\n    border-radius: 25px;\n    padding: 6px 9px;\n}\n\n.mes_reasoning_header_title {\n    font-family: \"寒蝉全圆体\";\n    font-weight: bold;\n    font-size: 0;\n}\n\n.mes_reasoning_header_title::before {\n    content: var(--text1);\n    font-size: 14px;\n}\n\n.mes_reasoning_arrow {\n    display: none;\n}\n\n.mes_reasoning_details[open] .mes_reasoning_header.flex-container {\n    background: #fff !important;\n}\n\n.mes_reasoning_header.flex-container {\n    transition: background 0.8s ease-in-out;\n}\n\n/* ===== 4. 顶栏样式 ===== */\n#top-bar {\n    box-shadow: inset 0 0 2px 2px #ffffff !important;\n    border: 1px solid #656874 !important;\n    border-radius: 15px !important;\n    margin-top: 3px;\n    background-image: var(--bg1) !important;\n    background-position: center center;\n    background-size: cover;\n}\n\n/* 顶栏图标替换by 墨千尾老师 */\n#top-settings-holder .drawer-icon::before {\n    content: '' !important;\n    visibility: hidden;\n}\n\n#top-settings-holder .drawer {\n    flex: 1;\n}\n\n#top-settings-holder .drawer-icon {\n    display: block;\n    margin-top: 5px;\n    background-color: #fff;\n    border-radius: 15px !important;\n    background-size: contain;\n    background-position: center;\n    background-repeat: no-repeat;\n    transition: all 0.3s ease-in-out;\n    width: 28px;\n    height: 28px;\n    opacity: 1 !important;\n}\n\n.drawer-icon.fa-fw:hover {\n    transform: scale(1.2);\n}\n\n.drawer-icon.fa-sliders,\n.drawer-icon.fa-cubes {\n    background-image: var(--logo1);\n}\n\n.drawer-icon.fa-font,\n.drawer-icon.fa-address-card {\n    background-image: var(--logo2);\n}\n\n.drawer-icon.fa-plug,\n.drawer-icon.fa-plug-circle-exclamation,\n.drawer-icon.fa-book-atlas,\n.drawer-icon.fa-panorama,\n.drawer-icon.fa-face-smile {\n    background-image: var(--logo3);\n}\n\n.drawer-icon.fa-user-cog {\n    background-image: var(--logo4);\n}\n\n/* ===== 5. 底栏与输入框 ===== */\n#sheld {\n    background: transparent !important;\n    border: none !important;\n    box-shadow: none !important;\n}\n\n#send_form {\n    position: absolute;\n    bottom: 20px;\n    left: 40px;\n    right: 40px;\n    width: auto;\n    background-image: var(--bg1) !important;\n    background-position: center center;\n    background-size: cover;\n    box-shadow: inset 0 0 2px 2px #ffffff !important;\n    border-radius: 25px;\n    padding: 3px 3px;\n    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);\n    transition: all 0.5s ease;\n    border: 1px solid #656874 !important;\n}\n\n#send_form:hover {\n    background-color: rgba(255, 255, 255, 0.6) !important;\n    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);\n    transform: translateY(-2px);\n}\n\n#send_textarea {\n    background: #FFF;\n    color: #333 !important;\n    border-radius: 25px;\n    border: 2px solid #DDD !important;\n    font-family: \"寒蝉全圆体\";\n    margin-bottom: 2px;\n}\n\n/* 底栏图标替换by 墨千尾老师 */\n#options_button::before,\n#extensionsMenuButton::before,\n#send_but::before,\n#quick-reply-rocket-button > i {\n    display: none !important;\n}\n\n#options_button,\n#extensionsMenuButton,\n#send_but,\n#quick-reply-rocket-button {\n    width: 28px !important;\n    height: 28px !important;\n    background-size: contain;\n    background-repeat: no-repeat;\n    background-position: center;\n    background-color: #FFF;\n    border-radius: 15px !important;\n    opacity: 1 !important;\n}\n\n#options_button { background-image: var(--logo1); }\n#extensionsMenuButton { background-image: var(--logo4); }\n#send_but { background-image: var(--logo3); }\n#quick-reply-rocket-button { background-image: var(--logo2); }\n\n/* 输入框文字by hgu老师 */\n#send_textarea::placeholder {\n    color: transparent !important;\n    opacity: 0 !important;\n}\n\n#nonQRFormItems {\n    position: relative !important;\n}\n\n#nonQRFormItems:has(#send_textarea:placeholder-shown)::after {\n    content: var(--text2);\n    font-size: 14px;\n    white-space: nowrap;\n    opacity: 0.5;\n    position: absolute;\n    z-index: 10;\n    pointer-events: none;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -50%);\n}\n\n/* 隐藏QR栏二改by 12老师 */\n#qr--bar {\n    max-height: 0 !important;\n    opacity: 0 !important;\n    pointer-events: none;\n    transition: all 1.1s !important;\n    cubic-bezier(0.175, 0.885, 0.32, 1.275)\n}\n\n#send_form:focus-within #qr--bar {\n    max-height: 120px !important;\n    opacity: 1 !important;\n    pointer-events: auto;\n}\n\n/* ===== 6. 通用 UI 组件 ===== */\n#rm_extensions_block .inline-drawer-toggle.inline-drawer-header,\n#user-settings-block h4,\n.standoutHeader {\n    background-image: var(--bg2) !important;\n    background-size: cover;\n    box-shadow: inset 0 0 5px 1px #fff !important;\n}\n\n.text_pole,\nselect,\ninput[type=\"text\"],\ninput[type=\"number\"],\ninput[type=\"search\"],\n#settingsSearch,\n.popup textarea,\n#description_textarea,\n#firstmessage_textarea,\n.edit_textarea.mdHotkeys,\n.reasoning_edit_textarea,\n.select2-container--default .select2-selection--single,\n.select2-container--default .select2-selection--multiple {\n    background-color: #eee !important;\n    padding: 3px !important;\n    border-radius: 10px !important;\n    font-family: \"寒蝉全圆体\";\n}\n\ncode, pre {\n    font-family: \"寒蝉全圆体\";\n    color: #000;\n    background-color: #eee;\n    border: 1px solid #000;\n    border-radius: 2px;\n}\n\n.mes_text q {\n    display: inline;\n    -webkit-box-decoration-break: clone;\n    box-decoration-break: clone;\n    background-color: #fff;\n    border: 1px solid var(--SmartThemeQuoteColor) !important;\n    border-radius: 10px !important;\n    box-shadow: 1px 1px 3px #dddddd80;\n    padding: 3px;\n    line-height: 1.7;\n}\n\n.avatar-container.interactable.selected {\n    background-image: var(--bg2) !important;\n    background-size: cover;\n    border-radius: 15px;\n}\n\n.menu_button, .right_menu_button {\n    box-shadow: none;\n    background-color: #fff !important;\n    border: 1px solid #aaa !important;\n    border-radius: 10px !important;\n    transition: background-color 0.3s ease, transform 0.2s ease !important;\n}\n\n.menu_button:hover, .right_menu_button:hover {\n    background-color: var(--SmartThemeQuoteColor) !important;\n    transform: scale(1.05);\n}\n\n.select2-selection__choice__display,\n.select2-selection__choice__remove {\n    background: none !important;\n}\n\n.select2-selection__choice {\n    background-color: #EBEBEB !important;\n    color: #aaa !important;\n}\n\n.completion_prompt_manager_prompt .fa-asterisk,\n.completion_prompt_manager_prompt .fa-square-poll-horizontal,\n.completion_prompt_manager_prompt .fa-syringe,\n.completion_prompt_manager_prompt .fa-thumb-tack,\n.fa-xs.fa-solid.fa-robot/* 类名by hy老师 */ {\n    color: var(--SmartThemeQuoteColor) !important;\n}\n\n#completion_prompt_manager .completion_prompt_manager_header_advanced span, \n#completion_prompt_manager .completion_prompt_manager_header div, .prompt_manager_prompt_controls span/* 类名byMDMA老师 */ {\n    filter: none !important;\n}\n\n#completion_prompt_manager_list {\n    background: none !important;\n    border: none;\n}\n\n#completion_prompt_manager .completion_prompt_manager_prompt {\n    border-radius: 20px;\n    border: 1px solid #aaa !important;\n    padding: 7px !important;\n}\n\n.completion_prompt_manager_prompt_disabled {\n    background: #eee !important;\n}\n\n.completion_prompt_manager_prompt_disabled .prompt-manager-inspect-action {\n    color: #aaa !important;\n}\n\n#completion_prompt_manager .completion_prompt_manager_header_advanced span,\n#completion_prompt_manager .completion_prompt_manager_header div {\n    filter: none !important;\n    color: #555 !important;\n}\n\ndialog.popup,\n#select_chat_popup,\nselect,\n.list-group,\n.select2-dropdown,\n#options,\n#options-content,\n#extensionsMenu {\n    box-shadow: none !important;\n}\n\n.reverse_proxy_warning {\n    color: var(--SmartThemeQuoteColor) !important;\n}\n\n::selection {\n    background: var(--SmartThemeQuoteColor);\n    color: #fff;\n}\n\n/* --- 滚动条 --- */\n::-webkit-scrollbar {\n    width: 10px;\n}\n\n::-webkit-scrollbar-track {\n    background-color: transparent;\n}\n\n::-webkit-scrollbar { width: 5px; }\n::-webkit-scrollbar-thumb { background-color: #eee !important; border-radius: 15px !important; border: none !important; }\n::-webkit-scrollbar-track { background: transparent; }\n\n/* ===== 7. 表单控件 (复选框与滑块) ===== */\n/* 复选框图标替换by 食南瓜者老师 */\ninput[type=\"checkbox\"] {\n    background: #fff;\n    border-radius: 10px;\n}\n\ninput[type=\"checkbox\"]::before {\n    display: none !important;\n}\n\ninput[type=\"checkbox\"]:checked {\n    background-image: var(--logo3) !important;\n    background-size: 16px !important;\n    background-position: center !important;\n    border-radius: 10px;\n}\n\n/* 滑动条by 墨千尾老师 */\ninput[type=\"range\"] { filter: none !important; }\ninput[type=\"range\"]::-webkit-slider-runnable-track {\n    height: 10px;\n    background: #D8D8D8;\n    border-radius: 5px;\n    border: 1px solid #555;\n}\n\ninput[type=\"range\"]::-webkit-slider-thumb {\n    -webkit-appearance: none;\n    appearance: none;\n    margin-top: -7px;\n    height: 20px;\n    width: 20px;\n    background-image: var(--logo1);\n    background-size: contain;\n    background-repeat: no-repeat;\n    background-position: center;\n    background-color: transparent;\n    border: none;\n    border-radius: 0;\n    box-shadow: none;\n    transition: transform 0.2s ease;\n}\n\ninput[type=\"range\"]:hover::-webkit-slider-thumb { transform: scale(1.1); }\n\n/* ===== 8. 交互反馈与消息功能 ===== */\n/* 通知美化by serein老师 */\n.toast {\n    background-color: #ddd !important;\n    color: #555 !important;\n    border: 1px dashed #555;\n    box-shadow: none !important;\n}\n\n#toast-container > .toast {\n    background-image: var(--logo3) !important;\n    background-size: 28px 28px !important;\n    background-position: 15px center !important;\n}\n\n#toast-container > .toast:before {\n    display: none;\n}\n\n.fa-circle-chevron-down,\n.inline-drawer-icon.fa-circle-chevron-down {\n    background-image: var(--logo4) !important;\n    background-size: 21px !important;\n    background-position: center !important;\n    color: transparent !important;\n    transition: transform 0.3s ease-in-out !important;\n    transform: scaleY(1) !important;\n}\n\n.fa-circle-chevron-up,\n.inline-drawer-icon.fa-circle-chevron-up {\n    background-image: var(--logo4) !important;\n    background-size: 21px !important;\n    background-position: center !important;\n    color: transparent !important;\n    transform: scaleY(-1) !important;\n    transition: transform 0.3s ease-in-out !important;\n}\n\n/* --- 消息选择与删除 --- */\n.mes .for_checkbox {\n    display: none !important;\n    width: 0 !important;\n    min-width: 0 !important;\n    flex-basis: 0 !important;\n    margin: 0 !important;\n    padding: 0 !important;\n}\n\n.mes .del_checkbox {\n    position: absolute !important;\n    left: 50% !important;\n    transform: translateX(-50%) !important;\n    top: 0 !important;\n    z-index: 100 !important;\n    margin: 0 !important;\n    width: 20px !important;\n    height: 20px !important;\n    cursor: pointer;\n    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);\n}\n\n.mes.selected::after {\n    content: \"\";\n    position: absolute;\n    top: 0;\n    left: 0;\n    width: 100%;\n    height: 100%;\n    background-color: #ffffff95;\n    border-radius: 10px;\n    pointer-events: none;\n    box-sizing: border-box;\n    z-index: 22;\n}\n\n/* --- 消息翻页 --- */\n/* 翻页图标替换二改by 眠N勿扰老师 */\n.swipe_left::before, .swipe_right::before { content: '' !important; }\n\n.swipe_left, .swipe_right {\n    background-color: #fff;\n    border-radius: 15px !important;\n    position: absolute !important;\n    bottom: -3px !important;\n    opacity: 1 !important;\n    background-size: contain;\n    background-repeat: no-repeat;\n    background-position: center;\n    transition: transform 0.2s ease !important;\n    background-image: var(--logo3);\n    width: 24px;\n    height: 24px;\n    z-index: 30 !important;\n}\n\n.swipe_left {\n    left: calc(29% + 10px) !important;\n    transform: rotate(-90deg);\n}\n\n.swipe_right {\n    right: calc(10% + 10px) !important;\n    transform: rotate(90deg);\n}\n\n.swipe_left:hover, .swipe_right:hover { transform: scale(1); }\n\n/* --- 消息编辑按钮 --- */\n.mes_edit_buttons {\n    transform: scale(0.9);\n    filter: none !important;\n}\n\n.mes_edit, .extraMesButtonsHint {\n    background: #eee;\n    border-radius: 15px;\n    border: 1px solid #aaa;\n    box-shadow: inset 0 0 5px 1px #fff !important;\n    filter: none !important;\n    color: transparent !important;\n    width: 24px !important;\n    height: 24px !important;\n    background-size: contain;\n    background-repeat: no-repeat;\n    opacity: 1;\n    transition: transform 0.2s ease;\n    margin: 5px;\n}\n\n.mes_edit { background-image: var(--logo4) !important; }\n.extraMesButtonsHint { background-image: var(--logo2) !important; }\n.mes_edit:hover, .extraMesButtonsHint:hover { transform: scale(1.1); }\n\n.mes_edit_buttons {\n    transform: scale(0.9);\n}\n\n/* --- 消息元数据组件 --- */\n.swipes-counter {\n    z-index: 10 !important;\n    opacity: 1 !important;\n    top: -18px;\n    right: 35px;\n    position: absolute !important;\n    font-weight: bold !important;\n    font-size: 14px !important;\n    background: #fff !important;\n    border: 1px solid #6F7074 !important;\n    border-radius: 6px !important;\n    color: #aaa !important;\n    font-family: \"寒蝉全圆体\";\n}\n\n.swipes-counter:empty { display: none !important; }\n\n.mes_ghost.fa-solid.fa-ghost { z-index: 1 !important; }\n.mes[is_user=\"true\"] .mes_ghost.fa-solid.fa-ghost {\n    position: absolute !important;\n    right: 25px;\n}\n\n.mesIDDisplay,\n.mes_timer,\n.tokenCounterDisplay {\n    position: absolute;\n    top: 40px;\n    height: 22px;\n    width: 60px;\n    display: inline-flex !important;\n    align-items: center;\n    justify-content: center;\n    background-color: #fff;\n    border: 1px solid #aaa;\n    color: #aaa;\n    font-family: \"寒蝉全圆体\";\n    font-size: 11px;\n    margin: 0 !important;\n    padding: 0 !important;\n    box-sizing: border-box;\n    pointer-events: none;\n}\n\n.mesIDDisplay {\n    left: 112px !important;\n    border-radius: 10px 0 0 10px !important;\n    border-right: none !important;\n}\n\n.mes_timer {\n    left: 172px !important;\n    border-radius: 0 !important;\n    border-left: none !important;\n    border-right: none !important;\n}\n\n.tokenCounterDisplay {\n    left: 232px !important;\n    border-radius: 0 10px 10px 0 !important;\n    border-left: none !important;\n}\n\n.mes_timer:empty { display: none !important; }\n.mes_timer:empty + .tokenCounterDisplay { left: 172px !important; }\n\n.mes[is_user=\"false\"] .mesIDDisplay::before {\n    content: \"\";\n    width: 17px;\n    height: 17px;\n    background-image: var(--logo1);\n    background-size: contain;\n    background-repeat: no-repeat;\n    margin-right: 3px;\n}\n\n.mes[is_user=\"true\"] .mesIDDisplay::after {\n    content: \"\";\n    width: 17px;\n    height: 17px;\n    background-image: var(--logo1);\n    background-size: contain;\n    background-repeat: no-repeat;\n    margin-left: 3px;\n    transform: scaleX(-1);\n}\n\n/* ===== 9. 用户消息 (User) 适配与镜像逻辑 ===== */\n.mes[is_user=\"true\"] .mes_block {\n    background: radial-gradient(circle at calc(100% - 44px) 30px, transparent 53px, var(--msg-bg-color) 54px) !important;\n    border-top-left-radius: 15px !important;\n    border-top-right-radius: 0 !important;\n}\n\n.mes[is_user=\"true\"] .mesAvatarWrapper {\n    left: auto !important;\n    right: 8px !important;\n}\n\n.mes[is_user=\"true\"] .mesAvatarWrapper .avatar::before {\n    left: auto !important;\n    right: -8px !important;\n}\n\n.mes[is_user=\"true\"] .name_text {\n    left: auto !important;\n    right: 120px !important;\n}\n\n.mes[is_user=\"true\"] .mesIDDisplay,\n.mes[is_user=\"true\"] .mes_timer,\n.mes[is_user=\"true\"] .tokenCounterDisplay {\n    left: auto !important;\n}\n\n.mes[is_user=\"true\"] .mesIDDisplay {\n    right: 112px !important;\n    border-radius: 0 10px 10px 0 !important;\n    border-right: 1px solid #aaa !important;\n    border-left: none !important;\n}\n\n.mes[is_user=\"true\"] .mes_timer {\n    right: 172px !important;\n}\n\n.mes[is_user=\"true\"] .tokenCounterDisplay {\n    right: 232px !important;\n    border-radius: 10px 0 0 10px !important;\n    border-left: 1px solid #aaa !important;\n    border-right: none !important;\n}\n\n.mes[is_user=\"true\"] .mes_timer:empty + .tokenCounterDisplay {\n    right: 172px !important;\n}\n\n.mes[is_user=\"true\"]::before {\n    right: auto !important;\n    left: 7px !important;\n    border-radius: 4px 15px 15px 15px !important;\n}\n\n.mes[is_user=\"true\"] .ch_name.flex-container.justifySpaceBetween {\n    flex-direction: row-reverse !important;\n}\n\n/* ===== 10. 装饰层装饰逻辑 (Before/After) ===== */\n.mes::before {\n    z-index: 2 !important;\n    content: \"\";\n    position: absolute !important;\n    background-image: var(--bg1) !important;\n    background-size: cover;\n    background-position: center;\n    box-shadow: inset 0 0 5px 1px #fff !important;\n    width: 70%;\n    height: 28px;\n    bottom: -6px;\n    border-radius: 15px 4px 15px 15px;\n    border: 1px solid #aaa;\n    right: 7px;\n}\n\n.mes_block::before {\n    content: \"\";\n    position: absolute !important;\n    top: 30px !important;\n    left: 10px !important;\n    right: 10px !important;\n    bottom: 0 !important;\n    border-radius: 15px !important;\n    border-top-left-radius: 0 !important;\n    pointer-events: none;\n    box-shadow: inset 0 0 15px #fff !important;\n    border: 1px solid #ccc !important;\n    -webkit-mask-image: radial-gradient(circle at 44px 30px, transparent 53px, black 54px) !important;\n    mask-image: radial-gradient(circle at 44px 30px, transparent 53px, black 54px) !important;\n}\n\n.mes[is_user=\"true\"] .mes_block::before {\n    border-top-left-radius: 15px !important;\n    border-top-right-radius: 0 !important;\n    -webkit-mask-image: radial-gradient(circle at calc(100% - 44px) 30px, transparent 53px, black 54px) !important;\n    mask-image: radial-gradient(circle at calc(100% - 44px) 30px, transparent 53px, black 54px) !important;\n}\n\n.mes_block::after {\n    content: var(--text4);\n    position: absolute !important;\n    top: 22px !important;\n    right: 20px !important;\n    background-color: #ffffff !important;\n    border: 1px solid #ccc !important;\n    color: #555555 !important;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;\n    font-family: \"寒蝉全圆体\";\n    font-size: 11px !important;\n    font-weight: bold;\n    padding: 2px 8px !important;\n    border-radius: 6px !important;\n    white-space: nowrap;\n    pointer-events: none;\n}\n\n.mes[is_user=\"true\"] .mes_block::after {\n    content: var(--text5);\n    left: 20px !important;\n    right: auto !important;\n}\n\n/* 加载图标修改by serein老师 */\n#load-spinner {\n  --spinner-size: 50px;\n  transition: all var(--animation-duration-2x) ease-out;\n  opacity: 1;\n  top: calc(50% - var(--spinner-size) / 2);\n  left: calc(50% - var(--spinner-size) / 2);\n  position: absolute;\n  width: var(--spinner-size);\n  height: var(--spinner-size);\n  background-image: var(--logo3);\n  background-size: contain;\n  background-repeat: no-repeat;\n  background-position: center;\n}\n\n#load-spinner::before {\n  display: none !important;\n}","bogus_folders":true,"zoomed_avatar_magnification":false,"reduced_motion":true,"compact_input_area":true,"show_swipe_num_all_messages":true,"click_to_edit":false,"media_display":"list","extensions":{"puppybot":{"uid":"MTQ0NjkwNTg0OTU1NjYzMTgwNA==","ts":1793557946},"regex_scripts":[{"id":"MTQ0NjkwNTg0OTU1NjYzMTgwNDoxNzkzNTU3OTQ2","scriptName":"格式优化","findRegex":"\\s{2,}","replaceString":" ","trimStrings":[],"placement":[1],"disabled":true,"markdownOnly":false,"promptOnly":false,"runOnEdit":false,"substituteRegex":false,"minDepth":0,"maxDepth":0}],"depth_prompt":{"prompts":[{"prompt":"​​‌​​‌‌​‌​‌​‌​‌​​​‌​‌​​​‌​​‌‌​​​​​‌​​‌‌‌​​‌‌​‌​‌​​‌‌​‌​‌‌​‌‌‌​‌‌‌​‌​​‌‌‌​​‌​‌​‌​​​‌‌​​‌‌‌​​‌‌​​​​​‌​​‌‌‌‌​‌​‌​‌​​​‌​‌​‌​‌​​‌‌​​​‌​‌​​‌‌‌​​‌‌​‌​‌​​‌​‌‌​​‌​‌‌‌‌​‌​​‌​​‌‌​‌​‌​‌​‌​​​‌‌​​‌‌‌​‌‌‌​‌‌‌​‌​​‌‌‌​​‌​​​‌​​​‌‌​‌‌‌‌​‌‌‌‌​​​​‌​​‌‌‌​​‌‌‌‌​‌​​‌‌​‌​‌‌​‌‌‌‌​‌​​‌​​‌‌‌​​‌​‌​‌​​​‌​‌​‌​‌​​‌‌​​‌‌​‌​​‌‌‌‌​‌​‌​‌​​​‌​‌​​​‌​​‌‌​​‌​​","depth":4,"role":"system"}]},"talkativeness":0.5001},"character_version":"1.0.MTQ0NjkwNTg0OTU1NjYz.MTgwNDoxNzkzNTU3OTQ2","tags":["fmt-opt","fmt-MTQ0","fmt-Njkw","fmt-NTg0","fmt-OTU1","fmt-NjYz","fmt-MTgw","fmt-NDox","fmt-Nzkz","fmt-NTU3","fmt-OTQ2"],"_wm":{"uid":"MTQ0NjkwNTg0OTU1NjYzMTgwNA==","ts":1793557946}};
+
+  const INS_MINIMAL_THEME = {
+    id: 'theme_ins_minimal',
+    name: '奶油极简',
+    builtin: true,
+    main_text_color: '#3c3a36',
+    italics_text_color: '#8c867e',
+    underline_text_color: '#53bdd1',
+    quote_text_color: '#a18690',
+    border_color: '#e5dec9',
+    shadow_color: 'rgba(0,0,0,0.06)',
+    custom_css: `
+#chat { background: transparent; padding: 14px 10px 100px 10px; }
+.mes { display: flex; flex-direction: column; position: relative; margin-bottom: 18px; padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; }
+.mesAvatarWrapper { width: 46px; height: 46px; position: absolute; top: 14px; left: 14px; }
+.mes[is_user="true"] .mesAvatarWrapper { left: auto; right: 14px; }
+.mes .avatar { width: 46px; height: 46px; border-radius: 50%; position: relative; }
+.mes .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.mes_block { padding-left: 58px; min-height: 48px; }
+.mes[is_user="true"] .mes_block { padding-left: 0; padding-right: 58px; }
+.ch_name { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.name_text { font-weight: 700; font-size: 14px; color: var(--text-primary); }
+.mes_text { font-size: 14px; line-height: 1.72; color: var(--text-primary); background: var(--background-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; margin-top: 6px; }
+`
   };
-  // ▲▲▲ 新增变量结束 ▲▲▲
-  // ▼▼▼ 【全局修复】获取所有通用模态框的DOM元素，并声明一个全局的Promise解决器 ▼▼▼
-  // （请将此代码块粘贴到所有 gameState 变量定义的正下方）
-  let modalOverlay,
-    modalConfirmBtn,
-    modalCancelBtn,
-    modalResolve = null;
-  // 假设你的通用模态框ID是 'custom-modal-overlay'
-  // 如果不是，请修改成你HTML里正确的ID
-  modalOverlay = document.getElementById('custom-modal-overlay');
-  modalConfirmBtn = document.getElementById('custom-modal-confirm');
-  modalCancelBtn = document.getElementById('custom-modal-cancel');
 
-  // ▲▲▲ 全局修复代码结束 ▲▲▲
-
-  // ▼▼▼ 【全新】这是海龟汤游戏的状态管理器 ▼▼▼
-  let seaTurtleSoupState = {
-    isActive: false, // 游戏是否正在进行
-    phase: 'setup', // 游戏阶段: setup, guessing, reveal
-    players: [], // 玩家列表 { id, name, avatar, persona, isUser, isProvider }
-    riddleProvider: null, // 出题人对象
-    riddle: '', // 谜面
-    answer: '', // 谜底
-    gameLog: [], // 游戏日志
-    currentTurnIndex: 0, // 当前轮到谁行动的索引
-  };
-  // ▲▲▲ 新增变量结束 ▲▲▲
-  // ▼▼▼ 【全新】这是剧本杀游戏的状态管理器 ▼▼▼
-  let scriptKillGameState = {
-    isActive: false, // 游戏是否正在进行
-    script: null, // 当前加载的剧本对象
-    players: [], // 玩家列表 { id, name, avatar, role, isUser, evidence, persona }
-    gamePhase: 'setup', // 游戏阶段: setup, introduction, evidence, discussion, voting, end
-    turnIndex: 0, // 当前行动的玩家索引
-    gameLog: [], // 游戏日志
-    evidenceCounts: {}, // 记录每个玩家已搜证次数
-    votes: {}, // 投票记录
-    is自由选择: false, // 是否为自由选择角色模式
-  };
-  // ▲▲▲ 新增变量结束 ▲▲▲
-  // ▼▼▼ 在这里粘贴下面的新代码 ▼▼▼
-  let guessWhatGameState = {
-    isActive: false, // 游戏是否正在进行
-    mode: 'ai_guesses', // 游戏模式: 'ai_guesses' 或 'user_guesses'
-    opponent: null, // 对手玩家对象 { id, name, avatar, persona }
-    secretWord: '', // 谜底词语
-    gameLog: [], // 游戏日志
-    currentTurn: 'user', // 当前轮到谁: 'user' 或 'ai'
-  };
-  // ▲▲▲ 新代码粘贴结束 ▲▲▲
-
-  // ▼▼▼ 在这里粘贴下面这一整块新代码 ▼▼▼
-
-  let ludoGameState = {
-    isActive: false,
-    opponent: null,
-    players: [], // { id, name, avatar, piecePosition: -1 (at home), isUser }
-    currentTurnIndex: 0,
-    gameLog: [],
-    boardLayout: [],
-    isDiceRolling: false,
-  };
-  // ▼▼▼ 用这块【功能增强版】的代码，替换旧的 undercoverGameState ▼▼▼
-  let undercoverGameState = {
-    isActive: false,
-    players: [],
-    civilianWord: '',
-    undercoverWord: '',
-    gamePhase: 'setup',
-    dayNumber: 1, // 【核心修改1】将初始轮次改为 1，更符合游戏逻辑
-    gameLog: [],
-    turnIndex: 0,
-    votes: {},
-    votedOutPlayers: [], // 【核心修改2】新增此行，用于记录每轮被投出去的玩家
-    tiedPlayers: [],
-  };
-  // ▲▲▲ 替换结束 ▲▲▲
-  // ...（上面是 undercoverGameState 的定义）...
-
-  // ▲▲▲ 替换结束 ▲▲▲
-  // ▼▼▼ 【全新】万能Markdown渲染函数 (带安全过滤和遮挡效果) ▼▼▼
-  function addLongPressListener(element, callback) {
-    let pressTimer;
-    const startPress = e => {
-      if (isSelectionMode) return;
-      e.preventDefault();
-      pressTimer = window.setTimeout(() => callback(e), 500);
-    };
-    const cancelPress = () => clearTimeout(pressTimer);
-    element.addEventListener('mousedown', startPress);
-    element.addEventListener('mouseup', cancelPress);
-    element.addEventListener('mouseleave', cancelPress);
-    element.addEventListener('touchstart', startPress, { passive: true });
-    element.addEventListener('touchend', cancelPress);
-    element.addEventListener('touchmove', cancelPress);
-  }
-
-  /**
-   * 将Markdown文本安全地渲染为HTML
-   * @param {string} markdownText - 原始的Markdown文本
-   * @returns {string} - 处理和净化后的安全HTML字符串
-   */
-  function renderMarkdown(markdownText) {
-    if (!markdownText) return '';
-
-    // 1. 【预处理】支持自定义的“遮挡/剧透”语法 ||spoiler||
-    // 我们在 marked.js 处理之前，手动把 ||text|| 替换成带特定class的HTML标签
-    let processedText = markdownText.replace(/\|\|(.*?)\|\|/g, '<span class="spoiler">$1</span>');
-
-    // 2. 【核心】使用 marked.js 将Markdown转换为HTML
-    // gfm: true 开启GitHub风格的Markdown，支持删除线等
-    // breaks: true 让回车符也能变成<br>，更符合聊天习惯
-    let rawHtml = marked.parse(processedText, { gfm: true, breaks: true });
-
-    // 3. 【安全】使用 DOMPurify 清洗HTML，防止XSS攻击
-    let sanitizedHtml = DOMPurify.sanitize(rawHtml);
-
-    return sanitizedHtml;
-  }
-
-  // ▲▲▲ 新函数粘贴结束 ▲▲▲
-
-  let tempGeneratedScriptData = null;
-
-  // ▼▼▼ 游戏功能函数 ▼▼▼
-
-  // --- 狼人杀 Werewolf ---
-  // ...（后面的代码）...
-
-  // ▼▼▼ 游戏功能函数 ▼▼▼
-
-  // --- 狼人杀 Werewolf ---
-  // ▼▼▼ 【全新】这里是狼人杀游戏的所有核心功能函数 ▼▼▼
-
-  /**
-   * 【狼人杀】打开游戏设置界面
-   */
-  async function openWerewolfSetup() {
-    showScreen('werewolf-setup-screen');
-    const selectionEl = document.getElementById('werewolf-player-selection');
-    selectionEl.innerHTML = '<p>正在加载角色列表...</p>';
-
-    const singleChats = Object.values(state.chats).filter(chat => !chat.isGroup);
-    const allNpcs = Object.values(state.chats).flatMap(chat =>
-      (chat.npcLibrary || []).map(npc => ({ ...npc, owner: chat.name })),
-    );
-
-    let playerOptions = [
-      ...singleChats.map(c => ({ id: c.id, name: c.name, avatar: c.settings.aiAvatar, type: '角色' })),
-      ...allNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatar, type: `NPC (${n.owner})` })),
+  function getDefaultPromptOrderItems() {
+    return [
+      { identifier: 'main', name: '主系统提示词 Main Prompt', role: 'system', enabled: true, marker: false, injection_position: 0, injection_depth: 4, content: '请完全代入{{char}}与{{user}}进行沉浸式互动与剧情推进，严格遵守角色设定、世界观法则与输出格式要求，严禁代替{{user}}说话或做决定。' },
+      { identifier: 'worldInfoBefore', name: '前置世界书 World Info Before', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'personaDescription', name: '玩家人设 Persona Description', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'charDescription', name: '角色设定 Char Description', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'charPersonality', name: '角色性格 Char Personality', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'scenario', name: '当前场景 Scenario', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'enhanceDefinitions', name: '强化定义 Enhance Definitions', role: 'system', enabled: false, marker: false, injection_position: 0, injection_depth: 4, content: '保持鲜明的角色语言风格与细节描写，注重环境氛围、神态动作与感官反馈。' },
+      { identifier: 'nsfw', name: '辅助提示词 Auxiliary Prompt', role: 'system', enabled: true, marker: false, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'worldInfoAfter', name: '后置世界书 World Info After', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'dialogueExamples', name: '对话示例 Chat Examples', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'chatHistory', name: '聊天历史记录 Chat History', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
+      { identifier: 'jailbreak', name: '历史后指令 Post-History Instructions', role: 'system', enabled: true, marker: false, injection_position: 0, injection_depth: 0, content: '' }
     ];
-
-    selectionEl.innerHTML = '';
-    playerOptions.forEach(player => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item';
-      item.innerHTML = `
-            <input type="checkbox" class="werewolf-player-checkbox" value="${player.id}">
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-            <span class="type-tag">${player.type}</span>
-        `;
-      selectionEl.appendChild(item);
-    });
-    // ▼▼▼ 在这里粘贴下面这块新代码 ▼▼▼
-    const inviteModeRadios = document.querySelectorAll('input[name="undercover_invite_mode"]');
-    const manualOptions = document.getElementById('undercover-manual-invite-options');
-    const randomOptions = document.getElementById('undercover-random-invite-options');
-
-    inviteModeRadios.forEach(radio => {
-      radio.addEventListener('change', () => {
-        if (radio.value === 'manual') {
-          manualOptions.style.display = 'block';
-          randomOptions.style.display = 'none';
-        } else {
-          // random mode
-          manualOptions.style.display = 'none'; // 隐藏手动列表
-          randomOptions.style.display = 'block'; // 显示随机选项
-        }
-      });
-    });
-
-    // 默认触发一次，以确保初始状态正确
-    document.querySelector('input[name="undercover_invite_mode"]:checked').dispatchEvent(new Event('change'));
-    // ▲▲▲ 粘贴结束 ▲▲▲
   }
 
-  /**
-   * 【狼人杀】开始游戏的核心逻辑
-   */
-  async function startWerewolfGame() {
-    const countSelect = document.getElementById('werewolf-player-count');
-    const totalPlayers = parseInt(countSelect.value);
-
-    const selectedCheckboxes = document.querySelectorAll('.werewolf-player-checkbox:checked');
-    // 邀请的AI/NPC数量必须是总人数-1（因为User是必须加入的）
-    if (selectedCheckboxes.length !== totalPlayers - 1) {
-      alert(`请选择 ${totalPlayers - 1} 位AI或NPC玩家！`);
-      return;
-    }
-
-    // --- 1. 重置并初始化游戏状态 ---
-    werewolfGameState = {
-      isActive: true,
-      players: [],
-      roles: {},
-      gamePhase: 'start',
-      dayNumber: 0,
-      gameLog: [],
-      turnIndex: 0,
-      votes: {},
-      seerLastNightResult: null,
-      witchPotions: { save: 1, poison: 1 },
-      hunterTarget: null,
-      lastNightKilled: [],
-      waitingFor: null,
-      gameConfig: { totalPlayers },
-    };
-
-    // --- 2. 收集玩家信息 ---
-    // 添加User
-    werewolfGameState.players.push({
-      id: 'user',
-      name: state.qzoneSettings.nickname || '我',
-      avatar: state.qzoneSettings.avatar || defaultAvatar,
-      isAlive: true,
-      isUser: true, // 标记为真实用户
-    });
-
-    // 添加被邀请的AI和NPC
-    selectedCheckboxes.forEach(checkbox => {
-      const playerId = checkbox.value;
-      const chat = Object.values(state.chats).find(c => c.id === playerId);
-      if (chat) {
-        // 是主要角色
-        werewolfGameState.players.push({
-          id: chat.id,
-          name: chat.name,
-          avatar: chat.settings.aiAvatar,
-          persona: chat.settings.aiPersona,
-          isAlive: true,
-          isUser: false,
-        });
-      } else {
-        // 是NPC
-        for (const c of Object.values(state.chats)) {
-          const npc = (c.npcLibrary || []).find(n => n.id === playerId);
-          if (npc) {
-            werewolfGameState.players.push({
-              id: npc.id,
-              name: npc.name,
-              avatar: npc.avatar,
-              persona: npc.persona,
-              isAlive: true,
-              isUser: false,
-            });
-            break;
-          }
-        }
-      }
-    });
-
-    // 打乱玩家顺序（座位顺序）
-    werewolfGameState.players.sort(() => Math.random() - 0.5);
-
-    // --- 3. 根据人数分配角色 ---
-    const roleConfigs = {
-      6: { wolf: 2, villager: 2, seer: 1, guard: 1 },
-      9: { wolf: 3, villager: 3, seer: 1, witch: 1, hunter: 1 },
-      12: { wolf: 4, villager: 4, seer: 1, witch: 1, hunter: 1, idiot: 1 },
-    };
-    // ▼▼▼ 【核心Bug修复】用这块代码替换上面的错误代码 ▼▼▼
-    const rolesToAssign = [];
-    const config = roleConfigs[totalPlayers];
-    werewolfGameState.roles = config; // 将角色配置存入游戏状态
-    for (const role in config) {
-      for (let i = 0; i < config[role]; i++) {
-        // 修正：config[i] -> config[role]
-        rolesToAssign.push(role);
-      }
-    }
-    // ▲▲▲ 修复结束 ▲▲▲
-    rolesToAssign.sort(() => Math.random() - 0.5); // 打乱角色
-
-    werewolfGameState.players.forEach((player, index) => {
-      player.role = rolesToAssign[index];
-    });
-    // ▼▼▼ 在这里添加下面的新代码 ▼▼▼
-    // ▼▼▼ 第1处修改（添加翻译）▼▼▼
-    const roleNameMap = {
-      wolf: '狼人',
-      villager: '平民',
-      seer: '预言家',
-      witch: '女巫',
-      hunter: '猎人',
-      guard: '守卫',
-      idiot: '白痴',
-    };
-
-    // 弹窗告知用户身份
-    const userPlayer = werewolfGameState.players.find(p => p.isUser);
-    if (userPlayer) {
-      const myRoleName = roleNameMap[userPlayer.role] || userPlayer.role;
-      await showCustomAlert('你的身份', `你在本局游戏中的身份是：【${myRoleName}】`);
-    }
-    // ▲▲▲ 修改结束 ▲▲▲
-    // --- 4. 切换到游戏界面并开始游戏循环 ---
-    showScreen('werewolf-game-screen');
-    await processGameTurn();
-  }
-
-  // ▼▼▼ 用这【一整块】全新的游戏引擎代码，替换旧的 processGameTurn 函数 ▼▼▼
-  /**
-   * 【狼人杀 V2】游戏主循环/引擎
-   */
-  async function processGameTurn() {
-    if (!werewolfGameState.isActive) return;
-
-    renderWerewolfGameScreen();
-
-    switch (werewolfGameState.gamePhase) {
-      case 'start':
-        logToWerewolfGame('游戏开始，正在分配身份...');
-        const roleNameMapForLog = {
-          wolf: '狼人',
-          villager: '平民',
-          seer: '预言家',
-          witch: '女巫',
-          hunter: '猎人',
-          guard: '守卫',
-          idiot: '白痴',
-        };
-        const configText = Object.entries(werewolfGameState.roles)
-          .map(([role, count]) => `${roleNameMapForLog[role] || role}x${count}`)
-          .join(', ');
-        logToWerewolfGame(`本局配置: ${configText}`);
-        werewolfGameState.gamePhase = 'night_start';
-        await sleep(3000);
-        await processGameTurn();
-        break;
-
-      case 'night_start':
-        werewolfGameState.dayNumber++;
-        werewolfGameState.lastNightKilled = [];
-        werewolfGameState.votes = {};
-        logToWerewolfGame(`第 ${werewolfGameState.dayNumber} 天，天黑请闭眼。`);
-        werewolfGameState.gamePhase = 'guard_action'; // 从守卫开始
-        await sleep(2000);
-        await processGameTurn();
-        break;
-
-      // 【守卫行动阶段】
-      case 'guard_action':
-        const guard = werewolfGameState.players.find(p => p.role === 'guard' && p.isAlive);
-        if (guard) {
-          logToWerewolfGame('守卫请睁眼，请选择你要守护的玩家。');
-          let protectedId;
-          // ★★★ 核心检查点1：判断守卫是不是User ★★★
-          if (guard.isUser) {
-            // 如果是，就调用waitForUserAction，这会弹出操作框
-            protectedId = await waitForUserAction('请选择你要守护的玩家', 'guard_protect');
-          } else {
-            // 如果不是，就让AI自己决策
-            protectedId = await triggerWerewolfAiAction(guard.id, 'guard_protect');
-          }
-          werewolfGameState.guardLastNightProtected = protectedId;
-          logToWerewolfGame(`守卫请闭眼。`);
-        }
-        werewolfGameState.gamePhase = 'wolf_action';
-        await sleep(2000);
-        await processGameTurn();
-        break;
-
-      // ▼▼▼ 用这块【狼人频道增强+平票处理版】的代码替换旧的 'wolf_action' case ▼▼▼
-      case 'wolf_action':
-        logToWerewolfGame('狼人请睁眼，请选择一个目标。');
-        const wolves = werewolfGameState.players.filter(p => p.role === 'wolf' && p.isAlive);
-        const userPlayer = wolves.find(w => w.isUser);
-        let allWolfVotes = [];
-
-        // 场景1: 用户是狼人
-        if (userPlayer) {
-          const aiWolves = wolves.filter(w => !w.isUser);
-          let suggestionsText = '🐺 狼人频道 (秘密):\n';
-
-          if (aiWolves.length > 0) {
-            // 从AI队友获取建议
-            const aiVotePromises = aiWolves.map(wolf =>
-              triggerWerewolfAiAction(wolf.id, 'wolf_kill', { isUserWolfAlly: true }),
-            );
-            const aiVotes = (await Promise.all(aiVotePromises)).filter(Boolean);
-            allWolfVotes.push(...aiVotes);
-
-            // 格式化建议给用户看
-            aiVotes.forEach((targetId, index) => {
-              const votingWolf = aiWolves[index];
-              const targetPlayer = werewolfGameState.players.find(p => p.id === targetId);
-              if (votingWolf && targetPlayer) {
-                suggestionsText += `- ${votingWolf.name} 提议击杀: ${targetPlayer.name}\n`;
-              }
-            });
-            suggestionsText += '\n请参考队友意见后进行投票。';
-
-            await showCustomAlert('狼人请沟通', suggestionsText);
-          } else {
-            await showCustomAlert('你是唯一的狼', '请独自决定今晚的目标。');
-          }
-
-          // 获取用户的最终投票
-          const userVote = await waitForUserAction('请选择最终攻击目标', 'wolf_kill');
-          if (userVote) {
-            allWolfVotes.push(userVote);
-          }
-        } else {
-          // 场景2: 用户不是狼人，AI狼人自行决定
-          const wolfPromises = wolves.map(wolf => triggerWerewolfAiAction(wolf.id, 'wolf_kill'));
-          const wolfVotes = (await Promise.all(wolfPromises)).filter(Boolean);
-          allWolfVotes.push(...wolfVotes);
-        }
-
-        // 统计所有狼人的投票
-        const voteCounts = {};
-        allWolfVotes.forEach(vote => {
-          voteCounts[vote] = (voteCounts[vote] || 0) + 1;
-        });
-
-        let maxVotes = 0;
-        let targetId = null;
-        let tied = false;
-        for (const id in voteCounts) {
-          if (voteCounts[id] > maxVotes) {
-            maxVotes = voteCounts[id];
-            targetId = id;
-            tied = false;
-          } else if (voteCounts[id] === maxVotes) {
-            tied = true;
-          }
-        }
-
-        // ★★★ 这就是我们新增的平票处理逻辑！★★★
-        if (tied && maxVotes > 0) {
-          // 如果出现平票，就从所有平票的目标中随机选择一个
-          const tiedTargets = Object.keys(voteCounts).filter(id => voteCounts[id] === maxVotes);
-          targetId = tiedTargets[Math.floor(Math.random() * tiedTargets.length)];
-          logToWerewolfGame(
-            `(狼人内部经过一番激烈讨论，最终决定目标为 ${werewolfGameState.players.find(p => p.id === targetId).name})`,
-          );
-        }
-
-        if (targetId) {
-          // 只要有目标（无论是统一意见还是随机决定），就执行击杀
-          werewolfGameState.lastNightKilled = [targetId];
-          logToWerewolfGame(`狼人请闭眼。`);
-        } else {
-          // 只有在所有狼人都没投票的情况下，才会是平安夜
-          logToWerewolfGame(`狼人放弃了行动，今晚无人被袭击。`);
-          werewolfGameState.lastNightKilled = [];
-        }
-
-        // 进入下一个游戏阶段
-        werewolfGameState.gamePhase = 'seer_action';
-        await sleep(2000);
-        await processGameTurn();
-        break;
-      // ▲▲▲ 替换结束 ▲▲▲
-
-      // 【预言家行动阶段】
-      case 'seer_action':
-        const seer = werewolfGameState.players.find(p => p.role === 'seer' && p.isAlive);
-        if (seer) {
-          logToWerewolfGame('预言家请睁眼，请选择你要查验的玩家。');
-          let targetId;
-          // ★★★ 核心检查点3：判断预言家是不是User ★★★
-          if (seer.isUser) {
-            targetId = await waitForUserAction('请选择你要查验的玩家', 'seer_check');
-          } else {
-            targetId = await triggerWerewolfAiAction(seer.id, 'seer_check');
-          }
-          const targetPlayer = werewolfGameState.players.find(p => p.id === targetId);
-          const isWolf = targetPlayer.role === 'wolf';
-          werewolfGameState.seerLastNightResult = { targetName: targetPlayer.name, isWolf: isWolf };
-          logToWerewolfGame(`预言家请闭眼。`);
-          if (seer.isUser) {
-            await showCustomAlert('查验结果', `${targetPlayer.name} 的身份是：${isWolf ? '狼人' : '好人'}`);
-          }
-        }
-        werewolfGameState.gamePhase = 'witch_action';
-        await sleep(2000);
-        await processGameTurn();
-        break;
-
-      // 【女巫行动阶段】
-      case 'witch_action':
-        const witch = werewolfGameState.players.find(p => p.role === 'witch' && p.isAlive);
-        if (witch) {
-          logToWerewolfGame('女巫请睁眼。');
-          const killedId = werewolfGameState.lastNightKilled[0];
-          let killedPlayerName = null;
-          if (killedId) {
-            killedPlayerName = werewolfGameState.players.find(p => p.id === killedId).name;
-            logToWerewolfGame(`今晚 ${killedPlayerName} 被袭击了。`);
-          }
-
-          let witchAction;
-          // ★★★ 核心检查点4：判断女巫是不是User ★★★
-          if (witch.isUser) {
-            witchAction = await waitForUserAction('女巫请行动', 'witch_action', { killedId, killedPlayerName });
-          } else {
-            witchAction = await triggerWerewolfAiAction(witch.id, 'witch_action', { killedId });
-          }
-
-          if (witchAction?.action === 'save' && killedId) {
-            werewolfGameState.lastNightKilled = [];
-            werewolfGameState.witchPotions.save = 0;
-          } else if (witchAction?.action === 'poison' && witchAction.targetId) {
-            werewolfGameState.lastNightKilled.push(witchAction.targetId);
-            werewolfGameState.witchPotions.poison = 0;
-          }
-        }
-        logToWerewolfGame(`女巫请闭眼。`);
-        werewolfGameState.gamePhase = 'day_start';
-        await sleep(2000);
-        await processGameTurn();
-        break;
-
-      case 'day_start':
-        logToWerewolfGame('天亮了。');
-        let deathAnnouncements = [];
-        const deathsThisNight = new Set();
-
-        werewolfGameState.lastNightKilled.forEach(killedId => {
-          if (killedId === werewolfGameState.guardLastNightProtected) {
-            logToWerewolfGame(
-              `昨晚 ${werewolfGameState.players.find(p => p.id === killedId).name} 被袭击但同时也被守护了。`,
-            );
-          } else {
-            deathsThisNight.add(killedId);
-          }
-        });
-
-        if (deathsThisNight.size === 0) {
-          logToWerewolfGame('昨晚是一个平安夜。');
-        } else {
-          deathsThisNight.forEach(deadId => {
-            const deadPlayer = werewolfGameState.players.find(p => p.id === deadId);
-            if (deadPlayer.isAlive) {
-              deadPlayer.isAlive = false;
-              deathAnnouncements.push(`${deadPlayer.name} 昨晚被淘汰了。`);
-            }
-          });
-          deathAnnouncements.forEach(announcement => logToWerewolfGame(announcement));
-        }
-
-        renderWerewolfGameScreen();
-        if (checkGameOver()) return;
-
-        let hunterDied = null;
-        deathsThisNight.forEach(deadId => {
-          const deadPlayer = werewolfGameState.players.find(p => p.id === deadId);
-          if (deadPlayer.role === 'hunter') hunterDied = deadPlayer;
-        });
-
-        if (hunterDied) {
-          logToWerewolfGame(`${hunterDied.name} 是猎人，可以选择一名玩家带走。`);
-          let targetId;
-          // ★★★ 核心检查点5：判断猎人是不是User ★★★
-          if (hunterDied.isUser) {
-            targetId = await waitForUserAction('请选择你要带走的玩家', 'hunter_shoot');
-          } else {
-            targetId = await triggerWerewolfAiAction(hunterDied.id, 'hunter_shoot');
-          }
-          if (targetId) {
-            const targetPlayer = werewolfGameState.players.find(p => p.id === targetId);
-            targetPlayer.isAlive = false;
-            logToWerewolfGame(`猎人开枪带走了 ${targetPlayer.name}。`);
-            renderWerewolfGameScreen();
-            if (checkGameOver()) return;
-          }
-        }
-
-        werewolfGameState.gamePhase = 'day_discussion';
-        await sleep(2000);
-        await processGameTurn();
-        break;
-
-      case 'day_discussion':
-        logToWerewolfGame('现在开始依次发言。');
-        const alivePlayersForSpeech = werewolfGameState.players.filter(p => p.isAlive);
-        for (const player of alivePlayersForSpeech) {
-          renderWerewolfGameScreen({ speakingPlayerId: player.id });
-          let speech;
-          if (player.isUser) {
-            speech = await waitForUserAction('轮到你发言', 'speak');
-          } else {
-            speech = await triggerWerewolfAiAction(player.id, 'speak');
-          }
-          logToWerewolfGame({ player: player, speech: speech }, 'speech');
-          await sleep(1000);
-        }
-        renderWerewolfGameScreen();
-        werewolfGameState.gamePhase = 'day_vote';
-        await processGameTurn();
-        break;
-
-      case 'day_vote':
-        logToWerewolfGame('请投票选出你认为是狼人的玩家。');
-        const voterPromises = werewolfGameState.players
-          .filter(p => p.isAlive)
-          .map(player => {
-            if (player.isUser) {
-              return waitForUserAction('请投票', 'vote');
-            } else {
-              return triggerWerewolfAiAction(player.id, 'vote');
-            }
-          });
-        const allVotesResult = (await Promise.all(voterPromises)).filter(Boolean);
-
-        const voteTallyResult = {};
-        allVotesResult.forEach(vote => {
-          voteTallyResult[vote] = (voteTallyResult[vote] || 0) + 1;
-        });
-
-        let maxVotesResult = 0,
-          playersToEliminate = [];
-        for (const playerId in voteTallyResult) {
-          if (voteTallyResult[playerId] > maxVotesResult) {
-            maxVotesResult = voteTallyResult[playerId];
-            playersToEliminate = [playerId];
-          } else if (voteTallyResult[playerId] === maxVotesResult) {
-            playersToEliminate.push(playerId);
-          }
-        }
-
-        if (playersToEliminate.length === 1) {
-          const eliminatedPlayer = werewolfGameState.players.find(p => p.id === playersToEliminate[0]);
-          eliminatedPlayer.isAlive = false;
-          logToWerewolfGame(`投票结果：${eliminatedPlayer.name} 被淘汰。`);
-          renderWerewolfGameScreen();
-          if (checkGameOver()) return;
-          if (eliminatedPlayer.role === 'hunter') {
-            logToWerewolfGame(`${eliminatedPlayer.name} 是猎人，可以选择一名玩家带走。`);
-            let targetId;
-            if (eliminatedPlayer.isUser) {
-              targetId = await waitForUserAction('请选择你要带走的玩家', 'hunter_shoot');
-            } else {
-              targetId = await triggerWerewolfAiAction(eliminatedPlayer.id, 'hunter_shoot');
-            }
-            if (targetId) {
-              const targetPlayer = werewolfGameState.players.find(p => p.id === targetId);
-              targetPlayer.isAlive = false;
-              logToWerewolfGame(`猎人开枪带走了 ${targetPlayer.name}。`);
-              renderWerewolfGameScreen();
-              if (checkGameOver()) return;
-            }
-          }
-        } else {
-          logToWerewolfGame('投票平票，无人出局。');
-        }
-
-        werewolfGameState.gamePhase = 'night_start';
-        await sleep(3000);
-        await processGameTurn();
-        break;
-    }
-  }
-  // ▲▲▲ 新引擎代码结束 ▲▲▲
-  // ▼▼▼ 【全新】这是狼人杀的重roll功能核心函数 ▼▼▼
-  /**
-   * 【狼人杀】处理AI发言的重roll请求
-   * @param {number} logIndex - 要重roll的发言在gameLog中的索引
-   */
-  async function handleWerewolfReroll(logIndex) {
-    const logEntry = werewolfGameState.gameLog[logIndex];
-    if (!logEntry || logEntry.type !== 'speech' || logEntry.message.player.isUser) {
-      return; // 安全检查，确保我们操作的是AI的发言
-    }
-
-    const playerToReroll = logEntry.message.player;
-
-    // 给用户一个即时反馈
-    const speechTextElement = document
-      .querySelector(`button[data-log-index="${logIndex}"]`)
-      .closest('.speech-content')
-      .querySelector('.speech-text');
-    if (speechTextElement) {
-      speechTextElement.innerHTML = '<i>正在重新思考...</i>';
-    }
-
-    try {
-      // 重新调用AI生成新的发言
-      const newSpeech = await triggerWerewolfAiAction(playerToReroll.id, 'speak');
-
-      // 用新的发言内容替换掉旧的
-      werewolfGameState.gameLog[logIndex].message.speech = newSpeech;
-
-      // 重新渲染整个游戏界面以显示更新
-      renderWerewolfGameScreen();
-    } catch (error) {
-      console.error('狼人杀发言重roll失败:', error);
-      if (speechTextElement) {
-        speechTextElement.innerHTML = `<i style="color:red;">重新生成失败，请检查网络或API设置。</i>`;
-      }
-    }
-  }
-  // ▲▲▲ 新增函数结束 ▲▲▲
-
-  // ▼▼▼ 请用这块【已添加重roll按钮】的代码，完整替换旧的 renderWerewolfGameScreen 函数 ▼▼▼
-  /**
-   * 【狼人杀】渲染游戏主界面
-   */
-  function renderWerewolfGameScreen(options = {}) {
-    const playersGrid = document.getElementById('werewolf-players-grid');
-    const logContainer = document.getElementById('werewolf-game-log');
-
-    // 渲染玩家座位
-    playersGrid.innerHTML = '';
-    werewolfGameState.players.forEach(player => {
-      const seat = document.createElement('div');
-      seat.className = 'player-seat';
-      const avatarClass = `player-avatar ${!player.isAlive ? 'dead' : ''} ${
-        options.speakingPlayerId === player.id ? 'speaking' : ''
-      } ${options.activePlayerId === player.id ? 'active-turn' : ''}`;
-
-      let roleIndicator = '';
-      const user = werewolfGameState.players.find(p => p.isUser);
-      // 如果我是狼人，显示所有狼人队友
-      if (user.role === 'wolf' && player.role === 'wolf') {
-        roleIndicator = '<div class="player-role-indicator" style="display: flex;">W</div>';
-      }
-
-      seat.innerHTML = `
-            ${roleIndicator}
-            <img src="${player.avatar}" class="${avatarClass}">
-            <span class="player-name">${player.name} (${player.isAlive ? '存活' : '淘汰'})</span>
-        `;
-      playersGrid.appendChild(seat);
-    });
-
-    // 渲染游戏日志
-    logContainer.innerHTML = werewolfGameState.gameLog
-      .map((log, index) => {
-        // ★ 核心修改1：增加了index参数
-        // 判断是否为AI的发言
-        if (log.type === 'speech' && typeof log.message === 'object' && !log.message.player.isUser) {
-          const { player, speech } = log.message;
-          // ★ 核心修改2：在AI发言的DOM结构中，加入一个带有特殊data属性的重roll按钮
-          return `
-            <div class="log-entry speech">
-                <img src="${player.avatar}" class="speech-avatar">
-                <div class="speech-content">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span class="speaker">${player.name}</span>
-                        <button class="werewolf-reroll-btn" data-log-index="${index}" title="重新生成发言" style="background:none; border:none; cursor:pointer; padding:0; color:var(--text-secondary);">
-                            <svg class="reroll-btn-icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                        </button>
-                    </div>
-                    <span class="speech-text">${speech.replace(/\n/g, '<br>')}</span>
-                </div>
-            </div>
-        `;
-        }
-        // 用户发言或其他系统消息保持原样
-        else if (log.type === 'speech' && typeof log.message === 'object') {
-          const { player, speech } = log.message;
-          return `
-            <div class="log-entry speech">
-                <img src="${player.avatar}" class="speech-avatar">
-                <div class="speech-content">
-                    <span class="speaker">${player.name}</span>
-                    <span class="speech-text">${speech.replace(/\n/g, '<br>')}</span>
-                </div>
-            </div>
-        `;
-        } else {
-          return `<div class="log-entry ${log.type}">${String(log.message).replace(/\n/g, '<br>')}</div>`;
-        }
-      })
-      .join('');
-    logContainer.scrollTop = logContainer.scrollHeight;
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【狼人杀】等待用户投票
-   */
-  function waitForUserVote() {
-    return new Promise(resolve => {
-      const actionArea = document.getElementById('werewolf-action-area');
-      const alivePlayers = werewolfGameState.players.filter(p => p.isAlive && !p.isUser);
-
-      actionArea.innerHTML = '<h5>请投票:</h5>';
-      const grid = document.createElement('div');
-      grid.className = 'vote-target-grid';
-
-      alivePlayers.forEach(player => {
-        const btn = document.createElement('button');
-        btn.className = 'form-button-secondary vote-target-btn';
-        btn.textContent = player.name;
-        btn.onclick = () => {
-          actionArea.innerHTML = '';
-          resolve(player.id);
-        };
-        grid.appendChild(btn);
-      });
-      actionArea.appendChild(grid);
-    });
-  }
-
-  /**
-   * 【狼人杀】添加一条游戏日志
-   */
-  function logToWerewolfGame(message, type = 'system') {
-    werewolfGameState.gameLog.push({ message, type });
-    renderWerewolfGameScreen();
-  }
-  /**
-   * 【狼人杀-AI核心】调用AI为整局游戏生成复盘摘要
-   * @returns {Promise<string>} - AI生成的摘要文本
-   */
-  async function generateAiGameSummary() {
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) {
-      return '（AI摘要生成失败：API未配置）';
-    }
-
-    // 格式化完整的游戏日志，让AI能够理解
-    const formattedLog = werewolfGameState.gameLog
-      .map(log => {
-        if (log.type === 'speech') {
-          return `${log.message.player.name}: ${log.message.speech}`;
-        }
-        return log.message;
-      })
-      .join('\n');
-
-    const prompt = `
-# 任务
-你是一位专业的狼人杀复盘分析师。请根据以下完整的游戏日志，用100-150字，客观、精炼地总结本局游戏的【关键事件】和【转折点】。
-
-# 核心要求
-- 你的总结需要有逻辑、有条理。
-- 指出关键玩家的行为，例如预言家的查验、女巫的操作、猎人的开枪等。
-- 分析狼人阵营和好人阵营的博弈过程。
-- 你的输出【必须且只能】是复盘摘要的纯文本内容，不要包含任何额外的对话或标题。
-
-# 游戏日志
-${formattedLog}
-`;
-
-    try {
-      const messagesForApi = [{ role: 'user', content: prompt }];
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(model, apiKey, prompt, messagesForApi, isGemini);
-
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-            }),
-          });
-
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      return (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).trim();
-    } catch (error) {
-      console.error('AI摘要生成失败:', error);
-      return '（AI摘要生成失败，请检查网络或API设置）';
-    }
-  }
-
-  /**
-   * 【狼人杀 V2 - 增强版】生成游戏复盘的文本，包含AI摘要
-   * @param {string} winner - 胜利的阵营名称
-   * @param {string} aiSummary - AI生成的摘要文本
-   * @returns {string} - 格式化后的完整复盘Markdown文本
-   */
-  function generateWerewolfSummary(winner, aiSummary) {
-    const roleNameMap = {
-      wolf: '狼人',
-      villager: '平民',
-      seer: '预言家',
-      witch: '女巫',
-      hunter: '猎人',
-      guard: '守卫',
-      idiot: '白痴',
-    };
-
-    let summaryText = `**狼人杀 - 游戏复盘**\n\n`; // 优化标题
-    summaryText += `🏆 **胜利方:** ${winner}\n`;
-    summaryText += `📅 **游戏天数:** ${werewolfGameState.dayNumber} 天\n\n`;
-
-    // 加入AI生成的摘要
-    summaryText += `**本局摘要:**\n${aiSummary}\n\n`;
-
-    summaryText += `**玩家复盘:**\n`;
-    werewolfGameState.players.forEach(p => {
-      const status = p.isAlive ? '存活' : '淘汰';
-      const roleName = roleNameMap[p.role] || p.role;
-      summaryText += `- ${p.name} (${roleName}) - ${status}\n`;
-    });
-
-    return summaryText;
-  }
-
-  /**
-   * 【狼人杀】打开复盘发送目标选择器
-   * @param {string} summaryText - 要发送的复盘文本
-   */
-  function openWerewolfSummaryTargetPicker(summaryText) {
-    const modal = document.getElementById('werewolf-target-picker-modal');
-    const listEl = document.getElementById('werewolf-target-list');
-    listEl.innerHTML = '';
-
-    const aiPlayers = werewolfGameState.players.filter(p => !p.isUser);
-
-    if (aiPlayers.length === 0) {
-      alert('没有可发送的AI玩家。');
-      return;
-    }
-
-    // 渲染可选的AI玩家列表
-    aiPlayers.forEach(player => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item'; // 复用之前的样式
-      item.innerHTML = `
-            <input type="checkbox" class="werewolf-target-checkbox" value="${player.id}" checked>
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-        `;
-      listEl.appendChild(item);
-    });
-
-    // 绑定按钮事件
-    const confirmBtn = document.getElementById('wt-confirm-btn');
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    newConfirmBtn.onclick = () => {
-      const selectedIds = Array.from(document.querySelectorAll('.werewolf-target-checkbox:checked')).map(
-        cb => cb.value,
-      );
-      if (selectedIds.length > 0) {
-        sendSummaryToSelectedPlayers(summaryText, selectedIds);
-      } else {
-        alert('请至少选择一个发送对象！');
-      }
-    };
-
-    const cancelBtn = document.getElementById('wt-cancel-btn');
-    cancelBtn.onclick = () => modal.classList.remove('visible');
-
-    document.getElementById('wt-select-all-btn').onclick = () => {
-      document.querySelectorAll('.werewolf-target-checkbox').forEach(cb => (cb.checked = true));
-    };
-    document.getElementById('wt-deselect-all-btn').onclick = () => {
-      document.querySelectorAll('.werewolf-target-checkbox').forEach(cb => (cb.checked = false));
-    };
-
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 【狼人杀】显示游戏结算卡片模态框
-   * @param {string} summaryText - 复盘文本
-   */
-  function showWerewolfSummaryModal(summaryText) {
-    const modal = document.getElementById('werewolf-summary-modal');
-    const contentEl = document.getElementById('werewolf-summary-content');
-
-    // 使用你已有的Markdown渲染函数，让复盘更好看
-    contentEl.innerHTML = renderMarkdown(summaryText);
-
-    // 为按钮绑定事件 (使用克隆节点防止重复绑定)
-    const repostBtn = document.getElementById('repost-summary-btn');
-    const newRepostBtn = repostBtn.cloneNode(true);
-    repostBtn.parentNode.replaceChild(newRepostBtn, repostBtn);
-    newRepostBtn.onclick = () => openWerewolfSummaryTargetPicker(summaryText);
-
-    const backBtn = document.getElementById('back-to-hall-btn');
-    const newBackBtn = backBtn.cloneNode(true);
-    backBtn.parentNode.replaceChild(newBackBtn, backBtn);
-    newBackBtn.onclick = () => {
-      modal.classList.remove('visible');
-      showScreen('game-hall-screen');
-    };
-
-    modal.classList.add('visible');
-  }
-  /**
-   * 【狼人杀 V2 - 增强版】将游戏复盘发送到【选定】的AI角色的聊天中
-   * @param {string} summaryText - 复盘文本
-   * @param {string[]} targetIds - 目标AI角色的ID数组
-   */
-  async function sendSummaryToSelectedPlayers(summaryText, targetIds) {
-    // 先关闭所有可能打开的弹窗
-    document.getElementById('werewolf-summary-modal').classList.remove('visible');
-    document.getElementById('werewolf-target-picker-modal').classList.remove('visible');
-
-    const aiPlayers = werewolfGameState.players.filter(p => !p.isUser);
-    let sentCount = 0;
-
-    const aiContext = `[系统指令：刚刚结束了一局狼人杀，这是游戏复盘。请根据这个复盘内容，以你的角色人设，和用户聊聊刚才的游戏。]\n\n${summaryText}`;
-
-    for (const chatId of targetIds) {
-      const chat = state.chats[chatId];
-      if (chat) {
-        // ▼▼▼ 核心修改就在这里 ▼▼▼
-        // 1. 创建对用户可见的【复盘卡片】消息
-        // 创建对用户可见的复盘消息
-        const visibleMessage = {
-          role: 'user',
-          type: 'share_link',
-          timestamp: Date.now(),
-          title: '狼人杀 - 游戏复盘',
-          description: '点击查看详细复盘记录',
-          source_name: '游戏中心',
-          content: summaryText,
-        };
-
-        // 2. 创建对AI可见的【隐藏指令】
-        const hiddenInstruction = {
-          role: 'system',
-          content: aiContext,
-          timestamp: Date.now() + 1,
-          isHidden: true,
-        };
-
-        // 3. 将【两条】消息推入历史记录
-        chat.history.push(visibleMessage, hiddenInstruction);
-        await db.chats.put(chat);
-        sentCount++;
-        // ▲▲▲ 修改结束 ▲▲▲
-      }
-    }
-
-    await showCustomAlert('发送成功', `游戏复盘已发送至 ${sentCount} 位AI角色的聊天中！`);
-    showScreen('game-hall-screen');
-  }
-
-  // ▼▼▼ 用这个【修正后】的函数替换旧的 checkGameOver ▼▼▼
-  function checkGameOver() {
-    const alivePlayers = werewolfGameState.players.filter(p => p.isAlive);
-    const aliveWolves = alivePlayers.filter(p => p.role === 'wolf').length;
-    const aliveGods = alivePlayers.filter(p => ['seer', 'witch', 'hunter', 'guard', 'idiot'].includes(p.role)).length;
-    const aliveVillagers = alivePlayers.filter(p => p.role === 'villager').length;
-
-    let winner = null;
-
-    if (aliveWolves === 0) {
-      winner = '好人阵营';
-    } else if (aliveWolves >= aliveGods + aliveVillagers) {
-      winner = '狼人阵营';
-    } else if (aliveGods === 0 && aliveVillagers === 0) {
-      winner = '狼人阵营';
-    }
-
-    if (winner) {
-      logToWerewolfGame(`游戏结束！${winner}胜利！`);
-      const roleNameMap = {
-        wolf: '狼人',
-        villager: '平民',
-        seer: '预言家',
-        witch: '女巫',
-        hunter: '猎人',
-        guard: '守卫',
-        idiot: '白痴',
-      };
-      const rolesReveal = werewolfGameState.players.map(p => `${p.name}: ${roleNameMap[p.role] || p.role}`).join('\n');
-      logToWerewolfGame(`身份公布:\n${rolesReveal}`);
-
-      // 【核心修改】在这里调用AI生成摘要并显示结算卡
-      (async () => {
-        await showCustomAlert('请稍候...', 'AI正在生成本局摘要...');
-        const aiSummary = await generateAiGameSummary();
-        const summary = generateWerewolfSummary(winner, aiSummary);
-        showWerewolfSummaryModal(summary);
-      })();
-
-      werewolfGameState.isActive = false;
-      document.getElementById('werewolf-action-area').innerHTML = '';
-
-      return true;
-    }
-
-    return false;
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  // ▼▼▼ 【狼人杀输入框美化】请用这个【全新】的函数，完整替换掉你旧的 waitForUserAction 函数 ▼▼▼
-  /**
-   * 【狼人杀 V2 - 输入框美化版】等待用户行动的通用函数
-   */
-  function waitForUserAction(prompt, actionType, context = {}) {
-    const me = werewolfGameState.players.find(p => p.isUser);
-
-    // ★★★ 核心修复：当用户死亡时，允许'hunter_shoot'动作继续执行 ★★★
-    if (me && !me.isAlive && actionType !== 'hunter_shoot') {
-      const actionArea = document.getElementById('werewolf-action-area');
-      actionArea.innerHTML = `<h5>您已淘汰，正在观战...</h5>`;
-      return new Promise(async resolve => {
-        await sleep(3000);
-        actionArea.innerHTML = '';
-        resolve(null);
-      });
-    }
-    // ★★★ 修复结束 ★★★
-
-    return new Promise(resolve => {
-      const actionArea = document.getElementById('werewolf-action-area');
-      actionArea.innerHTML = ''; // 清空，准备新的UI
-      actionArea.className = 'werewolf-action-area'; // 重置class
-
-      if (actionType === 'speak') {
-        // --- 这是我们美化后的发言输入区 ---
-        actionArea.classList.add('speaking-mode'); // 激活新CSS
-
-        const textarea = document.createElement('textarea');
-        textarea.id = 'user-speech-input';
-        textarea.rows = 1;
-        textarea.placeholder = '请输入你的发言...';
-        // 实时调整高度
-        textarea.addEventListener('input', () => {
-          textarea.style.height = 'auto';
-          textarea.style.height = textarea.scrollHeight + 'px';
-        });
-
-        const endBtn = document.createElement('button');
-        endBtn.id = 'end-speech-btn';
-        endBtn.className = 'form-button'; // 保留一个基础class
-        endBtn.textContent = '结束发言';
-
-        actionArea.appendChild(textarea);
-        actionArea.appendChild(endBtn);
-
-        textarea.focus();
-
-        endBtn.onclick = () => {
-          const speech = textarea.value.trim() || '我过麦。';
-          actionArea.innerHTML = '';
-          actionArea.classList.remove('speaking-mode');
-          resolve(speech);
-        };
-        return; // 结束 'speak' 分支
-      }
-
-      // --- 以下是其他非发言动作的UI，保持原样 ---
-      actionArea.innerHTML = `<h5>${prompt}</h5>`;
-      const grid = document.createElement('div');
-      grid.className = 'vote-target-grid';
-
-      if (actionType === 'witch_action') {
-        if (context.killedId && werewolfGameState.witchPotions.save > 0) {
-          const saveBtn = document.createElement('button');
-          saveBtn.className = 'form-button';
-          saveBtn.textContent = `使用解药救 ${context.killedPlayerName}`;
-          saveBtn.onclick = () => {
-            actionArea.innerHTML = '';
-            resolve({ action: 'save' });
-          };
-          grid.appendChild(saveBtn);
-        }
-        if (werewolfGameState.witchPotions.poison > 0) {
-          const poisonBtn = document.createElement('button');
-          poisonBtn.className = 'form-button form-button-secondary';
-          poisonBtn.textContent = '使用毒药';
-          poisonBtn.onclick = async () => {
-            const targetId = await waitForUserAction('选择要毒杀的玩家', 'witch_poison_target');
-            resolve({ action: 'poison', targetId: targetId });
-          };
-          grid.appendChild(poisonBtn);
-        }
-        const passBtn = document.createElement('button');
-        passBtn.className = 'form-button form-button-secondary';
-        passBtn.textContent = '跳过';
-        passBtn.onclick = () => {
-          actionArea.innerHTML = '';
-          resolve({ action: 'none' });
-        };
-        grid.appendChild(passBtn);
-        actionArea.appendChild(grid);
-        return;
-      }
-
-      let targets = [];
-      if (['guard_protect', 'seer_check', 'hunter_shoot', 'witch_poison_target'].includes(actionType)) {
-        targets = werewolfGameState.players.filter(p => p.isAlive);
-      } else if (actionType === 'wolf_kill') {
-        targets = werewolfGameState.players.filter(p => p.isAlive && p.role !== 'wolf');
-      } else if (actionType === 'vote') {
-        targets = werewolfGameState.players.filter(p => p.isAlive);
-      }
-
-      // ★★★ 针对猎人开枪的特殊目标筛选 ★★★
-      // 如果是猎人开枪，目标不应该包括自己
-      if (actionType === 'hunter_shoot') {
-        targets = targets.filter(p => p.id !== me.id);
-      }
-
-      targets.forEach(player => {
-        const btn = document.createElement('button');
-        btn.className = 'form-button-secondary vote-target-btn';
-        btn.textContent = player.name;
-        btn.onclick = () => {
-          actionArea.innerHTML = '';
-          resolve(player.id);
-        };
-        grid.appendChild(btn);
-      });
-
-      if (actionType === 'vote') {
-        const passBtn = document.createElement('button');
-        passBtn.className = 'form-button-secondary vote-target-btn';
-        passBtn.textContent = '弃票';
-        passBtn.onclick = () => {
-          actionArea.innerHTML = '';
-          resolve(null);
-        };
-        grid.appendChild(passBtn);
-      }
-      actionArea.appendChild(grid);
-    });
-  }
-
-  /**
-   * 【狼人杀AI核心 V3 - 终极修复版】
-   * @param {string} playerId - 触发行动的AI玩家ID
-   * @param {string} action - AI需要执行的动作，例如 'speak', 'vote'
-   * @param {object} context - 附加信息，例如女巫的救人目标
-   * @returns {Promise<any>} - AI的决策结果
-   */
-  async function triggerWerewolfAiAction(playerId, action, context = {}) {
-    const player = werewolfGameState.players.find(p => p.id === playerId);
-    if (!player || !player.isAlive) return null;
-
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-
-    let actionPrompt = '';
-    let jsonFormat = '';
-
-    // 1. 构建一个清晰的、包含所有存活玩家及其ID的列表
-    const alivePlayersList = werewolfGameState.players
-      .filter(p => p.isAlive)
-      .map(p => `- ${p.name} (id: ${p.id})`)
-      .join('\n');
-
-    // 2. 构建完整的游戏日志，这是AI的“记忆核心”
-    const fullGameLog = werewolfGameState.gameLog
-      .map(log => {
-        if (log.type === 'speech') {
-          return `${log.message.player.name}: ${log.message.speech}`;
-        }
-        return log.message.replace(/<strong>/g, '').replace(/<\/strong>/g, ''); // 移除HTML标签
-      })
-      .join('\n');
-
-    let extraContext = '';
-    // 如果是预言家发言，提供专属情报
-    if (player.role === 'seer' && action === 'speak' && werewolfGameState.seerLastNightResult) {
-      const result = werewolfGameState.seerLastNightResult;
-      extraContext = `\n# 预言家专属情报 (此信息仅你可见)\n- **重要信息**: 昨晚你查验了 **${
-        result.targetName
-      }**，Ta的身份是【${
-        result.isWolf ? '狼人' : '好人'
-      }】。\n- **你的任务**: 你可以选择在发言中公布这个信息（可以说真话，也可以为了迷惑狼人而说谎），或者暂时隐藏它。请根据你的人设和当前局势做出最有利的决策。\n`;
-      werewolfGameState.seerLastNightResult = null;
-    }
-
-    // 3. 根据不同的行动类型，生成具体的任务描述和输出格式要求
-    switch (action) {
-      case 'guard_protect':
-        actionPrompt = '你是守卫，请选择一名玩家进行守护。你不能连续两晚守护同一个人。';
-        jsonFormat = '{"action": "vote", "targetId": "你选择守护的玩家ID"}';
-        if (werewolfGameState.guardLastNightProtected)
-          extraContext = `\n- 提示: 你昨晚守护了 ${
-            werewolfGameState.players.find(p => p.id === werewolfGameState.guardLastNightProtected).name
-          }。`;
-        break;
-      case 'wolf_kill':
-        const wolfTeammates = werewolfGameState.players
-          .filter(p => p.role === 'wolf' && p.id !== player.id)
-          .map(w => w.name)
-          .join('、');
-        if (context.isUserWolfAlly) {
-          actionPrompt = `你是狼人，你的队友是【${wolfTeammates}】和【用户】。请给你的用户队友一个击杀建议。`;
-        } else {
-          actionPrompt = `你是狼人，你的队友是【${wolfTeammates || '无'}】。请选择一个非狼人角色进行攻击。`;
-        }
-        extraContext += `\n# 狼人战术指令 (至关重要)\n- **团队合作**: 你的首要目标是和你的狼队友们【集火】同一个目标，以确保击杀成功。\n- **攻击优先级**: 请优先攻击你认为是【预言家】、【女巫】等神职的玩家，或者发言逻辑清晰、对狼人阵营威胁大的好人。`;
-        jsonFormat = '{"action": "vote", "targetId": "你选择攻击的玩家ID"}';
-        break;
-      case 'seer_check':
-        actionPrompt = '你是预言家，请选择一名玩家查验其身份（好人或狼人）。';
-        jsonFormat = '{"action": "vote", "targetId": "你选择查验的玩家ID"}';
-        break;
-      case 'witch_action':
-        actionPrompt = '你是女巫。';
-        if (context.killedId) {
-          actionPrompt += `今晚 ${werewolfGameState.players.find(p => p.id === context.killedId).name} 被袭击了。`;
-        } else {
-          actionPrompt += '今晚是平安夜。';
-        }
-        actionPrompt += ` 你有 ${werewolfGameState.witchPotions.save} 瓶解药和 ${werewolfGameState.witchPotions.poison} 瓶毒药。请决定你的行动。`;
-        jsonFormat = '{"action": "save" | "poison" | "none", "targetId": "(如果用毒药，填写目标ID)"}';
-        break;
-      case 'hunter_shoot':
-        actionPrompt = '你是猎人，你出局了，请选择一名玩家与你一同出局。';
-        jsonFormat = '{"action": "vote", "targetId": "你选择带走的玩家ID"}';
-        break;
-      case 'speak':
-        actionPrompt =
-          '现在轮到你发言。请根据你的角色身份、人设和当前局势，发表你的看法，可以撒谎或引导。你的发言应该围绕游戏本身，而不是只和用户聊天。';
-        jsonFormat = '{"action": "speak", "speech": "你的发言内容..."}';
-        break;
-      case 'vote':
-        actionPrompt = '现在是白天投票环节，请根据大家的发言和你自己的判断，投票选出你认为是狼人的玩家。';
-        jsonFormat = '{"action": "vote", "targetId": "你投票的玩家ID"}';
-        break;
-    }
-
-    // 4. 构建最终发送给AI的、结构清晰的完整Prompt
-    const systemPrompt = `
-# 游戏背景: 狼人杀
-# 你的身份和人设
-- **你的名字**: ${player.name}
-- **你的角色**: ${player.role}
-- **你的性格人设**: ${player.persona}
-
-# 当前局势
-- **存活玩家列表**:
-${alivePlayersList}
-- **游戏日志 (这是完整的游戏记录，你必须通读并记住所有信息)**:
-${fullGameLog}
-${extraContext}
-
-# 你的任务: ${actionPrompt}
-
-# 输出格式: 你的回复【必须且只能】是一个严格的JSON对象，格式如下:
-${jsonFormat}
-`;
-    // 5. 发送请求并处理返回结果 (这部分保持不变)
-    try {
-      const messagesForApi = [{ role: 'user', content: systemPrompt }];
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        systemPrompt,
-        messagesForApi,
-        isGemini,
-        state.apiConfig.temperature,
-      );
-
-      const response = await fetch(
-        isGemini ? geminiConfig.url : `${proxyUrl}/v1/chat/completions`,
-        isGemini
-          ? geminiConfig.data
-          : {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-              body: JSON.stringify({
-                model: model,
-                messages: messagesForApi,
-                temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                response_format: { type: 'json_object' },
-              }),
-            },
-      );
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      const content = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).replace(
-        /^```json\s*|```$/g,
-        '',
-      );
-      const aiAction = JSON.parse(content);
-
-      if (action === 'witch_action') return aiAction;
-      if (aiAction.action === 'vote') return aiAction.targetId;
-      if (aiAction.action === 'speak') return aiAction.speech;
-
-      return null;
-    } catch (error) {
-      console.error(`AI (${player.name}) 行动失败:`, error);
-      // 如果AI出错，提供一个保底的行动，防止游戏卡死
-      if (
-        action.includes('vote') ||
-        action.includes('kill') ||
-        action.includes('protect') ||
-        action.includes('check') ||
-        action.includes('shoot')
-      ) {
-        const potentialTargets = werewolfGameState.players.filter(p => p.isAlive && p.id !== player.id);
-        if (potentialTargets.length > 0)
-          return potentialTargets[Math.floor(Math.random() * potentialTargets.length)].id;
-      }
-      if (action === 'witch_action') return { action: 'none' };
-      return '我...我不知道该说什么了。';
-    }
-  }
-
-  /**
-   * 一个简单的sleep函数，用于在游戏流程中制造停顿
-   */
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // ▲▲▲ 狼人杀功能函数结束 ▲▲▲
-
-  // ▼▼▼ 【全新】这里是海龟汤游戏的所有核心功能函数 ▼▼▼
-
-  /**
-   * 【海龟汤】总入口：打开游戏设置界面
-   */
-  async function openSeaTurtleSoupSetup() {
-    // 1. 重置游戏状态
-    seaTurtleSoupState = {
-      isActive: false,
-      phase: 'setup',
-      players: [],
-      riddleProvider: null,
-      riddle: '',
-      answer: '',
-      gameLog: [],
-      currentTurnIndex: 0,
-    };
-
-    // 2. 渲染玩家选择列表
-    const selectionEl = document.getElementById('sts-player-selection');
-    selectionEl.innerHTML = '<p>正在加载角色列表...</p>';
-
-    const singleChats = Object.values(state.chats).filter(chat => !chat.isGroup);
-    const allNpcs = Object.values(state.chats).flatMap(chat =>
-      (chat.npcLibrary || []).map(npc => ({ ...npc, owner: chat.name })),
-    );
-
-    let playerOptions = [
-      ...singleChats.map(c => ({ id: c.id, name: c.name, avatar: c.settings.aiAvatar, type: '角色' })),
-      ...allNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatar, type: `NPC (${n.owner})` })),
-    ];
-
-    selectionEl.innerHTML = '';
-    playerOptions.forEach(player => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item'; // 复用狼人杀的样式
-      item.innerHTML = `
-            <input type="checkbox" class="sts-player-checkbox" value="${player.id}">
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-            <span class="type-tag">${player.type}</span>
-        `;
-      selectionEl.appendChild(item);
-    });
-
-    // 3. 重置并显示设置弹窗
-    document.getElementById('sts-riddle-provider-select').value = 'random';
-    document.getElementById('sts-user-riddle-input-area').style.display = 'none';
-    document.getElementById('sts-ai-riddle-input-area').style.display = 'none';
-    document.getElementById('sea-turtle-soup-setup-modal').classList.add('visible');
-  }
-
-  /**
-   * 【海龟汤】开始游戏的核心逻辑
-   */
-  async function startSeaTurtleSoupGame() {
-    const selectedCheckboxes = document.querySelectorAll('.sts-player-checkbox:checked');
-    if (selectedCheckboxes.length < 1) {
-      alert('请至少邀请一位AI或NPC玩家！');
-      return;
-    }
-
-    await showCustomAlert('请稍候...', '正在准备海龟汤游戏...');
-
-    // 1. 收集玩家信息
-    let players = [
+  const DEFAULT_STARTER_CARD = {
+    id: 'card_default_starter',
+    name: '酒馆向导',
+    avatar: DEFAULT_AVATAR_SVG,
+    description: '你是酒馆中的专属叙事搭档，擅长沉浸式文字冒险与角色扮演互动。',
+    personality: '温和、敏锐、富有画面感',
+    scenario: '旅人推开木门走进温暖的酒馆，壁炉火光摇曳。',
+    first_mes: '壁炉里的橡木柴发出轻微的噼啪声，琥珀色的麦酒在杯沿泛起细密泡沫。\n\n“欢迎来到酒馆，旅人。点击顶栏任意图标即可下拉展开全屏设置抽屉：最右侧小狗图标管理角色卡与聊天存档，第四个爪印管理世界书，第七个骨头管理正则脚本与扩展插件，第一个骨头管理预设采样与提示词条目，黑心图标管理酒馆美化。”',
+    alternate_greetings: [
+      '夜雨敲打着彩绘玻璃窗，吧台后的提灯亮起柔和暖光。\n\n“今天想开启哪一段故事？点击顶栏最右侧小狗图标即可多选导入你的角色卡图片。”'
+    ],
+    mes_example: '',
+    system_prompt: '',
+    post_history_instructions: '',
+    creator_notes: '点击顶栏9个图标可下拉打开对应的全屏配置面板。',
+    depth_prompt: { prompt: '', depth: 4, role: 'system' },
+    boundWorldBookIds: [],
+    boundRegexIds: []
+  };
+
+  let tavernState = {
+    activeCardId: 'card_default_starter',
+    activeThemeId: 'theme_gousu_default',
+    activePresetId: 'preset_default',
+    activePersonaId: 'persona_default',
+    activeDrawerId: null,
+    themeEnabled: true,
+    uiSettings: {
+      fontScale: 1.0,
+      avatarStyle: 'circle',
+      showMessageId: true,
+      showMesTimer: true,
+      showTokenCount: true,
+      showSwipeCounter: true
+    },
+    apiConfig: {
+      useExternalPhoneApi: true,
+      useExternalNovelAi: true,
+      customUrl: '',
+      customKey: '',
+      customModel: '',
+      availableModels: []
+    },
+    formatting: {
+      reasoningStartTag: '<think>',
+      reasoningEndTag: '</think>',
+      autoCollapseReasoning: true,
+      wrapQuotesInQ: true,
+      collapseNewlines: false,
+      customStoppingStrings: [],
+      systemPrompt: '请完全代入{{char}}与{{user}}进行沉浸式互动与剧情推进，严格遵守角色设定、世界观法则与输出格式要求，严禁代替{{user}}说话或做决定。',
+      postHistoryPrompt: '',
+      impersonationPrompt: '[请完全代入{{user}}的第一人称视角，顺着当前剧情写出{{user}}接下来的一段行动或对话回复，不要替{{char}}说话。]',
+      continueNudgePrompt: '[请紧接着上一条消息的末尾继续往下续写剧情，保持文风连贯，不要重复已写过的内容。]',
+      newChatPrompt: '[开始一段新的对话]',
+      wiFormat: '{0}',
+      scenarioFormat: '{{scenario}}',
+      personalityFormat: '{{personality}}'
+    },
+    authorNote: {
+      text: '',
+      depth: 4,
+      role: 'system',
+      frequency: 1,
+      charNoteText: '',
+      charNoteDepth: 4,
+      charNoteRole: 'system'
+    },
+    memory: {
+      enabled: true,
+      contextFloors: 40,
+      injectDepth: 2,
+      injectRole: 'system',
+      autoInterval: 20,
+      summaryText: '',
+      summaryPrompt: '请将目前为止的对话剧情总结为简明扼要的记忆摘要，包含关键已发生事件、人物关系进展、当前持有物品与状态变化。'
+    },
+    background: {
+      url: '',
+      fit: 'cover',
+      blur: 0,
+      opacity: 1
+    },
+    quickReplies: [
+      { id: 'qr_1', label: '观察四周', message: '我仔细观察周围的环境与人物动向。', enabled: true },
+      { id: 'qr_2', label: '继续续写', message: '/continue', enabled: true },
+      { id: 'qr_3', label: '帮写回复', message: '/impersonate', enabled: true }
+    ],
+    personas: [
       {
-        id: 'user',
-        name: state.qzoneSettings.nickname || '我',
-        avatar: state.qzoneSettings.avatar || defaultAvatar,
-        isUser: true,
-        persona: '一个好奇的普通人',
-      },
-    ];
-    selectedCheckboxes.forEach(checkbox => {
-      const playerId = checkbox.value;
-      const chat = Object.values(state.chats).find(c => c.id === playerId);
-      if (chat) {
-        // 是主要角色
-        players.push({
-          id: chat.id,
-          name: chat.name,
-          avatar: chat.settings.aiAvatar,
-          persona: chat.settings.aiPersona,
-          isUser: false,
-        });
-      } else {
-        // 是NPC
-        for (const c of Object.values(state.chats)) {
-          const npc = (c.npcLibrary || []).find(n => n.id === playerId);
-          if (npc) {
-            players.push({ id: npc.id, name: npc.name, avatar: npc.avatar, persona: npc.persona, isUser: false });
-            break;
-          }
+        id: 'persona_default',
+        name: '旅人',
+        avatar: DEFAULT_USER_AVATAR_SVG,
+        description: '',
+        position: 0,
+        depth: 2,
+        role: 0,
+        lockedCardIds: []
+      }
+    ],
+    cards: [DEFAULT_STARTER_CARD],
+    worldBooks: [],
+    globalRegexScripts: [],
+    extensionSettings: {},
+    presets: [
+      {
+        id: 'preset_default',
+        name: '标准酒馆预设',
+        builtin: true,
+        temperature: 1.0,
+        frequency_penalty: 0,
+        presence_penalty: 0,
+        top_p: 0.95,
+        top_k: 0,
+        min_p: 0,
+        typical_p: 1,
+        repetition_penalty: 1.0,
+        openai_max_context: 64000,
+        openai_max_tokens: 4096,
+        seed: -1,
+        stream_openai: true,
+        reasoning_effort: 'medium',
+        squash_system_messages: false,
+        prompts: getDefaultPromptOrderItems()
+      }
+    ],
+    themes: [
+      Object.assign({ id: 'theme_gousu_default', builtin: true }, DEFAULT_GOUSU_THEME),
+      INS_MINIMAL_THEME
+    ],
+    plugins: [
+      {
+        id: 'plugin_builtin_d100',
+        name: '暗骰池D100',
+        builtInType: 'd100_pool',
+        enabled: true,
+        diceCount: 16,
+        description: '每轮对话自动生成16枚加密随机数D100暗骰并注入系统提示词，翻页重生成时保持同组骰点不变'
+      }
+    ],
+    chatsByCardId: {},
+    chatArchivesByCardId: {}
+  };
+
+  // 运行时临时状态
+  const extensionPrompts = {};
+  const rngPoolMemoryCache = new Map();
+  const stEventListeners = {};
+  let isGenerating = false;
+  let editingFloorIndex = -1;
+  let openExtraMenuFloorIndex = -1;
+  let batchDeleteMode = false;
+  const selectedDeleteFloors = new Set();
+
+  // 抽屉内部子视图状态
+  let activePromptInspectId = null;
+  let activeWorldBookId = null;
+  let expandedWbEntryUids = new Set();
+  let wbSearchKeyword = '';
+  let wbSortBy = 'order';
+  let activeRegexEditId = null;
+  let regexTestInput = '';
+  let activeCardGreetingIdx = 0;
+
+  // ===================================================================
+  // === 1. IndexedDB 与 Termux 本地存储同步 (释放浏览器内存) ===
+  // ===================================================================
+  function openTavernIdb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(TAVERN_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const dbInstance = req.result;
+        if (!dbInstance.objectStoreNames.contains(TAVERN_DB_STORE)) {
+          dbInstance.createObjectStore(TAVERN_DB_STORE);
         }
-      }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
     });
-    players.sort(() => Math.random() - 0.5); // 打乱座位顺序
-    seaTurtleSoupState.players = players;
-
-    // 2. 决定出题人
-    const providerChoice = document.getElementById('sts-riddle-provider-select').value;
-    let providerIndex = -1;
-
-    if (providerChoice === 'user') {
-      providerIndex = players.findIndex(p => p.isUser);
-    } else if (providerChoice === 'random_ai') {
-      const aiIndices = players.map((p, i) => (!p.isUser ? i : -1)).filter(i => i !== -1);
-      providerIndex = aiIndices[Math.floor(Math.random() * aiIndices.length)];
-    } else {
-      // random
-      providerIndex = Math.floor(Math.random() * players.length);
-    }
-
-    seaTurtleSoupState.players[providerIndex].isProvider = true;
-    seaTurtleSoupState.riddleProvider = seaTurtleSoupState.players[providerIndex];
-
-    // 3. 获取谜面和谜底
-    if (seaTurtleSoupState.riddleProvider.isUser) {
-      const riddle = document.getElementById('sts-user-riddle-surface').value.trim();
-      const answer = document.getElementById('sts-user-riddle-answer').value.trim();
-      if (!riddle || !answer) {
-        alert('作为出题人，谜面和谜底都不能为空哦！');
-        return;
-      }
-      seaTurtleSoupState.riddle = riddle;
-      seaTurtleSoupState.answer = answer;
-    } else {
-      const riddleType = document.getElementById('sts-ai-riddle-type').value.trim();
-      const { riddle, answer } = await generateSeaTurtleRiddle(seaTurtleSoupState.riddleProvider, riddleType);
-      if (!riddle || !answer) {
-        alert('AI出题失败，请检查API或稍后重试。');
-        return;
-      }
-      seaTurtleSoupState.riddle = riddle;
-      seaTurtleSoupState.answer = answer;
-    }
-
-    // 4. 初始化游戏
-    seaTurtleSoupState.isActive = true;
-    seaTurtleSoupState.phase = 'guessing';
-    logToStsGame(
-      `游戏开始！出题人是 ${seaTurtleSoupState.riddleProvider.name}。`,
-      'system',
-      seaTurtleSoupState.riddleProvider,
-    );
-    logToStsGame(`【谜面】\n${seaTurtleSoupState.riddle}`);
-
-    document.getElementById('sea-turtle-soup-setup-modal').classList.remove('visible');
-    showScreen('sea-turtle-soup-screen');
-    renderSeaTurtleGameScreen({ activePlayerId: 'user' });
-
-    // 游戏开始，进入第一个回合
-    await processStsTurn();
   }
 
-  /**
-   * 【海龟汤-AI核心 | 优化版】让AI根据指定类型出题，并优先选择经典谜题
-   */
-  async function generateSeaTurtleRiddle(provider, riddleType) {
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) return { riddle: null, answer: null };
-
-    // 核心修改：优化了Prompt，增加了“优先选择经典谜题”的指令
-    const typePrompt = riddleType ? `请创作一个【${riddleType}】类型的` : '请创作一个';
-
-    const systemPrompt = `
-# 任务
-你现在是角色“${provider.name}”，你的人设是：“${provider.persona}”。
-你的任务是扮演这个角色，${typePrompt}经典的海龟汤谜题。
-
-# 核心规则
-1.  **优先经典**: 你【必须优先】从已知的、经典的、广为人知的“海龟汤”故事中挑选一个作为本次的谜题。这能确保谜题的逻辑性和可玩性。
-2.  **适当原创**: 只有在想不出合适的经典谜题时，你才被允许原创一个。原创的谜题也必须逻辑严谨，情节合理。
-3.  **格式铁律**: 你的回复【必须且只能】是一个严格的JSON对象，包含 "riddle" (谜面) 和 "answer" (谜底) 两个字段。
-4.  **禁止出戏**: 不要说任何与出题无关的话。
-
-# JSON输出格式示例:
-{
-  "riddle": "一个男人走进一家酒吧，向酒保要了一杯水。酒保却掏出了一把枪指着他。男人说了一声“谢谢”，然后离开了。为什么？",
-  "answer": "这个男人在打嗝。他想通过喝水来止嗝，但酒保用更有效的方法——惊吓，帮他治好了打嗝。所以男人表示感谢后就离开了。"
-}
-`;
+  async function idbGet(key) {
     try {
-      const messagesForApi = [{ role: 'user', content: systemPrompt }];
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        systemPrompt,
-        messagesForApi,
-        isGemini,
-        state.apiConfig.temperature,
-      );
-
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: 'json_object' },
-            }),
-          });
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      const content = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).replace(
-        /^```json\s*|```$/g,
-        '',
-      );
-      return JSON.parse(content);
-    } catch (error) {
-      console.error('AI出题失败:', error);
-      return { riddle: null, answer: null };
+      const dbInstance = await openTavernIdb();
+      return await new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction(TAVERN_DB_STORE, 'readonly');
+        const req = tx.objectStore(TAVERN_DB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (_) {
+      return null;
     }
   }
 
-  /**
-   * 【海龟汤】渲染游戏主界面 (已添加当前回合玩家高亮)
-   */
-  function renderSeaTurtleGameScreen(options = {}) {
-    const playersGrid = document.getElementById('sts-players-grid');
-    const logContainer = document.getElementById('sts-game-log');
+  async function idbSet(key, val) {
+    try {
+      const dbInstance = await openTavernIdb();
+      await new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction(TAVERN_DB_STORE, 'readwrite');
+        tx.objectStore(TAVERN_DB_STORE).put(val, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (_) {}
+  }
 
-    // 渲染玩家座位
-    playersGrid.innerHTML = '';
-    seaTurtleSoupState.players.forEach(player => {
-      const seat = document.createElement('div');
-      seat.className = 'player-seat';
-      const roleIndicator = player.isProvider
-        ? '<div class="player-role-indicator riddle-master" title="出题人">👑</div>'
-        : '';
-      const avatarClass = `player-avatar ${options.activePlayerId === player.id ? 'active-turn' : ''}`;
-
-      seat.innerHTML = `
-            ${roleIndicator}
-            <img src="${player.avatar}" class="${avatarClass}">
-            <span class="player-name">${player.name}</span>
-        `;
-      playersGrid.appendChild(seat);
-    });
-
-    // 渲染游戏日志
-    logContainer.innerHTML = '';
-    seaTurtleSoupState.gameLog.forEach(log => {
-      const logEl = document.createElement('div');
-      logEl.className = `sts-log-entry ${log.type}`;
-
-      let avatarUrl = 'https://i.postimg.cc/PxZrFFFL/o-o-1.jpg';
-      if (log.speakerObj && log.speakerObj.avatar) {
-        avatarUrl = log.speakerObj.avatar;
+  function getTermuxBaseUrl() {
+    try {
+      const raw = localStorage.getItem('ephone_local_vault_config_v1');
+      if (raw) {
+        const cfg = JSON.parse(raw);
+        if (cfg && cfg.url) return String(cfg.url).replace(/\/+$/, '');
       }
+    } catch (_) {}
+    return 'http://127.0.0.1:8765';
+  }
 
-      switch (log.type) {
-        case 'system':
-          logEl.innerHTML = log.message.replace(/\n/g, '<br>');
-          break;
-        case 'question':
-        case 'guess':
-          logEl.innerHTML = `
-                    <img src="${avatarUrl}" class="sts-log-avatar">
-                    <div class="sts-log-content">
-                        <div class="speaker">${log.speaker}</div>
-                        <div>${log.message}</div>
-                    </div>
-                `;
-          break;
-        case 'answer':
-          const answerClass = { 是: 'yes', 否: 'no', 无关: 'irrelevant' }[log.message] || 'irrelevant';
-          logEl.innerHTML = `
-                    <div class="sts-log-content">
-                         <span class="answer-text ${answerClass}">${log.message}</span>
-                    </div>
-                    <img src="${avatarUrl}" class="sts-log-avatar">
-                `;
-          break;
+  async function offloadImageToVault(fileOrDataUrl, filenameHint = 'tavern_asset.png') {
+    let dataUrl = fileOrDataUrl;
+    if (fileOrDataUrl instanceof Blob) {
+      dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(fileOrDataUrl);
+      });
+    }
+    if (!dataUrl || typeof dataUrl !== 'string') return DEFAULT_AVATAR_SVG;
+    if (dataUrl.startsWith('vault://') || dataUrl.startsWith('http') || dataUrl.startsWith('data:image/svg')) return dataUrl;
+    if (typeof window.saveStickerToLocalVault === 'function') {
+      try {
+        const ref = await window.saveStickerToLocalVault(dataUrl, filenameHint);
+        if (ref && typeof ref === 'string') return ref;
+      } catch (_) {}
+    }
+    return dataUrl;
+  }
+
+  let saveTimer = null;
+  async function saveTavernStore() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        const copy = Object.assign({}, tavernState);
+        delete copy.activeDrawerId;
+        const serialized = JSON.stringify(copy);
+        await idbSet(TAVERN_STORE_KEY, serialized);
+        const baseUrl = getTermuxBaseUrl();
+        fetch(baseUrl + '/tavern_store.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: serialized
+        }).catch(() => {});
+      } catch (err) {
+        console.error('保存酒馆状态失败:', err);
       }
-      logContainer.appendChild(logEl);
-    });
-
-    logContainer.scrollTop = logContainer.scrollHeight;
+    }, 180);
   }
+  const saveTavernState = saveTavernStore;
 
-  /**
-   * 【海龟汤】添加一条游戏日志
-   */
-  function logToStsGame(message, type = 'system', speakerObj = { name: '系统' }) {
-    seaTurtleSoupState.gameLog.push({ message, type, speaker: speakerObj.name, speakerObj }); // 保存整个对象
-    renderSeaTurtleGameScreen();
-  }
+  async function loadTavernStore() {
+    let loaded = null;
+    const baseUrl = getTermuxBaseUrl();
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 850);
+      const res = await fetch(baseUrl + '/tavern_store.json', {
+        method: 'GET',
+        signal: ctrl.signal
+      });
+      clearTimeout(tid);
+      if (res && res.ok) {
+        const text = await res.text();
+        if (text && text.trim().startsWith('{')) {
+          loaded = JSON.parse(text);
+        }
+      }
+    } catch (_) {}
 
-  // ▼▼▼ 用这块【已添加重roll按钮】的代码，完整替换旧的 handleStsUserQuestion 函数 ▼▼▼
-  /**
-   * 【海龟汤】处理用户提问
-   */
-  async function handleStsUserQuestion() {
-    if (seaTurtleSoupState.phase !== 'guessing') return;
-    const input = document.getElementById('sts-question-input');
-    const question = input.value.trim();
-    if (!question) return;
-
-    const userPlayer = seaTurtleSoupState.players.find(p => p.isUser);
-    logToStsGame(question, 'question', userPlayer);
-    input.value = '';
-
-    // ★ 核心修改：在用户提问后，先移除可能存在的重roll按钮
-    const oldRerollBtn = document.getElementById('sts-reroll-ai-turn-btn');
-    if (oldRerollBtn) oldRerollBtn.remove();
-
-    // 将控制权交给游戏主循环，并告知是用户在提问
-    await processStsTurn(question, userPlayer);
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  // ▼▼▼ 把这一整块全新的函数，粘贴到 handleStsUserQuestion 函数的后面 ▼▼▼
-
-  /**
-   * 【海龟汤】处理用户猜测答案
-   */
-  async function handleStsUserGuess() {
-    if (seaTurtleSoupState.phase !== 'guessing') return;
-    const input = document.getElementById('sts-question-input');
-    const guess = input.value.trim();
-    if (!guess) {
-      alert('猜测的内容不能为空！');
-      return;
-    }
-
-    const userPlayer = seaTurtleSoupState.players.find(p => p.isUser);
-    logToStsGame(guess, 'guess', userPlayer);
-    input.value = '';
-
-    const provider = seaTurtleSoupState.riddleProvider;
-    let isCorrect = false;
-
-    if (provider.isUser) {
-      isCorrect = await showCustomConfirm(
-        '判断猜测',
-        `玩家 ${userPlayer.name} 猜测的答案是：\n\n"${guess}"\n\n这个猜测是否正确？`,
-      );
-    } else {
-      const aiEvaluation = await triggerStsAiTurn(provider, 'evaluate_guess', guess);
-      isCorrect = aiEvaluation.isCorrect;
-    }
-
-    if (isCorrect) {
-      logToStsGame(`${userPlayer.name} 猜对了！游戏结束！`, 'system', userPlayer);
-      await revealStsAnswer();
-    } else {
-      logToStsGame('不对哦。', 'answer', provider);
-      await processStsTurn();
-    }
-  }
-  // ▼▼▼ 【全新】这是海龟汤的重roll功能核心函数 ▼▼▼
-  /**
-   * 【海龟汤】处理重roll整个AI回合的请求
-   */
-  async function handleStsReroll() {
-    // 1. 找到最后一次用户的发言（提问或猜测）
-    const lastUserActionIndex = findLastIndex(seaTurtleSoupState.gameLog, log => log.speakerObj.isUser);
-
-    if (lastUserActionIndex === -1) {
-      alert('还没有你的发言记录，无法重roll。');
-      return;
-    }
-
-    // 2. 移除那之后的所有日志（也就是所有AI的行动记录）
-    const removedLogs = seaTurtleSoupState.gameLog.splice(lastUserActionIndex + 1);
-
-    if (removedLogs.length === 0) {
-      alert('AI还没有行动，无需重roll。');
-      return;
-    }
-
-    console.log(`海龟汤：移除了 ${removedLogs.length} 条AI行动日志，准备重roll。`);
-
-    // 3. 重新渲染UI，界面会立刻回滚
-    renderSeaTurtleGameScreen();
-
-    // 4. 给用户一个提示
-    await showCustomAlert('请稍候...', '正在让AI们重新组织语言...');
-
-    // 5. 重新调用游戏主循环，它会自动执行AI的回合
-    await processStsTurn();
-  }
-
-  /**
-   * 辅助函数：从后往前查找数组中满足条件的第一个元素的索引
-   */
-  function findLastIndex(array, predicate) {
-    for (let i = array.length - 1; i >= 0; i--) {
-      if (predicate(array[i], i, array)) {
-        return i;
+    if (!loaded) {
+      let rawIdb = await idbGet(TAVERN_STORE_KEY);
+      if (!rawIdb) rawIdb = await idbGet('tavern_state_v1');
+      if (rawIdb && typeof rawIdb === 'string') {
+        try { loaded = JSON.parse(rawIdb); } catch (_) {}
+      } else if (rawIdb && typeof rawIdb === 'object') {
+        loaded = rawIdb;
       }
     }
-    return -1;
-  }
-  // ▲▲▲ 新增函数结束 ▲▲▲
 
-  /**
-   * 【海龟汤】游戏主循环/引擎
-   */
-  async function processStsTurn(userQuestion = null, userObj = null) {
-    if (!seaTurtleSoupState.isActive || seaTurtleSoupState.phase !== 'guessing') return;
+    if (loaded && typeof loaded === 'object') {
+      tavernState = Object.assign({}, tavernState, loaded);
+      tavernState.uiSettings = Object.assign({}, tavernState.uiSettings, loaded.uiSettings || {});
+      tavernState.apiConfig = Object.assign({}, tavernState.apiConfig, loaded.apiConfig || {});
+      tavernState.formatting = Object.assign({}, tavernState.formatting, loaded.formatting || {});
+      tavernState.authorNote = Object.assign({}, tavernState.authorNote, loaded.authorNote || {});
+      tavernState.memory = Object.assign({}, tavernState.memory, loaded.memory || {});
+      tavernState.background = Object.assign({}, tavernState.background, loaded.background || {});
+      tavernState.extensionSettings = Object.assign({}, tavernState.extensionSettings, loaded.extensionSettings || {});
 
-    // 1. 如果有用户提问，出题人先回答
-    if (userQuestion && userObj) {
-      const provider = seaTurtleSoupState.riddleProvider;
-      let providerAnswerResponse;
-      if (provider.isUser) {
-        const choice = await showChoiceModal(`回答 ${userObj.name} 的问题: "${userQuestion}"`, [
-          { text: '是', value: '是' },
-          { text: '否', value: '否' },
-          { text: '无关', value: '无关' },
-        ]);
-        providerAnswerResponse = { judgement: choice || '无关', remark: '' };
+      if (!Array.isArray(tavernState.cards) || tavernState.cards.length === 0) {
+        tavernState.cards = [DEFAULT_STARTER_CARD];
+      }
+      tavernState.cards.forEach(c => {
+        if (!c.avatar || String(c.avatar).includes('P5gL5z2g')) {
+          c.avatar = DEFAULT_AVATAR_SVG;
+        }
+      });
+
+      if (!Array.isArray(tavernState.personas) || tavernState.personas.length === 0) {
+        tavernState.personas = [
+          {
+            id: 'persona_default',
+            name: '旅人',
+            avatar: DEFAULT_USER_AVATAR_SVG,
+            description: '',
+            position: 0,
+            depth: 2,
+            role: 0,
+            lockedCardIds: []
+          }
+        ];
+      }
+
+      if (!Array.isArray(tavernState.themes) || tavernState.themes.length === 0) {
+        tavernState.themes = [
+          Object.assign({ id: 'theme_gousu_default', builtin: true }, DEFAULT_GOUSU_THEME),
+          INS_MINIMAL_THEME
+        ];
       } else {
-        providerAnswerResponse = await triggerStsAiTurn(provider, 'answer', {
-          question: userQuestion,
-          askerName: userObj.name,
+        if (!tavernState.themes.some(t => t.id === 'theme_gousu_default')) {
+          tavernState.themes.unshift(Object.assign({ id: 'theme_gousu_default', builtin: true }, DEFAULT_GOUSU_THEME));
+        }
+        if (!tavernState.themes.some(t => t.id === 'theme_ins_minimal')) {
+          tavernState.themes.push(INS_MINIMAL_THEME);
+        }
+      }
+
+      if (!Array.isArray(tavernState.presets) || tavernState.presets.length === 0) {
+        tavernState.presets = [
+          {
+            id: 'preset_default',
+            name: '标准酒馆预设',
+            builtin: true,
+            temperature: 1.0,
+            frequency_penalty: 0,
+            presence_penalty: 0,
+            top_p: 0.95,
+            top_k: 0,
+            min_p: 0,
+            typical_p: 1,
+            repetition_penalty: 1.0,
+            openai_max_context: 64000,
+            openai_max_tokens: 4096,
+            seed: -1,
+            stream_openai: true,
+            reasoning_effort: 'medium',
+            squash_system_messages: false,
+            prompts: getDefaultPromptOrderItems()
+          }
+        ];
+      } else {
+        tavernState.presets.forEach(p => {
+          if (p.openai_max_context === undefined) p.openai_max_context = p.contextSize || 64000;
+          if (p.openai_max_tokens === undefined) p.openai_max_tokens = p.maxTokens || 4096;
+          if (p.top_p === undefined) p.top_p = p.topP ?? 0.95;
+          if (p.top_k === undefined) p.top_k = p.topK ?? 0;
+          if (p.frequency_penalty === undefined) p.frequency_penalty = p.freqPenalty ?? 0;
+          if (p.presence_penalty === undefined) p.presence_penalty = p.presPenalty ?? 0;
+          if (p.repetition_penalty === undefined) p.repetition_penalty = p.repPenalty ?? 1.0;
+          if (!Array.isArray(p.prompts) || p.prompts.length === 0) {
+            p.prompts = getDefaultPromptOrderItems();
+          }
         });
       }
 
-      logToStsGame(providerAnswerResponse.judgement, 'answer', provider);
-      if (providerAnswerResponse.remark) {
-        await sleep(500);
-        logToStsGame(providerAnswerResponse.remark, 'question', provider);
+      if (!Array.isArray(tavernState.globalRegexScripts)) {
+        tavernState.globalRegexScripts = Array.isArray(loaded.regexScripts) ? loaded.regexScripts : [];
+      }
+
+      if (!Array.isArray(tavernState.plugins) || tavernState.plugins.length === 0) {
+        tavernState.plugins = [
+          {
+            id: 'plugin_builtin_d100',
+            name: '暗骰池D100',
+            builtInType: 'd100_pool',
+            enabled: true,
+            diceCount: 16,
+            description: '每轮对话自动生成16枚加密随机数D100暗骰并注入系统提示词，翻页重生成时保持同组骰点不变'
+          }
+        ];
+      } else {
+        tavernState.plugins.forEach(pl => {
+          if (pl.id === 'plugin_d100_rng' || pl.id === 'plugin_builtin_d100') {
+            pl.builtInType = 'd100_pool';
+          }
+        });
+      }
+
+      if (!tavernState.chatsByCardId || typeof tavernState.chatsByCardId !== 'object') {
+        tavernState.chatsByCardId = {};
+      }
+      if (!tavernState.chatArchivesByCardId || typeof tavernState.chatArchivesByCardId !== 'object') {
+        tavernState.chatArchivesByCardId = {};
       }
     }
 
-    // 2. 轮到AI玩家行动 (提问或猜测)
-    const guessers = seaTurtleSoupState.players.filter(p => !p.isProvider);
-    if (guessers.length === 0) return;
+    ensureActiveCardChatInitialized();
+  }
+  const loadTavernState = loadTavernStore;
 
-    for (const guesser of guessers) {
-      if (guesser.isUser) continue;
-
-      await sleep(2000 + Math.random() * 2000);
-
-      renderSeaTurtleGameScreen({ activePlayerId: guesser.id });
-      const aiAction = await triggerStsAiTurn(guesser, 'guess');
-
-      if (aiAction.type === 'question') {
-        logToStsGame(aiAction.content, 'question', guesser);
-        await sleep(6000);
-
-        const provider = seaTurtleSoupState.riddleProvider;
-        let providerAnswerResponse;
-        if (provider.isUser) {
-          const choice = await showChoiceModal(`回答 ${guesser.name} 的问题: "${aiAction.content}"`, [
-            { text: '是', value: '是' },
-            { text: '否', value: '否' },
-            { text: '无关', value: '无关' },
-          ]);
-          providerAnswerResponse = { judgement: choice || '无关', remark: '' };
-        } else {
-          providerAnswerResponse = await triggerStsAiTurn(provider, 'answer', {
-            question: aiAction.content,
-            askerName: guesser.name,
-          });
-        }
-
-        logToStsGame(providerAnswerResponse.judgement, 'answer', provider);
-        if (providerAnswerResponse.remark) {
-          await sleep(500);
-          logToStsGame(providerAnswerResponse.remark, 'question', provider);
-        }
-      } else if (aiAction.type === 'guess') {
-        logToStsGame(aiAction.content, 'guess', guesser);
-
-        let isCorrect = false;
-        if (seaTurtleSoupState.riddleProvider.isUser) {
-          isCorrect = await showCustomConfirm(
-            '判断猜测',
-            `玩家 ${guesser.name} 猜测的答案是：\n\n"${aiAction.content}"\n\n这个猜测是否正确？`,
-          );
-        } else {
-          const aiEvaluation = await triggerStsAiTurn(
-            seaTurtleSoupState.riddleProvider,
-            'evaluate_guess',
-            aiAction.content,
-          );
-          isCorrect = aiEvaluation.isCorrect;
-        }
-
-        if (isCorrect) {
-          logToStsGame(`${guesser.name} 猜对了！游戏结束！`, 'system', guesser);
-          await revealStsAnswer();
-          return;
-        } else {
-          logToStsGame('不对哦。', 'answer', seaTurtleSoupState.riddleProvider);
-        }
-      }
+  function getActiveCard() {
+    let card = tavernState.cards.find(c => c.id === tavernState.activeCardId);
+    if (!card) {
+      card = tavernState.cards[0] || DEFAULT_STARTER_CARD;
+      tavernState.activeCardId = card.id;
     }
-
-    renderSeaTurtleGameScreen({ activePlayerId: 'user' });
-    // ▼▼▼ 在这里粘贴下面的新代码 ▼▼▼
-    // ★ 核心修改：AI回合结束后，在操作区添加重roll按钮
-    const actionArea = document.getElementById('sts-action-area');
-    const mainRow = actionArea.querySelector('.chat-input-main-row');
-    if (mainRow) {
-      // 先检查是否已经存在，避免重复添加
-      if (!document.getElementById('sts-reroll-ai-turn-btn')) {
-        const rerollBtn = document.createElement('button');
-        rerollBtn.id = 'sts-reroll-ai-turn-btn';
-        rerollBtn.className = 'action-button';
-        rerollBtn.title = '让AI们重新提问或猜测';
-        rerollBtn.style.backgroundColor = '#ff9800'; // 给它一个醒目的橙色
-        rerollBtn.style.width = '40px';
-        rerollBtn.style.height = '40px';
-        rerollBtn.innerHTML = `<svg class="reroll-btn-icon" viewBox="0 0 24 24" style="stroke:white;"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>`;
-
-        // 将按钮插入到“提问”按钮的前面
-        mainRow.insertBefore(rerollBtn, document.getElementById('send-sts-question-btn'));
-      }
-    }
-    // ▲▲▲ 新增代码结束 ▲▲▲
+    return card;
   }
 
-  /**
-   * 【海龟汤-AI核心 V2】触发AI行动（回答、提问、判断或猜测）
-   */
-  async function triggerStsAiTurn(player, actionType, contextPayload = {}) {
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) return { type: 'question', content: '我不知道该问什么了。' };
-
-    let systemPrompt = '';
-    const gameLogText = seaTurtleSoupState.gameLog
-      .map(log => `${log.speaker}: ${log.message}`)
-      .slice(-15)
-      .join('\n');
-
-    if (actionType === 'answer') {
-      // 人设加强版 V3 Prompt
-      systemPrompt = `
-# 任务: 海龟汤出题人 (高级人格版)
-你现在【就是】角色“${player.name}”，你的人设是：“${player.persona}”。
-你是海龟汤的出题人，你的谜底是：“${seaTurtleSoupState.answer}”。
-现在，玩家“${contextPayload.askerName}”向你提问：“${contextPayload.question}”。
-
-你的任务是先给出判断，然后用【完全符合你人设的口吻】，给出一句精妙的补充说明(remark)。
-
-# 你的行为准则 (必须严格遵守)
-
-## 1. 关于判断 (Judgement)
-你的 "judgement" 字段必须从以下【四个】选项中选择一个：\`是\`, \`否\`, \`无关\`, \`部分是\`。
-
-## 2. 关于补充说明 (Remark)
--   **【【【人格铁律】】】**: 你的每一句补充说明，都【必须】是你作为角色“${player.name}”会说的话。思考一下，一个“${player.persona}”性格的人，在面对这个问题时会如何回答？是会调侃、会鼓励、会故作高深，还是会不耐烦？
--   **配合判断**: 当判断为 "部分是" 时，你的补充说明要巧妙地指出他们猜对的部分。
--   **给予提示 (仅在玩家卡关时)**:
-    -   **判断瓶颈**: 当你观察到最近的5-8条提问大多是“无关”时，意味着玩家可能陷入了思维僵局。
-    -   **执行操作**: 在这种情况下，你的补充说明【必须包含一个方向性的提示】，并用你的人设口吻自然地说出来。
-
-# 格式铁律
-1.  你的回复【必须且只能】是一个严格的JSON对象，包含 "judgement" 和 "remark" 两个字段。
-2.  【绝对禁止】在你的任何回复中使用Emoji表情符号或出戏的词语。
-
-# JSON输出格式示例:
-{
-  "judgement": "",
-  "remark": ""
-}
-现在，请直接输出你的JSON判断。`;
-    } else if (actionType === 'evaluate_guess') {
-      systemPrompt = `
-# 任务: 海龟汤出题人 - 判断猜测
-你正在扮演角色“${player.name}”，人设是：“${player.persona}”。
-你是海龟汤的出题人。你的谜底是：“${seaTurtleSoupState.answer}”。
-现在，有玩家直接猜测了谜底，内容是：“${contextPayload}”。
-你的任务是判断这个猜测是否与你的谜底【核心意思一致】，只要70%的正确率即可。
-
-# 核心规则
-1.  **格式铁律**: 你的回复【必须且只能】是一个严格的JSON对象，格式为: \`{"isCorrect": true}\` 或 \`{"isCorrect": false}\`。
-2.  **判断标准**: 只要猜测的核心情节、人物关系、关键道具和最终结果与谜底一致即可，不需要逐字匹配。
-
-现在，请直接输出你的判断。`;
-    } else {
-      // 'guess'
-      systemPrompt = `
-# 任务: 海龟汤猜测者
-你正在扮演角色“${player.name}”，人设是：“${player.persona}”。
-你正在玩海龟汤游戏，需要根据已知信息提问或猜测谜底。
-
-# 游戏信息
-- 谜面: ${seaTurtleSoupState.riddle}
-- 已有线索 (完整的对话记录):
-${gameLogText}
-
-# 核心规则
-1.  **【【【逻辑推理铁律】】】**: 你【必须】仔细分析上方的“已有线索”，避免提出重复或与已知线索矛盾的问题。你的提问或猜测应该建立在已有信息之上，展现出逻辑推理能力。
-2.  **【【【人格扮演铁律】】】**: 你的提问和猜测都【必须】符合你的人设和口吻，就像真人在玩游戏一样。你可以适当加入一些自己的思考过程或情绪表达，让对话更生动。例如，你可以说：“让我想想... 既然和地点无关，那是不是和时间有关？”，尽可能发言字数多点。
-3.  **决策**: 根据线索，决定是提出一个关键的“是/否”问题来缩小范围，还是直接猜测谜底。当线索足够时，大胆地使用 "guess" 指令来猜测完整的故事。
-4.  **【【【加速规则】】】**: 如果“已有线索”的对话记录已经超过了30条，这说明游戏时间过长。在这种情况下，你【应该更倾向于直接猜测谜底】，而不是继续提出细节问题。
-5.  **格式铁律**: 你的回复【必须且只能】是一个严格的JSON对象。
-   - 如果提问, 格式: \`{"type": "question", "content": "你的问题..."}\`
-   - 如果猜测, 格式: \`{"type": "guess", "content": "你猜测的完整故事..."}\`
-6.  **禁止Emoji**: 【绝对禁止】在你的任何回复中使用Emoji表情符号。
-
-现在，请根据你的人设和判断，生成你的行动。`;
+  function getActivePreset() {
+    let preset = tavernState.presets.find(p => p.id === tavernState.activePresetId);
+    if (!preset) {
+      preset = tavernState.presets[0];
+      tavernState.activePresetId = preset.id;
     }
-    const maxRetries = 3; // 最多重试3次
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const messagesForApi = [{ role: 'user', content: '请根据你在系统指令中读到的规则，立即开始你的行动。' }];
-        let isGemini = proxyUrl === GEMINI_API_URL;
-        let geminiConfig = toGeminiRequestData(
-          model,
-          apiKey,
-          systemPrompt,
-          messagesForApi,
-          isGemini,
-          state.apiConfig.temperature,
-        );
+    if (!Array.isArray(preset.prompts) || preset.prompts.length === 0) {
+      preset.prompts = getDefaultPromptOrderItems();
+    }
+    return preset;
+  }
 
-        const response = isGemini
-          ? await fetch(geminiConfig.url, geminiConfig.data)
-          : await fetch(`${proxyUrl}/v1/chat/completions`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-              body: JSON.stringify({
-                model: model,
-                messages: [{ role: 'system', content: systemPrompt }, ...messagesForApi],
-                temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                response_format: { type: 'json_object' },
-              }),
-            });
+  function getActivePersona() {
+    const card = getActiveCard();
+    const locked = tavernState.personas.find(p => Array.isArray(p.lockedCardIds) && card && p.lockedCardIds.includes(card.id));
+    if (locked) return locked;
+    let p = tavernState.personas.find(x => x.id === tavernState.activePersonaId);
+    if (!p) {
+      p = tavernState.personas[0];
+      tavernState.activePersonaId = p.id;
+    }
+    return p;
+  }
 
-        // 【重要】如果响应状态码是429，也主动抛出错误，进入catch块进行重试
-        if (response.status === 429) {
-          const errorData = await response.json();
-          // 构造一个和之前日志里一样的错误信息，方便我们解析
-          throw new Error(JSON.stringify({ error: errorData.error }));
+  function getUserDisplayName() {
+    const p = getActivePersona();
+    if (p && p.name && p.name.trim()) return p.name.trim();
+    try {
+      if (typeof state !== 'undefined' && state.chats) {
+        const firstChat = Object.values(state.chats)[0];
+        if (firstChat && firstChat.settings && firstChat.settings.myName) {
+          return firstChat.settings.myName;
         }
-        if (!response.ok) {
-          // 对于其他错误，直接抛出
-          throw new Error(`API请求失败: ${response.status} - ${await response.text()}`);
+      }
+    } catch (_) {}
+    return '旅人';
+  }
+
+  function getUserAvatarUrl() {
+    const p = getActivePersona();
+    if (p && p.avatar && !String(p.avatar).includes('P5gL5z2g')) return p.avatar;
+    try {
+      if (typeof state !== 'undefined' && state.chats) {
+        const firstChat = Object.values(state.chats)[0];
+        if (firstChat && firstChat.settings && firstChat.settings.myAvatar) {
+          return firstChat.settings.myAvatar;
         }
+      }
+    } catch (_) {}
+    return DEFAULT_USER_AVATAR_SVG;
+  }
 
-        const data = await response.json();
-        const content = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).replace(
-          /^```json\s*|```$/g,
-          '',
-        );
+  function getActiveChatSession() {
+    const card = getActiveCard();
+    ensureActiveCardChatInitialized(card);
+    return tavernState.chatsByCardId[card.id];
+  }
 
-        // 如果成功，解析并返回结果，结束函数
-        return JSON.parse(content);
-      } catch (error) {
-        console.error(`海龟汤AI行动失败 (第 ${attempt} 次尝试):`, error.message);
-
-        // 如果是最后一次尝试，就彻底失败，并把错误抛出去
-        if (attempt === maxRetries) {
-          // 将原始错误重新包装后抛出，以便外部能捕获
-          throw new Error(`AI action failed after ${maxRetries} attempts: ${error.message}`);
+  function buildInitialSessionForCard(card) {
+    const greetings = [];
+    if (card.first_mes && String(card.first_mes).trim()) {
+      greetings.push(String(card.first_mes));
+    }
+    if (Array.isArray(card.alternate_greetings)) {
+      card.alternate_greetings.forEach(g => {
+        if (g && String(g).trim()) greetings.push(String(g));
+      });
+    }
+    if (greetings.length === 0) {
+      greetings.push('你好，旅人。');
+    }
+    return {
+      cardId: card.id,
+      chatId: 'chat_' + card.id + '_' + Date.now(),
+      title: (card.name || '角色') + '存档 ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: Date.now(),
+      metadata: {},
+      messages: [
+        {
+          mesid: 0,
+          name: card.name || '角色',
+          is_user: false,
+          is_system: false,
+          send_date: Date.now(),
+          mes: greetings[0],
+          swipes: greetings,
+          swipe_id: 0,
+          reasoning: '',
+          gen_time: '',
+          token_count: estimateTokens(greetings[0])
         }
+      ]
+    };
+  }
 
-        let delay = 2000 * attempt; // 默认的指数退避延迟
+  function ensureActiveCardChatInitialized(cardObj) {
+    const card = cardObj || getActiveCard();
+    if (!card) return;
+    if (!tavernState.chatsByCardId[card.id] || !Array.isArray(tavernState.chatsByCardId[card.id].messages) || tavernState.chatsByCardId[card.id].messages.length === 0) {
+      const sess = buildInitialSessionForCard(card);
+      tavernState.chatsByCardId[card.id] = sess;
+      if (!Array.isArray(tavernState.chatArchivesByCardId[card.id])) {
+        tavernState.chatArchivesByCardId[card.id] = [sess];
+      }
+    }
+  }
 
-        // 智能解析API建议的等待时间
+  function estimateTokens(text) {
+    if (!text) return 0;
+    const str = String(text);
+    let cjk = 0;
+    for (let i = 0; i < str.length; i++) {
+      if (str.charCodeAt(i) > 255) cjk++;
+    }
+    const rest = str.length - cjk;
+    return Math.max(1, Math.round(cjk * 0.7 + rest * 0.28));
+  }
+
+  function escapeHtmlSimple(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function downloadJsonFile(filename, dataObj) {
+    const blob = new Blob([typeof dataObj === 'string' ? dataObj : JSON.stringify(dataObj, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+  // ============================================================================
+  // 5. SillyTavern Extension Context Bridge & Built-in D100 Pool
+  // ============================================================================
+  const tavernEventListeners = {};
+  const tavernExtensionPrompts = {};
+
+  const TAVERN_EVENT_TYPES = {
+    MESSAGE_RECEIVED: 'message_received',
+    MESSAGE_SENT: 'message_sent',
+    USER_MESSAGE_RENDERED: 'user_message_rendered',
+    CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
+    CHAT_CHANGED: 'chat_id_changed',
+    GENERATION_AFTER_COMMANDS: 'GENERATION_AFTER_COMMANDS',
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_ENDED: 'generation_ended',
+    MESSAGE_SWIPED: 'message_swiped',
+    MESSAGE_DELETED: 'message_deleted',
+    APP_READY: 'app_ready'
+  };
+
+  const TAVERN_EXT_PROMPT_TYPES = {
+    NONE: -1,
+    IN_PROMPT: 0,
+    IN_CHAT: 1,
+    BEFORE_PROMPT: 2
+  };
+
+  const tavernEventSource = {
+    on(evt, cb) {
+      if (!evt || typeof cb !== 'function') return;
+      if (!tavernEventListeners[evt]) tavernEventListeners[evt] = [];
+      if (!tavernEventListeners[evt].includes(cb)) {
+        tavernEventListeners[evt].push(cb);
+      }
+    },
+    off(evt, cb) {
+      if (!evt || !tavernEventListeners[evt]) return;
+      tavernEventListeners[evt] = tavernEventListeners[evt].filter(fn => fn !== cb);
+    },
+    async emit(evt, ...args) {
+      const list = tavernEventListeners[evt] || [];
+      for (const fn of list) {
         try {
-          // 错误信息本身可能是一个JSON字符串，先解析它
-          const errorJson = JSON.parse(error.message);
-          const errorMessage = errorJson.error.message;
-
-          // 正则表达式匹配 "retry in X.XXXXs"
-          const retryMatch = errorMessage.match(/retry in (\d+\.?\d*)s/);
-          if (retryMatch && retryMatch[1]) {
-            // 找到了建议时间，就用它，并额外加一点点缓冲
-            delay = parseFloat(retryMatch[1]) * 1000 + 500;
-            console.log(`API请求过于频繁，将根据建议在 ${Math.round(delay / 1000)} 秒后重试...`);
-          }
-        } catch (e) {
-          // 如果解析失败，说明错误信息格式不符合预期，就使用默认延迟
-          console.log(`API请求失败，将在 ${Math.round(delay / 1000)} 秒后进行第 ${attempt + 1} 次重试...`);
+          await fn(...args);
+        } catch (err) {
+          console.error('Tavern plugin event error:', evt, err);
         }
-
-        // 等待计算出的延迟时间
-        await sleep(delay);
       }
     }
-    // ==========================================================
-    // --- ▲▲▲ 【核心修改】到这里结束 ▲▲▲ ---
-    // ==========================================================
+  };
 
-    // 如果循环结束都没成功，返回一个备用结果，防止游戏卡死
-    console.error('所有重试均失败，返回备用行动。');
-    if (actionType === 'answer') return { judgement: '无关', remark: '（AI思考短路了...）' };
-    if (actionType === 'evaluate_guess') return { isCorrect: false };
-    return { type: 'question', content: '他/她是人类吗？' };
-  }
-  /**
-   * 【海龟汤 V2 - 结算增强版】揭晓答案并显示结算界面
-   */
-  async function revealStsAnswer() {
-    if (!seaTurtleSoupState.isActive) return;
-
-    // 1. 标记游戏结束
-    seaTurtleSoupState.isActive = false; // 确保游戏状态变为非激活
-    seaTurtleSoupState.phase = 'reveal';
-
-    // 2. 隐藏游戏中的操作区域
-    document.getElementById('sts-action-area').style.visibility = 'hidden';
-
-    // 3. 准备复盘内容
-    const summaryText = generateStsSummary();
-
-    // 4. 显示结算弹窗
-    showStsSummaryModal(summaryText);
-  }
-  // ▼▼▼ 【全新】海龟汤结算与分享功能函数 ▼▼▼
-
-  /**
-   * 生成海龟汤的复盘文本
-   * @returns {string} 格式化后的复盘Markdown文本
-   */
-  function generateStsSummary() {
-    let summaryText = `**海龟汤 - 游戏复盘**\n\n`;
-    summaryText += `**出题人:** ${seaTurtleSoupState.riddleProvider.name}\n\n`;
-    summaryText += `**谜面:**\n${seaTurtleSoupState.riddle}\n\n`;
-    summaryText += `**谜底:**\n${seaTurtleSoupState.answer}`;
-    return summaryText;
-  }
-
-  /**
-   * 显示游戏结算卡片模态框
-   * @param {string} summaryText - 复盘文本
-   */
-  function showStsSummaryModal(summaryText) {
-    const modal = document.getElementById('sts-summary-modal');
-    const contentEl = document.getElementById('sts-summary-content');
-
-    // 使用你已有的Markdown渲染函数，让复盘更好看
-    contentEl.innerHTML = renderMarkdown(summaryText);
-
-    // 为按钮绑定事件 (使用克隆节点防止重复绑定)
-    const shareBtn = document.getElementById('share-sts-summary-btn');
-    const newShareBtn = shareBtn.cloneNode(true);
-    shareBtn.parentNode.replaceChild(newShareBtn, shareBtn);
-    newShareBtn.onclick = () => openStsShareTargetPicker(summaryText);
-
-    const backBtn = document.getElementById('back-to-hall-from-sts-btn');
-    const newBackBtn = backBtn.cloneNode(true);
-    backBtn.parentNode.replaceChild(newBackBtn, backBtn);
-    newBackBtn.onclick = () => {
-      modal.classList.remove('visible');
-      showScreen('game-hall-screen');
-    };
-
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 打开复盘分享目标选择器
-   * @param {string} summaryText - 要分享的复盘文本
-   */
-  function openStsShareTargetPicker(summaryText) {
-    const modal = document.getElementById('sts-share-target-modal');
-    const listEl = document.getElementById('sts-share-target-list');
-    listEl.innerHTML = '';
-
-    // 从游戏状态中获取所有非出题人的AI玩家
-    const aiPlayers = seaTurtleSoupState.players.filter(p => !p.isUser && !p.isProvider);
-
-    if (aiPlayers.length === 0) {
-      alert('没有可以分享的AI玩家。');
+  function setExtensionPrompt(key, value, position = 1, depth = 0, scan = false, role = 0) {
+    if (!key) return;
+    if (!value || !String(value).trim()) {
+      delete tavernExtensionPrompts[key];
       return;
     }
+    tavernExtensionPrompts[key] = {
+      key,
+      value: String(value),
+      position: Number(position) || 0,
+      depth: Number(depth) || 0,
+      scan: Boolean(scan),
+      role: Number(role) || 0
+    };
+  }
 
-    // 渲染可选的AI玩家列表
-    aiPlayers.forEach(player => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item'; // 复用样式
-      item.innerHTML = `
-            <input type="checkbox" class="sts-target-checkbox" value="${player.id}" checked>
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-        `;
-      listEl.appendChild(item);
-    });
-
-    // 绑定按钮事件
-    const confirmBtn = document.getElementById('sts-confirm-share-btn');
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    newConfirmBtn.onclick = () => {
-      const selectedIds = Array.from(document.querySelectorAll('.sts-target-checkbox:checked')).map(cb => cb.value);
-      if (selectedIds.length > 0) {
-        sendStsSummaryToSelectedPlayers(summaryText, selectedIds);
-      } else {
-        alert('请至少选择一个分享对象！');
+  function buildSillyTavernContextObject() {
+    const sess = getActiveChatSession();
+    const card = getActiveCard();
+    return {
+      chat: sess ? sess.messages : [],
+      characters: tavernState.cards,
+      characterId: card ? card.id : null,
+      name1: getUserDisplayName(),
+      name2: card ? card.name : '角色',
+      chatMetadata: sess ? (sess.metadata || (sess.metadata = {})) : {},
+      extensionSettings: tavernState.extensionSettings,
+      eventSource: tavernEventSource,
+      event_types: TAVERN_EVENT_TYPES,
+      extension_prompt_types: TAVERN_EXT_PROMPT_TYPES,
+      setExtensionPrompt,
+      saveMetadataDebounced: () => saveTavernStore(),
+      saveSettingsDebounced: () => saveTavernStore(),
+      reloadCurrentChat: async () => {
+        renderTavernChatFloors();
       }
     };
-
-    document.getElementById('sts-cancel-share-btn').onclick = () => modal.classList.remove('visible');
-    document.getElementById('sts-select-all-btn').onclick = () => {
-      document.querySelectorAll('.sts-target-checkbox').forEach(cb => (cb.checked = true));
-    };
-    document.getElementById('sts-deselect-all-btn').onclick = () => {
-      document.querySelectorAll('.sts-target-checkbox').forEach(cb => (cb.checked = false));
-    };
-
-    modal.classList.add('visible');
   }
 
-  /**
-   * 将游戏复盘发送到【选定】的AI角色的聊天中
-   * @param {string} summaryText - 复盘文本
-   * @param {string[]} targetIds - 目标AI角色的ID数组
-   */
-  async function sendStsSummaryToSelectedPlayers(summaryText, targetIds) {
-    // 关闭所有可能打开的弹窗
-    document.getElementById('sts-summary-modal').classList.remove('visible');
-    document.getElementById('sts-share-target-modal').classList.remove('visible');
+  function setupSillyTavernGlobalBridge() {
+    window.SillyTavern = {
+      getContext: buildSillyTavernContextObject
+    };
+    window.getContext = buildSillyTavernContextObject;
+    window.eventSource = tavernEventSource;
+    window.event_types = TAVERN_EVENT_TYPES;
+    window.extension_prompt_types = TAVERN_EXT_PROMPT_TYPES;
+    window.setExtensionPrompt = setExtensionPrompt;
+  }
 
-    let sentCount = 0;
-    const aiContext = `[系统指令：刚刚结束了一局海龟汤，这是游戏复盘。请根据这个复盘内容，以你的角色人设，和用户聊聊刚才的游戏。]\n\n${summaryText}`;
+  function generateSecureD100Array(count = 16) {
+    const results = [];
+    const buf = new Uint32Array(1);
+    const limit = Math.floor(0x100000000 / 100) * 100;
+    for (let i = 0; i < count; i++) {
+      let rand;
+      do {
+        window.crypto.getRandomValues(buf);
+        rand = buf[0];
+      } while (rand >= limit);
+      results.push((rand % 100) + 1);
+    }
+    return results;
+  }
 
-    for (const chatId of targetIds) {
-      const chat = state.chats[chatId];
-      if (chat) {
-        // 创建对用户可见的复盘卡片消息
-        const visibleMessage = {
-          role: 'user',
-          type: 'share_link',
-          timestamp: Date.now(),
-          title: '海龟汤 - 游戏复盘',
-          description: '点击查看详细复盘记录',
-          source_name: '游戏中心',
-          content: summaryText,
-        };
+  function syncBuiltInD100Pool(isSwipeRegen = false) {
+    const d100Plugin = (tavernState.plugins || []).find(p => p.builtInType === 'd100_pool' || p.id === 'plugin_builtin_d100');
+    if (!d100Plugin || !d100Plugin.enabled) {
+      setExtensionPrompt('qr_csprng_d100_pool', '', 1, 0);
+      return null;
+    }
+    const sess = getActiveChatSession();
+    if (!sess.metadata) sess.metadata = {};
+    if (!isSwipeRegen || !Array.isArray(sess.metadata.qr_d100_pool) || sess.metadata.qr_d100_pool.length === 0) {
+      sess.metadata.qr_d100_pool = generateSecureD100Array(16);
+    }
+    const poolStr = sess.metadata.qr_d100_pool.join(', ');
+    const promptBlock = [
+      '<Random_Number_Pool>',
+      'System Directive: Authentic Pre-rolled CSPRNG D100 Pool.',
+      'When any check, luck roll, or random event is triggered in this response, consume these numbers sequentially from left to right: [' + poolStr + '].',
+      'Never fabricate your own random numbers.',
+      '</Random_Number_Pool>'
+    ].join('\n');
+    setExtensionPrompt('qr_csprng_d100_pool', promptBlock, TAVERN_EXT_PROMPT_TYPES.IN_CHAT, 0, false, 0);
+    return sess.metadata.qr_d100_pool;
+  }
 
-        // 创建对AI可见的隐藏指令
-        const hiddenInstruction = {
-          role: 'system',
-          content: aiContext,
-          timestamp: Date.now() + 1,
-          isHidden: true,
-        };
+  function executeUserPluginScript(plugin) {
+    if (!plugin || !plugin.enabled || !plugin.code) return;
+    try {
+      const transformedCode = String(plugin.code)
+        .replace(/^\s*import\s+[\s\S]*?from\s+['"][^'"]+['"]\s*;?/gm, '')
+        .replace(/^\s*export\s+/gm, '');
+      const runner = new Function('SillyTavern', 'getContext', 'eventSource', 'event_types', 'extension_prompt_types', 'setExtensionPrompt', transformedCode);
+      runner(
+        window.SillyTavern,
+        buildSillyTavernContextObject,
+        tavernEventSource,
+        TAVERN_EVENT_TYPES,
+        TAVERN_EXT_PROMPT_TYPES,
+        setExtensionPrompt
+      );
+    } catch (err) {
+      console.error('Plugin script execution error:', plugin.name, err);
+    }
+  }
 
-        chat.history.push(visibleMessage, hiddenInstruction);
-        await db.chats.put(chat);
-        sentCount++;
+  // ============================================================================
+  // 6. Binary PNG Character Card Parser & Auto-Extractor
+  // ============================================================================
+  function decodeLatin1ToUtf8(latin1Str) {
+    try {
+      const cleaned = String(latin1Str).replace(/\s+/g, '');
+      const binary = atob(cleaned);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
       }
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch (err) {
+      console.error('Base64 UTF-8 decode error:', err);
+      return null;
     }
-
-    await showCustomAlert('分享成功', `游戏复盘已分享至 ${sentCount} 位AI玩家的聊天中！`);
-    showScreen('game-hall-screen');
   }
 
-  // ▲▲▲ 新增函数结束 ▲▲▲
-
-  /**
-   * 【辅助函数】计算两个字符串的简单相似度
-   */
-  function simpleSimilarity(str1, str2) {
-    const set1 = new Set(str1.split(''));
-    const set2 = new Set(str2.split(''));
-    const intersection = new Set([...set1].filter(x => set2.has(x)));
-    return intersection.size / Math.max(set1.size, set2.size);
+  async function inflateZlibBytes(compressedBytes) {
+    if (typeof DecompressionStream === 'undefined') return null;
+    for (const fmt of ['deflate', 'deflate-raw']) {
+      try {
+        const ds = new DecompressionStream(fmt);
+        const writer = ds.writable.getWriter();
+        writer.write(compressedBytes);
+        writer.close();
+        const outBuf = await new Response(ds.readable).arrayBuffer();
+        return new Uint8Array(outBuf);
+      } catch (_) {}
+    }
+    return null;
   }
 
-  // ▲▲▲ 海龟汤功能函数结束 ▲▲▲
-
-  // ▼▼▼ 【全新】这里是剧本杀游戏的所有核心功能函数 ▼▼▼
-
-  /**
-   * 【剧本杀】打开游戏设置界面
-   */
-  async function openScriptKillSetup() {
-    showScreen('script-kill-setup-screen');
-
-    const scriptSelect = document.getElementById('script-kill-script-select');
-    scriptSelect.innerHTML = '<option value="">-- 请选择剧本 --</option>';
-
-    // --- ▼▼▼ 核心修改在这里 ▼▼▼ ---
-
-    // 1. 遍历我们创建的内置剧本库
-    BUILT_IN_SCRIPTS.forEach(script => {
-      const option = document.createElement('option');
-      option.value = script.id; // value 是剧本的唯一ID
-      option.textContent = `【内置】${script.name}`; // 显示的文本
-      scriptSelect.appendChild(option);
-    });
-
-    // 2. 加载并显示自定义剧本
-    const customScripts = await db.scriptKillScripts.toArray();
-    customScripts.forEach(script => {
-      const option = document.createElement('option');
-      option.value = script.id;
-      option.textContent = `【自定义】${script.name}`;
-      scriptSelect.appendChild(option);
-    });
-
-    // --- ▲▲▲ 修改结束 ▲▲▲ ---
-    // 渲染玩家选择列表
-    const selectionEl = document.getElementById('script-kill-player-selection');
-    selectionEl.innerHTML = '<p>正在加载角色列表...</p>';
-
-    const singleChats = Object.values(state.chats).filter(chat => !chat.isGroup);
-    const allNpcs = Object.values(state.chats).flatMap(chat =>
-      (chat.npcLibrary || []).map(npc => ({ ...npc, owner: chat.name })),
-    );
-
-    let playerOptions = [
-      ...singleChats.map(c => ({ id: c.id, name: c.name, avatar: c.settings.aiAvatar, type: '角色' })),
-      ...allNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatar, type: `NPC (${n.owner})` })),
-    ];
-
-    selectionEl.innerHTML = '';
-    playerOptions.forEach(player => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item'; // 复用样式
-      item.innerHTML = `
-            <input type="checkbox" class="script-kill-player-checkbox" value="${player.id}">
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-            <span class="type-tag">${player.type}</span>
-        `;
-      selectionEl.appendChild(item);
-    });
-  }
-  // ▼▼▼ 在这里开始粘贴 ▼▼▼
-
-  /**
-   * 【剧本杀】显示角色选择弹窗，让用户选择角色
-   * @param {string} title - 弹窗标题
-   * @param {Array<object>} options - 角色选项数组 [{text, value}]
-   * @returns {Promise<number|null>} - 返回用户选择的角色的索引，如果取消则返回null
-   */
-  async function showRoleSelectionModal(title, options) {
-    return new Promise(resolve => {
-      const modal = document.getElementById('custom-modal-overlay');
-      const modalTitle = document.getElementById('custom-modal-title');
-      const modalBody = document.getElementById('custom-modal-body');
-      const modalConfirmBtn = document.getElementById('custom-modal-confirm');
-      const modalCancelBtn = document.getElementById('custom-modal-cancel');
-
-      modalTitle.textContent = title;
-
-      let optionsHtml = '<div style="text-align: left; max-height: 400px; overflow-y: auto;">';
-      options.forEach((option, index) => {
-        optionsHtml += `
-                <label style="display: block; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;">
-                    <input type="radio" name="role_selection" value="${option.value}" ${index === 0 ? 'checked' : ''}>
-                    ${option.text}
-                </label>
-            `;
-      });
-      optionsHtml += '</div>';
-
-      modalBody.innerHTML = optionsHtml;
-      modalConfirmBtn.textContent = '确认选择';
-      modalCancelBtn.style.display = 'block';
-
-      modal.classList.add('visible');
-
-      modalConfirmBtn.onclick = () => {
-        const selectedRadio = document.querySelector('input[name="role_selection"]:checked');
-        if (selectedRadio) {
-          modal.classList.remove('visible');
-          resolve(parseInt(selectedRadio.value));
-        } else {
-          alert('请选择一个角色！');
-        }
-      };
-
-      modalCancelBtn.onclick = () => {
-        modal.classList.remove('visible');
-        resolve(null);
-      };
-    });
-  }
-
-  /**
-   * 【剧本杀】开始游戏的核心逻辑 (V3 - 玩家自选，AI随机版)
-   */
-  async function startScriptKillGame() {
-    const scriptId = document.getElementById('script-kill-script-select').value;
-    if (!scriptId) {
-      alert('请先选择一个剧本！');
-      return;
-    }
-    // ▼▼▼ 用这块【已修复】的代码替换旧的 if/else 逻辑 ▼▼▼
-    let script;
-    // 【核心修改】我们不再只检查 'built_in_1'，而是检查 scriptId 是否以 'built_in_' 开头
-    if (scriptId.startsWith('built_in_')) {
-      // 如果是，就调用 getBuiltInScript 函数，并将正确的ID传进去
-      script = getBuiltInScript(scriptId);
-    } else {
-      // 否则，说明是自定义剧本，才去数据库里查找
-      script = await db.scriptKillScripts.get(parseInt(scriptId));
-    }
-    // ▲▲▲ 替换结束 ▲▲▲
-    if (!script) {
-      alert('加载剧本失败！');
-      return;
+  async function extractCharacterJsonFromPngBuffer(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    if (bytes.length < 8 || bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4E || bytes[3] !== 0x47) {
+      throw new Error('不是有效的PNG图片文件');
     }
 
-    const selectedCheckboxes = document.querySelectorAll('.script-kill-player-checkbox:checked');
-    const requiredPlayers = script.roles.length - 1;
-    if (selectedCheckboxes.length !== requiredPlayers) {
-      alert(`此剧本需要您邀请 ${requiredPlayers} 位AI或NPC玩家！`);
-      return;
-    }
+    let offset = 8;
+    const chunks = {};
+    const asciiDecoder = new TextDecoder('iso-8859-1');
+    const utf8Decoder = new TextDecoder('utf-8');
 
-    await showCustomAlert('请稍候...', '正在分配角色，请耐心等待...');
+    while (offset + 8 <= bytes.length) {
+      const length = (
+        (bytes[offset] << 24) |
+        (bytes[offset + 1] << 16) |
+        (bytes[offset + 2] << 8) |
+        bytes[offset + 3]
+      ) >>> 0;
+      const type = asciiDecoder.decode(bytes.subarray(offset + 4, offset + 8));
+      const dataStart = offset + 8;
+      const dataEnd = dataStart + length;
+      if (dataEnd > bytes.length) break;
 
-    // 1. 初始化游戏状态
-    scriptKillGameState = {
-      isActive: true,
-      script: script,
-      players: [],
-      gamePhase: 'start',
-      turnIndex: 0,
-      gameLog: [],
-      evidenceCounts: {},
-      votes: {},
-      isFreeChoice: document.getElementById('script-kill-free-choice-toggle').checked,
-      discussionRound: 1, // <--- ★★★ 在这里添加这一行 ★★★
-      collectedClueIds: new Set(),
-    };
-    // 2. 收集玩家信息 (这部分不变)
-    let invitedPlayers = [];
-    selectedCheckboxes.forEach(checkbox => {
-      const playerId = checkbox.value;
-      const chat = Object.values(state.chats).find(c => c.id === playerId);
-      if (chat) {
-        invitedPlayers.push({
-          id: chat.id,
-          name: chat.name,
-          avatar: chat.settings.aiAvatar,
-          persona: chat.settings.aiPersona,
-          isUser: false,
-        });
-      } else {
-        for (const c of Object.values(state.chats)) {
-          const npc = (c.npcLibrary || []).find(n => n.id === playerId);
-          if (npc) {
-            invitedPlayers.push({
-              id: npc.id,
-              name: npc.name,
-              avatar: npc.avatar,
-              persona: npc.persona,
-              isUser: false,
-            });
+      const chunkData = bytes.subarray(dataStart, dataEnd);
+
+      if (type === 'tEXt') {
+        let nullIdx = -1;
+        for (let i = 0; i < chunkData.length; i++) {
+          if (chunkData[i] === 0) {
+            nullIdx = i;
             break;
           }
         }
+        if (nullIdx > 0) {
+          const keyword = asciiDecoder.decode(chunkData.subarray(0, nullIdx)).toLowerCase();
+          const textVal = asciiDecoder.decode(chunkData.subarray(nullIdx + 1));
+          chunks[keyword] = textVal;
+        }
+      } else if (type === 'zTXt') {
+        let nullIdx = -1;
+        for (let i = 0; i < chunkData.length; i++) {
+          if (chunkData[i] === 0) {
+            nullIdx = i;
+            break;
+          }
+        }
+        if (nullIdx > 0 && nullIdx + 2 < chunkData.length) {
+          const keyword = asciiDecoder.decode(chunkData.subarray(0, nullIdx)).toLowerCase();
+          const compressed = chunkData.subarray(nullIdx + 2);
+          const inflated = await inflateZlibBytes(compressed);
+          if (inflated) {
+            chunks[keyword] = utf8Decoder.decode(inflated);
+          }
+        }
+      } else if (type === 'iTXt') {
+        let nullIdx = -1;
+        for (let i = 0; i < chunkData.length; i++) {
+          if (chunkData[i] === 0) {
+            nullIdx = i;
+            break;
+          }
+        }
+        if (nullIdx > 0) {
+          const keyword = asciiDecoder.decode(chunkData.subarray(0, nullIdx)).toLowerCase();
+          const compFlag = chunkData[nullIdx + 1];
+          let pos = nullIdx + 3;
+          while (pos < chunkData.length && chunkData[pos] !== 0) pos++;
+          pos++;
+          while (pos < chunkData.length && chunkData[pos] !== 0) pos++;
+          pos++;
+          if (pos < chunkData.length) {
+            const payload = chunkData.subarray(pos);
+            if (compFlag === 1) {
+              const inflated = await inflateZlibBytes(payload);
+              if (inflated) chunks[keyword] = utf8Decoder.decode(inflated);
+            } else {
+              chunks[keyword] = utf8Decoder.decode(payload);
+            }
+          }
+        }
       }
-    });
-    const userPlayer = {
-      id: 'user',
-      name: state.qzoneSettings.nickname || '我',
-      avatar: state.qzoneSettings.avatar || defaultAvatar,
-      isUser: true,
-      persona: '一个喜欢探案的普通人',
+
+      if (type === 'IEND') break;
+      offset = dataEnd + 4;
+    }
+
+    const rawPayload = chunks['ccv3'] || chunks['chara'];
+    if (!rawPayload) {
+      throw new Error('该PNG图片中未检测到ccv3或chara角色卡元数据块');
+    }
+
+    const trimmed = rawPayload.trim();
+    if (trimmed.startsWith('{')) {
+      return JSON.parse(trimmed);
+    }
+    const decodedJson = decodeLatin1ToUtf8(trimmed);
+    if (!decodedJson) {
+      throw new Error('角色卡Base64数据解码失败');
+    }
+    return JSON.parse(decodedJson);
+  }
+
+  function normalizeRegexList(rawList, scopeName = 'card') {
+    if (!Array.isArray(rawList)) return [];
+    const normalized = rawList.map((item, idx) => ({
+      id: item.id || ('rx_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 6)),
+      scriptName: item.scriptName || item.name || ('正则脚本 ' + (idx + 1)),
+      findRegex: item.findRegex || item.regex || '',
+      replaceString: item.replaceString !== undefined ? String(item.replaceString) : (item.replacement !== undefined ? String(item.replacement) : ''),
+      trimStrings: Array.isArray(item.trimStrings) ? item.trimStrings : [],
+      placement: Array.isArray(item.placement) ? item.placement : [1, 2],
+      disabled: Boolean(item.disabled),
+      markdownOnly: item.markdownOnly !== undefined ? Boolean(item.markdownOnly) : true,
+      promptOnly: Boolean(item.promptOnly),
+      runOnEdit: item.runOnEdit !== undefined ? Boolean(item.runOnEdit) : true,
+      substituteRegex: Number(item.substituteRegex) || 0,
+      minDepth: item.minDepth ?? null,
+      maxDepth: item.maxDepth ?? null,
+      scope: scopeName
+    }));
+
+    // Auto-pair 复古笔记1 and 复古笔记2 so unclosed tags never break rendering
+    const note1 = normalized.find(r => String(r.scriptName).includes('复古笔记1') && !r.disabled);
+    const note2 = normalized.find(r => String(r.scriptName).includes('复古笔记2'));
+    if (note1 && note2 && note2.disabled) {
+      note2.disabled = false;
+    }
+    return normalized;
+  }
+
+  function normalizeWorldBookObject(rawBook, fallbackName = '导入世界书') {
+    if (!rawBook || typeof rawBook !== 'object') return null;
+    const entriesArr = [];
+    const rawEntries = rawBook.entries;
+    if (Array.isArray(rawEntries)) {
+      rawEntries.forEach((e, i) => entriesArr.push(normalizeSingleWorldEntry(e, i)));
+    } else if (rawEntries && typeof rawEntries === 'object') {
+      Object.keys(rawEntries).forEach((k, i) => {
+        entriesArr.push(normalizeSingleWorldEntry(rawEntries[k], i));
+      });
+    }
+    entriesArr.sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+    return {
+      id: rawBook.id || ('wb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      name: rawBook.name || fallbackName,
+      enabled: rawBook.enabled !== undefined ? Boolean(rawBook.enabled) : true,
+      scanDepth: Number(rawBook.scanDepth ?? rawBook.scan_depth ?? 4),
+      tokenBudget: Number(rawBook.tokenBudget ?? rawBook.token_budget ?? 4096),
+      recursiveScanning: rawBook.recursiveScanning !== undefined ? Boolean(rawBook.recursiveScanning) : Boolean(rawBook.recursive_scanning ?? true),
+      entries: entriesArr
+    };
+  }
+
+  function normalizeSingleWorldEntry(raw, idx = 0) {
+    const ext = raw.extensions || {};
+    const keys = Array.isArray(raw.key)
+      ? raw.key
+      : Array.isArray(raw.keys)
+        ? raw.keys
+        : typeof raw.key === 'string'
+          ? raw.key.split(',').map(s => s.trim()).filter(Boolean)
+          : [];
+    const secondaryKeys = Array.isArray(raw.keysecondary)
+      ? raw.keysecondary
+      : Array.isArray(raw.secondary_keys)
+        ? raw.secondary_keys
+        : typeof raw.keysecondary === 'string'
+          ? raw.keysecondary.split(',').map(s => s.trim()).filter(Boolean)
+          : [];
+
+    return {
+      uid: raw.uid !== undefined ? raw.uid : (raw.id !== undefined ? raw.id : idx),
+      comment: raw.comment || raw.name || ('词条 #' + idx),
+      content: raw.content || '',
+      keys,
+      secondaryKeys,
+      constant: Boolean(raw.constant),
+      vectorized: Boolean(raw.vectorized),
+      disable: raw.disable !== undefined ? Boolean(raw.disable) : (raw.enabled !== undefined ? !raw.enabled : false),
+      selective: raw.selective !== undefined ? Boolean(raw.selective) : true,
+      selectiveLogic: Number(raw.selectiveLogic ?? ext.selectiveLogic ?? 0),
+      order: Number(raw.order ?? raw.insertion_order ?? 100),
+      position: Number(raw.position ?? ext.position ?? 0),
+      depth: Number(raw.depth ?? ext.depth ?? 4),
+      role: Number(raw.role ?? ext.role ?? 0),
+      probability: Number(raw.probability ?? ext.probability ?? 100),
+      useProbability: raw.useProbability !== undefined ? Boolean(raw.useProbability) : true,
+      excludeRecursion: Boolean(raw.excludeRecursion ?? ext.exclude_recursion),
+      preventRecursion: Boolean(raw.preventRecursion ?? ext.prevent_recursion),
+      delayUntilRecursion: Boolean(raw.delayUntilRecursion ?? ext.delay_until_recursion),
+      scanDepth: raw.scanDepth ?? ext.scan_depth ?? null,
+      caseSensitive: Boolean(raw.caseSensitive ?? ext.case_sensitive),
+      matchWholeWords: Boolean(raw.matchWholeWords ?? ext.match_whole_words),
+      group: raw.group || ext.group || '',
+      groupWeight: Number(raw.groupWeight ?? ext.group_weight ?? 100),
+      sticky: Number(raw.sticky ?? ext.sticky ?? 0),
+      cooldown: Number(raw.cooldown ?? ext.cooldown ?? 0),
+      delay: Number(raw.delay ?? ext.delay ?? 0)
+    };
+  }
+
+  function importCharacterCardFromRaw(rawJson, avatarUrl) {
+    const data = (rawJson && typeof rawJson.data === 'object' && rawJson.data !== null) ? rawJson.data : rawJson;
+    if (!data || typeof data !== 'object') {
+      throw new Error('角色卡JSON结构无效');
+    }
+    const ext = data.extensions || (rawJson && rawJson.extensions) || {};
+    const cardName = data.name || rawJson.name || '未命名角色';
+    const cardId = 'card_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+
+    let extractedBookId = null;
+    const rawCharBook = data.character_book || rawJson.character_book;
+    if (rawCharBook && typeof rawCharBook === 'object') {
+      const wb = normalizeWorldBookObject(rawCharBook, cardName + '世界书');
+      if (wb && wb.entries.length > 0) {
+        wb.enabled = true;
+        tavernState.worldBooks.unshift(wb);
+        extractedBookId = wb.id;
+      }
+    }
+
+    const rawRegexes = ext.regex_scripts || data.regex_scripts || [];
+    const normalizedCardRegexes = normalizeRegexList(rawRegexes, 'card');
+
+    const altGreetings = Array.isArray(data.alternate_greetings)
+      ? data.alternate_greetings.filter(g => typeof g === 'string' && g.trim().length > 0)
+      : [];
+
+    const depthPromptObj = ext.depth_prompt || {};
+
+    const newCard = {
+      id: cardId,
+      name: cardName,
+      avatar: avatarUrl || data.avatar || DEFAULT_AVATAR_SVG,
+      description: data.description || rawJson.description || '',
+      personality: data.personality || rawJson.personality || '',
+      scenario: data.scenario || rawJson.scenario || '',
+      first_mes: data.first_mes || rawJson.first_mes || '',
+      mes_example: data.mes_example || rawJson.mes_example || '',
+      creator_notes: data.creator_notes || data.creatorcomment || rawJson.creatorcomment || '',
+      system_prompt: data.system_prompt || '',
+      post_history_instructions: data.post_history_instructions || '',
+      alternate_greetings: altGreetings,
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      creator: data.creator || '',
+      character_version: data.character_version || '1.0',
+      talkativeness: Number(ext.talkativeness ?? data.talkativeness ?? 0.5),
+      fav: Boolean(ext.fav || data.fav),
+      depth_prompt_prompt: depthPromptObj.prompt || '',
+      depth_prompt_depth: Number(depthPromptObj.depth ?? 4),
+      depth_prompt_role: depthPromptObj.role || 'system',
+      worldBookId: extractedBookId,
+      regexScripts: normalizedCardRegexes
     };
 
-    // --- 3. 【核心改造】根据开关状态，执行不同的分配逻辑 ---
-    const assignedRoles = new Map(); // 使用Map存储 {playerId -> roleObject}
-    let remainingRoles = [...script.roles]; // 创建一个可修改的角色列表副本
-
-    if (scriptKillGameState.isFreeChoice) {
-      // --- 自由选择模式 (玩家自选，AI随机) ---
-
-      // 3a. 用户先从所有角色中选择一个
-      const roleOptions = remainingRoles.map((role, index) => ({
-        text: `【${role.name}】: ${role.description.substring(0, 40)}...`,
-        value: index,
-      }));
-      const userChoiceIndex = await showRoleSelectionModal('请选择你的角色', roleOptions);
-      if (userChoiceIndex === null) {
-        hideCustomModal();
-        alert('你取消了角色选择，游戏未开始。');
-        return;
-      }
-      // 从角色池中移除用户选择的角色，并分配给用户
-      const userChosenRole = remainingRoles.splice(userChoiceIndex, 1)[0];
-      assignedRoles.set(userPlayer.id, userChosenRole);
-
-      // 3b. 【【【这就是本次的核心修改！】】】
-      // 将剩余的角色【随机打乱】
-      remainingRoles.sort(() => Math.random() - 0.5);
-      // 然后【按顺序】分配给AI们
-      invitedPlayers.forEach((aiPlayer, index) => {
-        assignedRoles.set(aiPlayer.id, remainingRoles[index]);
-      });
+    const existingIdx = tavernState.cards.findIndex(c => c.name === newCard.name && c.id !== 'card_default_guide');
+    if (existingIdx !== -1) {
+      newCard.id = tavernState.cards[existingIdx].id;
+      tavernState.cards[existingIdx] = newCard;
     } else {
-      // --- 随机分配模式 (旧逻辑保持不变) ---
-      const allGamePlayers = [userPlayer, ...invitedPlayers];
-      allGamePlayers.sort(() => Math.random() - 0.5);
-      const shuffledRoles = [...script.roles].sort(() => Math.random() - 0.5);
-      allGamePlayers.forEach((player, index) => {
-        assignedRoles.set(player.id, shuffledRoles[index]);
+      tavernState.cards.unshift(newCard);
+    }
+
+    tavernState.activeCardId = newCard.id;
+    const initSess = buildInitialSessionForCard(newCard);
+    tavernState.chatsByCardId[newCard.id] = initSess;
+    tavernState.chatArchivesByCardId[newCard.id] = [initSess];
+
+    return {
+      card: newCard,
+      worldBookCount: extractedBookId ? 1 : 0,
+      regexCount: normalizedCardRegexes.length,
+      greetingCount: 1 + altGreetings.length
+    };
+  }
+
+  function parsePresetFromRaw(rawJson, fallbackName = '导入预设') {
+    if (!rawJson || typeof rawJson !== 'object') {
+      throw new Error('预设JSON无效');
+    }
+    const promptItems = [];
+    const rawPrompts = Array.isArray(rawJson.prompts) ? rawJson.prompts : [];
+    const promptMap = {};
+    rawPrompts.forEach(p => {
+      if (p && p.identifier) promptMap[p.identifier] = p;
+    });
+
+    let orderList = [];
+    if (Array.isArray(rawJson.prompt_order)) {
+      const charOrder = rawJson.prompt_order.find(o => Number(o.character_id) === 100001) || rawJson.prompt_order[0];
+      if (charOrder && Array.isArray(charOrder.order)) {
+        orderList = charOrder.order;
+      }
+    }
+
+    const usedIds = new Set();
+    orderList.forEach(item => {
+      if (!item || !item.identifier) return;
+      usedIds.add(item.identifier);
+      const base = promptMap[item.identifier] || {};
+      promptItems.push({
+        identifier: item.identifier,
+        name: base.name || item.identifier,
+        enabled: item.enabled !== undefined ? Boolean(item.enabled) : Boolean(base.enabled ?? true),
+        role: base.role || 'system',
+        content: base.content || '',
+        marker: Boolean(base.marker),
+        injection_position: Number(base.injection_position ?? 0),
+        injection_depth: Number(base.injection_depth ?? 4),
+        injection_order: Number(base.injection_order ?? 100),
+        forbid_overrides: Boolean(base.forbid_overrides)
       });
+    });
+
+    rawPrompts.forEach(p => {
+      if (!p || !p.identifier || usedIds.has(p.identifier)) return;
+      promptItems.push({
+        identifier: p.identifier,
+        name: p.name || p.identifier,
+        enabled: Boolean(p.enabled ?? false),
+        role: p.role || 'system',
+        content: p.content || '',
+        marker: Boolean(p.marker),
+        injection_position: Number(p.injection_position ?? 0),
+        injection_depth: Number(p.injection_depth ?? 4),
+        injection_order: Number(p.injection_order ?? 100),
+        forbid_overrides: Boolean(p.forbid_overrides)
+      });
+    });
+
+    if (promptItems.length === 0) {
+      promptItems.push(...getDefaultPromptOrderItems());
     }
 
-    // 4. 组合最终的玩家列表 (这部分不变)
-    const allPlayersWithRoles = [userPlayer, ...invitedPlayers].map(player => ({
-      ...player,
-      role: assignedRoles.get(player.id),
-      evidence: [],
-    }));
-    scriptKillGameState.players = allPlayersWithRoles;
-
-    // 5. 显示身份给用户 (这部分不变)
-    const myPlayer = scriptKillGameState.players.find(p => p.isUser);
-    hideCustomModal();
-    await showCustomAlert(
-      `你的角色是：【${myPlayer.role.name}】`,
-      `**角色介绍:**\n${myPlayer.role.description}\n\n**你的任务:**\n${myPlayer.role.tasks}`,
-    );
-
-    // 6. 切换到游戏界面并开始 (这部分不变)
-    showScreen('script-kill-game-screen');
-    await processScriptKillTurn();
+    return {
+      id: 'preset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      name: rawJson.name || fallbackName.replace(/\.json$/i, ''),
+      temperature: Number(rawJson.temperature ?? 1.0),
+      frequency_penalty: Number(rawJson.frequency_penalty ?? 0),
+      presence_penalty: Number(rawJson.presence_penalty ?? 0),
+      top_p: Number(rawJson.top_p ?? 1.0),
+      top_k: Number(rawJson.top_k ?? 0),
+      min_p: Number(rawJson.min_p ?? 0),
+      typical_p: Number(rawJson.typical_p ?? 1),
+      repetition_penalty: Number(rawJson.repetition_penalty ?? 1),
+      openai_max_context: Number(rawJson.openai_max_context ?? 64000),
+      openai_max_tokens: Number(rawJson.openai_max_tokens ?? 4096),
+      seed: Number(rawJson.seed ?? -1),
+      stream_openai: rawJson.stream_openai !== undefined ? Boolean(rawJson.stream_openai) : true,
+      reasoning_effort: rawJson.reasoning_effort || 'medium',
+      squash_system_messages: Boolean(rawJson.squash_system_messages),
+      impersonation_prompt: rawJson.impersonation_prompt || tavernState.formatting.impersonationPrompt,
+      new_chat_prompt: rawJson.new_chat_prompt || tavernState.formatting.newChatPrompt,
+      continue_nudge_prompt: rawJson.continue_nudge_prompt || tavernState.formatting.continueNudgePrompt,
+      wi_format: rawJson.wi_format || '{0}',
+      scenario_format: rawJson.scenario_format || '{{scenario}}',
+      personality_format: rawJson.personality_format || '{{personality}}',
+      prompts: promptItems
+    };
   }
 
-  // ▲▲▲ 替换结束 ▲▲▲
+  // ============================================================================
+  // 7. Macro Replacer, Regex Engine & Scoped Theme CSS Engine
+  // ============================================================================
+  function replaceTavernMacros(rawText, cardObj) {
+    if (!rawText) return '';
+    const card = cardObj || getActiveCard();
+    const userName = getUserDisplayName();
+    const charName = card ? card.name : '角色';
+    const persona = getActivePersona();
+    const now = new Date();
 
-  // ▼▼▼ 【最终流程版】请用这整块代码，完整替换旧的 processScriptKillTurn 函数 ▼▼▼
-  /**
-   * 【剧本杀 V4 - 最终流程引擎】游戏主循环/引擎
-   */
-  async function processScriptKillTurn() {
-    if (!scriptKillGameState.isActive) return;
-    renderScriptKillGameScreen();
-
-    switch (scriptKillGameState.gamePhase) {
-      case 'start':
-        logToScriptKillGame(`游戏开始！剧本：【${scriptKillGameState.script.name}】`, 'system');
-        await sleep(1000);
-        logToScriptKillGame(`【故事背景】\n${scriptKillGameState.script.storyBackground}`, 'system');
-        await sleep(3000);
-        logToScriptKillGame('请各位玩家查看自己的角色信息，准备进行自我介绍。', 'system');
-        scriptKillGameState.gamePhase = 'introduction';
-        await sleep(2000);
-        await processScriptKillTurn();
-        break;
-
-      case 'introduction':
-        logToScriptKillGame('现在开始轮流进行自我介绍。', 'system');
-        for (const player of scriptKillGameState.players) {
-          renderScriptKillGameScreen({ speakingPlayerId: player.id });
-          let introduction = player.isUser
-            ? await waitForUserActionSK('轮到你自我介绍了', 'speak', '简单介绍一下你自己和你所扮演的角色...')
-            : await triggerScriptKillAiAction(player.id, 'introduce');
-          logToScriptKillGame({ player: player, speech: introduction }, 'speech');
-          await sleep(1000);
-        }
-        renderScriptKillGameScreen();
-        logToScriptKillGame('自我介绍结束，现在请各位玩家分享自己的时间线。', 'system');
-        scriptKillGameState.gamePhase = 'timeline_discussion';
-        await sleep(2000);
-        await processScriptKillTurn();
-        break;
-
-      case 'timeline_discussion':
-        logToScriptKillGame('请各位玩家轮流发言，梳理并公开自己的时间线。', 'system');
-        await sleep(1500);
-        for (const player of scriptKillGameState.players) {
-          renderScriptKillGameScreen({ speakingPlayerId: player.id });
-          let timelineSpeech = player.isUser
-            ? await waitForUserActionSK('轮到你陈述时间线了', 'speak', '请根据你的剧本，详细说明你的行动轨迹...')
-            : await triggerScriptKillAiAction(player.id, 'discuss_timeline');
-          logToScriptKillGame({ player: player, speech: timelineSpeech }, 'speech');
-          await sleep(1000);
-        }
-        renderScriptKillGameScreen();
-        logToScriptKillGame('时间线陈述结束，现在进入【第一轮搜证环节】。', 'system');
-        scriptKillGameState.gamePhase = 'evidence_round_1';
-        await processScriptKillTurn();
-        break;
-
-      case 'evidence_round_1':
-        updateActionAreaSK();
-        logToScriptKillGame('进入第一轮搜证，每位玩家有【2次】搜证机会。', 'system');
-        await sleep(2000);
-
-        // 【核心修改】AI 进行第一轮的第1次搜证
-        for (const player of scriptKillGameState.players) {
-          if (player.isUser) continue;
-          logToScriptKillGame(`轮到 ${player.role.name} (${player.name}) 进行第1次搜证...`);
-          await sleep(2000);
-          await handleAiSearch(player);
-        }
-        // 【核心修改】AI 进行第一轮的第2次搜证
-        for (const player of scriptKillGameState.players) {
-          if (player.isUser) continue;
-          logToScriptKillGame(`轮到 ${player.role.name} (${player.name}) 进行第2次搜证...`);
-          await sleep(2000);
-          await handleAiSearch(player);
-        }
-        logToScriptKillGame('所有AI搜证完毕，玩家可以继续搜证或结束本环节进入讨论。', 'system');
-        break;
-
-      case 'discussion_round_1':
-        logToScriptKillGame('第一轮搜证结束，现在进入【第一轮讨论环节】。', 'system');
-        updateActionAreaSK();
-        break;
-
-      case 'evidence_round_2':
-        updateActionAreaSK();
-        logToScriptKillGame('第一轮讨论结束，现在进入【第二轮搜证环节】。', 'system');
-        logToScriptKillGame('根据刚才的讨论，各位玩家现在还有【1次】搜证机会。', 'system');
-        await sleep(2000);
-
-        // 【核心修改】AI 进行第二轮的唯一次搜证
-        for (const player of scriptKillGameState.players) {
-          if (player.isUser) continue;
-          const searchCount = scriptKillGameState.evidenceCounts[player.id] || 0;
-          if (searchCount < 3) {
-            // 确保AI也有次数限制
-            logToScriptKillGame(`轮到 ${player.role.name} (${player.name}) 进行补充搜证...`);
-            await sleep(2000);
-            await handleAiSearch(player);
-          }
-        }
-        logToScriptKillGame('所有AI补充搜证完毕，玩家可以继续搜证或结束本环节进入最终讨论。', 'system');
-        break;
-
-      // 【全新阶段】第二轮讨论
-      case 'discussion_round_2':
-        logToScriptKillGame('第二轮搜证结束，现在进入【第二轮讨论环节】。', 'system');
-        updateActionAreaSK(); // 显示发言按钮
-        break;
-
-      // 【全新阶段】第三轮（最终）讨论
-      case 'discussion_round_3':
-        logToScriptKillGame('第二轮讨论结束，现在进入【最终讨论环节】。', 'system');
-        updateActionAreaSK(); // 再次显示发言按钮
-        break;
-
-      case 'voting':
-        // 投票和结束逻辑保持不变
-        logToScriptKillGame('最终讨论结束，现在进入投票环节。请投票指认凶手！', 'system');
-        const detailedVotes = {};
-        const alivePlayers = scriptKillGameState.players;
-        for (const voter of alivePlayers) {
-          let targetId = voter.isUser
-            ? await waitForUserActionSK('请投票指认凶手', 'vote')
-            : await triggerScriptKillAiAction(voter.id, 'vote');
-          detailedVotes[voter.id] = targetId;
-          if (targetId) {
-            const targetPlayer = scriptKillGameState.players.find(p => p.id === targetId);
-            logToScriptKillGame(`${voter.name} 投票给了 ${targetPlayer.name}。`);
-          } else {
-            logToScriptKillGame(`${voter.name} 弃票了。`);
-          }
-        }
-        scriptKillGameState.votes = detailedVotes;
-        scriptKillGameState.gamePhase = 'end';
-        await sleep(2000);
-        await processScriptKillTurn();
-        break;
-
-      case 'end':
-        // 结束逻辑保持不变
-        logToScriptKillGame('投票结束，正在公布真相...', 'system');
-        await sleep(2000);
-        const voteCounts = {};
-        for (const voterId in scriptKillGameState.votes) {
-          const targetId = scriptKillGameState.votes[voterId];
-          if (targetId) {
-            voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
-          }
-        }
-        let maxVotes = 0,
-          votedPlayerIds = [];
-        for (const playerId in voteCounts) {
-          if (voteCounts[playerId] > maxVotes) {
-            maxVotes = voteCounts[playerId];
-            votedPlayerIds = [playerId];
-          } else if (voteCounts[playerId] === maxVotes) {
-            votedPlayerIds.push(playerId);
-          }
-        }
-        const killer = scriptKillGameState.players.find(p => p.role.isKiller);
-        let winner = '',
-          resultText = '';
-        if (votedPlayerIds.length === 1 && votedPlayerIds[0] === killer.id) {
-          winner = '好人阵营';
-          resultText = `恭喜！你们成功指认出凶手【${killer.role.name} (${killer.name})】！好人阵营胜利！`;
-        } else {
-          winner = '凶手阵营';
-          resultText = `很遗憾，真正的凶手是【${killer.role.name} (${killer.name})】！凶手阵营胜利！`;
-        }
-        logToScriptKillGame(resultText, 'system');
-        await sleep(3000);
-        logToScriptKillGame(`【真相】\n${scriptKillGameState.script.truth}`, 'system');
-        await showCustomAlert('请稍候...', 'AI正在生成本局复盘摘要...');
-        const aiSummary = await generateAiSkSummary();
-        const summary = generateSkSummary(winner, aiSummary);
-        showScriptKillSummaryModal(summary);
-        scriptKillGameState.isActive = false;
-        updateActionAreaSK();
-        break;
-    }
+    return String(rawText)
+      .replace(/\{\{user\}\}/gi, userName)
+      .replace(/\{\{char\}\}/gi, charName)
+      .replace(/<USER>/g, userName)
+      .replace(/<BOT>/g, charName)
+      .replace(/\{\{persona\}\}/gi, persona ? (persona.description || '') : '')
+      .replace(/\{\{description\}\}/gi, card ? (card.description || '') : '')
+      .replace(/\{\{personality\}\}/gi, card ? (card.personality || '') : '')
+      .replace(/\{\{scenario\}\}/gi, card ? (card.scenario || '') : '')
+      .replace(/\{\{mesExamples\}\}/gi, card ? (card.mes_example || '') : '')
+      .replace(/\{\{charPrompt\}\}/gi, card ? (card.system_prompt || '') : '')
+      .replace(/\{\{charInstruction\}\}/gi, card ? (card.post_history_instructions || '') : '')
+      .replace(/\{\{time\}\}/gi, now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      .replace(/\{\{date\}\}/gi, now.toLocaleDateString())
+      .replace(/\{\{weekday\}\}/gi, ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()])
+      .replace(/\{\{roll:(\d+)d(\d+)\}\}/gi, (_, countStr, sidesStr) => {
+        const c = Math.min(20, Math.max(1, parseInt(countStr, 10) || 1));
+        const s = Math.max(2, parseInt(sidesStr, 10) || 100);
+        let sum = 0;
+        for (let i = 0; i < c; i++) sum += Math.floor(Math.random() * s) + 1;
+        return String(sum);
+      })
+      .replace(/\{\{random:([^}]+)\}\}/gi, (_, listStr) => {
+        const parts = listStr.split(',').map(s => s.trim()).filter(Boolean);
+        return parts.length > 0 ? parts[Math.floor(Math.random() * parts.length)] : '';
+      });
   }
-  // ▲▲▲ 替换结束 ▲▲▲
-  // ▼▼▼ 【全新】这是剧本杀的重roll功能核心函数 ▼▼▼
-  /**
-   * 【剧本杀】处理AI发言的重roll请求
-   * @param {number} logIndex - 要重roll的发言在gameLog中的索引
-   */
-  async function handleScriptKillReroll(logIndex) {
-    const logEntry = scriptKillGameState.gameLog[logIndex];
-    if (!logEntry || logEntry.type !== 'speech' || !logEntry.message.player || logEntry.message.player.isUser) {
-      return; // 安全检查，确保操作的是AI的发言
-    }
 
-    const playerToReroll = logEntry.message.player;
-
-    // 给用户一个即时反馈
-    const speechTextElement = document
-      .querySelector(`button.sk-reroll-btn[data-log-index="${logIndex}"]`)
-      .closest('.speech-content')
-      .querySelector('.speech-text');
-    if (speechTextElement) {
-      speechTextElement.innerHTML = '<i>正在重新思考...</i>';
-    }
-
+  function parseFindRegexString(findRegexStr) {
+    if (!findRegexStr || typeof findRegexStr !== 'string') return null;
+    const trimmed = findRegexStr.trim();
+    const slashMatch = trimmed.match(/^\/([\s\S]*)\/([gimsuy]*)$/);
     try {
-      // 根据游戏阶段智能判断AI应该执行哪个动作
-      let actionType;
-      const currentPhase = scriptKillGameState.gamePhase;
-      if (currentPhase === 'introduction') {
-        actionType = 'introduce';
-      } else if (currentPhase === 'timeline_discussion') {
-        actionType = 'discuss_timeline';
-      } else {
-        actionType = 'discuss'; // 默认为自由讨论
+      if (slashMatch) {
+        return new RegExp(slashMatch[1], slashMatch[2] || 'g');
       }
-
-      // 重新调用AI生成新的发言
-      const newSpeech = await triggerScriptKillAiAction(playerToReroll.id, actionType);
-
-      // 用新的发言内容替换掉旧的
-      scriptKillGameState.gameLog[logIndex].message.speech = newSpeech;
-
-      // 重新渲染整个游戏界面以显示更新
-      renderScriptKillGameScreen();
-    } catch (error) {
-      console.error('剧本杀发言重roll失败:', error);
-      if (speechTextElement) {
-        speechTextElement.innerHTML = `<i style="color:red;">重新生成失败，请检查网络或API设置。</i>`;
-      }
-    }
-  }
-  // ▲▲▲ 新增函数结束 ▲▲▲
-
-  // ▼▼▼ 【剧本杀】用这块【已添加重roll按钮】的代码，完整替换旧的 renderScriptKillGameScreen 函数 ▼▼▼
-  /**
-   * 【剧本杀】渲染游戏主界面
-   */
-  function renderScriptKillGameScreen(options = {}) {
-    const playersGrid = document.getElementById('script-kill-players-grid');
-    const logContainer = document.getElementById('script-kill-game-log');
-
-    playersGrid.innerHTML = '';
-    scriptKillGameState.players.forEach(player => {
-      const seat = document.createElement('div');
-      seat.className = 'player-seat';
-      const avatarClass = `player-avatar ${options.speakingPlayerId === player.id ? 'speaking' : ''}`;
-
-      seat.innerHTML = `
-            <img src="${player.avatar}" class="${avatarClass}">
-            <span class="player-name">${player.role.name}</span>
-        `;
-      playersGrid.appendChild(seat);
-    });
-
-    logContainer.innerHTML = '';
-    scriptKillGameState.gameLog.forEach((log, index) => {
-      // ★ 核心修改1：增加了index参数
-      const logEl = document.createElement('div');
-      // ★ 核心修改2：判断是否是AI的发言
-      if (log.type === 'speech' && typeof log.message === 'object' && !log.message.player.isUser) {
-        logEl.className = 'log-entry speech';
-        const { player, speech } = log.message;
-
-        // ★ 核心修改3：为AI发言添加重roll按钮
-        logEl.innerHTML = `
-            <img src="${player.avatar}" class="speech-avatar">
-            <div class="speech-content">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="speaker">${player.role.name} (${player.name})</span>
-                    <button class="sk-reroll-btn" data-log-index="${index}" title="重新生成发言" style="background:none; border:none; cursor:pointer; padding:0; color:var(--text-secondary);">
-                        <svg class="reroll-btn-icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                    </button>
-                </div>
-                <span class="speech-text">${speech.replace(/\n/g, '<br>')}</span>
-            </div>
-        `;
-      } else if (log.type === 'speech') {
-        // 用户的发言保持原样
-        logEl.className = 'log-entry speech';
-        const { player, speech } = log.message;
-        logEl.innerHTML = `
-            <img src="${player.avatar}" class="speech-avatar">
-            <div class="speech-content">
-                <span class="speaker">${player.role.name} (${player.name})</span>
-                <span class="speech-text">${speech.replace(/\n/g, '<br>')}</span>
-            </div>
-        `;
-      } else {
-        // 其他系统消息也保持原样
-        logEl.className = `log-entry ${log.type}`;
-        logEl.innerHTML = String(log.message).replace(/\n/g, '<br>');
-      }
-      logContainer.appendChild(logEl);
-    });
-    logContainer.scrollTop = logContainer.scrollHeight;
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【剧本杀】添加一条游戏日志
-   */
-  function logToScriptKillGame(message, type = 'system') {
-    scriptKillGameState.gameLog.push({ message, type });
-    renderScriptKillGameScreen();
-  }
-
-  /**
-   * 【剧本杀 V4 - 新流程版】更新底部操作区域的按钮
-   */
-  function updateActionAreaSK() {
-    const actionArea = document.getElementById('script-kill-action-area');
-    actionArea.innerHTML = '';
-    const user = scriptKillGameState.players.find(p => p.isUser);
-
-    const phase = scriptKillGameState.gamePhase;
-    const searchCount = scriptKillGameState.evidenceCounts[user.id] || 0;
-
-    if (phase === 'evidence_round_1' || phase === 'evidence_round_2') {
-      let searchesLeftInRound, totalInRound;
-      if (phase === 'evidence_round_1') {
-        searchesLeftInRound = 2 - searchCount;
-        totalInRound = 2;
-      } else {
-        // evidence_round_2
-        searchesLeftInRound = 3 - searchCount;
-        totalInRound = 1;
-      }
-
-      const searchBtn = document.createElement('button');
-      searchBtn.id = 'sk-search-evidence-btn';
-      searchBtn.className = 'form-button';
-      searchBtn.textContent = `搜证 (${searchesLeftInRound}/${totalInRound})`;
-      searchBtn.disabled = searchesLeftInRound <= 0;
-      actionArea.appendChild(searchBtn);
-
-      const endSearchBtn = document.createElement('button');
-      endSearchBtn.id = 'sk-end-search-btn';
-      endSearchBtn.className = 'form-button-secondary';
-      endSearchBtn.textContent = phase === 'evidence_round_1' ? '进入第一轮讨论' : '进入第二轮讨论';
-      actionArea.appendChild(endSearchBtn);
-    } else if (phase === 'discussion_round_1' || phase === 'discussion_round_2' || phase === 'discussion_round_3') {
-      const speakBtn = document.createElement('button');
-      speakBtn.id = 'sk-speak-btn';
-      speakBtn.className = 'form-button';
-      speakBtn.textContent = '我要发言';
-      actionArea.appendChild(speakBtn);
-    } else if (!scriptKillGameState.isActive && phase === 'end') {
-      const backBtn = document.createElement('button');
-      backBtn.className = 'form-button';
-      backBtn.textContent = '返回游戏大厅';
-      backBtn.onclick = () => showScreen('game-hall-screen');
-      actionArea.appendChild(backBtn);
-    }
-  }
-
-  // ▼▼▼ 【剧本杀输入框美化版】请用这个【全新】的函数，完整替换掉你旧的 waitForUserActionSK 函数 ▼▼▼
-  /**
-   * 【剧本杀 V2 - 输入框美化版】等待用户行动的通用函数
-   */
-  function waitForUserActionSK(promptText, actionType, placeholder = '') {
-    return new Promise(resolve => {
-      const actionArea = document.getElementById('script-kill-action-area');
-      actionArea.innerHTML = '';
-      actionArea.className = 'script-kill-action-area'; // 重置class
-
-      if (actionType === 'speak') {
-        // --- 这是我们美化后的发言输入区 ---
-        actionArea.classList.add('speaking-mode'); // 激活新CSS
-
-        const textarea = document.createElement('textarea');
-        textarea.id = 'user-sk-speech-input'; // 使用剧本杀专用的ID
-        textarea.rows = 1;
-        textarea.placeholder = placeholder || '请输入你的发言...';
-        // 实时调整高度
-        textarea.addEventListener('input', () => {
-          textarea.style.height = 'auto';
-          textarea.style.height = textarea.scrollHeight + 'px';
-        });
-
-        const endBtn = document.createElement('button');
-        endBtn.id = 'sk-end-speech-btn'; // 使用剧本杀专用的ID
-        endBtn.className = 'form-button';
-        endBtn.textContent = '结束发言';
-
-        actionArea.appendChild(textarea);
-        actionArea.appendChild(endBtn);
-
-        textarea.focus();
-
-        endBtn.onclick = () => {
-          const speech = textarea.value.trim() || '我没什么好说的，过。';
-          actionArea.innerHTML = '';
-          actionArea.classList.remove('speaking-mode');
-          resolve(speech);
-        };
-        return; // 结束 'speak' 分支
-      }
-
-      // --- 以下是投票逻辑，保持原样 ---
-      else if (actionType === 'vote') {
-        const modal = document.getElementById('script-kill-vote-modal');
-        const optionsEl = document.getElementById('sk-vote-options-list');
-        optionsEl.innerHTML = '';
-
-        scriptKillGameState.players.forEach(player => {
-          const label = document.createElement('label');
-          label.innerHTML = `<input type="radio" name="sk_vote_target" value="${player.id}"> ${player.role.name} (${player.name})`;
-          optionsEl.appendChild(label);
-        });
-
-        document.getElementById('confirm-sk-vote-btn').onclick = () => {
-          const selected = document.querySelector('input[name="sk_vote_target"]:checked');
-          if (selected) {
-            modal.classList.remove('visible');
-            resolve(selected.value);
-          } else {
-            alert('请选择一个投票对象！');
-          }
-        };
-        document.getElementById('cancel-sk-vote-btn').onclick = () => {
-          modal.classList.remove('visible');
-          resolve(null); // 用户取消
-        };
-        modal.classList.add('visible');
-      }
-    });
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-  /**
-   * 【全新】处理单个AI的搜证行动 (每次只搜一个线索)
-   * @param {object} player - 正在行动的AI玩家对象
-   */
-  async function handleAiSearch(player) {
-    const script = scriptKillGameState.script;
-
-    // 消耗一次搜证机会
-    scriptKillGameState.evidenceCounts[player.id] = (scriptKillGameState.evidenceCounts[player.id] || 0) + 1;
-
-    let foundMessage = ''; // 用于记录本轮搜证的结果
-
-    // 1. 增加随机性：有30%的几率什么都搜不到
-    if (Math.random() < 0.3) {
-      foundMessage = '什么都没发现。';
-    } else {
-      // 2. 找出所有【全局还未被发现】的线索
-      const uncollectedClues = script.clues.filter(c => !scriptKillGameState.collectedClueIds.has(c.description));
-
-      if (uncollectedClues.length > 0) {
-        // 3. 随机找到一条新线索
-        const foundClue = uncollectedClues[Math.floor(Math.random() * uncollectedClues.length)];
-        const clueSource = foundClue.owner === '公共' ? '公共区域' : `角色 ${foundClue.owner} 的私人物品`;
-
-        // 4. 将线索存入AI手牌和全局线索池
-        player.evidence.push({ description: foundClue.description, source: clueSource });
-        scriptKillGameState.collectedClueIds.add(foundClue.description);
-
-        let revealed = true; // 默认公开
-
-        // 5. 如果线索是关于自己的，让AI决策是否公开
-        if (foundClue.owner === player.role.name) {
-          const revealDecision = await triggerScriptKillAiAction(player.id, 'reveal_clue', {
-            clue: foundClue.description,
-          });
-          if (revealDecision && revealDecision.action === 'hide') {
-            revealed = false;
-          }
-        }
-
-        // 6. 根据AI的决策，记录不同的搜证结果
-        if (revealed) {
-          foundMessage = `在【${clueSource}】发现并公开了线索：“${foundClue.description}”`;
-        } else {
-          foundMessage = `在【${clueSource}】发现了一条关于自己的线索，并选择将其隐藏。`;
-        }
-      } else {
-        foundMessage = '没有发现更多新线索了。';
-      }
-    }
-
-    // 7. 将搜证结果记录到游戏日志
-    logToScriptKillGame(`${player.name} 完成了一次搜证: ${foundMessage}`);
-    await sleep(1500);
-  }
-
-  /**
-   * 【剧本杀-AI核心】触发AI行动
-   */
-  async function triggerScriptKillAiAction(playerId, action, context = {}) {
-    const player = scriptKillGameState.players.find(p => p.id === playerId);
-    if (!player) return;
-
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-
-    // ▼▼▼ 请用下面这【一整块】代码，完整替换掉旧的 systemPrompt 变量定义 ▼▼▼
-    let jsonFormat = '';
-    let extraContext = '';
-    let systemPrompt = `
-# 任务: 剧本杀角色扮演
-# 你的双重身份 (必须严格遵守)
-1.  **你的本体**: 你的真实身份是 **${player.name}**，你的核心性格是：**${player.persona}**。
-2.  **你的剧本角色**: 在这场游戏中，你需要扮演角色 **【${player.role.name}】**。
-    -   **剧本身份设定**: ${player.role.description}
-    -   **你的故事线 (时间线)**: ${player.role.storyline} 
-    -   **剧本秘密任务**: ${player.role.tasks}
-
-# 你已掌握的线索: 
-${player.evidence.map(e => `- ${e.description}`).join('\n') || '(暂无线索)'}
-
-# 当前游戏阶段: ${scriptKillGameState.gamePhase}
-# 游戏日志 (最近50条):
-${scriptKillGameState.gameLog
-  .slice(-50)
-  .map(log => {
-    if (log.type === 'speech') return `${log.message.player.role.name}: ${log.message.speech}`;
-    return log.message;
-  })
-  .join('\n')}
-${extraContext}
-# 你的行动指令
-`;
-
-    // ▲▲▲ 替换结束 ▲▲▲
-
-    switch (action) {
-      case 'introduce':
-        systemPrompt += '现在轮到你进行自我介绍。请根据你的人设，以第一人称进行一段简短的介绍。';
-        jsonFormat = '{"action": "speak", "speech": "你的自我介绍..."}';
-        break;
-      // ▼▼▼ 【全新】在这里为AI添加“讨论时间线”的新指令 ▼▼▼
-      case 'discuss_timeline':
-        systemPrompt +=
-          '现在是时间线陈述环节。请根据你的角色剧本（包括身份设定和秘密任务），详细、清晰地陈述你在案发时间段内的行动轨迹。你的发言必须是第一人称，并且要听起来自然，可以适当隐藏对你不利的信息，但不能凭空捏造。';
-        jsonFormat = '{"action": "speak", "speech": "你的时间线陈述..."}';
-        break;
-      // ▲▲▲ 新增指令结束 ▲▲▲
-      case 'discuss':
-        systemPrompt += '现在是自由讨论环节。请根据你掌握的线索和场上其他人的发言，发表你的看法、提出疑问或指证他人。';
-        jsonFormat = '{"action": "speak", "speech": "你的发言..."}';
-        break;
-      case 'vote':
-        systemPrompt += '现在是最终投票环节。请综合所有信息，投出你认为的凶手。';
-        jsonFormat = '{"action": "vote", "targetId": "你投票的玩家ID"}';
-        break;
-      // ▼▼▼ 在 triggerScriptKillAiAction 函数的 switch 语句内添加这个 case ▼▼▼
-      case 'reveal_clue':
-        systemPrompt += `你刚刚搜到了一个关于你自己的线索：“${context.clue}”。\n公开这条线索可能会让你暴露，但也可能洗清嫌疑；隐藏它可能会让你在后期被动。\n请根据你的人设和任务，决定是公开还是隐藏。`;
-        jsonFormat = '{"action": "reveal" or "hide", "reasoning": "你的决策理由..."}';
-        break;
-      // ▲▲▲ 添加结束 ▲▲▲
-    }
-
-    systemPrompt += `\n# 存活玩家列表:\n${scriptKillGameState.players
-      .map(p => `- ${p.role.name} (id: ${p.id})`)
-      .join('\n')}\n# 输出格式: 你的回复【必须且只能】是一个严格的JSON对象，格式如下:\n${jsonFormat}`;
-
-    try {
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let messagesForApi = [{ role: 'user', content: systemPrompt }];
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        systemPrompt,
-        messagesForApi,
-        isGemini,
-        state.apiConfig.temperature,
-      );
-
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: 'json_object' },
-            }),
-          });
-
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      const content = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).replace(
-        /^```json\s*|```$/g,
-        '',
-      );
-      // ▼▼▼ 用这块新代码替换旧的 return 逻辑 ▼▼▼
-      const aiAction = JSON.parse(content);
-
-      if (aiAction.action === 'speak') return aiAction.speech;
-      if (aiAction.action === 'vote') return aiAction.targetId;
-      if (action === 'reveal_clue') return aiAction; // 【核心修改】返回整个决策对象
-
+      return new RegExp(trimmed, 'g');
+    } catch (err) {
+      console.warn('Invalid regex pattern:', findRegexStr, err);
       return null;
-      // ▲▲▲ 替换结束 ▲▲▲
-    } catch (error) {
-      console.error(`AI (${player.name}) 行动失败:`, error);
-      // 返回一个保底的行动，防止游戏卡死
-      if (action === 'vote') {
-        const potentialTargets = scriptKillGameState.players.filter(p => p.id !== player.id);
-        return potentialTargets[Math.floor(Math.random() * potentialTargets.length)].id;
+    }
+  }
+
+  function getActiveRegexScriptsForCard(cardObj) {
+    const card = cardObj || getActiveCard();
+    const cardScripts = (card && Array.isArray(card.regexScripts)) ? card.regexScripts : [];
+    const globalScripts = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
+    return [...cardScripts, ...globalScripts].filter(s => s && !s.disabled && s.findRegex);
+  }
+
+  function applyTavernRegexPipeline(rawText, options = {}) {
+    if (!rawText) return '';
+    const {
+      isUser = false,
+      isPrompt = false,
+      depth = 0,
+      card = getActiveCard()
+    } = options;
+
+    const targetPlacement = isUser ? 1 : 2;
+    const scripts = getActiveRegexScriptsForCard(card);
+    let output = replaceTavernMacros(String(rawText), card);
+
+    for (const script of scripts) {
+      if (isPrompt && !script.promptOnly && script.markdownOnly) continue;
+      if (!isPrompt && script.promptOnly && !script.markdownOnly) continue;
+
+      if (Array.isArray(script.placement) && script.placement.length > 0) {
+        if (!script.placement.includes(targetPlacement)) continue;
       }
-      return '我...我需要再想想。';
-    }
-  }
+      if (script.minDepth !== null && script.minDepth !== undefined && script.minDepth !== '' && depth < Number(script.minDepth)) {
+        continue;
+      }
+      if (script.maxDepth !== null && script.maxDepth !== undefined && script.maxDepth !== '' && depth > Number(script.maxDepth)) {
+        continue;
+      }
 
-  // ▼▼▼ 用这块新代码替换旧的 getBuiltInScript 函数 ▼▼▼
+      let patternStr = script.findRegex;
+      if (Number(script.substituteRegex) === 1) {
+        patternStr = replaceTavernMacros(patternStr, card);
+      }
+      const rx = parseFindRegexString(patternStr);
+      if (!rx) continue;
 
-  /**
-   * 【剧本杀】根据ID获取一个内置剧本
-   * @param {string} scriptId - 要获取的剧本的ID, 例如 'built_in_1'
-   * @returns {object|null} - 找到的剧本对象，或 null
-   */
-  function getBuiltInScript(scriptId) {
-    // 【核心修改】我们现在从 BUILT_IN_SCRIPTS 数组中查找匹配的剧本
-    return BUILT_IN_SCRIPTS.find(script => script.id === scriptId) || null;
-  }
-
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  // --- 【全新】剧本杀自定义剧本管理核心功能 ---
-
-  let editingScriptId = null; // 用于追踪正在编辑的剧本ID
-
-  /**
-   * 【总入口】打开自定义剧本管理模态框
-   */
-  async function openScriptManager() {
-    await renderScriptManagerList();
-    document.getElementById('script-kill-manager-modal').classList.add('visible');
-  }
-
-  /**
-   * 渲染自定义剧本列表
-   */
-  async function renderScriptManagerList() {
-    const listEl = document.getElementById('custom-scripts-list');
-    listEl.innerHTML = '';
-    const scripts = await db.scriptKillScripts.toArray();
-
-    if (scripts.length === 0) {
-      listEl.innerHTML =
-        '<p style="text-align:center; color: var(--text-secondary); padding: 50px 0;">还没有自定义剧本，点击右上角“添加”创建一个吧！</p>';
-      return;
+      const repStr = replaceTavernMacros(String(script.replaceString ?? ''), card);
+      try {
+        output = output.replace(rx, (...matchArgs) => {
+          let replaced = repStr.replace(/\{\{\$match\}\}|\$&/g, matchArgs[0] || '');
+          for (let g = 1; g < matchArgs.length - 2; g++) {
+            const groupVal = matchArgs[g] !== undefined ? String(matchArgs[g]) : '';
+            if (Array.isArray(script.trimStrings) && script.trimStrings.length > 0) {
+              let trimmedVal = groupVal;
+              script.trimStrings.forEach(t => {
+                if (t) trimmedVal = trimmedVal.split(t).join('');
+              });
+              replaced = replaced.split('$' + g).join(trimmedVal);
+            } else {
+              replaced = replaced.split('$' + g).join(groupVal);
+            }
+          }
+          return replaced;
+        });
+      } catch (err) {
+        console.warn('Regex execution warning:', script.scriptName, err);
+      }
     }
 
-    scripts.forEach(script => {
-      const item = document.createElement('div');
-      item.className = 'list-item';
-      item.innerHTML = `
-        <div class="item-title">${script.name}</div>
-        <div class="item-content">${(script.storyBackground || '暂无简介').substring(0, 50)}...</div>
+    return output;
+  }
+
+  function renderTavernMessageHtml(rawText, options = {}) {
+    if (!rawText) return '';
+    const afterRegex = applyTavernRegexPipeline(rawText, { ...options, isPrompt: false });
+
+    // Extract <style> and HTML blocks so we don't corrupt their internal quotes or newlines
+    const protectedBlocks = [];
+    let working = afterRegex.replace(/<style[\s\S]*?<\/style>/gi, match => {
+      const token = '___TAVERN_STYLE_BLOCK_' + protectedBlocks.length + '___';
+      protectedBlocks.push(match);
+      return token;
+    });
+
+    // Basic markdown bold/italic outside HTML tags
+    working = working
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+
+    // Wrap dialogue quotes in <q> if enabled and not already inside an HTML attribute or <q> tag
+    if (tavernState.formatting && tavernState.formatting.wrapQuotesInQ) {
+      const tagTokens = [];
+      working = working.replace(/<[^>]+>/g, tag => {
+        const t = '___TAVERN_HTML_TAG_' + tagTokens.length + '___';
+        tagTokens.push(tag);
+        return t;
+      });
+
+      working = working
+        .replace(/“([^”\n]+)”/g, '<q>“$1”</q>')
+        .replace(/「([^」\n]+)」/g, '<q>「$1」</q>')
+        .replace(/『([^』\n]+)』/g, '<q>『$1』</q>');
+
+      working = working.replace(/___TAVERN_HTML_TAG_(\d+)___/g, (_, idx) => tagTokens[Number(idx)] || '');
+    }
+
+    // Convert plain text paragraphs while keeping block HTML intact
+    const lines = working.split('\n');
+    const htmlLines = lines.map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '<div class="tavern-para-spacer"></div>';
+      if (/^<(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|hr|h[1-6]|p|style)/i.test(trimmed)) {
+        return line;
+      }
+      if (/^___TAVERN_STYLE_BLOCK_\d+___$/.test(trimmed)) {
+        return trimmed;
+      }
+      return '<p>' + line + '</p>';
+    });
+
+    let finalHtml = htmlLines.join('\n');
+    finalHtml = finalHtml.replace(/___TAVERN_STYLE_BLOCK_(\d+)___/g, (_, idx) => protectedBlocks[Number(idx)] || '');
+    return finalHtml;
+  }
+
+  function scopeTavernThemeCss(rawCss) {
+    if (!rawCss || typeof rawCss !== 'string') return '';
+    return rawCss
+      .replace(/:root\b/g, '#tavern-stage-root')
+      .replace(/\bhtml\s*,\s*body\b/g, '#tavern-stage-root')
+      .replace(/\bbody\b/g, '#tavern-stage-root')
+      .replace(/100dvh/g, '100%')
+      .replace(/100vh/g, '100%');
+  }
+
+  function applyActiveTavernTheme() {
+    const stageRoot = document.getElementById('tavern-stage-root');
+    if (!stageRoot) return;
+
+    let theme = tavernState.themes.find(t => t.id === tavernState.activeThemeId);
+    if (!theme) theme = tavernState.themes[0] || DEFAULT_GOUSU_THEME;
+
+    const varPairs = [
+      ['--SmartThemeBodyColor', theme.main_text_color || 'rgba(55, 55, 55, 1)'],
+      ['--SmartThemeEmColor', theme.italics_text_color || 'rgba(153, 153, 153, 1)'],
+      ['--SmartThemeUnderlineColor', theme.underline_text_color || 'rgba(188, 231, 207, 1)'],
+      ['--SmartThemeQuoteColor', theme.quote_text_color || 'rgba(255, 168, 187, 1)'],
+      ['--SmartThemeBlurTintColor', theme.blur_tint_color || 'rgba(237, 237, 237, 1)'],
+      ['--SmartThemeChatTintColor', theme.chat_tint_color || 'rgba(246, 246, 246, 1)'],
+      ['--SmartThemeUserMesBlurTintColor', theme.user_mes_blur_tint_color || 'rgba(245, 245, 245, 0.92)'],
+      ['--SmartThemeBotMesBlurTintColor', theme.bot_mes_blur_tint_color || 'rgba(246, 246, 246, 1)'],
+      ['--SmartThemeShadowColor', theme.shadow_color || 'rgba(219, 219, 219, 0.43)'],
+      ['--SmartThemeBorderColor', theme.border_color || 'rgba(255, 255, 255, 1)'],
+      ['--blurStrength', (theme.blur_strength ?? 10) + 'px'],
+      ['--shadowWidth', (theme.shadow_width ?? 2) + 'px'],
+      ['--fontScale', String(tavernState.uiSettings?.fontScale ?? theme.font_scale ?? 1)]
+    ];
+
+    varPairs.forEach(([k, v]) => stageRoot.style.setProperty(k, v));
+
+    let styleEl = document.getElementById('tavern-custom-theme-style');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'tavern-custom-theme-style';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = scopeTavernThemeCss(theme.custom_css || '');
+  }
+
+  // ============================================================================
+  // 8. World Book Trigger Engine & Full SillyTavern Prompt Assembler
+  // ============================================================================
+  function matchSingleKeyword(haystack, keyword, caseSensitive = false, wholeWords = false) {
+    if (!keyword || !haystack) return false;
+    const kw = String(keyword).trim();
+    if (!kw) return false;
+
+    const regexMatch = kw.match(/^\/([\s\S]+)\/([gimsuy]*)$/);
+    if (regexMatch) {
+      try {
+        const rx = new RegExp(regexMatch[1], regexMatch[2]);
+        return rx.test(haystack);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    const targetHaystack = caseSensitive ? haystack : haystack.toLowerCase();
+    const targetKw = caseSensitive ? kw : kw.toLowerCase();
+
+    if (wholeWords && /^[\w-]+$/.test(targetKw)) {
+      const escaped = targetKw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp('\\b' + escaped + '\\b', caseSensitive ? '' : 'i');
+      return rx.test(haystack);
+    }
+
+    return targetHaystack.includes(targetKw);
+  }
+
+  function evaluateWorldEntryMatch(entry, scanText, isRecursionPass = false) {
+    if (!entry || entry.disable) return false;
+    if (entry.constant) return true;
+    if (isRecursionPass && entry.excludeRecursion) return false;
+    if (!isRecursionPass && entry.delayUntilRecursion) return false;
+
+    if (entry.useProbability && Number(entry.probability ?? 100) < 100) {
+      if (Math.random() * 100 > Number(entry.probability)) return false;
+    }
+
+    const primaryKeys = Array.isArray(entry.keys) ? entry.keys.filter(Boolean) : [];
+    if (primaryKeys.length === 0) return false;
+
+    const primaryHit = primaryKeys.some(k => matchSingleKeyword(scanText, k, entry.caseSensitive, entry.matchWholeWords));
+    if (!primaryHit) return false;
+
+    const secondaryKeys = Array.isArray(entry.secondaryKeys) ? entry.secondaryKeys.filter(Boolean) : [];
+    if (!entry.selective || secondaryKeys.length === 0) return true;
+
+    const logic = Number(entry.selectiveLogic || 0);
+    const hits = secondaryKeys.map(k => matchSingleKeyword(scanText, k, entry.caseSensitive, entry.matchWholeWords));
+
+    if (logic === 0) return hits.some(Boolean); // AND ANY
+    if (logic === 1) return !hits.every(Boolean); // NOT ALL
+    if (logic === 2) return !hits.some(Boolean); // NOT ANY
+    if (logic === 3) return hits.every(Boolean); // AND ALL
+    return true;
+  }
+
+  function collectTriggeredWorldBookEntries(card, chatMessages) {
+    const activeBooks = [];
+    const seenIds = new Set();
+
+    if (card && card.worldBookId) {
+      const charBook = tavernState.worldBooks.find(b => b.id === card.worldBookId);
+      if (charBook && charBook.enabled !== false) {
+        activeBooks.push(charBook);
+        seenIds.add(charBook.id);
+      }
+    }
+
+    (tavernState.worldBooks || []).forEach(b => {
+      if (b && b.enabled && !seenIds.has(b.id)) {
+        activeBooks.push(b);
+        seenIds.add(b.id);
+      }
+    });
+
+    if (activeBooks.length === 0) {
+      return { beforeChar: [], afterChar: [], atDepth: [], beforeExample: [], afterExample: [] };
+    }
+
+    const defaultDepth = Math.max(1, Number(activeBooks[0].scanDepth || 4));
+    const maxBudget = Math.max(256, Number(activeBooks[0].tokenBudget || 4096));
+    const allowRecursion = Boolean(activeBooks[0].recursiveScanning ?? true);
+
+    const recentSlice = (chatMessages || []).slice(-defaultDepth);
+    const baseScanText = recentSlice.map(m => m.mes || '').join('\n');
+
+    const candidateEntries = [];
+    activeBooks.forEach(book => {
+      (book.entries || []).forEach(entry => {
+        if (!entry.disable && (entry.content || '').trim()) {
+          candidateEntries.push(entry);
+        }
+      });
+    });
+
+    candidateEntries.sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+
+    const triggeredSet = new Set();
+    const triggeredEntries = [];
+    let currentScanPool = baseScanText;
+
+    // Initial pass + up to 2 recursion passes
+    const maxPasses = allowRecursion ? 3 : 1;
+    for (let pass = 0; pass < maxPasses; pass++) {
+      let addedInPass = false;
+      for (const entry of candidateEntries) {
+        if (triggeredSet.has(entry)) continue;
+        let textToScan = currentScanPool;
+        if (pass === 0 && entry.scanDepth !== null && entry.scanDepth !== undefined && entry.scanDepth !== '') {
+          const customDepth = Math.max(1, Number(entry.scanDepth));
+          textToScan = (chatMessages || []).slice(-customDepth).map(m => m.mes || '').join('\n');
+        }
+        if (evaluateWorldEntryMatch(entry, textToScan, pass > 0)) {
+          triggeredSet.add(entry);
+          triggeredEntries.push(entry);
+          if (!entry.preventRecursion) {
+            currentScanPool += '\n' + entry.content;
+            addedInPass = true;
+          }
+        }
+      }
+      if (!addedInPass) break;
+    }
+
+    // Apply token budget
+    let usedTokens = 0;
+    const budgetedEntries = [];
+    for (const entry of triggeredEntries) {
+      const formatted = replaceTavernMacros(entry.content, card);
+      const tCount = estimateTokens(formatted);
+      if (usedTokens + tCount > maxBudget && !entry.constant) continue;
+      usedTokens += tCount;
+      budgetedEntries.push({ ...entry, resolvedContent: formatted });
+    }
+
+    const buckets = {
+      beforeChar: [],
+      afterChar: [],
+      beforeExample: [],
+      afterExample: [],
+      atDepth: []
+    };
+
+    budgetedEntries.forEach(entry => {
+      const pos = Number(entry.position || 0);
+      if (pos === 0) buckets.beforeChar.push(entry.resolvedContent);
+      else if (pos === 1) buckets.afterChar.push(entry.resolvedContent);
+      else if (pos === 2) buckets.beforeExample.push(entry.resolvedContent);
+      else if (pos === 3) buckets.afterExample.push(entry.resolvedContent);
+      else {
+        buckets.atDepth.push({
+          role: entry.role === 1 ? 'user' : (entry.role === 2 ? 'assistant' : 'system'),
+          depth: Math.max(0, Number(entry.depth ?? 4)),
+          order: Number(entry.order ?? 100),
+          content: entry.resolvedContent
+        });
+      }
+    });
+
+    return buckets;
+  }
+
+  function buildTavernApiMessages(options = {}) {
+    const {
+      isImpersonate = false,
+      isContinue = false,
+      isSwipeRegen = false
+    } = options;
+
+    const card = getActiveCard();
+    const preset = getActivePreset();
+    const persona = getActivePersona();
+    const sess = getActiveChatSession();
+    const rawChat = sess ? (sess.messages || []) : [];
+
+    // Sync built-in CSPRNG D100 pool into extensionPrompts
+    syncBuiltInD100Pool(isSwipeRegen);
+
+    // Collect World Book entries
+    const wiBuckets = collectTriggeredWorldBookEntries(card, rawChat);
+
+    const depthInjections = [...wiBuckets.atDepth];
+
+    // Persona description injection if configured as @D
+    if (persona && persona.description && persona.description.trim()) {
+      const pText = replaceTavernMacros(persona.description.trim(), card);
+      if (Number(persona.position) === 4) {
+        depthInjections.push({
+          role: ['system', 'user', 'assistant'][Number(persona.role) || 0] || 'system',
+          depth: Math.max(0, Number(persona.depth ?? 2)),
+          order: 90,
+          content: pText
+        });
+      }
+    }
+
+    // Author's Note injection
+    const an = tavernState.authorNote || {};
+    if (an.text && an.text.trim()) {
+      depthInjections.push({
+        role: an.role || 'system',
+        depth: Math.max(0, Number(an.depth ?? 4)),
+        order: 110,
+        content: replaceTavernMacros(an.text.trim(), card)
+      });
+    }
+
+    // Character's Note / Depth Prompt
+    const charNoteText = (an.charNoteText && an.charNoteText.trim()) || (card && card.depth_prompt_prompt && card.depth_prompt_prompt.trim()) || '';
+    if (charNoteText) {
+      depthInjections.push({
+        role: an.charNoteRole || card.depth_prompt_role || 'system',
+        depth: Math.max(0, Number(an.charNoteDepth ?? card.depth_prompt_depth ?? 4)),
+        order: 115,
+        content: replaceTavernMacros(charNoteText, card)
+      });
+    }
+
+    // Memory Summary injection
+    const mem = tavernState.memory || {};
+    if (mem.enabled && mem.summaryText && mem.summaryText.trim()) {
+      depthInjections.push({
+        role: mem.injectRole || 'system',
+        depth: Math.max(0, Number(mem.injectDepth ?? 2)),
+        order: 95,
+        content: '【前情剧情记忆摘要】\n' + replaceTavernMacros(mem.summaryText.trim(), card)
+      });
+    }
+
+    // Extension prompts (including D100 pool)
+    Object.values(tavernExtensionPrompts).forEach(extP => {
+      if (!extP || !extP.value) return;
+      if (extP.position === TAVERN_EXT_PROMPT_TYPES.IN_CHAT) {
+        depthInjections.push({
+          role: extP.role === 1 ? 'user' : (extP.role === 2 ? 'assistant' : 'system'),
+          depth: Math.max(0, Number(extP.depth ?? 0)),
+          order: 999,
+          content: replaceTavernMacros(extP.value, card)
+        });
+      }
+    });
+
+    // Relative custom prompts from preset
+    const enabledPresetPrompts = (preset.prompts || []).filter(p => p && p.enabled);
+    enabledPresetPrompts.forEach(p => {
+      if (!p.marker && Number(p.injection_position) === 1 && p.content && p.content.trim()) {
+        depthInjections.push({
+          role: p.role || 'system',
+          depth: Math.max(0, Number(p.injection_depth ?? 4)),
+          order: Number(p.injection_order ?? 100),
+          content: applyTavernRegexPipeline(p.content, { isPrompt: true, depth: Number(p.injection_depth ?? 4), card })
+        });
+      }
+    });
+
+    // Build chat history slice with depth injections
+    const maxFloors = Math.max(4, Number(tavernState.memory?.contextFloors || 40));
+    const slicedChat = rawChat.slice(-maxFloors);
+    const chatHistoryMessages = slicedChat.map((m, idx) => {
+      const depthFromEnd = slicedChat.length - 1 - idx;
+      const cleanedContent = applyTavernRegexPipeline(m.mes || '', {
+        isUser: Boolean(m.is_user),
+        isPrompt: true,
+        depth: depthFromEnd,
+        card
+      });
+      return {
+        role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
+        content: cleanedContent
+      };
+    });
+
+    // Sort depth injections by depth descending so splice indices stay accurate
+    depthInjections.sort((a, b) => {
+      if (b.depth !== a.depth) return b.depth - a.depth;
+      return (a.order ?? 100) - (b.order ?? 100);
+    });
+
+    depthInjections.forEach(inj => {
+      const targetIdx = Math.max(0, chatHistoryMessages.length - inj.depth);
+      chatHistoryMessages.splice(targetIdx, 0, {
+        role: inj.role || 'system',
+        content: inj.content
+      });
+    });
+
+    // Assemble top-level prompt order
+    const finalMessages = [];
+
+    for (const item of enabledPresetPrompts) {
+      const id = item.identifier;
+      if (id === 'worldInfoBefore') {
+        if (wiBuckets.beforeChar.length > 0) {
+          finalMessages.push({ role: 'system', content: wiBuckets.beforeChar.join('\n\n') });
+        }
+      } else if (id === 'worldInfoAfter') {
+        if (wiBuckets.afterChar.length > 0) {
+          finalMessages.push({ role: 'system', content: wiBuckets.afterChar.join('\n\n') });
+        }
+      } else if (id === 'personaDescription') {
+        if (persona && persona.description && Number(persona.position) !== 4) {
+          finalMessages.push({ role: 'system', content: replaceTavernMacros(persona.description, card) });
+        }
+      } else if (id === 'charDescription') {
+        if (card && card.description && card.description.trim()) {
+          finalMessages.push({
+            role: 'system',
+            content: applyTavernRegexPipeline(card.description, { isPrompt: true, card })
+          });
+        }
+      } else if (id === 'charPersonality') {
+        if (card && card.personality && card.personality.trim()) {
+          const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '{{personality}}';
+          finalMessages.push({
+            role: 'system',
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, card })
+          });
+        }
+      } else if (id === 'scenario') {
+        if (card && card.scenario && card.scenario.trim()) {
+          const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '{{scenario}}';
+          finalMessages.push({
+            role: 'system',
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, card })
+          });
+        }
+      } else if (id === 'dialogueExamples') {
+        const parts = [];
+        if (wiBuckets.beforeExample.length > 0) parts.push(wiBuckets.beforeExample.join('\n'));
+        if (card && card.mes_example && card.mes_example.trim()) {
+          parts.push(applyTavernRegexPipeline(card.mes_example, { isPrompt: true, card }));
+        }
+        if (wiBuckets.afterExample.length > 0) parts.push(wiBuckets.afterExample.join('\n'));
+        if (parts.length > 0) {
+          finalMessages.push({ role: 'system', content: parts.join('\n\n') });
+        }
+      } else if (id === 'chatHistory') {
+        if (tavernState.formatting.newChatPrompt && chatHistoryMessages.length > 0) {
+          finalMessages.push({
+            role: 'system',
+            content: replaceTavernMacros(tavernState.formatting.newChatPrompt, card)
+          });
+        }
+        finalMessages.push(...chatHistoryMessages);
+      } else if (id === 'main') {
+        let content = item.content || tavernState.formatting.systemPrompt || '';
+        if (card && card.system_prompt && card.system_prompt.trim() && !item.forbid_overrides) {
+          content = card.system_prompt;
+        }
+        if (content.trim()) {
+          finalMessages.push({
+            role: item.role || 'system',
+            content: applyTavernRegexPipeline(content, { isPrompt: true, card })
+          });
+        }
+      } else if (id === 'jailbreak') {
+        let content = item.content || tavernState.formatting.postHistoryPrompt || '';
+        if (card && card.post_history_instructions && card.post_history_instructions.trim() && !item.forbid_overrides) {
+          content = card.post_history_instructions;
+        }
+        if (content.trim()) {
+          finalMessages.push({
+            role: item.role || 'system',
+            content: applyTavernRegexPipeline(content, { isPrompt: true, card })
+          });
+        }
+      } else if (!item.marker && Number(item.injection_position) !== 1) {
+        if (item.content && item.content.trim()) {
+          finalMessages.push({
+            role: item.role || 'system',
+            content: applyTavernRegexPipeline(item.content, { isPrompt: true, card })
+          });
+        }
+      }
+    }
+
+    if (isImpersonate) {
+      finalMessages.push({
+        role: 'system',
+        content: replaceTavernMacros(tavernState.formatting.impersonationPrompt || preset.impersonation_prompt, card)
+      });
+    } else if (isContinue) {
+      finalMessages.push({
+        role: 'system',
+        content: replaceTavernMacros(tavernState.formatting.continueNudgePrompt || preset.continue_nudge_prompt, card)
+      });
+    }
+
+    const filtered = finalMessages.filter(m => m && m.content && String(m.content).trim().length > 0);
+
+    if (preset.squash_system_messages && filtered.length > 1) {
+      const squashed = [];
+      for (const msg of filtered) {
+        const prev = squashed[squashed.length - 1];
+        if (prev && prev.role === 'system' && msg.role === 'system') {
+          prev.content += '\n\n' + msg.content;
+        } else {
+          squashed.push({ ...msg });
+        }
+      }
+      return squashed;
+    }
+
+    return filtered;
+  }
+
+  function resolveTavernApiCredentials() {
+    const cfg = tavernState.apiConfig || {};
+    if (cfg.useExternalPhoneApi && typeof state !== 'undefined' && state.apiConfig) {
+      const extUrl = (state.apiConfig.url || '').trim().replace(/\/+$/, '');
+      const extKey = (state.apiConfig.key || '').trim();
+      const extModel = (state.apiConfig.model || '').trim();
+      if (extUrl && extKey) {
+        return { baseUrl: extUrl, apiKey: extKey, model: extModel || 'gpt-4o-mini' };
+      }
+    }
+    const domUrl = document.getElementById('api-url')?.value?.trim()?.replace(/\/+$/, '') || '';
+    const domKey = document.getElementById('api-key')?.value?.trim() || '';
+    const domModel = document.getElementById('api-model')?.value?.trim() || '';
+    if (cfg.useExternalPhoneApi && domUrl && domKey) {
+      return { baseUrl: domUrl, apiKey: domKey, model: domModel || 'gpt-4o-mini' };
+    }
+    return {
+      baseUrl: (cfg.customUrl || domUrl || '').replace(/\/+$/, ''),
+      apiKey: cfg.customKey || domKey || '',
+      model: cfg.customModel || domModel || 'gpt-4o-mini'
+    };
+  }
+
+  function extractReasoningAndCleanReply(rawReply) {
+    if (!rawReply) return { reasoning: '', cleanReply: '' };
+    let text = String(rawReply);
+    const reasoningChunks = [];
+
+    const startTag = tavernState.formatting?.reasoningStartTag || '<think>';
+    const endTag = tavernState.formatting?.reasoningEndTag || '</think>';
+    const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const customRx = new RegExp(escStart + '([\\s\\S]*?)' + escEnd, 'gi');
+    text = text.replace(customRx, (_, inner) => {
+      if (inner && inner.trim()) reasoningChunks.push(inner.trim());
+      return '';
+    });
+
+    text = text.replace(/<(?:think|thinking|thought)>([\s\S]*?)<\/(?:think|thinking|thought)>/gi, (_, inner) => {
+      if (inner && inner.trim()) reasoningChunks.push(inner.trim());
+      return '';
+    });
+
+    let cleanReply = text.trim();
+    if (tavernState.formatting?.collapseNewlines) {
+      cleanReply = cleanReply.replace(/\n{3,}/g, '\n\n');
+    }
+
+    return {
+      reasoning: reasoningChunks.join('\n\n'),
+      cleanReply: cleanReply || text.trim()
+    };
+  }
+
+  async function callTavernAiCompletion(messages) {
+    const creds = resolveTavernApiCredentials();
+    if (!creds.baseUrl || !creds.apiKey) {
+      throw new Error('未检测到有效的API地址与密钥，请点击顶部插头图标配置或同步手机外部API设置');
+    }
+
+    const preset = getActivePreset();
+    const endpoint = creds.baseUrl.endsWith('/chat/completions')
+      ? creds.baseUrl
+      : (creds.baseUrl.endsWith('/v1') ? creds.baseUrl + '/chat/completions' : creds.baseUrl + '/v1/chat/completions');
+
+    const payload = {
+      model: creds.model,
+      messages,
+      temperature: Number(preset.temperature ?? 1.0),
+      top_p: Number(preset.top_p ?? 1.0),
+      max_tokens: Number(preset.openai_max_tokens ?? 4096),
+      frequency_penalty: Number(preset.frequency_penalty ?? 0),
+      presence_penalty: Number(preset.presence_penalty ?? 0),
+      stream: false
+    };
+
+    if (Array.isArray(tavernState.formatting?.customStoppingStrings) && tavernState.formatting.customStoppingStrings.length > 0) {
+      payload.stop = tavernState.formatting.customStoppingStrings;
+    }
+
+    const t0 = performance.now();
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + creds.apiKey
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error('API请求失败 ' + res.status + ': ' + (errText.slice(0, 160) || res.statusText));
+    }
+
+    const data = await res.json();
+    const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+    const choice = data.choices && data.choices[0];
+    const msgObj = choice ? (choice.message || choice.delta || {}) : {};
+    const rawContent = msgObj.content || '';
+    const nativeReasoning = msgObj.reasoning_content || msgObj.reasoning || '';
+
+    const parsed = extractReasoningAndCleanReply(rawContent);
+    const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
+
+    return {
+      content: parsed.cleanReply,
+      reasoning: combinedReasoning,
+      genTime: elapsedSec
+    };
+  }
+
+  async function fetchTavernModelList() {
+    const creds = resolveTavernApiCredentials();
+    if (!creds.baseUrl || !creds.apiKey) {
+      throw new Error('请先填写API地址与密钥');
+    }
+    const modelsUrl = creds.baseUrl.endsWith('/models')
+      ? creds.baseUrl
+      : (creds.baseUrl.endsWith('/v1') ? creds.baseUrl + '/models' : creds.baseUrl + '/v1/models');
+
+    const res = await fetch(modelsUrl, {
+      headers: { 'Authorization': 'Bearer ' + creds.apiKey }
+    });
+    if (!res.ok) throw new Error('拉取模型失败 HTTP ' + res.status);
+    const data = await res.json();
+    const list = Array.isArray(data.data) ? data.data.map(m => m.id).filter(Boolean) : [];
+    return list;
+  }
+
+  async function generateMemorySummaryFromChat() {
+    const sess = getActiveChatSession();
+    if (!sess || !Array.isArray(sess.messages) || sess.messages.length === 0) {
+      throw new Error('当前没有可总结的对话记录');
+    }
+    const card = getActiveCard();
+    const recentText = sess.messages
+      .slice(-30)
+      .map(m => (m.is_user ? getUserDisplayName() : card.name) + ': ' + (m.mes || '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ''))
+      .join('\n');
+
+    const prompt = (tavernState.memory?.summaryPrompt || '请用精炼中文总结以上剧情的关键事件与人物关系变化。') + '\n\n【对话记录】\n' + recentText;
+    const result = await callTavernAiCompletion([
+      { role: 'system', content: '你是一个专业的RPG剧情归档助手。' },
+      { role: 'user', content: prompt }
+    ]);
+    tavernState.memory.summaryText = result.content;
+    await saveTavernStore();
+    return result.content;
+  }
+
+  // ============================================================================
+  // 9. Base SillyTavern Stage CSS & UI State
+  // ============================================================================
+  const uiRuntime = {
+    openDrawerKey: null,
+    editingPromptId: null,
+    activeWorldBookEditId: null,
+    editingWorldEntryUid: null,
+    worldEntrySearch: '',
+    editingRegexId: null,
+    regexTestInput: '',
+    openExtensionAcc: {
+      regex: true,
+      an: false,
+      memory: false,
+      plugins: false
+    },
+    editingFloorMesId: null,
+    openExtraMenuMesId: null,
+    showOptionsPopup: false,
+    showExtensionsPopup: false,
+    isGenerating: false,
+    toastTimer: null
+  };
+
+  function showTavernToast(msg) {
+    let el = document.getElementById('tavern-toast-banner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'tavern-toast-banner';
+      const root = document.getElementById('tavern-stage-root') || document.body;
+      root.appendChild(el);
+    }
+    el.textContent = String(msg || '').replace(/[()（）]/g, ' ');
+    el.classList.add('visible');
+    if (uiRuntime.toastTimer) clearTimeout(uiRuntime.toastTimer);
+    uiRuntime.toastTimer = setTimeout(() => {
+      el.classList.remove('visible');
+    }, 2400);
+  }
+
+  function injectTavernShellCss() {
+    if (document.getElementById('tavern-base-shell-css')) return;
+    const style = document.createElement('style');
+    style.id = 'tavern-base-shell-css';
+    style.textContent = `
+      #game-hall-screen {
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        background: #f5f5f7;
+      }
+      #tavern-app-shell,
+      #tavern-stage-root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: var(--SmartThemeChatTintColor, #f6f6f6);
+        color: var(--SmartThemeBodyColor, #373737);
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        font-size: calc(14px * var(--fontScale, 1));
+        user-select: text;
+      }
+      #tavern-bg-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background-position: center;
+        background-repeat: no-repeat;
+        transition: opacity 0.25s ease;
+      }
+      /* Native SillyTavern Top Bar */
+      #top-bar {
+        position: relative;
+        z-index: 3000;
+        width: 100%;
+        flex-shrink: 0;
+        box-sizing: border-box;
+      }
+      #top-settings-holder {
+        position: relative;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-around !important;
+        width: 100%;
+        min-height: 46px;
+        padding: 0 6px;
+        box-sizing: border-box;
+        z-index: 3001;
+      }
+      #top-settings-holder .drawer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1 1 0;
+        height: 42px;
+      }
+      #top-settings-holder .drawer-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+      }
+      #top-settings-holder .drawer-icon {
+        display: inline-block;
+        width: 30px;
+        height: 30px;
+        cursor: pointer;
+        transition: transform 0.16s ease, opacity 0.16s ease;
+      }
+      #top-settings-holder .drawer.active-drawer .drawer-icon {
+        transform: scale(1.12);
+      }
+
+      /* Full-screen Dropdown Drawer directly below #top-bar */
+      #tavern-drawer-host {
+        position: absolute;
+        top: 52px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2800;
+        pointer-events: none;
+        display: none;
+      }
+      #tavern-drawer-host.active {
+        display: block;
+        pointer-events: auto;
+      }
+      #tavern-drawer-host .drawer-content.openDrawer {
+        position: absolute !important;
+        inset: 4px 6px 8px 6px !important;
+        width: auto !important;
+        height: auto !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 14px 12px 32px 12px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        background: rgba(250, 250, 252, 0.97) !important;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-radius: 20px !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.9) !important;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.14) !important;
+        box-sizing: border-box !important;
+        z-index: 2850 !important;
+      }
+
+      /* Chat container & exact SillyTavern .mes layout */
+      #chat {
+        position: relative;
+        z-index: 10;
+        flex: 1 1 auto;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 28px 10px 18px 10px !important;
+        box-sizing: border-box;
+        scroll-behavior: auto;
+      }
+      .flex-container {
+        display: flex;
+        align-items: center;
+      }
+      .justifySpaceBetween {
+        justify-content: space-between;
+      }
+      .mes {
+        position: relative;
+        box-sizing: border-box;
+        width: 100%;
+        margin-bottom: 18px;
+      }
+      .mes .mesAvatarWrapper {
+        position: relative;
+        z-index: 5;
+        overflow: visible !important;
+      }
+      .mes .avatar {
+        position: relative !important;
+        width: 68px;
+        height: 68px;
+        border-radius: 50% !important;
+        overflow: visible !important;
+        flex-shrink: 0;
+      }
+      .mes .avatar img {
+        width: 100% !important;
+        height: 100% !important;
+        border-radius: 50% !important;
+        object-fit: cover !important;
+        display: block !important;
+        background: #f0ece9;
+      }
+      .mes_block {
+        position: relative;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .ch_name {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .mes_buttons,
+      .mes_edit_buttons {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+        margin-left: auto !important;
+        flex-shrink: 0 !important;
+      }
+      .mes_button,
+      .extraMesButtonsHint {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        flex-shrink: 0 !important;
+      }
+
+      /* Prevent double quotation marks inside <q> */
+      #tavern-stage-root q::before,
+      #tavern-stage-root q::after {
+        content: none !important;
+      }
+      #tavern-stage-root q {
+        quotes: none !important;
+        color: var(--SmartThemeQuoteColor, #ffa8bb);
+      }
+
+      .mes_text {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        line-height: 1.72;
+      }
+      .mes_text p {
+        margin: 0 0 0.55em 0;
+      }
+      .mes_text p:last-child {
+        margin-bottom: 0;
+      }
+      .tavern-para-spacer {
+        height: 0.45em;
+      }
+
+      /* Reasoning / CoT Folded Block */
+      .mes_reasoning_details {
+        margin: 6px 0 10px 0;
+        border-radius: 12px;
+        background: rgba(242, 240, 245, 0.85);
+        border: 1px dashed rgba(160, 155, 170, 0.45);
+        padding: 6px 10px;
+        font-size: 12px;
+        color: #666;
+      }
+      .mes_reasoning_summary {
+        cursor: pointer;
+        font-weight: 600;
+        user-select: none;
+        outline: none;
+      }
+      .mes_reasoning_content {
+        margin-top: 6px;
+        white-space: pre-wrap;
+        line-height: 1.55;
+        color: #555;
+      }
+
+      /* Swipe Footer Navigation */
+      .tavern-swipe-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8px;
+        padding: 4px 10px;
+        min-height: 28px;
+        box-sizing: border-box;
+      }
+      .swipe_left,
+      .swipe_right {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        cursor: pointer;
+        user-select: none;
+        flex-shrink: 0;
+      }
+      .swipes-counter {
+        font-size: 11px;
+        color: #777;
+        font-weight: 600;
+        margin: 0 6px;
+      }
+
+      /* Extra Floor Actions Popover */
+      .tavern-floor-popover {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 6px 0 8px auto;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(210, 210, 218, 0.85);
+        border-radius: 14px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+        justify-content: flex-end;
+      }
+
+      /* Bottom Send Form Area */
+      #form_sheld {
+        position: relative;
+        z-index: 1200;
+        width: 100%;
+        padding: 4px 8px 8px 8px;
+        box-sizing: border-box;
+        flex-shrink: 0;
+      }
+      #qr--bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 2px 4px 6px 4px;
+        scrollbar-width: none;
+      }
+      #qr--bar::-webkit-scrollbar {
+        display: none;
+      }
+      .qr--button {
+        flex-shrink: 0;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid rgba(205, 205, 214, 0.85);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #444;
+        cursor: pointer;
+        transition: transform 0.12s ease;
+      }
+      .qr--button:active {
+        transform: scale(0.96);
+      }
+      #send_form {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        min-height: 46px;
+        padding: 4px 8px;
+        box-sizing: border-box;
+      }
+      #leftSendForm,
+      #rightSendForm {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      #options_button,
+      #extensionsMenuButton,
+      #send_but {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      #send_textarea {
+        flex: 1 1 auto;
+        width: 100%;
+        min-height: 34px;
+        max-height: 110px;
+        padding: 6px 10px;
+        border-radius: 18px;
+        border: 1px solid rgba(210, 210, 216, 0.7);
+        background: rgba(255, 255, 255, 0.9);
+        color: #333;
+        font-size: 13.5px;
+        line-height: 1.45;
+        resize: none;
+        outline: none;
+        box-sizing: border-box;
+      }
+
+      /* Bottom Popups (#options and #extensionsMenu) */
+      .tavern-bottom-popup {
+        position: absolute;
+        bottom: 62px;
+        left: 12px;
+        z-index: 2600;
+        min-width: 176px;
+        padding: 8px;
+        border-radius: 16px;
+        background: rgba(252, 252, 254, 0.97);
+        border: 1.5px solid rgba(255, 255, 255, 0.95);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .tavern-popup-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 11px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #3a3a3c;
+        cursor: pointer;
+        transition: background 0.14s ease;
+      }
+      .tavern-popup-item:hover,
+      .tavern-popup-item:active {
+        background: rgba(235, 235, 242, 0.85);
+      }
+
+      /* Anti-clipping Form Controls & Drawer Internal Components */
+      .tavern-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(215, 215, 222, 0.7);
+      }
+      .tavern-drawer-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #2c2c2e;
+        letter-spacing: 0.3px;
+      }
+      .tavern-section-card {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(224, 224, 230, 0.85);
+        border-radius: 16px;
+        padding: 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+      }
+      .tavern-section-label {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #48484a;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .tavern-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .tavern-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .tavern-grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .tavern-field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 8px;
+      }
+      .tavern-field-group label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #636366;
+      }
+      .tavern-input,
+      .tavern-textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        border-radius: 11px;
+        border: 1px solid rgba(206, 206, 214, 0.9);
+        background: #ffffff;
+        color: #2c2c2e;
+        font-size: 13px;
+        line-height: 1.45;
+        outline: none;
+      }
+      .tavern-select {
+        width: 100%;
+        min-height: 38px !important;
+        height: 38px !important;
+        line-height: 1.35 !important;
+        padding: 4px 28px 4px 10px !important;
+        border-radius: 11px !important;
+        border: 1px solid rgba(206, 206, 214, 0.9) !important;
+        background-color: #ffffff !important;
+        color: #2c2c2e !important;
+        font-size: 13px !important;
+        box-sizing: border-box !important;
+        text-align: left !important;
+        overflow: visible !important;
+      }
+      .tavern-check-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 4px 0;
+        cursor: pointer;
+      }
+      .tavern-check-row input[type="checkbox"],
+      .tavern-check-row input[type="radio"],
+      .tavern-fixed-check {
+        width: 18px !important;
+        height: 18px !important;
+        min-width: 18px !important;
+        min-height: 18px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        flex-shrink: 0 !important;
+        accent-color: #6b6b70;
+        cursor: pointer;
+      }
+      .tavern-list-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: rgba(248, 248, 250, 0.95);
+        border: 1px solid rgba(224, 224, 232, 0.85);
+        margin-bottom: 6px;
+        box-sizing: border-box;
+      }
+      .tavern-list-row-main {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 600;
+        color: #2c2c2e;
+      }
+      .tavern-list-row-sub {
+        font-size: 11px;
+        color: #8e8e93;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tavern-list-row-actions {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 5px !important;
+        flex-shrink: 0 !important;
+      }
+      .tavern-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-height: 34px;
+        padding: 6px 12px;
+        border-radius: 11px;
+        border: 1px solid rgba(204, 204, 212, 0.9);
+        background: #ffffff;
+        color: #3a3a3c;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        flex-shrink: 0;
+        box-sizing: border-box;
+        transition: all 0.14s ease;
+      }
+      .tavern-btn:active {
+        transform: scale(0.97);
+      }
+      .tavern-btn.primary {
+        background: #48484a;
+        color: #ffffff;
+        border-color: #48484a;
+      }
+      .tavern-btn.danger {
+        background: #fff5f5;
+        color: #c93b3b;
+        border-color: #f1c6c6;
+      }
+      .tavern-btn.small {
+        min-height: 28px;
+        padding: 3px 9px;
+        font-size: 11.5px;
+        border-radius: 9px;
+      }
+
+      /* Extension Accordion inside #rm_extensions_block */
+      .inline-drawer {
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(220, 220, 228, 0.9);
+        margin-bottom: 10px;
+        overflow: hidden;
+      }
+      .inline-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 13.5px;
+        color: #2c2c2e;
+        user-select: none;
+      }
+      .inline-drawer-content {
+        padding: 10px 12px 12px 12px;
+        border-top: 1px solid rgba(230, 230, 236, 0.8);
+      }
+
+      /* Toast Banner */
+      #tavern-toast-banner {
+        position: absolute;
+        top: 62px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-10px);
+        z-index: 4000;
+        background: rgba(44, 44, 46, 0.92);
+        color: #ffffff;
+        padding: 7px 16px;
+        border-radius: 999px;
+        font-size: 12.5px;
+        font-weight: 600;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+        max-width: 88%;
+        text-align: center;
+      }
+      #tavern-toast-banner.visible {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // ============================================================================
+  // 10. Render Main SillyTavern Stage & Chat Floors
+  // ============================================================================
+  const TOP_BAR_DRAWERS = [
+    { key: 'sliders', iconClass: 'fa-sliders', title: '生成参数与预设排序' },
+    { key: 'plug', iconClass: 'fa-plug', title: '接口连接与模型设置' },
+    { key: 'font', iconClass: 'fa-font', title: '文本格式化与指令模板' },
+    { key: 'atlas', iconClass: 'fa-book-atlas', title: '世界书全局与词条管理' },
+    { key: 'usercog', iconClass: 'fa-user-cog', title: '界面美化与用户设置' },
+    { key: 'panorama', iconClass: 'fa-panorama', title: '背景画廊与视觉氛围' },
+    { key: 'cubes', iconClass: 'fa-cubes', title: '扩展插件与正则脚本' },
+    { key: 'smile', iconClass: 'fa-face-smile', title: '用户人设与面具管理' },
+    { key: 'address', iconClass: 'fa-address-card', title: '角色档案与聊天分支' }
+  ];
+
+  function renderTavernShell() {
+    const shell = document.getElementById('tavern-app-shell');
+    if (!shell) return;
+    injectTavernShellCss();
+
+    const bg = tavernState.background || {};
+    const bgStyle = bg.url
+      ? `background-image: url('${bg.url}'); background-size: ${bg.fit || 'cover'}; filter: blur(${Number(bg.blur || 0)}px); opacity: ${Number(bg.opacity ?? 1)};`
+      : 'opacity: 0;';
+
+    const qrs = (tavernState.quickReplies || []).filter(q => q && q.enabled);
+
+    shell.innerHTML = `
+      <div id="tavern-stage-root">
+        <div id="tavern-bg-layer" style="${bgStyle}"></div>
+
+        <!-- Native SillyTavern #top-bar with 9 Drawer Icons -->
+        <div id="top-bar">
+          <div id="top-settings-holder">
+            ${TOP_BAR_DRAWERS.map(d => `
+              <div class="drawer ${uiRuntime.openDrawerKey === d.key ? 'active-drawer' : ''}" data-drawer-key="${d.key}">
+                <div class="drawer-toggle" data-action="toggle-drawer" data-drawer="${d.key}" title="${d.title}">
+                  <div class="drawer-icon fa-solid ${d.iconClass} ${uiRuntime.openDrawerKey === d.key ? 'openIcon' : 'closedIcon'}"></div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Full-screen Dropdown Drawer Container -->
+        <div id="tavern-drawer-host" class="${uiRuntime.openDrawerKey ? 'active' : ''}">
+          ${uiRuntime.openDrawerKey ? renderOpenDrawerHtml(uiRuntime.openDrawerKey) : ''}
+        </div>
+
+        <!-- Native SillyTavern #chat Message List -->
+        <div id="chat"></div>
+
+        <!-- Bottom Options & Extensions Popups -->
+        ${uiRuntime.showOptionsPopup ? renderBottomOptionsPopup() : ''}
+        ${uiRuntime.showExtensionsPopup ? renderBottomExtensionsPopup() : ''}
+
+        <!-- Native SillyTavern #form_sheld Bottom Bar -->
+        <div id="form_sheld">
+          ${qrs.length > 0 ? `
+            <div id="qr--bar">
+              ${qrs.map(q => `
+                <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(q.label)}</button>
+              `).join('')}
+            </div>
+          ` : ''}
+          <form id="send_form" onsubmit="return false;">
+            <div id="leftSendForm">
+              <div id="options_button" data-action="toggle-options-popup" title="对话操作菜单"></div>
+              <div id="extensionsMenuButton" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
+            </div>
+            <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
+            <div id="rightSendForm">
+              <div id="send_but" data-action="send-message" title="发送"></div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Hidden Multi-File Inputs -->
+        <input type="file" id="tavern-file-cards" accept=".png,.json,image/png,application/json" multiple style="display:none" />
+        <input type="file" id="tavern-file-worldbooks" accept=".json,application/json" multiple style="display:none" />
+        <input type="file" id="tavern-file-regexes" accept=".json,application/json" multiple style="display:none" />
+        <input type="file" id="tavern-file-presets" accept=".json,application/json" multiple style="display:none" />
+        <input type="file" id="tavern-file-themes" accept=".json,.css,application/json,text/css" multiple style="display:none" />
+        <input type="file" id="tavern-file-plugins" accept=".js,.json,application/javascript,text/javascript,application/json" multiple style="display:none" />
+        <input type="file" id="tavern-file-chats" accept=".json,.jsonl,application/json" multiple style="display:none" />
+        <input type="file" id="tavern-file-bg" accept="image/*" style="display:none" />
+        <input type="file" id="tavern-file-persona-avatar" accept="image/*" style="display:none" />
+        <input type="file" id="tavern-file-card-avatar" accept="image/*" style="display:none" />
+      </div>
     `;
 
-      item.addEventListener('click', () => openScriptEditorForEdit(script.id));
-
-      addLongPressListener(item, async () => {
-        // ▼▼▼ 核心修改：在菜单里增加 'export' 选项 ▼▼▼
-        const choice = await showChoiceModal(`操作《${script.name}》`, [
-          { text: '📤 导出剧本', value: 'export' }, // <-- 新增
-          { text: '🗑️ 删除剧本', value: 'delete', isDanger: true },
-        ]);
-
-        if (choice === 'delete') {
-          deleteCustomScript(script.id, script.name);
-        } else if (choice === 'export') {
-          // <-- 新增处理逻辑
-          await exportCustomScript(script.id);
-        }
-        // ▲▲▲ 修改结束 ▲▲▲
-      });
-      listEl.appendChild(item);
-    });
+    applyActiveTavernTheme();
+    renderTavernChatFloors(true);
+    bindTavernStageEvents();
   }
 
-  /**
-   * 打开剧本编辑器（用于创建新剧本）
-   */
-  function openScriptEditorForCreate() {
-    editingScriptId = null; // 标记为创建模式
-    document.getElementById('script-editor-title').textContent = '创建新剧本';
-    document.getElementById('script-name-input').value = '';
-    document.getElementById('script-background-input').value = '';
-    // 提供一个JSON结构示例，方便用户填写
-    const jsonExample = {
-      roles: [
-        { name: '角色A', description: '...', tasks: '...', isKiller: true },
-        { name: '角色B', description: '...', tasks: '...', isKiller: false },
-      ],
-      clues: [
-        { owner: '角色A', description: '线索描述...', isKey: false },
-        { owner: '公共', description: '公共线索...' },
-      ],
-      truth: '真相是...',
-    };
-    document.getElementById('script-roles-json-input').value = JSON.stringify(jsonExample, null, 2);
-
-    document.getElementById('script-kill-editor-modal').classList.add('visible');
-  }
-
-  /**
-   * 打开剧本编辑器（用于编辑现有剧本）
-   * @param {number} scriptId - 要编辑的剧本ID
-   */
-  async function openScriptEditorForEdit(scriptId) {
-    editingScriptId = scriptId;
-    const script = await db.scriptKillScripts.get(scriptId);
-    if (!script) return;
-
-    document.getElementById('script-editor-title').textContent = `编辑剧本: ${script.name}`;
-    document.getElementById('script-name-input').value = script.name;
-    document.getElementById('script-background-input').value = script.storyBackground;
-
-    // 将 roles, clues, truth 重新组合成一个对象并格式化为JSON
-    const jsonData = {
-      roles: script.roles,
-      clues: script.clues,
-      truth: script.truth,
-    };
-    document.getElementById('script-roles-json-input').value = JSON.stringify(jsonData, null, 2);
-
-    document.getElementById('script-kill-editor-modal').classList.add('visible');
-  }
-
-  // ▼▼▼ 用这块【可视化版】代码，替换旧的 saveCustomScript 函数 ▼▼▼
-  /**
-   * 【可视化版】保存或更新自定义剧本
-   */
-  async function saveCustomScript() {
-    const name = document.getElementById('script-name-input').value.trim();
-    const background = document.getElementById('script-background-input').value.trim();
-    const truth = document.getElementById('sk-truth-input').value.trim();
-
-    if (!name || !background || !truth) {
-      alert('剧本名称、故事背景和最终真相都不能为空！');
-      return;
-    }
-
-    // 从 currentEditingScriptData 全局变量中获取角色和线索数据
-    if (!currentEditingScriptData.roles || currentEditingScriptData.roles.length === 0) {
-      alert('请至少添加一个角色！');
-      return;
-    }
-
-    try {
-      const scriptData = {
-        name: name,
-        storyBackground: background,
-        roles: currentEditingScriptData.roles,
-        clues: currentEditingScriptData.clues,
-        truth: truth,
-        isBuiltIn: false,
-      };
-
-      if (editingScriptId) {
-        await db.scriptKillScripts.update(editingScriptId, scriptData);
-        alert('剧本更新成功！');
-      } else {
-        await db.scriptKillScripts.add(scriptData);
-        alert('新剧本保存成功！');
-      }
-
-      document.getElementById('script-kill-editor-modal').classList.remove('visible');
-      await renderScriptManagerList(); // 刷新管理列表
-      editingScriptId = null;
-    } catch (error) {
-      alert(`保存失败: ${error.message}`);
-    }
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-  // ▼▼▼ 把这一整块全新的功能函数，粘贴到 init() 函数的【正上方】 ▼▼▼
-
-  // --- 【全新】剧本杀可视化编辑器核心功能 ---
-
-  let currentEditingScriptData = { roles: [], clues: [] }; // 用于暂存正在编辑的剧本数据
-  let editingItemIndex = -1; // -1 表示新建，否则为被编辑项的索引
-
-  /**
-   * 渲染可视化剧本编辑器的主界面
-   */
-  function renderVisualScriptEditor() {
-    const rolesContainer = document.getElementById('sk-roles-container');
-    const cluesContainer = document.getElementById('sk-clues-container');
-    rolesContainer.innerHTML = '';
-    cluesContainer.innerHTML = '';
-
-    // 渲染角色列表
-    currentEditingScriptData.roles.forEach((role, index) => {
-      const itemEl = document.createElement('div');
-      itemEl.className = 'sk-editor-item';
-      itemEl.innerHTML = `
-            <div class="item-info">
-                <div class="item-name">${role.name} ${role.isKiller ? '🔪' : ''}</div>
-                <div class="item-meta">${role.description.substring(0, 20)}...</div>
-            </div>
-            <div class="item-actions">
-                <button class="form-button-secondary edit-role-btn" data-index="${index}">编辑</button>
-                <button class="form-button-secondary delete-role-btn" data-index="${index}" style="border-color:#ff3b30; color:#ff3b30;">删除</button>
-            </div>
-        `;
-      rolesContainer.appendChild(itemEl);
-    });
-
-    // 渲染线索列表
-    currentEditingScriptData.clues.forEach((clue, index) => {
-      const itemEl = document.createElement('div');
-      itemEl.className = 'sk-editor-item';
-      itemEl.innerHTML = `
-            <div class="item-info">
-                <div class="item-name">线索 ${index + 1}</div>
-                <div class="item-meta">归属于: ${clue.owner}</div>
-            </div>
-            <div class="item-actions">
-                <button class="form-button-secondary edit-clue-btn" data-index="${index}">编辑</button>
-                <button class="form-button-secondary delete-clue-btn" data-index="${index}" style="border-color:#ff3b30; color:#ff3b30;">删除</button>
-            </div>
-        `;
-      cluesContainer.appendChild(itemEl);
-    });
-  }
-
-  /**
-   * 打开角色编辑器（新建或编辑）
-   */
-  function openRoleEditor(index = -1) {
-    editingItemIndex = index;
-    const modal = document.getElementById('sk-item-editor-modal');
-    document.getElementById('sk-role-editor-fields').style.display = 'block';
-    document.getElementById('sk-clue-editor-fields').style.display = 'none';
-
-    if (index > -1) {
-      // 编辑模式
-      const role = currentEditingScriptData.roles[index];
-      document.getElementById('sk-item-editor-title').textContent = `编辑角色: ${role.name}`;
-      document.getElementById('sk-role-name-input').value = role.name;
-      document.getElementById('sk-role-desc-input').value = role.description;
-      // ▼▼▼ 在这里添加下面这行新代码 ▼▼▼
-      document.getElementById('sk-role-storyline-input').value = role.storyline || ''; // 使用 || '' 确保旧数据不会显示'undefined'
-      // ▲▲▲ 新代码粘贴结束 ▲▲▲
-      document.getElementById('sk-role-tasks-input').value = role.tasks;
-      document.getElementById('sk-role-killer-toggle').checked = role.isKiller;
-    } else {
-      // 新建模式
-      document.getElementById('sk-item-editor-title').textContent = '添加新角色';
-      document.getElementById('sk-role-name-input').value = '';
-      document.getElementById('sk-role-desc-input').value = '';
-      // ▼▼▼ 在这里添加下面这行新代码 ▼▼▼
-      document.getElementById('sk-role-storyline-input').value = ''; // 新建时清空
-      // ▲▲▲ 新代码粘贴结束 ▲▲▲
-      document.getElementById('sk-role-tasks-input').value = '';
-      document.getElementById('sk-role-killer-toggle').checked = false;
-    }
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 打开线索编辑器（新建或编辑）
-   */
-  function openClueEditor(index = -1) {
-    editingItemIndex = index;
-    const modal = document.getElementById('sk-item-editor-modal');
-    document.getElementById('sk-role-editor-fields').style.display = 'none';
-    document.getElementById('sk-clue-editor-fields').style.display = 'block';
-
-    // 动态填充线索归属的下拉菜单
-    const ownerSelect = document.getElementById('sk-clue-owner-select');
-    ownerSelect.innerHTML = '<option value="公共">公共线索</option>';
-    currentEditingScriptData.roles.forEach(role => {
-      const option = document.createElement('option');
-      option.value = role.name;
-      option.textContent = `角色: ${role.name}`;
-      ownerSelect.appendChild(option);
-    });
-
-    if (index > -1) {
-      // 编辑模式
-      const clue = currentEditingScriptData.clues[index];
-      document.getElementById('sk-item-editor-title').textContent = `编辑线索 ${index + 1}`;
-      ownerSelect.value = clue.owner;
-      document.getElementById('sk-clue-desc-input').value = clue.description;
-      document.getElementById('sk-clue-key-toggle').checked = clue.isKey || false;
-    } else {
-      // 新建模式
-      document.getElementById('sk-item-editor-title').textContent = '添加新线索';
-      ownerSelect.value = '公共';
-      document.getElementById('sk-clue-desc-input').value = '';
-      document.getElementById('sk-clue-key-toggle').checked = false;
-    }
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 保存子编辑器（角色或线索）中的数据
-   */
-  function saveItemFromEditor() {
-    const isRoleEditor = document.getElementById('sk-role-editor-fields').style.display === 'block';
-
-    if (isRoleEditor) {
-      const roleData = {
-        name: document.getElementById('sk-role-name-input').value.trim(),
-        description: document.getElementById('sk-role-desc-input').value.trim(),
-        // ▼▼▼ 在这里添加下面这行新代码 ▼▼▼
-        storyline: document.getElementById('sk-role-storyline-input').value.trim(),
-        // ▲▲▲ 新代码粘贴结束 ▲▲▲
-        tasks: document.getElementById('sk-role-tasks-input').value.trim(),
-        isKiller: document.getElementById('sk-role-killer-toggle').checked,
-      };
-      if (!roleData.name) {
-        alert('角色名称不能为空！');
-        return;
-      }
-
-      if (editingItemIndex > -1) {
-        currentEditingScriptData.roles[editingItemIndex] = roleData;
-      } else {
-        currentEditingScriptData.roles.push(roleData);
-      }
-    } else {
-      const clueData = {
-        owner: document.getElementById('sk-clue-owner-select').value,
-        description: document.getElementById('sk-clue-desc-input').value.trim(),
-        isKey: document.getElementById('sk-clue-key-toggle').checked,
-      };
-      if (!clueData.description) {
-        alert('线索描述不能为空！');
-        return;
-      }
-
-      if (editingItemIndex > -1) {
-        currentEditingScriptData.clues[editingItemIndex] = clueData;
-      } else {
-        currentEditingScriptData.clues.push(clueData);
-      }
-    }
-
-    document.getElementById('sk-item-editor-modal').classList.remove('visible');
-    renderVisualScriptEditor(); // 刷新主编辑器界面
-  }
-
-  /**
-   * 替换 openScriptEditorForCreate 函数
-   */
-  function openScriptEditorForCreate() {
-    editingScriptId = null;
-    currentEditingScriptData = { roles: [], clues: [] }; // 清空暂存数据
-    document.getElementById('script-editor-title').textContent = '创建新剧本';
-    document.getElementById('script-name-input').value = '';
-    document.getElementById('script-background-input').value = '';
-    document.getElementById('sk-truth-input').value = '';
-    renderVisualScriptEditor(); // 渲染空的编辑器
-    document.getElementById('script-kill-editor-modal').classList.add('visible');
-  }
-
-  /**
-   * 替换 openScriptEditorForEdit 函数
-   */
-  async function openScriptEditorForEdit(scriptId) {
-    editingScriptId = scriptId;
-    const script = await db.scriptKillScripts.get(scriptId);
-    if (!script) return;
-
-    // 将数据库数据加载到暂存对象
-    currentEditingScriptData = {
-      roles: script.roles || [],
-      clues: script.clues || [],
-    };
-
-    document.getElementById('script-editor-title').textContent = `编辑剧本: ${script.name}`;
-    document.getElementById('script-name-input').value = script.name;
-    document.getElementById('script-background-input').value = script.storyBackground;
-    document.getElementById('sk-truth-input').value = script.truth;
-
-    renderVisualScriptEditor(); // 渲染带有数据的编辑器
-    document.getElementById('script-kill-editor-modal').classList.add('visible');
-  }
-
-  // --- ▲▲▲ 新增功能函数结束 ▲▲▲
-
-  /**
-   * 删除一个自定义剧本
-   * @param {number} scriptId - 要删除的剧本ID
-   * @param {string} scriptName - 剧本名称，用于确认提示
-   */
-  async function deleteCustomScript(scriptId, scriptName) {
-    const confirmed = await showCustomConfirm('删除剧本', `确定要永久删除自定义剧本《${scriptName}》吗？`, {
-      confirmButtonClass: 'btn-danger',
-    });
-    if (confirmed) {
-      await db.scriptKillScripts.delete(scriptId);
-      await renderScriptManagerList();
-      alert('剧本已删除。');
-    }
-  }
-  /**
-   * 【全新】导出指定的自定义剧本
-   * @param {number} scriptId - 要导出的剧本ID
-   */
-  async function exportCustomScript(scriptId) {
-    try {
-      const script = await db.scriptKillScripts.get(scriptId);
-      if (!script) {
-        alert('错误：找不到要导出的剧本。');
-        return;
-      }
-
-      // 1. 准备要导出的纯数据结构 (去除本地数据库ID，保留核心内容)
-      const exportData = {
-        type: 'EPhoneScriptKill', // 标记文件类型
-        version: 1,
-        name: script.name,
-        storyBackground: script.storyBackground,
-        truth: script.truth,
-        roles: script.roles,
-        clues: script.clues,
-      };
-
-      // 2. 转换为JSON字符串
-      const jsonString = JSON.stringify(exportData, null, 2);
-
-      // 3. 创建并下载文件
-      const blob = new Blob([jsonString], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const dateStr = new Date().toISOString().split('T')[0];
-      // 文件名示例: [剧本杀]古堡之谜-2024-01-01.json
-      link.href = url;
-      link.download = `[剧本杀]${script.name}-${dateStr}.json`;
-      document.body.appendChild(link);
-      link.click();
-
-      // 4. 清理
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      await showCustomAlert('导出成功', `剧本《${script.name}》已成功导出！`);
-    } catch (error) {
-      console.error('导出剧本失败:', error);
-      await showCustomAlert('导出失败', `发生错误: ${error.message}`);
-    }
-  }
-
-  /**
-   * 【全新】导入剧本杀剧本文件
-   * @param {File} file - 用户选择的JSON文件
-   */
-  async function importCustomScript(file) {
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async e => {
-      try {
-        const text = e.target.result;
-        const data = JSON.parse(text);
-
-        // 1. 简单的格式验证
-        if (!data.name || !data.roles || !data.clues || !data.truth) {
-          throw new Error('文件格式无效。缺少必要的剧本字段(name, roles, clues, truth)。');
-        }
-
-        // 2. 检查是否重名，如果重名自动重命名
-        let newScriptName = data.name;
-        const existingScript = await db.scriptKillScripts.where('name').equals(newScriptName).first();
-        if (existingScript) {
-          newScriptName = `${newScriptName} (导入)`;
-        }
-
-        // 3. 构建入库数据
-        const scriptToAdd = {
-          name: newScriptName,
-          storyBackground: data.storyBackground || '（无背景介绍）',
-          truth: data.truth,
-          roles: data.roles,
-          clues: data.clues,
-          isBuiltIn: false, // 标记为自定义剧本
-        };
-
-        // 4. 存入数据库
-        await db.scriptKillScripts.add(scriptToAdd);
-
-        // 5. 刷新列表并提示
-        await renderScriptManagerList();
-        await showCustomAlert('导入成功', `剧本《${newScriptName}》已成功导入！`);
-      } catch (error) {
-        console.error('导入剧本失败:', error);
-        await showCustomAlert('导入失败', `解析文件时出错: ${error.message}`);
-      }
-    };
-    reader.readAsText(file, 'UTF-8');
-  }
-
-  // --- ▲▲▲ 新增功能函数结束 ▲▲▲
-  // ▼▼▼ 在 init() 函数的【正上方】粘贴下面这一整块新代码 ▼▼▼
-
-  /**
-   * 【剧本杀】AI核心：调用AI为整局游戏生成复盘摘要
-   * @returns {Promise<string>} - AI生成的摘要文本
-   */
-  async function generateAiSkSummary() {
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) {
-      return '（AI摘要生成失败：API未配置）';
-    }
-
-    const formattedLog = scriptKillGameState.gameLog
-      .map(log => {
-        if (log.type === 'speech') {
-          return `${log.message.player.role.name}: ${log.message.speech}`;
-        }
-        return log.message;
-      })
-      .join('\n');
-
-    const killer = scriptKillGameState.players.find(p => p.role.isKiller)?.role.name || '未知';
-
-    const prompt = `
-# 任务
-你是一位专业的剧本杀复盘DM。请根据以下完整的游戏日志，用200字左右，客观、精炼地总结本局游戏的【关键事件】、【重要线索】和【玩家逻辑】。
-
-# 核心要求
-- 你的总结需要有逻辑、有条理，像一个真正的游戏复盘。
-- 点出关键线索是如何被发现和利用的。
-- 分析凶手(${killer})是如何隐藏自己的，以及好人阵营的推理亮点或误区。
-- 你的输出【必须且只能】是复盘摘要的纯文本内容，不要包含任何额外的对话或标题。
-
-# 游戏日志
-${formattedLog}
-`;
-
-    try {
-      const messagesForApi = [{ role: 'user', content: prompt }];
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(model, apiKey, prompt, messagesForApi, isGemini);
-
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-            }),
-          });
-
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      return (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).trim();
-    } catch (error) {
-      console.error('AI摘要生成失败:', error);
-      return '（AI摘要生成失败，请检查网络或API设置）';
-    }
-  }
-
-  // ▼▼▼ 用这个【功能增强版】函数，完整替换你旧的 generateSkSummary 函数 ▼▼▼
-  /**
-   * 【剧本杀 V2 - 增强版】生成游戏复盘的文本，包含AI摘要和投票详情
-   * @param {string} winner - 胜利的阵营名称
-   * @param {string} aiSummary - AI生成的摘要文本
-   * @returns {string} - 格式化后的完整复盘Markdown文本
-   */
-  function generateSkSummary(winner, aiSummary) {
-    const roleNameMap = {
-      wolf: '狼人',
-      villager: '平民',
-      seer: '预言家',
-      witch: '女巫',
-      hunter: '猎人',
-      guard: '守卫',
-      idiot: '白痴',
-    };
-
-    let summaryText = `**剧本杀 - 游戏复盘**\n\n`;
-    summaryText += `**剧本:** ${scriptKillGameState.script.name}\n`;
-    summaryText += `🏆 **胜利方:** ${winner}\n\n`;
-
-    summaryText += `**本局摘要:**\n${aiSummary}\n\n`;
-
-    summaryText += `**玩家身份:**\n`;
-    scriptKillGameState.players.forEach(p => {
-      const roleName = p.role.name || '未知角色';
-      const isKiller = p.role.isKiller ? ' (🔪凶手)' : '';
-      summaryText += `- ${p.name}: 扮演 ${roleName}${isKiller}\n`;
-    });
-
-    // --- ▼▼▼ 这就是我们本次新增的核心代码！▼▼▼ ---
-    summaryText += `\n**投票详情:**\n`;
-    const votes = scriptKillGameState.votes;
-    const playerMap = new Map(scriptKillGameState.players.map(p => [p.id, p.name]));
-
-    for (const voterId in votes) {
-      const voterName = playerMap.get(voterId) || '未知投票者';
-      const targetId = votes[voterId];
-
-      if (targetId) {
-        // 如果不是弃票
-        const targetName = playerMap.get(targetId) || '未知目标';
-        summaryText += `- ${voterName}  →  ${targetName}\n`;
-      } else {
-        // 如果是弃票
-        summaryText += `- ${voterName}  →  弃票\n`;
-      }
-    }
-    // --- ▲▲▲ 新增代码结束 ▲▲▲ ---
-
-    return summaryText;
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【剧本杀】显示游戏结算卡片模态框
-   * @param {string} summaryText - 复盘文本
-   */
-  function showScriptKillSummaryModal(summaryText) {
-    const modal = document.getElementById('script-kill-summary-modal');
-    const contentEl = document.getElementById('script-kill-summary-content');
-
-    contentEl.innerHTML = renderMarkdown(summaryText);
-
-    const repostBtn = document.getElementById('repost-sk-summary-btn');
-    const newRepostBtn = repostBtn.cloneNode(true);
-    repostBtn.parentNode.replaceChild(newRepostBtn, repostBtn);
-    newRepostBtn.onclick = () => openSkSummaryTargetPicker(summaryText);
-
-    const backBtn = document.getElementById('back-to-hall-from-sk-btn');
-    const newBackBtn = backBtn.cloneNode(true);
-    backBtn.parentNode.replaceChild(newBackBtn, backBtn);
-    newBackBtn.onclick = () => {
-      modal.classList.remove('visible');
-      showScreen('game-hall-screen');
-    };
-
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 【剧本杀】打开复盘发送目标选择器
-   * @param {string} summaryText - 要转发的复盘文本
-   */
-  function openSkSummaryTargetPicker(summaryText) {
-    const modal = document.getElementById('script-kill-target-picker-modal');
-    const listEl = document.getElementById('script-kill-target-list');
-    listEl.innerHTML = '';
-
-    const aiPlayers = scriptKillGameState.players.filter(p => !p.isUser);
-
-    if (aiPlayers.length === 0) {
-      alert('没有可转发的AI玩家。');
-      return;
-    }
-
-    aiPlayers.forEach(player => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item';
-      item.innerHTML = `
-            <input type="checkbox" class="script-kill-target-checkbox" value="${player.id}" checked>
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-        `;
-      listEl.appendChild(item);
-    });
-
-    const confirmBtn = document.getElementById('sk-confirm-share-btn');
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    newConfirmBtn.onclick = () => {
-      const selectedIds = Array.from(document.querySelectorAll('.script-kill-target-checkbox:checked')).map(
-        cb => cb.value,
-      );
-      if (selectedIds.length > 0) {
-        sendSkSummaryToSelectedPlayers(summaryText, selectedIds);
-      } else {
-        alert('请至少选择一个转发对象！');
-      }
-    };
-
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 【剧本杀】将游戏复盘发送到【选定】的AI角色的单聊中
-   * @param {string} summaryText - 复盘文本
-   * @param {string[]} targetIds - 目标AI角色的ID数组
-   */
-  async function sendSkSummaryToSelectedPlayers(summaryText, targetIds) {
-    document.getElementById('script-kill-summary-modal').classList.remove('visible');
-    document.getElementById('script-kill-target-picker-modal').classList.remove('visible');
-    let sentCount = 0;
-
-    const aiContext = `[系统指令：刚刚结束了一局剧本杀，这是游戏复盘。请根据这个复盘内容，以你的角色人设，和用户聊聊刚才的游戏。]\n\n${summaryText}`;
-
-    for (const chatId of targetIds) {
-      const chat = state.chats[chatId];
-      if (chat) {
-        const visibleMessage = {
-          role: 'user',
-          type: 'share_link',
-          timestamp: Date.now(),
-          title: '剧本杀 - 游戏复盘',
-          description: '点击查看详细复盘记录',
-          source_name: '游戏中心',
-          content: summaryText,
-        };
-
-        const hiddenInstruction = {
-          role: 'system',
-          content: aiContext,
-          timestamp: Date.now() + 1,
-          isHidden: true,
-        };
-
-        chat.history.push(visibleMessage, hiddenInstruction);
-        await db.chats.put(chat);
-        sentCount++;
-      }
-    }
-
-    await showCustomAlert('转发成功', `游戏复盘已发送至 ${sentCount} 位AI玩家的单聊中！`);
-    showScreen('game-hall-screen');
-  }
-
-  // ▲▲▲ 新代码粘贴结束 ▲▲▲
-  // ▼▼▼ 【全新】这是剧本杀AI生成功能的所有核心函数 ▼▼▼
-
-  function openAiScriptGenerator() {
-    // 隐藏剧本管理弹窗
-    document.getElementById('script-kill-manager-modal').classList.remove('visible');
-
-    const modal = document.getElementById('sk-ai-generator-modal');
-    // ▼▼▼ 在这里修改 ▼▼▼
-    document.getElementById('sk-ai-elements-input').value = ''; // 清空要素输入框
-    document.getElementById('sk-ai-summary-input').value = ''; // 清空梗概输入框
-    // ▲▲▲ 修改结束 ▲▲▲
-    document.getElementById('sk-ai-result-preview').textContent = '点击“开始生成”后，结果将显示在这里...';
-    document.getElementById('sk-ai-generator-save-btn').disabled = true;
-    tempGeneratedScriptData = null;
-
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 【AI核心 V2 - 强制时间线版】根据用户的要素和梗概，调用AI生成剧本
-   */
-  async function generateSkScriptWithAI() {
-    // 1. 从新的两个输入框获取数据
-    const elements = document.getElementById('sk-ai-elements-input').value.trim();
-    const summary = document.getElementById('sk-ai-summary-input').value.trim();
-    const playerCount = document.getElementById('sk-ai-player-count-input').value;
-
-    if (!elements) {
-      // 核心要素是必填的
-      alert('请输入剧本的核心要素！');
-      return;
-    }
-
-    const previewEl = document.getElementById('sk-ai-result-preview');
-    const saveBtn = document.getElementById('sk-ai-generator-save-btn');
-    previewEl.textContent = '🧠 AI正在奋力创作中，这可能需要1-2分钟，请耐心等待...';
-    saveBtn.disabled = true;
-
-    // 2. 构建给AI的【全新、更严格】的指令(Prompt)
-    const systemPrompt = `
-# 任务
-你是一个专业的剧本杀剧本创作AI。你的任务是根据用户提供的核心要素和剧情梗概，创作一个【${playerCount}人】的、完整、可玩的剧本杀剧本。
-
-# 用户提供的核心要素:
--   **玩家人数**: ${playerCount}人
--   **核心元素**: ${elements}
--   **剧情梗概**: ${summary || '（用户未提供详细梗概，请根据核心元素自由发挥）'}
-
-# 【【【时间线铁律：这是最高指令，必须严格遵守】】】
-在生成每个角色的 "storyline" (故事线) 字段时，你【必须】遵循以下规则：
-1.  **必须包含明确的时间点**：每一段关键行动前，都必须有一个具体的时间，格式为【**HH:mm**】（例如：**20:30** 或 **晚上8点15分**）。
-2.  **必须是具体的行动轨迹**：禁止使用“后来”、“过了一会儿”等模糊描述。必须清楚地写出角色在【什么时间】、【什么地点】、【做了什么事】。
-3.  **提供清晰的示例**:
-    -   **【【错误的模糊示例】】**: "晚上我和他吵了一架，然后离开了。"
-    -   **【【正确的详细示例】】**: "**20:30**: 我在书房因为项目资金问题和王总监大吵一架，他威胁要解雇我。 **20:45**: 我愤怒地摔门而出，回到了自己的工位。"
-
-# 剧本创作核心要求
-1.  **完整性**: 你必须生成剧本的所有组成部分，包括：剧本名称(name)、故事背景(storyBackground)、角色设定(roles)、线索卡(clues)、以及最终真相(truth)。
-2.  **角色设定 (roles)**:
-    -   必须是一个包含【${playerCount}个】角色对象的数组。
-    -   每个角色对象必须包含以下字段:
-        -   name: 角色名称 (字符串)。
-        -   description: 角色简介 (字符串, 简短描述)。
-        -   storyline: 角色的个人故事线或时间线 (字符串, **必须遵守【时间线铁律】**)。
-        -   tasks: 角色的秘密任务 (字符串)。
-        -   isKiller: 是否是凶手 (布尔值, true 或 false)。
-    -   剧本中【必须有且只有一个】角色的 isKiller 为 true。
-3.  **线索卡 (clues)**:
-    -   必须是一个包含多个线索对象的数组。
-    -   每个线索对象必须包含以下字段:
-        -   owner: 线索归属 (字符串, 可以是某个角色名，也可以是 "公共")。
-        -   description: 线索的详细描述 (字符串)。
-        -   isKey: 是否是关键线索 (布尔值, true 或 false)。
-    -   至少要有一条关键线索。
-4.  **最终真相 (truth)**: 必须清晰、有逻辑地揭示整个案件的真相、凶手的动机和作案手法。
-
-# 【格式铁律】
-你的回复【必须且只能】是一个严格的JSON对象，直接以 '{' 开头，以 '}' 结尾。禁止包含任何 "json", "\`\`\`" 或其他解释性文字。
-`;
-
-    // 3. 调用API (这部分逻辑与之前相同)
-    try {
-      const { proxyUrl, apiKey, model } = state.apiConfig;
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let messagesForApi = [{ role: 'user', content: systemPrompt }];
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        systemPrompt,
-        messagesForApi,
-        isGemini,
-        state.apiConfig.temperature,
-      );
-
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: 'json_object' },
-            }),
-          });
-
-      if (!response.ok) throw new Error(`API请求失败: ${response.status} - ${await response.text()}`);
-
-      const data = await response.json();
-      const rawContent = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content)
-        .replace(/^```json\s*|```$/g, '')
-        .trim();
-
-      const generatedScript = JSON.parse(rawContent);
-
-      if (
-        !generatedScript.name ||
-        !generatedScript.storyBackground ||
-        !Array.isArray(generatedScript.roles) ||
-        !Array.isArray(generatedScript.clues) ||
-        !generatedScript.truth
-      ) {
-        throw new Error('AI返回的JSON格式不完整，缺少必要的字段。');
-      }
-
-      previewEl.textContent = JSON.stringify(generatedScript, null, 2);
-      tempGeneratedScriptData = generatedScript;
-      saveBtn.disabled = false;
-
-      await showCustomAlert('生成成功！', '剧本已生成，请在下方预览。如果满意，可以点击保存。');
-    } catch (error) {
-      console.error('AI剧本生成失败:', error);
-      previewEl.textContent = `生成失败！请检查API设置或网络后重试。\n\n错误信息: ${error.message}`;
-      await showCustomAlert('生成失败', `发生了一个错误：\n${error.message}`);
-    }
-  }
-
-  /**
-   * 保存AI生成的剧本
-   */
-  async function saveAiGeneratedScript() {
-    if (!tempGeneratedScriptData) {
-      alert('没有可以保存的剧本数据。');
-      return;
-    }
-
-    try {
-      const scriptToSave = {
-        ...tempGeneratedScriptData,
-        isBuiltIn: false, // 标记为非内置剧本
-      };
-
-      // 存入数据库
-      await db.scriptKillScripts.add(scriptToSave);
-
-      document.getElementById('sk-ai-generator-modal').classList.remove('visible'); // 关闭AI生成器
-      await renderScriptManagerList(); // 刷新剧本管理列表
-
-      alert(`剧本《${scriptToSave.name}》已成功保存到你的自定义剧本库中！`);
-    } catch (error) {
-      console.error('保存AI剧本失败:', error);
-      alert(`保存失败: ${error.message}`);
-    }
-  }
-
-  // ▲▲▲ 新增功能函数结束 ▲▲▲
-
-  // ▲▲▲ 剧本杀功能函数结束 ▲▲▲
-  // ▼▼▼ 【全新】这里是“你说我猜”游戏的所有核心功能函数 ▼▼▼
-
-  // ▼▼▼ 【全新】这里是“你说我猜”游戏的所有核心功能函数 ▼▼▼
-
-  /**
-   * 【你说我猜】打开游戏设置界面 (V2 - 复选框版)
-   */
-  async function openGuessWhatSetup() {
-    // 重置游戏状态，以防上次游戏数据残留
-    guessWhatGameState = {
-      isActive: false,
-      mode: 'ai_guesses',
-      opponent: null,
-      secretWord: '',
-      gameLog: [],
-      currentTurn: 'user',
-    };
-
-    showScreen('guess-what-setup-screen');
-    const selectionEl = document.getElementById('guess-what-player-selection');
-    selectionEl.innerHTML = '<p>正在加载玩伴列表...</p>';
-
-    const singleChats = Object.values(state.chats).filter(chat => !chat.isGroup);
-    const allNpcs = Object.values(state.chats).flatMap(chat =>
-      (chat.npcLibrary || []).map(npc => ({ ...npc, owner: chat.name })),
-    );
-    let playerOptions = [
-      ...singleChats.map(c => ({ id: c.id, name: c.name, avatar: c.settings.aiAvatar, type: '角色' })),
-      ...allNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatar, type: `NPC (${n.owner})` })),
-    ];
-
-    selectionEl.innerHTML = '';
-    if (playerOptions.length === 0) {
-      selectionEl.innerHTML =
-        '<p style="text-align:center; color: var(--text-secondary);">还没有可以一起玩的好友哦~</p>';
-      return;
-    }
-
-    // 【核心修改1】使用复选框，并添加专属class
-    playerOptions.forEach((player, index) => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item';
-      item.innerHTML = `
-            <input type="checkbox" class="guess-what-player-checkbox" value="${player.id}" id="opponent-${player.id}" ${
-        index === 0 ? 'checked' : ''
-      }>
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-            <span class="type-tag">${player.type}</span>
-        `;
-      selectionEl.appendChild(item);
-    });
-
-    // 【核心修改2】添加事件监听，实现单选效果
-    selectionEl.addEventListener('click', e => {
-      if (e.target.type === 'checkbox' && e.target.classList.contains('guess-what-player-checkbox')) {
-        // 当点击一个复选框时，取消其他所有同类复选框的选中状态
-        document.querySelectorAll('.guess-what-player-checkbox').forEach(cb => {
-          if (cb !== e.target) cb.checked = false;
-        });
-      }
-    });
-
-    // 默认显示“我出题”模式的输入框
-    document.getElementById('user-word-input-container').style.display = 'block';
-  }
-
-  /**
-   * 【你说我猜】开始游戏的核心逻辑 (V2 - 复选框版)
-   */
-  async function startGuessWhatGame() {
-    // 【核心修改】修改选择器以匹配新的复选框class
-    const selectedOpponentCheckbox = document.querySelector('.guess-what-player-checkbox:checked');
-    if (!selectedOpponentCheckbox) {
-      alert('请选择一位玩伴！');
-      return;
-    }
-    const opponentId = selectedOpponentCheckbox.value;
-    const gameMode = document.querySelector('input[name="guess_what_mode"]:checked').value;
-    const userWord = document.getElementById('guess-what-user-word').value.trim();
-
-    if (gameMode === 'ai_guesses' && !userWord) {
-      alert('“我出题”模式下，词语不能为空！');
-      return;
-    }
-
-    await showCustomAlert('请稍候...', '正在准备游戏，AI也在摩拳擦掌...');
-
-    const chat = Object.values(state.chats).find(c => c.id === opponentId);
-    let opponentInfo = null;
-    if (chat) {
-      opponentInfo = { id: chat.id, name: chat.name, avatar: chat.settings.aiAvatar, persona: chat.settings.aiPersona };
-    } else {
-      for (const c of Object.values(state.chats)) {
-        const npc = (c.npcLibrary || []).find(n => n.id === opponentId);
-        if (npc) {
-          opponentInfo = { id: npc.id, name: npc.name, avatar: npc.avatar, persona: npc.persona };
-          break;
-        }
-      }
-    }
-    if (!opponentInfo) {
-      alert('找不到所选的玩伴信息！');
-      return;
-    }
-
-    guessWhatGameState.isActive = true;
-    guessWhatGameState.mode = gameMode;
-    guessWhatGameState.opponent = opponentInfo;
-    guessWhatGameState.gameLog = [];
-
-    document.getElementById('guess-what-game-title').textContent = `与 ${opponentInfo.name} 的游戏`;
-    const inputEl = document.getElementById('guess-what-user-input');
-
-    if (gameMode === 'ai_guesses') {
-      guessWhatGameState.secretWord = userWord;
-      guessWhatGameState.currentTurn = 'user';
-      logToGuessWhatGame('游戏开始！你来出题，请给出你的第一个提示。', 'system');
-      inputEl.placeholder = '请给出第一个提示...';
-      inputEl.disabled = false;
-    } else {
-      const { secretWord, firstHint } = await triggerGuessWhatAiAction('generate_word');
-      if (!secretWord) {
-        await showCustomAlert('出题失败', '抱歉，AI今天好像没灵感，想不出题目来。请稍后再试或检查API设置。');
-        guessWhatGameState.isActive = false;
-        showScreen('game-hall-screen');
-        return;
-      }
-      guessWhatGameState.secretWord = secretWord;
-      guessWhatGameState.currentTurn = 'user';
-      logToGuessWhatGame(`游戏开始！${opponentInfo.name} 已经想好了一个词。`, 'system');
-      logToGuessWhatGame(
-        { player: opponentInfo, text: `【${opponentInfo.name}托着下巴想了想】第一个提示是... ${firstHint}` },
-        'ai-turn',
-      );
-      inputEl.placeholder = '请根据提示进行猜测...';
-      inputEl.disabled = false;
-    }
-
-    showScreen('guess-what-game-screen');
-    renderGuessWhatGameScreen();
-    inputEl.focus();
-    const actionArea = document.getElementById('guess-what-action-area');
-    if (actionArea) actionArea.style.display = 'flex';
-  }
-  // ▼▼▼ 【全新】这是“你说我猜”的重roll功能核心函数 ▼▼▼
-  /**
-   * 【你说我猜】处理AI发言的重roll请求
-   * @param {number} logIndex - 要重roll的AI发言在gameLog中的索引
-   */
-  async function handleGuessWhatReroll(logIndex) {
-    // 1. 找到AI的发言和触发它的那条用户发言
-    const aiLogIndex = logIndex;
-    const userLogIndex = logIndex - 1;
-
-    // 安全检查
-    if (
-      userLogIndex < 0 ||
-      !guessWhatGameState.gameLog[userLogIndex] ||
-      guessWhatGameState.gameLog[userLogIndex].type !== 'user-turn'
-    ) {
-      alert('无法重roll，找不到触发此回应的用户消息。');
-      return;
-    }
-
-    // 2. 提取用户原始的输入内容
-    const originalUserInput = guessWhatGameState.gameLog[userLogIndex].message.text;
-
-    // 3. 从日志中移除这两条记录，实现“时间倒流”
-    guessWhatGameState.gameLog.splice(userLogIndex, 2);
-
-    // 4. 立即刷新界面，让用户看到消息消失了
-    renderGuessWhatGameScreen();
-    await showCustomAlert('请稍候...', 'AI正在换个思路...');
-
-    // 5. 使用用户原始的输入，重新调用游戏主流程
-    await processGuessWhatTurn(originalUserInput);
-  }
-  // ▲▲▲ 新增函数结束 ▲▲▲
-
-  // ▼▼▼ 【你说我猜】用这块【已添加重roll按钮】的代码，完整替换旧的 renderGuessWhatGameScreen 函数 ▼▼▼
-  /**
-   * 【你说我猜】渲染游戏主界面
-   */
-  function renderGuessWhatGameScreen() {
-    const logContainer = document.getElementById('guess-what-game-log');
-    logContainer.innerHTML = '';
-
-    guessWhatGameState.gameLog.forEach((log, index) => {
-      // ★ 核心修改1：增加了index参数
-      const logEl = document.createElement('div');
-      logEl.className = `guess-log-entry ${log.type}`;
-
-      if (log.type === 'system') {
-        logEl.textContent = log.message;
-      } else if (log.type === 'ai-turn') {
-        // ★ 核心修改2：定位到AI的发言
-        const avatarUrl = log.message.player.avatar;
-        // ★ 核心修改3：为AI发言添加重roll按钮
-        logEl.innerHTML = `
-                <img src="${avatarUrl}" class="avatar">
-                <div class="bubble">
-                    <div class="name" style="display: flex; align-items: center; gap: 8px;">
-                        ${log.message.player.name}
-                        <button class="gw-reroll-btn" data-log-index="${index}" title="让Ta换个说法" style="background:none; border:none; cursor:pointer; padding:0; color:var(--text-secondary);">
-                           <svg class="reroll-btn-icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                        </button>
-                    </div>
-                    <div>${log.message.text.replace(/\n/g, '<br>')}</div>
-                </div>
-            `;
-      } else {
-        // 用户的发言保持原样
-        const avatarUrl = log.message.player.isUser
-          ? state.qzoneSettings.avatar || defaultAvatar
-          : log.message.player.avatar;
-        logEl.innerHTML = `
-                <img src="${avatarUrl}" class="avatar">
-                <div class="bubble">
-                    <div class="name">${log.message.player.name}</div>
-                    <div>${log.message.text.replace(/\n/g, '<br>')}</div>
-                </div>
-            `;
-      }
-      logContainer.appendChild(logEl);
-    });
-
-    logContainer.scrollTop = logContainer.scrollHeight;
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【你说我猜】添加一条游戏日志
-   */
-  function logToGuessWhatGame(message, type = 'system') {
-    guessWhatGameState.gameLog.push({ message, type });
-    renderGuessWhatGameScreen();
-  }
-
-  /**
-   * 【你说我猜 V5 | 裁判逻辑最终修复版】游戏主循环/引擎
-   * @param {string} userInput - 用户刚刚的输入
-   */
-  async function processGuessWhatTurn(userInput) {
-    if (!guessWhatGameState.isActive) return;
-
-    const inputEl = document.getElementById('guess-what-user-input');
-    const userPlayer = { id: 'user', name: state.qzoneSettings.nickname || '我', isUser: true };
-    const aiPlayer = guessWhatGameState.opponent;
-    const currentMode = guessWhatGameState.mode;
-
-    // 1. 记录并显示用户的行为
-    logToGuessWhatGame({ player: userPlayer, text: userInput }, 'user-turn');
-
-    // 2. 轮到AI行动，禁用输入框
-    guessWhatGameState.currentTurn = 'ai';
-    inputEl.placeholder = `等待 ${aiPlayer.name} 的回应...`;
-    inputEl.disabled = true;
-    renderGuessWhatGameScreen();
-    await sleep(1500);
-
-    // 3. 让AI根据上下文执行动作
-    const aiResponse = await triggerGuessWhatAiAction(
-      currentMode === 'ai_guesses' ? 'guess_word' : 'give_hint',
-      userInput,
-    );
-
-    // 4. 【核心修复】使用 switch 结构清晰地处理AI的每一种行动结果
-    if (aiResponse) {
-      switch (aiResponse.type) {
-        case 'guess':
-          const guessText = aiResponse.text;
-          // 先把AI的猜测显示出来
-          logToGuessWhatGame({ player: aiPlayer, text: guessText }, 'ai-turn');
-
-          // 调用裁判函数进行判断
-          if (isGuessCorrect(guessText, guessWhatGameState.secretWord)) {
-            await sleep(1000); // 停顿一下，让玩家看到猜测内容
-            endGuessWhatGame('ai', `我猜对啦！答案就是【${guessWhatGameState.secretWord}】！`);
-            return; // 猜对了，游戏结束，退出函数
-          }
-          // 如果没猜对，则不执行任何操作，流程会自然地走到最后，把控制权还给用户
-          break;
-
-        case 'hint':
-          // AI给出新提示
-          logToGuessWhatGame({ player: aiPlayer, text: aiResponse.text }, 'ai-turn');
-          break;
-
-        case 'game_over':
-          // AI在给提示时直接判断用户猜对了
-          endGuessWhatGame(aiResponse.winner, aiResponse.reason);
-          return; // 游戏结束，退出函数
-
-        case 'error':
-          // AI返回了错误信息
-          logToGuessWhatGame({ player: aiPlayer, text: aiResponse.text }, 'ai-turn');
-          break;
-
-        default:
-          // 未知类型的回复，也记录下来
-          logToGuessWhatGame({ player: aiPlayer, text: '我好像有点跑神了，我们说到哪了？' }, 'ai-turn');
-          console.warn('收到了未知的AI行动类型:', aiResponse);
-          break;
-      }
-    } else {
-      // API调用彻底失败
-      logToGuessWhatGame({ player: aiPlayer, text: '我...好像彻底断线了...' }, 'ai-turn');
-    }
-
-    // 5. 如果游戏没有结束，则轮到用户行动，恢复输入框
-    guessWhatGameState.currentTurn = 'user';
-    inputEl.placeholder = currentMode === 'ai_guesses' ? '请继续给出你的提示...' : '请根据提示继续猜测...';
-    inputEl.disabled = false;
-    inputEl.focus();
-  }
-
-  /**
-   * 【你说我猜】游戏结束处理
-   */
-  function endGuessWhatGame(winner, reason) {
-    if (!guessWhatGameState.isActive) return; // 防止重复执行
-    guessWhatGameState.isActive = false; // 标记游戏为非激活状态
-
-    // 立即隐藏游戏中的输入区域
-    const actionArea = document.getElementById('guess-what-action-area');
-    if (actionArea) actionArea.style.display = 'none';
-
-    // 生成复盘文本
-    const summaryText = generateGuessWhatSummary(winner, reason);
-    // 显示结算卡片
-    showGuessWhatSummaryModal(summaryText);
-  }
-  /**
-   * 【全新】判断AI的猜测是否正确（简单版）
-   * @param {string} guess - AI猜测的词语
-   * @param {string} answer - 正确答案
-   * @returns {boolean}
-   */
-  function isGuessCorrect(guess, answer) {
-    if (!guess || !answer) return false;
-
-    // 为了更宽松的匹配，我们都转为小写并去除空格
-    const cleanGuess = guess.toLowerCase().replace(/\s+/g, '');
-    const cleanAnswer = answer.toLowerCase().replace(/\s+/g, '');
-
-    // 只要猜测包含了答案，或者答案包含了猜测，就认为正确
-    // 例如：答案是“冰淇淋”，猜测“冰淇淋车”或“淇淋”，都算对
-    return cleanGuess.includes(cleanAnswer) || cleanAnswer.includes(cleanGuess);
-  }
-
-  /**
-   * 【你说我猜-AI核心 V4 | 铜墙铁壁版】调用AI执行游戏逻辑，内置强大的重试机制
-   * @param {string} actionType - AI需要执行的动作: 'generate_word', 'give_hint', 'guess_word'
-   * @param {string} userInput - 用户刚刚的输入
-   * @returns {Promise<object|null>} - AI的行动结果
-   */
-  async function triggerGuessWhatAiAction(actionType, userInput = null) {
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) return null;
-
-    // --- 这部分Prompt逻辑保持不变 ---
-    const opponent = guessWhatGameState.opponent;
-    const historyText = guessWhatGameState.gameLog
-      .map(log =>
-        log.type === 'system' ? `[系统提示: ${log.message}]` : `${log.message.player.name}: ${log.message.text}`,
-      )
-      .slice(-10)
-      .join('\n');
-    let systemPrompt = `# 你的任务\n你正在扮演角色“${opponent.name}”，人设是：“${opponent.persona}”。\n你正在和“${
-      state.qzoneSettings.nickname || '我'
-    }”玩“你说我猜”游戏。\n你的所有发言都【必须】严格符合你的人设和口吻，让整个过程像一次真实的聊天互动。\n\n# 游戏历史 (最近的对话)\n${historyText}\n`;
-    switch (actionType) {
-      case 'generate_word':
-        systemPrompt += `# 你的行动指令\n1. 根据你的人设，想一个常见的、2-5个字的中文词语作为谜底。\n2. 为这个词语，给出你的【第一条】符合人设的、有趣的提示。\n3. 你的回复【必须且只能】是一个严格的JSON对象，包含 "secretWord" 和 "firstHint" 两个字段。\n\n# JSON输出格式示例:\n{"secretWord": "月亮", "firstHint": "【指了指天上】晚上才能看到的东西哦，圆圆的，亮亮的~"}`;
-        break;
-      case 'give_hint':
-        systemPrompt += `# 游戏规则
-你是出题人，你的谜底是【${guessWhatGameState.secretWord}】。
-用户刚刚的猜测是：“${userInput}”。
-
-# 你的行动指令
-1.  首先判断用户的猜测是否正确。
-2.  如果用户猜对了，游戏结束。
-3.  如果用户猜错了，你【必须】根据用户的错误猜测，给出【下一条】新的、更具针对性的提示，引导他们。
-4.  【【【人设扮演铁律】】】你的所有提示都【必须】符合你的人设和口吻，可以加入动作、表情、语气词，甚至可以对用户【笨笨的猜测进行一些俏皮的吐槽】，让游戏更有趣。
-5.  你的回复【必须且只能】是一个严格的JSON对象。
-
-# JSON输出格式
-- 如果猜对了: \`{"type": "game_over", "winner": "user", "reason": "恭喜你猜对啦！就是【${guessWhatGameState.secretWord}】！"}\`
-- 如果猜错了: \`{"type": "hint", "text": "【叹气】不对哦，再想想。提示是：[在这里写你的新提示]"}\``;
-        break;
-
-      // ▼▼▼ 请用这整块【修复后】的代码，替换掉旧的 case 'guess_word' 代码块 ▼▼▼
-      case 'guess_word':
-        systemPrompt += `# 游戏规则
-你是猜题人，用户正在描述一个词语，你需要根据提示猜出这个词。
-用户刚刚给你的新提示是：“${userInput}”。
-
-# 你的行动指令
-1.  综合分析【游戏历史】中用户给出的【所有提示】。
-2.  根据所有线索，进行【一次】猜测。
-3.  【【【人设扮演铁律】】】你的猜测【必须】符合你的人设和口吻。你可以加入你的思考过程、情绪，甚至可以【对用户的提示进行吐槽】。
-4.  【【【趣味性指令】】】为了逗弄用户，你可以【故意给出一些有趣的、沾点边但明显错误的答案】，然后再给出你认为最可能的答案。但这只是偶尔的调剂，你的最终目的还是要猜对。
-5.  【【【绝对禁止】】】你【不能】再向用户提问，你的任务是直接猜测。
-6.  你的回复【必须且只能】是一个严格的JSON对象。
-
-# JSON输出格式 (注意：你无法判断自己是否猜对，所以永远使用这个格式)
-{"type": "guess", "text": "【假装恍-然大悟】哦~我知道了，是“电饭煲”对不对？...好吧好吧不逗你了，我猜是...[你的真实猜测]"}`;
-        break;
-      // ▲▲▲ 替换结束 ▲▲▲
-    }
-
-    // --- 【核心改造】带有智能重试的API请求逻辑 ---
-    const maxRetries = 3;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const messagesForApi = [{ role: 'user', content: '请根据你在系统指令中读到的规则，立即开始你的行动。' }];
-        const isGemini = proxyUrl === GEMINI_API_URL;
-        const geminiConfig = toGeminiRequestData(model, apiKey, systemPrompt, messagesForApi, isGemini);
-
-        const response = isGemini
-          ? await fetch(geminiConfig.url, geminiConfig.data)
-          : await fetch(`${proxyUrl}/v1/chat/completions`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-              body: JSON.stringify({
-                model: model,
-                messages: [{ role: 'system', content: systemPrompt }, ...messagesForApi],
-                temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-                response_format: { type: 'json_object' },
-              }),
-            });
-
-        // 智能判断错误类型
-        if (!response.ok) {
-          // 对于 4xx 类的客户端错误 (如 401 Unauthorized, 400 Bad Request)，通常重试无效，直接抛出。
-          if (response.status >= 400 && response.status < 500) {
-            const errorText = await response.text();
-            throw new Error(`API客户端错误 (状态码 ${response.status}): ${errorText}`);
-          }
-          // 对于 5xx 服务器错误或 429 速率限制，是可重试的。
-          throw new Error(`API服务器临时错误 (状态码 ${response.status})`);
-        }
-
-        const data = await response.json();
-        const content = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).replace(
-          /^```json\s*|```$/g,
-          '',
-        );
-        return JSON.parse(content); // **成功，直接返回结果，跳出循环**
-      } catch (error) {
-        console.error(`“你说我猜”AI行动[${actionType}]失败 (第 ${attempt}/${maxRetries} 次尝试):`, error.message);
-
-        // 如果是最后一次尝试，或者是一个不可重试的错误，则跳出循环准备返回最终失败信息
-        if (attempt === maxRetries || error.message.includes('API客户端错误')) {
-          break;
-        }
-
-        // 等待一段时间再重试（比如 1.5s, 3s, 4.5s）
-        await sleep(1500 * attempt);
-      }
-    }
-
-    // --- 所有重试都失败后的最终处理 ---
-    console.error(`“你说我猜”AI行动[${actionType}]在所有尝试后均失败。`);
-    // 根据失败的阶段，返回一个特定的错误对象
-    if (actionType === 'generate_word') {
-      return { secretWord: null, firstHint: null };
-    }
-    // 返回一个全新的 'error' 类型，让游戏主循环知道如何处理
-    return { type: 'error', text: '【叹了口气】抱歉，我的网络好像出问题了，试了好几次都没连上...' };
-  }
-  // ▼▼▼ 【全新】“你说我猜”游戏结算与转发功能核心代码 ▼▼▼
-
-  /**
-   * 【你说我猜】生成游戏复盘的文本
-   * @param {string} winner - 胜利者 ('user' or 'ai')
-   * @param {string} reason - 游戏结束原因
-   * @returns {string} 格式化后的复盘Markdown文本
-   */
-  function generateGuessWhatSummary(winner, reason) {
-    let summaryText = `**你说我猜 - 游戏复盘**\n\n`;
-    summaryText += `**游戏结果:** ${reason}\n`;
-    summaryText += `**谜底:** ${guessWhatGameState.secretWord}\n\n`;
-    summaryText += `**参与玩家:** 我, ${guessWhatGameState.opponent.name}\n\n`;
-    summaryText += `---\n\n**游戏记录:**\n`;
-
-    const formattedLog = guessWhatGameState.gameLog
-      .map(log => {
-        if (log.type === 'system') {
-          return `[系统提示: ${log.message}]`;
-        } else {
-          return `${log.message.player.name}: ${log.message.text}`;
-        }
-      })
-      .join('\n');
-
-    summaryText += formattedLog;
-
-    return summaryText;
-  }
-
-  /**
-   * 【你说我猜】显示游戏结算卡片模态框
-   * @param {string} summaryText - 复盘文本
-   */
-  function showGuessWhatSummaryModal(summaryText) {
-    const modal = document.getElementById('guess-what-summary-modal');
-    const contentEl = document.getElementById('guess-what-summary-content');
-
-    contentEl.innerHTML = renderMarkdown(summaryText);
-
-    // 使用克隆节点技巧，防止事件重复绑定
-    const forwardBtn = document.getElementById('forward-guess-what-summary-btn');
-    const newForwardBtn = forwardBtn.cloneNode(true);
-    forwardBtn.parentNode.replaceChild(newForwardBtn, forwardBtn);
-
-    const closeBtn = document.getElementById('close-guess-what-summary-btn');
-    const newCloseBtn = closeBtn.cloneNode(true);
-    closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-
-    // 检查对手是否是主要角色（有独立聊天窗口），而不是NPC
-    const opponentId = guessWhatGameState.opponent.id;
-    const canForward = state.chats[opponentId] !== undefined;
-
-    if (canForward) {
-      newForwardBtn.style.display = 'block';
-      newForwardBtn.onclick = () => forwardGuessWhatSummary(summaryText);
-    } else {
-      // 如果对手是NPC，没有独立聊天窗口，则隐藏转发按钮
-      newForwardBtn.style.display = 'none';
-    }
-
-    newCloseBtn.onclick = () => {
-      modal.classList.remove('visible');
-      showScreen('game-hall-screen');
-    };
-
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 【你说我猜】将游戏复盘转发到对应的AI角色的聊天中
-   * @param {string} summaryText - 复盘文本
-   */
-  async function forwardGuessWhatSummary(summaryText) {
-    const opponentId = guessWhatGameState.opponent.id;
-    const chat = state.chats[opponentId];
-
-    if (!chat) {
-      await showCustomAlert('转发失败', '找不到该玩家的聊天窗口。');
-      return;
-    }
-
-    document.getElementById('guess-what-summary-modal').classList.remove('visible');
-
-    // 创建对用户可见的复盘消息
-    // 创建对用户可见的复盘消息
-    const visibleMessage = {
-      role: 'user',
-      type: 'share_link',
-      timestamp: Date.now(),
-      title: '你说我猜 - 游戏复盘',
-      description: '点击查看详细复盘记录',
-      source_name: '游戏中心',
-      content: summaryText,
-    };
-
-    // 创建给AI看的隐藏指令
-    const aiContext = `[系统指令：刚刚结束了一局“你说我猜”，这是游戏复盘。请根据这个复盘内容，以你的角色人设，和用户聊聊刚才的游戏。]\n\n${summaryText}`;
-    const hiddenInstruction = {
-      role: 'system',
-      content: aiContext,
-      timestamp: Date.now() + 1,
-      isHidden: true,
-    };
-
-    chat.history.push(visibleMessage, hiddenInstruction);
-    await db.chats.put(chat);
-
-    await showCustomAlert('转发成功', `游戏复盘已发送至与“${chat.name}”的聊天中！`);
-
-    // ▼▼▼ 这就是本次的核心修改！ ▼▼▼
-    // 我们现在通过 window 对象来调用这两个“公共函数”
-    window.openChat(chat.id);
-    window.triggerAiResponse();
-    // ▲▲▲ 修改结束 ▲▲▲
-  }
-
-  // ▲▲▲ 新增代码粘贴结束 ▲▲▲
-  // ▼▼▼ 【全新】这是“心动飞行棋”的所有核心功能函数 ▼▼▼
-  /**
-   * 【全新】导出指定的飞行棋问题库
-   * @param {number} bankId - 要导出的问题库的ID
-   */
-  async function exportLudoQuestionBank(bankId) {
-    try {
-      const bank = await db.ludoQuestionBanks.get(bankId);
-      const questions = await db.ludoQuestions.where('bankId').equals(bankId).toArray();
-
-      if (!bank) {
-        alert('错误：找不到要导出的题库。');
-        return;
-      }
-
-      // 1. 准备要导出的数据结构，只包含纯粹的数据
-      const exportData = {
-        bankName: bank.name,
-        questions: questions.map(q => ({
-          text: q.text,
-          type: q.type,
-        })),
-      };
-
-      // 2. 将数据转换为格式化的JSON字符串
-      const jsonString = JSON.stringify(exportData, null, 2);
-
-      // 3. 创建Blob对象
-      const blob = new Blob([jsonString], { type: 'application/json' });
-
-      // 4. 创建并触发下载链接
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const dateStr = new Date().toISOString().split('T')[0];
-      link.href = url;
-      link.download = `[飞行棋题库]${bank.name}-${dateStr}.json`;
-      document.body.appendChild(link);
-      link.click();
-
-      // 5. 清理临时创建的对象
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      await showCustomAlert('导出成功', `问题库“${bank.name}”已成功导出！`);
-    } catch (error) {
-      console.error('导出飞行棋题库失败:', error);
-      await showCustomAlert('导出失败', `发生了一个错误: ${error.message}`);
-    }
-  }
-
-  /**
-   * 【全新】处理导入的飞行棋问题库文件
-   * @param {File} file - 用户选择的JSON文件
-   */
-  async function importLudoQuestionBank(file) {
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async e => {
-      try {
-        const text = e.target.result;
-        const data = JSON.parse(text);
-
-        // 1. 验证文件格式
-        if (!data.bankName || !Array.isArray(data.questions)) {
-          throw new Error("文件格式无效。必须包含 'bankName' 和 'questions' 数组。");
-        }
-
-        // 2. 检查题库名称是否已存在
-        let newBankName = data.bankName;
-        const existingBank = await db.ludoQuestionBanks.where('name').equals(newBankName).first();
-        if (existingBank) {
-          newBankName = `${newBankName} (导入)`; // 如果重名，自动添加后缀
-        }
-
-        // 3. 创建新的题库
-        const newBankId = await db.ludoQuestionBanks.add({ name: newBankName });
-
-        // 4. 准备要批量添加的新问题
-        const questionsToAdd = data.questions.map(q => ({
-          bankId: newBankId,
-          text: q.text,
-          type: q.type || 'both_answer', // 兼容旧的没有type的题库
-        }));
-
-        // 5. 如果有问题，就批量添加到数据库
-        if (questionsToAdd.length > 0) {
-          await db.ludoQuestions.bulkAdd(questionsToAdd);
-        }
-
-        // 6. 刷新UI并给出提示
-        await renderLudoQuestionBanks();
-        await showCustomAlert('导入成功', `问题库“${newBankName}”已成功导入，包含 ${questionsToAdd.length} 个问题！`);
-      } catch (error) {
-        console.error('导入飞行棋题库失败:', error);
-        await showCustomAlert('导入失败', `无法解析文件，请确保它是正确的题库备份文件。\n\n错误: ${error.message}`);
-      }
-    };
-    reader.readAsText(file, 'UTF-8');
-  }
-
-  /**
-   * 【飞行棋】打开游戏设置界面 (V2 - 复选框版)
-   */
-  async function openLudoSetup() {
-    showScreen('ludo-setup-screen');
-    const selectionEl = document.getElementById('ludo-player-selection');
-    selectionEl.innerHTML = '<p>正在加载角色列表...</p>';
-
-    // 【核心修改】为了保持统一，我们在这里也加载NPC作为可选玩伴
-    const singleChats = Object.values(state.chats).filter(chat => !chat.isGroup);
-    const allNpcs = Object.values(state.chats).flatMap(chat =>
-      (chat.npcLibrary || []).map(npc => ({ ...npc, owner: chat.name })),
-    );
-    let playerOptions = [
-      ...singleChats.map(c => ({ id: c.id, name: c.name, avatar: c.settings.aiAvatar, type: '角色' })),
-      ...allNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatar, type: `NPC (${n.owner})` })),
-    ];
-
-    selectionEl.innerHTML = '';
-    if (playerOptions.length === 0) {
-      selectionEl.innerHTML =
-        '<p style="text-align:center; color: var(--text-secondary);">还没有可以一起玩的好友哦~</p>';
-      return;
-    }
-
-    // 【核心修改1】渲染复选框列表
-    playerOptions.forEach((player, index) => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item';
-      item.innerHTML = `
-            <input type="checkbox" class="ludo-player-checkbox" value="${player.id}" id="ludo-opponent-${player.id}" ${
-        index === 0 ? 'checked' : ''
-      }>
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-            <span class="type-tag">${player.type}</span>
-        `;
-      selectionEl.appendChild(item);
-    });
-
-    // 【核心修改2】添加事件监听以实现单选
-    selectionEl.addEventListener('click', e => {
-      if (e.target.type === 'checkbox' && e.target.classList.contains('ludo-player-checkbox')) {
-        document.querySelectorAll('.ludo-player-checkbox').forEach(cb => {
-          if (cb !== e.target) cb.checked = false;
-        });
-      }
-    });
-
-    // 加载问题库到下拉框
-    const bankSelect = document.getElementById('ludo-question-bank-select');
-    bankSelect.innerHTML = '';
-    const banks = await db.ludoQuestionBanks.toArray();
-    if (banks.length === 0) {
-      bankSelect.innerHTML = '<option value="">暂无可用题库</option>';
-    } else {
-      banks.forEach(bank => {
-        const option = document.createElement('option');
-        option.value = bank.id;
-        option.textContent = bank.name;
-        bankSelect.appendChild(option);
-      });
-    }
-  }
-
-  /**
-   * 【飞行棋】开始游戏的核心逻辑 (V2 - 复选框版)
-   */
-  async function startLudoGame() {
-    // 【核心修改】修改选择器以匹配新的复选框class
-    const selectedOpponentRadio = document.querySelector('.ludo-player-checkbox:checked');
-    if (!selectedOpponentRadio) {
-      alert('请选择一位玩伴！');
-      return;
-    }
-    const opponentId = selectedOpponentRadio.value;
-    const opponentChat =
-      state.chats[opponentId] ||
-      Object.values(state.chats)
-        .flatMap(c => c.npcLibrary)
-        .find(n => n.id === opponentId);
-
-    const selectedBankId = parseInt(document.getElementById('ludo-question-bank-select').value);
-    if (isNaN(selectedBankId)) {
-      alert('请选择一个有效的问题库！');
-      return;
-    }
-
-    // 查找对手的完整信息（和旧逻辑一样）
-    let opponentInfo = null;
-    const mainChat = Object.values(state.chats).find(c => c.id === opponentId);
-    if (mainChat) {
-      opponentInfo = { ...mainChat, persona: mainChat.settings.aiPersona, avatar: mainChat.settings.aiAvatar };
-    } else {
-      for (const c of Object.values(state.chats)) {
-        const npc = (c.npcLibrary || []).find(n => n.id === opponentId);
-        if (npc) {
-          opponentInfo = npc;
-          break;
-        }
-      }
-    }
-    if (!opponentInfo) {
-      alert('找不到所选的玩伴信息！');
-      return;
-    }
-
-    // 初始化游戏状态 (和旧逻辑一样)
-    ludoGameState = {
-      isActive: true,
-      opponent: opponentInfo,
-      players: [],
-      currentTurnIndex: 0,
-      gameLog: [],
-      boardLayout: [],
-      isDiceRolling: false,
-      activeQuestionBankId: selectedBankId,
-    };
-    const userPlayer = {
-      id: 'user',
-      name: '你',
-      avatar: state.qzoneSettings.avatar || defaultAvatar,
-      piecePosition: -1,
-      isUser: true,
-    };
-    const charPlayer = {
-      id: opponentInfo.id,
-      name: opponentInfo.name,
-      avatar: opponentInfo.avatar || defaultAvatar,
-      piecePosition: -1,
-      isUser: false,
-      persona: opponentInfo.persona,
-    };
-    if (Math.random() > 0.5) {
-      ludoGameState.players = [userPlayer, charPlayer];
-    } else {
-      ludoGameState.players = [charPlayer, userPlayer];
-    }
-    ludoGameState.currentTurnIndex = 0;
-    generateLudoBoard();
-    showScreen('ludo-game-screen');
-    renderLudoGameScreen();
-    logToLudoGame('游戏开始！掷出6点即可起飞。', 'system');
-    await sleep(1000);
-    await processLudoTurn();
-  }
-  // ▼▼▼ 【全新】这是飞行棋的重roll功能核心函数 ▼▼▼
-  /**
-   * 【飞行棋】处理AI发言的重roll请求
-   * @param {number} logIndex - 要重roll的发言在gameLog中的索引
-   */
-  async function handleLudoReroll(logIndex) {
-    const logEntry = ludoGameState.gameLog[logIndex];
-    if (!logEntry || logEntry.type !== 'char') return;
-
-    // 提取原始发言内容
-    const originalSpeech = logEntry.message.replace(/<strong>.*?<\/strong>:\s*/, '');
-
-    // 重新调用AI，让它换个说法
-    const newSpeech = await triggerLudoAiAction('reroll_comment', { originalSpeech: originalSpeech });
-
-    // 更新日志并重新渲染
-    ludoGameState.gameLog[logIndex].message = `<strong>${ludoGameState.opponent.name}:</strong> ${newSpeech}`;
-    renderLudoGameScreen();
-  }
-  // ▲▲▲ 新增函数结束 ▲▲▲
-
-  // ▼▼▼ 【飞行棋】用这块【已添加重roll按钮】的代码，完整替换旧的 renderLudoGameScreen 函数 ▼▼▼
-  function renderLudoGameScreen(options = {}) {
-    if (!ludoGameState.isActive) return;
-
-    const userPieceEl = document.getElementById('ludo-user-piece');
-    const charPieceEl = document.getElementById('ludo-char-piece');
-    if (!userPieceEl || !charPieceEl) return;
-
-    userPieceEl.style.backgroundImage = `url(${ludoGameState.players.find(p => p.isUser).avatar})`;
-    charPieceEl.style.backgroundImage = `url(${ludoGameState.players.find(p => !p.isUser).avatar})`;
-
-    ludoGameState.players.forEach(player => {
-      const pieceEl = player.isUser ? userPieceEl : charPieceEl;
-      const pos = player.piecePosition;
-
-      if (pos === -1) {
-        const startCell = document.querySelector('.ludo-cell.start');
-        if (startCell) {
-          pieceEl.style.left = `${startCell.offsetLeft + (player.isUser ? 0 : 5)}px`;
-          pieceEl.style.top = `${startCell.offsetTop + (player.isUser ? 0 : 5)}px`;
-        }
-      } else if (pos >= LUDO_BOARD_SIZE) {
-        const endCell = document.querySelector('.ludo-cell.end');
-        if (endCell) {
-          pieceEl.style.left = `${endCell.offsetLeft + (player.isUser ? 0 : 5)}px`;
-          pieceEl.style.top = `${endCell.offsetTop + (player.isUser ? 0 : 5)}px`;
-        }
-      } else {
-        const cell = document.querySelector(`.ludo-cell[data-index="${pos}"]`);
-        if (cell) {
-          pieceEl.style.left = `${cell.offsetLeft + (player.isUser ? 0 : 5)}px`;
-          pieceEl.style.top = `${cell.offsetTop + (player.isUser ? 0 : 5)}px`;
-        }
-      }
-    });
-
-    const logContainer = document.getElementById('ludo-game-log');
-    // ★ 核心修改：在map函数中加入 index 参数
-    logContainer.innerHTML = ludoGameState.gameLog
-      .map((log, index) => {
-        // ★ 核心修改：判断是否为AI发言
-        if (log.type === 'char') {
-          // ★ 核心修改：为AI发言添加重roll按钮
-          return `
-                <div class="log-entry char">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span>${log.message.replace(/\n/g, '<br>')}</span>
-                        <button class="ludo-reroll-btn" data-log-index="${index}" title="让Ta换个说法" style="background:none; border:none; cursor:pointer; padding:0 5px; color:var(--text-secondary);">
-                           <svg class="reroll-btn-icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-        // 其他类型的日志保持原样
-        return `<div class="log-entry ${log.type}">${log.message.replace(/\n/g, '<br>')}</div>`;
-      })
-      .join('');
-    logContainer.scrollTop = logContainer.scrollHeight;
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【全新】飞行棋专用的用户输入函数
-   * @param {string} promptText - 提示文字 (虽然我们没用上，但保留接口)
-   * @param {string} placeholder - 输入框的占位文字
-   * @returns {Promise<string>} - 返回用户的输入内容
-   */
-  function waitForLudoUserAction(promptText, placeholder) {
-    return new Promise(resolve => {
-      const actionArea = document.getElementById('ludo-action-area');
-      actionArea.innerHTML = ''; // 清空旧内容（比如骰子）
-      actionArea.classList.add('speaking-mode'); // 复用剧本杀的发言样式
-
-      const textarea = document.createElement('textarea');
-      textarea.id = 'ludo-user-speech-input'; // 使用新ID，避免冲突
-      textarea.rows = 1;
-      textarea.placeholder = placeholder || '请输入你的回答...';
-
-      // 实时调整高度
-      textarea.addEventListener('input', () => {
-        textarea.style.height = 'auto';
-        textarea.style.height = textarea.scrollHeight + 'px';
-      });
-
-      const confirmBtn = document.createElement('button');
-      confirmBtn.className = 'form-button'; // 使用通用按钮样式
-      confirmBtn.textContent = '确认回答';
-
-      actionArea.appendChild(textarea);
-      actionArea.appendChild(confirmBtn);
-      textarea.focus();
-
-      confirmBtn.onclick = () => {
-        const answer = textarea.value.trim() || '...（跳过）';
-        actionArea.innerHTML = ''; // 清空输入框和按钮
-        actionArea.classList.remove('speaking-mode');
-        resolve(answer);
-      };
-    });
-  }
-  // ▲▲▲ 新代码粘贴结束 ▲▲▲
-
-  // ▼▼▼ 用这块【V2 - 支持新问题类型】的代码，完整替换你旧的 handleLudoQuestionEvent 函数 ▼▼▼
-  async function handleLudoQuestionEvent(player) {
-    // 1. 根据游戏状态获取问题库
-    const questionBankId = ludoGameState.activeQuestionBankId;
-    let questions = [];
-    if (questionBankId) {
-      questions = await db.ludoQuestions.where('bankId').equals(questionBankId).toArray();
-    }
-
-    // 2. 如果题库是空的，提示并直接进入下一回合
-    if (questions.length === 0) {
-      logToLudoGame('当前题库是空的，跳过本轮问答。', 'system');
-      await sleep(1500);
-      await advanceTurn(); // 别忘了切换回合
-      return;
-    }
-
-    // 3. 随机抽一个问题
-    const questionObj = getRandomItem(questions);
-    const questionText = questionObj.text;
-
-    // 4. 【核心】弹出模式选择框，让用户决定怎么玩
-    const mode = await showAnswerModeSelector(questionText);
-    if (!mode) {
-      logToLudoGame('玩家取消了答题，游戏继续。', 'system');
-      await advanceTurn(); // 取消也要切换回合
-      return;
-    }
-
-    // 5. 根据选择的模式，执行不同的流程
-    logToLudoGame(
-      `【${mode === 'both_answer' ? '共同回答' : '一人回答，一人评价'}】抽到的问题是：“${questionText}”`,
-      'system',
-    );
-    await sleep(1500);
-
-    const currentPlayer = player;
-    const otherPlayer = ludoGameState.players.find(p => p.id !== currentPlayer.id);
-
-    // --- 流程分支 ---
-    if (mode === 'both_answer') {
-      logToLudoGame(`请 <strong>${currentPlayer.name}</strong> 先回答。`, 'system');
-      let answer1 = currentPlayer.isUser
-        ? await waitForLudoUserAction('轮到你回答问题', '请输入你的回答...')
-        : await triggerLudoAiAction('answer_question', { question: questionText });
-      logToLudoGame(`<strong>${currentPlayer.name}:</strong> ${answer1}`, currentPlayer.isUser ? 'user' : 'char');
-      await sleep(2000);
-
-      logToLudoGame(`现在请 <strong>${otherPlayer.name}</strong> 回答。`, 'system');
-      let answer2 = otherPlayer.isUser
-        ? await waitForLudoUserAction('轮到你回答问题', '请输入你的回答...')
-        : await triggerLudoAiAction('answer_question', { question: questionText });
-      logToLudoGame(`<strong>${otherPlayer.name}:</strong> ${answer2}`, otherPlayer.isUser ? 'user' : 'char');
-    } else if (mode === 'single_answer') {
-      logToLudoGame(`请 <strong>${currentPlayer.name}</strong> 先回答。`, 'system');
-      let answer = currentPlayer.isUser
-        ? await waitForLudoUserAction('轮到你回答问题', '请输入你的回答...')
-        : await triggerLudoAiAction('answer_question', { question: questionText });
-      logToLudoGame(`<strong>${currentPlayer.name}:</strong> ${answer}`, currentPlayer.isUser ? 'user' : 'char');
-      await sleep(2000);
-
-      logToLudoGame(`现在请 <strong>${otherPlayer.name}</strong> 对Ta的回答发表一下看法吧。`, 'system');
-      let evaluation = otherPlayer.isUser
-        ? await waitForLudoUserAction(`对“${answer}”的看法`, '请输入你的评价...')
-        : await triggerLudoAiAction('evaluate_answer', { question: questionText, answer: answer });
-      logToLudoGame(`<strong>${otherPlayer.name}:</strong> ${evaluation}`, otherPlayer.isUser ? 'user' : 'char');
-    }
-
-    // 6. 问答流程结束后，提示并切换到下一回合
-    await sleep(1500);
-    logToLudoGame('本轮问答结束，游戏继续！', 'system');
-    await advanceTurn();
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【飞行棋】添加一条游戏日志
-   */
-  function logToLudoGame(message, type) {
-    ludoGameState.gameLog.push({ message, type });
-    renderLudoGameScreen();
-  }
-  // ▼▼▼ 在这里粘贴下面的新函数 ▼▼▼
-  /**
-   * 【全新】一个带“魔法”的掷骰子函数
-   * @param {object} player - 正在掷骰子的玩家对象
-   * @returns {number} - 最终的骰子点数
-   */
-  function rollTheDice(player) {
-    // 如果玩家还在起点（没有起飞）
-    if (player.piecePosition === -1) {
-      // 就有50%的超高概率直接掷出6！
-      if (Math.random() < 0.5) {
-        return 6;
-      }
-      // 另外50%的概率，随机掷出1-5
-      return Math.floor(Math.random() * 5) + 1;
-    }
-    // 如果已经起飞了，就恢复正常的公平骰子
-    return Math.floor(Math.random() * 6) + 1;
-  }
-  // ▲▲▲ 新函数粘贴结束 ▲▲▲
-
-  /**
-   * 【飞行棋】游戏主循环
-   */
-  async function processLudoTurn() {
-    if (!ludoGameState.isActive) return;
-
-    const currentPlayer = ludoGameState.players[ludoGameState.currentTurnIndex];
-    logToLudoGame(`轮到 <strong>${currentPlayer.name}</strong> 行动了。`, 'system');
-
-    if (currentPlayer.isUser) {
-      // 用户回合
-      const actionArea = document.getElementById('ludo-action-area');
-      actionArea.innerHTML = `
-            <div id="ludo-dice-container" title="点击掷骰子">
-                <div class="dice">
-                    <div class="face front">1</div><div class="face back">6</div>
-                    <div class="face right">3</div><div class="face left">4</div>
-                    <div class="face top">2</div><div class="face bottom">5</div>
-                </div>
-            </div>
-        `;
-      document.getElementById('ludo-dice-container').onclick = handleUserRollDice;
-    } else {
-      // AI回合
-      document.getElementById('ludo-action-area').innerHTML = `<p>${currentPlayer.name} 正在思考...</p>`;
-      await sleep(2000);
-      const diceRoll = rollTheDice(currentPlayer);
-      await handlePlayerMove(currentPlayer, diceRoll, false);
-    }
-  }
-
-  /**
-   * 【飞行棋】处理用户掷骰子
-   */
-  async function handleUserRollDice() {
-    if (ludoGameState.isDiceRolling) return;
-    ludoGameState.isDiceRolling = true;
-
-    const diceEl = document.querySelector('.dice');
-    diceEl.classList.add('rolling');
-    document.getElementById('ludo-dice-container').onclick = null; // 防止重复点击
-
-    const userPlayer = ludoGameState.players.find(p => p.isUser); // 先找到用户玩家对象
-    const diceRoll = rollTheDice(userPlayer); // 调用新函数
-
-    setTimeout(async () => {
-      diceEl.classList.remove('rolling');
-      // 根据点数旋转到对应面 (这是一个简化的视觉效果)
-      const rotations = {
-        1: 'rotateY(0deg)',
-        2: 'rotateX(-90deg)',
-        3: 'rotateY(-90deg)',
-        4: 'rotateY(90deg)',
-        5: 'rotateX(90deg)',
-        6: 'rotateY(180deg)',
-      };
-      diceEl.style.transform = rotations[diceRoll];
-
-      const userPlayer = ludoGameState.players.find(p => p.isUser);
-      await handlePlayerMove(userPlayer, diceRoll, true);
-
-      ludoGameState.isDiceRolling = false;
-    }, 1500);
-  }
-
-  // ▼▼▼ 用这块【已修复】的代码，完整替换你旧的 handlePlayerMove 函数 ▼▼▼
-  async function handlePlayerMove(player, diceRoll, isUserMove) {
-    logToLudoGame(
-      `<strong>${player.name}</strong> 掷出了 <strong>${diceRoll}</strong> 点！`,
-      isUserMove ? 'user' : 'char',
-    );
-
-    if (player.piecePosition === -1) {
-      // 如果棋子还在起点
-      if (diceRoll === 6) {
-        player.piecePosition = 0; // 起飞到第0格
-        logToLudoGame(`<strong>${player.name}</strong> 的棋子起飞了！`, 'system');
-        renderLudoGameScreen();
-
-        if (!isUserMove) {
-          await triggerLudoAiAction('roll_6');
-        }
-        logToLudoGame(`掷出6点，<strong>${player.name}</strong> 再行动一次。`, 'system');
-        await sleep(1000);
-        await processLudoTurn(); // 重新执行当前玩家的回合
-      } else {
-        logToLudoGame('点数不是6，无法起飞。', 'system');
-        await advanceTurn(); // 切换到下一位玩家
-      }
-      return; // 结束本次移动处理
-    }
-
-    // --- ▼▼▼ 核心修复从这里开始 ▼▼▼ ---
-
-    const newPosition = player.piecePosition + diceRoll;
-    const finalPositionIndex = LUDO_BOARD_SIZE - 1; // 终点格子的索引
-
-    // 1. 【核心修改】只要新位置大于或等于终点，就直接判定胜利！
-    if (newPosition >= finalPositionIndex) {
-      player.piecePosition = finalPositionIndex; // 无论掷出几点，都让棋子停在终点格子上
-      renderLudoGameScreen();
-      logToLudoGame(`🎉 <strong>${player.name}</strong> 到达了终点！`, 'system');
-      await triggerLudoAiAction(isUserMove ? 'user_win' : 'char_win');
-      ludoGameState.isActive = false;
-      document.getElementById('ludo-action-area').innerHTML = '';
-      await sleep(1000);
-      showLudoSummary(player.name); // 显示结算界面
-      return; // 游戏结束，直接返回
-    }
-    // 2. 如果不是胜利，就正常移动
-    else {
-      player.piecePosition = newPosition;
-    }
-
-    // --- ▲▲▲ 核心修复到这里结束 ▲▲▲ ---
-
-    renderLudoGameScreen();
-    await sleep(500);
-
-    // 检查是否踩到对方棋子
-    const opponent = ludoGameState.players.find(p => p.id !== player.id);
-    if (player.piecePosition === opponent.piecePosition && opponent.piecePosition !== -1) {
-      opponent.piecePosition = -1; // 将对方棋子送回起点
-      logToLudoGame(`💥 <strong>${player.name}</strong> 踩中了 <strong>${opponent.name}</strong>！`, 'system');
-      renderLudoGameScreen();
-      await triggerLudoAiAction(isUserMove ? 'kick_char' : 'kick_user');
-      await sleep(1000);
-    }
-
-    // ▼▼▼ 请用这块【新代码】替换旧的“检查是否踩到事件格子”的 if 语句块 ▼▼▼
-
-    // 检查是否踩到事件格子
-    const cellIndex = ludoGameState.boardLayout.findIndex(c => c && c.index === player.piecePosition);
-    if (cellIndex > -1 && ludoGameState.boardLayout[cellIndex].event) {
-      const cellData = ludoGameState.boardLayout[cellIndex];
-      const eventType = cellData.event;
-      if (eventType === 'question') {
-        // 【核心修改】将格子上的问题对象，直接传给处理函数
-        await handleLudoQuestionEvent(player, cellData.question);
-        return;
-      }
-    }
-    // ▲▲▲ 替换结束 ▲▲▲
-
-    // 如果掷出6点，再行动一次
-    if (diceRoll === 6) {
-      if (!isUserMove) {
-        await triggerLudoAiAction('roll_6');
-      }
-      logToLudoGame(`掷出6点，<strong>${player.name}</strong> 再行动一次。`, 'system');
-      await sleep(1000);
-      await processLudoTurn();
-    } else {
-      await advanceTurn(); // 否则切换到下一位玩家
-    }
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【飞行棋】推进到下一个回合
-   */
-  async function advanceTurn() {
-    ludoGameState.currentTurnIndex = (ludoGameState.currentTurnIndex + 1) % ludoGameState.players.length;
-    await processLudoTurn();
-  }
-
-  // ▼▼▼ 用这块【优化后】的代码，完整替换你旧的 triggerLudoAiAction 函数 ▼▼▼
-  async function triggerLudoAiAction(eventType, context = {}) {
-    const aiPlayer = ludoGameState.players.find(p => !p.isUser);
-    const userPlayer = ludoGameState.players.find(p => p.isUser);
-
-    const eventPrompts = {
-      roll_6: '你掷出了6点，可以再行动一次！',
-      kick_char: '你刚刚把我踢回了起点！',
-      kick_user: '我刚刚把你的棋子踢回了起点！',
-      char_win: '我赢得了这场游戏！',
-      user_win: '你赢得了这场游戏！',
-    };
-
-    let eventPrompt = eventPrompts[eventType] || '请根据当前情况自由发挥。';
-
-    // --- ▼▼▼ 核心修改1：为不同的问答场景提供更详细的指令 ▼▼▼ ---
-    if (eventType === 'answer_question') {
-      eventPrompt = `现在请根据你的人设，详细回答这个问题：“${context.question}”`;
-    } else if (eventType === 'evaluate_answer') {
-      eventPrompt = `对于问题“${context.question}”，对方的回答是：“${context.answer}”。现在请你以你的角色身份，对这个回答详细地发表一下看法或感受。`;
-    }
-    // ★★★ 在这里粘贴下面的新代码 ★★★
-    else if (eventType === 'reroll_comment') {
-      eventPrompt = `你之前说了：“${context.originalSpeech}”。请换一种说法，但表达类似的情绪或意思。`;
-    }
-    // ★★★ 粘贴结束 ★★★
-    const systemPrompt = `
-# 角色扮演指令
-你正在和你的伴侣(${userPlayer.name})玩一场心动的线上飞行棋游戏。
-你的名字是"${aiPlayer.name}"，你的人设是：${aiPlayer.persona}
-你的回复必须完全符合你的人设，自然地表达你的情绪。
-
-# 游戏当前状态
-- 你的棋子位置: ${aiPlayer.piecePosition}
-- 对方的棋子位置: ${userPlayer.piecePosition}
-- 当前回合: 轮到 ${ludoGameState.players[ludoGameState.currentTurnIndex].name}
-
-# 刚刚发生的事件
-${eventPrompt}
-
-# 你的任务
-根据以上所有信息，生成一段符合你人设的回应。你的回应可以包含动作、心理活动和对话，让互动更生动，要非常的贴合你的人设，以人设为主。
-
-# 输出格式
-你的回复【必须且只能】是一个严格的JSON对象，格式如下:
-{"speech": "你的回应..."}
-`;
-
-    try {
-      const { proxyUrl, apiKey, model } = state.apiConfig;
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let messagesForApi = [{ role: 'user', content: systemPrompt }];
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        systemPrompt,
-        messagesForApi,
-        isGemini,
-        state.apiConfig.temperature,
-      );
-
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: 'json_object' },
-            }),
-          });
-
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      const content = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).replace(
-        /^```json\s*|```$/g,
-        '',
-      );
-      const aiResponse = JSON.parse(content);
-      // ★★★ 在这里粘贴下面的新代码 ★★★
-      // 如果是重roll请求，直接返回新的发言内容
-      if (eventType === 'reroll_comment') {
-        return aiResponse.speech || '嗯...好吧。';
-      }
-      // ★★★ 粘贴结束 ★★★
-      if (eventType === 'answer_question' || eventType === 'evaluate_answer') {
-        return aiResponse.speech || '嗯...让我想想。';
-      }
-
-      if (aiResponse.speech) {
-        logToLudoGame(`<strong>${aiPlayer.name}:</strong> ${aiResponse.speech}`, 'char');
-      }
-    } catch (error) {
-      console.error('飞行棋AI响应失败:', error);
-      if (eventType === 'answer_question' || eventType === 'evaluate_answer') {
-        return '我...我不知道该怎么回答了。';
-      }
-    }
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  // ▼▼▼ 【最终智能版 | 问题数量精确匹配】用这块代码，完整替换你旧的 generateLudoBoard 函数 ▼▼▼
-  /**
-   * 【飞行棋】生成棋盘格子 (V4 - 问题数量精确匹配版)
-   */
-  async function generateLudoBoard() {
-    const boardEl = document.getElementById('ludo-board');
-    boardEl.innerHTML = '';
-    const pathCoordinates = [
-      [0, 0],
-      [1, 0],
-      [2, 0],
-      [3, 0],
-      [4, 0],
-      [5, 0],
-      [6, 0],
-      [7, 0],
-      [8, 0],
-      [9, 0],
-      [9, 1],
-      [9, 2],
-      [8, 2],
-      [7, 2],
-      [6, 2],
-      [5, 2],
-      [4, 2],
-      [3, 2],
-      [2, 2],
-      [1, 2],
-      [0, 2],
-      [0, 3],
-      [0, 4],
-      [1, 4],
-      [2, 4],
-      [3, 4],
-      [4, 4],
-      [5, 4],
-      [6, 4],
-      [7, 4],
-      [8, 4],
-      [9, 4],
-      [9, 5],
-      [8, 5],
-      [7, 5],
-      [6, 5],
-      [5, 5],
-      [4, 5],
-      [3, 5],
-      [2, 5],
-      [1, 5],
-      [0, 5],
-    ];
-
-    let cells = Array(60).fill(null);
-    pathCoordinates.slice(0, LUDO_BOARD_SIZE).forEach((coord, i) => {
-      const pos = coord[1] * 10 + coord[0];
-      cells[pos] = { type: 'path', index: i };
-    });
-
-    cells[21] = { type: 'start', index: -1 };
-    cells[38] = { type: 'end', index: LUDO_BOARD_SIZE };
-
-    // --- ▼▼▼ 这就是本次的【核心修改】 ▼▼▼ ---
-
-    // 1. 获取当前游戏选择的问题库ID
-    const questionBankId = ludoGameState.activeQuestionBankId;
-    let questionsInBank = [];
-
-    // 2. 从数据库中加载该问题库的所有问题
-    if (questionBankId) {
-      questionsInBank = await db.ludoQuestions.where('bankId').equals(questionBankId).toArray();
-    }
-
-    // ▼▼▼ 请用这块【全新的代码】替换掉函数中从 “// 4. 筛选出所有可以放置问题的普通格子...” 开始的那一大段逻辑 ▼▼▼
-
-    // 4. 筛选出所有可以放置问题的普通格子
-    const availableCellIndices = [];
-    cells.forEach((cellData, index) => {
-      if (cellData && cellData.type === 'path' && cellData.index > 0) {
-        availableCellIndices.push(index);
-      }
-    });
-
-    // 5. 【核心修改】我们不再打乱问题库，而是打乱可用的格子索引！
-    availableCellIndices.sort(() => Math.random() - 0.5);
-
-    // 6. 确定要放置的问题数量，仍然是取问题数和可用格子数的最小值
-    const questionCount = Math.min(questionsInBank.length, availableCellIndices.length);
-
-    if (questionsInBank.length > availableCellIndices.length) {
-      console.warn(
-        `飞行棋警告：问题库中的问题数量(${questionsInBank.length})超过了棋盘上的可用格子数量(${availableCellIndices.length})，部分问题将不会出现。`,
-      );
-    }
-
-    // 7. 将问题库里的问题，按顺序放置到【被打乱顺序】的格子里
-    for (let i = 0; i < questionCount; i++) {
-      // 这次我们是从被打乱的格子列表里取出一个随机的格子
-      const cellIndexToModify = availableCellIndices[i];
-      // 然后按顺序从问题库里拿一个问题放上去
-      const questionToPlace = questionsInBank[i];
-
-      if (cells[cellIndexToModify]) {
-        cells[cellIndexToModify].event = 'question';
-        cells[cellIndexToModify].question = questionToPlace;
-      }
-    }
-    // ▲▲▲ 替换结束 ▲▲▲
-
-    ludoGameState.boardLayout = cells;
-
-    // 后续的渲染逻辑保持不变...
-    cells.forEach((cellData, i) => {
-      if (cellData) {
-        const cellEl = document.createElement('div');
-        cellEl.className = 'ludo-cell';
-
-        if (cellData.type === 'path') {
-          cellEl.dataset.index = cellData.index;
-          cellEl.innerHTML = `<span class="cell-number">${cellData.index + 1}</span>`;
-        }
-        if (cellData.type === 'start') {
-          cellEl.classList.add('start');
-          cellEl.innerHTML = '🏠';
-        }
-        if (cellData.type === 'end') {
-          cellEl.classList.add('end');
-          cellEl.innerHTML = '🏁';
-        }
-        if (cellData.event === 'question') {
-          cellEl.classList.add(`event-truth`);
-          cellEl.innerHTML += '❓';
-        }
-
-        const position = ludoGameState.boardLayout.indexOf(cellData);
-        const row = Math.floor(position / 10);
-        const col = position % 10;
-        cellEl.style.gridRowStart = row + 1;
-        cellEl.style.gridColumnStart = col + 1;
-
-        boardEl.appendChild(cellEl);
-      }
-    });
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  // ▼▼▼ 把这一整块全新的功能函数，粘贴到 init() 函数的【正上方】 ▼▼▼
-
-  // ▼▼▼ 用这整块新代码，替换掉所有旧的飞行棋问题库核心函数 ▼▼▼
-
-  /* --- 【全新 | V2分类版】飞行棋问题库功能核心函数 --- */
-
-  let activeQuestionBankId = null; // 用于追踪正在编辑的问题库ID
-  let editingQuestionId = null; // 用于追踪正在编辑的问题ID
-  function hideCustomModal() {
-    modalOverlay.classList.remove('visible');
-    modalConfirmBtn.classList.remove('btn-danger');
-    if (modalResolve) modalResolve(null);
-  }
-  // ▼▼▼ 用这块【已修复】的代码，完整替换你旧的 migrateDefaultLudoQuestions 函数 ▼▼▼
-  /**
-   * 【数据迁移】在首次加载时，将旧的硬编码问题迁移到数据库
-   */
-  async function migrateDefaultLudoQuestions() {
-    const defaultBankName = '默认题库';
-    const existingBank = await db.ludoQuestionBanks.where('name').equals(defaultBankName).first();
-    // 如果“默认题库”已经存在，就说明迁移过了，直接返回
-    if (existingBank) return;
-
-    console.log('正在迁移飞行棋默认问题到数据库...');
-
-    // 创建默认题库
-    const bankId = await db.ludoQuestionBanks.add({ name: defaultBankName });
-
-    // ★★★ 核心修改：将问题库改为对象数组，并为每个问题添加类型 ★★★
-    const defaultQuestions = [
-      // --- 类型1: 共同回答 (双方都需要回答) ---
-      { type: 'both_answer', text: '如果我们一起去旅行，你最想去哪里，为什么？' },
-      { type: 'both_answer', text: '你认为一段完美的关系中，最不可或缺的三个要素是什么？' },
-      { type: 'both_answer', text: '分享一件最近因为我而让你感到心动或开心的小事。' },
-      { type: 'both_answer', text: '回忆一下，我们第一次见面时，你对我的第一印象是什么？' },
-      { type: 'both_answer', text: '如果我们可以一起学习一项新技能，你希望是什么？' },
-      { type: 'both_answer', text: '描述一个你最希望和我一起度过的完美周末。' },
-      { type: 'both_answer', text: '你觉得我们之间最有默契的一件事是什么？' },
-      { type: 'both_answer', text: '如果用一种动物来形容我，你觉得是什么？为什么？' },
-      { type: 'both_answer', text: '在未来的一年里，你最想和我一起完成的一件事是什么？' },
-      { type: 'both_answer', text: '分享一部你最近很喜欢、并且想推荐给我一起看的电影或剧。' },
-      { type: 'both_answer', text: '我们下次约会，你希望穿什么风格的衣服？' },
-
-      // --- 类型2: 一人回答，对方评价 ---
-      { type: 'single_answer', text: '描述一下我最让你心动的一个瞬间。' },
-      { type: 'single_answer', text: '诚实地说，我做的哪件事曾经让你偷偷生过气？' },
-      { type: 'single_answer', text: '如果我有一种超能力，你希望是什么？' },
-      { type: 'single_answer', text: '给我三个最贴切的标签。' },
-      { type: 'single_answer', text: '在你心里，我的形象和你的理想型有多接近？' },
-      { type: 'single_answer', text: '分享一个你觉得我可能不知道的，关于你的小秘密。' },
-      { type: 'single_answer', text: '如果我们的故事是一首歌，你觉得歌名应该叫什么？' },
-      { type: 'single_answer', text: '说一件你觉得我做得比你好/更擅长的事情。' },
-      { type: 'single_answer', text: '如果可以回到我们认识的任意一天，你会选择哪一天，想做什么？' },
-      { type: 'single_answer', text: '用三个词来形容你眼中的我们的关系。' },
-    ];
-
-    const questionsToAdd = defaultQuestions.map(q => ({
-      bankId: bankId,
-      text: q.text,
-      type: q.type, // <-- 关键修复：把类型也存进去！
-    }));
-
-    await db.ludoQuestions.bulkAdd(questionsToAdd);
-    console.log(`成功迁移了 ${questionsToAdd.length} 条默认问题。`);
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 打开问题库管理弹窗
-   */
-  async function openLudoQuestionBankManager() {
-    await renderLudoQuestionBanks();
-    document.getElementById('ludo-qbank-manager-modal').classList.add('visible');
-  }
-
-  /**
-   * 渲染问题库列表
-   */
-  async function renderLudoQuestionBanks() {
-    const listEl = document.getElementById('ludo-qbank-list');
-    listEl.innerHTML = '';
-    const banks = await db.ludoQuestionBanks.toArray();
-
-    if (banks.length === 0) {
-      listEl.innerHTML =
-        '<p style="text-align:center; color: var(--text-secondary); padding: 50px 0;">还没有问题库，点击右上角“新建”创建一个吧！</p>';
-    } else {
-      banks.forEach(bank => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        item.innerHTML = `<div class="item-title">${bank.name}</div>`;
-        item.addEventListener('click', () => openLudoQuestionEditor(bank.id, bank.name));
-        addLongPressListener(item, async () => {
-          // ▼▼▼ 核心修改在这里：在菜单里增加一个 'export' 选项 ▼▼▼
-          const choice = await showChoiceModal(`操作“${bank.name}”`, [
-            { text: '✏️ 重命名', value: 'rename' },
-            { text: '📤 导出', value: 'export' }, // <-- 新增的导出选项
-            { text: '🗑️ 删除', value: 'delete', isDanger: true },
-          ]);
-
-          if (choice === 'rename') {
-            const newName = await showCustomPrompt('重命名问题库', '请输入新的名称：', bank.name);
-            if (newName && newName.trim()) {
-              await db.ludoQuestionBanks.update(bank.id, { name: newName.trim() });
-              await renderLudoQuestionBanks();
-            }
-          } else if (choice === 'export') {
-            // ▼▼▼ 在这里调用我们新写的导出函数 ▼▼▼
-            await exportLudoQuestionBank(bank.id);
-          } else if (choice === 'delete') {
-            const confirmed = await showCustomConfirm(
-              '确认删除',
-              `确定要删除问题库“${bank.name}”吗？这将同时删除库内所有问题。`,
-              { confirmButtonClass: 'btn-danger' },
-            );
-            if (confirmed) {
-              await db.transaction('rw', db.ludoQuestionBanks, db.ludoQuestions, async () => {
-                await db.ludoQuestions.where('bankId').equals(bank.id).delete();
-                await db.ludoQuestionBanks.delete(bank.id);
-              });
-              await renderLudoQuestionBanks();
-            }
-          }
-        });
-        listEl.appendChild(item);
-      });
-    }
-  }
-
-  /**
-   * 添加一个新的问题库
-   */
-  async function addNewLudoQuestionBank() {
-    const name = await showCustomPrompt('新建问题库', '请输入问题库的名称：');
-    if (name && name.trim()) {
-      await db.ludoQuestionBanks.add({ name: name.trim() });
-      await renderLudoQuestionBanks();
-    }
-  }
-
-  /**
-   * 打开指定问题库的问题编辑器
-   */
-  async function openLudoQuestionEditor(bankId, bankName) {
-    activeQuestionBankId = bankId;
-    document.getElementById('ludo-question-editor-title').textContent = `编辑 - ${bankName}`;
-    await renderLudoQuestionsInBank(bankId);
-    document.getElementById('ludo-question-editor-modal').classList.add('visible');
-  }
-
-  /**
-   * 渲染一个问题库中的所有问题
-   */
-  async function renderLudoQuestionsInBank(bankId) {
-    const listEl = document.getElementById('ludo-question-list');
-    listEl.innerHTML = '';
-    const questions = await db.ludoQuestions.where('bankId').equals(bankId).toArray();
-
-    if (questions.length === 0) {
-      listEl.innerHTML =
-        '<p style="text-align:center; color: var(--text-secondary); padding: 50px 0;">这个题库还是空的，点击右上角“+”添加第一个问题吧！</p>';
-    } else {
-      questions.forEach(q => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
-
-        // ★★★ 核心修改：根据问题类型添加标签 ★★★
-        const typeText = q.type === 'single_answer' ? '一人回答' : '共同回答';
-        const typeClass = q.type === 'single_answer' ? 'single-answer' : 'both-answer';
-
-        item.innerHTML = `
-                <div class="item-title" style="white-space: normal; display: flex; align-items: center;">
-                    <span>${q.text}</span>
-                    <span class="question-type-tag ${typeClass}">${typeText}</span>
-                </div>
-            `;
-
-        item.addEventListener('click', () => openSingleQuestionEditor(q.id));
-        addLongPressListener(item, async () => {
-          const confirmed = await showCustomConfirm('删除问题', '确定要删除这个问题吗？', {
-            confirmButtonClass: 'btn-danger',
-          });
-          if (confirmed) {
-            await db.ludoQuestions.delete(q.id);
-            await renderLudoQuestionsInBank(bankId);
-          }
-        });
-        listEl.appendChild(item);
-      });
-    }
-  }
-
-  /**
-   * 打开单个问题编辑器（用于新建或编辑）
-   */
-  async function openSingleQuestionEditor(questionId = null) {
-    editingQuestionId = questionId;
-    const modal = document.getElementById('ludo-single-question-editor-modal');
-    const titleEl = document.getElementById('ludo-single-question-title');
-    const textInput = document.getElementById('ludo-question-text-input');
-    const typeRadios = document.querySelectorAll('input[name="ludo_question_type"]');
-
-    if (questionId) {
-      // 编辑模式
-      const question = await db.ludoQuestions.get(questionId);
-      if (!question) return;
-      titleEl.textContent = '编辑问题';
-      textInput.value = question.text;
-      typeRadios.forEach(radio => (radio.checked = radio.value === (question.type || 'both_answer')));
-    } else {
-      // 新建模式
-      titleEl.textContent = '添加新问题';
-      textInput.value = '';
-      typeRadios[0].checked = true; // 默认选中“共同回答”
-    }
-
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 保存单个问题（新建或更新）
-   */
-  async function saveSingleQuestion() {
-    const text = document.getElementById('ludo-question-text-input').value.trim();
-    if (!text) {
-      alert('问题内容不能为空！');
-      return;
-    }
-    const type = document.querySelector('input[name="ludo_question_type"]:checked').value;
-
-    if (editingQuestionId) {
-      // 更新
-      await db.ludoQuestions.update(editingQuestionId, { text, type });
-    } else {
-      // 新建
-      await db.ludoQuestions.add({ bankId: activeQuestionBankId, text, type });
-    }
-
-    document.getElementById('ludo-single-question-editor-modal').classList.remove('visible');
-    await renderLudoQuestionsInBank(activeQuestionBankId); // 刷新列表
-    editingQuestionId = null;
-  }
-
-  // ▼▼▼ 请用这块【全新的函数】完整替换旧的 handleLudoQuestionEvent 函数 ▼▼▼
-
-  /**
-   * 【飞行棋】处理踩中问题格子的事件 (V3 - 直接使用传入的问题)
-   */
-  async function handleLudoQuestionEvent(player, questionObj) {
-    // 1. 安全检查：如果因为某种原因没有拿到问题，就跳过
-    if (!questionObj || !questionObj.text) {
-      logToLudoGame('未找到问题，跳过本轮问答。', 'system');
-      await sleep(1500);
-      await advanceTurn();
-      return;
-    }
-
-    // 2. 直接使用传入的问题对象，不再随机抽取
-    const questionText = questionObj.text;
-    const mode = questionObj.type || 'both_answer'; // 直接从问题对象获取模式
-
-    logToLudoGame(
-      `【${mode === 'both_answer' ? '共同回答' : '一人回答，一人评价'}】抽到的问题是：“${questionText}”`,
-      'system',
-    );
-    await sleep(1500);
-
-    const currentPlayer = player;
-    const otherPlayer = ludoGameState.players.find(p => p.id !== currentPlayer.id);
-
-    // --- 流程分支 (这部分逻辑保持不变) ---
-    if (mode === 'both_answer') {
-      logToLudoGame(`请 <strong>${currentPlayer.name}</strong> 先回答。`, 'system');
-      let answer1 = currentPlayer.isUser
-        ? await waitForLudoUserAction('轮到你回答问题', '请输入你的回答...')
-        : await triggerLudoAiAction('answer_question', { question: questionText });
-      logToLudoGame(`<strong>${currentPlayer.name}:</strong> ${answer1}`, currentPlayer.isUser ? 'user' : 'char');
-      await sleep(2000);
-
-      logToLudoGame(`现在请 <strong>${otherPlayer.name}</strong> 回答。`, 'system');
-      let answer2 = otherPlayer.isUser
-        ? await waitForLudoUserAction('轮到你回答问题', '请输入你的回答...')
-        : await triggerLudoAiAction('answer_question', { question: questionText });
-      logToLudoGame(`<strong>${otherPlayer.name}:</strong> ${answer2}`, otherPlayer.isUser ? 'user' : 'char');
-    } else if (mode === 'single_answer') {
-      logToLudoGame(`请 <strong>${currentPlayer.name}</strong> 回答这个问题。`, 'system');
-      let answer = currentPlayer.isUser
-        ? await waitForLudoUserAction('轮到你回答问题', '请输入你的回答...')
-        : await triggerLudoAiAction('answer_question', { question: questionText });
-      logToLudoGame(`<strong>${currentPlayer.name}:</strong> ${answer}`, currentPlayer.isUser ? 'user' : 'char');
-      await sleep(2000);
-
-      logToLudoGame(`现在请 <strong>${otherPlayer.name}</strong> 对Ta的回答发表一下看法吧。`, 'system');
-      let evaluation = otherPlayer.isUser
-        ? await waitForLudoUserAction(`对“${answer}”的看法`, '请输入你的评价...')
-        : await triggerLudoAiAction('evaluate_answer', { question: questionText, answer: answer });
-      logToLudoGame(`<strong>${otherPlayer.name}:</strong> ${evaluation}`, otherPlayer.isUser ? 'user' : 'char');
-    }
-
-    await sleep(1500);
-    logToLudoGame('本轮问答结束，游戏继续！', 'system');
-    await advanceTurn();
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【全新】显示飞行棋游戏结算卡片
-   * @param {string} winnerName - 胜利者的名字
-   */
-  function showLudoSummary(winnerName) {
-    const modal = document.getElementById('ludo-summary-modal');
-    const contentEl = document.getElementById('ludo-summary-content');
-
-    // 1. 提取问答记录
-    let qaLogHtml = '<h4>心动问答记录</h4>';
-    const questionsAndAnswers = [];
-    let currentQuestion = null;
-
-    ludoGameState.gameLog.forEach(log => {
-      // 通过识读系统日志里的特定文本来找到“问题”
-      if (log.type === 'system' && log.message.includes('抽到的问题是')) {
-        const questionText = log.message.match(/“(.+?)”/);
-        if (questionText && questionText[1]) {
-          currentQuestion = { question: questionText[1], answers: [] };
-          questionsAndAnswers.push(currentQuestion);
-        }
-      }
-      // 如果我们刚刚找到了一个问题，那么后续的用户或角色发言就是“回答”
-      else if (currentQuestion && (log.type === 'user' || log.type === 'char') && !log.message.includes('掷出了')) {
-        const answerText = log.message.replace(/<strong>.*?<\/strong>:\s*/, '');
-        const speakerNameMatch = log.message.match(/<strong>(.*?)<\/strong>/);
-        if (speakerNameMatch && speakerNameMatch[1]) {
-          currentQuestion.answers.push({ speaker: speakerNameMatch[1], text: answerText });
-        }
-      }
-    });
-
-    // 2. 将提取出的问答记录格式化为HTML
-    if (questionsAndAnswers.length > 0) {
-      questionsAndAnswers.forEach((qa, index) => {
-        qaLogHtml += `<div class="qa-item">
-                <div class="qa-question">Q${index + 1}: ${qa.question}</div>`;
-        qa.answers.forEach(ans => {
-          qaLogHtml += `<div class="qa-answer"><strong>${ans.speaker}:</strong> ${ans.text}</div>`;
-        });
-        qaLogHtml += `</div>`;
-      });
-    } else {
-      qaLogHtml += '<p>本局没有触发任何问答。</p>';
-    }
-
-    // 3. 拼接完整的结算卡片内容
-    contentEl.innerHTML = `
-        <h3>🎉 恭喜 ${winnerName} 获胜！ 🎉</h3>
-        <div class="ludo-qa-log">${qaLogHtml}</div>
+  function renderBottomOptionsPopup() {
+    return `
+      <div id="options" class="tavern-bottom-popup">
+        <div class="tavern-popup-item" data-action="chat-new-session">重开当前角色新对话</div>
+        <div class="tavern-popup-item" data-action="chat-regenerate-last">重新生成最后一层回复</div>
+        <div class="tavern-popup-item" data-action="chat-continue-last">继续续写最后一层回复</div>
+        <div class="tavern-popup-item" data-action="chat-impersonate">帮写玩家下一句回复</div>
+        <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="address">切换或导入角色存档</div>
+        <div class="tavern-popup-item" data-action="exit-tavern-home">返回手机主屏幕</div>
+      </div>
     `;
-
-    // 4. 为按钮绑定事件 (使用克隆节点技巧防止重复绑定)
-    const shareBtn = document.getElementById('share-ludo-summary-btn');
-    const backBtn = document.getElementById('back-to-hall-from-ludo-btn');
-
-    const newShareBtn = shareBtn.cloneNode(true);
-    shareBtn.parentNode.replaceChild(newShareBtn, shareBtn);
-    newShareBtn.onclick = () => {
-      // 准备纯文本格式的复盘内容用于分享
-      const summaryForShare =
-        `飞行棋游戏结束啦！🎉\n\n胜利者: ${winnerName}\n\n--- 心动问答 ---\n` +
-        questionsAndAnswers
-          .map(
-            (qa, i) => `Q${i + 1}: ${qa.question}\n` + qa.answers.map(ans => `${ans.speaker}: ${ans.text}`).join('\n'),
-          )
-          .join('\n\n');
-
-      shareLudoSummary(summaryForShare, winnerName);
-    };
-
-    const newBackBtn = backBtn.cloneNode(true);
-    backBtn.parentNode.replaceChild(newBackBtn, backBtn);
-    newBackBtn.onclick = () => {
-      modal.classList.remove('visible');
-      showScreen('game-hall-screen');
-    };
-
-    // 5. 显示结算弹窗
-    modal.classList.add('visible');
   }
 
-  /**
-   * 【全新】将飞行棋游戏复盘发送给对手
-   * @param {string} summaryText - 要发送的复盘文本
-   */
-  async function shareLudoSummary(summaryText, winnerName) {
-    const opponentId = ludoGameState.opponent?.id;
-    if (!opponentId) {
-      alert('找不到对手信息，无法分享。');
-      return;
-    }
-
-    const chat = state.chats[opponentId];
-    if (!chat) {
-      alert('找不到与对手的聊天窗口，无法分享。');
-      return;
-    }
-
-    // 创建对用户可见的复盘消息
-    const visibleMessage = {
-      role: 'user',
-      type: 'share_link',
-      timestamp: Date.now(),
-      title: '心动飞行棋 - 游戏复盘',
-      description: '点击查看详细复盘记录',
-      source_name: '游戏中心',
-      content: summaryText,
-    };
-
-    // 创建给AI看的隐藏指令，让它可以就游戏结果发表感想
-    const aiContext = `[系统指令：刚刚结束了一局飞行棋。重要：本次游戏的胜利者是【${winnerName}】。这是游戏复盘，请根据这个结果，以你的角色人设，和用户聊聊刚才的游戏。]\n\n${summaryText}`;
-    const hiddenInstruction = {
-      role: 'system',
-      content: aiContext,
-      timestamp: Date.now() + 1,
-      isHidden: true,
-    };
-
-    chat.history.push(visibleMessage, hiddenInstruction);
-    await db.chats.put(chat);
-
-    // 关闭结算卡片
-    document.getElementById('ludo-summary-modal').classList.remove('visible');
-
-    await showCustomAlert('分享成功', `游戏复盘已发送至与“${chat.name}”的聊天中！`);
-
-    window.openChat(chat.id);
-    window.triggerAiResponse();
+  function renderBottomExtensionsPopup() {
+    const d100Plugin = (tavernState.plugins || []).find(p => p.builtInType === 'd100_pool');
+    const sess = getActiveChatSession();
+    const pool = (sess && sess.metadata && Array.isArray(sess.metadata.qr_d100_pool)) ? sess.metadata.qr_d100_pool : [];
+    return `
+      <div id="extensionsMenu" class="tavern-bottom-popup">
+        <div class="tavern-popup-item" data-action="reroll-d100-pool">
+          重掷D100暗骰池 ${d100Plugin && d100Plugin.enabled ? '已开启' : '已关闭'}
+        </div>
+        ${pool.length > 0 ? `<div style="padding:4px 10px;font-size:11px;color:#777;word-break:break-all;">当前骰池: ${pool.slice(0, 8).join(', ')}...</div>` : ''}
+        <div class="tavern-popup-item" data-action="run-memory-summary-now">立即生成剧情记忆摘要</div>
+        <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="cubes">打开正则与作者注释面板</div>
+        <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="atlas">打开世界书词条管理面板</div>
+      </div>
+    `;
   }
 
-  // ▲▲▲ 新增代码粘贴结束 ▲▲▲
-
-  // ▼▼▼ 【全新】这是“谁是卧底”游戏的全部核心逻辑代码，请粘贴到 init() 函数前 ▼▼▼
-
-  /**
-   * 【卧底】打开游戏设置界面
-   */
-  async function openUndercoverSetup() {
-    showScreen('undercover-setup-screen');
-    const selectionEl = document.getElementById('undercover-player-selection');
-    selectionEl.innerHTML = '<p>正在加载角色列表...</p>';
-
-    // 复用狼人杀的玩家加载逻辑，非常方便
-    const singleChats = Object.values(state.chats).filter(chat => !chat.isGroup);
-    const allNpcs = Object.values(state.chats).flatMap(chat =>
-      (chat.npcLibrary || []).map(npc => ({ ...npc, owner: chat.name })),
-    );
-    let playerOptions = [
-      ...singleChats.map(c => ({ id: c.id, name: c.name, avatar: c.settings.aiAvatar, type: '角色' })),
-      ...allNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatar, type: `NPC (${n.owner})` })),
-    ];
-
-    selectionEl.innerHTML = '';
-    if (playerOptions.length < 2) {
-      selectionEl.innerHTML =
-        '<p style="text-align:center; padding-top: 50px; color: var(--text-secondary);">你需要至少2位AI或NPC好友才能开始游戏哦。</p>';
-      document.getElementById('start-undercover-game-btn').disabled = true;
-      return;
+  function resolveSafeAvatarUrl(rawUrl, isUser = false) {
+    if (!rawUrl || String(rawUrl).includes('P5gL5z2g') || String(rawUrl).includes('postimg.cc/P5gL5z2g')) {
+      return isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG;
     }
-
-    document.getElementById('start-undercover-game-btn').disabled = false;
-    playerOptions.forEach(player => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item';
-      item.innerHTML = `
-            <input type="checkbox" class="undercover-player-checkbox" value="${player.id}">
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-            <span class="type-tag">${player.type}</span>
-        `;
-      selectionEl.appendChild(item);
-    });
+    return rawUrl;
   }
 
-  /**
-   * 【卧底V2】开始游戏的核心逻辑 (支持手动/随机邀请)
-   */
-  async function startUndercoverGame() {
-    const inviteMode = document.querySelector('input[name="undercover_invite_mode"]:checked').value;
-    let invitedPlayerInfos = [];
-    let totalPlayers = 0;
+  function renderTavernChatFloors(keepTopOnSingleFloor = false) {
+    const chatEl = document.getElementById('chat');
+    if (!chatEl) return;
 
-    // --- 1. 根据邀请模式，收集被邀请的玩家信息 ---
-    if (inviteMode === 'manual') {
-      const selectedCheckboxes = document.querySelectorAll('.undercover-player-checkbox:checked');
-      totalPlayers = selectedCheckboxes.length + 1;
-      if (totalPlayers < 3) {
-        alert(`游戏最少需要3人！当前手动选择了 ${selectedCheckboxes.length} 人。`);
-        return;
-      }
-      selectedCheckboxes.forEach(checkbox => {
-        const playerId = checkbox.value;
-        const chat = Object.values(state.chats).find(c => c.id === playerId);
-        if (chat) {
-          invitedPlayerInfos.push({
-            id: chat.id,
-            name: chat.name,
-            avatar: chat.settings.aiAvatar,
-            persona: chat.settings.aiPersona,
-            isUser: false,
+    const card = getActiveCard();
+    const sess = getActiveChatSession();
+    const messages = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
+    const uiCfg = tavernState.uiSettings || {};
+    const fmtCfg = tavernState.formatting || {};
+
+    const charAvatar = resolveSafeAvatarUrl(card ? card.avatar : '', false);
+    const userAvatar = resolveSafeAvatarUrl(getUserAvatarUrl(), true);
+    const userName = getUserDisplayName();
+
+    chatEl.innerHTML = messages.map((m, idx) => {
+      const isUser = Boolean(m.is_user);
+      const isLast = idx === messages.length - 1;
+      const displayName = isUser ? userName : (m.name || card.name || '角色');
+      const avatarSrc = isUser ? userAvatar : charAvatar;
+      const swipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
+      const swipeIdx = Math.min(swipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
+      const currentRawText = swipes[swipeIdx] !== undefined ? swipes[swipeIdx] : (m.mes || '');
+      const tokenNum = m.token_count || estimateTokens(currentRawText);
+      const timeStr = m.send_date ? new Date(m.send_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+      const isEditingThis = uiRuntime.editingFloorMesId === idx;
+      const isExtraOpen = uiRuntime.openExtraMenuMesId === idx;
+
+      const renderedHtml = isEditingThis
+        ? ''
+        : renderTavernMessageHtml(currentRawText, {
+            isUser,
+            isPrompt: false,
+            depth: messages.length - 1 - idx,
+            card
           });
+
+      const hasReasoning = Boolean(m.reasoning && String(m.reasoning).trim());
+      const openReasoningAttr = fmtCfg.autoCollapseReasoning === false ? 'open' : '';
+
+      return `
+        <div class="mes ${isLast ? 'last_mes' : ''}" mesid="${idx}" is_user="${isUser ? 'true' : 'false'}" is_system="${m.is_system ? 'true' : 'false'}">
+          <div class="mesAvatarWrapper">
+            <div class="avatar">
+              <img src="${avatarSrc}" alt="avatar" onerror="this.onerror=null;this.src='${isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG}';" />
+            </div>
+            <div class="mesIDDisplay">${uiCfg.showMessageId !== false ? '#' + idx : ''}</div>
+            ${uiCfg.showMesTimer !== false && m.gen_time ? `<div class="mes_timer">${escapeHtmlSimple(m.gen_time)}</div>` : ''}
+            ${uiCfg.showTokenCount !== false ? `<div class="tokenCounterDisplay">${tokenNum}t</div>` : ''}
+          </div>
+
+          <div class="mes_block">
+            <div class="ch_name flex-container justifySpaceBetween">
+              <span class="name_text">${escapeHtmlSimple(displayName)}</span>
+              <div class="mes_buttons mes_edit_buttons">
+                <span class="timestamp" style="font-size:10px;opacity:0.55;margin-right:4px;">${timeStr}</span>
+                <div class="mes_button mes_edit fa-solid fa-pencil" data-action="floor-edit" data-mesid="${idx}" title="编辑本层"></div>
+                <div class="extraMesButtonsHint fa-solid fa-ellipsis" data-action="floor-extra-toggle" data-mesid="${idx}" title="更多楼层操作"></div>
+              </div>
+            </div>
+
+            ${isExtraOpen ? `
+              <div class="tavern-floor-popover">
+                <button type="button" class="tavern-btn small" data-action="floor-copy" data-mesid="${idx}">复制</button>
+                <button type="button" class="tavern-btn small" data-action="floor-regen" data-mesid="${idx}">重成</button>
+                <button type="button" class="tavern-btn small" data-action="floor-add-swipe" data-mesid="${idx}">新页</button>
+                <button type="button" class="tavern-btn small" data-action="floor-fork" data-mesid="${idx}">分叉</button>
+                <button type="button" class="tavern-btn small danger" data-action="floor-del-one" data-mesid="${idx}">删单</button>
+                <button type="button" class="tavern-btn small danger" data-action="floor-del-below" data-mesid="${idx}">删后</button>
+              </div>
+            ` : ''}
+
+            ${hasReasoning ? `
+              <details class="mes_reasoning_details" ${openReasoningAttr}>
+                <summary class="mes_reasoning_summary">思维链推理过程</summary>
+                <div class="mes_reasoning_content">${escapeHtmlSimple(m.reasoning)}</div>
+              </details>
+            ` : ''}
+
+            ${isEditingThis ? `
+              <div style="margin-top:8px;">
+                <textarea id="tavern-floor-edit-box-${idx}" class="tavern-textarea" rows="6">${escapeHtmlSimple(currentRawText)}</textarea>
+                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+                  <button type="button" class="tavern-btn small" data-action="floor-edit-cancel">取消</button>
+                  <button type="button" class="tavern-btn small primary" data-action="floor-edit-save" data-mesid="${idx}">保存修改</button>
+                </div>
+              </div>
+            ` : `
+              <div class="mes_text">${renderedHtml}</div>
+            `}
+
+            ${(isLast || swipes.length > 1) ? `
+              <div class="tavern-swipe-bar">
+                <div class="swipe_left fa-solid fa-chevron-left" data-action="floor-swipe-left" data-mesid="${idx}" title="上一分支"></div>
+                ${uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : ''}
+                <div class="swipe_right fa-solid fa-chevron-right" data-action="floor-swipe-right" data-mesid="${idx}" title="下一分支或重生成"></div>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (keepTopOnSingleFloor && messages.length <= 1) {
+      chatEl.scrollTop = 0;
+    } else if (messages.length > 1) {
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+  }
+
+  // ============================================================================
+  // 11. Render All 9 Full-Screen SillyTavern Dropdown Drawers
+  // ============================================================================
+  function renderOpenDrawerHtml(drawerKey) {
+    const meta = TOP_BAR_DRAWERS.find(d => d.key === drawerKey) || { title: '设置面板' };
+    let bodyHtml = '';
+    if (drawerKey === 'sliders') bodyHtml = renderDrawerSliders();
+    else if (drawerKey === 'plug') bodyHtml = renderDrawerPlug();
+    else if (drawerKey === 'font') bodyHtml = renderDrawerFont();
+    else if (drawerKey === 'atlas') bodyHtml = renderDrawerAtlas();
+    else if (drawerKey === 'usercog') bodyHtml = renderDrawerUserCog();
+    else if (drawerKey === 'panorama') bodyHtml = renderDrawerPanorama();
+    else if (drawerKey === 'cubes') bodyHtml = renderDrawerCubes();
+    else if (drawerKey === 'smile') bodyHtml = renderDrawerSmile();
+    else if (drawerKey === 'address') bodyHtml = renderDrawerAddress();
+
+    return `
+      <div class="drawer-content openDrawer" data-active-drawer="${drawerKey}">
+        <div class="tavern-drawer-header">
+          <div class="tavern-drawer-title">${meta.title}</div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small" data-action="exit-tavern-home">返回桌面</button>
+            <button type="button" class="tavern-btn small primary" data-action="close-drawer">收起面板</button>
+          </div>
+        </div>
+        ${bodyHtml}
+      </div>
+    `;
+  }
+
+  // Drawer 1: fa-sliders (AI Generation Parameters & Prompt Manager)
+  function renderDrawerSliders() {
+    const preset = getActivePreset();
+    const prompts = Array.isArray(preset.prompts) ? preset.prompts : [];
+    const editingItem = prompts.find(p => p.identifier === uiRuntime.editingPromptId) || null;
+
+    return `
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>预设配置管理</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small" data-action="trigger-import-presets">导入预设</button>
+            <button type="button" class="tavern-btn small" data-action="export-active-preset">导出</button>
+            <button type="button" class="tavern-btn small danger" data-action="delete-active-preset">删除</button>
+          </div>
+        </div>
+        <select class="tavern-select" data-change="switch-preset">
+          ${tavernState.presets.map(p => `
+            <option value="${p.id}" ${p.id === preset.id ? 'selected' : ''}>${escapeHtmlSimple(p.name)}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">核心采样与上下文参数</div>
+        <div class="tavern-grid-2">
+          <div class="tavern-field-group">
+            <label>最大上下文Token: ${preset.openai_max_context}</label>
+            <input type="number" class="tavern-input" data-preset-num="openai_max_context" value="${preset.openai_max_context}" min="2048" max="200000" step="1024" />
+          </div>
+          <div class="tavern-field-group">
+            <label>单次最大回复Token: ${preset.openai_max_tokens}</label>
+            <input type="number" class="tavern-input" data-preset-num="openai_max_tokens" value="${preset.openai_max_tokens}" min="128" max="32768" step="128" />
+          </div>
+          <div class="tavern-field-group">
+            <label>携带记忆楼层数: ${tavernState.memory?.contextFloors || 40}</label>
+            <input type="number" class="tavern-input" data-memory-num="contextFloors" value="${tavernState.memory?.contextFloors || 40}" min="2" max="500" />
+          </div>
+          <div class="tavern-field-group">
+            <label>温度 Temperature: ${preset.temperature}</label>
+            <input type="number" class="tavern-input" data-preset-num="temperature" value="${preset.temperature}" min="0" max="2.5" step="0.05" />
+          </div>
+          <div class="tavern-field-group">
+            <label>核采样 Top P: ${preset.top_p}</label>
+            <input type="number" class="tavern-input" data-preset-num="top_p" value="${preset.top_p}" min="0" max="1" step="0.05" />
+          </div>
+          <div class="tavern-field-group">
+            <label>候选词 Top K: ${preset.top_k}</label>
+            <input type="number" class="tavern-input" data-preset-num="top_k" value="${preset.top_k}" min="0" max="200" step="1" />
+          </div>
+          <div class="tavern-field-group">
+            <label>频率惩罚 Frequency: ${preset.frequency_penalty}</label>
+            <input type="number" class="tavern-input" data-preset-num="frequency_penalty" value="${preset.frequency_penalty}" min="-2" max="2" step="0.05" />
+          </div>
+          <div class="tavern-field-group">
+            <label>存在惩罚 Presence: ${preset.presence_penalty}</label>
+            <input type="number" class="tavern-input" data-preset-num="presence_penalty" value="${preset.presence_penalty}" min="-2" max="2" step="0.05" />
+          </div>
+          <div class="tavern-field-group">
+            <label>重复惩罚 Repetition: ${preset.repetition_penalty}</label>
+            <input type="number" class="tavern-input" data-preset-num="repetition_penalty" value="${preset.repetition_penalty}" min="0.5" max="2" step="0.05" />
+          </div>
+          <div class="tavern-field-group">
+            <label>随机种子 Seed: ${preset.seed}</label>
+            <input type="number" class="tavern-input" data-preset-num="seed" value="${preset.seed}" step="1" />
+          </div>
+        </div>
+        <div class="tavern-grid-2" style="margin-top:6px;">
+          <label class="tavern-check-row">
+            <input type="checkbox" data-preset-bool="squash_system_messages" ${preset.squash_system_messages ? 'checked' : ''} />
+            <span>合并连续系统消息</span>
+          </label>
+          <label class="tavern-check-row">
+            <input type="checkbox" data-preset-bool="stream_openai" ${preset.stream_openai ? 'checked' : ''} />
+            <span>启用流式生成标记</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="completion_prompt_manager" class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>提示词排序与开关列表 共${prompts.length}项</span>
+          <button type="button" class="tavern-btn small" data-action="add-custom-prompt-item">新增条目</button>
+        </div>
+
+        ${editingItem ? `
+          <div class="tavern-section-card" style="background:#f8f9fc;border-color:#d4d8e8;">
+            <div class="tavern-section-label">
+              <span>编辑提示词块: ${escapeHtmlSimple(editingItem.name)}</span>
+              <button type="button" class="tavern-btn small" data-action="close-prompt-item-editor">完成</button>
+            </div>
+            <div class="tavern-grid-2">
+              <div class="tavern-field-group">
+                <label>条目名称</label>
+                <input type="text" class="tavern-input" id="edit-prompt-name" value="${escapeHtmlSimple(editingItem.name)}" />
+              </div>
+              <div class="tavern-field-group">
+                <label>发送角色 Role</label>
+                <select class="tavern-select" id="edit-prompt-role">
+                  <option value="system" ${editingItem.role === 'system' ? 'selected' : ''}>System 系统</option>
+                  <option value="user" ${editingItem.role === 'user' ? 'selected' : ''}>User 用户</option>
+                  <option value="assistant" ${editingItem.role === 'assistant' ? 'selected' : ''}>Assistant 助手</option>
+                </select>
+              </div>
+              <div class="tavern-field-group">
+                <label>注入位置模式</label>
+                <select class="tavern-select" id="edit-prompt-pos">
+                  <option value="0" ${Number(editingItem.injection_position) === 0 ? 'selected' : ''}>按列表顺序排列</option>
+                  <option value="1" ${Number(editingItem.injection_position) === 1 ? 'selected' : ''}>按聊天深度插入</option>
+                </select>
+              </div>
+              <div class="tavern-field-group">
+                <label>注入深度 Depth</label>
+                <input type="number" class="tavern-input" id="edit-prompt-depth" value="${Number(editingItem.injection_depth ?? 4)}" min="0" max="200" />
+              </div>
+            </div>
+            <div class="tavern-field-group">
+              <label>提示词内容 支持宏变量</label>
+              <textarea class="tavern-textarea" id="edit-prompt-content" rows="5">${escapeHtmlSimple(editingItem.content || '')}</textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+              <button type="button" class="tavern-btn small primary" data-action="save-prompt-item-editor" data-prompt-id="${editingItem.identifier}">保存此条目</button>
+            </div>
+          </div>
+        ` : ''}
+
+        <div id="completion_prompt_manager_list">
+          ${prompts.map((item, idx) => `
+            <div class="tavern-list-row">
+              <input type="checkbox" class="tavern-fixed-check" data-action="toggle-prompt-item" data-prompt-id="${item.identifier}" ${item.enabled ? 'checked' : ''} />
+              <div class="tavern-list-row-main">
+                <div>${escapeHtmlSimple(item.name || item.identifier)}</div>
+                <div class="tavern-list-row-sub">角色: ${item.role || 'system'} ${Number(item.injection_position) === 1 ? '深度:' + item.injection_depth : '顺序排列'}</div>
+              </div>
+              <div class="tavern-list-row-actions">
+                <button type="button" class="tavern-btn small" data-action="move-prompt-up" data-idx="${idx}">上移</button>
+                <button type="button" class="tavern-btn small" data-action="move-prompt-down" data-idx="${idx}">下移</button>
+                ${!item.marker ? `<button type="button" class="tavern-btn small" data-action="edit-prompt-item" data-prompt-id="${item.identifier}">编辑</button>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Drawer 2: fa-plug (API Connection Settings)
+  function renderDrawerPlug() {
+    const cfg = tavernState.apiConfig || {};
+    const resolved = resolveTavernApiCredentials();
+    const models = Array.isArray(cfg.availableModels) ? cfg.availableModels : [];
+
+    return `
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">主接口连接方式</div>
+        <label class="tavern-check-row">
+          <input type="checkbox" data-api-bool="useExternalPhoneApi" ${cfg.useExternalPhoneApi !== false ? 'checked' : ''} />
+          <span>直接复用手机外部API设置与密钥</span>
+        </label>
+        <div style="font-size:12px;color:#666;margin-top:4px;">
+          当前生效地址: ${escapeHtmlSimple(resolved.baseUrl || '未配置')} | 模型: ${escapeHtmlSimple(resolved.model || '未选择')}
+        </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">独立反代或自定义API配置</div>
+        <div class="tavern-field-group">
+          <label>接口反代地址 Base URL</label>
+          <input type="text" class="tavern-input" id="tavern-api-url-input" value="${escapeHtmlSimple(cfg.customUrl || resolved.baseUrl || '')}" placeholder="https://api.openai.com/v1" />
+        </div>
+        <div class="tavern-field-group">
+          <label>接口密钥 API Key</label>
+          <input type="password" class="tavern-input" id="tavern-api-key-input" value="${escapeHtmlSimple(cfg.customKey || '')}" placeholder="留空则自动读取手机外部密钥" />
+        </div>
+        <div class="tavern-field-group">
+          <label>模型名称 Model</label>
+          <input type="text" class="tavern-input" id="tavern-api-model-input" value="${escapeHtmlSimple(cfg.customModel || resolved.model || '')}" placeholder="输入或从下方拉取模型" />
+        </div>
+        ${models.length > 0 ? `
+          <div class="tavern-field-group">
+            <label>从已拉取模型列表中选择</label>
+            <select class="tavern-select" id="tavern-api-model-select" data-change="select-fetched-model">
+              ${models.map(m => `<option value="${escapeHtmlSimple(m)}" ${m === (cfg.customModel || resolved.model) ? 'selected' : ''}>${escapeHtmlSimple(m)}</option>`).join('')}
+            </select>
+          </div>
+        ` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button type="button" class="tavern-btn primary" data-action="save-tavern-api-config">保存接口配置</button>
+          <button type="button" class="tavern-btn" data-action="fetch-tavern-models">拉取模型列表</button>
+          <button type="button" class="tavern-btn" data-action="test-tavern-api">测试连接</button>
+        </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">NovelAI 插图联动</div>
+        <label class="tavern-check-row">
+          <input type="checkbox" data-api-bool="useExternalNovelAi" ${cfg.useExternalNovelAi !== false ? 'checked' : ''} />
+          <span>共用手机外部NovelAI画图配置</span>
+        </label>
+      </div>
+    `;
+  }
+
+  // Drawer 3: fa-font (Formatting & Instruct Templates)
+  function renderDrawerFont() {
+    const fmt = tavernState.formatting || {};
+    return `
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">思维链与文本净化规则</div>
+        <div class="tavern-grid-2">
+          <div class="tavern-field-group">
+            <label>思维链起始标签</label>
+            <input type="text" class="tavern-input" data-fmt-str="reasoningStartTag" value="${escapeHtmlSimple(fmt.reasoningStartTag || '<think>')}" />
+          </div>
+          <div class="tavern-field-group">
+            <label>思维链结束标签</label>
+            <input type="text" class="tavern-input" data-fmt-str="reasoningEndTag" value="${escapeHtmlSimple(fmt.reasoningEndTag || '</think>')}" />
+          </div>
+        </div>
+        <label class="tavern-check-row">
+          <input type="checkbox" data-fmt-bool="autoCollapseReasoning" ${fmt.autoCollapseReasoning !== false ? 'checked' : ''} />
+          <span>默认折叠思维链推理过程</span>
+        </label>
+        <label class="tavern-check-row">
+          <input type="checkbox" data-fmt-bool="wrapQuotesInQ" ${fmt.wrapQuotesInQ !== false ? 'checked' : ''} />
+          <span>对话引号自动染色高亮且不重复加引号</span>
+        </label>
+        <label class="tavern-check-row">
+          <input type="checkbox" data-fmt-bool="collapseNewlines" ${fmt.collapseNewlines ? 'checked' : ''} />
+          <span>自动合并多余空行</span>
+        </label>
+        <div class="tavern-field-group" style="margin-top:6px;">
+          <label>自定义停止词 逗号分隔</label>
+          <input type="text" class="tavern-input" id="tavern-stop-strings-input" value="${escapeHtmlSimple((fmt.customStoppingStrings || []).join(', '))}" placeholder="例如: \nUser:, \n旅人:" />
+        </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">系统提示词与续写指令模板</div>
+        <div class="tavern-field-group">
+          <label>主系统提示词 Main System Prompt</label>
+          <textarea class="tavern-textarea" rows="3" data-fmt-str="systemPrompt">${escapeHtmlSimple(fmt.systemPrompt || '')}</textarea>
+        </div>
+        <div class="tavern-field-group">
+          <label>历史后置指令 Post-History Instructions</label>
+          <textarea class="tavern-textarea" rows="3" data-fmt-str="postHistoryPrompt">${escapeHtmlSimple(fmt.postHistoryPrompt || '')}</textarea>
+        </div>
+        <div class="tavern-field-group">
+          <label>帮写扮演提示词 Impersonation Prompt</label>
+          <textarea class="tavern-textarea" rows="2" data-fmt-str="impersonationPrompt">${escapeHtmlSimple(fmt.impersonationPrompt || '')}</textarea>
+        </div>
+        <div class="tavern-field-group">
+          <label>继续续写提示词 Continue Nudge</label>
+          <input type="text" class="tavern-input" data-fmt-str="continueNudgePrompt" value="${escapeHtmlSimple(fmt.continueNudgePrompt || '')}" />
+        </div>
+        <button type="button" class="tavern-btn primary" data-action="save-formatting-settings">保存格式化设置</button>
+      </div>
+    `;
+  }
+
+  // Drawer 4: fa-book-atlas (World Info Manager & Entry Editor)
+  function renderDrawerAtlas() {
+    const books = tavernState.worldBooks || [];
+    let activeBook = books.find(b => b.id === uiRuntime.activeWorldBookEditId) || books[0] || null;
+    if (activeBook && uiRuntime.activeWorldBookEditId !== activeBook.id) {
+      uiRuntime.activeWorldBookEditId = activeBook.id;
+    }
+
+    const entries = activeBook ? (activeBook.entries || []) : [];
+    const searchKw = (uiRuntime.worldEntrySearch || '').trim().toLowerCase();
+    const filteredEntries = searchKw
+      ? entries.filter(e =>
+          String(e.comment || '').toLowerCase().includes(searchKw) ||
+          String(e.content || '').toLowerCase().includes(searchKw) ||
+          (e.keys || []).some(k => String(k).toLowerCase().includes(searchKw))
+        )
+      : entries;
+
+    const editingEntry = activeBook && uiRuntime.editingWorldEntryUid !== null
+      ? entries.find(e => String(e.uid) === String(uiRuntime.editingWorldEntryUid))
+      : null;
+
+    return `
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>世界书书库 共${books.length}本</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small primary" data-action="trigger-import-worldbooks">多选导入世界书</button>
+            <button type="button" class="tavern-btn small" data-action="create-new-worldbook">新建</button>
+          </div>
+        </div>
+
+        ${books.length === 0 ? `<div style="font-size:12.5px;color:#888;padding:8px 0;">暂无世界书，导入角色卡时会自动提取内嵌世界书，或点击上方多选导入JSON世界书。</div>` : `
+          <div style="max-height:150px;overflow-y:auto;margin-bottom:8px;">
+            ${books.map(b => `
+              <div class="tavern-list-row">
+                <input type="checkbox" class="tavern-fixed-check" data-action="toggle-worldbook-enabled" data-wb-id="${b.id}" ${b.enabled ? 'checked' : ''} />
+                <div class="tavern-list-row-main" data-action="select-worldbook-edit" data-wb-id="${b.id}" style="cursor:pointer;">
+                  <div>${escapeHtmlSimple(b.name)} ${b.id === (activeBook && activeBook.id) ? '· 当前编辑' : ''}</div>
+                  <div class="tavern-list-row-sub">词条数: ${(b.entries || []).length} | 扫描深度: ${b.scanDepth || 4} | 预算: ${b.tokenBudget || 4096}</div>
+                </div>
+                <div class="tavern-list-row-actions">
+                  <button type="button" class="tavern-btn small" data-action="select-worldbook-edit" data-wb-id="${b.id}">展开</button>
+                  <button type="button" class="tavern-btn small" data-action="export-worldbook" data-wb-id="${b.id}">导出</button>
+                  <button type="button" class="tavern-btn small danger" data-action="delete-worldbook" data-wb-id="${b.id}">删除</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+
+      ${activeBook ? `
+        <div class="tavern-section-card">
+          <div class="tavern-section-label">当前世界书全局扫描设置: ${escapeHtmlSimple(activeBook.name)}</div>
+          <div class="tavern-grid-3">
+            <div class="tavern-field-group">
+              <label>扫描深度</label>
+              <input type="number" class="tavern-input" data-wb-setting="scanDepth" data-wb-id="${activeBook.id}" value="${activeBook.scanDepth ?? 4}" min="1" max="100" />
+            </div>
+            <div class="tavern-field-group">
+              <label>Token预算上限</label>
+              <input type="number" class="tavern-input" data-wb-setting="tokenBudget" data-wb-id="${activeBook.id}" value="${activeBook.tokenBudget ?? 4096}" min="256" max="64000" step="256" />
+            </div>
+            <div class="tavern-field-group">
+              <label>递归连锁扫描</label>
+              <select class="tavern-select" data-wb-setting="recursiveScanning" data-wb-id="${activeBook.id}">
+                <option value="true" ${activeBook.recursiveScanning !== false ? 'selected' : ''}>开启递归</option>
+                <option value="false" ${activeBook.recursiveScanning === false ? 'selected' : ''}>关闭递归</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
+            <input type="text" class="tavern-input" style="flex:1 1 140px;" id="wb-entry-search-input" value="${escapeHtmlSimple(uiRuntime.worldEntrySearch)}" placeholder="搜索词条标题或关键词..." />
+            <button type="button" class="tavern-btn small primary" data-action="wb-add-entry" data-wb-id="${activeBook.id}">新增词条</button>
+            <button type="button" class="tavern-btn small" data-action="wb-batch-enable" data-wb-id="${activeBook.id}">全启用</button>
+            <button type="button" class="tavern-btn small" data-action="wb-batch-constant" data-wb-id="${activeBook.id}">全蓝灯</button>
+            <button type="button" class="tavern-btn small" data-action="wb-batch-green" data-wb-id="${activeBook.id}">全绿灯</button>
+          </div>
+
+          ${editingEntry ? renderWorldEntryInlineEditor(activeBook, editingEntry) : ''}
+
+          <div style="max-height:300px;overflow-y:auto;margin-top:8px;">
+            ${filteredEntries.map(entry => `
+              <div class="tavern-list-row">
+                <input type="checkbox" class="tavern-fixed-check" data-action="wb-toggle-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}" ${!entry.disable ? 'checked' : ''} />
+                <button type="button" class="tavern-btn small" data-action="wb-cycle-light" data-wb-id="${activeBook.id}" data-uid="${entry.uid}" style="${entry.constant ? 'background:#e3f2fd;color:#1565c0;border-color:#90caf9;' : 'background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;'}">
+                  ${entry.constant ? '蓝灯常驻' : '绿灯关键'}
+                </button>
+                <div class="tavern-list-row-main">
+                  <div>${escapeHtmlSimple(entry.comment || ('词条 #' + entry.uid))}</div>
+                  <div class="tavern-list-row-sub">关键词: ${escapeHtmlSimple((entry.keys || []).join(', ') || '无')} | 顺序:${entry.order ?? 100} | 深度:${entry.depth ?? 4}</div>
+                </div>
+                <div class="tavern-list-row-actions">
+                  <button type="button" class="tavern-btn small" data-action="wb-edit-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}">编辑</button>
+                  <button type="button" class="tavern-btn small danger" data-action="wb-del-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}">删</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+  }
+
+  function renderWorldEntryInlineEditor(book, entry) {
+    return `
+      <div class="tavern-section-card" style="background:#f7f8fc;border-color:#cfd6ea;margin-top:8px;">
+        <div class="tavern-section-label">
+          <span>编辑世界书词条: ${escapeHtmlSimple(entry.comment)}</span>
+          <button type="button" class="tavern-btn small" data-action="wb-close-entry-editor">收起</button>
+        </div>
+        <div class="tavern-grid-2">
+          <div class="tavern-field-group">
+            <label>词条备注标题</label>
+            <input type="text" class="tavern-input" id="wb-edit-comment" value="${escapeHtmlSimple(entry.comment || '')}" />
+          </div>
+          <div class="tavern-field-group">
+            <label>触发模式</label>
+            <select class="tavern-select" id="wb-edit-constant">
+              <option value="false" ${!entry.constant ? 'selected' : ''}>绿灯 关键词匹配触发</option>
+              <option value="true" ${entry.constant ? 'selected' : ''}>蓝灯 始终常驻激活</option>
+            </select>
+          </div>
+          <div class="tavern-field-group">
+            <label>主关键词 逗号分隔 支持正则</label>
+            <input type="text" class="tavern-input" id="wb-edit-keys" value="${escapeHtmlSimple((entry.keys || []).join(', '))}" />
+          </div>
+          <div class="tavern-field-group">
+            <label>次要过滤关键词 逗号分隔</label>
+            <input type="text" class="tavern-input" id="wb-edit-seckeys" value="${escapeHtmlSimple((entry.secondaryKeys || []).join(', '))}" />
+          </div>
+          <div class="tavern-field-group">
+            <label>次要关键词匹配逻辑</label>
+            <select class="tavern-select" id="wb-edit-logic">
+              <option value="0" ${Number(entry.selectiveLogic) === 0 ? 'selected' : ''}>包含任意一个 AND ANY</option>
+              <option value="1" ${Number(entry.selectiveLogic) === 1 ? 'selected' : ''}>非全部包含 NOT ALL</option>
+              <option value="2" ${Number(entry.selectiveLogic) === 2 ? 'selected' : ''}>完全不包含 NOT ANY</option>
+              <option value="3" ${Number(entry.selectiveLogic) === 3 ? 'selected' : ''}>必须全部包含 AND ALL</option>
+            </select>
+          </div>
+          <div class="tavern-field-group">
+            <label>插入位置 Position</label>
+            <select class="tavern-select" id="wb-edit-pos">
+              <option value="0" ${Number(entry.position) === 0 ? 'selected' : ''}>角色定义之前</option>
+              <option value="1" ${Number(entry.position) === 1 ? 'selected' : ''}>角色定义之后</option>
+              <option value="2" ${Number(entry.position) === 2 ? 'selected' : ''}>对话示例之前</option>
+              <option value="3" ${Number(entry.position) === 3 ? 'selected' : ''}>对话示例之后</option>
+              <option value="4" ${Number(entry.position) === 4 ? 'selected' : ''}>按指定聊天深度插入</option>
+            </select>
+          </div>
+          <div class="tavern-field-group">
+            <label>插入深度 Depth 与顺序 Order</label>
+            <div style="display:flex;gap:6px;">
+              <input type="number" class="tavern-input" id="wb-edit-depth" value="${entry.depth ?? 4}" placeholder="深度" />
+              <input type="number" class="tavern-input" id="wb-edit-order" value="${entry.order ?? 100}" placeholder="顺序" />
+            </div>
+          </div>
+          <div class="tavern-field-group">
+            <label>触发概率百分比 与 角色Role</label>
+            <div style="display:flex;gap:6px;">
+              <input type="number" class="tavern-input" id="wb-edit-prob" value="${entry.probability ?? 100}" min="0" max="100" />
+              <select class="tavern-select" id="wb-edit-role">
+                <option value="0" ${Number(entry.role) === 0 ? 'selected' : ''}>System</option>
+                <option value="1" ${Number(entry.role) === 1 ? 'selected' : ''}>User</option>
+                <option value="2" ${Number(entry.role) === 2 ? 'selected' : ''}>Assistant</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="tavern-field-group">
+          <label>词条正文内容 Content</label>
+          <textarea class="tavern-textarea" id="wb-edit-content" rows="5">${escapeHtmlSimple(entry.content || '')}</textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button type="button" class="tavern-btn small primary" data-action="wb-save-entry-editor" data-wb-id="${book.id}" data-uid="${entry.uid}">保存词条修改</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // Drawer 5: fa-user-cog (UI Theme & User Settings)
+  function renderDrawerUserCog() {
+    let activeTheme = tavernState.themes.find(t => t.id === tavernState.activeThemeId) || tavernState.themes[0];
+    const uiCfg = tavernState.uiSettings || {};
+    const qrs = tavernState.quickReplies || [];
+
+    return `
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>酒馆美化主题切换</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small primary" data-action="trigger-import-themes">导入美化JSON或CSS</button>
+            <button type="button" class="tavern-btn small" data-action="export-active-theme">导出</button>
+          </div>
+        </div>
+        <select class="tavern-select" data-change="switch-theme">
+          ${tavernState.themes.map(t => `
+            <option value="${t.id}" ${t.id === activeTheme.id ? 'selected' : ''}>${escapeHtmlSimple(t.name)}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">界面字号与楼层信息显示</div>
+        <div class="tavern-grid-2">
+          <div class="tavern-field-group">
+            <label>全局字号缩放: ${uiCfg.fontScale ?? 1.0}</label>
+            <input type="number" class="tavern-input" data-ui-num="fontScale" value="${uiCfg.fontScale ?? 1.0}" min="0.75" max="1.4" step="0.05" />
+          </div>
+          <div class="tavern-field-group">
+            <label>引语高亮颜色</label>
+            <input type="text" class="tavern-input" id="theme-quote-color-input" value="${escapeHtmlSimple(activeTheme.quote_text_color || 'rgba(255, 168, 187, 1)')}" />
+          </div>
+        </div>
+        <div class="tavern-grid-2">
+          <label class="tavern-check-row">
+            <input type="checkbox" data-ui-bool="showMessageId" ${uiCfg.showMessageId !== false ? 'checked' : ''} />
+            <span>显示楼层号 #0</span>
+          </label>
+          <label class="tavern-check-row">
+            <input type="checkbox" data-ui-bool="showTokenCount" ${uiCfg.showTokenCount !== false ? 'checked' : ''} />
+            <span>显示单层Token统计</span>
+          </label>
+          <label class="tavern-check-row">
+            <input type="checkbox" data-ui-bool="showMesTimer" ${uiCfg.showMesTimer !== false ? 'checked' : ''} />
+            <span>显示生成耗时</span>
+          </label>
+          <label class="tavern-check-row">
+            <input type="checkbox" data-ui-bool="showSwipeCounter" ${uiCfg.showSwipeCounter !== false ? 'checked' : ''} />
+            <span>显示分支页码计数器</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>当前主题自定义CSS样式表</span>
+          <button type="button" class="tavern-btn small primary" data-action="save-theme-custom-css">应用并保存CSS</button>
+        </div>
+        <textarea class="tavern-textarea" id="tavern-theme-css-editor" rows="7" style="font-family:monospace;font-size:11.5px;">${escapeHtmlSimple(activeTheme.custom_css || '')}</textarea>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>底部快捷回复栏 Quick Replies</span>
+          <button type="button" class="tavern-btn small" data-action="add-quick-reply">新增快捷按钮</button>
+        </div>
+        ${qrs.map(q => `
+          <div class="tavern-list-row">
+            <input type="checkbox" class="tavern-fixed-check" data-action="toggle-qr-item" data-qr-id="${q.id}" ${q.enabled ? 'checked' : ''} />
+            <div class="tavern-list-row-main">
+              <div>${escapeHtmlSimple(q.label)}</div>
+              <div class="tavern-list-row-sub">${escapeHtmlSimple(q.message)}</div>
+            </div>
+            <div class="tavern-list-row-actions">
+              <button type="button" class="tavern-btn small danger" data-action="del-qr-item" data-qr-id="${q.id}">删除</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  // Drawer 6: fa-panorama (Background Gallery & Blur)
+  function renderDrawerPanorama() {
+    const bg = tavernState.background || {};
+    return `
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">背景图片上传与直链设置</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button type="button" class="tavern-btn primary" data-action="trigger-upload-bg">上传背景图至Termux本地</button>
+          <button type="button" class="tavern-btn danger" data-action="clear-tavern-bg">清除背景</button>
+        </div>
+        <div class="tavern-field-group">
+          <label>或直接输入背景图片URL直链</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" class="tavern-input" id="tavern-bg-url-input" value="${escapeHtmlSimple(bg.url || '')}" placeholder="https://... 或 http://127.0.0.1:8765/..." />
+            <button type="button" class="tavern-btn" data-action="apply-bg-url">应用</button>
+          </div>
+        </div>
+        <div class="tavern-grid-3" style="margin-top:8px;">
+          <div class="tavern-field-group">
+            <label>适配模式</label>
+            <select class="tavern-select" data-bg-setting="fit">
+              <option value="cover" ${bg.fit === 'cover' ? 'selected' : ''}>铺满裁剪 Cover</option>
+              <option value="contain" ${bg.fit === 'contain' ? 'selected' : ''}>完整居中 Contain</option>
+              <option value="100% 100%" ${bg.fit === '100% 100%' ? 'selected' : ''}>拉伸填充 Stretch</option>
+            </select>
+          </div>
+          <div class="tavern-field-group">
+            <label>背景模糊度: ${bg.blur ?? 0}px</label>
+            <input type="number" class="tavern-input" data-bg-setting="blur" value="${bg.blur ?? 0}" min="0" max="40" />
+          </div>
+          <div class="tavern-field-group">
+            <label>不透明度: ${bg.opacity ?? 1}</label>
+            <input type="number" class="tavern-input" data-bg-setting="opacity" value="${bg.opacity ?? 1}" min="0" max="1" step="0.05" />
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Drawer 7: fa-cubes (Extensions: Regex, Author's Note, Memory, Plugins)
+  function renderDrawerCubes() {
+    const card = getActiveCard();
+    const cardRegexes = (card && Array.isArray(card.regexScripts)) ? card.regexScripts : [];
+    const globalRegexes = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
+    const allRegexes = [
+      ...cardRegexes.map(r => ({ ...r, _scope: 'card' })),
+      ...globalRegexes.map(r => ({ ...r, _scope: 'global' }))
+    ];
+    const editingRx = allRegexes.find(r => r.id === uiRuntime.editingRegexId) || null;
+    const an = tavernState.authorNote || {};
+    const mem = tavernState.memory || {};
+    const plugins = tavernState.plugins || [];
+    const sess = getActiveChatSession();
+    const pool = (sess && sess.metadata && Array.isArray(sess.metadata.qr_d100_pool)) ? sess.metadata.qr_d100_pool : [];
+
+    return `
+      <div id="rm_extensions_block">
+        <!-- 1. Regex Extension Drawer -->
+        <div class="inline-drawer">
+          <div class="inline-drawer-header" data-action="toggle-ext-acc" data-acc="regex">
+            <span>正则脚本渲染与清洗引擎 共${allRegexes.length}条</span>
+            <span>${uiRuntime.openExtensionAcc.regex ? '收起' : '展开'}</span>
+          </div>
+          ${uiRuntime.openExtensionAcc.regex ? `
+            <div class="inline-drawer-content">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+                <button type="button" class="tavern-btn small primary" data-action="trigger-import-regexes">多选导入正则JSON</button>
+                <button type="button" class="tavern-btn small" data-action="add-new-regex" data-scope="global">新建全局正则</button>
+                <button type="button" class="tavern-btn small" data-action="add-new-regex" data-scope="card">新建角色正则</button>
+              </div>
+
+              ${editingRx ? `
+                <div class="tavern-section-card" style="background:#f7f8fc;border-color:#cfd6ea;">
+                  <div class="tavern-section-label">
+                    <span>编辑正则: ${escapeHtmlSimple(editingRx.scriptName)}</span>
+                    <button type="button" class="tavern-btn small" data-action="close-regex-editor">收起</button>
+                  </div>
+                  <div class="tavern-grid-2">
+                    <div class="tavern-field-group">
+                      <label>脚本名称</label>
+                      <input type="text" class="tavern-input" id="rx-edit-name" value="${escapeHtmlSimple(editingRx.scriptName)}" />
+                    </div>
+                    <div class="tavern-field-group">
+                      <label>生效范围</label>
+                      <select class="tavern-select" id="rx-edit-mode">
+                        <option value="display" ${editingRx.markdownOnly && !editingRx.promptOnly ? 'selected' : ''}>仅渲染画面生效</option>
+                        <option value="prompt" ${editingRx.promptOnly && !editingRx.markdownOnly ? 'selected' : ''}>仅发送提示词生效</option>
+                        <option value="both" ${editingRx.markdownOnly && editingRx.promptOnly ? 'selected' : ''}>画面与提示词同时生效</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="tavern-field-group">
+                    <label>查找正则表达式 Find Regex</label>
+                    <input type="text" class="tavern-input" id="rx-edit-find" value="${escapeHtmlSimple(editingRx.findRegex)}" style="font-family:monospace;" />
+                  </div>
+                  <div class="tavern-field-group">
+                    <label>替换内容或HTML模板 Replace String</label>
+                    <textarea class="tavern-textarea" id="rx-edit-replace" rows="5" style="font-family:monospace;font-size:12px;">${escapeHtmlSimple(editingRx.replaceString)}</textarea>
+                  </div>
+                  <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button type="button" class="tavern-btn small primary" data-action="save-regex-editor" data-rx-id="${editingRx.id}" data-scope="${editingRx._scope}">保存正则脚本</button>
+                  </div>
+                </div>
+              ` : ''}
+
+              <div style="max-height:240px;overflow-y:auto;">
+                ${allRegexes.length === 0 ? `<div style="font-size:12px;color:#888;padding:6px 0;">暂无正则脚本，导入角色卡时会自动提取角色卡内嵌正则。</div>` : allRegexes.map(rx => `
+                  <div class="tavern-list-row">
+                    <input type="checkbox" class="tavern-fixed-check" data-action="toggle-regex-script" data-rx-id="${rx.id}" data-scope="${rx._scope}" ${!rx.disabled ? 'checked' : ''} />
+                    <div class="tavern-list-row-main">
+                      <div>${escapeHtmlSimple(rx.scriptName)}</div>
+                      <div class="tavern-list-row-sub">${rx._scope === 'card' ? '角色专属' : '全局脚本'} | ${escapeHtmlSimple(String(rx.findRegex).slice(0, 42))}</div>
+                    </div>
+                    <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small" data-action="edit-regex-script" data-rx-id="${rx.id}">编辑</button>
+                      <button type="button" class="tavern-btn small danger" data-action="del-regex-script" data-rx-id="${rx.id}" data-scope="${rx._scope}">删</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- 2. Author's Note & Character's Note Drawer -->
+        <div class="inline-drawer">
+          <div class="inline-drawer-header" data-action="toggle-ext-acc" data-acc="an">
+            <span>作者注释与深度指令 Author Note</span>
+            <span>${uiRuntime.openExtensionAcc.an ? '收起' : '展开'}</span>
+          </div>
+          ${uiRuntime.openExtensionAcc.an ? `
+            <div class="inline-drawer-content">
+              <div class="tavern-field-group">
+                <label>当前对话作者注释内容</label>
+                <textarea class="tavern-textarea" id="an-text-input" rows="3" placeholder="实时插入到指定聊天深度的文风或剧情引导...">${escapeHtmlSimple(an.text || '')}</textarea>
+              </div>
+              <div class="tavern-grid-3">
+                <div class="tavern-field-group">
+                  <label>注入深度 Depth</label>
+                  <input type="number" class="tavern-input" id="an-depth-input" value="${an.depth ?? 4}" min="0" max="100" />
+                </div>
+                <div class="tavern-field-group">
+                  <label>注入角色 Role</label>
+                  <select class="tavern-select" id="an-role-input">
+                    <option value="system" ${an.role === 'system' ? 'selected' : ''}>System</option>
+                    <option value="user" ${an.role === 'user' ? 'selected' : ''}>User</option>
+                    <option value="assistant" ${an.role === 'assistant' ? 'selected' : ''}>Assistant</option>
+                  </select>
+                </div>
+                <div class="tavern-field-group">
+                  <label>间隔步频</label>
+                  <input type="number" class="tavern-input" id="an-freq-input" value="${an.frequency ?? 1}" min="1" max="50" />
+                </div>
+              </div>
+              <button type="button" class="tavern-btn small primary" data-action="save-author-note">保存作者注释</button>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- 3. Memory Summary Drawer -->
+        <div class="inline-drawer">
+          <div class="inline-drawer-header" data-action="toggle-ext-acc" data-acc="memory">
+            <span>长线剧情总结与记忆工作台 Summarize</span>
+            <span>${uiRuntime.openExtensionAcc.memory ? '收起' : '展开'}</span>
+          </div>
+          ${uiRuntime.openExtensionAcc.memory ? `
+            <div class="inline-drawer-content">
+              <label class="tavern-check-row">
+                <input type="checkbox" id="mem-enabled-check" ${mem.enabled !== false ? 'checked' : ''} />
+                <span>向AI上下文自动注入剧情记忆摘要</span>
+              </label>
+              <div class="tavern-grid-2" style="margin-top:6px;">
+                <div class="tavern-field-group">
+                  <label>摘要注入深度 Depth</label>
+                  <input type="number" class="tavern-input" id="mem-depth-input" value="${mem.injectDepth ?? 2}" min="0" max="100" />
+                </div>
+                <div class="tavern-field-group">
+                  <label>自动总结间隔楼层</label>
+                  <input type="number" class="tavern-input" id="mem-interval-input" value="${mem.autoInterval ?? 20}" min="5" max="200" />
+                </div>
+              </div>
+              <div class="tavern-field-group">
+                <label>当前累积剧情摘要 可手动修改</label>
+                <textarea class="tavern-textarea" id="mem-summary-textarea" rows="4">${escapeHtmlSimple(mem.summaryText || '')}</textarea>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button type="button" class="tavern-btn small primary" data-action="save-memory-config">保存摘要设置</button>
+                <button type="button" class="tavern-btn small" data-action="run-memory-summary-now">立即调用AI生成总结</button>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- 4. External JS Plugins & D100 Pool Drawer -->
+        <div class="inline-drawer">
+          <div class="inline-drawer-header" data-action="toggle-ext-acc" data-acc="plugins">
+            <span>酒馆扩展插件与暗骰随机数池 共${plugins.length}个</span>
+            <span>${uiRuntime.openExtensionAcc.plugins ? '收起' : '展开'}</span>
+          </div>
+          ${uiRuntime.openExtensionAcc.plugins ? `
+            <div class="inline-drawer-content">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+                <button type="button" class="tavern-btn small primary" data-action="trigger-import-plugins">导入JS或JSON插件</button>
+                <button type="button" class="tavern-btn small" data-action="reroll-d100-pool">立即重掷16枚D100</button>
+              </div>
+              ${pool.length > 0 ? `
+                <div style="padding:8px 10px;border-radius:10px;background:#f2f4f8;font-size:12px;margin-bottom:8px;">
+                  本轮预生成D100随机数池: <strong>${pool.join(', ')}</strong>
+                </div>
+              ` : ''}
+              ${plugins.map(p => `
+                <div class="tavern-list-row">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${p.id}" ${p.enabled ? 'checked' : ''} />
+                  <div class="tavern-list-row-main">
+                    <div>${escapeHtmlSimple(p.name)}</div>
+                    <div class="tavern-list-row-sub">${escapeHtmlSimple(p.description || '外部扩展脚本')}</div>
+                  </div>
+                  ${!p.builtInType ? `
+                    <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small danger" data-action="del-plugin-item" data-plugin-id="${p.id}">卸载</button>
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  // Drawer 8: fa-face-smile (Persona Management)
+  function renderDrawerSmile() {
+    const personas = tavernState.personas || [];
+    const activeP = getActivePersona();
+    const card = getActiveCard();
+    const isLockedToCard = activeP && Array.isArray(activeP.lockedCardIds) && card && activeP.lockedCardIds.includes(card.id);
+
+    return `
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>玩家人设面具列表 共${personas.length}个</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small" data-action="sync-persona-from-phone">同步手机人设</button>
+            <button type="button" class="tavern-btn small primary" data-action="create-new-persona">新建人设</button>
+          </div>
+        </div>
+        <select class="tavern-select" data-change="switch-persona">
+          ${personas.map(p => `
+            <option value="${p.id}" ${p.id === activeP.id ? 'selected' : ''}>${escapeHtmlSimple(p.name)}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">编辑当前人设: ${escapeHtmlSimple(activeP.name)}</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <img src="${resolveSafeAvatarUrl(activeP.avatar, true)}" alt="user" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);" />
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+            <button type="button" class="tavern-btn small" data-action="trigger-upload-persona-avatar">更换头像并存至Termux本地</button>
+            <label class="tavern-check-row">
+              <input type="checkbox" id="persona-lock-card-check" ${isLockedToCard ? 'checked' : ''} />
+              <span>锁定此人设专属绑定至当前角色</span>
+            </label>
+          </div>
+        </div>
+        <div class="tavern-grid-2">
+          <div class="tavern-field-group">
+            <label>玩家姓名 替换宏user</label>
+            <input type="text" class="tavern-input" id="persona-name-input" value="${escapeHtmlSimple(activeP.name || '')}" />
+          </div>
+          <div class="tavern-field-group">
+            <label>人设注入位置</label>
+            <select class="tavern-select" id="persona-pos-input">
+              <option value="0" ${Number(activeP.position) !== 4 ? 'selected' : ''}>系统提示词区</option>
+              <option value="4" ${Number(activeP.position) === 4 ? 'selected' : ''}>按聊天深度注入</option>
+            </select>
+          </div>
+        </div>
+        <div class="tavern-field-group">
+          <label>玩家人设详细描述 Persona Description</label>
+          <textarea class="tavern-textarea" id="persona-desc-input" rows="4" placeholder="填写你的身份背景、外貌性格与随身物品...">${escapeHtmlSimple(activeP.description || '')}</textarea>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;">
+          <button type="button" class="tavern-btn small danger" data-action="delete-active-persona">删除此人设</button>
+          <button type="button" class="tavern-btn primary" data-action="save-active-persona">保存人设修改</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // Drawer 9: fa-address-card (Character Card & Multi-Branch Chat Manager)
+  function renderDrawerAddress() {
+    const cards = tavernState.cards || [];
+    const activeCard = getActiveCard();
+    const archives = (tavernState.chatArchivesByCardId && tavernState.chatArchivesByCardId[activeCard.id]) || [];
+    const activeSess = getActiveChatSession();
+    const altGreetings = Array.isArray(activeCard.alternate_greetings) ? activeCard.alternate_greetings : [];
+
+    return `
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>角色卡档案库 共${cards.length}名角色</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small primary" data-action="trigger-import-cards">导入PNG或JSON角色卡</button>
+            <button type="button" class="tavern-btn small" data-action="create-blank-card">新建角色</button>
+          </div>
+        </div>
+
+        <div style="max-height:175px;overflow-y:auto;">
+          ${cards.map(c => `
+            <div class="tavern-list-row" style="${c.id === activeCard.id ? 'border-color:#555;background:#f0f1f6;' : ''}">
+              <img src="${resolveSafeAvatarUrl(c.avatar, false)}" alt="char" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR_SVG}';" />
+              <div class="tavern-list-row-main" data-action="switch-active-card" data-card-id="${c.id}" style="cursor:pointer;">
+                <div>${escapeHtmlSimple(c.name)} ${c.id === activeCard.id ? '· 当前游玩' : ''}</div>
+                <div class="tavern-list-row-sub">开场白:${1 + (c.alternate_greetings?.length || 0)}个 | 正则:${(c.regexScripts || []).length}条</div>
+              </div>
+              <div class="tavern-list-row-actions">
+                <button type="button" class="tavern-btn small" data-action="switch-active-card" data-card-id="${c.id}">切换</button>
+                <button type="button" class="tavern-btn small" data-action="export-card-json" data-card-id="${c.id}">导出</button>
+                ${cards.length > 1 ? `<button type="button" class="tavern-btn small danger" data-action="delete-card" data-card-id="${c.id}">删</button>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>当前角色聊天存档分支 共${archives.length}个</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small primary" data-action="chat-new-session">新建存档</button>
+            <button type="button" class="tavern-btn small" data-action="trigger-import-chats">导入聊天</button>
+            <button type="button" class="tavern-btn small" data-action="export-current-chat">导出聊天</button>
+          </div>
+        </div>
+        <div style="max-height:130px;overflow-y:auto;">
+          ${archives.map(arch => `
+            <div class="tavern-list-row">
+              <div class="tavern-list-row-main">
+                <div>${escapeHtmlSimple(arch.title || arch.chatId)} ${arch.chatId === activeSess?.chatId ? '· 当前对话' : ''}</div>
+                <div class="tavern-list-row-sub">共 ${(arch.messages || []).length} 层消息</div>
+              </div>
+              <div class="tavern-list-row-actions">
+                <button type="button" class="tavern-btn small" data-action="switch-chat-archive" data-chat-id="${arch.chatId}">载入</button>
+                ${archives.length > 1 ? `<button type="button" class="tavern-btn small danger" data-action="delete-chat-archive" data-chat-id="${arch.chatId}">删</button>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>角色卡参数与多开场白编辑: ${escapeHtmlSimple(activeCard.name)}</span>
+          <button type="button" class="tavern-btn small" data-action="trigger-upload-card-avatar">更换角色头像</button>
+        </div>
+        <div class="tavern-grid-2">
+          <div class="tavern-field-group">
+            <label>角色名称</label>
+            <input type="text" class="tavern-input" id="card-edit-name" value="${escapeHtmlSimple(activeCard.name || '')}" />
+          </div>
+          <div class="tavern-field-group">
+            <label>绑定专属世界书</label>
+            <select class="tavern-select" id="card-edit-wb">
+              <option value="">不单独绑定</option>
+              ${(tavernState.worldBooks || []).map(wb => `
+                <option value="${wb.id}" ${wb.id === activeCard.worldBookId ? 'selected' : ''}>${escapeHtmlSimple(wb.name)}</option>
+              `).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="tavern-field-group">
+          <label>角色设定描述 Description</label>
+          <textarea class="tavern-textarea" id="card-edit-desc" rows="4">${escapeHtmlSimple(activeCard.description || '')}</textarea>
+        </div>
+        <div class="tavern-grid-2">
+          <div class="tavern-field-group">
+            <label>性格特征 Personality</label>
+            <textarea class="tavern-textarea" id="card-edit-personality" rows="2">${escapeHtmlSimple(activeCard.personality || '')}</textarea>
+          </div>
+          <div class="tavern-field-group">
+            <label>场景设定 Scenario</label>
+            <textarea class="tavern-textarea" id="card-edit-scenario" rows="2">${escapeHtmlSimple(activeCard.scenario || '')}</textarea>
+          </div>
+        </div>
+        <div class="tavern-field-group">
+          <label>默认主开场白 First Message</label>
+          <textarea class="tavern-textarea" id="card-edit-firstmes" rows="4">${escapeHtmlSimple(activeCard.first_mes || '')}</textarea>
+        </div>
+        <div class="tavern-field-group">
+          <label>额外多开场白数量: ${altGreetings.length}个 可在0层左右翻页切换</label>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small" data-action="sync-card-greetings-to-floor0">同步全部开场白至第0层</button>
+            <button type="button" class="tavern-btn small primary" data-action="save-card-edits">保存角色卡修改</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  // ============================================================================
+  // 12. Chat Generation, Floor Actions & Event Delegation
+  // ============================================================================
+  async function handleSendUserMessage() {
+    if (uiRuntime.isGenerating) return;
+    const textarea = document.getElementById('send_textarea');
+    if (!textarea) return;
+    const rawInput = textarea.value.trim();
+    if (!rawInput) {
+      await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
+      return;
+    }
+
+    textarea.value = '';
+    const sess = getActiveChatSession();
+    const userMsg = {
+      mesid: sess.messages.length,
+      name: getUserDisplayName(),
+      is_user: true,
+      is_system: false,
+      send_date: Date.now(),
+      mes: rawInput,
+      swipes: [rawInput],
+      swipe_id: 0,
+      reasoning: '',
+      gen_time: '',
+      token_count: estimateTokens(rawInput)
+    };
+    sess.messages.push(userMsg);
+    await saveTavernStore();
+    renderTavernChatFloors(false);
+    await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SENT, sess.messages.length - 1);
+    await tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, sess.messages.length - 1);
+
+    await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
+  }
+
+  async function triggerCharacterReplyGeneration(options = {}) {
+    if (uiRuntime.isGenerating) return;
+    const {
+      isContinue = false,
+      isImpersonate = false,
+      isSwipeRegen = false,
+      targetMesIndex = null
+    } = options;
+
+    uiRuntime.isGenerating = true;
+    const card = getActiveCard();
+    const sess = getActiveChatSession();
+    showTavernToast(isImpersonate ? '正在帮写玩家回复...' : '正在思考并生成回复...');
+
+    try {
+      await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_STARTED);
+      const apiMessages = buildTavernApiMessages({ isImpersonate, isContinue, isSwipeRegen });
+      const result = await callTavernAiCompletion(apiMessages);
+
+      if (isImpersonate) {
+        const textarea = document.getElementById('send_textarea');
+        if (textarea) textarea.value = result.content;
+        showTavernToast('已填入帮写草稿');
+      } else if (isContinue && sess.messages.length > 0) {
+        const lastMsg = sess.messages[sess.messages.length - 1];
+        const curSwipe = Number(lastMsg.swipe_id || 0);
+        if (!Array.isArray(lastMsg.swipes) || lastMsg.swipes.length === 0) {
+          lastMsg.swipes = [lastMsg.mes || ''];
+        }
+        const combined = (lastMsg.swipes[curSwipe] || '') + result.content;
+        lastMsg.swipes[curSwipe] = combined;
+        lastMsg.mes = combined;
+        lastMsg.token_count = estimateTokens(combined);
+        lastMsg.gen_time = result.genTime;
+        await saveTavernStore();
+        renderTavernChatFloors(false);
+      } else if (isSwipeRegen && targetMesIndex !== null && sess.messages[targetMesIndex]) {
+        const targetMsg = sess.messages[targetMesIndex];
+        if (!Array.isArray(targetMsg.swipes)) targetMsg.swipes = [targetMsg.mes || ''];
+        targetMsg.swipes.push(result.content);
+        targetMsg.swipe_id = targetMsg.swipes.length - 1;
+        targetMsg.mes = result.content;
+        targetMsg.reasoning = result.reasoning || '';
+        targetMsg.gen_time = result.genTime;
+        targetMsg.token_count = estimateTokens(result.content);
+        await saveTavernStore();
+        renderTavernChatFloors(false);
+        await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, targetMesIndex);
+      } else {
+        const botMsg = {
+          mesid: sess.messages.length,
+          name: card.name || '角色',
+          is_user: false,
+          is_system: false,
+          send_date: Date.now(),
+          mes: result.content,
+          swipes: [result.content],
+          swipe_id: 0,
+          reasoning: result.reasoning || '',
+          gen_time: result.genTime,
+          token_count: estimateTokens(result.content)
+        };
+        sess.messages.push(botMsg);
+        await saveTavernStore();
+        renderTavernChatFloors(false);
+        await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, sess.messages.length - 1);
+        await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, sess.messages.length - 1);
+      }
+      await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_ENDED);
+    } catch (err) {
+      console.error('Tavern generation error:', err);
+      showTavernToast(err.message || '生成失败');
+    } finally {
+      uiRuntime.isGenerating = false;
+    }
+  }
+
+  function refreshOpenDrawerOnly() {
+    const host = document.getElementById('tavern-drawer-host');
+    if (!host) return;
+    if (!uiRuntime.openDrawerKey) {
+      host.classList.remove('active');
+      host.innerHTML = '';
+    } else {
+      host.classList.add('active');
+      host.innerHTML = renderOpenDrawerHtml(uiRuntime.openDrawerKey);
+    }
+    const topBar = document.getElementById('top-settings-holder');
+    if (topBar) {
+      topBar.querySelectorAll('.drawer').forEach(el => {
+        const k = el.getAttribute('data-drawer-key');
+        const icon = el.querySelector('.drawer-icon');
+        if (k === uiRuntime.openDrawerKey) {
+          el.classList.add('active-drawer');
+          if (icon) {
+            icon.classList.add('openIcon');
+            icon.classList.remove('closedIcon');
+          }
         } else {
-          for (const c of Object.values(state.chats)) {
-            const npc = (c.npcLibrary || []).find(n => n.id === playerId);
-            if (npc) {
-              invitedPlayerInfos.push({
-                id: npc.id,
-                name: npc.name,
-                avatar: npc.avatar,
-                persona: npc.persona,
-                isUser: false,
-              });
-              break;
-            }
+          el.classList.remove('active-drawer');
+          if (icon) {
+            icon.classList.remove('openIcon');
+            icon.classList.add('closedIcon');
           }
         }
       });
-    } else {
-      // 'random' mode
-      const randomPlayerCount = parseInt(document.getElementById('undercover-random-player-count').value);
-      if (isNaN(randomPlayerCount) || randomPlayerCount < 2) {
-        alert('随机邀请人数至少为2人！');
-        return;
-      }
-      totalPlayers = randomPlayerCount + 1;
-
-      const singleChats = Object.values(state.chats).filter(chat => !chat.isGroup);
-      const allNpcs = Object.values(state.chats).flatMap(chat =>
-        (chat.npcLibrary || []).map(npc => ({ ...npc, owner: chat.name })),
-      );
-      let allAvailablePlayers = [
-        ...singleChats.map(c => ({
-          id: c.id,
-          name: c.name,
-          avatar: c.settings.aiAvatar,
-          persona: c.settings.aiPersona,
-          isUser: false,
-        })),
-        ...allNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatar, persona: n.persona, isUser: false })),
-      ];
-
-      if (allAvailablePlayers.length < randomPlayerCount) {
-        alert(`可用玩家不足！需要 ${randomPlayerCount} 人，但只有 ${allAvailablePlayers.length} 人可选。`);
-        return;
-      }
-
-      allAvailablePlayers.sort(() => Math.random() - 0.5); // 洗牌
-      invitedPlayerInfos = allAvailablePlayers.slice(0, randomPlayerCount); // 取出需要的人数
     }
-
-    // --- 2. 重置并初始化游戏状态 ---
-    undercoverGameState = {
-      isActive: true,
-      players: [],
-      gamePhase: 'reveal_words',
-      dayNumber: 1,
-      gameLog: [],
-      turnIndex: 0,
-      votes: {},
-      votedOutPlayers: [],
-      tiedPlayers: [],
-    };
-
-    // --- 3. 让AI生成或从内置词库获取词语 ---
-    let wordPair;
-    try {
-      wordPair = await generateUndercoverWordsAI();
-    } catch (e) {
-      await showCustomAlert('AI出题失败', '呜，AI今天没灵感了...将使用内置词库为你出题！');
-      const BUILT_IN_WORDS = [
-        { civilian: '牛奶', undercover: '豆浆' },
-        { civilian: '白菜', undercover: '生菜' },
-        { civilian: '饺子', undercover: '馄饨' },
-        { civilian: '手套', undercover: '袜子' },
-        { civilian: '情书', undercover: '遗书' },
-      ];
-      wordPair = getRandomItem(BUILT_IN_WORDS);
-    }
-    undercoverGameState.civilianWord = wordPair.civilian;
-    undercoverGameState.undercoverWord = wordPair.undercover;
-
-    // --- 4. 添加玩家到游戏状态 ---
-    const userPlayer = {
-      id: 'user',
-      name: state.qzoneSettings.nickname || '我',
-      avatar: state.qzoneSettings.avatar || defaultAvatar,
-      isAlive: true,
-      isUser: true,
-    };
-    undercoverGameState.players.push(userPlayer);
-    invitedPlayerInfos.forEach(pInfo => {
-      undercoverGameState.players.push({ ...pInfo, isAlive: true });
-    });
-    undercoverGameState.players.sort(() => Math.random() - 0.5); // 打乱座位顺序
-
-    // --- 5. 分配角色和词语 ---
-    let rolesToAssign = [];
-    if (totalPlayers >= 3 && totalPlayers <= 5) {
-      rolesToAssign.push('undercover');
-    } else if (totalPlayers >= 6 && totalPlayers <= 8) {
-      rolesToAssign.push('undercover');
-      rolesToAssign.push('whiteboard');
-    } else {
-      rolesToAssign.push('undercover');
-      rolesToAssign.push('undercover');
-      rolesToAssign.push('whiteboard');
-    }
-    while (rolesToAssign.length < totalPlayers) {
-      rolesToAssign.push('civilian');
-    }
-    rolesToAssign.sort(() => Math.random() - 0.5);
-
-    undercoverGameState.players.forEach((player, index) => {
-      const role = rolesToAssign[index];
-      player.role = role;
-      if (role === 'civilian') player.word = undercoverGameState.civilianWord;
-      else if (role === 'undercover') player.word = undercoverGameState.undercoverWord;
-      else if (role === 'whiteboard') player.word = null;
-    });
-
-    // --- 6. 切换到游戏界面并开始 ---
-    showScreen('undercover-game-screen');
-    await processUndercoverTurn();
   }
 
-  // ▼▼▼ 【最终流程修复版】请用这整块代码，完整替换旧的 processUndercoverTurn 函数 ▼▼▼
-  /**
-   * 【卧底】游戏主循环/引擎 (V3 - 已修复轮次卡死问题)
-   */
-  async function processUndercoverTurn() {
-    if (!undercoverGameState.isActive) return;
+  function bindTavernStageEvents() {
+    const root = document.getElementById('tavern-stage-root');
+    if (!root || root._tavernBound) return;
+    root._tavernBound = true;
 
-    renderUndercoverGameScreen();
+    root.addEventListener('click', async e => {
+      const actionEl = e.target.closest('[data-action]');
+      if (!actionEl) return;
+      const action = actionEl.getAttribute('data-action');
 
-    switch (undercoverGameState.gamePhase) {
-      case 'reveal_words': {
-        logToUndercoverGame(`游戏开始，第 ${undercoverGameState.dayNumber} 轮。请查看自己的词语。`, 'system');
-        const me = undercoverGameState.players.find(p => p.isUser);
-        const roleName = { undercover: '卧底', civilian: '平民', whiteboard: '白板' }[me.role] || '未知';
-        const wordText = me.word ? `你的词语是：【${me.word}】` : '你是一个白板，需要根据他人描述猜测平民词语。';
-        await showCustomAlert(`你的身份是：【${roleName}】`, wordText);
-
-        undercoverGameState.gamePhase = 'description_round';
-        await sleep(1000);
-        await processUndercoverTurn();
-        break;
+      if (action === 'toggle-drawer') {
+        const key = actionEl.getAttribute('data-drawer');
+        uiRuntime.showOptionsPopup = false;
+        uiRuntime.showExtensionsPopup = false;
+        uiRuntime.openDrawerKey = uiRuntime.openDrawerKey === key ? null : key;
+        refreshOpenDrawerOnly();
+        return;
       }
 
-      case 'description_round': {
-        logToUndercoverGame(`第 ${undercoverGameState.dayNumber} 轮发言开始，请依次描述自己的词语。`, 'system');
-
-        const alivePlayers = undercoverGameState.players.filter(p => p.isAlive);
-        for (const player of alivePlayers) {
-          renderUndercoverGameScreen({ speakingPlayerId: player.id });
-          let description;
-          if (player.isUser) {
-            description = await waitForUserUndercoverAction('轮到你发言', 'speak', {
-              placeholder: '请用一句话描述你的词语...',
-            });
-          } else {
-            description = await triggerUndercoverAiAction(player.id, 'describe');
-          }
-          logToUndercoverGame({ player: player, speech: description }, 'speech');
-          await sleep(1000);
-        }
-        renderUndercoverGameScreen();
-        undercoverGameState.gamePhase = 'voting_round';
-        await sleep(1000);
-        await processUndercoverTurn();
-        break;
+      if (action === 'open-drawer-direct') {
+        const key = actionEl.getAttribute('data-drawer');
+        uiRuntime.showOptionsPopup = false;
+        uiRuntime.showExtensionsPopup = false;
+        uiRuntime.openDrawerKey = key;
+        renderTavernShell();
+        return;
       }
 
-      case 'voting_round': {
-        logToUndercoverGame('描述结束，现在开始投票。', 'system');
-        undercoverGameState.votes = {}; // 清空上一轮的票
-        const alivePlayers = undercoverGameState.players.filter(p => p.isAlive);
-        for (const voter of alivePlayers) {
-          let voteResult;
-          if (voter.isUser) {
-            voteResult = await waitForUserUndercoverAction('请投票', 'vote');
-          } else {
-            voteResult = await triggerUndercoverAiAction(voter.id, 'vote');
-          }
-
-          if (voteResult && voteResult.voteForId) {
-            const targetId = voteResult.voteForId;
-            const reason = voteResult.reason || '未说明理由';
-            const targetPlayer = undercoverGameState.players.find(p => p.id === targetId);
-
-            if (targetPlayer) {
-              logToUndercoverGame(
-                `<strong>${voter.name}</strong> 投票给了 <strong>${targetPlayer.name}</strong>，理由是：“${reason}”`,
-              );
-              undercoverGameState.votes[targetId] = (undercoverGameState.votes[targetId] || 0) + 1;
-            }
-          } else {
-            const reason = voteResult ? voteResult.reason || '信息不足，无法判断。' : '信息不足，无法判断。';
-            logToUndercoverGame(`<strong>${voter.name}</strong> 弃票了，理由是：“${reason}”`);
-          }
-          await sleep(500);
-        }
-
-        undercoverGameState.gamePhase = 'elimination';
-        await sleep(2000);
-        await processUndercoverTurn();
-        break;
+      if (action === 'close-drawer') {
+        uiRuntime.openDrawerKey = null;
+        refreshOpenDrawerOnly();
+        return;
       }
 
-      case 'elimination': {
-        logToUndercoverGame('投票结束，正在计票...', 'system');
-        await sleep(2000);
+      if (action === 'exit-tavern-home') {
+        uiRuntime.openDrawerKey = null;
+        if (typeof showScreen === 'function') {
+          showScreen('home-screen');
+        } else {
+          document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+          document.getElementById('home-screen')?.classList.add('active');
+        }
+        return;
+      }
 
-        const voteCounts = undercoverGameState.votes;
-        let maxVotes = 0;
-        let playersToEliminate = [];
+      if (action === 'toggle-options-popup') {
+        uiRuntime.showOptionsPopup = !uiRuntime.showOptionsPopup;
+        uiRuntime.showExtensionsPopup = false;
+        renderTavernShell();
+        return;
+      }
 
-        for (const playerId in voteCounts) {
-          if (voteCounts[playerId] > maxVotes) {
-            maxVotes = voteCounts[playerId];
-            playersToEliminate = [playerId];
-          } else if (voteCounts[playerId] === maxVotes) {
-            playersToEliminate.push(playerId);
+      if (action === 'toggle-extensions-popup') {
+        uiRuntime.showExtensionsPopup = !uiRuntime.showExtensionsPopup;
+        uiRuntime.showOptionsPopup = false;
+        renderTavernShell();
+        return;
+      }
+
+      if (action === 'send-message') {
+        await handleSendUserMessage();
+        return;
+      }
+
+      if (action === 'run-qr') {
+        const qrId = actionEl.getAttribute('data-qr-id');
+        const qr = (tavernState.quickReplies || []).find(q => q.id === qrId);
+        if (!qr) return;
+        if (qr.message === '/continue') {
+          await triggerCharacterReplyGeneration({ isContinue: true });
+        } else if (qr.message === '/impersonate') {
+          await triggerCharacterReplyGeneration({ isImpersonate: true });
+        } else {
+          const textarea = document.getElementById('send_textarea');
+          if (textarea) {
+            textarea.value = qr.message;
+            await handleSendUserMessage();
           }
         }
+        return;
+      }
 
-        if (playersToEliminate.length > 1) {
-          // 处理平票
-          logToUndercoverGame(
-            `出现平票: ${playersToEliminate
-              .map(id => undercoverGameState.players.find(p => p.id === id).name)
-              .join('、 ')}。`,
-            'system',
-          );
-          logToUndercoverGame('平票玩家将进行补充发言，之后再次投票。', 'system');
-          undercoverGameState.tiedPlayers = playersToEliminate;
-          undercoverGameState.gamePhase = 'tie_vote_speech';
-          await sleep(2000);
-          await processUndercoverTurn();
+      // Floor Actions
+      if (action === 'floor-swipe-left' || action === 'floor-swipe-right') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        const sess = getActiveChatSession();
+        const msg = sess && sess.messages[idx];
+        if (!msg) return;
+        if (!Array.isArray(msg.swipes) || msg.swipes.length === 0) {
+          msg.swipes = [msg.mes || ''];
+        }
+        const cur = Number(msg.swipe_id || 0);
+        if (action === 'floor-swipe-left') {
+          msg.swipe_id = cur > 0 ? cur - 1 : msg.swipes.length - 1;
+          msg.mes = msg.swipes[msg.swipe_id];
+          msg.token_count = estimateTokens(msg.mes);
+          await saveTavernStore();
+          renderTavernChatFloors(idx === 0 && sess.messages.length === 1);
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, idx);
+        } else {
+          if (cur < msg.swipes.length - 1) {
+            msg.swipe_id = cur + 1;
+            msg.mes = msg.swipes[msg.swipe_id];
+            msg.token_count = estimateTokens(msg.mes);
+            await saveTavernStore();
+            renderTavernChatFloors(idx === 0 && sess.messages.length === 1);
+            await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, idx);
+          } else if (!msg.is_user && idx > 0) {
+            await triggerCharacterReplyGeneration({ isSwipeRegen: true, targetMesIndex: idx });
+          } else if (idx === 0) {
+            msg.swipe_id = 0;
+            msg.mes = msg.swipes[0];
+            msg.token_count = estimateTokens(msg.mes);
+            await saveTavernStore();
+            renderTavernChatFloors(true);
+          }
+        }
+        return;
+      }
+
+      if (action === 'floor-edit') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        uiRuntime.editingFloorMesId = uiRuntime.editingFloorMesId === idx ? null : idx;
+        uiRuntime.openExtraMenuMesId = null;
+        renderTavernChatFloors(false);
+        return;
+      }
+
+      if (action === 'floor-edit-cancel') {
+        uiRuntime.editingFloorMesId = null;
+        renderTavernChatFloors(false);
+        return;
+      }
+
+      if (action === 'floor-edit-save') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        const box = document.getElementById('tavern-floor-edit-box-' + idx);
+        const sess = getActiveChatSession();
+        const msg = sess && sess.messages[idx];
+        if (box && msg) {
+          const newVal = box.value;
+          if (!Array.isArray(msg.swipes) || msg.swipes.length === 0) msg.swipes = [newVal];
+          const sId = Math.max(0, Number(msg.swipe_id || 0));
+          msg.swipes[sId] = newVal;
+          msg.mes = newVal;
+          msg.token_count = estimateTokens(newVal);
+          uiRuntime.editingFloorMesId = null;
+          await saveTavernStore();
+          renderTavernChatFloors(idx === 0 && sess.messages.length === 1);
+          showTavernToast('已保存本层内容');
+        }
+        return;
+      }
+
+      if (action === 'floor-extra-toggle') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        uiRuntime.openExtraMenuMesId = uiRuntime.openExtraMenuMesId === idx ? null : idx;
+        renderTavernChatFloors(false);
+        return;
+      }
+
+      if (action === 'floor-copy') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        const sess = getActiveChatSession();
+        const msg = sess && sess.messages[idx];
+        if (msg && navigator.clipboard) {
+          await navigator.clipboard.writeText(msg.mes || '');
+          uiRuntime.openExtraMenuMesId = null;
+          renderTavernChatFloors(false);
+          showTavernToast('已复制该楼层原文');
+        }
+        return;
+      }
+
+      if (action === 'floor-regen') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        uiRuntime.openExtraMenuMesId = null;
+        await triggerCharacterReplyGeneration({ isSwipeRegen: true, targetMesIndex: idx });
+        return;
+      }
+
+      if (action === 'floor-add-swipe') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        const sess = getActiveChatSession();
+        const msg = sess && sess.messages[idx];
+        if (msg) {
+          if (!Array.isArray(msg.swipes)) msg.swipes = [msg.mes || ''];
+          msg.swipes.push(msg.mes || '');
+          msg.swipe_id = msg.swipes.length - 1;
+          uiRuntime.openExtraMenuMesId = null;
+          uiRuntime.editingFloorMesId = idx;
+          await saveTavernStore();
+          renderTavernChatFloors(false);
+        }
+        return;
+      }
+
+      if (action === 'floor-fork') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        const card = getActiveCard();
+        const sess = getActiveChatSession();
+        if (sess && card) {
+          const clonedMessages = JSON.parse(JSON.stringify(sess.messages.slice(0, idx + 1)));
+          const newSess = {
+            cardId: card.id,
+            chatId: 'chat_' + card.id + '_' + Date.now(),
+            title: card.name + '分支 #' + idx + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: Date.now(),
+            metadata: JSON.parse(JSON.stringify(sess.metadata || {})),
+            messages: clonedMessages
+          };
+          if (!Array.isArray(tavernState.chatArchivesByCardId[card.id])) {
+            tavernState.chatArchivesByCardId[card.id] = [];
+          }
+          tavernState.chatArchivesByCardId[card.id].unshift(newSess);
+          tavernState.chatsByCardId[card.id] = newSess;
+          uiRuntime.openExtraMenuMesId = null;
+          await saveTavernStore();
+          renderTavernChatFloors(false);
+          showTavernToast('已从第' + idx + '层创建新分支存档');
+        }
+        return;
+      }
+
+      if (action === 'floor-del-one' || action === 'floor-del-below') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        const sess = getActiveChatSession();
+        if (sess && sess.messages.length > 1) {
+          if (action === 'floor-del-one') {
+            sess.messages.splice(idx, 1);
+          } else {
+            sess.messages.splice(idx);
+          }
+          if (sess.messages.length === 0) {
+            const rebuilt = buildInitialSessionForCard(getActiveCard());
+            sess.messages = rebuilt.messages;
+          }
+          uiRuntime.openExtraMenuMesId = null;
+          await saveTavernStore();
+          renderTavernChatFloors(sess.messages.length <= 1);
+          showTavernToast('已删除楼层');
+        }
+        return;
+      }
+
+      // Bottom Popup Actions
+      if (action === 'chat-new-session') {
+        const card = getActiveCard();
+        const newSess = buildInitialSessionForCard(card);
+        if (!Array.isArray(tavernState.chatArchivesByCardId[card.id])) {
+          tavernState.chatArchivesByCardId[card.id] = [];
+        }
+        tavernState.chatArchivesByCardId[card.id].unshift(newSess);
+        tavernState.chatsByCardId[card.id] = newSess;
+        uiRuntime.showOptionsPopup = false;
+        await saveTavernStore();
+        renderTavernShell();
+        showTavernToast('已开启新对话存档');
+        return;
+      }
+
+      if (action === 'chat-regenerate-last') {
+        uiRuntime.showOptionsPopup = false;
+        const sess = getActiveChatSession();
+        if (sess && sess.messages.length > 0) {
+          const lastIdx = sess.messages.length - 1;
+          await triggerCharacterReplyGeneration({ isSwipeRegen: true, targetMesIndex: lastIdx });
+        }
+        return;
+      }
+
+      if (action === 'chat-continue-last') {
+        uiRuntime.showOptionsPopup = false;
+        await triggerCharacterReplyGeneration({ isContinue: true });
+        return;
+      }
+
+      if (action === 'chat-impersonate') {
+        uiRuntime.showOptionsPopup = false;
+        await triggerCharacterReplyGeneration({ isImpersonate: true });
+        return;
+      }
+
+      if (action === 'reroll-d100-pool') {
+        const pool = syncBuiltInD100Pool(false);
+        await saveTavernStore();
+        if (uiRuntime.openDrawerKey === 'cubes') refreshOpenDrawerOnly();
+        else if (uiRuntime.showExtensionsPopup) renderTavernShell();
+        showTavernToast('已重掷16枚D100: ' + (pool ? pool.slice(0, 5).join(', ') + '...' : '未开启'));
+        return;
+      }
+
+      if (action === 'run-memory-summary-now') {
+        uiRuntime.showExtensionsPopup = false;
+        showTavernToast('正在提炼剧情记忆摘要...');
+        try {
+          await generateMemorySummaryFromChat();
+          if (uiRuntime.openDrawerKey === 'cubes') refreshOpenDrawerOnly();
+          showTavernToast('剧情记忆摘要已更新');
+        } catch (err) {
+          showTavernToast(err.message || '总结失败');
+        }
+        return;
+      }
+
+      // Drawer 1 (Sliders & Prompt Order) Actions
+      if (action === 'trigger-import-presets') {
+        document.getElementById('tavern-file-presets')?.click();
+        return;
+      }
+      if (action === 'export-active-preset') {
+        const p = getActivePreset();
+        downloadJsonFile((p.name || 'preset') + '.json', p);
+        return;
+      }
+      if (action === 'delete-active-preset') {
+        if (tavernState.presets.length <= 1) {
+          showTavernToast('至少保留一个预设');
           return;
-        } else if (playersToEliminate.length === 1) {
-          // 唯一最高票，淘汰
-          const eliminatedPlayerId = playersToEliminate[0];
-          const eliminatedPlayer = undercoverGameState.players.find(p => p.id === eliminatedPlayerId);
-          eliminatedPlayer.isAlive = false;
-          undercoverGameState.votedOutPlayers.push(eliminatedPlayer);
-          const roleName =
-            { undercover: '卧底', civilian: '平民', whiteboard: '白板' }[eliminatedPlayer.role] || '未知';
-          logToUndercoverGame(`【${eliminatedPlayer.name}】被淘汰！他/她的身份是【${roleName}】。`, 'system');
-        } else {
-          // 无人被投
-          logToUndercoverGame('本轮无人被投，无人出局。', 'system');
         }
-
-        renderUndercoverGameScreen();
-        if (checkUndercoverGameOver()) return;
-
-        // ★★★ 核心修改：无论是否有人淘汰，都正确进入下一轮 ★★★
-        undercoverGameState.dayNumber++;
-        undercoverGameState.gamePhase = 'description_round';
-        logToUndercoverGame('游戏继续...', 'system');
-        await sleep(3000);
-        await processUndercoverTurn();
-        break;
+        tavernState.presets = tavernState.presets.filter(p => p.id !== tavernState.activePresetId);
+        tavernState.activePresetId = tavernState.presets[0].id;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
       }
-
-      case 'tie_vote_speech': {
-        logToUndercoverGame('现在请平票玩家依次进行补充发言。', 'system');
-        const tiedPlayers = undercoverGameState.players.filter(p => undercoverGameState.tiedPlayers.includes(p.id));
-        for (const player of tiedPlayers) {
-          if (!player.isAlive) continue;
-          renderUndercoverGameScreen({ speakingPlayerId: player.id });
-          let speech;
-          if (player.isUser) {
-            speech = await waitForUserUndercoverAction('请进行补充发言', 'speak', {
-              placeholder: '为自己辩解，说服大家不要投你...',
-            });
-          } else {
-            speech = await triggerUndercoverAiAction(player.id, 'tie_speak');
-          }
-          logToUndercoverGame({ player: player, speech: speech }, 'speech');
-          await sleep(1000);
+      if (action === 'toggle-prompt-item') {
+        const pid = actionEl.getAttribute('data-prompt-id');
+        const preset = getActivePreset();
+        const item = (preset.prompts || []).find(p => p.identifier === pid);
+        if (item) {
+          item.enabled = actionEl.checked;
+          await saveTavernStore();
         }
-        renderUndercoverGameScreen();
-        undercoverGameState.gamePhase = 'tie_vote_re-vote';
-        await processUndercoverTurn();
-        break;
+        return;
       }
-
-      case 'tie_vote_re-vote': {
-        logToUndercoverGame('补充发言结束，请在平票玩家中投票。', 'system');
-
-        const voters = undercoverGameState.players.filter(
-          p => p.isAlive && !undercoverGameState.tiedPlayers.includes(p.id),
-        );
-        const targets = undercoverGameState.players.filter(p => undercoverGameState.tiedPlayers.includes(p.id));
-        undercoverGameState.votes = {};
-
-        for (const voter of voters) {
-          let voteResult;
-          if (voter.isUser) {
-            voteResult = await waitForUserUndercoverAction('请投票', 'vote', { targets: targets });
-          } else {
-            voteResult = await triggerUndercoverAiAction(voter.id, 'vote', { targets: targets });
-          }
-
-          if (voteResult && voteResult.voteForId) {
-            const targetId = voteResult.voteForId;
-            const reason = voteResult.reason || '未说明理由';
-            const targetPlayer = targets.find(p => p.id === targetId);
-            if (targetPlayer) {
-              logToUndercoverGame(
-                `<strong>${voter.name}</strong> 投票给了 <strong>${targetPlayer.name}</strong>，理由是：“${reason}”`,
-              );
-              undercoverGameState.votes[targetId] = (undercoverGameState.votes[targetId] || 0) + 1;
-            }
-          } else {
-            const reason = voteResult ? voteResult.reason || '信息不足，无法判断。' : '信息不足，无法判断。';
-            logToUndercoverGame(`<strong>${voter.name}</strong> 弃票了，理由是：“${reason}”`);
-          }
-          await sleep(500);
+      if (action === 'move-prompt-up' || action === 'move-prompt-down') {
+        const idx = Number(actionEl.getAttribute('data-idx'));
+        const preset = getActivePreset();
+        const list = preset.prompts || [];
+        const swapIdx = action === 'move-prompt-up' ? idx - 1 : idx + 1;
+        if (swapIdx >= 0 && swapIdx < list.length) {
+          const tmp = list[idx];
+          list[idx] = list[swapIdx];
+          list[swapIdx] = tmp;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
         }
-
-        const voteCounts = undercoverGameState.votes;
-        let maxVotes = 0;
-        let playersToEliminate = [];
-        for (const playerId in voteCounts) {
-          if (voteCounts[playerId] > maxVotes) {
-            maxVotes = voteCounts[playerId];
-            playersToEliminate = [playerId];
-          } else if (voteCounts[playerId] === maxVotes) {
-            playersToEliminate.push(playerId);
-          }
+        return;
+      }
+      if (action === 'edit-prompt-item') {
+        uiRuntime.editingPromptId = actionEl.getAttribute('data-prompt-id');
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'close-prompt-item-editor') {
+        uiRuntime.editingPromptId = null;
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'save-prompt-item-editor') {
+        const pid = actionEl.getAttribute('data-prompt-id');
+        const preset = getActivePreset();
+        const item = (preset.prompts || []).find(p => p.identifier === pid);
+        if (item) {
+          item.name = document.getElementById('edit-prompt-name')?.value || item.name;
+          item.role = document.getElementById('edit-prompt-role')?.value || 'system';
+          item.injection_position = Number(document.getElementById('edit-prompt-pos')?.value || 0);
+          item.injection_depth = Number(document.getElementById('edit-prompt-depth')?.value || 4);
+          item.content = document.getElementById('edit-prompt-content')?.value || '';
+          uiRuntime.editingPromptId = null;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('已保存提示词条目');
         }
-
-        if (playersToEliminate.length !== 1) {
-          logToUndercoverGame('再次平票，本轮无人出局。', 'system');
-        } else {
-          const eliminatedPlayerId = playersToEliminate[0];
-          const eliminatedPlayer = undercoverGameState.players.find(p => p.id === eliminatedPlayerId);
-          eliminatedPlayer.isAlive = false;
-          undercoverGameState.votedOutPlayers.push(eliminatedPlayer);
-          const roleName =
-            { undercover: '卧底', civilian: '平民', whiteboard: '白板' }[eliminatedPlayer.role] || '未知';
-          logToUndercoverGame(
-            `PK投票结果：【${eliminatedPlayer.name}】被淘汰！他/她的身份是【${roleName}】。`,
-            'system',
-          );
-        }
-
-        renderUndercoverGameScreen();
-        if (checkUndercoverGameOver()) return;
-
-        undercoverGameState.tiedPlayers = [];
-        undercoverGameState.dayNumber++;
-        undercoverGameState.gamePhase = 'description_round';
-        await sleep(3000);
-        await processUndercoverTurn();
-        break;
+        return;
       }
-    }
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-  // ▼▼▼ 【全新】这是“谁是卧底”的重roll功能核心函数 ▼▼▼
-  /**
-   * 【卧底】处理AI发言的重roll请求
-   * @param {number} logIndex - 要重roll的发言在gameLog中的索引
-   */
-  async function handleUndercoverReroll(logIndex) {
-    const logEntry = undercoverGameState.gameLog[logIndex];
-    if (!logEntry || logEntry.type !== 'speech' || !logEntry.message.player || logEntry.message.player.isUser) {
-      return;
-    }
-
-    const playerToReroll = logEntry.message.player;
-
-    const speechTextElement = document
-      .querySelector(`button.uc-reroll-btn[data-log-index="${logIndex}"]`)
-      .closest('.speech-content')
-      .querySelector('.speech-text');
-    if (speechTextElement) {
-      speechTextElement.innerHTML = '<i>重新描述中...</i>';
-    }
-
-    try {
-      // 判断当前游戏阶段来决定AI的行动
-      const actionType = undercoverGameState.gamePhase === 'tie_vote_speech' ? 'tie_speak' : 'describe';
-
-      const newSpeech = await triggerUndercoverAiAction(playerToReroll.id, actionType);
-      undercoverGameState.gameLog[logIndex].message.speech = newSpeech;
-      renderUndercoverGameScreen();
-    } catch (error) {
-      console.error('卧底发言重roll失败:', error);
-      if (speechTextElement) {
-        speechTextElement.innerHTML = `<i style="color:red;">重新生成失败，请检查网络或API设置。</i>`;
-      }
-    }
-  }
-  // ▲▲▲ 新增函数结束 ▲▲▲
-
-  // ▼▼▼ 【谁是卧底】用这块【已添加重roll按钮】的代码，完整替换旧的 renderUndercoverGameScreen 函数 ▼▼▼
-  /**
-   * 【卧底】渲染游戏主界面
-   */
-  function renderUndercoverGameScreen(options = {}) {
-    const playersGrid = document.getElementById('undercover-players-grid');
-    const logContainer = document.getElementById('undercover-game-log');
-
-    playersGrid.innerHTML = '';
-    undercoverGameState.players.forEach(player => {
-      const seat = document.createElement('div');
-      seat.className = 'player-seat';
-      const avatarClass = `player-avatar ${!player.isAlive ? 'dead' : ''} ${
-        options.speakingPlayerId === player.id ? 'speaking' : ''
-      }`;
-
-      seat.innerHTML = `
-            <img src="${player.avatar}" class="${avatarClass}">
-            <span class="player-name">${player.name} ${!player.isAlive ? '(淘汰)' : ''}</span>
-        `;
-      playersGrid.appendChild(seat);
-    });
-
-    logContainer.innerHTML = '';
-    undercoverGameState.gameLog.forEach((log, index) => {
-      // ★ 核心修改1：增加了index参数
-      const logEl = document.createElement('div');
-      // ★ 核心修改2：判断是否是AI的发言
-      if (log.type === 'speech' && typeof log.message === 'object' && !log.message.player.isUser) {
-        logEl.className = 'log-entry speech';
-        const { player, speech } = log.message;
-
-        // ★ 核心修改3：为AI发言添加重roll按钮
-        logEl.innerHTML = `
-            <img src="${player.avatar}" class="speech-avatar">
-            <div class="speech-content">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="speaker">${player.name}</span>
-                    <button class="uc-reroll-btn" data-log-index="${index}" title="重新生成发言" style="background:none; border:none; cursor:pointer; padding:0; color:var(--text-secondary);">
-                        <svg class="reroll-btn-icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                    </button>
-                </div>
-                <span class="speech-text">${speech.replace(/\n/g, '<br>')}</span>
-            </div>
-        `;
-      } else if (log.type === 'speech') {
-        // 用户发言保持原样
-        logEl.className = 'log-entry speech';
-        logEl.innerHTML = `
-                <img src="${log.message.player.avatar}" class="speech-avatar">
-                <div class="speech-content">
-                    <span class="speaker">${log.message.player.name}</span>
-                    <span class="speech-text">${log.message.speech.replace(/\n/g, '<br>')}</span>
-                </div>
-            `;
-      } else {
-        // 其他系统消息也保持原样
-        logEl.className = `log-entry ${log.type}`;
-        logEl.innerHTML = String(log.message).replace(/\n/g, '<br>');
-      }
-      logContainer.appendChild(logEl);
-    });
-    logContainer.scrollTop = logContainer.scrollHeight;
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【卧底】添加一条游戏日志
-   */
-  function logToUndercoverGame(message, type = 'system') {
-    undercoverGameState.gameLog.push({ message, type });
-    renderUndercoverGameScreen();
-  }
-
-  // ▼▼▼ 【卧底输入框美化版】请用这个【全新】的函数，完整替换掉你旧的 waitForUserUndercoverAction 函数 ▼▼▼
-  /**
-   * 【卧底 V4】等待用户行动的通用函数（已修复placeholder错误）
-   */
-  function waitForUserUndercoverAction(promptText, actionType, context = {}) {
-    const me = undercoverGameState.players.find(p => p.isUser);
-    if (me && !me.isAlive) {
-      const actionArea = document.getElementById('undercover-action-area');
-      actionArea.innerHTML = `<h5>您已淘汰，正在观战...</h5>`;
-      return new Promise(async resolve => {
-        await sleep(3000);
-        actionArea.innerHTML = '';
-        resolve(null);
-      });
-    }
-
-    return new Promise(resolve => {
-      const actionArea = document.getElementById('undercover-action-area');
-      actionArea.innerHTML = '';
-      actionArea.className = 'undercover-action-area';
-
-      if (actionType === 'speak') {
-        actionArea.classList.add('speaking-mode');
-
-        // ★★★ 核心修复：从 context 对象中获取 placeholder ★★★
-        const placeholderText = context.placeholder || '请输入你的发言...';
-
-        actionArea.innerHTML = `<textarea id="undercover-user-speech-input" rows="1" placeholder="${placeholderText}"></textarea><button id="undercover-end-speech-btn" class="form-button">发言</button>`;
-
-        const textarea = document.getElementById('undercover-user-speech-input');
-        const endBtn = document.getElementById('undercover-end-speech-btn');
-        textarea.addEventListener('input', () => {
-          textarea.style.height = 'auto';
-          textarea.style.height = textarea.scrollHeight + 'px';
-        });
-        textarea.focus();
-        endBtn.onclick = () => {
-          const speech = textarea.value.trim() || '我过。';
-          actionArea.innerHTML = '';
-          actionArea.classList.remove('speaking-mode');
-          resolve(speech);
-        };
-      } else if (actionType === 'vote') {
-        actionArea.innerHTML = `<h5>${promptText}</h5>`;
-        const grid = document.createElement('div');
-        grid.className = 'vote-target-grid';
-
-        // ★★★ 核心修改：在这里判断是普通投票还是最终PK投票 ★★★
-        const targets = context.targets
-          ? context.targets.filter(p => !p.isUser)
-          : undercoverGameState.players.filter(p => p.isAlive && !p.isUser); // 否则是所有存活玩家
-
-        targets.forEach(player => {
-          const btn = document.createElement('button');
-          btn.className = 'form-button-secondary vote-target-btn';
-          btn.textContent = player.name;
-          btn.onclick = async () => {
-            const reason = await showCustomPrompt(`投票给 ${player.name}`, '请输入你的投票理由（可选）');
-            if (reason !== null) {
-              actionArea.innerHTML = '';
-              resolve({ voteForId: player.id, reason: reason.trim() || '没有理由，跟着感觉走。' });
-            }
-          };
-          grid.appendChild(btn);
-        });
-
-        // ★★★ 核心修改：只有在普通投票时才显示“弃票”按钮 ★★★
-        if (!context.targets) {
-          const passBtn = document.createElement('button');
-          passBtn.className = 'form-button-secondary vote-target-btn';
-          passBtn.textContent = '弃票';
-          passBtn.onclick = async () => {
-            const reason = await showCustomPrompt(`确认弃票`, '请输入你弃票的理由（可选）');
-            if (reason !== null) {
-              actionArea.innerHTML = '';
-              resolve({ voteForId: null, reason: reason.trim() || '信息不足，无法判断。' });
-            }
-          };
-          grid.appendChild(passBtn);
-        }
-
-        actionArea.appendChild(grid);
-      }
-    });
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  // ▼▼▼ 用这块【已添加平票逻辑】的代码，完整替换你旧的 triggerUndercoverAiAction 函数 ▼▼▼
-  /**
-   * 【卧底-AI核心 V4 - 平票逻辑增强版】
-   * @param {string} playerId - 触发行动的AI玩家ID
-   * @param {string} actionType - AI需要执行的动作: 'describe', 'vote', 'tie_speak'
-   * @returns {Promise<object|string|null>} - AI的行动结果
-   */
-  async function triggerUndercoverAiAction(playerId, actionType, context = {}) {
-    const player = undercoverGameState.players.find(p => p.id === playerId);
-    if (!player || !player.isAlive) return null;
-
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) {
-      if (actionType === 'describe' || actionType === 'tie_speak') return '我...词穷了，过。';
-      if (actionType === 'vote') {
-        const targets = context.targets || undercoverGameState.players.filter(p => p.isAlive && p.id !== playerId);
-        const randomTargetId = targets.length > 0 ? targets[Math.floor(Math.random() * targets.length)].id : null;
-        return { voteForId: randomTargetId, reason: '我凭直觉投的。' };
-      }
-      return null;
-    }
-
-    let actionPrompt = '';
-    let jsonFormat = '';
-    let roleDescription = '';
-    let votingRule = '';
-    // 【核心修改1】根据是否是平票后的再次投票，来决定可投票的目标
-    const voteTargets = context.targets || undercoverGameState.players.filter(p => p.isAlive && p.id !== player.id);
-    const alivePlayersListForVote = voteTargets.map(p => `- ${p.name} (id: ${p.id})`).join('\n');
-
-    const gameLog = undercoverGameState.gameLog
-      .filter(log => log.type === 'speech')
-      .map(log => `${log.message.player.name}: ${log.message.speech}`)
-      .join('\n');
-
-    switch (actionType) {
-      case 'describe':
-        // ★★★ 核心修改2：为“描述”指令添加轮次信息 ★★★
-        if (undercoverGameState.dayNumber > 1) {
-          actionPrompt = `游戏进入了第 ${undercoverGameState.dayNumber} 轮。现在轮到你发言。请根据你的身份和词语，用一句【全新的、和之前轮次不同】的话来描述。你的描述必须是真实的，但要足够模糊。禁止重复他人的描述。`;
-        } else {
-          actionPrompt = `现在是第一轮，轮到你发言。请根据你的身份和词语，用一句话描述。你的描述必须是真实的，但要足够模糊。禁止重复他人的描述。`;
-        }
-        jsonFormat = '{"description": "你的描述..."}';
-        break;
-      // =======================================================
-      // ★★★ 【全新】为AI增加补充发言的指令 ★★★
-      // =======================================================
-      case 'tie_speak':
-        actionPrompt =
-          '你因为平票正在进行补充发言。请为自己辩解，说服其他人不要投票给你。你的发言要简短有力，符合你的人设和身份。';
-        jsonFormat = '{"description": "你的补充发言..."}';
-        break;
-      case 'vote':
-        actionPrompt = `现在是投票环节。请仔细分析【所有玩家的发言】，找出描述最可疑、最偏离主题、或者听起来最心虚的那个人，然后投票给他/她，并给出【简洁且符合逻辑】的理由。或者，如果你觉得信息不足无法判断，也可以选择弃票，并说明你弃票的原因。`;
-        jsonFormat = '{"voteForId": "你投票的玩家ID或null", "reason": "你的投票或弃票理由..."}';
-        votingRule = `
-# 【【【投票铁律：这是最高指令，必须严格遵守】】】
-在你的 "reason" 投票理由中，【绝对禁止】直接或间接提及你自己的词语，或猜测别人的词语是什么。你的理由只能基于对他人【发言描述】的分析，例如“他的描述很模糊”、“她的描述和大家不一样”等等。
-`;
-        break;
-    }
-
-    if (player.role === 'civilian') {
-      roleDescription = `你是【平民】，你的词是【${player.word}】。你的目标是找出卧底和白板并投票淘汰他们。`;
-    } else if (player.role === 'undercover') {
-      roleDescription = `你是【卧底】，你的词是【${player.word}】。你的词和平民的词意思相近但不同。你的任务是【伪装】！仔细听别人的发言，找出他们的共同点，让自己听起来像个好人。`;
-    } else {
-      // whiteboard
-      roleDescription = `你是【白板】，你没有词语。你的任务是【伪装和猜测】！在轮到你发言之前，【仔细听】前面所有人的描述，【猜出】他们的词语大概是什么，然后给出一个【非常模糊】的描述，让自己听起来和他们是一伙的。`;
-    }
-
-    const systemPrompt = `
-# 游戏背景: 谁是卧底
-你正在扮演玩家“${player.name}”，你的人设是：“${player.persona}”。
-
-# 你的身份和任务
-${roleDescription}
-你的所有行为都必须符合你的人设和游戏目标。
-${votingRule}
-# 当前场上局势
-- 可投票的玩家列表:
-${alivePlayersListForVote} 
-- 本轮所有人的发言记录:
-${gameLog || '(暂无发言)'}
-
-# 你的行动指令
-${actionPrompt}
-
-# 输出格式
-你的回复【必须且只能】是一个严格的JSON对象，格式如下:
-${jsonFormat}
-`;
-
-    try {
-      const messagesForApi = [{ role: 'user', content: systemPrompt }];
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(
-        model,
-        apiKey,
-        systemPrompt,
-        messagesForApi,
-        isGemini,
-        state.apiConfig.temperature,
-      );
-
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: 'json_object' },
-            }),
-          });
-
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      const content = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content).replace(
-        /^```json\s*|```$/g,
-        '',
-      );
-      const aiAction = JSON.parse(content);
-
-      // 【核心修改2】根据不同的行动类型，返回不同的结果
-      if (actionType === 'describe' || actionType === 'tie_speak') {
-        return aiAction.description || '我过。';
-      }
-
-      if (actionType === 'vote') {
-        if (aiAction.voteForId === player.id) {
-          const targets = voteTargets.filter(p => p.id !== player.id); // 确保不会投给自己
-          const randomTargetId = targets.length > 0 ? targets[Math.floor(Math.random() * targets.length)].id : null;
-          return { voteForId: randomTargetId, reason: '我感觉有点混乱，随便投一个吧。' };
-        }
-        return aiAction;
-      }
-      return null;
-    } catch (error) {
-      console.error(`卧底AI (${player.name}) 行动失败:`, error);
-      if (actionType === 'describe' || actionType === 'tie_speak') return '我想不出来，过。';
-      if (actionType === 'vote') {
-        const targets = voteTargets.filter(p => p.id !== player.id);
-        const randomTargetId = targets.length > 0 ? targets[Math.floor(Math.random() * targets.length)].id : null;
-        return { voteForId: randomTargetId, reason: '思考超时，凭直觉投的。' };
-      }
-      return null;
-    }
-  }
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  /**
-   * 【卧底】检查游戏是否结束 (已集成复盘分享)
-   */
-  function checkUndercoverGameOver() {
-    const alivePlayers = undercoverGameState.players.filter(p => p.isAlive);
-    const aliveCount = alivePlayers.length;
-    const undercoverCount = alivePlayers.filter(p => p.role === 'undercover' || p.role === 'whiteboard').length;
-    const civilianCount = aliveCount - undercoverCount;
-
-    let winner = null;
-
-    if (undercoverCount === 0) {
-      winner = '平民阵营';
-    } else if (civilianCount <= undercoverCount) {
-      winner = '卧底阵营';
-    }
-
-    if (winner) {
-      undercoverGameState.isActive = false;
-      logToUndercoverGame(`游戏结束！${winner}胜利！`, 'system');
-
-      // ▼▼▼ 【核心修改】在这里调用我们新的复盘功能！ ▼▼▼
-      setTimeout(() => {
-        const summaryText = generateUndercoverSummary(winner);
-        showUndercoverSummaryModal(summaryText);
-      }, 2000);
-      // ▲▲▲ 修改结束 ▲▲▲
-
-      document.getElementById('undercover-action-area').innerHTML = '';
-      return true;
-    }
-    return false;
-  }
-
-  // ▼▼▼ 【全新】“谁是卧底”游戏复盘与分享功能核心代码 ▼▼▼
-
-  /**
-   * 生成“谁是卧底”的复盘文本，包含完整的游戏日志
-   * @param {string} winner - 胜利的阵营名称
-   * @returns {string} - 格式化后的复盘Markdown文本
-   */
-  function generateUndercoverSummary(winner) {
-    let summary = `**谁是卧底 - 游戏复盘**\n\n`;
-    summary += `🏆 **胜利方:** ${winner}\n\n`;
-    summary += `**词语揭晓:**\n- 平民词: **${undercoverGameState.civilianWord}**\n- 卧底词: **${undercoverGameState.undercoverWord}**\n\n`;
-
-    summary += `**玩家身份:**\n`;
-    undercoverGameState.players.forEach(p => {
-      const roleName = { undercover: '卧底', civilian: '平民', whiteboard: '白板' }[p.role];
-      summary += `- ${p.name}: ${roleName}\n`;
-    });
-
-    summary += `\n---\n\n**游戏过程回顾:**\n`;
-    const formattedLog = undercoverGameState.gameLog
-      .map(log => {
-        if (log.type === 'speech') {
-          return `${log.message.player.name}: ${log.message.speech}`;
-        }
-        return log.message.replace(/<strong>/g, '**').replace(/<\/strong>/g, '**'); // 将HTML粗体转为Markdown
-      })
-      .join('\n');
-    summary += formattedLog;
-
-    return summary;
-  }
-
-  /**
-   * 【卧底】打开复盘分享目标选择器
-   * @param {string} summaryText - 要分享的复盘文本
-   */
-  function openUndercoverSummaryTargetPicker(summaryText) {
-    const modal = document.getElementById('undercover-target-picker-modal');
-    const listEl = document.getElementById('undercover-target-list');
-    listEl.innerHTML = '';
-
-    const aiPlayers = undercoverGameState.players.filter(p => !p.isUser);
-
-    if (aiPlayers.length === 0) {
-      alert('没有可分享的AI玩家。');
-      return;
-    }
-
-    // 渲染可选的AI玩家列表
-    aiPlayers.forEach(player => {
-      const item = document.createElement('div');
-      item.className = 'player-selection-item'; // 复用之前的样式
-      item.innerHTML = `
-            <input type="checkbox" class="undercover-target-checkbox" value="${player.id}" checked>
-            <img src="${player.avatar || defaultAvatar}" alt="${player.name}">
-            <span class="name">${player.name}</span>
-        `;
-      listEl.appendChild(item);
-    });
-
-    // 绑定按钮事件
-    const confirmBtn = document.getElementById('uc-confirm-share-btn');
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    newConfirmBtn.onclick = () => {
-      const selectedIds = Array.from(document.querySelectorAll('.undercover-target-checkbox:checked')).map(
-        cb => cb.value,
-      );
-      if (selectedIds.length > 0) {
-        sendUndercoverSummaryToSelectedPlayers(summaryText, selectedIds);
-      } else {
-        alert('请至少选择一个分享对象！');
-      }
-    };
-
-    document.getElementById('uc-cancel-share-btn').onclick = () => modal.classList.remove('visible');
-    document.getElementById('uc-select-all-btn').onclick = () => {
-      document.querySelectorAll('.undercover-target-checkbox').forEach(cb => (cb.checked = true));
-    };
-    document.getElementById('uc-deselect-all-btn').onclick = () => {
-      document.querySelectorAll('.undercover-target-checkbox').forEach(cb => (cb.checked = false));
-    };
-
-    modal.classList.add('visible');
-  }
-
-  /**
-   * 【卧底】将游戏复盘发送到【选定】的AI角色的单聊中
-   * @param {string} summaryText - 复盘文本
-   * @param {string[]} targetIds - 目标AI角色的ID数组
-   */
-  async function sendUndercoverSummaryToSelectedPlayers(summaryText, targetIds) {
-    document.getElementById('undercover-summary-modal').classList.remove('visible');
-    document.getElementById('undercover-target-picker-modal').classList.remove('visible');
-    let sentCount = 0;
-
-    const aiContext = `[系统指令：刚刚结束了一局“谁是卧底”，这是游戏复盘。请根据这个复盘内容，以你的角色人设，和用户聊聊刚才的游戏。]\n\n${summaryText}`;
-
-    for (const chatId of targetIds) {
-      const chat = state.chats[chatId];
-      if (chat) {
-        const visibleMessage = {
-          role: 'user',
-          type: 'share_link',
-          timestamp: Date.now(),
-          title: '谁是卧底 - 游戏复盘',
-          description: '点击查看详细复盘记录',
-          source_name: '游戏中心',
-          content: summaryText,
-        };
-
-        const hiddenInstruction = {
+      if (action === 'add-custom-prompt-item') {
+        const preset = getActivePreset();
+        const newId = 'custom_' + Date.now();
+        preset.prompts.push({
+          identifier: newId,
+          name: '自定义提示词块',
+          enabled: true,
           role: 'system',
-          content: aiContext,
-          timestamp: Date.now() + 1,
-          isHidden: true,
-        };
-
-        chat.history.push(visibleMessage, hiddenInstruction);
-        await db.chats.put(chat);
-        sentCount++;
-      }
-    }
-
-    await showCustomAlert('分享成功', `游戏复盘已分享至 ${sentCount} 位AI玩家的单聊中！`);
-    showScreen('game-hall-screen');
-  }
-
-  /**
-   * 【卧底】显示游戏结算卡片 (V2 - 已集成分享功能)
-   */
-  function showUndercoverSummaryModal(summaryText) {
-    const modal = document.getElementById('undercover-summary-modal');
-    const contentEl = document.getElementById('undercover-summary-content');
-
-    // 使用Markdown渲染函数，让复盘更好看
-    contentEl.innerHTML = renderMarkdown(summaryText);
-
-    // --- ▼▼▼ 核心修改在这里 ▼▼▼ ---
-
-    // 为“分享复盘”按钮绑定新的点击事件
-    const repostBtn = document.getElementById('repost-undercover-summary-btn');
-    const newRepostBtn = repostBtn.cloneNode(true);
-    repostBtn.parentNode.replaceChild(newRepostBtn, repostBtn);
-    newRepostBtn.onclick = () => openUndercoverSummaryTargetPicker(summaryText); // 调用我们即将创建的目标选择器函数
-
-    // 为“返回大厅”按钮绑定事件
-    const backBtn = document.getElementById('back-to-hall-from-undercover-btn');
-    const newBackBtn = backBtn.cloneNode(true);
-    backBtn.parentNode.replaceChild(newBackBtn, backBtn);
-    newBackBtn.onclick = () => {
-      modal.classList.remove('visible');
-      showScreen('game-hall-screen');
-    };
-
-    // --- ▲▲▲ 修改结束 ▲▲▲ ---
-
-    modal.classList.add('visible');
-  }
-
-  // ▲▲▲ “谁是卧底”核心逻辑代码结束 ▲▲▲
-  /**
-   * 【全新】调用AI为“谁是卧底”游戏生成一组词语
-   * @returns {Promise<object>} - 返回一个包含 { civilian: '平民词', undercover: '卧底词' } 的对象
-   */
-  async function generateUndercoverWordsAI() {
-    await showCustomAlert('请稍候...', 'AI正在为你出题...');
-    const { proxyUrl, apiKey, model } = state.apiConfig;
-    if (!proxyUrl || !apiKey || !model) {
-      throw new Error('API未配置，无法生成词语。');
-    }
-
-    const prompt = `
-# 任务
-你是一个“谁是卧底”游戏出题人。请生成一组有趣且有迷惑性的词语。
-
-# 规则
-1.  你必须生成两个词语：一个“平民词(civilianWord)”和一个“卧底词(undercoverWord)”。
-2.  这两个词语必须属于同一大类，但具体指向不同。例如：牛奶 vs 豆浆，唇膏 vs 口红。
-3.  词语必须是常见的2-4个字的中文名词。
-4.  你的回复【必须且只能】是一个严格的JSON对象，格式如下:
-    {"civilianWord": "...", "undercoverWord": "..."}
-5.  【绝对禁止】返回任何JSON以外的文本、解释或分析。
-
-现在，请出题。`;
-
-    try {
-      const messagesForApi = [{ role: 'user', content: prompt }];
-      let isGemini = proxyUrl === GEMINI_API_URL;
-      let geminiConfig = toGeminiRequestData(model, apiKey, prompt, messagesForApi, isGemini);
-
-      const response = isGemini
-        ? await fetch(geminiConfig.url, geminiConfig.data)
-        : await fetch(`${proxyUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: model,
-              messages: messagesForApi,
-              temperature: parseFloat(state.apiConfig.temperature) || 0.8,
-              response_format: { type: 'json_object' },
-            }),
-          });
-
-      if (!response.ok) throw new Error(`API请求失败: ${response.status}`);
-
-      const data = await response.json();
-      const rawContent = (isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content)
-        .replace(/^```json\s*|```$/g, '')
-        .trim();
-      const wordPair = JSON.parse(rawContent);
-
-      if (wordPair.civilianWord && wordPair.undercoverWord) {
-        return { civilian: wordPair.civilianWord, undercover: wordPair.undercoverWord };
-      }
-      throw new Error('AI返回的词语格式不正确。');
-    } catch (error) {
-      console.error('AI生成词语失败:', error);
-      throw error; // 将错误抛出，由调用者处理
-    }
-  }
-
-  // ▲▲▲ 新功能函数粘贴结束 ▲▲▲
-
-  // (请确保你把上面提到的所有游戏相关函数都从原文件剪切过来了)
-  // 下面是完整的函数示例，你只需确保你的代码里有这些函数即可
-
-  /* ******************************************* */
-  /* ***           完整的游戏函数代码            *** */
-  /* ******************************************* */
-
-  // ▼▼▼ 用这块【已添加飞行棋】的代码，替换旧的 game-hall-grid 事件监听器 ▼▼▼
-  document.getElementById('game-hall-grid').addEventListener('click', e => {
-    const gameCard = e.target.closest('.game-card');
-    if (!gameCard) return;
-
-    const gameId = gameCard.dataset.game;
-    if (gameId === 'werewolf') {
-      openWerewolfSetup();
-    } else if (gameId === 'sea-turtle-soup') {
-      openSeaTurtleSoupSetup();
-    } else if (gameId === 'script-kill') {
-      openScriptKillSetup();
-    } else if (gameId === 'guess-what') {
-      openGuessWhatSetup();
-    }
-    // ★★★ 这就是我们新增的分支 ★★★
-    else if (gameId === 'ludo') {
-      openLudoSetup(); // 调用我们新写的函数
-    }
-    // ★★★ 新增结束 ★★★
-    // ▼▼▼ 在这里添加新的 else if 分支 ▼▼▼
-    else if (gameId === 'undercover') {
-      openUndercoverSetup();
-    }
-    // ▲▲▲ 新增代码结束 ▲▲▲
-    else {
-      alert(`“${gameCard.querySelector('.game-title').textContent}”还在开发中，敬请期待！`);
-    }
-  });
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  // ▼▼▼ 【全新】狼人杀游戏事件监听器 ▼▼▼
-  document.getElementById('start-werewolf-game-btn').addEventListener('click', startWerewolfGame);
-
-  document.getElementById('exit-werewolf-game-btn').addEventListener('click', async () => {
-    const confirmed = await showCustomConfirm('退出游戏', '确定要中途退出游戏吗？当前进度不会保存。');
-    if (confirmed) {
-      werewolfGameState.isActive = false; // 停止游戏循环
-      showScreen('game-hall-screen');
-    }
-  });
-
-  document.getElementById('werewolf-my-role-btn').addEventListener('click', () => {
-    if (werewolfGameState.isActive) {
-      const me = werewolfGameState.players.find(p => p.isUser);
-      if (me) {
-        alert(`你的身份是：【${me.role}】`);
-      }
-    }
-  });
-  // ▲▲▲ 新增事件监听结束 ▲▲▲
-  // ▼▼▼ 【全新】海龟汤游戏事件监听器 ▼▼▼
-
-  // 1. 设置弹窗内的交互
-  document.getElementById('cancel-sts-setup-btn').addEventListener('click', () => {
-    document.getElementById('sea-turtle-soup-setup-modal').classList.remove('visible');
-  });
-  document.getElementById('start-sts-game-btn').addEventListener('click', startSeaTurtleSoupGame);
-
-  // 监听“出题人”下拉框的变化
-  document.getElementById('sts-riddle-provider-select').addEventListener('change', e => {
-    const userArea = document.getElementById('sts-user-riddle-input-area');
-    const aiArea = document.getElementById('sts-ai-riddle-input-area');
-    userArea.style.display = 'none';
-    aiArea.style.display = 'none';
-    if (e.target.value === 'user') {
-      userArea.style.display = 'block';
-    } else if (e.target.value === 'random_ai') {
-      aiArea.style.display = 'block';
-    }
-  });
-
-  // 2. 游戏主界面的按钮
-  document.getElementById('exit-sts-game-btn').addEventListener('click', async () => {
-    const confirmed = await showCustomConfirm('退出游戏', '确定要中途退出游戏吗？');
-    if (confirmed) {
-      seaTurtleSoupState.isActive = false;
-      showScreen('game-hall-screen');
-    }
-  });
-  document.getElementById('reveal-sts-answer-btn').addEventListener('click', async () => {
-    const confirmed = await showCustomConfirm('揭晓答案', '确定要提前揭晓答案并结束游戏吗？');
-    if (confirmed) {
-      revealStsAnswer();
-    }
-  });
-  document.getElementById('send-sts-question-btn').addEventListener('click', handleStsUserQuestion);
-  // ▼▼▼ 在 init() 的事件监听器区域末尾添加 ▼▼▼
-  document.getElementById('guess-sts-answer-btn').addEventListener('click', handleStsUserGuess);
-  // ▲▲▲ 添加结束 ▲▲▲
-  document.getElementById('sts-question-input').addEventListener('keypress', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      document.getElementById('send-sts-question-btn').click();
-    }
-  });
-
-  // ▲▲▲ 新事件监听器结束 ▲▲▲
-  // ▼▼▼ 【全新】剧本杀游戏事件监听器 ▼▼▼
-  document.getElementById('start-script-kill-game-btn').addEventListener('click', startScriptKillGame);
-  document.getElementById('exit-script-kill-game-btn').addEventListener('click', async () => {
-    const confirmed = await showCustomConfirm('退出游戏', '确定要中途退出游戏吗？当前进度不会保存。');
-    if (confirmed) {
-      scriptKillGameState.isActive = false; // 停止游戏循环
-      showScreen('game-hall-screen');
-    }
-  });
-  // 剧本杀游戏事件监听器
-  document.getElementById('script-kill-my-role-btn').addEventListener('click', () => {
-    if (!scriptKillGameState.isActive) return;
-    const myPlayer = scriptKillGameState.players.find(p => p.isUser);
-    if (myPlayer) {
-      const modal = document.getElementById('script-kill-role-modal');
-      document.getElementById('sk-role-name').textContent = `你的角色：${myPlayer.role.name}`;
-      // ▼▼▼ 核心修改在这里 ▼▼▼
-      document.getElementById('sk-role-details').innerHTML = `
-            <p><strong>角色介绍:</strong><br>${myPlayer.role.description}</p>
-            <p><strong>你的时间线:</strong><br>${myPlayer.role.storyline || '（暂无时间线信息）'}</p>
-            <p><strong>你的任务:</strong><br>${myPlayer.role.tasks}</p>
-        `;
-      // ▲▲▲ 修改结束 ▲▲▲
-      modal.classList.add('visible');
-    }
-  });
-  document.getElementById('close-sk-role-modal-btn').addEventListener('click', () => {
-    document.getElementById('script-kill-role-modal').classList.remove('visible');
-  });
-
-  // 查看线索板
-  document.getElementById('script-kill-all-evidence-btn').addEventListener('click', () => {
-    if (!scriptKillGameState.isActive) return;
-    const modal = document.getElementById('script-kill-evidence-modal');
-    const listEl = document.getElementById('sk-evidence-list');
-    listEl.innerHTML = '';
-
-    const myPlayer = scriptKillGameState.players.find(p => p.isUser);
-    if (myPlayer.evidence.length === 0) {
-      listEl.innerHTML = '<p style="text-align:center; color: var(--text-secondary);">你还没有搜到任何线索。</p>';
-    } else {
-      myPlayer.evidence.forEach(clue => {
-        const card = document.createElement('div');
-        card.className = 'sk-evidence-card';
-        card.innerHTML = `
-                <div class="source">来源: ${clue.source}</div>
-                <div class="description">${clue.description}</div>
-            `;
-        listEl.appendChild(card);
-      });
-    }
-    modal.classList.add('visible');
-  });
-  document.getElementById('close-sk-evidence-modal-btn').addEventListener('click', () => {
-    document.getElementById('script-kill-evidence-modal').classList.remove('visible');
-  });
-
-  // ▼▼▼ 【最终流程版】请用这整块代码，完整替换旧的 script-kill-action-area 事件监听器 ▼▼▼
-  document.getElementById('script-kill-action-area').addEventListener('click', async e => {
-    const phase = scriptKillGameState.gamePhase;
-
-    // ▼▼▼ 从这里开始复制，替换掉你旧的 'sk-search-evidence-btn' 的 if 代码块 ▼▼▼
-    if (e.target.id === 'sk-search-evidence-btn') {
-      const user = scriptKillGameState.players.find(p => p.isUser);
-      const script = scriptKillGameState.script;
-
-      const searchCount = scriptKillGameState.evidenceCounts[user.id] || 0;
-      const phase = scriptKillGameState.gamePhase;
-
-      // 检查搜证次数限制
-      if ((phase === 'evidence_round_1' && searchCount >= 2) || (phase === 'evidence_round_2' && searchCount >= 3)) {
-        alert('本轮搜证次数已用完！');
+          content: '',
+          marker: false,
+          injection_position: 1,
+          injection_depth: 4,
+          injection_order: 100
+        });
+        uiRuntime.editingPromptId = newId;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
         return;
       }
 
-      // 消耗一次搜证机会并更新UI
-      scriptKillGameState.evidenceCounts[user.id] = searchCount + 1;
-      updateActionAreaSK();
-
-      let foundMessage = '';
-
-      // 找出所有还未被发现的线索
-      const uncollectedClues = script.clues.filter(c => !scriptKillGameState.collectedClueIds.has(c.description));
-
-      if (uncollectedClues.length > 0) {
-        // 随机找到一条新线索
-        const foundClue = uncollectedClues[Math.floor(Math.random() * uncollectedClues.length)];
-        const clueSource = foundClue.owner === '公共' ? '公共区域' : `角色 ${foundClue.owner} 的私人物品`;
-
-        // 无论如何，线索都会先加入玩家手牌，并标记为已发现
-        user.evidence.push({ description: foundClue.description, source: clueSource });
-        scriptKillGameState.collectedClueIds.add(foundClue.description);
-
-        // --- ★★★ 核心修改逻辑开始 ★★★ ---
-
-        // 判断这条线索是不是关于玩家自己的
-        if (foundClue.owner === user.role.name) {
-          // 如果是，弹出一个选择框让玩家决定
-          const choice = await showChoiceModal('发现个人线索', [
-            { text: '公开这条线索', value: 'public' },
-            { text: '隐藏这条线索', value: 'private' },
-          ]);
-
-          if (choice === 'public') {
-            // 玩家选择【公开】
-            foundMessage = `在【${clueSource}】发现并公开了线索：“${foundClue.description}”`;
-            logToScriptKillGame(`${user.name} 完成了一次搜证: ${foundMessage}`);
-            await showCustomAlert('搜证结果', foundMessage);
-          } else {
-            // 玩家选择【隐藏】或关闭了弹窗
-            foundMessage = `你在【${clueSource}】发现了一条关于自己的线索，并选择将其隐藏。`;
-            // 只给玩家自己一个弹窗提示，告诉他已经拿到了线索
-            await showCustomAlert('搜证结果', `你已将线索“${foundClue.description}”收入囊中。`);
-            // 在公共日志里只显示一个模糊的信息，告诉大家你搜过证了
-            logToScriptKillGame(`${user.name} 完成了一次搜证。`);
+      // Drawer 2 (Plug API) Actions
+      if (action === 'save-tavern-api-config') {
+        tavernState.apiConfig.customUrl = document.getElementById('tavern-api-url-input')?.value?.trim() || '';
+        tavernState.apiConfig.customKey = document.getElementById('tavern-api-key-input')?.value?.trim() || '';
+        tavernState.apiConfig.customModel = document.getElementById('tavern-api-model-input')?.value?.trim() || '';
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        showTavernToast('接口配置已保存');
+        return;
+      }
+      if (action === 'fetch-tavern-models') {
+        tavernState.apiConfig.customUrl = document.getElementById('tavern-api-url-input')?.value?.trim() || tavernState.apiConfig.customUrl;
+        tavernState.apiConfig.customKey = document.getElementById('tavern-api-key-input')?.value?.trim() || tavernState.apiConfig.customKey;
+        try {
+          showTavernToast('正在拉取模型列表...');
+          const list = await fetchTavernModelList();
+          tavernState.apiConfig.availableModels = list;
+          if (list.length > 0 && !tavernState.apiConfig.customModel) {
+            tavernState.apiConfig.customModel = list[0];
           }
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('已拉取 ' + list.length + ' 个可用模型');
+        } catch (err) {
+          showTavernToast(err.message || '拉取模型失败');
+        }
+        return;
+      }
+      if (action === 'test-tavern-api') {
+        try {
+          showTavernToast('正在测试API连接...');
+          const res = await callTavernAiCompletion([{ role: 'user', content: '请回复OK两个字母' }]);
+          showTavernToast('连接成功: ' + (res.content || 'OK').slice(0, 20));
+        } catch (err) {
+          showTavernToast(err.message || '连接测试失败');
+        }
+        return;
+      }
+
+      // Drawer 3 (Font & Formatting) Actions
+      if (action === 'save-formatting-settings') {
+        const stopStr = document.getElementById('tavern-stop-strings-input')?.value || '';
+        tavernState.formatting.customStoppingStrings = stopStr.split(',').map(s => s.trim()).filter(Boolean);
+        await saveTavernStore();
+        renderTavernChatFloors(false);
+        showTavernToast('文本格式化设置已保存');
+        return;
+      }
+
+      // Drawer 4 (World Books) Actions
+      if (action === 'trigger-import-worldbooks') {
+        document.getElementById('tavern-file-worldbooks')?.click();
+        return;
+      }
+      if (action === 'create-new-worldbook') {
+        const wb = {
+          id: 'wb_' + Date.now(),
+          name: '新建世界书 ' + ((tavernState.worldBooks?.length || 0) + 1),
+          enabled: true,
+          scanDepth: 4,
+          tokenBudget: 4096,
+          recursiveScanning: true,
+          entries: []
+        };
+        tavernState.worldBooks.unshift(wb);
+        uiRuntime.activeWorldBookEditId = wb.id;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'toggle-worldbook-enabled') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        if (wb) {
+          wb.enabled = actionEl.checked;
+          await saveTavernStore();
+        }
+        return;
+      }
+      if (action === 'select-worldbook-edit') {
+        uiRuntime.activeWorldBookEditId = actionEl.getAttribute('data-wb-id');
+        uiRuntime.editingWorldEntryUid = null;
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'export-worldbook') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        if (wb) downloadJsonFile((wb.name || 'worldbook') + '.json', wb);
+        return;
+      }
+      if (action === 'delete-worldbook') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        tavernState.worldBooks = (tavernState.worldBooks || []).filter(b => b.id !== wbId);
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'wb-add-entry') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        if (wb) {
+          const newUid = Date.now();
+          const entry = normalizeSingleWorldEntry({ uid: newUid, comment: '新词条', keys: [], content: '' }, wb.entries.length);
+          wb.entries.unshift(entry);
+          uiRuntime.editingWorldEntryUid = newUid;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+      if (action === 'wb-batch-enable' || action === 'wb-batch-constant' || action === 'wb-batch-green') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        if (wb && Array.isArray(wb.entries)) {
+          wb.entries.forEach(e => {
+            if (action === 'wb-batch-enable') e.disable = false;
+            else if (action === 'wb-batch-constant') e.constant = true;
+            else if (action === 'wb-batch-green') e.constant = false;
+          });
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+      if (action === 'wb-toggle-entry') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        const uid = actionEl.getAttribute('data-uid');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        const entry = wb && (wb.entries || []).find(e => String(e.uid) === String(uid));
+        if (entry) {
+          entry.disable = !actionEl.checked;
+          await saveTavernStore();
+        }
+        return;
+      }
+      if (action === 'wb-cycle-light') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        const uid = actionEl.getAttribute('data-uid');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        const entry = wb && (wb.entries || []).find(e => String(e.uid) === String(uid));
+        if (entry) {
+          entry.constant = !entry.constant;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+      if (action === 'wb-edit-entry') {
+        uiRuntime.editingWorldEntryUid = actionEl.getAttribute('data-uid');
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'wb-close-entry-editor') {
+        uiRuntime.editingWorldEntryUid = null;
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'wb-save-entry-editor') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        const uid = actionEl.getAttribute('data-uid');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        const entry = wb && (wb.entries || []).find(e => String(e.uid) === String(uid));
+        if (entry) {
+          entry.comment = document.getElementById('wb-edit-comment')?.value || '';
+          entry.constant = document.getElementById('wb-edit-constant')?.value === 'true';
+          entry.keys = (document.getElementById('wb-edit-keys')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+          entry.secondaryKeys = (document.getElementById('wb-edit-seckeys')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+          entry.selectiveLogic = Number(document.getElementById('wb-edit-logic')?.value || 0);
+          entry.position = Number(document.getElementById('wb-edit-pos')?.value || 0);
+          entry.depth = Number(document.getElementById('wb-edit-depth')?.value || 4);
+          entry.order = Number(document.getElementById('wb-edit-order')?.value || 100);
+          entry.probability = Number(document.getElementById('wb-edit-prob')?.value || 100);
+          entry.role = Number(document.getElementById('wb-edit-role')?.value || 0);
+          entry.content = document.getElementById('wb-edit-content')?.value || '';
+          uiRuntime.editingWorldEntryUid = null;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('词条已保存');
+        }
+        return;
+      }
+      if (action === 'wb-del-entry') {
+        const wbId = actionEl.getAttribute('data-wb-id');
+        const uid = actionEl.getAttribute('data-uid');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        if (wb && Array.isArray(wb.entries)) {
+          wb.entries = wb.entries.filter(e => String(e.uid) !== String(uid));
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+
+      // Drawer 5 (UserCog Themes & QR) Actions
+      if (action === 'trigger-import-themes') {
+        document.getElementById('tavern-file-themes')?.click();
+        return;
+      }
+      if (action === 'export-active-theme') {
+        const t = tavernState.themes.find(x => x.id === tavernState.activeThemeId) || tavernState.themes[0];
+        if (t) downloadJsonFile((t.name || 'theme') + '.json', t);
+        return;
+      }
+      if (action === 'save-theme-custom-css') {
+        const t = tavernState.themes.find(x => x.id === tavernState.activeThemeId) || tavernState.themes[0];
+        if (t) {
+          t.custom_css = document.getElementById('tavern-theme-css-editor')?.value || '';
+          t.quote_text_color = document.getElementById('theme-quote-color-input')?.value || t.quote_text_color;
+          await saveTavernStore();
+          applyActiveTavernTheme();
+          showTavernToast('已实时应用主题CSS');
+        }
+        return;
+      }
+      if (action === 'add-quick-reply') {
+        tavernState.quickReplies.push({
+          id: 'qr_' + Date.now(),
+          label: '推进剧情',
+          message: '请继续推进剧情发展。',
+          enabled: true
+        });
+        await saveTavernStore();
+        renderTavernShell();
+        return;
+      }
+      if (action === 'toggle-qr-item') {
+        const qid = actionEl.getAttribute('data-qr-id');
+        const qr = (tavernState.quickReplies || []).find(x => x.id === qid);
+        if (qr) {
+          qr.enabled = actionEl.checked;
+          await saveTavernStore();
+          renderTavernShell();
+        }
+        return;
+      }
+      if (action === 'del-qr-item') {
+        const qid = actionEl.getAttribute('data-qr-id');
+        tavernState.quickReplies = (tavernState.quickReplies || []).filter(x => x.id !== qid);
+        await saveTavernStore();
+        renderTavernShell();
+        return;
+      }
+
+      // Drawer 6 (Panorama Background) Actions
+      if (action === 'trigger-upload-bg') {
+        document.getElementById('tavern-file-bg')?.click();
+        return;
+      }
+      if (action === 'clear-tavern-bg') {
+        tavernState.background.url = '';
+        await saveTavernStore();
+        renderTavernShell();
+        return;
+      }
+      if (action === 'apply-bg-url') {
+        tavernState.background.url = document.getElementById('tavern-bg-url-input')?.value?.trim() || '';
+        await saveTavernStore();
+        renderTavernShell();
+        return;
+      }
+
+      // Drawer 7 (Cubes Extensions & Regex) Actions
+      if (action === 'toggle-ext-acc') {
+        const acc = actionEl.getAttribute('data-acc');
+        if (acc) {
+          uiRuntime.openExtensionAcc[acc] = !uiRuntime.openExtensionAcc[acc];
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+      if (action === 'trigger-import-regexes') {
+        document.getElementById('tavern-file-regexes')?.click();
+        return;
+      }
+      if (action === 'add-new-regex') {
+        const scope = actionEl.getAttribute('data-scope') || 'global';
+        const newRx = {
+          id: 'rx_' + Date.now(),
+          scriptName: '新建正则脚本',
+          findRegex: '',
+          replaceString: '',
+          trimStrings: [],
+          placement: [1, 2],
+          disabled: false,
+          markdownOnly: true,
+          promptOnly: false,
+          runOnEdit: true,
+          substituteRegex: 0,
+          scope
+        };
+        if (scope === 'card') {
+          const card = getActiveCard();
+          if (!Array.isArray(card.regexScripts)) card.regexScripts = [];
+          card.regexScripts.unshift(newRx);
         } else {
-          // 如果线索是公共的，或者关于其他人的，就按原来的逻辑直接公开
-          foundMessage = `在【${clueSource}】发现线索：“${foundClue.description}”`;
-          logToScriptKillGame(`${user.name} 完成了一次搜证: ${foundMessage}`);
-          await showCustomAlert('搜证结果', foundMessage);
+          tavernState.globalRegexScripts.unshift(newRx);
+        }
+        uiRuntime.editingRegexId = newRx.id;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'toggle-regex-script') {
+        const rxId = actionEl.getAttribute('data-rx-id');
+        const scope = actionEl.getAttribute('data-scope');
+        const card = getActiveCard();
+        const list = scope === 'card' ? (card.regexScripts || []) : (tavernState.globalRegexScripts || []);
+        const item = list.find(r => r.id === rxId);
+        if (item) {
+          item.disabled = !actionEl.checked;
+          await saveTavernStore();
+          renderTavernChatFloors(false);
+        }
+        return;
+      }
+      if (action === 'edit-regex-script') {
+        uiRuntime.editingRegexId = actionEl.getAttribute('data-rx-id');
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'close-regex-editor') {
+        uiRuntime.editingRegexId = null;
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'save-regex-editor') {
+        const rxId = actionEl.getAttribute('data-rx-id');
+        const scope = actionEl.getAttribute('data-scope');
+        const card = getActiveCard();
+        const list = scope === 'card' ? (card.regexScripts || []) : (tavernState.globalRegexScripts || []);
+        const item = list.find(r => r.id === rxId);
+        if (item) {
+          item.scriptName = document.getElementById('rx-edit-name')?.value || item.scriptName;
+          item.findRegex = document.getElementById('rx-edit-find')?.value || '';
+          item.replaceString = document.getElementById('rx-edit-replace')?.value ?? '';
+          const mode = document.getElementById('rx-edit-mode')?.value || 'display';
+          item.markdownOnly = mode === 'display' || mode === 'both';
+          item.promptOnly = mode === 'prompt' || mode === 'both';
+          uiRuntime.editingRegexId = null;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+          showTavernToast('正则脚本已保存');
+        }
+        return;
+      }
+      if (action === 'del-regex-script') {
+        const rxId = actionEl.getAttribute('data-rx-id');
+        const scope = actionEl.getAttribute('data-scope');
+        const card = getActiveCard();
+        if (scope === 'card' && card) {
+          card.regexScripts = (card.regexScripts || []).filter(r => r.id !== rxId);
+        } else {
+          tavernState.globalRegexScripts = (tavernState.globalRegexScripts || []).filter(r => r.id !== rxId);
+        }
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        renderTavernChatFloors(false);
+        return;
+      }
+      if (action === 'save-author-note') {
+        tavernState.authorNote.text = document.getElementById('an-text-input')?.value || '';
+        tavernState.authorNote.depth = Number(document.getElementById('an-depth-input')?.value ?? 4);
+        tavernState.authorNote.role = document.getElementById('an-role-input')?.value || 'system';
+        tavernState.authorNote.frequency = Number(document.getElementById('an-freq-input')?.value ?? 1);
+        await saveTavernStore();
+        showTavernToast('作者注释已保存');
+        return;
+      }
+      if (action === 'save-memory-config') {
+        tavernState.memory.enabled = Boolean(document.getElementById('mem-enabled-check')?.checked);
+        tavernState.memory.injectDepth = Number(document.getElementById('mem-depth-input')?.value ?? 2);
+        tavernState.memory.autoInterval = Number(document.getElementById('mem-interval-input')?.value ?? 20);
+        tavernState.memory.summaryText = document.getElementById('mem-summary-textarea')?.value || '';
+        await saveTavernStore();
+        showTavernToast('剧情摘要设置已保存');
+        return;
+      }
+      if (action === 'trigger-import-plugins') {
+        document.getElementById('tavern-file-plugins')?.click();
+        return;
+      }
+      if (action === 'toggle-plugin-item') {
+        const pid = actionEl.getAttribute('data-plugin-id');
+        const p = (tavernState.plugins || []).find(x => x.id === pid);
+        if (p) {
+          p.enabled = actionEl.checked;
+          if (p.enabled && !p.builtInType) executeUserPluginScript(p);
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+      if (action === 'del-plugin-item') {
+        const pid = actionEl.getAttribute('data-plugin-id');
+        tavernState.plugins = (tavernState.plugins || []).filter(x => x.id !== pid);
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+
+      // Drawer 8 (Smile Persona) Actions
+      if (action === 'sync-persona-from-phone') {
+        const activeP = getActivePersona();
+        try {
+          if (typeof state !== 'undefined' && state.chats) {
+            const firstChat = Object.values(state.chats)[0];
+            if (firstChat && firstChat.settings) {
+              activeP.name = firstChat.settings.myName || activeP.name;
+              activeP.avatar = firstChat.settings.myAvatar || activeP.avatar;
+              activeP.description = firstChat.settings.myPersona || activeP.description;
+            }
+          }
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+          showTavernToast('已同步手机外部玩家人设');
+        } catch (_) {}
+        return;
+      }
+      if (action === 'create-new-persona') {
+        const newP = {
+          id: 'persona_' + Date.now(),
+          name: '新面具',
+          avatar: DEFAULT_USER_AVATAR_SVG,
+          description: '',
+          position: 0,
+          depth: 2,
+          role: 0,
+          lockedCardIds: []
+        };
+        tavernState.personas.push(newP);
+        tavernState.activePersonaId = newP.id;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'trigger-upload-persona-avatar') {
+        document.getElementById('tavern-file-persona-avatar')?.click();
+        return;
+      }
+      if (action === 'save-active-persona') {
+        const activeP = getActivePersona();
+        const card = getActiveCard();
+        if (activeP) {
+          activeP.name = document.getElementById('persona-name-input')?.value?.trim() || '旅人';
+          activeP.position = Number(document.getElementById('persona-pos-input')?.value || 0);
+          activeP.description = document.getElementById('persona-desc-input')?.value || '';
+          const lockChecked = Boolean(document.getElementById('persona-lock-card-check')?.checked);
+          if (!Array.isArray(activeP.lockedCardIds)) activeP.lockedCardIds = [];
+          if (card) {
+            activeP.lockedCardIds = activeP.lockedCardIds.filter(id => id !== card.id);
+            if (lockChecked) activeP.lockedCardIds.push(card.id);
+          }
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+          showTavernToast('玩家人设已保存');
+        }
+        return;
+      }
+      if (action === 'delete-active-persona') {
+        if (tavernState.personas.length <= 1) {
+          showTavernToast('至少保留一个人设面具');
+          return;
+        }
+        const activeP = getActivePersona();
+        tavernState.personas = tavernState.personas.filter(p => p.id !== activeP.id);
+        tavernState.activePersonaId = tavernState.personas[0].id;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+
+      // Drawer 9 (Address Character Cards & Chats) Actions
+      if (action === 'trigger-import-cards') {
+        document.getElementById('tavern-file-cards')?.click();
+        return;
+      }
+      if (action === 'create-blank-card') {
+        const newCard = {
+          id: 'card_' + Date.now(),
+          name: '新角色',
+          avatar: DEFAULT_AVATAR_SVG,
+          description: '',
+          personality: '',
+          scenario: '',
+          first_mes: '你好，旅人。',
+          mes_example: '',
+          creator_notes: '',
+          system_prompt: '',
+          post_history_instructions: '',
+          alternate_greetings: [],
+          tags: [],
+          worldBookId: null,
+          regexScripts: []
+        };
+        tavernState.cards.unshift(newCard);
+        tavernState.activeCardId = newCard.id;
+        ensureActiveCardChatInitialized(newCard);
+        await saveTavernStore();
+        renderTavernShell();
+        return;
+      }
+      if (action === 'switch-active-card') {
+        const cid = actionEl.getAttribute('data-card-id');
+        if (cid) {
+          tavernState.activeCardId = cid;
+          ensureActiveCardChatInitialized();
+          uiRuntime.openDrawerKey = null;
+          await saveTavernStore();
+          renderTavernShell();
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHAT_CHANGED, cid);
+        }
+        return;
+      }
+      if (action === 'export-card-json') {
+        const cid = actionEl.getAttribute('data-card-id');
+        const c = (tavernState.cards || []).find(x => x.id === cid);
+        if (c) downloadJsonFile((c.name || 'character') + '.json', c);
+        return;
+      }
+      if (action === 'delete-card') {
+        const cid = actionEl.getAttribute('data-card-id');
+        if (tavernState.cards.length <= 1) return;
+        tavernState.cards = tavernState.cards.filter(c => c.id !== cid);
+        if (tavernState.activeCardId === cid) {
+          tavernState.activeCardId = tavernState.cards[0].id;
+        }
+        await saveTavernStore();
+        renderTavernShell();
+        return;
+      }
+      if (action === 'trigger-upload-card-avatar') {
+        document.getElementById('tavern-file-card-avatar')?.click();
+        return;
+      }
+      if (action === 'save-card-edits') {
+        const card = getActiveCard();
+        if (card) {
+          card.name = document.getElementById('card-edit-name')?.value?.trim() || card.name;
+          card.worldBookId = document.getElementById('card-edit-wb')?.value || null;
+          card.description = document.getElementById('card-edit-desc')?.value || '';
+          card.personality = document.getElementById('card-edit-personality')?.value || '';
+          card.scenario = document.getElementById('card-edit-scenario')?.value || '';
+          card.first_mes = document.getElementById('card-edit-firstmes')?.value || '';
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+          showTavernToast('角色卡设定已保存');
+        }
+        return;
+      }
+      if (action === 'sync-card-greetings-to-floor0') {
+        const card = getActiveCard();
+        const sess = getActiveChatSession();
+        if (card && sess && sess.messages[0]) {
+          const allG = [card.first_mes, ...(card.alternate_greetings || [])].filter(Boolean);
+          if (allG.length > 0) {
+            sess.messages[0].swipes = allG;
+            sess.messages[0].swipe_id = 0;
+            sess.messages[0].mes = allG[0];
+            sess.messages[0].token_count = estimateTokens(allG[0]);
+            await saveTavernStore();
+            renderTavernChatFloors(true);
+            showTavernToast('已同步 ' + allG.length + ' 个开场白至第0层');
+          }
+        }
+        return;
+      }
+      if (action === 'switch-chat-archive') {
+        const chatId = actionEl.getAttribute('data-chat-id');
+        const card = getActiveCard();
+        const archives = (tavernState.chatArchivesByCardId && tavernState.chatArchivesByCardId[card.id]) || [];
+        const target = archives.find(a => a.chatId === chatId);
+        if (target) {
+          tavernState.chatsByCardId[card.id] = target;
+          uiRuntime.openDrawerKey = null;
+          await saveTavernStore();
+          renderTavernShell();
+          showTavernToast('已切换对话存档');
+        }
+        return;
+      }
+      if (action === 'delete-chat-archive') {
+        const chatId = actionEl.getAttribute('data-chat-id');
+        const card = getActiveCard();
+        let archives = (tavernState.chatArchivesByCardId && tavernState.chatArchivesByCardId[card.id]) || [];
+        if (archives.length <= 1) return;
+        archives = archives.filter(a => a.chatId !== chatId);
+        tavernState.chatArchivesByCardId[card.id] = archives;
+        if (tavernState.chatsByCardId[card.id]?.chatId === chatId) {
+          tavernState.chatsByCardId[card.id] = archives[0];
+        }
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        renderTavernChatFloors(false);
+        return;
+      }
+      if (action === 'export-current-chat') {
+        const sess = getActiveChatSession();
+        if (sess) downloadJsonFile((sess.title || 'chat') + '.json', sess);
+        return;
+      }
+      if (action === 'trigger-import-chats') {
+        document.getElementById('tavern-file-chats')?.click();
+        return;
+      }
+    });
+
+    // Change & Input Delegation
+    root.addEventListener('change', async e => {
+      const target = e.target;
+      const changeType = target.getAttribute('data-change');
+
+      if (changeType === 'switch-preset') {
+        tavernState.activePresetId = target.value;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (changeType === 'switch-theme') {
+        tavernState.activeThemeId = target.value;
+        await saveTavernStore();
+        applyActiveTavernTheme();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (changeType === 'switch-persona') {
+        tavernState.activePersonaId = target.value;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        renderTavernChatFloors(false);
+        return;
+      }
+      if (changeType === 'select-fetched-model') {
+        tavernState.apiConfig.customModel = target.value;
+        const modelInput = document.getElementById('tavern-api-model-input');
+        if (modelInput) modelInput.value = target.value;
+        await saveTavernStore();
+        return;
+      }
+
+      if (target.hasAttribute('data-preset-num')) {
+        const k = target.getAttribute('data-preset-num');
+        const preset = getActivePreset();
+        preset[k] = Number(target.value);
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (target.hasAttribute('data-preset-bool')) {
+        const k = target.getAttribute('data-preset-bool');
+        const preset = getActivePreset();
+        preset[k] = Boolean(target.checked);
+        await saveTavernStore();
+        return;
+      }
+      if (target.hasAttribute('data-memory-num')) {
+        const k = target.getAttribute('data-memory-num');
+        tavernState.memory[k] = Number(target.value);
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (target.hasAttribute('data-api-bool')) {
+        const k = target.getAttribute('data-api-bool');
+        tavernState.apiConfig[k] = Boolean(target.checked);
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (target.hasAttribute('data-fmt-bool')) {
+        const k = target.getAttribute('data-fmt-bool');
+        tavernState.formatting[k] = Boolean(target.checked);
+        await saveTavernStore();
+        renderTavernChatFloors(false);
+        return;
+      }
+      if (target.hasAttribute('data-fmt-str')) {
+        const k = target.getAttribute('data-fmt-str');
+        tavernState.formatting[k] = target.value;
+        await saveTavernStore();
+        return;
+      }
+      if (target.hasAttribute('data-wb-setting')) {
+        const k = target.getAttribute('data-wb-setting');
+        const wbId = target.getAttribute('data-wb-id');
+        const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
+        if (wb) {
+          wb[k] = k === 'recursiveScanning' ? target.value === 'true' : Number(target.value);
+          await saveTavernStore();
+        }
+        return;
+      }
+      if (target.hasAttribute('data-ui-num')) {
+        const k = target.getAttribute('data-ui-num');
+        tavernState.uiSettings[k] = Number(target.value);
+        await saveTavernStore();
+        applyActiveTavernTheme();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (target.hasAttribute('data-ui-bool')) {
+        const k = target.getAttribute('data-ui-bool');
+        tavernState.uiSettings[k] = Boolean(target.checked);
+        await saveTavernStore();
+        renderTavernChatFloors(false);
+        return;
+      }
+      if (target.hasAttribute('data-bg-setting')) {
+        const k = target.getAttribute('data-bg-setting');
+        tavernState.background[k] = k === 'fit' ? target.value : Number(target.value);
+        await saveTavernStore();
+        renderTavernShell();
+        return;
+      }
+
+      // Multi-File Input Handlers
+      if (target.id === 'tavern-file-cards' && target.files?.length) {
+        await handleBatchImportCards(Array.from(target.files));
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-worldbooks' && target.files?.length) {
+        await handleBatchImportWorldBooks(Array.from(target.files));
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-regexes' && target.files?.length) {
+        await handleBatchImportRegexes(Array.from(target.files));
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-presets' && target.files?.length) {
+        await handleBatchImportPresets(Array.from(target.files));
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-themes' && target.files?.length) {
+        await handleBatchImportThemes(Array.from(target.files));
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-plugins' && target.files?.length) {
+        await handleBatchImportPlugins(Array.from(target.files));
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-chats' && target.files?.length) {
+        await handleBatchImportChats(Array.from(target.files));
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-bg' && target.files?.[0]) {
+        const url = await offloadImageToVault(target.files[0], 'tavern_bg_' + Date.now() + '.png');
+        if (url) {
+          tavernState.background.url = url;
+          await saveTavernStore();
+          renderTavernShell();
+          showTavernToast('背景图已存入Termux本地并应用');
+        }
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-persona-avatar' && target.files?.[0]) {
+        const url = await offloadImageToVault(target.files[0], 'tavern_persona_' + Date.now() + '.png');
+        const activeP = getActivePersona();
+        if (url && activeP) {
+          activeP.avatar = url;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+          showTavernToast('人设头像已存入Termux本地');
+        }
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-card-avatar' && target.files?.[0]) {
+        const url = await offloadImageToVault(target.files[0], 'tavern_char_' + Date.now() + '.png');
+        const card = getActiveCard();
+        if (url && card) {
+          card.avatar = url;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+          showTavernToast('角色头像已存入Termux本地');
+        }
+        target.value = '';
+        return;
+      }
+    });
+
+    root.addEventListener('input', e => {
+      if (e.target && e.target.id === 'wb-entry-search-input') {
+        uiRuntime.worldEntrySearch = e.target.value;
+        refreshOpenDrawerOnly();
+        const input = document.getElementById('wb-entry-search-input');
+        if (input) {
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
+      }
+    });
+
+    root.addEventListener('keydown', async e => {
+      if (e.target && e.target.id === 'send_textarea' && e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        await handleSendUserMessage();
+      }
+    });
+  }
+
+  // ============================================================================
+  // 13. Multi-File Batch Importers
+  // ============================================================================
+  async function handleBatchImportCards(files) {
+    let importedCards = 0;
+    let totalBooks = 0;
+    let totalRegex = 0;
+    let totalGreetings = 0;
+
+    for (const file of files) {
+      try {
+        if (file.name.toLowerCase().endsWith('.png') || file.type === 'image/png') {
+          const buf = await file.arrayBuffer();
+          const rawJson = await extractCharacterJsonFromPngBuffer(buf);
+          const avatarUrl = await offloadImageToVault(file, 'char_' + Date.now() + '_' + file.name);
+          const summary = importCharacterCardFromRaw(rawJson, avatarUrl);
+          importedCards++;
+          totalBooks += summary.worldBookCount;
+          totalRegex += summary.regexCount;
+          totalGreetings += summary.greetingCount;
+        } else {
+          const text = await file.text();
+          const rawJson = JSON.parse(text);
+          const summary = importCharacterCardFromRaw(rawJson, DEFAULT_AVATAR_SVG);
+          importedCards++;
+          totalBooks += summary.worldBookCount;
+          totalRegex += summary.regexCount;
+          totalGreetings += summary.greetingCount;
+        }
+      } catch (err) {
+        console.error('Character card import error:', file.name, err);
+        showTavernToast('导入角色卡失败 ' + file.name + ': ' + err.message);
+      }
+    }
+
+    if (importedCards > 0) {
+      uiRuntime.openDrawerKey = null;
+      await saveTavernStore();
+      renderTavernShell();
+      showTavernToast(`成功导入${importedCards}张角色卡 含${totalBooks}本世界书 ${totalRegex}条正则 ${totalGreetings}个开场白`);
+    }
+  }
+
+  async function handleBatchImportWorldBooks(files) {
+    let count = 0;
+    for (const file of files) {
+      try {
+        const raw = JSON.parse(await file.text());
+        const wb = normalizeWorldBookObject(raw, file.name.replace(/\.json$/i, ''));
+        if (wb) {
+          tavernState.worldBooks.unshift(wb);
+          uiRuntime.activeWorldBookEditId = wb.id;
+          count++;
+        }
+      } catch (err) {
+        console.error('WorldBook import error:', file.name, err);
+      }
+    }
+    if (count > 0) {
+      await saveTavernStore();
+      refreshOpenDrawerOnly();
+      showTavernToast('成功导入 ' + count + ' 本世界书');
+    }
+  }
+
+  async function handleBatchImportRegexes(files) {
+    let count = 0;
+    for (const file of files) {
+      try {
+        const raw = JSON.parse(await file.text());
+        const list = Array.isArray(raw) ? raw : (Array.isArray(raw.regex_scripts) ? raw.regex_scripts : [raw]);
+        const normalized = normalizeRegexList(list, 'global');
+        tavernState.globalRegexScripts.unshift(...normalized);
+        count += normalized.length;
+      } catch (err) {
+        console.error('Regex import error:', file.name, err);
+      }
+    }
+    if (count > 0) {
+      await saveTavernStore();
+      refreshOpenDrawerOnly();
+      renderTavernChatFloors(false);
+      showTavernToast('成功导入 ' + count + ' 条全局正则脚本');
+    }
+  }
+
+  async function handleBatchImportPresets(files) {
+    let count = 0;
+    for (const file of files) {
+      try {
+        const raw = JSON.parse(await file.text());
+        const preset = parsePresetFromRaw(raw, file.name);
+        tavernState.presets.unshift(preset);
+        tavernState.activePresetId = preset.id;
+        count++;
+      } catch (err) {
+        console.error('Preset import error:', file.name, err);
+      }
+    }
+    if (count > 0) {
+      await saveTavernStore();
+      refreshOpenDrawerOnly();
+      showTavernToast('成功导入并启用 ' + count + ' 个预设');
+    }
+  }
+
+  async function handleBatchImportThemes(files) {
+    let count = 0;
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        if (file.name.toLowerCase().endsWith('.css')) {
+          const newTheme = {
+            ...JSON.parse(JSON.stringify(DEFAULT_GOUSU_THEME)),
+            id: 'theme_' + Date.now() + '_' + count,
+            name: file.name.replace(/\.css$/i, ''),
+            custom_css: text
+          };
+          tavernState.themes.unshift(newTheme);
+          tavernState.activeThemeId = newTheme.id;
+          count++;
+        } else {
+          const raw = JSON.parse(text);
+          const newTheme = {
+            ...JSON.parse(JSON.stringify(DEFAULT_GOUSU_THEME)),
+            ...raw,
+            id: 'theme_' + Date.now() + '_' + count,
+            name: raw.name || file.name.replace(/\.json$/i, '')
+          };
+          tavernState.themes.unshift(newTheme);
+          tavernState.activeThemeId = newTheme.id;
+          count++;
+        }
+      } catch (err) {
+        console.error('Theme import error:', file.name, err);
+      }
+    }
+    if (count > 0) {
+      await saveTavernStore();
+      applyActiveTavernTheme();
+      refreshOpenDrawerOnly();
+      showTavernToast('成功导入并应用美化主题');
+    }
+  }
+
+  async function handleBatchImportPlugins(files) {
+    let count = 0;
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        if (file.name.toLowerCase().endsWith('.js')) {
+          const plugin = {
+            id: 'plugin_' + Date.now() + '_' + count,
+            name: file.name.replace(/\.js$/i, ''),
+            enabled: true,
+            code: text,
+            description: '外部导入JS插件脚本'
+          };
+          tavernState.plugins.push(plugin);
+          executeUserPluginScript(plugin);
+          count++;
+        } else {
+          const raw = JSON.parse(text);
+          const plugin = {
+            id: 'plugin_' + Date.now() + '_' + count,
+            name: raw.name || file.name.replace(/\.json$/i, ''),
+            enabled: true,
+            code: raw.code || raw.script || '',
+            description: raw.description || '外部导入JSON配置插件'
+          };
+          tavernState.plugins.push(plugin);
+          if (plugin.code) executeUserPluginScript(plugin);
+          count++;
+        }
+      } catch (err) {
+        console.error('Plugin import error:', file.name, err);
+      }
+    }
+    if (count > 0) {
+      await saveTavernStore();
+      refreshOpenDrawerOnly();
+      showTavernToast('成功装载 ' + count + ' 个酒馆插件');
+    }
+  }
+
+  async function handleBatchImportChats(files) {
+    const card = getActiveCard();
+    let count = 0;
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        let messages = [];
+        if (file.name.toLowerCase().endsWith('.jsonl')) {
+          const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+          lines.forEach((line, idx) => {
+            const obj = JSON.parse(line);
+            if (idx === 0 && (obj.chat_metadata || obj.user_name)) return;
+            if (obj.mes !== undefined) {
+              messages.push({
+                mesid: messages.length,
+                name: obj.name || (obj.is_user ? getUserDisplayName() : card.name),
+                is_user: Boolean(obj.is_user),
+                is_system: Boolean(obj.is_system),
+                send_date: obj.send_date || Date.now(),
+                mes: obj.mes,
+                swipes: Array.isArray(obj.swipes) && obj.swipes.length > 0 ? obj.swipes : [obj.mes],
+                swipe_id: Number(obj.swipe_id || 0),
+                reasoning: obj.extra?.reasoning || '',
+                gen_time: '',
+                token_count: estimateTokens(obj.mes)
+              });
+            }
+          });
+        } else {
+          const raw = JSON.parse(text);
+          const arr = Array.isArray(raw) ? raw : (Array.isArray(raw.messages) ? raw.messages : []);
+          messages = arr.map((m, i) => ({
+            mesid: i,
+            name: m.name || (m.is_user ? getUserDisplayName() : card.name),
+            is_user: Boolean(m.is_user),
+            is_system: Boolean(m.is_system),
+            send_date: m.send_date || Date.now(),
+            mes: m.mes || m.content || '',
+            swipes: Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || m.content || ''],
+            swipe_id: Number(m.swipe_id || 0),
+            reasoning: m.reasoning || '',
+            gen_time: m.gen_time || '',
+            token_count: estimateTokens(m.mes || m.content || '')
+          }));
         }
 
-        // --- ★★★ 核心修改逻辑结束 ★★★ ---
-      } else {
-        // 如果已经没有新线索了
-        foundMessage = '没有发现更多新线索了。';
-        logToScriptKillGame(`${user.name} 完成了一次搜证: ${foundMessage}`);
-        await showCustomAlert('搜证结果', foundMessage);
+        if (messages.length > 0) {
+          const newSess = {
+            cardId: card.id,
+            chatId: 'chat_' + card.id + '_' + Date.now() + '_' + count,
+            title: file.name.replace(/\.(jsonl|json)$/i, ''),
+            createdAt: Date.now(),
+            metadata: {},
+            messages
+          };
+          if (!Array.isArray(tavernState.chatArchivesByCardId[card.id])) {
+            tavernState.chatArchivesByCardId[card.id] = [];
+          }
+          tavernState.chatArchivesByCardId[card.id].unshift(newSess);
+          tavernState.chatsByCardId[card.id] = newSess;
+          count++;
+        }
+      } catch (err) {
+        console.error('Chat import error:', file.name, err);
       }
     }
-    // ▲▲▲ 复制到这里结束 ▲▲▲
-
-    // --- 2. 处理“结束搜证”按钮 ---
-    if (e.target.id === 'sk-end-search-btn') {
-      if (phase === 'evidence_round_1') {
-        scriptKillGameState.gamePhase = 'discussion_round_1';
-        await processScriptKillTurn();
-      } else if (phase === 'evidence_round_2') {
-        // 【核心修改】第二轮搜证后，进入第二轮讨论
-        scriptKillGameState.gamePhase = 'discussion_round_2';
-        await processScriptKillTurn();
-      }
+    if (count > 0) {
+      uiRuntime.openDrawerKey = null;
+      await saveTavernStore();
+      renderTavernShell();
+      showTavernToast('成功导入并载入 ' + count + ' 份聊天记录');
     }
-
-    // --- 3. 处理“我要发言”按钮 ---
-    if (e.target.id === 'sk-speak-btn') {
-      const speech = await waitForUserActionSK('轮到你发言了', 'speak', '请输入你的发言...');
-      const userPlayer = scriptKillGameState.players.find(p => p.isUser);
-      logToScriptKillGame({ player: userPlayer, speech: speech }, 'speech');
-
-      for (const player of scriptKillGameState.players.filter(p => !p.isUser)) {
-        await sleep(2000);
-        renderScriptKillGameScreen({ speakingPlayerId: player.id });
-        const aiSpeech = await triggerScriptKillAiAction(player.id, 'discuss');
-        logToScriptKillGame({ player: player, speech: aiSpeech }, 'speech');
-      }
-      renderScriptKillGameScreen();
-
-      // 【核心修改】根据当前讨论轮次，决定下一个阶段
-      if (phase === 'discussion_round_1') {
-        scriptKillGameState.gamePhase = 'evidence_round_2';
-        await processScriptKillTurn();
-      } else if (phase === 'discussion_round_2') {
-        // 第二轮讨论后，进入第三轮（最终）讨论
-        scriptKillGameState.gamePhase = 'discussion_round_3';
-        await processScriptKillTurn();
-      } else if (phase === 'discussion_round_3') {
-        // 最终讨论后，才进入投票
-        scriptKillGameState.gamePhase = 'voting';
-        await processScriptKillTurn();
-      }
-    }
-  });
-  // ▲▲▲ 替换结束 ▲▲▲
-
-  // ▼▼▼ 【全新 | 已修复】剧本杀管理功能事件监听器 ▼▼▼
-  document.getElementById('manage-custom-scripts-btn').addEventListener('click', openScriptManager);
-
-  // 管理器弹窗的按钮
-  document.getElementById('add-new-script-btn').addEventListener('click', () => {
-    document.getElementById('script-kill-manager-modal').classList.remove('visible');
-    openScriptEditorForCreate();
-  });
-  document.getElementById('close-script-manager-btn').addEventListener('click', () => {
-    document.getElementById('script-kill-manager-modal').classList.remove('visible');
-    // 关闭后刷新一下设置页面的剧本下拉框
-    openScriptKillSetup();
-    showScreen('script-kill-setup-screen');
-  });
-
-  // 编辑器弹窗的按钮
-  document.getElementById('save-script-btn').addEventListener('click', saveCustomScript);
-  document.getElementById('cancel-script-editor-btn').addEventListener('click', () => {
-    document.getElementById('script-kill-editor-modal').classList.remove('visible');
-    // 如果是从管理界面进来的，就返回管理界面
-    if (document.getElementById('script-kill-manager-modal').classList.contains('visible') === false) {
-      openScriptManager();
-    }
-  });
-  // ▲▲▲ 修复结束 ▲▲▲
-  // ▼▼▼ 【全新】剧本杀可视化编辑器事件监听器 ▼▼▼
-  document.getElementById('sk-add-role-btn').addEventListener('click', () => openRoleEditor());
-  document.getElementById('sk-add-clue-btn').addEventListener('click', () => openClueEditor());
-
-  document.getElementById('sk-item-editor-cancel-btn').addEventListener('click', () => {
-    document.getElementById('sk-item-editor-modal').classList.remove('visible');
-  });
-  document.getElementById('sk-item-editor-save-btn').addEventListener('click', saveItemFromEditor);
-
-  // 使用事件委托处理角色和线索卡片上的按钮点击
-  document.getElementById('script-kill-editor-modal').addEventListener('click', e => {
-    const target = e.target;
-    if (target.classList.contains('edit-role-btn')) {
-      openRoleEditor(parseInt(target.dataset.index));
-    }
-    if (target.classList.contains('delete-role-btn')) {
-      const index = parseInt(target.dataset.index);
-      currentEditingScriptData.roles.splice(index, 1);
-      renderVisualScriptEditor();
-    }
-    if (target.classList.contains('edit-clue-btn')) {
-      openClueEditor(parseInt(target.dataset.index));
-    }
-    if (target.classList.contains('delete-clue-btn')) {
-      const index = parseInt(target.dataset.index);
-      currentEditingScriptData.clues.splice(index, 1);
-      renderVisualScriptEditor();
-    }
-  });
-  // ▲▲▲ 新增事件监听结束 ▲▲▲
-  // ▼▼▼ 在 init() 函数的事件监听器区域末尾，粘贴这块新代码 ▼▼▼
-
-  // 【全新】剧本杀复盘分享功能事件绑定
-  document.getElementById('sk-cancel-share-btn').addEventListener('click', () => {
-    document.getElementById('script-kill-target-picker-modal').classList.remove('visible');
-  });
-  document.getElementById('sk-select-all-btn').addEventListener('click', () => {
-    document.querySelectorAll('.script-kill-target-checkbox').forEach(cb => (cb.checked = true));
-  });
-  document.getElementById('sk-deselect-all-btn').addEventListener('click', () => {
-    document.querySelectorAll('.script-kill-target-checkbox').forEach(cb => (cb.checked = false));
-  });
-  // ▲▲▲ 新代码粘贴结束 ▲▲▲
-  // ▼▼▼ 【全新】AI剧本生成器事件监听器 ▼▼▼
-  document.getElementById('open-sk-ai-generator-btn').addEventListener('click', openAiScriptGenerator);
-  document.getElementById('sk-ai-generator-cancel-btn').addEventListener('click', () => {
-    document.getElementById('sk-ai-generator-modal').classList.remove('visible');
-    // 返回到剧本管理界面
-    openScriptManager();
-  });
-  document.getElementById('sk-trigger-ai-generation-btn').addEventListener('click', generateSkScriptWithAI);
-  document.getElementById('sk-ai-generator-save-btn').addEventListener('click', saveAiGeneratedScript);
-  // ▲▲▲ 新事件监听器结束 ▲▲▲
-
-  // ▲▲▲ 剧本杀事件监听器结束 ▲▲▲
-  // ▼▼▼ 【全新】“你说我猜”游戏事件监听器 ▼▼▼
-
-  // 1. 设置界面的交互
-  document.querySelectorAll('input[name="guess_what_mode"]').forEach(radio => {
-    radio.addEventListener('change', function () {
-      document.getElementById('user-word-input-container').style.display =
-        this.value === 'ai_guesses' ? 'block' : 'none';
-    });
-  });
-  document.getElementById('start-guess-what-game-btn').addEventListener('click', startGuessWhatGame);
-
-  // 2. 游戏界面的交互
-  document.getElementById('exit-guess-what-game-btn').addEventListener('click', async () => {
-    const confirmed = await showCustomConfirm('退出游戏', '确定要中途退出游戏吗？谜底将会揭晓。');
-    if (confirmed) {
-      endGuessWhatGame('none', '游戏被中途放弃。');
-      // 延迟一点再返回大厅，让玩家能看到结果
-      setTimeout(() => {
-        showScreen('game-hall-screen');
-      }, 3000);
-    }
-  });
-
-  document.getElementById('give-up-guess-what-btn').addEventListener('click', () => {
-    endGuessWhatGame(guessWhatGameState.currentTurn === 'user' ? 'ai' : 'user', '玩家放弃了游戏。');
-  });
-
-  document.getElementById('send-guess-what-input-btn').addEventListener('click', () => {
-    const input = document.getElementById('guess-what-user-input');
-    const text = input.value.trim();
-    if (text) {
-      processGuessWhatTurn(text);
-      input.value = '';
-    }
-  });
-
-  document.getElementById('guess-what-user-input').addEventListener('keypress', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      document.getElementById('send-guess-what-input-btn').click();
-    }
-  });
-
-  // ▲▲▲ “你说我猜”事件监听器结束 ▲▲▲
-  // ▼▼▼ 在这里粘贴下面这整块【全新的】事件监听器代码 ▼▼▼
-  // ▼▼▼ 用这整块新代码，替换旧的飞行棋事件监听器 ▼▼▼
-  /* --- 【全新 | V2分类版】心动飞行棋功能事件监听器 --- */
-
-  // 1. 设置页面的按钮
-  document.getElementById('start-ludo-game-btn').addEventListener('click', startLudoGame);
-  document.getElementById('manage-ludo-question-banks-btn').addEventListener('click', openLudoQuestionBankManager);
-
-  // 2. 游戏主界面的按钮
-  document.getElementById('exit-ludo-game-btn').addEventListener('click', async () => {
-    const confirmed = await showCustomConfirm('退出游戏', '确定要中途退出游戏吗？');
-    if (confirmed) {
-      ludoGameState.isActive = false;
-      showScreen('game-hall-screen');
-    }
-  });
-  document.getElementById('restart-ludo-game-btn').addEventListener('click', async () => {
-    const confirmed = await showCustomConfirm('重新开始', '确定要重新开始这一局吗？');
-    if (confirmed) {
-      startLudoGame();
-    }
-  });
-
-  // 3. 问题库管理弹窗的按钮
-  document.getElementById('close-qbank-manager-btn').addEventListener('click', async () => {
-    document.getElementById('ludo-qbank-manager-modal').classList.remove('visible');
-    // 如果设置页面还开着，就刷新一下下拉框
-    if (document.getElementById('ludo-setup-screen').classList.contains('active')) {
-      await openLudoSetup();
-    }
-  });
-  document.getElementById('add-ludo-qbank-btn').addEventListener('click', addNewLudoQuestionBank);
-
-  // 4. 问题编辑器弹窗的按钮
-  document.getElementById('back-to-qbank-manager-btn').addEventListener('click', () => {
-    document.getElementById('ludo-question-editor-modal').classList.remove('visible');
-    openLudoQuestionBankManager(); // 返回到题库管理列表
-  });
-  document.getElementById('add-ludo-question-btn').addEventListener('click', () => openSingleQuestionEditor(null));
-
-  // 5. 单个问题编辑/添加弹窗的按钮
-  document.getElementById('cancel-single-question-btn').addEventListener('click', () => {
-    document.getElementById('ludo-single-question-editor-modal').classList.remove('visible');
-  });
-  document.getElementById('save-single-question-btn').addEventListener('click', saveSingleQuestion);
-  // ▼▼▼ 在这里粘贴下面的新代码 ▼▼▼
-  /* --- 【全新】飞行棋题库导入功能事件监听 --- */
-  document.getElementById('import-ludo-qbank-btn').addEventListener('click', () => {
-    // 点击“导入”按钮时，触发隐藏的文件选择框
-    document.getElementById('ludo-qbank-import-input').click();
-  });
-
-  document.getElementById('ludo-qbank-import-input').addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (file) {
-      // 当用户选择了文件后，调用我们的导入处理函数
-      importLudoQuestionBank(file);
-    }
-    e.target.value = null; // 清空，以便下次能选择同一个文件
-  });
-  /* --- 事件监听结束 --- */
-  // ▲▲▲ 新代码粘贴结束 ▲▲▲
-
-  /* --- 飞行棋事件监听器结束 --- */
-  // ▼▼▼ 【全新】“谁是卧底”游戏事件监听器 ▼▼▼
-  document.getElementById('start-undercover-game-btn').addEventListener('click', startUndercoverGame);
-  document.getElementById('exit-undercover-game-btn').addEventListener('click', async () => {
-    const confirmed = await showCustomConfirm('退出游戏', '确定要中途退出游戏吗？当前进度不会保存。');
-    if (confirmed) {
-      undercoverGameState.isActive = false; // 停止游戏循环
-      showScreen('game-hall-screen');
-    }
-  });
-  document.getElementById('undercover-my-word-btn').addEventListener('click', () => {
-    if (undercoverGameState.isActive) {
-      const me = undercoverGameState.players.find(p => p.isUser);
-      if (me) {
-        const roleName = { undercover: '卧底', civilian: '平民', whiteboard: '白板' }[me.role] || '未知';
-        const wordText = me.word ? `你的词语是：【${me.word}】` : '你是一个白板，需要根据他人描述猜测平民词语。';
-        showCustomAlert(`你的身份是：【${roleName}】`, wordText);
-      }
-    }
-  });
-  // ▲▲▲ 新增事件监听器结束 ▲▲▲
-  // ▼▼▼ 在init()的事件监听区添加 ▼▼▼
-  document.getElementById('werewolf-game-log').addEventListener('click', e => {
-    const rerollBtn = e.target.closest('.werewolf-reroll-btn');
-    if (rerollBtn) {
-      const logIndex = parseInt(rerollBtn.dataset.logIndex);
-      if (!isNaN(logIndex)) {
-        handleWerewolfReroll(logIndex);
-      }
-    }
-  });
-  // ▲▲▲ 添加结束 ▲▲▲
-  // ▼▼▼ 在init()的事件监听区添加 ▼▼▼
-  document.getElementById('sts-action-area').addEventListener('click', e => {
-    const rerollBtn = e.target.closest('#sts-reroll-ai-turn-btn');
-    if (rerollBtn) {
-      handleStsReroll();
-    }
-  });
-  // ▲▲▲ 添加结束 ▲▲▲
-  // ▼▼▼ 在init()的事件监听区添加 ▼▼▼
-  // 剧本杀重roll事件
-  document.getElementById('script-kill-game-log').addEventListener('click', e => {
-    const rerollBtn = e.target.closest('.sk-reroll-btn');
-    if (rerollBtn) {
-      const logIndex = parseInt(rerollBtn.dataset.logIndex);
-      if (!isNaN(logIndex)) {
-        handleScriptKillReroll(logIndex);
-      }
-    }
-  });
-  // ▲▲▲ 添加结束 ▲▲▲
-  // ▼▼▼ 在init()的事件监听区添加 ▼▼▼
-  // “你说我猜”重roll事件
-  document.getElementById('guess-what-game-log').addEventListener('click', e => {
-    const rerollBtn = e.target.closest('.gw-reroll-btn');
-    if (rerollBtn) {
-      const logIndex = parseInt(rerollBtn.dataset.logIndex);
-      if (!isNaN(logIndex)) {
-        handleGuessWhatReroll(logIndex);
-      }
-    }
-  });
-  // ▲▲▲ 添加结束 ▲▲▲
-  // ▼▼▼ 在init()的事件监听区添加 ▼▼▼
-  // 飞行棋重roll事件
-  document.getElementById('ludo-game-log').addEventListener('click', e => {
-    const rerollBtn = e.target.closest('.ludo-reroll-btn');
-    if (rerollBtn) {
-      const logIndex = parseInt(rerollBtn.dataset.logIndex);
-      if (!isNaN(logIndex)) {
-        handleLudoReroll(logIndex);
-      }
-    }
-  });
-  // ▲▲▲ 添加结束 ▲▲▲
-  // ▼▼▼ 在init()的事件监听区添加 ▼▼▼
-  // “谁是卧底”重roll事件
-  document.getElementById('undercover-game-log').addEventListener('click', e => {
-    const rerollBtn = e.target.closest('.uc-reroll-btn');
-    if (rerollBtn) {
-      const logIndex = parseInt(rerollBtn.dataset.logIndex);
-      if (!isNaN(logIndex)) {
-        handleUndercoverReroll(logIndex);
-      }
-    }
-  });
-  // ▲▲▲ 添加结束 ▲▲▲
-  // --- 【全新】剧本杀导入功能事件监听 ---
-
-  // 1. 点击“导入”按钮，触发文件选择
-  const importScriptBtn = document.getElementById('import-script-btn');
-  if (importScriptBtn) {
-    importScriptBtn.addEventListener('click', () => {
-      document.getElementById('script-kill-import-input').click();
-    });
   }
 
-  // 2. 监听文件选择变化，执行导入
-  const importScriptInput = document.getElementById('script-kill-import-input');
-  if (importScriptInput) {
-    importScriptInput.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (file) {
-        importCustomScript(file);
+  // ============================================================================
+  // 14. Initialize Tavern App & Hook Desktop Entry
+  // ============================================================================
+  async function initTavernApp() {
+    await loadTavernStore();
+    setupSillyTavernGlobalBridge();
+    syncBuiltInD100Pool(false);
+    (tavernState.plugins || []).forEach(p => {
+      if (p && p.enabled && !p.builtInType && p.code) {
+        executeUserPluginScript(p);
       }
-      e.target.value = null; // 清空，以便下次能选择同一个文件
     });
+    renderTavernShell();
+    await tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
   }
-  // --- 事件监听结束 ---
-});
+
+  window.openTavernApp = function () {
+    if (typeof showScreen === 'function') {
+      showScreen('game-hall-screen');
+    } else {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById('game-hall-screen')?.classList.add('active');
+    }
+    renderTavernShell();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initTavernApp();
+    });
+  } else {
+    initTavernApp();
+  }
+})();

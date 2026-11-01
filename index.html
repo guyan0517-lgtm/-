@@ -381,16 +381,16 @@
               <div style="position: absolute; top: 100px; right: 85px">
                 <div
                   class="desktop-app-icon"
-                  onclick="showScreen('game-hall-screen')"
+                  onclick="window.openTavernApp ? window.openTavernApp() : showScreen('game-hall-screen')"
                 >
                   <div class="icon-bg-desktop">
                     <img
                       id="icon-img-game-hall"
-                      src="https://i.postimg.cc/P5gL5z2g/game-controller-icon.png"
-                      alt="游戏大厅"
+                      src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='28' fill='%23ede6df'/%3E%3Cpath d='M36 44h48v28a24 24 0 0 1-48 0V44z' fill='%238c7a6b'/%3E%3Cpath d='M84 50h8a8 8 0 0 1 0 16h-8' fill='none' stroke='%238c7a6b' stroke-width='6' stroke-linecap='round'/%3E%3Crect x='34' y='36' width='52' height='10' rx='5' fill='%23fffaf5'/%3E%3C/svg%3E"
+                      alt="酒馆"
                     />
                   </div>
-                  <span class="label">游戏大厅</span>
+                  <span class="label">酒馆</span>
                 </div>
               </div>
             </div>
@@ -2496,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v7.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v7.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -14270,75 +14270,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     </div>
 
     <div id="game-hall-screen" class="screen">
-      <div class="header">
-        <span class="back-btn" onclick="showScreen('home-screen')"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg></span>
-        <span>游戏大厅</span>
-        <span style="width: 30px"></span>
-        <!-- 占位符 -->
-      </div>
-      <div class="list-container" style="padding: 20px">
-        <p style="text-align: center; color: var(--text-secondary)">
-          选择一个游戏开始吧！
-        </p>
-        <div id="game-hall-grid">
-          <!-- 游戏列表将显示在这里 -->
-          <div class="game-card" data-game="werewolf">
-            <div class="game-icon">🐺</div>
-            <div class="game-info">
-              <div class="game-title">狼人杀</div>
-              <div class="game-desc">逻辑与谎言的对决</div>
-            </div>
-          </div>
-          <div class="game-card" data-game="sea-turtle-soup">
-            <div class="game-icon">🐢</div>
-            <div class="game-info">
-              <div class="game-title">海龟汤</div>
-              <div class="game-desc">揭开情景的真相</div>
-            </div>
-          </div>
-          <div class="game-card" data-game="script-kill">
-            <div class="game-icon">📜</div>
-            <div class="game-info">
-              <div class="game-title">剧本杀</div>
-              <div class="game-desc">扮演角色，探寻谜案</div>
-            </div>
-          </div>
-          <div class="game-card" data-game="guess-what">
-            <div class="game-icon">🗣️</div>
-            <div class="game-info">
-              <div class="game-title">你说我猜</div>
-              <div class="game-desc">考验默契的时候到了</div>
-            </div>
-          </div>
-          <div class="game-card" data-game="ludo">
-            <div class="game-icon">🎲</div>
-            <div class="game-info">
-              <div class="game-title">心动飞行棋</div>
-              <div class="game-desc">和Ta来一场只属于你们的冒险</div>
-            </div>
-          </div>
-
-          <div class="game-card" data-game="undercover">
-            <div class="game-icon">🕵️</div>
-            <div class="game-info">
-              <div class="game-title">谁是卧底</div>
-              <div class="game-desc">语言的伪装，逻辑的陷阱</div>
-            </div>
-          </div>
-
-          <p
-            style="
-              grid-column: 1 / -1;
-              text-align: center;
-              color: var(--text-secondary);
-              font-size: 14px;
-              margin-top: 20px;
-            "
-          >
-            更多游戏正在火速开发中...
-          </p>
-        </div>
-      </div>
+      <div id="tavern-app-shell"></div>
     </div>
 
     <!-- 1. 狼人杀游戏设置屏幕 -->
@@ -25150,7 +25082,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           sticker: "https://i.postimg.cc/mDCHYy8t/sticker-icon.png",
           forum: "https://i.postimg.cc/pr0T3WfC/douban-icon.png",
           "lovers-space": "https://i.postimg.cc/d1wZ39xW/lovers-space-icon.png",
-          "game-hall": "https://i.postimg.cc/P5gL5z2g/game-controller-icon.png",
+          "game-hall": "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='28' fill='%23ede6df'/%3E%3Cpath d='M36 44h48v28a24 24 0 0 1-48 0V44z' fill='%238c7a6b'/%3E%3Cpath d='M84 50h8a8 8 0 0 1 0 16h-8' fill='none' stroke='%238c7a6b' stroke-width='6' stroke-linecap='round'/%3E%3Crect x='34' y='36' width='52' height='10' rx='5' fill='%23fffaf5'/%3E%3C/svg%3E",
           "x-social": "https://i.postimg.cc/8P1H0vQ8/x-logo.png",
           taobao: "https://i.postimg.cc/k47tXg1j/taologo.png",
           "persona-creator": "https://api.iconify.design/lucide:sparkles.svg?color=%23ffffff",
@@ -25171,7 +25103,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           sticker: "表情包",
           forum: "圈子",
           "lovers-space": "情侣空间",
-          "game-hall": "游戏大厅",
+          "game-hall": "酒馆",
           "x-social": "X社交",
           taobao: "沙盘",
           "persona-creator": "人设",
@@ -65353,7 +65285,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             weibo: "微博",
             forum: "圈子",
             "lovers-space": "情侣空间",
-            "game-hall": "游戏大厅",
+            "game-hall": "酒馆",
             "x-social": "X社交",
             taobao: "桃宝",
             "persona-creator": "人设",
