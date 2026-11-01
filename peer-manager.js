@@ -6895,15 +6895,34 @@
     },
 
     resetPeerChatSettingsUI: function (currentChat) {
+      if (currentChat && (currentChat.id === window.MASHU_COMPANION_ID || currentChat.isMashuAuthor)) {
+        if (typeof window.applyMashuChatSettingsUI === "function") {
+          window.applyMashuChatSettingsUI(currentChat);
+        }
+        return;
+      }
+
+      const aiPersonaCard = document.getElementById("ai-persona-card");
+      if (aiPersonaCard && (!currentChat || !currentChat.isGroup)) {
+        aiPersonaCard.style.display = "block";
+      }
+
       const myPersonaCard = document.getElementById("my-persona-card");
       if (myPersonaCard) myPersonaCard.style.display = "block";
 
       const chatNameGroup = document.getElementById("chat-name-group");
       if (chatNameGroup) {
         const lbl = chatNameGroup.querySelector("label");
-        if (lbl) lbl.textContent = "角色真名 /群聊名称(AI只认这个，修改会影响记忆)";
+        if (lbl) lbl.textContent = currentChat && currentChat.isGroup ? "群名" : "备注名";
         const inp = document.getElementById("chat-name-input");
         if (inp) inp.readOnly = false;
+      }
+
+      const chatRemarkGroup = document.getElementById("chat-remark-group");
+      if (chatRemarkGroup) {
+        chatRemarkGroup.style.display = currentChat && currentChat.isGroup ? "none" : "block";
+        const remInp = document.getElementById("chat-remark-input");
+        if (remInp) remInp.readOnly = false;
       }
 
       const myGroupNick = document.getElementById("my-group-nickname-group");
@@ -7052,6 +7071,10 @@
             const currentChat = window.state.chats[window.state.activeChatId];
             if (currentChat && currentChat.roleType === "peer" && !currentChat.isGroup) {
               PeerManager.applyPeerChatSettingsUI(currentChat);
+            } else if (currentChat && (currentChat.id === window.MASHU_COMPANION_ID || currentChat.isMashuAuthor)) {
+              if (typeof window.applyMashuChatSettingsUI === "function") {
+                window.applyMashuChatSettingsUI(currentChat);
+              }
             } else {
               PeerManager.resetPeerChatSettingsUI(currentChat);
             }
