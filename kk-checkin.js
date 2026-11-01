@@ -278,8 +278,13 @@ async function generateHouseData(charId, includeComputer = true) {
         while (true) {
           try {
             console.log(`[${attempt}次尝试] 正在为“${description}”生成图片...`);
-            const url = await generateAndLoadImage(prompt);
-            if (url && url.length > 100) {
+            let url = "";
+            if (typeof window.generateNovelAiImageByPrompt === "function") {
+              url = await window.generateNovelAiImageByPrompt(prompt);
+            } else if (typeof generateAndLoadImage === "function") {
+              url = await generateAndLoadImage(prompt);
+            }
+            if (url && typeof url === "string" && url.trim().length > 5) {
               console.log(`✅ “${description}”生成成功！`);
               return url;
             } else {
@@ -289,6 +294,9 @@ async function generateHouseData(charId, includeComputer = true) {
             console.warn(
               `❌ “${description}”生成失败: ${e.message}。3秒后自动重试...`,
             );
+            if (attempt >= 3) {
+              throw e;
+            }
             await new Promise((resolve) => setTimeout(resolve, 3000));
             attempt++;
           }
@@ -380,11 +388,29 @@ async function generateHouseData(charId, includeComputer = true) {
  * 渲染房屋总览视图
  * @param {object} houseData - 角色的房屋数据
  */
+function applyKkBgUrl(el, rawUrl) {
+  if (!el || !rawUrl) return;
+  const str = String(rawUrl).trim();
+  if (str.startsWith("vault://")) {
+    const cached = window.vaultRefMemoryBlobCache && window.vaultRefMemoryBlobCache.get(str);
+    if (cached) {
+      el.style.backgroundImage = `url("${cached}")`;
+      return;
+    }
+    if (typeof window.resolveVaultRefToUrl === "function") {
+      window.resolveVaultRefToUrl(str).then((resolved) => {
+        if (resolved) el.style.backgroundImage = `url("${resolved}")`;
+      }).catch(() => {});
+      return;
+    }
+  }
+  el.style.backgroundImage = `url("${str}")`;
+}
+
 function renderKkHouseView(houseData) {
   document.getElementById("kk-house-owner-name").textContent =
     `${state.chats[activeKkCharId].name}的家`;
-  document.getElementById("kk-house-background").style.backgroundImage =
-    `url(${houseData.locationImageUrl})`;
+  applyKkBgUrl(document.getElementById("kk-house-background"), houseData.locationImageUrl);
   document.getElementById("kk-house-location").textContent = houseData.location;
   document.getElementById("kk-house-description").textContent =
     houseData.description;
@@ -411,8 +437,7 @@ function openKkAreaView(areaName) {
   if (!areaData) return;
 
   document.getElementById("kk-area-name").textContent = areaName;
-  document.getElementById("kk-area-background").style.backgroundImage =
-    `url(${areaData.imageUrl})`;
+  applyKkBgUrl(document.getElementById("kk-area-background"), areaData.imageUrl);
   document.getElementById("kk-area-description").textContent =
     areaData.description;
 
@@ -1306,7 +1331,7 @@ function renderSurveillanceView(surveillanceData) {
     feedEl.dataset.areaName = areaName;
 
     if (area && area.imageUrl) {
-      feedEl.style.backgroundImage = `url(${area.imageUrl})`;
+      applyKkBgUrl(feedEl, area.imageUrl);
     } else {
       feedEl.style.backgroundColor = "#333";
     }
@@ -2119,12 +2144,20 @@ async function handleTryOn() {
 
 // ================= KK查岗 - 沉浸式衣帽间 (升级版) =================
 
-// 辅助函数：生成衣服图片 (使用 Pollinations，因为它生成物品效果好且快，无需鉴权)
+// 辅助函数：生成衣服图片，优先调用 NovelAI
 async function generateClothingImage(prompt) {
-  // 强制加上白底、产品摄影等关键词
-  const enhancedPrompt = `clothing product photography, ${prompt}, white background, flat lay style, studio lighting, high quality, 4k, realistic, no human`;
+  const enhancedPrompt = `clothing product photography, ${prompt}, white background, flat lay style, studio lighting, high quality, masterpiece, no human`;
+  if (typeof window.generateNovelAiImageByPrompt === "function") {
+    try {
+      const naiUrl = await window.generateNovelAiImageByPrompt(enhancedPrompt);
+      if (naiUrl && typeof naiUrl === "string" && naiUrl.trim().length > 5) {
+        return naiUrl;
+      }
+    } catch (e) {
+      console.warn("衣帽间NovelAI生图失败，回退备用生图:", e);
+    }
+  }
   const encodedPrompt = encodeURIComponent(enhancedPrompt);
-  // 使用随机数防止缓存
   const randomSeed = Math.floor(Math.random() * 10000);
   return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${randomSeed}`;
 }
